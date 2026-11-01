@@ -59,11 +59,6 @@ bool inputTraceRequested() {
     return requested;
 }
 
-// One line per frame sent to the host: how long the host took to compose it and to take it.
-void logInputTrace(int32_t task, double composeMs, double postMs, int64_t wallMs) {
-    HWC_LOGI("input-trace stage=hwc.frame task=%d utc=%s mono=%.3f compose=%.1f post=%.1f", task,
-             ResizeTrace::utcStamp(wallMs).c_str(), traceMonoMs(), composeMs, postMs);
-}
 
 void logTrace(const std::vector<std::string>& lines) {
     for (const std::string& line : lines) {
@@ -218,12 +213,13 @@ void TaskComposer::present(Frame& frame) {
     // The frame (its acquire fences among it) moves to the pipeline: SurfaceFlinger's next
     // commands change the display's layers, not this frame.
     auto owned = std::make_shared<Frame>(std::move(frame));
-    mPipeline.submit([this, owned] { compose(*owned); });
+    const double presentedMs = traceMonoMs();
+    mPipeline.submit([this, owned, presentedMs] { compose(*owned, presentedMs); });
 }
 
 void TaskComposer::drain() { mPipeline.drain(); }
 
-void TaskComposer::compose(Frame& frame) {
+void TaskComposer::compose(Frame& frame, double presentedMs) {
     std::vector<std::vector<uint8_t>> outbox;
     std::optional<int64_t> refreshAt;
     {
@@ -415,8 +411,11 @@ void TaskComposer::compose(Frame& frame) {
                 mHost.post(output.display, target);
                 output.posted = true;
                 if (inputTraceRequested()) {
-                    logInputTrace(task.task, postStart - composeStart, traceMonoMs() - postStart,
-                                  traceWallMs());
+                    const double posted = traceMonoMs();
+                    HWC_LOGI("%s", frameTraceLine(task.task, traceWallMs(), posted,
+                                                  composeStart - presentedMs,
+                                                  postStart - composeStart, posted - postStart)
+                                       .c_str());
                 }
                 output.next ^= 1;
                 logTrace(mTrace.posted(task.task, width, height,
