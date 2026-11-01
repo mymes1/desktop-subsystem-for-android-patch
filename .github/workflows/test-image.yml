@@ -316,45 +316,26 @@ jobs:
 
 
   hal-survey:
-    name: Survey the image's HALs (temporary)
+    name: Fetch the HAL sources (temporary)
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        android: ["17", "16"]
     steps:
-      - uses: actions/checkout@v4
-      - name: Survey
+      - name: Fetch
         shell: bash {0}
         run: |
-          dsa/guest/image/fetch.sh ${{ matrix.android }} >/dev/null
-          tf=$(echo .scratch/aosp-inputs/*/*target_files*.zip)
-          ota=$(echo .scratch/aosp-inputs/*/otatools.zip)
-          echo "=== entries"
-          unzip -l "$tf" | awk '{print $4}' | grep -i -E 'audio|apex/|codec2|c2|health|power|vintf|mediacodec|seccomp|/init/|/hw/' | grep -v -E '\.(odex|vdex|art|prof|dm|apk)$'
-          mkdir -p x; cd x
-          unzip -q -o "../$tf" 'VENDOR/*' 'ODM/etc/*' 'SYSTEM/etc/vintf/*' 'SYSTEM/apex/com.android.media.swcodec*' 'SYSTEM/etc/init/*' 'META/*' 'SYSTEM/etc/selinux/*' 'SYSTEM/build.prop' >/dev/null
-          for f in $(find VENDOR/etc ODM/etc -maxdepth 3 -type f \( -iname '*audio*' -o -iname 'media_codecs*.xml' -o -iname '*health*' -o -iname '*power*' \) | grep -v performance); do echo "=== FILE $f"; cat "$f"; done
-          for f in VENDOR/etc/vintf/manifest.xml VENDOR/etc/vintf/manifest/*.xml; do echo "=== FILE $f"; grep -E '<name>|<version>|<fqname>|<instance>|<interface>' "$f"; done
-          for f in SYSTEM/etc/vintf/compatibility_matrix*.xml; do echo "=== MATRIX $f"; grep -B2 -A14 -E '<name>android\.hardware\.(audio\.core|audio\.effect|audio\.core\.sounddose|media\.c2|health|power|common|common\.fmq)</name>' "$f"; done
-          for f in VENDOR/etc/init/*.rc; do echo "=== RC $f"; case "$f" in *audio*|*health*|*power*|*media*|*codec*|*c2*) cat "$f";; esac; done
-          echo "=== vendor_file_contexts"; grep -i -E 'audio|codec|c2|health|power|media' VENDOR/etc/selinux/vendor_file_contexts
-          echo "=== apexkeys"; grep -E 'audio|health|power|media|codec' META/apexkeys.txt
-          echo "=== props"; grep -h -i -E 'audio|media|codec|health|power|battery' VENDOR/build.prop VENDOR/default.prop SYSTEM/build.prop
-          echo "=== sepolicy types"; grep -o -E '\(type (hal_audio|hal_health|hal_power|mediacodec|hal_codec2|hal_media)[a-z_0-9]*\)' SYSTEM/etc/selinux/plat_sepolicy.cil | sort -u
-          grep -h -E 'hal_audio_default|hal_health_default|hal_power_default|mediacodec' VENDOR/etc/selinux/vendor_sepolicy.cil | head -80
-          echo "=== bin/hw"; ls -la VENDOR/bin/hw
+          rev=android-16.0.0_r1
+          get() { # repo dir paths...
+            local repo=$1 dir=$2; shift 2
+            git clone -q --filter=blob:none --no-checkout https://android.googlesource.com/$repo $dir
+            git -C $dir sparse-checkout set --no-cone "$@"
+            git -C $dir fetch -q --depth=1 --no-tags origin refs/tags/$rev
+            git -C $dir checkout -q FETCH_HEAD
+          }
+          mkdir src; cd src
+          get platform/hardware/interfaces hi 'audio/aidl/aidl_api/' 'audio/aidl/Android.bp' 'audio/aidl/default/*.cpp' 'audio/aidl/default/include/core-impl/' 'audio/aidl/default/main.cpp' 'common/aidl/aidl_api/' 'common/fmq/aidl/aidl_api/' 'media/c2/aidl/aidl_api/' 'media/c2/aidl/Android.bp' 'health/aidl/aidl_api/' 'health/aidl/Android.bp' 'health/aidl/default/' 'power/aidl/aidl_api/' 'power/aidl/Android.bp' 'graphics/common/aidl/aidl_api/android.hardware.graphics.common/6/' 'media/bufferpool/aidl/aidl_api/' 'media/bufferpool/aidl/Android.bp'
+          get platform/system/hardware/interfaces shi 'media/aidl_api/' 'media/Android.bp'
+          get platform/system/libfmq fmq 'include/fmq/' 'base/fmq/' 'EventFlag.cpp'
+          get platform/frameworks/av av 'media/libaudiohal/impl/StreamHalAidl.cpp' 'media/libaudiohal/impl/StreamHalAidl.h' 'media/libaudiohal/impl/DevicesFactoryHalAidl.cpp' 'media/libaudiohal/impl/DeviceHalAidl.cpp' 'media/libaudiohal/impl/Hal2AidlMapper.cpp' 'media/libaudiohal/impl/EffectsFactoryHalAidl.cpp' 'media/libaudiohal/FactoryHal.cpp' 'services/audiopolicy/engine/common/src/EngineBase.cpp' 'services/audiopolicy/engine/config/src/EngineConfig.cpp' 'services/audiopolicy/engine/config/src/EngineDefaultConfig.h' 'services/audiopolicy/common/managerdefinitions/src/AudioPolicyConfig.cpp' 'services/audiopolicy/service/AudioPolicyService.cpp' 'media/codec2/hal/aidl/' 'media/codec2/hal/services/' 'media/codec2/vndk/include/' 'media/codec2/core/include/' 'media/libstagefright/data/' 'media/codec2/hal/client/'
           cd ..
-          mkdir -p ota; unzip -q -o "$ota" -d ota; chmod +x ota/bin/*
-          ls ota/bin | grep -i -E 'apex|debugfs|erofs'
-          for apex in x/VENDOR/apex/*.apex x/VENDOR/apex/*.capex x/SYSTEM/apex/com.android.media.swcodec*; do
-            [ -f "$apex" ] || continue
-            case "$apex" in *audio*|*health*|*power*|*codec*|*media*|*c2*) ;; *) echo "=== APEX $apex (not opened)"; continue;; esac
-            echo "=== APEX $apex"
-            d=apexout/$(basename "$apex"); mkdir -p "$d"
-            PATH="$PWD/ota/bin:$PATH" ota/bin/deapexer --debugfs_path ota/bin/debugfs_static --fsckerofs_path ota/bin/fsck.erofs extract "$apex" "$d" 2>&1 | tail -3
-            find "$d" -type f | head -80
-            for f in $(find "$d" -type f \( -name '*.xml' -o -name '*.rc' -o -name '*.json' \)); do echo "=== IN $f"; head -c 5000 "$f"; echo; done
-          done
-          echo "=== hardware/interfaces refs"
-          git ls-remote https://android.googlesource.com/platform/hardware/interfaces | grep -E 'android-latest|android17|android-17|android16-qpr|refs/heads/main' | head -20
+          tar --exclude=.git -cJf hal-src.tar.xz src
+          ls -la hal-src.tar.xz; sha256sum hal-src.tar.xz
+          echo SRC-BEGIN; base64 -w0 hal-src.tar.xz; echo; echo SRC-END
