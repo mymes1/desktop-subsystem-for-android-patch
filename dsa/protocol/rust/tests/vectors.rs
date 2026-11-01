@@ -10,11 +10,12 @@ use std::path::PathBuf;
 
 use dsa_protocol::control::{
     envelope::Body, AgentConnected, AppInfo, AuthChallenge, AuthProof, ClipboardSharing,
-    ClipboardText, ClockAnswer, ClockProbe, CloseTask, DeviceIdle, Envelope, GuestBoot,
-    GuestMemory, Hello, HelloAccepted, HelloRejected, ImeCommit, ImeComposition, ImeCursor,
-    KeyAction, KeyEvent, LaunchApp, PointerAction, PointerEvent, PointerTool, PowerState,
-    ProcessMemory, Rect, RejectReason, RequestGuestMemory, ResizeTask, Role, ScreenState,
-    SetTaskDensity, TaskFrames, TaskRemoved, TaskUpdated,
+    ClipboardText, ClockAnswer, ClockProbe, CloseTask, DeviceIdle, Envelope, FileAction, FileChunk,
+    FileProgress, GuestBoot, GuestMemory, Hello, HelloAccepted, HelloRejected, ImeCommit,
+    ImeComposition, ImeCursor, KeyAction, KeyEvent, LaunchApp, LinkHandling, OpenFile, OpenLink,
+    PointerAction, PointerEvent, PointerTool, PowerState, ProcessMemory, Rect, RejectReason,
+    RequestGuestMemory, ResizeTask, Role, ScreenState, SetTaskDensity, TaskFrames, TaskRemoved,
+    TaskUpdated,
 };
 use dsa_protocol::{decode, encode};
 
@@ -375,6 +376,41 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
                     swap_pss_kb: 1000,
                 }],
                 ..GuestMemory::default()
+            })),
+        ),
+        (
+            "open_link",
+            wrap(Body::OpenLink(OpenLink {
+                url: "https://example.com/".into(),
+            })),
+        ),
+        (
+            "link_handling",
+            wrap(Body::LinkHandling(LinkHandling { in_guest: true })),
+        ),
+        (
+            "open_file",
+            wrap(Body::OpenFile(OpenFile {
+                transfer_id: 3,
+                name: "photo.jpg".into(),
+                size: 1000,
+                action: FileAction::Send as i32,
+            })),
+        ),
+        (
+            "file_chunk",
+            wrap(Body::FileChunk(FileChunk {
+                transfer_id: 3,
+                offset: 131072,
+                data: vec![1, 2, 3],
+            })),
+        ),
+        (
+            "file_progress",
+            wrap(Body::FileProgress(FileProgress {
+                transfer_id: 3,
+                received: 1000,
+                error: "storage is full".into(),
             })),
         ),
     ])
