@@ -314,6 +314,7 @@ jobs:
             dsa/target/image/*/initrd.img
           if-no-files-found: error
 
+
   hal-survey:
     name: Survey the image's HALs (temporary)
     runs-on: ubuntu-latest
@@ -324,31 +325,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Survey
+        shell: bash {0}
         run: |
-          sudo apt-get update >/dev/null; sudo apt-get install -y --no-install-recommends e2fsprogs erofs-utils >/dev/null || true
           dsa/guest/image/fetch.sh ${{ matrix.android }} >/dev/null
           tf=$(echo .scratch/aosp-inputs/*/*target_files*.zip)
           ota=$(echo .scratch/aosp-inputs/*/otatools.zip)
           echo "=== entries"
-          unzip -l "$tf" | awk '{print $4}' | grep -i -E 'audio|apex/|media_codecs|codec2|c2|health|power|vintf|mediacodec|seccomp|init/' | grep -v -E '\.(odex|vdex|art|prof|dm)$' | grep -v '^SYSTEM/app\|^SYSTEM/priv-app\|^PRODUCT/app\|^PRODUCT/priv-app'
+          unzip -l "$tf" | awk '{print $4}' | grep -i -E 'audio|apex/|codec2|c2|health|power|vintf|mediacodec|seccomp|/init/|/hw/' | grep -v -E '\.(odex|vdex|art|prof|dm|apk)$'
           mkdir -p x; cd x
-          unzip -q -o "../$tf" 'VENDOR/etc/*' 'VENDOR/etc/init/*' 'ODM/etc/*' 'SYSTEM/etc/vintf/*' 'VENDOR/apex/*' 'SYSTEM/apex/com.android.media.swcodec*' 'SYSTEM/etc/init/*' 'META/*' || true
-          for f in $(find VENDOR/etc ODM/etc -maxdepth 3 -type f \( -iname '*audio*' -o -iname '*media_codecs*' -o -iname '*health*' -o -iname '*power*' -o -iname '*codec*' \) ); do echo "=== FILE $f"; cat "$f"; done
-          for f in VENDOR/etc/vintf/manifest.xml VENDOR/etc/vintf/manifest/*.xml VENDOR/etc/vintf/compatibility_matrix.xml SYSTEM/etc/vintf/compatibility_matrix.device.xml; do [ -f "$f" ] && { echo "=== FILE $f"; grep -n -E 'audio|media|c2|health|power|<hal|<name>|<version>|<fqname>|<instance>|<interface' "$f"; }; done
-          for f in SYSTEM/etc/vintf/compatibility_matrix.*.xml; do echo "=== MATRIX $f"; grep -A12 -E '<name>android\.hardware\.(audio\.core|media\.c2|health|power|audio\.effect)</name>' "$f" | head -80; done
-          for f in VENDOR/etc/init/*.rc; do case "$f" in *audio*|*health*|*power*|*media*|*codec*) echo "=== FILE $f"; cat "$f";; esac; done
-          grep -h -i -E 'audio|codec|c2|health|power' VENDOR/etc/selinux/vendor_file_contexts | head -60
-          grep -h -E 'audio|health|power|media' META/apexkeys.txt
+          unzip -q -o "../$tf" 'VENDOR/*' 'ODM/etc/*' 'SYSTEM/etc/vintf/*' 'SYSTEM/apex/com.android.media.swcodec*' 'SYSTEM/etc/init/*' 'META/*' 'SYSTEM/etc/selinux/*' 'SYSTEM/build.prop' >/dev/null
+          for f in $(find VENDOR/etc ODM/etc -maxdepth 3 -type f \( -iname '*audio*' -o -iname 'media_codecs*.xml' -o -iname '*health*' -o -iname '*power*' \) | grep -v performance); do echo "=== FILE $f"; cat "$f"; done
+          for f in VENDOR/etc/vintf/manifest.xml VENDOR/etc/vintf/manifest/*.xml; do echo "=== FILE $f"; grep -E '<name>|<version>|<fqname>|<instance>|<interface>' "$f"; done
+          for f in SYSTEM/etc/vintf/compatibility_matrix*.xml; do echo "=== MATRIX $f"; grep -B2 -A14 -E '<name>android\.hardware\.(audio\.core|audio\.effect|audio\.core\.sounddose|media\.c2|health|power|common|common\.fmq)</name>' "$f"; done
+          for f in VENDOR/etc/init/*.rc; do echo "=== RC $f"; case "$f" in *audio*|*health*|*power*|*media*|*codec*|*c2*) cat "$f";; esac; done
+          echo "=== vendor_file_contexts"; grep -i -E 'audio|codec|c2|health|power|media' VENDOR/etc/selinux/vendor_file_contexts
+          echo "=== apexkeys"; grep -E 'audio|health|power|media|codec' META/apexkeys.txt
+          echo "=== props"; grep -h -i -E 'audio|media|codec|health|power|battery' VENDOR/build.prop VENDOR/default.prop SYSTEM/build.prop
+          echo "=== sepolicy types"; grep -o -E '\(type (hal_audio|hal_health|hal_power|mediacodec|hal_codec2|hal_media)[a-z_0-9]*\)' SYSTEM/etc/selinux/plat_sepolicy.cil | sort -u
+          grep -h -E 'hal_audio_default|hal_health_default|hal_power_default|mediacodec' VENDOR/etc/selinux/vendor_sepolicy.cil | head -80
+          echo "=== bin/hw"; ls -la VENDOR/bin/hw
           cd ..
-          mkdir -p ota; unzip -q -o "$ota" -d ota; chmod +x ota/bin/* || true
-          ls ota/bin | grep -i -E 'apex|debugfs|erofs' || true
+          mkdir -p ota; unzip -q -o "$ota" -d ota; chmod +x ota/bin/*
+          ls ota/bin | grep -i -E 'apex|debugfs|erofs'
           for apex in x/VENDOR/apex/*.apex x/VENDOR/apex/*.capex x/SYSTEM/apex/com.android.media.swcodec*; do
             [ -f "$apex" ] || continue
             case "$apex" in *audio*|*health*|*power*|*codec*|*media*|*c2*) ;; *) echo "=== APEX $apex (not opened)"; continue;; esac
             echo "=== APEX $apex"
-            unzip -l "$apex"
             d=apexout/$(basename "$apex"); mkdir -p "$d"
-            PATH="$PWD/ota/bin:$PATH" ota/bin/deapexer --debugfs_path ota/bin/debugfs_static --fsckerofs_path ota/bin/fsck.erofs extract "$apex" "$d" 2>&1 | tail -3 || true
+            PATH="$PWD/ota/bin:$PATH" ota/bin/deapexer --debugfs_path ota/bin/debugfs_static --fsckerofs_path ota/bin/fsck.erofs extract "$apex" "$d" 2>&1 | tail -3
             find "$d" -type f | head -80
-            for f in $(find "$d" -type f \( -name '*.xml' -o -name '*.rc' -o -name '*.json' \)); do echo "=== IN $f"; head -c 6000 "$f"; done
+            for f in $(find "$d" -type f \( -name '*.xml' -o -name '*.rc' -o -name '*.json' \)); do echo "=== IN $f"; head -c 5000 "$f"; echo; done
           done
+          echo "=== hardware/interfaces refs"
+          git ls-remote https://android.googlesource.com/platform/hardware/interfaces | grep -E 'android-latest|android17|android-17|android16-qpr|refs/heads/main' | head -20
