@@ -9,10 +9,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use dsa_protocol::control::{
-    envelope::Body, AgentConnected, AppInfo, AuthChallenge, AuthProof, ClipboardSharing,
-    ClipboardText, ClockAnswer, ClockProbe, CloseTask, DeviceIdle, Envelope, FileAction, FileChunk,
-    FileProgress, GuestBoot, GuestMemory, Hello, HelloAccepted, HelloRejected, ImeCommit,
-    ImeComposition, ImeCursor, KeyAction, KeyEvent, LaunchApp, LinkHandling, OpenFile, OpenLink,
+    envelope::Body, AgentConnected, ApkChunk, AppInfo, AuthChallenge, AuthProof, CancelInstall,
+    ClipboardSharing, ClipboardText, ClockAnswer, ClockProbe, CloseTask, DeviceIdle, Envelope,
+    FileAction, FileChunk, FileProgress, GuestBoot, GuestMemory, Hello, HelloAccepted,
+    HelloRejected, ImeCommit, ImeComposition, ImeCursor, InstallApk, InstallProgress,
+    InstallResult, InstallStatus, KeyAction, KeyEvent, LaunchApp, LinkHandling, OpenFile, OpenLink,
     PointerAction, PointerEvent, PointerTool, PowerState, ProcessMemory, Rect, RejectReason,
     RequestGuestMemory, ResizeTask, Role, ScreenState, SetTaskDensity, TaskFrames, TaskRemoved,
     TaskUpdated,
@@ -325,6 +326,51 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
         (
             "clipboard_sharing_off",
             wrap(Body::ClipboardSharing(ClipboardSharing { on: false })),
+        ),
+        (
+            "install_apk",
+            wrap(Body::InstallApk(InstallApk {
+                transfer_id: 3,
+                name: "notes.apk".into(),
+                size: 1000,
+            })),
+        ),
+        (
+            "apk_chunk",
+            wrap(Body::ApkChunk(ApkChunk {
+                transfer_id: 3,
+                offset: 131_072,
+                data: vec![1, 2, 3],
+            })),
+        ),
+        (
+            "cancel_install",
+            wrap(Body::CancelInstall(CancelInstall { transfer_id: 3 })),
+        ),
+        (
+            "install_progress",
+            wrap(Body::InstallProgress(InstallProgress {
+                transfer_id: 3,
+                received: 131_072,
+            })),
+        ),
+        (
+            "install_result_success",
+            wrap(Body::InstallResult(InstallResult {
+                transfer_id: 3,
+                status: InstallStatus::Success as i32,
+                package_name: "com.example.notes".into(),
+                message: String::new(),
+            })),
+        ),
+        (
+            "install_result_conflicting_signature",
+            wrap(Body::InstallResult(InstallResult {
+                transfer_id: 3,
+                status: InstallStatus::ConflictingSignature as i32,
+                package_name: "com.example.notes".into(),
+                message: "INSTALL_FAILED_UPDATE_INCOMPATIBLE".into(),
+            })),
         ),
         (
             "agent_connected",
