@@ -69,6 +69,7 @@ class AgentApplication : Application() {
             fileStore = io.github.thisisthepy.dsa.agent.files.TransferStore(hostFilesDir(this)),
             fileOpener = AndroidFileOpener(this),
             clipboard = AndroidClipboard(this, log),
+            packageInstaller = AndroidPackageInstaller(this, log),
         )
         AgentApplication.agent = agent
         HostInputMethod.onCursor = { rect -> agent.cursorMoved(rect.left, rect.top, rect.right, rect.bottom) }
