@@ -7,6 +7,7 @@
 //! - [`session`]: one guest's life from start to stop.
 //! - [`accessibility`]: the accessibility tree of a task window, for host accessibility
 //!   clients such as screen readers.
+//! - [`audio`]: the guest's sound, played on the host's default output device.
 //! - [`bootconfig`]: the kernel bootconfig that carries each boot's secret to the guest.
 //! - [`handshake`]: the control channel's handshake as a session uses it.
 //! - [`host_api`]: the local API service, which acts on each caller's own Android, and its
@@ -28,6 +29,7 @@
 
 pub mod accessibility;
 pub mod apk;
+pub mod audio;
 pub mod bootconfig;
 pub mod clipboard;
 pub mod clock_trace;
