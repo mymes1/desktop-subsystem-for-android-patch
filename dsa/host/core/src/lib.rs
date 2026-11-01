@@ -23,6 +23,7 @@
 
 pub mod bootconfig;
 pub mod clipboard;
+pub mod clock_trace;
 pub mod compositor;
 pub mod guest_display;
 pub mod handshake;
