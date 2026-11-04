@@ -21,7 +21,7 @@ use dsa_host_core::session::{
     BackgroundRequest, BootProblem, GuestLauncher, GuestPower, GuestStall, Session, SessionConfig,
     SessionError, SessionEvent, SessionState, StopReason,
 };
-use dsa_host_core::tasks::{Bounds, Task, TaskEvent, TaskRequest};
+use dsa_host_core::tasks::{Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest};
 use dsa_host_core::widgets::{self, Placement, Widget, WidgetEvent, WidgetSize};
 use dsa_protocol::auth::BootSecret;
 use dsa_protocol::control::{envelope::Body, Envelope, RejectReason, Role};
@@ -1100,6 +1100,8 @@ fn task_updated(task_id: i32, label: &str) -> Body {
         max_height: 1080,
         min_width: 700,
         min_height: 500,
+        status_bar_appearance: dsa_protocol::control::StatusBarAppearance::Light as i32,
+        status_bar_color: 0xFFFA_FAFA,
     })
 }
 
@@ -1120,6 +1122,8 @@ fn clock(task_id: i32, label: &str) -> Task {
         max_height: 1080,
         min_width: 700,
         min_height: 500,
+        status_bar: StatusBarAppearance::Light,
+        status_bar_color: 0xFFFA_FAFA,
     }
 }
 
@@ -1245,6 +1249,27 @@ fn fr3_closing_a_task_and_launching_an_app_reach_the_guest() {
         Some(Body::LaunchApp(dsa_protocol::control::LaunchApp {
             package_name: "com.example.clock".into()
         }))
+    );
+}
+
+#[test]
+fn fr22_a_windows_caption_height_reaches_the_guest() {
+    let (session, mut agent, _launcher) = active_session();
+    session
+        .request(TaskRequest::SetCaption {
+            task_id: 7,
+            height: 62,
+        })
+        .expect("the caption height is sent");
+    let sent = dsa_protocol::decode(&agent.recv(Some(WAIT)).unwrap()).unwrap();
+    assert_eq!(
+        sent.body,
+        Some(Body::SetTaskCaption(
+            dsa_protocol::control::SetTaskCaption {
+                task_id: 7,
+                height: 62
+            }
+        ))
     );
 }
 

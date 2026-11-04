@@ -144,6 +144,21 @@ jobs:
       - name: Run the tests
         run: cargo test --workspace
 
+      # Pictures of the top of a light and a dark app window as the task window draws its
+      # title bar, kept with the run.
+      - name: Draw the title bar pictures
+        if: runner.os == 'Windows'
+        env:
+          DSA_CAPTION_PICTURES: ${{ github.workspace }}/.scratch/caption-pictures
+        run: cargo test -p dsa-host-core --lib fr22_pictures_of_a_light_and_a_dark_app_window
+
+      - name: Keep the title bar pictures
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: caption-pictures
+          path: .scratch/caption-pictures
+
       # Registers dsa-hostd as a real Windows service, reaches it through its named pipe and
       # stops it. The runner's account is an administrator, which this needs.
       - name: Run the service test as an installed Windows service

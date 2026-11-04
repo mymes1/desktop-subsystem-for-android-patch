@@ -665,6 +665,10 @@ impl Manager {
                 let requests = self.windows.window_dragging(task_id, dragging, now);
                 self.request(requests);
             }
+            FromHost::Caption { task_id, height } => {
+                let requests = self.windows.window_caption(task_id, height);
+                self.request(requests);
+            }
             FromHost::Focus { .. } => {}
             FromHost::Shown { task_id, shown } => self.shown.reported(task_id, shown),
         }
@@ -755,7 +759,8 @@ impl Manager {
                         ToHost::Retitle { .. }
                         | ToHost::Resize { .. }
                         | ToHost::TaskSize { .. }
-                        | ToHost::ImeCursor { .. } => {}
+                        | ToHost::ImeCursor { .. }
+                        | ToHost::CaptionTone { .. } => {}
                     }
                     link.send(to_wire(&message));
                 }

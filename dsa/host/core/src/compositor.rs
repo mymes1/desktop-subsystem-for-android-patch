@@ -10,8 +10,10 @@
 //! size, [`frame_buffers`] keeps a window's buffers at one size while it is resized,
 //! [`shown_windows`] says whether any window is shown, which lets the guest sleep, and
 //! [`visible_change`] when a press first visibly changes a window;
+//! [`caption`] lays out and draws the title bar a window draws over its app;
 //! the platform only carries it out.
 
+pub mod caption;
 pub mod frame_buffers;
 pub mod present_watch;
 pub mod resize_latency;

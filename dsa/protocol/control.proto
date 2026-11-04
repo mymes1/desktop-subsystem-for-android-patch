@@ -130,6 +130,24 @@ message TaskUpdated {
   // task's frames stretched. 0 when unknown.
   uint32 min_width = 9;
   uint32 min_height = 10;
+  // What the task's app told the system about its status bar: whether it asked for dark
+  // icons on a light status bar. The host draws its window's caption buttons in the
+  // matching tone over the app's status bar area.
+  StatusBarAppearance status_bar_appearance = 11;
+  // The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+  // transparent. Used only while the appearance is unspecified.
+  fixed32 status_bar_color = 12;
+}
+
+// Whether an app asked for dark status bar icons (a light status bar) or light ones.
+enum StatusBarAppearance {
+  // The app did not say, or the agent could not read it.
+  STATUS_BAR_APPEARANCE_UNSPECIFIED = 0;
+  // Dark icons on a light status bar (WindowInsetsController's
+  // APPEARANCE_LIGHT_STATUS_BARS).
+  STATUS_BAR_APPEARANCE_LIGHT = 1;
+  // Light icons on a dark status bar.
+  STATUS_BAR_APPEARANCE_DARK = 2;
 }
 
 // Guest to host, from the agent: the task ended; the host closes its window.
@@ -186,6 +204,17 @@ message ResizeTask {
 message SetTaskDensity {
   int32 task_id = 1;
   uint32 density_dpi = 2;
+}
+
+// Host to guest: the task's window draws its title bar over the top `height` pixels of the
+// task (guest display pixels, which are the window's). The agent gives the task a top system
+// bar inset of that height (status bars, system bars and caption bar), so the app keeps its
+// toolbar below the caption buttons and draws its status bar background behind them. The
+// host sends it when the window opens and whenever the height changes, as on a move to a
+// monitor of another scale. 0 removes the inset.
+message SetTaskCaption {
+  int32 task_id = 1;
+  uint32 height = 2;
 }
 
 // Guest to host, from the agent: the name and launcher icon of an app the host shows a task
@@ -1860,5 +1889,6 @@ message Envelope {
     CameraStill camera_still = 265;
     CameraStillTaken camera_still_taken = 266;
     CameraError camera_error = 267;
+    SetTaskCaption set_task_caption = 155;
   }
 }

@@ -42,8 +42,7 @@ use windows_sys::Win32::Graphics::Gdi::{
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::HiDpi::{
-    AdjustWindowRectExForDpi, GetDpiForWindow, SetProcessDpiAwarenessContext,
-    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+    GetDpiForWindow, SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
@@ -53,9 +52,10 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     IDC_ARROW, MINMAXINFO, MSG, SIZE_MINIMIZED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
     SWP_NOZORDER, SW_SHOW, SW_SHOWNOACTIVATE, WA_INACTIVE, WINDOWPOS, WINDOW_EX_STYLE,
     WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_CLOSE, WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_ERASEBKGND,
-    WM_EXITSIZEMOVE, WM_GETMINMAXINFO, WM_GETOBJECT, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_SIZE,
-    WM_TIMER, WM_WINDOWPOSCHANGED, WM_WINDOWPOSCHANGING, WNDCLASSEXW, WS_EX_APPWINDOW,
-    WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
+    WM_EXITSIZEMOVE, WM_GETMINMAXINFO, WM_GETOBJECT, WM_NCCREATE, WM_NCDESTROY, WM_PAINT,
+    WM_SETTINGCHANGE, WM_SIZE, WM_SYSCOLORCHANGE, WM_THEMECHANGED, WM_TIMER, WM_WINDOWPOSCHANGED,
+    WM_WINDOWPOSCHANGING, WNDCLASSEXW, WS_EX_APPWINDOW, WS_EX_NOREDIRECTIONBITMAP,
+    WS_OVERLAPPEDWINDOW,
 };
 
 use crate::compositor::log::{note, CompositorLogger};
@@ -64,6 +64,7 @@ use crate::compositor::present::{self, Gpu, WindowPresenter};
 use crate::compositor::window_marks;
 
 use super::accessibility::{AccessibilityWindow, ApiConnect, WM_APP_ACCESSIBILITY};
+use super::caption::{task_frame, CaptionWindow};
 use super::ime::ImeWindow;
 use super::keys::KeyWindow;
 use super::pointer::PointerWindow;
@@ -200,6 +201,8 @@ struct WindowData {
     ime: ImeWindow,
     /// The task's UI Automation tree, for screen readers and other accessibility clients.
     accessibility: RefCell<AccessibilityWindow>,
+    /// The title bar the window draws over the app's top, and its buttons.
+    caption: CaptionWindow,
     /// The largest client area Android can draw for the task, as the window manager last
     /// said, for WM_GETMINMAXINFO.
     max_client: Cell<Option<(u32, u32)>>,
@@ -404,6 +407,14 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
     lparam: LPARAM,
 ) -> LRESULT {
     if let Some(data) = window_data(hwnd) {
+        // The title bar first: what lies in it is the window's, never the app's.
+        let presenter = data.presenter.borrow().clone();
+        if let Some(result) =
+            data.caption
+                .handle(hwnd, message, wparam, lparam, presenter.as_deref())
+        {
+            return result;
+        }
         if let Some(result) = data.pointer.handle(hwnd, message, wparam, lparam) {
             return result;
         }
@@ -461,6 +472,9 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
                     }
                     // A size the window asked for before taking it asks nothing here.
                     report(data);
+                    // The buttons stay at the right end, and a maximized window's middle
+                    // button restores it.
+                    data.caption.paint(hwnd, data.presenter.borrow().as_deref());
                 }
             }
             0
@@ -574,6 +588,8 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
                     task_id: data.task_id,
                     dpi,
                 });
+                // The title bar's height follows the scale, and the task's inset with it.
+                data.caption.report_height(hwnd, &*data.report);
             }
             // A per-monitor aware window is handed the rectangle that keeps its size in
             // points on the new monitor, and applies it itself, within what Android can
@@ -602,11 +618,26 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
             );
             if let Some(data) = data {
                 data.rescaling.set(false);
+                data.caption.paint(hwnd, data.presenter.borrow().as_deref());
             }
             0
         }
+        WM_SETTINGCHANGE | WM_THEMECHANGED | WM_SYSCOLORCHANGE => {
+            // The caption's size, high contrast and the system colors may have changed.
+            if let Some(data) = window_data(hwnd) {
+                data.caption.report_height(hwnd, &*data.report);
+                data.caption
+                    .repaint(hwnd, data.presenter.borrow().as_deref());
+            }
+            DefWindowProcW(hwnd, message, wparam, lparam)
+        }
         WM_ACTIVATE => {
             if let Some(data) = window_data(hwnd) {
+                data.caption.activated(
+                    hwnd,
+                    (wparam & 0xffff) as u32 != WA_INACTIVE,
+                    data.presenter.borrow().as_deref(),
+                );
                 (data.report)(FromHost::Focus {
                     task_id: data.task_id,
                     focused: (wparam & 0xffff) as u32 != WA_INACTIVE,
@@ -667,16 +698,15 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
     }
 }
 
-/// The outer size of a window whose client area is `client` pixels at `dpi`.
+/// The outer size of a window whose client area is `client` pixels at `dpi`. The client
+/// area reaches the window's top edge, under the title bar, so only the side and bottom
+/// borders are added.
 unsafe fn outer_size(client: (u32, u32), dpi: u32) -> (i32, i32) {
-    let mut rect = RECT {
-        left: 0,
-        top: 0,
-        right: client.0 as i32,
-        bottom: client.1 as i32,
-    };
-    AdjustWindowRectExForDpi(&mut rect, TASK_STYLE, 0, TASK_EX_STYLE, dpi);
-    (rect.right - rect.left, rect.bottom - rect.top)
+    let (left, top, right, bottom) = task_frame(TASK_STYLE, TASK_EX_STYLE, dpi, false);
+    (
+        client.0 as i32 + left + right,
+        client.1 as i32 + top + bottom,
+    )
 }
 
 /// The work area of the monitor nearest `rect`, when the monitor says.
@@ -785,6 +815,14 @@ impl Ui {
                             }
                         }
                     }
+                    ToHost::CaptionTone { task_id, tone } => {
+                        if let Some(hwnd) = self.open.get(&task_id) {
+                            if let Some(data) = window_data(*hwnd) {
+                                let presenter = data.presenter.borrow().clone();
+                                data.caption.set_tone(*hwnd, tone, presenter.as_deref());
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -869,6 +907,7 @@ impl Ui {
             reporting: Cell::new(false),
             minimized: Cell::new(false),
             rescaling: Cell::new(false),
+            caption: CaptionWindow::new(task_id, TASK_STYLE, TASK_EX_STYLE),
         }));
         let class = wide(TASK_CLASS);
         let hwnd = CreateWindowExW(
@@ -935,6 +974,12 @@ impl Ui {
             task_id,
             dpi: GetDpiForWindow(hwnd).max(96),
         });
+        // Then the title bar's height, which becomes the task's top inset.
+        if let Some(data) = window_data(hwnd) {
+            data.caption.extend_frame(hwnd);
+            data.caption.report_height(hwnd, &*self.setup.report);
+            data.caption.paint(hwnd, data.presenter.borrow().as_deref());
+        }
         (self.setup.report)(FromHost::Resized {
             task_id,
             width: client.0,

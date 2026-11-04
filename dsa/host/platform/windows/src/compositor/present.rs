@@ -56,7 +56,7 @@ use dsa_host_core::compositor::resize_latency::ResizeLatency;
 use dsa_host_core::compositor::resize_sync::{self, frame_action, FrameAction, ResizeSync, Step};
 use dsa_host_core::compositor::visible_change::{self, area_around, Area, PressWatch, Verdict};
 use windows::core::{Interface, BOOL, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE, HWND, LUID};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE, HWND, LUID, POINT};
 use windows::Win32::Graphics::Direct3D::{
     D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP,
 };
@@ -69,10 +69,12 @@ use windows::Win32::Graphics::Direct3D11::{
     D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING,
 };
 use windows::Win32::Graphics::DirectComposition::{
-    DCompositionCreateDevice, IDCompositionDevice, IDCompositionTarget, IDCompositionVisual,
+    DCompositionCreateDevice, IDCompositionDevice, IDCompositionSurface, IDCompositionTarget,
+    IDCompositionVisual,
 };
 use windows::Win32::Graphics::Dxgi::Common::{
-    DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC,
+    DXGI_ALPHA_MODE_IGNORE, DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM,
+    DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC,
 };
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory2, IDXGIAdapter, IDXGIAdapter3, IDXGIDevice, IDXGIDevice3, IDXGIFactory2,
@@ -358,7 +360,11 @@ impl Drop for SharedTexture {
 
 struct State {
     target: IDCompositionTarget,
+    /// The frame's visual, under the caption's.
     visual: IDCompositionVisual,
+    /// The caption buttons' visual, above the frame's, and its surface and the surface's size.
+    caption: IDCompositionVisual,
+    caption_surface: Option<(IDCompositionSurface, (u32, u32))>,
     swapchain: Option<IDXGISwapChain2>,
     /// The size of the swapchain's buffers: the texture's, not a frame's.
     buffers: Option<(u32, u32)>,
@@ -470,20 +476,31 @@ impl WindowPresenter {
     ) -> Result<Arc<Self>, String> {
         let dcomp = gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: `hwnd` is a live window of this thread; the rest are plain COM calls.
-        let (target, visual) = unsafe {
+        let (target, visual, caption) = unsafe {
             let target = dcomp
                 .CreateTargetForHwnd(HWND(hwnd as *mut c_void), true)
                 .map_err(|e| failed("attaching DirectComposition to a task window", e))?;
+            let root = dcomp
+                .CreateVisual()
+                .map_err(|e| failed("creating a task window's visual", e))?;
             let visual = dcomp
                 .CreateVisual()
                 .map_err(|e| failed("creating a task window's visual", e))?;
+            // The caption buttons are drawn over the app, whose content runs under them.
+            let caption = dcomp
+                .CreateVisual()
+                .map_err(|e| failed("creating a task window's caption visual", e))?;
+            root.AddVisual(&visual, false, None::<&IDCompositionVisual>)
+                .map_err(|e| failed("adding a task window's frame visual", e))?;
+            root.AddVisual(&caption, true, &visual)
+                .map_err(|e| failed("adding a task window's caption visual", e))?;
             target
-                .SetRoot(&visual)
+                .SetRoot(&root)
                 .map_err(|e| failed("setting a task window's visual", e))?;
             dcomp
                 .Commit()
                 .map_err(|e| failed("committing a task window's visual", e))?;
-            (target, visual)
+            (target, visual, caption)
         };
         drop(dcomp);
         Ok(Arc::new(WindowPresenter {
@@ -493,6 +510,8 @@ impl WindowPresenter {
             state: Mutex::new(State {
                 target,
                 visual,
+                caption,
+                caption_surface: None,
                 swapchain: None,
                 buffers: None,
                 frame: (0, 0),
@@ -682,6 +701,74 @@ impl WindowPresenter {
                 ),
             );
         }
+    }
+
+    /// Shows the caption buttons: `pixels`, rows of premultiplied BGRA `size` pixels
+    /// large, with their left edge `left` client pixels from the window's. They stay until
+    /// the next call, over every frame.
+    pub fn show_caption(&self, left: i32, size: (u32, u32), pixels: &[u8]) -> Result<(), String> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed || size.0 == 0 || size.1 == 0 {
+            return Ok(());
+        }
+        if pixels.len() < (size.0 * size.1 * 4) as usize {
+            return Err("the caption image is smaller than its size".into());
+        }
+        let dcomp = self.gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: plain COM calls on objects this presenter owns; the update reads only
+        // `pixels`, which holds the whole image.
+        unsafe {
+            if state.caption_surface.as_ref().map(|(_, at)| *at) != Some(size) {
+                let surface = dcomp
+                    .CreateSurface(
+                        size.0,
+                        size.1,
+                        DXGI_FORMAT_B8G8R8A8_UNORM,
+                        DXGI_ALPHA_MODE_PREMULTIPLIED,
+                    )
+                    .map_err(|e| failed("creating a task window's caption surface", e))?;
+                state
+                    .caption
+                    .SetContent(&surface)
+                    .map_err(|e| failed("showing a task window's caption", e))?;
+                state.caption_surface = Some((surface, size));
+            }
+            let Some((surface, _)) = state.caption_surface.as_ref() else {
+                return Ok(());
+            };
+            let mut offset = POINT::default();
+            let texture: ID3D11Texture2D = surface
+                .BeginDraw(None, &mut offset)
+                .map_err(|e| failed("drawing a task window's caption", e))?;
+            let place = D3D11_BOX {
+                left: offset.x as u32,
+                top: offset.y as u32,
+                front: 0,
+                right: offset.x as u32 + size.0,
+                bottom: offset.y as u32 + size.1,
+                back: 1,
+            };
+            {
+                let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+                context.UpdateSubresource(
+                    &texture,
+                    0,
+                    Some(&place as *const D3D11_BOX),
+                    pixels.as_ptr() as *const c_void,
+                    size.0 * 4,
+                    0,
+                );
+            }
+            surface
+                .EndDraw()
+                .map_err(|e| failed("drawing a task window's caption", e))?;
+            let _ = state.caption.SetOffsetX2(left as f32);
+            let _ = state.caption.SetOffsetY2(0.0);
+            dcomp
+                .Commit()
+                .map_err(|e| failed("committing a task window's caption", e))?;
+        }
+        Ok(())
     }
 
     /// The window is closing: nothing more is shown in it.

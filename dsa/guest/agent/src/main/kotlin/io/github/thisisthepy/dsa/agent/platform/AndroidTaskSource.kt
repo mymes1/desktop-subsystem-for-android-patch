@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.graphics.Rect
 import io.github.thisisthepy.dsa.agent.Log
 import io.github.thisisthepy.dsa.agent.tasks.ScreenDp
+import io.github.thisisthepy.dsa.agent.tasks.StatusBarAppearance
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
 import io.github.thisisthepy.dsa.agent.tasks.TaskKind
 import io.github.thisisthepy.dsa.agent.tasks.TaskSnapshot
@@ -69,6 +70,8 @@ class AndroidTaskSource(
             screenDp = fields.screenDp(info),
             minWidth = smallest?.first ?: 0,
             minHeight = smallest?.second ?: 0,
+            statusBar = fields.statusBar(info),
+            statusBarColor = fields.statusBarColor(info),
         )
     }
 
@@ -112,6 +115,18 @@ private class TaskFields(private val log: Log) {
     private val minWidth = field { taskInfo.getField("minWidth") }
     private val minHeight = field { taskInfo.getField("minHeight") }
     private val defaultMinSize = field { taskInfo.getField("defaultMinSize") }
+    private val taskDescription = ActivityManager.TaskDescription::class.java
+
+    // The appearance of the system bars of the task's top opaque activity, else of its top
+    // activity (TaskDescription, Android 15 and later; not in the SDK).
+    private val barsAppearance = optional {
+        try {
+            taskDescription.getMethod("getTopOpaqueSystemBarsAppearance")
+        } catch (e: NoSuchMethodException) {
+            taskDescription.getMethod("getSystemBarsAppearance")
+        }
+    }
+    private val getStatusBarColor = optional { taskDescription.getMethod("getStatusBarColor") }
     private val warned = HashSet<String>()
 
     fun bounds(info: ActivityManager.RunningTaskInfo): Rect? =
@@ -147,6 +162,30 @@ private class TaskFields(private val log: Log) {
             Pair(if (width > 0) width else default, if (height > 0) height else default)
         }
 
+    /**
+     * Whether the task's app asked for dark status bar icons (a light status bar) or light
+     * ones, as its task description says: WindowInsetsController's
+     * APPEARANCE_LIGHT_STATUS_BARS, or APPEARANCE_LIGHT_CAPTION_BARS, which follows it unless
+     * the app sets it apart. Unknown when the framework does not say.
+     */
+    fun statusBar(info: ActivityManager.RunningTaskInfo): StatusBarAppearance {
+        val description = info.taskDescription ?: return StatusBarAppearance.UNKNOWN
+        val appearance = read("status bar appearance") { barsAppearance!!.invoke(description) as Int }
+            ?: return StatusBarAppearance.UNKNOWN
+        val light = appearance and (APPEARANCE_LIGHT_STATUS_BARS or APPEARANCE_LIGHT_CAPTION_BARS)
+        return if (light != 0) {
+            StatusBarAppearance.LIGHT
+        } else {
+            StatusBarAppearance.DARK
+        }
+    }
+
+    /** The status bar color the app set, as ARGB; 0 when it set none or it cannot be read. */
+    fun statusBarColor(info: ActivityManager.RunningTaskInfo): Int {
+        val description = info.taskDescription ?: return 0
+        return read("status bar color") { getStatusBarColor!!.invoke(description) as Int } ?: 0
+    }
+
     fun focused(info: ActivityManager.RunningTaskInfo): Boolean =
         read("focus") { isFocused!!.getBoolean(info) } ?: false
 
@@ -160,6 +199,13 @@ private class TaskFields(private val log: Log) {
         null
     }
 
+    /** A member only some frameworks have: missing is not worth a warning. */
+    private fun <T> optional(find: () -> T): T? = try {
+        find()
+    } catch (e: ReflectiveOperationException) {
+        null
+    }
+
     private fun <T> read(what: String, get: () -> T): T? = try {
         get()
     } catch (e: Exception) {
@@ -170,5 +216,9 @@ private class TaskFields(private val log: Log) {
     private companion object {
         // DisplayMetrics.DENSITY_DEFAULT: the density at which one dp is one pixel.
         const val DENSITY_BASE = 160
+
+        // WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS and APPEARANCE_LIGHT_CAPTION_BARS.
+        const val APPEARANCE_LIGHT_STATUS_BARS = 8
+        const val APPEARANCE_LIGHT_CAPTION_BARS = 256
     }
 }

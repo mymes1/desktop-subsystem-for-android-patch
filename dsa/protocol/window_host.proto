@@ -222,6 +222,32 @@ message WindowShown {
   bool shown = 2;
 }
 
+// Window host to window manager: the task's window draws its title bar over the top
+// `height` client pixels, where the app's content continues underneath. Sent when the window
+// opens and whenever the height changes (a move to a monitor of another scale, a change of
+// the system's caption size). The window manager asks Android to give the task a top inset
+// of that height.
+message WindowCaption {
+  int32 task_id = 1;
+  uint32 height = 2;
+}
+
+// The tone of a window's caption buttons, so they stay readable over the app's status bar.
+enum CaptionTone {
+  CAPTION_TONE_UNSPECIFIED = 0;
+  // Dark glyphs, for a light status bar.
+  CAPTION_TONE_DARK_GLYPHS = 1;
+  // Light glyphs, for a dark status bar.
+  CAPTION_TONE_LIGHT_GLYPHS = 2;
+}
+
+// Window manager to window host: the caption buttons of the task's window take this tone.
+// Sent when the window opens and whenever the app's status bar changes tone.
+message SetCaptionTone {
+  int32 task_id = 1;
+  CaptionTone tone = 2;
+}
+
 // The one message type on the wire. Each frame carries exactly one.
 message Envelope {
   oneof body {
@@ -245,5 +271,7 @@ message Envelope {
     TaskSize task_size = 18;
     ImeCursor ime_cursor = 19;
     WindowShown window_shown = 30;
+    WindowCaption window_caption = 31;
+    SetCaptionTone set_caption_tone = 32;
   }
 }

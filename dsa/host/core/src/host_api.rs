@@ -88,7 +88,9 @@ use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
 use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
 use crate::settings::{Settings, SettingsStore};
-use crate::tasks::{AppInfo, Bounds, Task, TaskEvent, TaskRequest, TaskRequestError, TaskWatch};
+use crate::tasks::{
+    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskRequestError, TaskWatch,
+};
 use crate::widgets::{
     self, MemoryWidgetPlacements, Placement, Widget, WidgetError, WidgetEvent, WidgetFrame,
     WidgetPlacements, WidgetProvider, WidgetSize,
@@ -773,10 +775,21 @@ fn task_to_wire(task: Task) -> types::Task {
         max_height: task.max_height,
         min_width: task.min_width,
         min_height: task.min_height,
+        status_bar_appearance: match task.status_bar {
+            StatusBarAppearance::Unspecified => types::StatusBarAppearance::Unspecified,
+            StatusBarAppearance::Light => types::StatusBarAppearance::Light,
+            StatusBarAppearance::Dark => types::StatusBarAppearance::Dark,
+        } as i32,
+        status_bar_color: task.status_bar_color,
     }
 }
 
 fn task_from_wire(task: types::Task) -> Task {
+    let status_bar = match task.status_bar_appearance() {
+        types::StatusBarAppearance::Unspecified => StatusBarAppearance::Unspecified,
+        types::StatusBarAppearance::Light => StatusBarAppearance::Light,
+        types::StatusBarAppearance::Dark => StatusBarAppearance::Dark,
+    };
     let bounds = task.bounds.unwrap_or_default();
     Task {
         task_id: task.task_id,
@@ -794,6 +807,8 @@ fn task_from_wire(task: types::Task) -> Task {
         max_height: task.max_height,
         min_width: task.min_width,
         min_height: task.min_height,
+        status_bar,
+        status_bar_color: task.status_bar_color,
     }
 }
 
@@ -2946,6 +2961,13 @@ impl HostApiService {
                     density_dpi: density.density_dpi,
                 },
             ),
+            Some(request::Body::SetTaskCaption(caption)) => self.request(
+                peer,
+                TaskRequest::SetCaption {
+                    task_id: caption.task_id,
+                    height: caption.height,
+                },
+            ),
             Some(request::Body::SetWindowsShown(shown)) => {
                 self.request(peer, TaskRequest::WindowsShown { shown: shown.shown })
             }
@@ -2993,6 +3015,7 @@ impl HostApiService {
                         | request::Body::LaunchApp(_)
                         | request::Body::ResizeTask(_)
                         | request::Body::SetTaskDensity(_)
+                        | request::Body::SetTaskCaption(_)
                         | request::Body::SetWindowsShown(_)
                         | request::Body::FreezeSession(_)
                         | request::Body::GetSettings(_)
@@ -3999,6 +4022,15 @@ impl HostApiClient {
         }))
     }
 
+    /// Asks the caller's Android to give a task a top inset of `height` pixels, which its
+    /// window's title bar covers.
+    pub fn set_task_caption(&mut self, task_id: i32, height: u32) -> Result<(), ClientError> {
+        self.done(request::Body::SetTaskCaption(types::SetTaskCaption {
+            task_id,
+            height,
+        }))
+    }
+
     /// Carries out `request` against the caller's Android.
     pub fn request(&mut self, request: &TaskRequest) -> Result<(), ClientError> {
         match request {
@@ -4014,6 +4046,7 @@ impl HostApiClient {
                 task_id,
                 density_dpi,
             } => self.set_task_density(*task_id, *density_dpi),
+            TaskRequest::SetCaption { task_id, height } => self.set_task_caption(*task_id, *height),
             TaskRequest::WindowsShown { shown } => self.set_windows_shown(*shown),
             TaskRequest::StopApp { package_name } => self.stop_app(package_name),
         }

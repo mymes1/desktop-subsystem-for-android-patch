@@ -10,6 +10,7 @@ import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.LaunchApp
 import io.github.thisisthepy.dsa.control.v1.OpenAppSettings
 import io.github.thisisthepy.dsa.control.v1.ResizeTask
+import io.github.thisisthepy.dsa.control.v1.SetTaskCaption
 import io.github.thisisthepy.dsa.control.v1.SetTaskDensity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,6 +41,23 @@ class HostRequestsTest {
 
         assertEquals(RequestResult.Resize(3, Size(1280, 720)), requests.handle(resize(3, 1280, 720)))
         assertEquals(RequestResult.Density(3, 320), requests.handle(density(3, 320)))
+    }
+
+    private fun caption(taskId: Int, height: Int) = Envelope.newBuilder()
+        .setSetTaskCaption(SetTaskCaption.newBuilder().setTaskId(taskId).setHeight(height))
+        .build().toByteArray()
+
+    @Test
+    fun fr22_a_title_bar_height_for_a_reported_task_is_handed_back() {
+        reported += 3
+
+        assertEquals(RequestResult.Caption(3, 62), requests.handle(caption(3, 62)))
+        assertEquals(RequestResult.Caption(3, 0), requests.handle(caption(3, 0)))
+        assertTrue(requests.handle(caption(4, 62)) is RequestResult.SizeRefused)
+        // An unsigned height past Int.MAX_VALUE, and one past any display.
+        assertTrue(requests.handle(caption(3, -1)) is RequestResult.Malformed)
+        assertTrue(requests.handle(caption(3, 20000)) is RequestResult.Malformed)
+        assertTrue(actions.captionInsets.isEmpty())
     }
 
     @Test

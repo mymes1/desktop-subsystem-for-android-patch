@@ -138,7 +138,9 @@ use crate::notifications::{self, Notification, NotificationAction, NotificationE
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
-use crate::tasks::{AppInfo, Bounds, Task, TaskEvent, TaskRequest, TaskTable, TaskWatch};
+use crate::tasks::{
+    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskTable, TaskWatch,
+};
 use crate::widgets::{
     self, Placement, Widget, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
 };
@@ -2078,6 +2080,9 @@ impl Session {
                 task_id,
                 density_dpi,
             }),
+            TaskRequest::SetCaption { task_id, height } => {
+                Body::SetTaskCaption(control::SetTaskCaption { task_id, height })
+            }
         };
         self.send(dsa_protocol::encode(&control::Envelope {
             body: Some(body),
@@ -4310,6 +4315,11 @@ impl Worker {
             }
             Some(Body::TaskUpdated(update)) => {
                 let bounds = update.bounds.unwrap_or_default();
+                let status_bar = match update.status_bar_appearance() {
+                    control::StatusBarAppearance::Light => StatusBarAppearance::Light,
+                    control::StatusBarAppearance::Dark => StatusBarAppearance::Dark,
+                    control::StatusBarAppearance::Unspecified => StatusBarAppearance::Unspecified,
+                };
                 self.shared.publish_task(TaskEvent::Updated(Task {
                     task_id: update.task_id,
                     bounds: Bounds {
@@ -4326,6 +4336,8 @@ impl Worker {
                     max_height: update.max_height,
                     min_width: update.min_width,
                     min_height: update.min_height,
+                    status_bar,
+                    status_bar_color: update.status_bar_color,
                 }));
             }
             Some(Body::TaskRemoved(removed)) => {
@@ -4522,6 +4534,7 @@ impl Worker {
             | Some(Body::LaunchApp(_))
             | Some(Body::ResizeTask(_))
             | Some(Body::SetTaskDensity(_))
+            | Some(Body::SetTaskCaption(_))
             | Some(Body::PointerEvent(_))
             | Some(Body::KeyEvent(_))
             | Some(Body::ImeComposition(_))

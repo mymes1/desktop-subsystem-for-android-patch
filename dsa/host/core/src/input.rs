@@ -593,15 +593,46 @@ mod tests {
     }
 
     /// The Settings window the offset was reported on: placed at 900 by 1100 window pixels on
-    /// a 2880 by 1800 monitor at 200%. Windows draws its frame outside the client area, and
-    /// the window's messages carry client coordinates, so the frame's invisible resize
-    /// borders and its caption never reach the mapping. The task is the client area's size,
+    /// a 2880 by 1800 monitor at 200%. Windows draws the side and bottom borders outside the
+    /// client area, and the window's messages carry client coordinates, so those borders never
+    /// reach the mapping. The title bar is inside the client area, over the app, and its band
+    /// is answered by the window's hit test before any point reaches the mapping. The task is the client area's size,
     /// one guest pixel per window pixel, in sizes that are not whole dp at 320 dpi.
     fn settings_at_200_percent() -> WindowGeometry {
         WindowGeometry {
             client: (869, 1031),
             task: (869, 1031),
         }
+    }
+
+    #[test]
+    fn fr22_under_the_title_bar_the_app_gets_the_points_below_the_band_unmoved() {
+        use crate::compositor::caption::{CaptionHit, CaptionLayout};
+        // The Settings window at 200%, now with its client area reaching the window's top
+        // edge: the task is the whole client area, title bar band included, and the band (62
+        // pixels, a standard caption at 192 dpi) belongs to Windows.
+        let geometry = settings_at_200_percent();
+        let layout = CaptionLayout::new(geometry.client.0, 62, 192, 16);
+        let (width, height) = geometry.client;
+        for y in 0..height {
+            for x in 0..width {
+                let hit = layout.hit(x as i32, y as i32);
+                if y < 62 {
+                    assert_ne!(hit, CaptionHit::Client, "({x}, {y}) is in the band");
+                    continue;
+                }
+                assert_eq!(hit, CaptionHit::Client, "({x}, {y}) is below the band");
+                let landed = geometry.to_guest((f64::from(x), f64::from(y)));
+                assert_eq!(landed, (x as f32, y as f32), "client pixel ({x}, {y})");
+            }
+        }
+        // The bottom corners reach the app exactly; the top ones are the window's.
+        for corner in [(0, height - 1), (width - 1, height - 1)] {
+            let landed = geometry.to_guest((f64::from(corner.0), f64::from(corner.1)));
+            assert_eq!(landed, (corner.0 as f32, corner.1 as f32));
+        }
+        assert_ne!(layout.hit(0, 0), CaptionHit::Client);
+        assert_ne!(layout.hit(width as i32 - 1, 0), CaptionHit::Client);
     }
 
     #[test]

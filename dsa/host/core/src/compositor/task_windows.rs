@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
+use super::caption::{caption_tone, CaptionTone};
 use super::window_sizing::WindowSizing;
 use crate::tasks::{Bounds, Task, TaskEvent, TaskRequest};
 
@@ -60,6 +61,10 @@ pub enum WindowChange {
         task_id: i32,
         cursor: crate::ime::ImeCursor,
     },
+    /// The window's caption buttons take this tone, to stay readable over the app's status
+    /// bar. Comes with every window that opens, and whenever the app's status bar changes
+    /// tone.
+    CaptionTone { task_id: i32, tone: CaptionTone },
 }
 
 /// The title of a task's window: its label, else its package, else its ID.
@@ -111,6 +116,11 @@ pub fn fill_scale(frame: (u32, u32), view: (u32, u32)) -> (f32, f32) {
         }
     };
     (scale(frame.0, view.0), scale(frame.1, view.1))
+}
+
+/// The tone of the caption glyphs of `task`'s window.
+fn tone_of(task: &Task) -> CaptionTone {
+    caption_tone(task.status_bar, task.status_bar_color)
 }
 
 fn open(task: &Task) -> WindowChange {
@@ -181,9 +191,21 @@ impl TaskWindows {
                     return Vec::new();
                 }
                 let mut changes = match previous {
-                    None => vec![open(task)],
+                    None => vec![
+                        open(task),
+                        WindowChange::CaptionTone {
+                            task_id: task.task_id,
+                            tone: tone_of(task),
+                        },
+                    ],
                     Some(previous) => {
                         let mut changes = Vec::new();
+                        if tone_of(&previous) != tone_of(task) {
+                            changes.push(WindowChange::CaptionTone {
+                                task_id: task.task_id,
+                                tone: tone_of(task),
+                            });
+                        }
                         let title = window_title(task);
                         if window_title(&previous) != title {
                             changes.push(WindowChange::Retitle {
@@ -293,7 +315,13 @@ impl TaskWindows {
         };
         self.sizes.insert(task_id, WindowSizing::new(task));
         self.told_sizes.remove(&task_id);
-        let mut changes = vec![open(task)];
+        let mut changes = vec![
+            open(task),
+            WindowChange::CaptionTone {
+                task_id,
+                tone: tone_of(task),
+            },
+        ];
         changes.extend(self.task_size_change(task_id));
         changes
     }
@@ -348,6 +376,15 @@ impl TaskWindows {
             .into_iter()
             .collect();
         (changes, request.into_iter().collect())
+    }
+
+    /// The task's window draws its title bar over its top `height` pixels. Returns the
+    /// request that gives the task a top inset of that height.
+    pub fn window_caption(&mut self, task_id: i32, height: u32) -> Vec<TaskRequest> {
+        if !self.has_window(task_id) {
+            return Vec::new();
+        }
+        vec![TaskRequest::SetCaption { task_id, height }]
     }
 
     /// The task's window opened on a monitor of `dpi`. Returns the client size it takes, and
@@ -545,6 +582,61 @@ mod tests {
         }
     }
 
+    fn dark_glyphs(task_id: i32) -> WindowChange {
+        WindowChange::CaptionTone {
+            task_id,
+            tone: CaptionTone::DarkGlyphs,
+        }
+    }
+
+    #[test]
+    fn fr22_a_window_follows_its_apps_status_bar_tone() {
+        use crate::tasks::StatusBarAppearance;
+        let mut windows = TaskWindows::new();
+        let mut dark = task(1, "Clock", 720, 1280);
+        dark.status_bar = StatusBarAppearance::Dark;
+        assert_eq!(
+            windows.apply(&TaskEvent::Updated(dark.clone())),
+            vec![
+                opened(1, "Clock"),
+                WindowChange::CaptionTone {
+                    task_id: 1,
+                    tone: CaptionTone::LightGlyphs
+                }
+            ]
+        );
+        assert!(windows.apply(&TaskEvent::Updated(dark.clone())).is_empty());
+        // The app switches to a light theme.
+        let mut light = dark.clone();
+        light.status_bar = StatusBarAppearance::Light;
+        assert_eq!(
+            windows.apply(&TaskEvent::Updated(light.clone())),
+            vec![dark_glyphs(1)]
+        );
+        // A new color with the same tone changes nothing.
+        light.status_bar_color = 0xFF00_0000;
+        assert!(windows.apply(&TaskEvent::Updated(light)).is_empty());
+    }
+
+    #[test]
+    fn fr22_a_windows_caption_height_becomes_its_tasks_top_inset() {
+        let mut windows = TaskWindows::new();
+        assert!(windows.window_caption(1, 62).is_empty(), "no window yet");
+        windows.apply(&updated(1, "Clock"));
+        assert_eq!(
+            windows.window_caption(1, 62),
+            vec![TaskRequest::SetCaption {
+                task_id: 1,
+                height: 62
+            }]
+        );
+        windows.user_closed(1);
+        assert!(
+            windows.window_caption(1, 31).is_empty(),
+            "the window closed"
+        );
+    }
+
     #[test]
     fn fr6_the_cursor_of_a_tasks_editor_goes_to_its_window_unchanged() {
         let mut windows = TaskWindows::new();
@@ -571,9 +663,12 @@ mod tests {
         let mut windows = TaskWindows::new();
         assert_eq!(
             windows.apply(&updated(1, "Clock")),
-            vec![opened(1, "Clock")]
+            vec![opened(1, "Clock"), dark_glyphs(1)]
         );
-        assert_eq!(windows.apply(&updated(2, "Maps")), vec![opened(2, "Maps")]);
+        assert_eq!(
+            windows.apply(&updated(2, "Maps")),
+            vec![opened(2, "Maps"), dark_glyphs(2)]
+        );
         assert_eq!(windows.windows(), vec![1, 2]);
     }
 
@@ -665,7 +760,7 @@ mod tests {
         // Its end closes no other window.
         assert!(windows.apply(&TaskEvent::Removed { task_id: 1 }).is_empty());
         assert!(
-            windows.apply(&updated(1, "Clock")).len() == 1,
+            windows.apply(&updated(1, "Clock")).len() == 2,
             "a new task 1 opens"
         );
     }
@@ -675,7 +770,10 @@ mod tests {
         let mut windows = TaskWindows::new();
         windows.apply(&updated(1, "Clock"));
         windows.user_closed(1);
-        assert_eq!(windows.close_failed(1), vec![opened(1, "Clock")]);
+        assert_eq!(
+            windows.close_failed(1),
+            vec![opened(1, "Clock"), dark_glyphs(1)]
+        );
         assert!(windows.has_window(1));
         assert!(windows.close_failed(1).is_empty());
     }
@@ -827,8 +925,8 @@ mod tests {
     fn fr4_a_window_hears_its_tasks_size_whenever_the_guest_changes_it() {
         let mut windows = TaskWindows::new();
         let mut clock = task(1, "Clock", 400, 300);
-        // Shown at the task's size, with no limit known: nothing more to say.
-        assert_eq!(windows.apply(&TaskEvent::Updated(clock.clone())).len(), 1);
+        // Shown at the task's size, with no limit known: nothing more to say than its tone.
+        assert_eq!(windows.apply(&TaskEvent::Updated(clock.clone())).len(), 2);
         clock.max_width = 1920;
         clock.max_height = 1080;
         let size = |width, height| WindowChange::TaskSize {
@@ -949,6 +1047,7 @@ mod tests {
                     title: "Maps 2".into()
                 },
                 opened(3, "Mail"),
+                dark_glyphs(3),
             ]
         );
         assert_eq!(windows.routes(), vec![(5, 3)]);
