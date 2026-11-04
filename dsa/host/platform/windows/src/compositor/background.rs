@@ -1279,7 +1279,7 @@ mod media {
     }
 
     fn hwnd(handle: windows_sys::Win32::Foundation::HWND) -> windows::Win32::Foundation::HWND {
-        windows::Win32::Foundation::HWND(handle as *mut core::ffi::c_void)
+        windows::Win32::Foundation::HWND(handle)
     }
 
     impl Controls {
