@@ -1041,7 +1041,7 @@ jobs:
   # the settings app for win-arm64), must refuse to install there: its package and its
   # setup.exe both say no, and nothing is left behind.
   arm64-on-x64:
-    name: fr25_the_arm64_package_installs_only_on_arm64_windows (windows, 2025)
+    name: fr27_the_arm64_package_installs_only_on_arm64_windows (windows, 2025)
     runs-on: windows-2025
     timeout-minutes: 40
     defaults:

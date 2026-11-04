@@ -277,7 +277,7 @@ fn fr14_the_vm_boots_the_image_folder_it_is_given() {
 }
 
 #[test]
-fn fr25_an_arm64_image_boots_its_own_kernel_named_image() {
+fn fr27_an_arm64_image_boots_its_own_kernel_named_image() {
     let config = HostConfig::parse(UPDATING).unwrap();
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
         .join(format!("arm64-image-{}", std::process::id()));
