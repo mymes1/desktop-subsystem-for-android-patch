@@ -88,12 +88,16 @@ therefore never depend on those documents; a comment may name them only as being
    worktree.
 9. **Only `main`, `develop` and `release` stay on the remote.** A branch merged into
    `develop` is deleted; its commits are in `develop`, so nothing is kept for it.
+10. **Integrate on `develop` without waiting for CI.** Feature branches go into `develop` as soon as
+    they are pushed; nobody waits for a pull request's checks. CI runs only on `develop` (and by
+    hand), where the dispatching session builds and tests the integrated whole once and fixes what
+    breaks there. Waiting for every branch's own run cost days of queues and conflicts.
 
 ## CI naming
 
 Workflow files and names, in `.github/workflows/`:
 
-- `test.yml`, "Test": the basic checks, on every pull request.
+- `test.yml`, "Test": the basic checks, on every push to `develop` and on the release pull request into `main`.
 - `release-sync.yml`, "Release sync": develop to main sync; its script is
   `.github/scripts/release/sync-release.sh`.
 - `test-<target>.yml`, "<Target> test": a special check for one target, such as
