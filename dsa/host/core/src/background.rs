@@ -334,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_a_package_name_must_be_one() {
+    fn fr24_a_package_name_must_be_one() {
         assert!(valid_package("com.example.music"));
         assert!(!valid_package(""));
         assert!(!valid_package("com.example/../x"));
@@ -344,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_text_actions_and_images_are_cut_to_the_limits() {
+    fn fr24_text_actions_and_images_are_cut_to_the_limits() {
         let mut message = app("com.example.music", &"t".repeat(MAX_LINE_CHARS + 10));
         message.actions = (0..20).map(|i| format!("action {i}")).collect();
         message.icon_png = vec![0; MAX_ICON_BYTES + 1];
@@ -365,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_the_hub_tells_watchers_of_changes_only() {
+    fn fr24_the_hub_tells_watchers_of_changes_only() {
         let mut hub = BackgroundHub::default();
         let watch = hub.watch();
         assert!(watch.apps.is_empty());
@@ -396,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_the_hub_keeps_a_bounded_number_of_apps() {
+    fn fr24_the_hub_keeps_a_bounded_number_of_apps() {
         let mut hub = BackgroundHub::default();
         for i in 0..MAX_APPS + 5 {
             let package = format!("com.example.app{i}");

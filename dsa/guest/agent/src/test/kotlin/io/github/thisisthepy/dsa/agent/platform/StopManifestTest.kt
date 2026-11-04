@@ -27,7 +27,7 @@ class StopManifestTest {
     }
 
     @Test
-    fun fr22_the_agent_may_force_stop_packages() {
+    fun fr24_the_agent_may_force_stop_packages() {
         val permission = "android.permission.FORCE_STOP_PACKAGES"
         assertTrue(permission in names("src/main/AndroidManifest.xml", "uses-permission"))
         assertTrue(permission in names("privapp-permissions-dsa-agent.xml", "permission"))

@@ -229,7 +229,7 @@ jobs:
 
       # The "Running in the background" page with apps on it: this runner's Android does not
       # boot, so a stand-in dsa says a music app and a download run in the background.
-      - name: fr22_settings_app_lists_the_apps_that_run_in_the_background
+      - name: fr24_settings_app_lists_the_apps_that_run_in_the_background
         run: |
           . .github/scripts/installer/setup-ui.ps1
           New-Item -ItemType Directory -Force screens | Out-Null

@@ -524,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_stopping_asks_by_default_and_do_not_ask_again_is_kept() {
+    fn fr24_stopping_asks_by_default_and_do_not_ask_again_is_kept() {
         let dir = scratch("stop");
         let store = FileSettings::new(&dir);
         assert!(!store.get("uid:1000").unwrap().stop_without_asking);

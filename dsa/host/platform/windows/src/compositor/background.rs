@@ -198,8 +198,9 @@ pub fn chosen(id: u32) -> Option<BackgroundCommand> {
     match id {
         MENU_OPEN => Some(BackgroundCommand::Open),
         MENU_STOP => Some(BackgroundCommand::Stop),
-        id if id >= MENU_FIRST_ACTION
-            && id < MENU_FIRST_ACTION + dsa_host_core::background::MAX_ACTIONS as u32 =>
+        id if (MENU_FIRST_ACTION
+            ..MENU_FIRST_ACTION + dsa_host_core::background::MAX_ACTIONS as u32)
+            .contains(&id) =>
         {
             Some(BackgroundCommand::Action(id - MENU_FIRST_ACTION))
         }
@@ -411,29 +412,24 @@ pub fn stop_dialog_template(question: &str, texts: &Texts, title: &str) -> Vec<u
     const BS_AUTOCHECKBOX: u32 = 0x3;
     const BUTTON: u16 = 0x0080;
     const STATIC: u16 = 0x0082;
-    let items: [(u32, i16, i16, i16, i16, u16, u16, &str); 4] = [
-        (0, 10, 10, 240, 52, STATIC_ID, STATIC, question),
+    type Item<'a> = (u32, [i16; 4], u16, u16, &'a str);
+    let items: [Item<'_>; 4] = [
+        (0, [10, 10, 240, 52], STATIC_ID, STATIC, question),
         (
             BS_AUTOCHECKBOX | WS_TABSTOP,
-            10,
-            68,
-            240,
-            12,
+            [10, 68, 240, 12],
             DO_NOT_ASK_ID,
             BUTTON,
             texts.do_not_ask,
         ),
         (
             BS_DEFPUSHBUTTON | WS_TABSTOP,
-            146,
-            88,
-            50,
-            14,
+            [146, 88, 50, 14],
             STOP_ID,
             BUTTON,
             texts.stop,
         ),
-        (WS_TABSTOP, 200, 88, 50, 14, CANCEL_ID, BUTTON, texts.cancel),
+        (WS_TABSTOP, [200, 88, 50, 14], CANCEL_ID, BUTTON, texts.cancel),
     ];
     let mut out = Vec::new();
     dword(
@@ -450,11 +446,11 @@ pub fn stop_dialog_template(question: &str, texts: &Texts, title: &str) -> Vec<u
     text(&mut out, title);
     word(&mut out, 9); // points
     text(&mut out, "Segoe UI");
-    for (style, x, y, cx, cy, id, class, caption) in items {
+    for (style, place, id, class, caption) in items {
         align(&mut out);
         dword(&mut out, WS_CHILD | WS_VISIBLE | style);
         dword(&mut out, 0);
-        for value in [x, y, cx, cy] {
+        for value in place {
             word(&mut out, value as u16);
         }
         word(&mut out, id);
@@ -1451,11 +1447,9 @@ mod media {
                     SHCreateMemStream(Some(&session.art_png))
                         .ok_or_else(|| "no memory for the album art".to_string())
                         .and_then(|stream| {
-                            CreateRandomAccessStreamOverStream::<_, IRandomAccessStream>(
-                                &stream,
-                                BSOS_DEFAULT,
-                            )
-                            .map_err(|e| fail("the album art", e))
+                            let wrapped: windows::core::Result<IRandomAccessStream> =
+                                CreateRandomAccessStreamOverStream(&stream, BSOS_DEFAULT);
+                            wrapped.map_err(|e| fail("the album art", e))
                         })
                 };
                 let reference = art.and_then(|stream| {
@@ -1496,7 +1490,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_each_app_has_its_own_icon_guid_and_keeps_it() {
+    fn fr24_each_app_has_its_own_icon_guid_and_keeps_it() {
         let music = tray_guid("com.example.music");
         assert_eq!(music, tray_guid("com.example.music"));
         assert_ne!(music, tray_guid("com.example.vpn"));
@@ -1507,7 +1501,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_the_tooltip_is_the_name_title_and_text_cut_to_fit() {
+    fn fr24_the_tooltip_is_the_name_title_and_text_cut_to_fit() {
         assert_eq!(tooltip(&music(&[])), "Music\nPlaying\nSong - Artist");
         let mut long = music(&[]);
         long.text = "\u{c74c}".repeat(300);
@@ -1522,7 +1516,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_the_menu_is_open_the_actions_and_stop() {
+    fn fr24_the_menu_is_open_the_actions_and_stop() {
         let texts = Texts::english();
         let entries = menu_entries(&music(&["Pause", "Next", "R&B"]), &texts);
         let ids: Vec<u32> = entries.iter().map(|e| e.id).collect();
@@ -1543,7 +1537,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_the_stop_question_names_the_app_in_the_users_language() {
+    fn fr24_the_stop_question_names_the_app_in_the_users_language() {
         assert!(Texts::english()
             .stop_question("Music")
             .starts_with("Stop Music?"));
@@ -1552,7 +1546,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_the_stop_question_is_a_dialog_with_a_do_not_ask_again_box() {
+    fn fr24_the_stop_question_is_a_dialog_with_a_do_not_ask_again_box() {
         let texts = Texts::english();
         let template = stop_dialog_template("Stop Music?", &texts, "DSA");
         let bytes: Vec<u8> = template.iter().flat_map(|d| d.to_le_bytes()).collect();
@@ -1588,7 +1582,7 @@ mod tests {
     }
 
     #[test]
-    fn fr22_the_tray_follows_the_service_and_passes_a_stop_back() {
+    fn fr24_the_tray_follows_the_service_and_passes_a_stop_back() {
         use dsa_host_core::host_api::UserAndroid;
         use dsa_host_core::host_api_conformance::{FakeAndroids, RunningService};
         use dsa_host_core::session::BackgroundRequest;

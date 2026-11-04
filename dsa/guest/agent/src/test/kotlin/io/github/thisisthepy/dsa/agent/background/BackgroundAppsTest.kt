@@ -122,7 +122,7 @@ class BackgroundAppsTest {
         ).build()
 
     @Test
-    fun fr22_a_foreground_service_reaches_the_host_and_its_end_removes_it() {
+    fun fr24_a_foreground_service_reaches_the_host_and_its_end_removes_it() {
         started()
         notifications.post(service())
         scheduler.runDue()
@@ -140,7 +140,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_an_ongoing_service_notification_is_not_a_toast() {
+    fun fr24_an_ongoing_service_notification_is_not_a_toast() {
         started()
         notifications.post(service())
         scheduler.runDue()
@@ -149,7 +149,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_one_entry_per_package_gone_only_with_its_last_service() {
+    fun fr24_one_entry_per_package_gone_only_with_its_last_service() {
         started()
         notifications.post(service(key = "a", title = "Downloading"))
         notifications.post(service(key = "b", title = "Playing"))
@@ -165,7 +165,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_the_agents_own_and_plain_notifications_are_not_background_apps() {
+    fun fr24_the_agents_own_and_plain_notifications_are_not_background_apps() {
         started()
         notifications.post(service(packageName = AGENT, key = "own"))
         notifications.post(notice())
@@ -174,7 +174,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_on_connecting_the_host_hears_of_every_app_and_session() {
+    fun fr24_on_connecting_the_host_hears_of_every_app_and_session() {
         notifications.shown[PLAYER] = service()
         media.sessions[MUSIC] = playing()
         started()
@@ -183,7 +183,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_open_and_an_action_run_the_notifications_intents() {
+    fun fr24_open_and_an_action_run_the_notifications_intents() {
         started()
         notifications.post(service())
         scheduler.runDue()
@@ -194,7 +194,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_stop_force_stops_the_package_and_removes_it_and_its_session_on_the_host() {
+    fun fr24_stop_force_stops_the_package_and_removes_it_and_its_session_on_the_host() {
         started()
         notifications.post(service())
         media.change(playing())
@@ -206,7 +206,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_the_agent_and_the_system_are_never_stopped() {
+    fun fr24_the_agent_and_the_system_are_never_stopped() {
         started()
         fromHost(action(BackgroundAppCommand.BACKGROUND_APP_COMMAND_STOP, packageName = AGENT))
         fromHost(action(BackgroundAppCommand.BACKGROUND_APP_COMMAND_STOP, packageName = "android"))
@@ -214,7 +214,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_acting_on_an_app_that_runs_nothing_removes_it_on_the_host() {
+    fun fr24_acting_on_an_app_that_runs_nothing_removes_it_on_the_host() {
         started()
         fromHost(action(BackgroundAppCommand.BACKGROUND_APP_COMMAND_OPEN))
         assertTrue(notifications.opened.isEmpty())
@@ -222,7 +222,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_a_media_session_reaches_the_host_and_media_keys_reach_it() {
+    fun fr24_a_media_session_reaches_the_host_and_media_keys_reach_it() {
         started()
         media.change(playing())
         media.change(playing())
@@ -247,7 +247,7 @@ class BackgroundAppsTest {
     }
 
     @Test
-    fun fr22_a_media_key_for_a_session_that_is_gone_removes_it_on_the_host() {
+    fun fr24_a_media_key_for_a_session_that_is_gone_removes_it_on_the_host() {
         started()
         fromHost(
             Envelope.newBuilder().setMediaControl(

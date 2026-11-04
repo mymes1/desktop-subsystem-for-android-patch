@@ -3589,7 +3589,7 @@ fn music_session() -> Body {
 const MUSIC: &str = "com.example.music";
 
 #[test]
-fn fr22_an_app_that_runs_in_the_background_reaches_the_watcher_and_goes_when_its_service_ends() {
+fn fr24_an_app_that_runs_in_the_background_reaches_the_watcher_and_goes_when_its_service_ends() {
     let (session, mut agent, _launcher) = active_session();
     let watch = session.watch_background();
     assert!(watch.apps.is_empty());
@@ -3638,7 +3638,7 @@ fn fr22_an_app_that_runs_in_the_background_reaches_the_watcher_and_goes_when_its
 }
 
 #[test]
-fn fr22_the_background_apps_of_a_guest_that_stops_are_removed() {
+fn fr24_the_background_apps_of_a_guest_that_stops_are_removed() {
     let (session, mut agent, _launcher) = active_session();
     let watch = session.watch_background();
     send_body(&mut agent, music_app("Playing"));
@@ -3667,7 +3667,7 @@ fn fr22_the_background_apps_of_a_guest_that_stops_are_removed() {
 }
 
 #[test]
-fn fr22_stop_and_an_action_reach_the_guest() {
+fn fr24_stop_and_an_action_reach_the_guest() {
     let (session, mut agent, _launcher) = active_session();
     let watch = session.watch_background();
     send_body(&mut agent, music_app("Playing"));
@@ -3712,7 +3712,7 @@ fn fr22_stop_and_an_action_reach_the_guest() {
 }
 
 #[test]
-fn fr22_a_media_key_for_a_frozen_guest_thaws_it_without_turning_the_screen_on() {
+fn fr24_a_media_key_for_a_frozen_guest_thaws_it_without_turning_the_screen_on() {
     let (session, mut agent, launcher) = lifecycle_session(None);
     let watch = session.watch_background();
     send_body(&mut agent, music_session());
@@ -3742,7 +3742,7 @@ fn fr22_a_media_key_for_a_frozen_guest_thaws_it_without_turning_the_screen_on() 
 }
 
 #[test]
-fn fr22_acting_on_a_background_app_of_a_stopped_guest_says_it_is_not_running() {
+fn fr24_acting_on_a_background_app_of_a_stopped_guest_says_it_is_not_running() {
     let (session, _connector) = session_with(FakeLauncher::default(), WAIT);
     assert_eq!(
         session.background_action(BackgroundRequest::App(

@@ -18,7 +18,7 @@ public class BackgroundViewModelTests
     private const string Asking = "{\"render_gpu\":\"display\",\"stop_without_asking\":false}";
 
     [Fact]
-    public async Task Fr22_the_page_lists_the_apps_that_run_in_the_background()
+    public async Task Fr24_the_page_lists_the_apps_that_run_in_the_background()
     {
         var cli = new FakeCli()
             .Answer("settings --json", Asking)
@@ -39,7 +39,7 @@ public class BackgroundViewModelTests
     }
 
     [Fact]
-    public async Task Fr22_stop_ends_the_app_and_the_list_follows()
+    public async Task Fr24_stop_ends_the_app_and_the_list_follows()
     {
         var cli = new FakeCli()
             .Answer("settings --json", Asking)
@@ -56,7 +56,7 @@ public class BackgroundViewModelTests
     }
 
     [Fact]
-    public async Task Fr22_asking_before_a_stop_can_be_turned_back_on()
+    public async Task Fr24_asking_before_a_stop_can_be_turned_back_on()
     {
         var cli = new FakeCli()
             .Answer("settings --json", "{\"stop_without_asking\":true}")
@@ -71,7 +71,7 @@ public class BackgroundViewModelTests
     }
 
     [Fact]
-    public async Task Fr22_a_stop_android_refused_says_why()
+    public async Task Fr24_a_stop_android_refused_says_why()
     {
         var cli = new FakeCli()
             .Answer("background list --json", "{\"apps\":[],\"media\":[]}")

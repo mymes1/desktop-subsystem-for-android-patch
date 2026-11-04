@@ -883,15 +883,15 @@ macro_rules! host_api_conformance {
             );
         }
         #[test]
-        fn fr22_apps_that_run_in_the_background_reach_a_watcher_and_a_list() {
+        fn fr24_apps_that_run_in_the_background_reach_a_watcher_and_a_list() {
             $crate::host_api_conformance::background_apps_reach_a_watcher(&mut || $make);
         }
         #[test]
-        fn fr22_open_action_stop_and_media_keys_reach_the_callers_android() {
+        fn fr24_open_action_stop_and_media_keys_reach_the_callers_android() {
             $crate::host_api_conformance::background_actions_reach_the_caller(&mut || $make);
         }
         #[test]
-        fn fr22_stopping_an_app_of_a_stopped_android_says_it_is_not_running() {
+        fn fr24_stopping_an_app_of_a_stopped_android_says_it_is_not_running() {
             $crate::host_api_conformance::background_action_needs_a_running_android(&mut || $make);
         }
         #[test]

@@ -1360,7 +1360,7 @@ fn fr12_dsa_widgets_says_why_a_widget_was_not_placed() {
 }
 
 #[test]
-fn fr22_dsa_background_is_parsed() {
+fn fr24_dsa_background_is_parsed() {
     use dsa_cli::BackgroundAction;
     assert_eq!(
         parse(&args("background")).unwrap().background,
@@ -1390,7 +1390,7 @@ fn fr22_dsa_background_is_parsed() {
 }
 
 #[test]
-fn fr22_dsa_background_lists_and_stops_the_apps_that_run_in_the_background() {
+fn fr24_dsa_background_lists_and_stops_the_apps_that_run_in_the_background() {
     use dsa_host_core::background::{BackgroundApp, BackgroundCommand, BackgroundEvent};
     use dsa_host_core::host_api::UserAndroids;
     use dsa_host_core::session::BackgroundRequest;
@@ -1435,7 +1435,7 @@ fn fr22_dsa_background_lists_and_stops_the_apps_that_run_in_the_background() {
 }
 
 #[test]
-fn fr22_stopping_without_asking_is_a_setting_off_by_default() {
+fn fr24_stopping_without_asking_is_a_setting_off_by_default() {
     let ((listener, _, _), endpoint) = local_pair();
     let _service = settings_service(listener);
     let settings = json_of(&dsa(&endpoint, "settings --json"));
