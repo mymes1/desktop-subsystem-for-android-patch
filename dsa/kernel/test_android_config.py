@@ -105,16 +105,27 @@ class AndroidKernelConfigTests(unittest.TestCase):
         ]:
             self.assertIn(option, config)
 
-    def test_fr21_the_kernel_keeps_its_last_log_in_pstore_ramoops(self):
+    def test_fr21_the_kernel_keeps_its_last_log_in_pstore_on_a_disk(self):
+        # A panic ends the VM, so a RAM backend keeps nothing; pstore/blk writes to the small
+        # disk the host attaches, found by its GPT partition UUID.
         config = CONFIG.read_text()
         for option in [
             "CONFIG_PSTORE=y",
             "CONFIG_PSTORE_CONSOLE=y",
             "CONFIG_PSTORE_PMSG=y",
-            "CONFIG_PSTORE_RAM=y",
+            "CONFIG_PSTORE_BLK=y",
+            "CONFIG_EFI_PARTITION=y",
+            "# CONFIG_PSTORE_RAM is not set",
         ]:
             self.assertIn(option, config)
+        self.assertNotIn("CONFIG_PSTORE_RAM=y", config)
 
+    def test_fr21_pstore_blk_waits_for_its_disk(self):
+        # Hyper-V disks probe asynchronously; without the wait pstore/blk looks for its disk
+        # before it exists and never registers.
+        patch = (PATCHES / "pstore-blk-wait-for-disk.patch").read_text()
+        self.assertIn("fs/pstore/blk.c", patch)
+        self.assertIn("+\twait_for_device_probe();", patch)
     def test_fr1_vmbus_root_device_is_platform_device_patch(self):
         patch = (PATCHES / "vmbus-platform-device.patch").read_text()
         self.assertIn("drivers/hv/vmbus_drv.c", patch)
