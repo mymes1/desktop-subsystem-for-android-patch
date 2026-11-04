@@ -18,7 +18,7 @@ pub mod names {
     /// The product every DSA program belongs to.
     pub const PRODUCT: &str = "Desktop Subsystem for Android";
     /// Who publishes it.
-    pub const COMPANY: &str = "Thisisthepy";
+    pub const COMPANY: &str = "ThisIsThePy";
     /// The service (`dsa-hostd.exe`), as Task Manager lists it.
     pub const SERVICE: &str = "Desktop Subsystem for Android Service";
     /// The window manager (`dsa-wm.exe`), as Task Manager lists it.
@@ -421,7 +421,7 @@ mod tests {
         assert_eq!(&info[6..6 + 30], utf16("VS_VERSION_INFO").as_slice());
         assert!(contains(&info, &utf16("DSA Window Manager")));
         assert!(contains(&info, &utf16("040904B0")));
-        assert!(contains(&info, &utf16("Thisisthepy")));
+        assert!(contains(&info, &utf16("ThisIsThePy")));
         assert!(contains(&info, &0xFEEF_04BDu32.to_le_bytes()));
         let korean = version_info(
             &VersionStrings {

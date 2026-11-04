@@ -38,7 +38,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
     <Package Name="$(ProductName)"
-             Manufacturer="Thisisthepy"
+             Manufacturer="ThisIsThePy"
              Version="$(Version)"
              UpgradeCode="5c08f90f-6eaa-402b-992b-6069634c45e8"
              Scope="perMachine"

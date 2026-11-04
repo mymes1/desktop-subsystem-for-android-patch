@@ -931,7 +931,7 @@ def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | No
     master_lines = [
         "================================================================================",
         "Desktop Subsystem for Android (DSA)",
-        "Copyright thisisthepy. All rights reserved.",
+        "Copyright ThisIsThePy. All rights reserved.",
         "================================================================================",
         "",
         "Licensed under the Apache License, Version 2.0 (the \"License\");",
