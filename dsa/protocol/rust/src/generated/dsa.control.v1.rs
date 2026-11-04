@@ -126,6 +126,13 @@ pub struct LaunchApp {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
 }
+/// Host to guest: the user's Stop. The agent ends every process of the app, even one a
+/// placed widget or a foreground service keeps running, and the guest gives the memory back.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopApp {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
 /// Host to guest: the user resized the task's window; the task takes the window's client
 /// size, in guest display pixels. Only the latest size counts: during a live resize the host
 /// sends the size it has now, not every size it passed through. The agent keeps the task
@@ -479,93 +486,6 @@ pub struct NotificationDismissed {
     #[prost(string, tag = "1")]
     pub key: ::prost::alloc::string::String,
 }
-/// Guest to host, from the agent: an app runs a foreground service, so it keeps running with
-/// no window. Sent when the service's ongoing notification is posted and each time it
-/// changes; the latest one replaces the earlier ones of the package. The icon is the app's,
-/// a PNG image of at most 96 pixels on a side and 64 KiB; a larger one is left out.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackgroundApp {
-    #[prost(string, tag = "1")]
-    pub package_name: ::prost::alloc::string::String,
-    /// The app's name, as the guest shows it.
-    #[prost(string, tag = "2")]
-    pub app_label: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "3")]
-    pub icon_png: ::prost::alloc::vec::Vec<u8>,
-    /// The ongoing notification's title and text ("Playing", "Downloading 3 files").
-    #[prost(string, tag = "4")]
-    pub title: ::prost::alloc::string::String,
-    #[prost(string, tag = "5")]
-    pub text: ::prost::alloc::string::String,
-    /// The titles of the ongoing notification's actions, in its order ("Pause", "Next"). The
-    /// host names one by its index in BackgroundAppAction. At most 8.
-    #[prost(string, repeated, tag = "6")]
-    pub actions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-}
-/// Guest to host, from the agent: the package runs no foreground service any more, because the
-/// service ended, the app was stopped, or its process died.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackgroundAppGone {
-    #[prost(string, tag = "1")]
-    pub package_name: ::prost::alloc::string::String,
-}
-/// Host to guest: the user acted on an app that runs in the background. A package the guest
-/// does not run in the background is answered with BackgroundAppGone, except a stop, which
-/// the agent carries out for any package but its own and the system's.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct BackgroundAppAction {
-    #[prost(string, tag = "1")]
-    pub package_name: ::prost::alloc::string::String,
-    #[prost(enumeration = "BackgroundAppCommand", tag = "2")]
-    pub command: i32,
-    #[prost(int32, tag = "3")]
-    pub action: i32,
-}
-/// Guest to host, from the agent: an app's active media session, sent when it becomes active
-/// and each time its metadata or playback state changes. One per package: the latest replaces
-/// the earlier one. The art is a PNG image of at most 256 pixels on a side and 256 KiB; a
-/// larger one is left out.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct MediaSession {
-    #[prost(string, tag = "1")]
-    pub package_name: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub app_label: ::prost::alloc::string::String,
-    #[prost(string, tag = "3")]
-    pub title: ::prost::alloc::string::String,
-    #[prost(string, tag = "4")]
-    pub artist: ::prost::alloc::string::String,
-    #[prost(string, tag = "5")]
-    pub album: ::prost::alloc::string::String,
-    #[prost(bytes = "vec", tag = "6")]
-    pub art_png: ::prost::alloc::vec::Vec<u8>,
-    #[prost(enumeration = "MediaPlayback", tag = "7")]
-    pub playback: i32,
-    /// Which commands the session takes now.
-    #[prost(bool, tag = "8")]
-    pub can_play: bool,
-    #[prost(bool, tag = "9")]
-    pub can_pause: bool,
-    #[prost(bool, tag = "10")]
-    pub can_next: bool,
-    #[prost(bool, tag = "11")]
-    pub can_previous: bool,
-}
-/// Guest to host, from the agent: the package has no active media session any more.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct MediaSessionGone {
-    #[prost(string, tag = "1")]
-    pub package_name: ::prost::alloc::string::String,
-}
-/// Host to guest: runs the command on the package's media session, through its transport
-/// controls. A package with no active session is answered with MediaSessionGone.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct MediaControl {
-    #[prost(string, tag = "1")]
-    pub package_name: ::prost::alloc::string::String,
-    #[prost(enumeration = "MediaCommand", tag = "2")]
-    pub command: i32,
-}
 /// Host to guest: asks the agent for a GuestMemory report now, instead of at its next
 /// periodic one.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -627,6 +547,29 @@ pub struct GuestMemory {
     /// The processes with the largest proportional set size, largest first, at most 10.
     #[prost(message, repeated, tag = "14")]
     pub top_processes: ::prost::alloc::vec::Vec<ProcessMemory>,
+    /// What the kernel itself holds, from /proc/meminfo: slab it cannot free (SUnreclaim),
+    /// kernel stacks, page tables, vmalloc, per-CPU areas, and the contiguous memory area (CMA)
+    /// set aside for drivers.
+    #[prost(uint64, tag = "15")]
+    pub slab_unreclaimable_kb: u64,
+    #[prost(uint64, tag = "16")]
+    pub kernel_stack_kb: u64,
+    #[prost(uint64, tag = "17")]
+    pub page_tables_kb: u64,
+    #[prost(uint64, tag = "18")]
+    pub vmalloc_used_kb: u64,
+    #[prost(uint64, tag = "19")]
+    pub percpu_kb: u64,
+    #[prost(uint64, tag = "20")]
+    pub cma_total_kb: u64,
+    /// Huge pages reserved (HugePages_Total times Hugepagesize).
+    #[prost(uint64, tag = "21")]
+    pub hugetlb_kb: u64,
+    /// The memory the kernel was given, counted from its online memory blocks; what it gave to
+    /// MemTotal is this less what it reserved at boot (its own code, page structures, swiotlb,
+    /// pstore). 0 when the guest cannot read it.
+    #[prost(uint64, tag = "22")]
+    pub mem_online_kb: u64,
 }
 /// From the agent to the guest's control daemon, on each connection to it: the agent has
 /// subscribed and takes the host's frames. It stops at the daemon, which tells the host with
@@ -1310,7 +1253,7 @@ pub struct DiagnosticsDone {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1422,18 +1365,6 @@ pub mod envelope {
         NotificationClicked(super::NotificationClicked),
         #[prost(message, tag = "73")]
         NotificationDismissed(super::NotificationDismissed),
-        #[prost(message, tag = "74")]
-        BackgroundApp(super::BackgroundApp),
-        #[prost(message, tag = "75")]
-        BackgroundAppGone(super::BackgroundAppGone),
-        #[prost(message, tag = "76")]
-        BackgroundAppAction(super::BackgroundAppAction),
-        #[prost(message, tag = "77")]
-        MediaSession(super::MediaSession),
-        #[prost(message, tag = "78")]
-        MediaSessionGone(super::MediaSessionGone),
-        #[prost(message, tag = "79")]
-        MediaControl(super::MediaControl),
         #[prost(message, tag = "90")]
         ListWidgetProviders(super::ListWidgetProviders),
         #[prost(message, tag = "91")]
@@ -1490,6 +1421,8 @@ pub mod envelope {
         DiagnosticsFile(super::DiagnosticsFile),
         #[prost(message, tag = "135")]
         DiagnosticsDone(super::DiagnosticsDone),
+        #[prost(message, tag = "136")]
+        StopApp(super::StopApp),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1748,117 +1681,6 @@ impl PowerHintKind {
             "POWER_HINT_KIND_UNSPECIFIED" => Some(Self::Unspecified),
             "POWER_HINT_KIND_MODE" => Some(Self::Mode),
             "POWER_HINT_KIND_BOOST" => Some(Self::Boost),
-            _ => None,
-        }
-    }
-}
-/// What the user did with an app that runs in the background, on the host.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum BackgroundAppCommand {
-    Unspecified = 0,
-    /// Opens the app: the agent runs the ongoing notification's content intent, else the app's
-    /// launcher activity.
-    Open = 1,
-    /// Runs the ongoing notification's action with the index in `action`.
-    Action = 2,
-    /// Stops the app: the agent force-stops its package, which ends its services and processes,
-    /// and answers with BackgroundAppGone (and MediaSessionGone when it had a session).
-    Stop = 3,
-}
-impl BackgroundAppCommand {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "BACKGROUND_APP_COMMAND_UNSPECIFIED",
-            Self::Open => "BACKGROUND_APP_COMMAND_OPEN",
-            Self::Action => "BACKGROUND_APP_COMMAND_ACTION",
-            Self::Stop => "BACKGROUND_APP_COMMAND_STOP",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "BACKGROUND_APP_COMMAND_UNSPECIFIED" => Some(Self::Unspecified),
-            "BACKGROUND_APP_COMMAND_OPEN" => Some(Self::Open),
-            "BACKGROUND_APP_COMMAND_ACTION" => Some(Self::Action),
-            "BACKGROUND_APP_COMMAND_STOP" => Some(Self::Stop),
-            _ => None,
-        }
-    }
-}
-/// The state of a media session's playback, as Android's PlaybackState reports it, folded to
-/// what a host's media controls show.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum MediaPlayback {
-    Unspecified = 0,
-    Stopped = 1,
-    Playing = 2,
-    Paused = 3,
-}
-impl MediaPlayback {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "MEDIA_PLAYBACK_UNSPECIFIED",
-            Self::Stopped => "MEDIA_PLAYBACK_STOPPED",
-            Self::Playing => "MEDIA_PLAYBACK_PLAYING",
-            Self::Paused => "MEDIA_PLAYBACK_PAUSED",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "MEDIA_PLAYBACK_UNSPECIFIED" => Some(Self::Unspecified),
-            "MEDIA_PLAYBACK_STOPPED" => Some(Self::Stopped),
-            "MEDIA_PLAYBACK_PLAYING" => Some(Self::Playing),
-            "MEDIA_PLAYBACK_PAUSED" => Some(Self::Paused),
-            _ => None,
-        }
-    }
-}
-/// A command for a media session, as a host's media keys and controls send it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum MediaCommand {
-    Unspecified = 0,
-    Play = 1,
-    Pause = 2,
-    Next = 3,
-    Previous = 4,
-    Stop = 5,
-}
-impl MediaCommand {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "MEDIA_COMMAND_UNSPECIFIED",
-            Self::Play => "MEDIA_COMMAND_PLAY",
-            Self::Pause => "MEDIA_COMMAND_PAUSE",
-            Self::Next => "MEDIA_COMMAND_NEXT",
-            Self::Previous => "MEDIA_COMMAND_PREVIOUS",
-            Self::Stop => "MEDIA_COMMAND_STOP",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "MEDIA_COMMAND_UNSPECIFIED" => Some(Self::Unspecified),
-            "MEDIA_COMMAND_PLAY" => Some(Self::Play),
-            "MEDIA_COMMAND_PAUSE" => Some(Self::Pause),
-            "MEDIA_COMMAND_NEXT" => Some(Self::Next),
-            "MEDIA_COMMAND_PREVIOUS" => Some(Self::Previous),
-            "MEDIA_COMMAND_STOP" => Some(Self::Stop),
             _ => None,
         }
     }

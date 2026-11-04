@@ -2428,6 +2428,12 @@ impl HostApiService {
                     package_name: launch.package_name,
                 },
             ),
+            Some(request::Body::StopApp(stop)) => self.request(
+                peer,
+                TaskRequest::StopApp {
+                    package_name: stop.package_name,
+                },
+            ),
             Some(request::Body::ResizeTask(resize)) => {
                 let started = Instant::now();
                 let answer = self.request(
@@ -2517,7 +2523,8 @@ impl HostApiService {
                         | request::Body::WidgetPointer(_)
                         | request::Body::WatchAccessibility(_)
                         | request::Body::WatchLog(_)
-                        | request::Body::CollectDiagnostics(_) => unreachable!("answered above"),
+                        | request::Body::CollectDiagnostics(_)
+                        | request::Body::StopApp(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -2661,6 +2668,7 @@ impl HostApiService {
             clipboard: wanted.clipboard,
             stop_without_asking: wanted.stop_without_asking,
             links_in_android: wanted.links_in_android,
+            memory_limit_mb: wanted.memory_limit_mb,
             program_updates: wanted.program_updates,
             image_updates: wanted.image_updates,
             input_trace: wanted.input_trace,
@@ -2765,6 +2773,7 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         render_gpu: settings.render_gpu.clone(),
         freeze: settings.freeze,
         links_in_android: settings.links_in_android,
+        memory_limit_mb: settings.memory_limit_mb,
         program_updates: settings.program_updates,
         image_updates: settings.image_updates,
         clipboard: settings.clipboard,
@@ -2786,6 +2795,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
         settings: Settings {
             render_gpu: settings.render_gpu,
             links_in_android: settings.links_in_android,
+            memory_limit_mb: settings.memory_limit_mb,
             freeze: settings.freeze,
             clipboard: settings.clipboard,
             stop_without_asking: settings.stop_without_asking,
@@ -3088,6 +3098,14 @@ impl HostApiClient {
         self.done(request::Body::CloseTask(types::CloseTask { task_id }))
     }
 
+    /// Asks the caller's Android to end every process of an app and give its memory back,
+    /// even one a widget or a foreground service keeps running: the user's Stop.
+    pub fn stop_app(&mut self, package_name: &str) -> Result<(), ClientError> {
+        self.done(request::Body::StopApp(types::StopApp {
+            package_name: package_name.to_string(),
+        }))
+    }
+
     /// Asks the caller's Android to start an app in a new task of its own.
     pub fn launch_app(&mut self, package_name: &str) -> Result<(), ClientError> {
         self.done(request::Body::LaunchApp(types::LaunchApp {
@@ -3139,6 +3157,7 @@ impl HostApiClient {
                 density_dpi,
             } => self.set_task_density(*task_id, *density_dpi),
             TaskRequest::WindowsShown { shown } => self.set_windows_shown(*shown),
+            TaskRequest::StopApp { package_name } => self.stop_app(package_name),
         }
     }
 

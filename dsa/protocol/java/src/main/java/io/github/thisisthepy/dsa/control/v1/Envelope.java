@@ -72,12 +72,6 @@ public  final class Envelope extends
     NOTIFICATION_REMOVED(71),
     NOTIFICATION_CLICKED(72),
     NOTIFICATION_DISMISSED(73),
-    BACKGROUND_APP(74),
-    BACKGROUND_APP_GONE(75),
-    BACKGROUND_APP_ACTION(76),
-    MEDIA_SESSION(77),
-    MEDIA_SESSION_GONE(78),
-    MEDIA_CONTROL(79),
     LIST_WIDGET_PROVIDERS(90),
     WIDGET_PROVIDERS(91),
     ADD_WIDGET(92),
@@ -106,6 +100,7 @@ public  final class Envelope extends
     COLLECT_DIAGNOSTICS(133),
     DIAGNOSTICS_FILE(134),
     DIAGNOSTICS_DONE(135),
+    STOP_APP(136),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -173,12 +168,6 @@ public  final class Envelope extends
         case 71: return NOTIFICATION_REMOVED;
         case 72: return NOTIFICATION_CLICKED;
         case 73: return NOTIFICATION_DISMISSED;
-        case 74: return BACKGROUND_APP;
-        case 75: return BACKGROUND_APP_GONE;
-        case 76: return BACKGROUND_APP_ACTION;
-        case 77: return MEDIA_SESSION;
-        case 78: return MEDIA_SESSION_GONE;
-        case 79: return MEDIA_CONTROL;
         case 90: return LIST_WIDGET_PROVIDERS;
         case 91: return WIDGET_PROVIDERS;
         case 92: return ADD_WIDGET;
@@ -207,6 +196,7 @@ public  final class Envelope extends
         case 133: return COLLECT_DIAGNOSTICS;
         case 134: return DIAGNOSTICS_FILE;
         case 135: return DIAGNOSTICS_DONE;
+        case 136: return STOP_APP;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -2828,306 +2818,6 @@ public  final class Envelope extends
     }
   }
 
-  public static final int BACKGROUND_APP_FIELD_NUMBER = 74;
-  /**
-   * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-   */
-  @java.lang.Override
-  public boolean hasBackgroundApp() {
-    return bodyCase_ == 74;
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.BackgroundApp getBackgroundApp() {
-    if (bodyCase_ == 74) {
-       return (io.github.thisisthepy.dsa.control.v1.BackgroundApp) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.BackgroundApp.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-   */
-  private void setBackgroundApp(io.github.thisisthepy.dsa.control.v1.BackgroundApp value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 74;
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-   */
-  private void mergeBackgroundApp(io.github.thisisthepy.dsa.control.v1.BackgroundApp value) {
-    value.getClass();
-  if (bodyCase_ == 74 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.BackgroundApp.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.BackgroundApp.newBuilder((io.github.thisisthepy.dsa.control.v1.BackgroundApp) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 74;
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-   */
-  private void clearBackgroundApp() {
-    if (bodyCase_ == 74) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int BACKGROUND_APP_GONE_FIELD_NUMBER = 75;
-  /**
-   * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-   */
-  @java.lang.Override
-  public boolean hasBackgroundAppGone() {
-    return bodyCase_ == 75;
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.BackgroundAppGone getBackgroundAppGone() {
-    if (bodyCase_ == 75) {
-       return (io.github.thisisthepy.dsa.control.v1.BackgroundAppGone) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.BackgroundAppGone.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-   */
-  private void setBackgroundAppGone(io.github.thisisthepy.dsa.control.v1.BackgroundAppGone value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 75;
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-   */
-  private void mergeBackgroundAppGone(io.github.thisisthepy.dsa.control.v1.BackgroundAppGone value) {
-    value.getClass();
-  if (bodyCase_ == 75 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.BackgroundAppGone.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.BackgroundAppGone.newBuilder((io.github.thisisthepy.dsa.control.v1.BackgroundAppGone) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 75;
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-   */
-  private void clearBackgroundAppGone() {
-    if (bodyCase_ == 75) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int BACKGROUND_APP_ACTION_FIELD_NUMBER = 76;
-  /**
-   * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-   */
-  @java.lang.Override
-  public boolean hasBackgroundAppAction() {
-    return bodyCase_ == 76;
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.BackgroundAppAction getBackgroundAppAction() {
-    if (bodyCase_ == 76) {
-       return (io.github.thisisthepy.dsa.control.v1.BackgroundAppAction) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.BackgroundAppAction.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-   */
-  private void setBackgroundAppAction(io.github.thisisthepy.dsa.control.v1.BackgroundAppAction value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 76;
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-   */
-  private void mergeBackgroundAppAction(io.github.thisisthepy.dsa.control.v1.BackgroundAppAction value) {
-    value.getClass();
-  if (bodyCase_ == 76 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.BackgroundAppAction.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.BackgroundAppAction.newBuilder((io.github.thisisthepy.dsa.control.v1.BackgroundAppAction) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 76;
-  }
-  /**
-   * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-   */
-  private void clearBackgroundAppAction() {
-    if (bodyCase_ == 76) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int MEDIA_SESSION_FIELD_NUMBER = 77;
-  /**
-   * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-   */
-  @java.lang.Override
-  public boolean hasMediaSession() {
-    return bodyCase_ == 77;
-  }
-  /**
-   * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.MediaSession getMediaSession() {
-    if (bodyCase_ == 77) {
-       return (io.github.thisisthepy.dsa.control.v1.MediaSession) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.MediaSession.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-   */
-  private void setMediaSession(io.github.thisisthepy.dsa.control.v1.MediaSession value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 77;
-  }
-  /**
-   * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-   */
-  private void mergeMediaSession(io.github.thisisthepy.dsa.control.v1.MediaSession value) {
-    value.getClass();
-  if (bodyCase_ == 77 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.MediaSession.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.MediaSession.newBuilder((io.github.thisisthepy.dsa.control.v1.MediaSession) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 77;
-  }
-  /**
-   * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-   */
-  private void clearMediaSession() {
-    if (bodyCase_ == 77) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int MEDIA_SESSION_GONE_FIELD_NUMBER = 78;
-  /**
-   * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-   */
-  @java.lang.Override
-  public boolean hasMediaSessionGone() {
-    return bodyCase_ == 78;
-  }
-  /**
-   * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.MediaSessionGone getMediaSessionGone() {
-    if (bodyCase_ == 78) {
-       return (io.github.thisisthepy.dsa.control.v1.MediaSessionGone) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.MediaSessionGone.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-   */
-  private void setMediaSessionGone(io.github.thisisthepy.dsa.control.v1.MediaSessionGone value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 78;
-  }
-  /**
-   * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-   */
-  private void mergeMediaSessionGone(io.github.thisisthepy.dsa.control.v1.MediaSessionGone value) {
-    value.getClass();
-  if (bodyCase_ == 78 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.MediaSessionGone.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.MediaSessionGone.newBuilder((io.github.thisisthepy.dsa.control.v1.MediaSessionGone) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 78;
-  }
-  /**
-   * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-   */
-  private void clearMediaSessionGone() {
-    if (bodyCase_ == 78) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int MEDIA_CONTROL_FIELD_NUMBER = 79;
-  /**
-   * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-   */
-  @java.lang.Override
-  public boolean hasMediaControl() {
-    return bodyCase_ == 79;
-  }
-  /**
-   * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.MediaControl getMediaControl() {
-    if (bodyCase_ == 79) {
-       return (io.github.thisisthepy.dsa.control.v1.MediaControl) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.MediaControl.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-   */
-  private void setMediaControl(io.github.thisisthepy.dsa.control.v1.MediaControl value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 79;
-  }
-  /**
-   * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-   */
-  private void mergeMediaControl(io.github.thisisthepy.dsa.control.v1.MediaControl value) {
-    value.getClass();
-  if (bodyCase_ == 79 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.MediaControl.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.MediaControl.newBuilder((io.github.thisisthepy.dsa.control.v1.MediaControl) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 79;
-  }
-  /**
-   * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-   */
-  private void clearMediaControl() {
-    if (bodyCase_ == 79) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
   public static final int LIST_WIDGET_PROVIDERS_FIELD_NUMBER = 90;
   /**
    * <code>.dsa.control.v1.ListWidgetProviders list_widget_providers = 90;</code>
@@ -4523,6 +4213,56 @@ public  final class Envelope extends
    */
   private void clearDiagnosticsDone() {
     if (bodyCase_ == 135) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int STOP_APP_FIELD_NUMBER = 136;
+  /**
+   * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+   */
+  @java.lang.Override
+  public boolean hasStopApp() {
+    return bodyCase_ == 136;
+  }
+  /**
+   * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.StopApp getStopApp() {
+    if (bodyCase_ == 136) {
+       return (io.github.thisisthepy.dsa.control.v1.StopApp) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.StopApp.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+   */
+  private void setStopApp(io.github.thisisthepy.dsa.control.v1.StopApp value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 136;
+  }
+  /**
+   * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+   */
+  private void mergeStopApp(io.github.thisisthepy.dsa.control.v1.StopApp value) {
+    value.getClass();
+  if (bodyCase_ == 136 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.StopApp.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.StopApp.newBuilder((io.github.thisisthepy.dsa.control.v1.StopApp) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 136;
+  }
+  /**
+   * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+   */
+  private void clearStopApp() {
+    if (bodyCase_ == 136) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -7136,294 +6876,6 @@ public  final class Envelope extends
     }
 
     /**
-     * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-     */
-    @java.lang.Override
-    public boolean hasBackgroundApp() {
-      return instance.hasBackgroundApp();
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.BackgroundApp getBackgroundApp() {
-      return instance.getBackgroundApp();
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-     */
-    public Builder setBackgroundApp(io.github.thisisthepy.dsa.control.v1.BackgroundApp value) {
-      copyOnWrite();
-      instance.setBackgroundApp(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-     */
-    public Builder setBackgroundApp(
-        io.github.thisisthepy.dsa.control.v1.BackgroundApp.Builder builderForValue) {
-      copyOnWrite();
-      instance.setBackgroundApp(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-     */
-    public Builder mergeBackgroundApp(io.github.thisisthepy.dsa.control.v1.BackgroundApp value) {
-      copyOnWrite();
-      instance.mergeBackgroundApp(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
-     */
-    public Builder clearBackgroundApp() {
-      copyOnWrite();
-      instance.clearBackgroundApp();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-     */
-    @java.lang.Override
-    public boolean hasBackgroundAppGone() {
-      return instance.hasBackgroundAppGone();
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.BackgroundAppGone getBackgroundAppGone() {
-      return instance.getBackgroundAppGone();
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-     */
-    public Builder setBackgroundAppGone(io.github.thisisthepy.dsa.control.v1.BackgroundAppGone value) {
-      copyOnWrite();
-      instance.setBackgroundAppGone(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-     */
-    public Builder setBackgroundAppGone(
-        io.github.thisisthepy.dsa.control.v1.BackgroundAppGone.Builder builderForValue) {
-      copyOnWrite();
-      instance.setBackgroundAppGone(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-     */
-    public Builder mergeBackgroundAppGone(io.github.thisisthepy.dsa.control.v1.BackgroundAppGone value) {
-      copyOnWrite();
-      instance.mergeBackgroundAppGone(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
-     */
-    public Builder clearBackgroundAppGone() {
-      copyOnWrite();
-      instance.clearBackgroundAppGone();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-     */
-    @java.lang.Override
-    public boolean hasBackgroundAppAction() {
-      return instance.hasBackgroundAppAction();
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.BackgroundAppAction getBackgroundAppAction() {
-      return instance.getBackgroundAppAction();
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-     */
-    public Builder setBackgroundAppAction(io.github.thisisthepy.dsa.control.v1.BackgroundAppAction value) {
-      copyOnWrite();
-      instance.setBackgroundAppAction(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-     */
-    public Builder setBackgroundAppAction(
-        io.github.thisisthepy.dsa.control.v1.BackgroundAppAction.Builder builderForValue) {
-      copyOnWrite();
-      instance.setBackgroundAppAction(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-     */
-    public Builder mergeBackgroundAppAction(io.github.thisisthepy.dsa.control.v1.BackgroundAppAction value) {
-      copyOnWrite();
-      instance.mergeBackgroundAppAction(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
-     */
-    public Builder clearBackgroundAppAction() {
-      copyOnWrite();
-      instance.clearBackgroundAppAction();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-     */
-    @java.lang.Override
-    public boolean hasMediaSession() {
-      return instance.hasMediaSession();
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.MediaSession getMediaSession() {
-      return instance.getMediaSession();
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-     */
-    public Builder setMediaSession(io.github.thisisthepy.dsa.control.v1.MediaSession value) {
-      copyOnWrite();
-      instance.setMediaSession(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-     */
-    public Builder setMediaSession(
-        io.github.thisisthepy.dsa.control.v1.MediaSession.Builder builderForValue) {
-      copyOnWrite();
-      instance.setMediaSession(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-     */
-    public Builder mergeMediaSession(io.github.thisisthepy.dsa.control.v1.MediaSession value) {
-      copyOnWrite();
-      instance.mergeMediaSession(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
-     */
-    public Builder clearMediaSession() {
-      copyOnWrite();
-      instance.clearMediaSession();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-     */
-    @java.lang.Override
-    public boolean hasMediaSessionGone() {
-      return instance.hasMediaSessionGone();
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.MediaSessionGone getMediaSessionGone() {
-      return instance.getMediaSessionGone();
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-     */
-    public Builder setMediaSessionGone(io.github.thisisthepy.dsa.control.v1.MediaSessionGone value) {
-      copyOnWrite();
-      instance.setMediaSessionGone(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-     */
-    public Builder setMediaSessionGone(
-        io.github.thisisthepy.dsa.control.v1.MediaSessionGone.Builder builderForValue) {
-      copyOnWrite();
-      instance.setMediaSessionGone(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-     */
-    public Builder mergeMediaSessionGone(io.github.thisisthepy.dsa.control.v1.MediaSessionGone value) {
-      copyOnWrite();
-      instance.mergeMediaSessionGone(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
-     */
-    public Builder clearMediaSessionGone() {
-      copyOnWrite();
-      instance.clearMediaSessionGone();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-     */
-    @java.lang.Override
-    public boolean hasMediaControl() {
-      return instance.hasMediaControl();
-    }
-    /**
-     * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.MediaControl getMediaControl() {
-      return instance.getMediaControl();
-    }
-    /**
-     * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-     */
-    public Builder setMediaControl(io.github.thisisthepy.dsa.control.v1.MediaControl value) {
-      copyOnWrite();
-      instance.setMediaControl(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-     */
-    public Builder setMediaControl(
-        io.github.thisisthepy.dsa.control.v1.MediaControl.Builder builderForValue) {
-      copyOnWrite();
-      instance.setMediaControl(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-     */
-    public Builder mergeMediaControl(io.github.thisisthepy.dsa.control.v1.MediaControl value) {
-      copyOnWrite();
-      instance.mergeMediaControl(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
-     */
-    public Builder clearMediaControl() {
-      copyOnWrite();
-      instance.clearMediaControl();
-      return this;
-    }
-
-    /**
      * <code>.dsa.control.v1.ListWidgetProviders list_widget_providers = 90;</code>
      */
     @java.lang.Override
@@ -8767,6 +8219,54 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+     */
+    @java.lang.Override
+    public boolean hasStopApp() {
+      return instance.hasStopApp();
+    }
+    /**
+     * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.StopApp getStopApp() {
+      return instance.getStopApp();
+    }
+    /**
+     * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+     */
+    public Builder setStopApp(io.github.thisisthepy.dsa.control.v1.StopApp value) {
+      copyOnWrite();
+      instance.setStopApp(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+     */
+    public Builder setStopApp(
+        io.github.thisisthepy.dsa.control.v1.StopApp.Builder builderForValue) {
+      copyOnWrite();
+      instance.setStopApp(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+     */
+    public Builder mergeStopApp(io.github.thisisthepy.dsa.control.v1.StopApp value) {
+      copyOnWrite();
+      instance.mergeStopApp(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+     */
+    public Builder clearStopApp() {
+      copyOnWrite();
+      instance.clearStopApp();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -8835,12 +8335,6 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.NotificationRemoved.class,
             io.github.thisisthepy.dsa.control.v1.NotificationClicked.class,
             io.github.thisisthepy.dsa.control.v1.NotificationDismissed.class,
-            io.github.thisisthepy.dsa.control.v1.BackgroundApp.class,
-            io.github.thisisthepy.dsa.control.v1.BackgroundAppGone.class,
-            io.github.thisisthepy.dsa.control.v1.BackgroundAppAction.class,
-            io.github.thisisthepy.dsa.control.v1.MediaSession.class,
-            io.github.thisisthepy.dsa.control.v1.MediaSessionGone.class,
-            io.github.thisisthepy.dsa.control.v1.MediaControl.class,
             io.github.thisisthepy.dsa.control.v1.AccessibilityWatch.class,
             io.github.thisisthepy.dsa.control.v1.AccessibilityTree.class,
             io.github.thisisthepy.dsa.control.v1.AccessibilityAction.class,
@@ -8870,20 +8364,21 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.CollectDiagnostics.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsFile.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsDone.class,
+            io.github.thisisthepy.dsa.control.v1.StopApp.class,
             io.github.thisisthepy.dsa.control.v1.DeveloperMode.class,
           };
           java.lang.String info =
-              "\u0000V\u0001\u0000\u0001\u008cV\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
+              "\u0000Q\u0001\u0000\u0001\u008cQ\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
               "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
               "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
               "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
               "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001d<\u0000(<\u0000)<\u0000" +
               "*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u00004<\u00005<\u00006<\u0000<<\u0000" +
               "=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000F<\u0000G<\u0000H<\u0000I<\u0000" +
-              "J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000" +
-              "Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000`<\u0000a<\u0000b<\u0000c<\u0000" +
-              "n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0082<\u0000" +
-              "\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u008c<\u0000";
+              "P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000" +
+              "`<\u0000a<\u0000b<\u0000c<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
+              "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
+              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
