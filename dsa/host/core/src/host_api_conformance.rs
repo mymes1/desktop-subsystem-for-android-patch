@@ -116,6 +116,44 @@ pub struct FakeAndroid {
     pub accessibility_actions: Mutex<Vec<(i32, ActionRequest)>>,
     /// The ARM translation image on its disk, if any.
     pub arm_image: Mutex<Option<Vec<u8>>>,
+    /// Each app whose settings it was asked to open, in order; `None` for the list of apps.
+    pub app_settings: Mutex<Vec<Option<String>>>,
+    /// How many times it was asked to read its apps again.
+    pub app_refreshes: Mutex<u32>,
+}
+
+/// The system app the fake Android lists, which it refuses to uninstall.
+pub const SYSTEM_PACKAGE: &str = "com.android.settings";
+
+/// The apps the fake Android has installed: [`KNOWN_PACKAGE`], a user app, and
+/// [`SYSTEM_PACKAGE`].
+pub fn sample_installed_apps() -> Vec<crate::tasks::AppInfo> {
+    vec![
+        crate::tasks::AppInfo {
+            package_name: SYSTEM_PACKAGE.into(),
+            label: "Settings".into(),
+            icon_png: vec![0x89, b'P', b'N', b'G', 1],
+            version_name: "16".into(),
+            version_code: 36,
+            system_app: true,
+            app_bytes: 40_000_000,
+            ..Default::default()
+        },
+        crate::tasks::AppInfo {
+            package_name: KNOWN_PACKAGE.into(),
+            label: "Notes".into(),
+            icon_png: vec![0x89, b'P', b'N', b'G', 2],
+            version_name: "4.1".into(),
+            version_code: INSTALLED_VERSION,
+            // 2023-11-14T22:13:20Z.
+            first_install_time_ms: 1_700_000_000_000,
+            last_update_time_ms: 1_710_000_000_000,
+            system_app: false,
+            app_bytes: 3_000_000,
+            data_bytes: 20_480,
+            cache_bytes: 1_024,
+        },
+    ]
 }
 
 /// What the fake Android says of an APK: one whose content starts with [`BAD_APK`] is not an APK
@@ -178,6 +216,8 @@ impl FakeAndroid {
             accessibility_watchers: Mutex::new(Vec::new()),
             accessibility_actions: Mutex::new(Vec::new()),
             arm_image: Mutex::new(None),
+            app_settings: Mutex::new(Vec::new()),
+            app_refreshes: Mutex::new(0),
         }
     }
 
@@ -559,6 +599,59 @@ impl UserAndroid for FakeAndroid {
             version_name: "4.1".into(),
             signer_sha256: vec![sha2::Sha256::digest(INSTALLED_SIGNER).to_vec()],
         }))
+    }
+    fn refresh_apps(&self) -> Result<(), TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        *self.app_refreshes.lock().unwrap() += 1;
+        let current = self.tasks.lock().unwrap().0.installed();
+        self.publish(TaskEvent::Installed(
+            current.unwrap_or_else(sample_installed_apps),
+        ));
+        Ok(())
+    }
+    fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        self.app_settings
+            .lock()
+            .unwrap()
+            .push(package.map(str::to_string));
+        Ok(())
+    }
+    fn uninstall_app(
+        &self,
+        package: &str,
+    ) -> Result<crate::apps::UninstallOutcome, TaskRequestError> {
+        use crate::apps::{UninstallOutcome, UninstallStatus};
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        let apps = self
+            .tasks
+            .lock()
+            .unwrap()
+            .0
+            .installed()
+            .unwrap_or_else(sample_installed_apps);
+        let status = match apps.iter().find(|app| app.package_name == package) {
+            None => UninstallStatus::NotInstalled,
+            Some(app) if app.system_app => UninstallStatus::SystemApp,
+            Some(_) => {
+                let left = apps
+                    .iter()
+                    .filter(|app| app.package_name != package)
+                    .cloned()
+                    .collect();
+                self.publish(TaskEvent::Installed(left));
+                UninstallStatus::Uninstalled
+            }
+        };
+        Ok(UninstallOutcome {
+            package_name: package.to_string(),
+            status,
+            message: if status == UninstallStatus::Uninstalled {
+                "Success".into()
+            } else {
+                "DELETE_FAILED_INTERNAL_ERROR".into()
+            },
+        })
     }
     fn freeze(&self) -> Result<(), TaskRequestError> {
         let mut state = self.state.lock().unwrap();

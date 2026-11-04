@@ -82,6 +82,8 @@ pub mod host_memory;
 pub mod https;
 #[cfg(windows)]
 pub mod hvsocket;
+#[cfg(windows)]
+pub mod installed_apps;
 pub mod installer_actions;
 pub mod monitors;
 pub mod paths;

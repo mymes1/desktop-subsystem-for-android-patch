@@ -1748,3 +1748,141 @@ fn fr17_dsa_changes_and_resets_the_device_identity_through_the_service() {
     assert!(stdout(&text).contains("model: Desktop Subsystem for Android"));
     assert!(stdout(&text).contains("next start"));
 }
+
+#[test]
+fn fr23_dsa_apps_is_parsed() {
+    use dsa_cli::AppsAction;
+    assert_eq!(parse(&args("apps")).unwrap().apps, Some(AppsAction::List));
+    assert_eq!(
+        parse(&args("apps list --json")).unwrap().apps,
+        Some(AppsAction::List)
+    );
+    assert_eq!(
+        parse(&args("apps info com.example.notes")).unwrap().apps,
+        Some(AppsAction::Info("com.example.notes".into()))
+    );
+    assert_eq!(
+        parse(&args("apps uninstall com.example.notes"))
+            .unwrap()
+            .apps,
+        Some(AppsAction::Uninstall("com.example.notes".into()))
+    );
+    assert_eq!(
+        parse(&args("apps settings")).unwrap().apps,
+        Some(AppsAction::Settings(None))
+    );
+    assert_eq!(
+        parse(&args("apps settings com.example.notes"))
+            .unwrap()
+            .apps,
+        Some(AppsAction::Settings(Some("com.example.notes".into())))
+    );
+    assert_eq!(parse(&args("apps")).unwrap().command, Cmd::Apps);
+    assert!(parse(&args("apps uninstall"))
+        .unwrap_err()
+        .contains("needs the app's package"));
+    assert!(parse(&args("apps uninstall ../evil"))
+        .unwrap_err()
+        .contains("not a package name"));
+}
+
+#[test]
+fn fr23_dsa_apps_list_and_info_show_each_app_with_its_details() {
+    use dsa_host_core::host_api_conformance::{KNOWN_PACKAGE, SYSTEM_PACKAGE};
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+
+    let list = dsa(&endpoint, "apps list");
+    assert!(list.status.success(), "{}", stderr(&list));
+    let text = stdout(&list);
+    assert!(
+        text.contains("com.example.notes  Notes 4.1  2.9 MB"),
+        "{text}"
+    );
+    assert!(text.contains("com.android.settings  Settings 16"), "{text}");
+    assert!(text.contains("(system)"), "{text}");
+    let android = androids.of(&user).unwrap();
+    assert_eq!(
+        android.state(),
+        SessionState::Active,
+        "Android was started first"
+    );
+    assert!(
+        *android.app_refreshes.lock().unwrap() >= 1,
+        "sizes were read again"
+    );
+
+    let json = json_of(&dsa(&endpoint, "apps list --json"));
+    let apps = json["apps"].as_array().unwrap();
+    assert_eq!(apps.len(), 2);
+    let notes = apps
+        .iter()
+        .find(|app| app["package"] == KNOWN_PACKAGE)
+        .unwrap();
+    assert_eq!(notes["label"], "Notes");
+    assert_eq!(notes["version_name"], "4.1");
+    assert_eq!(notes["version_code"], 41);
+    assert_eq!(notes["first_install_time_ms"], 1_700_000_000_000u64);
+    assert_eq!(notes["system_app"], false);
+    assert_eq!(notes["total_bytes"], 3_021_504);
+    assert_eq!(notes["icon_png"], "iVBORwI=");
+    let settings = apps
+        .iter()
+        .find(|app| app["package"] == SYSTEM_PACKAGE)
+        .unwrap();
+    assert_eq!(settings["system_app"], true);
+
+    let info = dsa(&endpoint, "apps info com.example.notes");
+    assert!(info.status.success(), "{}", stderr(&info));
+    let text = stdout(&info);
+    assert!(text.starts_with("Notes (com.example.notes)"), "{text}");
+    assert!(text.contains("Version: 4.1 (41)"), "{text}");
+    assert!(text.contains("Installed: 2023-11-14"), "{text}");
+    let missing = dsa(&endpoint, "apps info com.example.missing");
+    assert_eq!(missing.status.code(), Some(1));
+    assert!(stderr(&missing).contains("no app of com.example.missing"));
+}
+
+#[test]
+fn fr23_dsa_apps_uninstall_removes_a_user_app_and_refuses_a_system_app() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
+
+    let removed = dsa(&endpoint, "apps uninstall com.example.notes");
+    assert!(removed.status.success(), "{}", stderr(&removed));
+    assert_eq!(stdout(&removed), "Uninstalled com.example.notes");
+    let json = json_of(&dsa(&endpoint, "apps list --json"));
+    assert_eq!(json["apps"].as_array().unwrap().len(), 1, "the app is gone");
+
+    let system = dsa(&endpoint, "apps uninstall com.android.settings");
+    assert_eq!(system.status.code(), Some(1));
+    assert!(
+        stderr(&system).contains("not uninstalled (system-app)"),
+        "{}",
+        stderr(&system)
+    );
+    let gone = dsa(&endpoint, "apps uninstall com.example.notes");
+    assert!(
+        stderr(&gone).contains("not uninstalled (not-installed)"),
+        "{}",
+        stderr(&gone)
+    );
+}
+
+#[test]
+fn fr23_dsa_apps_settings_opens_androids_app_page_or_its_list_of_apps() {
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+
+    let one = dsa(&endpoint, "apps settings com.example.notes");
+    assert!(one.status.success(), "{}", stderr(&one));
+    assert_eq!(stdout(&one), "Opening the settings of com.example.notes");
+    let all = dsa(&endpoint, "apps settings");
+    assert!(all.status.success(), "{}", stderr(&all));
+    assert_eq!(
+        *androids.of(&user).unwrap().app_settings.lock().unwrap(),
+        vec![Some("com.example.notes".to_string()), None]
+    );
+}

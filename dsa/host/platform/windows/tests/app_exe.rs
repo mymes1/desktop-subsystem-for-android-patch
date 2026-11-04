@@ -46,6 +46,7 @@ fn clock() -> AppInfo {
         package_name: "com.example.clock".into(),
         label: "Clock".into(),
         icon_png: png(),
+        ..Default::default()
     }
 }
 

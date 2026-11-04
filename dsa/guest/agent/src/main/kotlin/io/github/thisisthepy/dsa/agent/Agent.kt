@@ -11,6 +11,8 @@ import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsCollector
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsSource
 import io.github.thisisthepy.dsa.agent.input.EditorConnection
 import io.github.thisisthepy.dsa.agent.install.ApkInstaller
+import io.github.thisisthepy.dsa.agent.install.AppUninstaller
+import io.github.thisisthepy.dsa.agent.install.PackageUninstallerPort
 import io.github.thisisthepy.dsa.agent.install.PackageInfoPort
 import io.github.thisisthepy.dsa.agent.install.PackageInstallerPort
 import io.github.thisisthepy.dsa.agent.install.PackageQueries
@@ -122,6 +124,7 @@ class Agent(
     notifications: NotificationSource = NotificationSource.NONE,
     packageInstaller: PackageInstallerPort = PackageInstallerPort.NONE,
     packages: PackageInfoPort = PackageInfoPort.NONE,
+    packageUninstaller: PackageUninstallerPort = PackageUninstallerPort.NONE,
     widgets: WidgetPlatform = WidgetPlatform.NONE,
     appProcesses: AppProcesses = AppProcesses.NONE,
     widgetStore: WidgetStore = WidgetStore.memory(),
@@ -198,7 +201,15 @@ class Agent(
         isConnected = { channel.connected },
         post = { work -> scheduler.post(work) },
     )
-    private val packageQueries =PackageQueries(packages, { frame -> channel.send(frame) }, log)
+    private val packageQueries = PackageQueries(packages, { frame -> channel.send(frame) }, log)
+    private val appUninstaller = AppUninstaller(
+        ownPackage,
+        packageUninstaller,
+        { frame -> channel.send(frame) },
+        log,
+        post = { work -> scheduler.post(work) },
+        onUninstalled = { requestAppsRefresh() },
+    )
     private val widgetManager = WidgetManager(
         widgets,
         widgetStore,
@@ -230,6 +241,7 @@ class Agent(
     )
     private var refreshPending = false
     private var appsPending = false
+    private var appsForced = false
     private var checkPending = false
 
     fun start() {
@@ -269,17 +281,23 @@ class Agent(
         }
     }
 
-    private fun requestAppsRefresh() {
+    private fun requestAppsRefresh(force: Boolean = false) {
+        if (force) appsForced = true
         if (appsPending) return
         appsPending = true
         scheduler.post {
             appsPending = false
-            refreshApps()
+            val forced = appsForced
+            appsForced = false
+            refreshApps(forced)
         }
     }
 
-    /** Tells the host which apps a launcher lists, when that changed. */
-    private fun refreshApps() {
+    /**
+     * Tells the host which apps a launcher lists, when that changed; when [force]d, sends the
+     * list even when nothing changed, since the host waits for it.
+     */
+    private fun refreshApps(force: Boolean) {
         if (!channel.connected) return
         val apps = try {
             launcherApps.list()
@@ -287,7 +305,7 @@ class Agent(
             log.warn("reading the installed apps failed", e)
             return
         } ?: return
-        installed.update(apps)
+        installed.update(apps, force)
     }
 
     private fun listen() {
@@ -343,6 +361,9 @@ class Agent(
         when (result) {
             is RequestResult.Launched -> log.info("launched ${result.packageName}")
             is RequestResult.LaunchFailed -> log.warn("could not launch ${result.packageName}: ${result.reason}")
+            is RequestResult.SettingsOpened -> log.info("opened the settings of ${result.packageName ?: "every app"}")
+            is RequestResult.SettingsFailed ->
+                log.warn("could not open the settings of ${result.packageName ?: "every app"}: ${result.reason}")
             is RequestResult.Closed -> log.info("ended task ${result.taskId}")
             is RequestResult.CloseRefused -> log.warn("did not end task ${result.taskId}: ${result.reason}")
             is RequestResult.Resize -> {
@@ -393,7 +414,9 @@ class Agent(
         if (apkInstaller.handle(envelope)) return true
         if (packageQueries.handle(envelope)) return true
         if (printer.handle(envelope)) return true
+        if (appUninstaller.handle(envelope)) return true
         when (envelope.bodyCase) {
+            Envelope.BodyCase.REFRESH_APPS -> requestAppsRefresh(force = true)
             Envelope.BodyCase.KEY_EVENT -> try {
                 keys.handle(envelope.keyEvent)
             } catch (e: Exception) {

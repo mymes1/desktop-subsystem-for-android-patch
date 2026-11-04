@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.net.Uri
+import android.provider.Settings
 import android.view.Display
 import io.github.thisisthepy.dsa.agent.Log
 import io.github.thisisthepy.dsa.agent.requests.ResizeOutcome
@@ -41,6 +43,27 @@ class AndroidTaskActions(
             false
         } catch (e: SecurityException) {
             log.warn("the framework refused to start $packageName", e)
+            false
+        }
+    }
+
+    override fun openAppSettings(packageName: String?): Boolean {
+        val intent = if (packageName == null) {
+            Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS)
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
+        freeform(options)
+        return try {
+            context.startActivity(intent, options.toBundle())
+            true
+        } catch (e: ActivityNotFoundException) {
+            log.warn("Settings has no page for ${packageName ?: "the list of apps"}", e)
+            false
+        } catch (e: SecurityException) {
+            log.warn("the framework refused to open the settings of ${packageName ?: "every app"}", e)
             false
         }
     }

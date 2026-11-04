@@ -481,6 +481,50 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.PackageState getPackageState();
 
   /**
+   * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
+   * @return Whether the uninstallApp field is set.
+   */
+  boolean hasUninstallApp();
+  /**
+   * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
+   * @return The uninstallApp.
+   */
+  io.github.thisisthepy.dsa.control.v1.UninstallApp getUninstallApp();
+
+  /**
+   * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
+   * @return Whether the uninstallResult field is set.
+   */
+  boolean hasUninstallResult();
+  /**
+   * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
+   * @return The uninstallResult.
+   */
+  io.github.thisisthepy.dsa.control.v1.UninstallResult getUninstallResult();
+
+  /**
+   * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
+   * @return Whether the refreshApps field is set.
+   */
+  boolean hasRefreshApps();
+  /**
+   * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
+   * @return The refreshApps.
+   */
+  io.github.thisisthepy.dsa.control.v1.RefreshApps getRefreshApps();
+
+  /**
+   * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
+   * @return Whether the openAppSettings field is set.
+   */
+  boolean hasOpenAppSettings();
+  /**
+   * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
+   * @return The openAppSettings.
+   */
+  io.github.thisisthepy.dsa.control.v1.OpenAppSettings getOpenAppSettings();
+
+  /**
    * <code>.dsa.control.v1.OpenLink open_link = 50;</code>
    * @return Whether the openLink field is set.
    */

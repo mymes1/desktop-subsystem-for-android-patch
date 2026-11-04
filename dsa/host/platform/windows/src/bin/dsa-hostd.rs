@@ -173,6 +173,9 @@ mod windows_host {
             for why in dsa_host_windows::user_registry::remove_user_keys(&sid, &local) {
                 eprintln!("{sid}: {why}");
             }
+            for why in dsa_host_windows::installed_apps::remove_for_user(&sid, &profile) {
+                eprintln!("{why}");
+            }
         }
     }
 

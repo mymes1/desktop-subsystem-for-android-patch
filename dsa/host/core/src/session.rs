@@ -115,6 +115,7 @@ use crate::accessibility::{
 };
 use crate::adb_bridge::{AdbBridge, BridgeStream, GuestAdb};
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::apps::UninstallOutcome;
 use crate::arm_translation::GuestArmTranslation;
 use crate::clipboard;
 use crate::clock_trace::ClockTrace;
@@ -604,6 +605,12 @@ struct Shared {
     package_queries: Mutex<HashMap<u32, Sender<Option<InstalledPackage>>>>,
     /// The ID of the last question about an installed package.
     last_package_query: AtomicU32,
+    /// The uninstalls waiting for the agent's answer, by request ID.
+    uninstalls: Mutex<HashMap<u32, Sender<UninstallOutcome>>>,
+    /// The ID of the last uninstall.
+    last_uninstall: AtomicU32,
+    /// Who waits for the agent's next list of installed apps.
+    app_refreshes: Mutex<Vec<Sender<()>>>,
     /// Who watches each task's accessibility tree.
     accessibility: Mutex<AccessibilityHub>,
     /// Who hears of the guest's power hints.
@@ -767,6 +774,19 @@ impl Shared {
             hub.table.installed_event(packages)
         };
         self.publish_task(event);
+    }
+
+    /// Tells whoever waits for a fresh list of installed apps that it arrived.
+    fn apps_refreshed(&self) {
+        let waiting: Vec<Sender<()>> = self
+            .app_refreshes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .drain(..)
+            .collect();
+        for waiter in waiting {
+            let _ = waiter.send(());
+        }
     }
 
     fn set_sender(&self, sender: Option<Box<dyn FrameSender>>) {
@@ -987,6 +1007,9 @@ impl Session {
             last_widget_request: AtomicU32::new(0),
             package_queries: Mutex::new(HashMap::new()),
             last_package_query: AtomicU32::new(0),
+            uninstalls: Mutex::new(HashMap::new()),
+            last_uninstall: AtomicU32::new(0),
+            app_refreshes: Mutex::new(Vec::new()),
             accessibility: Mutex::new(AccessibilityHub::default()),
             power_hint_watchers: Mutex::new(Vec::new()),
             location: Mutex::new(LocationHub::default()),
@@ -2100,6 +2123,79 @@ impl Session {
             });
         self.shared
             .package_queries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&request_id);
+        result
+    }
+
+    /// Asks the agent to read the installed apps again, sizes included, and waits up to
+    /// `timeout` for the fresh list, which then replaces the one the watchers have. Needs an
+    /// active session.
+    pub fn refresh_apps(&self, timeout: Duration) -> Result<(), SessionError> {
+        let (tx, answer) = mpsc::channel();
+        self.shared
+            .app_refreshes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(tx);
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::RefreshApps(control::RefreshApps {})),
+        }))?;
+        answer.recv_timeout(timeout).map_err(|_| {
+            SessionError::NoAnswer(format!(
+                "Android did not list its apps within {} seconds",
+                timeout.as_secs()
+            ))
+        })
+    }
+
+    /// Opens Android's own settings of `package` (its permissions, storage and
+    /// notifications) as a task in its own window, or the list of every app when it is
+    /// `None`. Needs an active session.
+    pub fn open_app_settings(&self, package: Option<&str>) -> Result<(), SessionError> {
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::OpenAppSettings(control::OpenAppSettings {
+                package_name: package.unwrap_or_default().to_string(),
+            })),
+        }))
+    }
+
+    /// Uninstalls the user app `package`, waiting up to `timeout` for Android to say how it
+    /// went. Needs an active session.
+    pub fn uninstall_app(
+        &self,
+        package: &str,
+        timeout: Duration,
+    ) -> Result<UninstallOutcome, SessionError> {
+        let request_id = self
+            .shared
+            .last_uninstall
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+        let (tx, answer) = mpsc::channel();
+        self.shared
+            .uninstalls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(request_id, tx);
+        let result = self
+            .send(dsa_protocol::encode(&control::Envelope {
+                body: Some(Body::UninstallApp(control::UninstallApp {
+                    request_id,
+                    package_name: package.to_string(),
+                })),
+            }))
+            .and_then(|()| {
+                answer.recv_timeout(timeout).map_err(|_| {
+                    SessionError::NoAnswer(format!(
+                        "Android did not say within {} seconds whether {package} was uninstalled",
+                        timeout.as_secs()
+                    ))
+                })
+            });
+        self.shared
+            .uninstalls
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&request_id);
@@ -4084,6 +4180,7 @@ impl Worker {
                     package_name: app.package_name,
                     label: app.label,
                     icon_png: app.icon_png,
+                    ..Default::default()
                 }));
             }
             Some(Body::InstalledApp(app)) => {
@@ -4091,10 +4188,38 @@ impl Worker {
                     package_name: app.package_name,
                     label: app.label,
                     icon_png: app.icon_png,
+                    version_name: app.version_name,
+                    version_code: app.version_code,
+                    first_install_time_ms: app.first_install_time_ms,
+                    last_update_time_ms: app.last_update_time_ms,
+                    system_app: app.system_app,
+                    app_bytes: app.app_bytes,
+                    data_bytes: app.data_bytes,
+                    cache_bytes: app.cache_bytes,
                 });
             }
             Some(Body::InstalledApps(apps)) => {
                 self.shared.publish_installed(&apps.package_names);
+                self.shared.apps_refreshed();
+            }
+            Some(Body::UninstallResult(result)) => {
+                let outcome = UninstallOutcome::from_control(&result);
+                let waiting = self
+                    .shared
+                    .uninstalls
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&result.request_id);
+                match waiting {
+                    Some(waiting) => {
+                        let _ = waiting.send(outcome);
+                    }
+                    None => eprintln!(
+                        "apps: dropped the agent's answer to uninstall request {}, which nobody \
+                         waits for",
+                        result.request_id
+                    ),
+                }
             }
             Some(Body::ImeCursor(cursor)) => {
                 let rect = cursor.cursor.unwrap_or_default();
@@ -4235,6 +4360,9 @@ impl Worker {
             | Some(Body::CancelInstall(_))
             | Some(Body::PrintJobResult(_))
             | Some(Body::QueryPackage(_))
+            | Some(Body::UninstallApp(_))
+            | Some(Body::RefreshApps(_))
+            | Some(Body::OpenAppSettings(_))
             | Some(Body::RequestGuestMemory(_))
             | Some(Body::StopApp(_))
             | Some(Body::ListWidgetProviders(_))

@@ -359,6 +359,18 @@ std::map<std::string, v1::Envelope> Cases() {
     query->set_package_name("com.example.notes");
   }
   {
+    v1::UninstallApp* uninstall = cases["uninstall_app"].mutable_uninstall_app();
+    uninstall->set_request_id(7);
+    uninstall->set_package_name("com.example.notes");
+  }
+  {
+    v1::UninstallResult* result = cases["uninstall_result"].mutable_uninstall_result();
+    result->set_request_id(7);
+    result->set_package_name("com.example.notes");
+    result->set_status(v1::UNINSTALL_STATUS_SYSTEM_APP);
+    result->set_message("system");
+  }
+  {
     v1::PackageState* state = cases["package_state_installed"].mutable_package_state();
     state->set_request_id(7);
     state->set_installed(true);

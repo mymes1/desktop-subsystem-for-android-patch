@@ -104,4 +104,49 @@ class InstalledAppReporterTest {
         assertEquals(listOf("org.example.clock"), described())
         assertEquals(listOf(listOf("org.example.clock")), lists())
     }
+
+    private fun detailed(versionCode: Long = 3, dataBytes: Long = 4096) = LauncherApp(
+        "org.example.notes", "Notes", byteArrayOf(1),
+        versionName = "1.$versionCode", versionCode = versionCode,
+        firstInstallTimeMs = 1_700_000_000_000, lastUpdateTimeMs = 1_710_000_000_000,
+        systemApp = false, appBytes = 1_000_000, dataBytes = dataBytes, cacheBytes = 512,
+    )
+
+    @Test
+    fun fr23_each_app_carries_its_version_dates_sizes_and_kind() {
+        reporter.update(listOf(detailed(), app("org.example.clock")))
+
+        val notes = sent.first { it.hasInstalledApp() && it.installedApp.packageName == "org.example.notes" }.installedApp
+        assertEquals("1.3", notes.versionName)
+        assertEquals(3L, notes.versionCode)
+        assertEquals(1_700_000_000_000, notes.firstInstallTimeMs)
+        assertEquals(1_710_000_000_000, notes.lastUpdateTimeMs)
+        assertEquals(false, notes.systemApp)
+        assertEquals(1_000_000L, notes.appBytes)
+        assertEquals(4096L, notes.dataBytes)
+        assertEquals(512L, notes.cacheBytes)
+    }
+
+    @Test
+    fun fr23_a_new_version_or_size_describes_the_app_again() {
+        reporter.update(listOf(detailed()))
+        sent.clear()
+
+        reporter.update(listOf(detailed(versionCode = 4)))
+        reporter.update(listOf(detailed(versionCode = 4, dataBytes = 8192)))
+
+        assertEquals(listOf("org.example.notes", "org.example.notes"), described())
+        assertEquals(2, lists().size)
+    }
+
+    @Test
+    fun fr23_a_forced_update_sends_the_list_even_when_nothing_changed() {
+        reporter.update(listOf(detailed()))
+        sent.clear()
+
+        reporter.update(listOf(detailed()), force = true)
+
+        assertEquals(emptyList<String>(), described())
+        assertEquals(listOf(listOf("org.example.notes")), lists())
+    }
 }

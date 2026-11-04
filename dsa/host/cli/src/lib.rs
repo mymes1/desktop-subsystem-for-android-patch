@@ -19,6 +19,7 @@
 //! dsa memory
 //! dsa gpus
 //! dsa widgets [list | add <provider> | remove <id> | watch]
+//! dsa apps [list | info <package> | uninstall <package> | settings [<package>]]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
 //! dsa arm-translation [status | install <folder> | remove]
@@ -90,6 +91,23 @@
 //! removed, until it is stopped or Android stops. With `--json` each line is one JSON
 //! object: `{"event":"widgets","widgets":[...]}` first, then
 //! `{"event":"placed","widget":{...}}` or `{"event":"removed","id":N}`.
+//!
+//! `dsa apps list` (or `dsa apps`) lists the apps installed in Android that a launcher lists,
+//! each with its package, name, version and size; `(system)` marks the apps that are part of
+//! Android. `dsa apps info <package>` describes one: its version, its size (app, data and
+//! cache), when it was installed and updated, and whether it can be uninstalled. Both have
+//! Android read the sizes again first. `dsa apps uninstall <package>` uninstalls an app you
+//! installed; an app that is part of Android stays, and the line on standard error starts with
+//! `not uninstalled (<reason>):` (`not-installed`, `system-app`, `blocked` or `other`), with
+//! exit code 1. Windows' list of installed apps runs it to uninstall an app from there.
+//! `dsa apps settings <package>` opens Android's own settings of the app (its permissions,
+//! storage and notifications) in a window, and `dsa apps settings` Android's list of every app.
+//! Android is started first when it is not running. With `--json`, `list` prints `apps`, each
+//! with `package`, `label`, `version_name`, `version_code`, `first_install_time_ms`,
+//! `last_update_time_ms`, `system_app`, `app_bytes`, `data_bytes`, `cache_bytes`,
+//! `total_bytes` and `icon_png` in base64; `info` prints one such object; `uninstall` prints
+//! `package`, `uninstalled`, `status` and `message`; `settings` prints `opened` with the package,
+//! or null for the list of apps.
 //!
 //! `dsa freeze` stops every process of the Android until one of its windows is shown
 //! again. Its notifications, alarms and widgets stop with it.
@@ -180,7 +198,7 @@ use dsa_host_core::host_api::{
 };
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::session::SessionState;
-use dsa_host_core::tasks::Task;
+use dsa_host_core::tasks::{AppInfo, Task};
 use dsa_host_core::widgets::{Widget, WidgetEvent, WidgetProvider};
 use dsa_transport::Connector;
 use serde_json::{json, Value};
@@ -191,6 +209,7 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      tasks | settings [set <name> <value> | device | reset device[.<field>]] | memory | \
      gpus | \
      widgets [list | add <provider> | remove <id> | watch] | \
+     apps [list | info <package> | uninstall <package> | settings [<package>]] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | remove]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
@@ -241,6 +260,22 @@ pub enum Command {
     ArmTranslationInstall,
     /// Remove the ARM translation package.
     ArmTranslationRemove,
+    /// List, describe or uninstall the installed apps, or open their settings in Android
+    /// ([`Invocation::apps`]).
+    Apps,
+}
+
+/// What `dsa apps` does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppsAction {
+    /// List every app.
+    List,
+    /// Describe one app.
+    Info(String),
+    /// Uninstall one app.
+    Uninstall(String),
+    /// Open Android's settings of one app, or Android's list of every app.
+    Settings(Option<String>),
 }
 
 /// What `dsa widgets` does.
@@ -403,6 +438,8 @@ pub struct Invocation {
     pub change: Option<Change>,
     /// What to do with widgets, for `dsa widgets`.
     pub widgets: Option<WidgetAction>,
+    /// What to do with the installed apps, for `dsa apps`.
+    pub apps: Option<AppsAction>,
     /// Print the answer as JSON.
     pub json: bool,
     /// Print each step of `dsa install` as it happens.
@@ -439,6 +476,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut file = None;
     let mut change = None;
     let mut widgets = None;
+    let mut apps = None;
     let mut json = false;
     let mut progress = false;
     let mut buffers: u32 = 0;
@@ -451,6 +489,44 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "logcat" if command.is_none() => command = Some(Command::Logcat),
+            "apps" if command.is_none() => command = Some(Command::Apps),
+            "list" if command == Some(Command::Apps) && apps.is_none() => {
+                apps = Some(AppsAction::List);
+            }
+            action @ ("info" | "uninstall") if command == Some(Command::Apps) && apps.is_none() => {
+                let package = args.next().ok_or_else(|| {
+                    format!(
+                        "dsa apps {action} needs the app's package, such as com.example.notes; \
+                         dsa apps list shows them"
+                    )
+                })?;
+                if !is_package_name(package) {
+                    return Err(format!(
+                        "{package:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                apps = Some(if action == "info" {
+                    AppsAction::Info(package.clone())
+                } else {
+                    AppsAction::Uninstall(package.clone())
+                });
+            }
+            "settings" if command == Some(Command::Apps) && apps.is_none() => {
+                apps = Some(AppsAction::Settings(None));
+            }
+            name if command == Some(Command::Apps)
+                && apps == Some(AppsAction::Settings(None))
+                && !name.starts_with('-') =>
+            {
+                if !is_package_name(name) {
+                    return Err(format!(
+                        "{name:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                apps = Some(AppsAction::Settings(Some(name.to_string())));
+            }
             "logs" if command.is_none() => match args.next().map(String::as_str) {
                 Some("collect") => command = Some(Command::LogsCollect),
                 _ => return Err(format!("dsa logs takes collect -o <file.zip>\n{USAGE}")),
@@ -617,6 +693,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     }
     let command = command.ok_or(USAGE)?;
     let widgets = (command == Command::Widgets).then(|| widgets.unwrap_or(WidgetAction::List));
+    let apps = (command == Command::Apps).then(|| apps.unwrap_or(AppsAction::List));
     if command == Command::Install && file.is_none() {
         return Err(format!(
             "dsa install needs the APK file to install\n{USAGE}"
@@ -684,6 +761,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
         file,
         change,
         widgets,
+        apps,
         json,
         progress,
         log_filter,
@@ -928,6 +1006,193 @@ pub fn widget_event_line(event: &WidgetEvent, json: bool) -> Option<String> {
             format!("Removed widget {widget_id}")
         }),
         WidgetEvent::Frame(_) | WidgetEvent::Listed(_) => None,
+    }
+}
+
+/// An installed app as one JSON object. With `icon`, the icon is in it as base64 PNG.
+pub fn app_json(app: &AppInfo, icon: bool) -> Value {
+    let mut value = json!({
+        "package": app.package_name,
+        "label": app.label,
+        "version_name": app.version_name,
+        "version_code": app.version_code,
+        "first_install_time_ms": app.first_install_time_ms,
+        "last_update_time_ms": app.last_update_time_ms,
+        "system_app": app.system_app,
+        "app_bytes": app.app_bytes,
+        "data_bytes": app.data_bytes,
+        "cache_bytes": app.cache_bytes,
+        "total_bytes": app.total_bytes(),
+    });
+    if icon {
+        value["icon_png"] = Value::String(base64(&app.icon_png));
+    }
+    value
+}
+
+/// A size in bytes as people read it: `3.2 MB`.
+pub fn human_size(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut unit = 0;
+    while size >= 1024.0 && unit < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{size:.1} {}", UNITS[unit])
+    }
+}
+
+/// What `dsa apps list` prints: one app a line.
+pub fn describe_apps(apps: &[AppInfo]) -> String {
+    if apps.is_empty() {
+        return "No app is installed in Android.".into();
+    }
+    let mut out = String::from("Installed apps (dsa apps info <package>):");
+    for app in apps {
+        let _ = write!(
+            out,
+            "\n  {}  {}{}  {}{}",
+            app.package_name,
+            app.label,
+            if app.version_name.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", app.version_name)
+            },
+            human_size(app.total_bytes()),
+            if app.system_app { "  (system)" } else { "" }
+        );
+    }
+    out
+}
+
+/// What `dsa apps info` prints.
+pub fn describe_app(app: &AppInfo) -> String {
+    let date = |ms: u64| {
+        if ms == 0 {
+            "unknown".to_string()
+        } else {
+            dsa_host_core::guest_log::utc_time(ms.saturating_mul(1_000_000))
+                .chars()
+                .take(10)
+                .collect()
+        }
+    };
+    [
+        format!("{} ({})", app.label, app.package_name),
+        format!(
+            "Version: {} ({})",
+            if app.version_name.is_empty() {
+                "unknown"
+            } else {
+                &app.version_name
+            },
+            app.version_code
+        ),
+        format!(
+            "Size: {} (app {}, data {}, cache {})",
+            human_size(app.total_bytes()),
+            human_size(app.app_bytes),
+            human_size(app.data_bytes),
+            human_size(app.cache_bytes)
+        ),
+        format!("Installed: {}", date(app.first_install_time_ms)),
+        format!("Updated: {}", date(app.last_update_time_ms)),
+        if app.system_app {
+            "Part of Android: it cannot be uninstalled".to_string()
+        } else {
+            "Installed by you: dsa apps uninstall removes it".to_string()
+        },
+    ]
+    .join("\n")
+}
+
+/// `dsa apps`: makes sure Android runs, then lists or describes its apps with their sizes read
+/// again, uninstalls one, or opens Android's settings of one (and, on Windows, the window
+/// manager that shows them).
+fn apps(
+    invocation: &Invocation,
+    mut client: HostApiClient,
+    connector: &mut dyn Connector,
+) -> Result<String, String> {
+    let action = invocation.apps.clone().unwrap_or(AppsAction::List);
+    #[cfg(windows)]
+    if invocation.endpoint.is_none() && matches!(action, AppsAction::Settings(_)) {
+        ensure_window_manager()?;
+    }
+    client
+        .ensure_running(OPEN_START_TIMEOUT, Duration::from_millis(250), |_| {})
+        .map_err(|e| format!("Android did not start: {e}"))?;
+    drop(client);
+    let mut client = connect(connector, None, false, Duration::from_secs(10))?;
+    match action {
+        AppsAction::List => {
+            let apps = client
+                .refreshed_apps()
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            Ok(if invocation.json {
+                json!({ "apps": apps.iter().map(|app| app_json(app, true)).collect::<Vec<_>>() })
+                    .to_string()
+            } else {
+                describe_apps(&apps)
+            })
+        }
+        AppsAction::Info(package) => {
+            let apps = client
+                .refreshed_apps()
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            let app = apps
+                .iter()
+                .find(|app| app.package_name == package)
+                .ok_or_else(|| {
+                    format!("no app of {package} is installed in Android; dsa apps list shows them")
+                })?;
+            Ok(if invocation.json {
+                app_json(app, true).to_string()
+            } else {
+                describe_app(app)
+            })
+        }
+        AppsAction::Uninstall(package) => {
+            let outcome = client.uninstall_app(&package).map_err(|e| e.to_string())?;
+            if !outcome.uninstalled() {
+                return Err(format!(
+                    "not uninstalled ({}): {}",
+                    outcome.status.code(),
+                    outcome
+                ));
+            }
+            Ok(if invocation.json {
+                json!({
+                    "package": outcome.package_name,
+                    "uninstalled": true,
+                    "status": outcome.status.code(),
+                    "message": outcome.message,
+                })
+                .to_string()
+            } else {
+                format!("Uninstalled {package}")
+            })
+        }
+        AppsAction::Settings(package) => {
+            client
+                .open_app_settings(package.as_deref())
+                .map_err(|e| e.to_string())?;
+            Ok(if invocation.json {
+                json!({ "opened": package }).to_string()
+            } else {
+                match package {
+                    Some(package) => format!("Opening the settings of {package}"),
+                    None => "Opening the list of apps".into(),
+                }
+            })
+        }
     }
 }
 
@@ -2050,6 +2315,7 @@ pub fn run_with_starter(
             return Ok(show_arm_translation(invocation, &status, Some(done)));
         }
         Command::Widgets => return widgets(invocation, client, connector),
+        Command::Apps => return apps(invocation, client, connector),
         Command::Open | Command::Share => {
             return open_file(invocation, client, connector);
         }

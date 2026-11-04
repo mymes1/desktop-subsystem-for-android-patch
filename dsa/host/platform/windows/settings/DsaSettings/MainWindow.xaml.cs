@@ -15,6 +15,7 @@ public partial class MainWindow : FluentWindow
     {
         ["general"] = typeof(GeneralPage),
         ["memory"] = typeof(MemoryPage),
+        ["apps"] = typeof(AppsPage),
         ["display"] = typeof(DisplayPage),
         ["updates"] = typeof(UpdatesPage),
         ["advanced"] = typeof(AdvancedPage),

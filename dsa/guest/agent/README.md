@@ -211,8 +211,20 @@ every package in one list (`InstalledApps`). Each app goes in a frame of its own
 carries every icon. It does so when the channel connects, and again whenever the package
 manager says a package was added, replaced, changed or removed, the language changed, or the
 user's storage was unlocked (before that, only the apps that run that early are listed).
-Only an app whose name or icon changed is described again; an app missing from the list has
-been removed. The agent's own package is never listed.
+Only an app whose name, icon, version or size changed is described again; an app missing from
+the list has been removed. The agent's own package is never listed.
+
+Each `InstalledApp` also carries the app's version, when it was first installed and last
+updated, whether it is part of the Android image, and its size (code, data and cache, from
+`StorageStatsManager`). The host's `RefreshApps` makes the agent read them again and send the
+list even when nothing changed, because the host waits for it.
+
+The host can uninstall an app (`UninstallApp`). The agent refuses an app that is part of the
+image, itself, and a package that is not installed, each with its reason, and uninstalls any
+other through `PackageInstaller`; `DELETE_PACKAGES` lets it go ahead without asking again in
+the guest. It answers with `UninstallResult`. `OpenAppSettings` opens Settings' page of an app
+(`ACTION_APPLICATION_DETAILS_SETTINGS`), or its list of apps when no package is named, as a
+task in its own window.
 
 ## Pointer input
 

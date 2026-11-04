@@ -112,7 +112,7 @@ fn remove_named(classes: HKEY, protocols: &[&str], prefixes: &[&str]) -> Vec<Str
 
 /// Turns on a privilege this process holds but has off, as SYSTEM holds the two that loading a
 /// hive needs.
-fn enable_privilege(name: &str) -> Result<(), String> {
+pub(crate) fn enable_privilege(name: &str) -> Result<(), String> {
     let mut token: HANDLE = std::ptr::null_mut();
     // SAFETY: this process's own token, closed below.
     if unsafe {

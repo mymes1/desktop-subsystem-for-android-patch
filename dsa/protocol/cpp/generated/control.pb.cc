@@ -244,6 +244,14 @@ PROTOBUF_CONSTEXPR InstalledApp::InstalledApp(
     /*decltype(_impl_.package_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.label_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.icon_png_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.version_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.version_code_)*/int64_t{0}
+  , /*decltype(_impl_.first_install_time_ms_)*/uint64_t{0u}
+  , /*decltype(_impl_.last_update_time_ms_)*/uint64_t{0u}
+  , /*decltype(_impl_.app_bytes_)*/uint64_t{0u}
+  , /*decltype(_impl_.data_bytes_)*/uint64_t{0u}
+  , /*decltype(_impl_.cache_bytes_)*/uint64_t{0u}
+  , /*decltype(_impl_.system_app_)*/false
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct InstalledAppDefaultTypeInternal {
   PROTOBUF_CONSTEXPR InstalledAppDefaultTypeInternal()
@@ -254,6 +262,61 @@ struct InstalledAppDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 InstalledAppDefaultTypeInternal _InstalledApp_default_instance_;
+PROTOBUF_CONSTEXPR RefreshApps::RefreshApps(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_._cached_size_)*/{}} {}
+struct RefreshAppsDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RefreshAppsDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RefreshAppsDefaultTypeInternal() {}
+  union {
+    RefreshApps _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RefreshAppsDefaultTypeInternal _RefreshApps_default_instance_;
+PROTOBUF_CONSTEXPR OpenAppSettings::OpenAppSettings(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.package_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct OpenAppSettingsDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR OpenAppSettingsDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~OpenAppSettingsDefaultTypeInternal() {}
+  union {
+    OpenAppSettings _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 OpenAppSettingsDefaultTypeInternal _OpenAppSettings_default_instance_;
+PROTOBUF_CONSTEXPR UninstallApp::UninstallApp(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.package_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct UninstallAppDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR UninstallAppDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~UninstallAppDefaultTypeInternal() {}
+  union {
+    UninstallApp _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 UninstallAppDefaultTypeInternal _UninstallApp_default_instance_;
+PROTOBUF_CONSTEXPR UninstallResult::UninstallResult(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.package_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.message_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_.status_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct UninstallResultDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR UninstallResultDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~UninstallResultDefaultTypeInternal() {}
+  union {
+    UninstallResult _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 UninstallResultDefaultTypeInternal _UninstallResult_default_instance_;
 PROTOBUF_CONSTEXPR InstalledApps::InstalledApps(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.package_names_)*/{}
@@ -1730,6 +1793,73 @@ bool RejectReason_Parse(
       RejectReason_entries, 6, name, &int_value);
   if (success) {
     *value = static_cast<RejectReason>(int_value);
+  }
+  return success;
+}
+bool UninstallStatus_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> UninstallStatus_strings[6] = {};
+
+static const char UninstallStatus_names[] =
+  "UNINSTALL_STATUS_BLOCKED"
+  "UNINSTALL_STATUS_NOT_INSTALLED"
+  "UNINSTALL_STATUS_OTHER"
+  "UNINSTALL_STATUS_SUCCESS"
+  "UNINSTALL_STATUS_SYSTEM_APP"
+  "UNINSTALL_STATUS_UNSPECIFIED";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry UninstallStatus_entries[] = {
+  { {UninstallStatus_names + 0, 24}, 4 },
+  { {UninstallStatus_names + 24, 30}, 2 },
+  { {UninstallStatus_names + 54, 22}, 5 },
+  { {UninstallStatus_names + 76, 24}, 1 },
+  { {UninstallStatus_names + 100, 27}, 3 },
+  { {UninstallStatus_names + 127, 28}, 0 },
+};
+
+static const int UninstallStatus_entries_by_number[] = {
+  5, // 0 -> UNINSTALL_STATUS_UNSPECIFIED
+  3, // 1 -> UNINSTALL_STATUS_SUCCESS
+  1, // 2 -> UNINSTALL_STATUS_NOT_INSTALLED
+  4, // 3 -> UNINSTALL_STATUS_SYSTEM_APP
+  0, // 4 -> UNINSTALL_STATUS_BLOCKED
+  2, // 5 -> UNINSTALL_STATUS_OTHER
+};
+
+const std::string& UninstallStatus_Name(
+    UninstallStatus value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          UninstallStatus_entries,
+          UninstallStatus_entries_by_number,
+          6, UninstallStatus_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      UninstallStatus_entries,
+      UninstallStatus_entries_by_number,
+      6, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     UninstallStatus_strings[idx].get();
+}
+bool UninstallStatus_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, UninstallStatus* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      UninstallStatus_entries, 6, name, &int_value);
+  if (success) {
+    *value = static_cast<UninstallStatus>(int_value);
   }
   return success;
 }
@@ -6212,6 +6342,14 @@ InstalledApp::InstalledApp(const InstalledApp& from)
       decltype(_impl_.package_name_){}
     , decltype(_impl_.label_){}
     , decltype(_impl_.icon_png_){}
+    , decltype(_impl_.version_name_){}
+    , decltype(_impl_.version_code_){}
+    , decltype(_impl_.first_install_time_ms_){}
+    , decltype(_impl_.last_update_time_ms_){}
+    , decltype(_impl_.app_bytes_){}
+    , decltype(_impl_.data_bytes_){}
+    , decltype(_impl_.cache_bytes_){}
+    , decltype(_impl_.system_app_){}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
@@ -6239,6 +6377,17 @@ InstalledApp::InstalledApp(const InstalledApp& from)
     _this->_impl_.icon_png_.Set(from._internal_icon_png(), 
       _this->GetArenaForAllocation());
   }
+  _impl_.version_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.version_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_version_name().empty()) {
+    _this->_impl_.version_name_.Set(from._internal_version_name(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.version_code_, &from._impl_.version_code_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.system_app_) -
+    reinterpret_cast<char*>(&_impl_.version_code_)) + sizeof(_impl_.system_app_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.InstalledApp)
 }
 
@@ -6250,6 +6399,14 @@ inline void InstalledApp::SharedCtor(
       decltype(_impl_.package_name_){}
     , decltype(_impl_.label_){}
     , decltype(_impl_.icon_png_){}
+    , decltype(_impl_.version_name_){}
+    , decltype(_impl_.version_code_){int64_t{0}}
+    , decltype(_impl_.first_install_time_ms_){uint64_t{0u}}
+    , decltype(_impl_.last_update_time_ms_){uint64_t{0u}}
+    , decltype(_impl_.app_bytes_){uint64_t{0u}}
+    , decltype(_impl_.data_bytes_){uint64_t{0u}}
+    , decltype(_impl_.cache_bytes_){uint64_t{0u}}
+    , decltype(_impl_.system_app_){false}
     , /*decltype(_impl_._cached_size_)*/{}
   };
   _impl_.package_name_.InitDefault();
@@ -6263,6 +6420,10 @@ inline void InstalledApp::SharedCtor(
   _impl_.icon_png_.InitDefault();
   #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
     _impl_.icon_png_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.version_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.version_name_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
@@ -6280,6 +6441,7 @@ inline void InstalledApp::SharedDtor() {
   _impl_.package_name_.Destroy();
   _impl_.label_.Destroy();
   _impl_.icon_png_.Destroy();
+  _impl_.version_name_.Destroy();
 }
 
 void InstalledApp::SetCachedSize(int size) const {
@@ -6295,6 +6457,10 @@ void InstalledApp::Clear() {
   _impl_.package_name_.ClearToEmpty();
   _impl_.label_.ClearToEmpty();
   _impl_.icon_png_.ClearToEmpty();
+  _impl_.version_name_.ClearToEmpty();
+  ::memset(&_impl_.version_code_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.system_app_) -
+      reinterpret_cast<char*>(&_impl_.version_code_)) + sizeof(_impl_.system_app_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -6329,6 +6495,72 @@ const char* InstalledApp::_InternalParse(const char* ptr, ::_pbi::ParseContext* 
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           auto str = _internal_mutable_icon_png();
           ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string version_name = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_version_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // int64 version_code = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.version_code_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 first_install_time_ms = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
+          _impl_.first_install_time_ms_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 last_update_time_ms = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
+          _impl_.last_update_time_ms_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool system_app = 8;
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 64)) {
+          _impl_.system_app_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 app_bytes = 9;
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 72)) {
+          _impl_.app_bytes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 data_bytes = 10;
+      case 10:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 80)) {
+          _impl_.data_bytes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 cache_bytes = 11;
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
+          _impl_.cache_bytes_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -6388,6 +6620,58 @@ uint8_t* InstalledApp::_InternalSerialize(
         3, this->_internal_icon_png(), target);
   }
 
+  // string version_name = 4;
+  if (!this->_internal_version_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_version_name().data(), static_cast<int>(this->_internal_version_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.InstalledApp.version_name");
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_version_name(), target);
+  }
+
+  // int64 version_code = 5;
+  if (this->_internal_version_code() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt64ToArray(5, this->_internal_version_code(), target);
+  }
+
+  // uint64 first_install_time_ms = 6;
+  if (this->_internal_first_install_time_ms() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(6, this->_internal_first_install_time_ms(), target);
+  }
+
+  // uint64 last_update_time_ms = 7;
+  if (this->_internal_last_update_time_ms() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(7, this->_internal_last_update_time_ms(), target);
+  }
+
+  // bool system_app = 8;
+  if (this->_internal_system_app() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(8, this->_internal_system_app(), target);
+  }
+
+  // uint64 app_bytes = 9;
+  if (this->_internal_app_bytes() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(9, this->_internal_app_bytes(), target);
+  }
+
+  // uint64 data_bytes = 10;
+  if (this->_internal_data_bytes() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(10, this->_internal_data_bytes(), target);
+  }
+
+  // uint64 cache_bytes = 11;
+  if (this->_internal_cache_bytes() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(11, this->_internal_cache_bytes(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -6425,6 +6709,48 @@ size_t InstalledApp::ByteSizeLong() const {
         this->_internal_icon_png());
   }
 
+  // string version_name = 4;
+  if (!this->_internal_version_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_version_name());
+  }
+
+  // int64 version_code = 5;
+  if (this->_internal_version_code() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(this->_internal_version_code());
+  }
+
+  // uint64 first_install_time_ms = 6;
+  if (this->_internal_first_install_time_ms() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_first_install_time_ms());
+  }
+
+  // uint64 last_update_time_ms = 7;
+  if (this->_internal_last_update_time_ms() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_last_update_time_ms());
+  }
+
+  // uint64 app_bytes = 9;
+  if (this->_internal_app_bytes() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_app_bytes());
+  }
+
+  // uint64 data_bytes = 10;
+  if (this->_internal_data_bytes() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_data_bytes());
+  }
+
+  // uint64 cache_bytes = 11;
+  if (this->_internal_cache_bytes() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_cache_bytes());
+  }
+
+  // bool system_app = 8;
+  if (this->_internal_system_app() != 0) {
+    total_size += 1 + 1;
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
   }
@@ -6454,6 +6780,30 @@ void InstalledApp::MergeFrom(const InstalledApp& from) {
   }
   if (!from._internal_icon_png().empty()) {
     _this->_internal_set_icon_png(from._internal_icon_png());
+  }
+  if (!from._internal_version_name().empty()) {
+    _this->_internal_set_version_name(from._internal_version_name());
+  }
+  if (from._internal_version_code() != 0) {
+    _this->_internal_set_version_code(from._internal_version_code());
+  }
+  if (from._internal_first_install_time_ms() != 0) {
+    _this->_internal_set_first_install_time_ms(from._internal_first_install_time_ms());
+  }
+  if (from._internal_last_update_time_ms() != 0) {
+    _this->_internal_set_last_update_time_ms(from._internal_last_update_time_ms());
+  }
+  if (from._internal_app_bytes() != 0) {
+    _this->_internal_set_app_bytes(from._internal_app_bytes());
+  }
+  if (from._internal_data_bytes() != 0) {
+    _this->_internal_set_data_bytes(from._internal_data_bytes());
+  }
+  if (from._internal_cache_bytes() != 0) {
+    _this->_internal_set_cache_bytes(from._internal_cache_bytes());
+  }
+  if (from._internal_system_app() != 0) {
+    _this->_internal_set_system_app(from._internal_system_app());
   }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
@@ -6486,10 +6836,923 @@ void InstalledApp::InternalSwap(InstalledApp* other) {
       &_impl_.icon_png_, lhs_arena,
       &other->_impl_.icon_png_, rhs_arena
   );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.version_name_, lhs_arena,
+      &other->_impl_.version_name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(InstalledApp, _impl_.system_app_)
+      + sizeof(InstalledApp::_impl_.system_app_)
+      - PROTOBUF_FIELD_OFFSET(InstalledApp, _impl_.version_code_)>(
+          reinterpret_cast<char*>(&_impl_.version_code_),
+          reinterpret_cast<char*>(&other->_impl_.version_code_));
 }
 
 std::string InstalledApp::GetTypeName() const {
   return "dsa.control.v1.InstalledApp";
+}
+
+
+// ===================================================================
+
+class RefreshApps::_Internal {
+ public:
+};
+
+RefreshApps::RefreshApps(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.RefreshApps)
+}
+RefreshApps::RefreshApps(const RefreshApps& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  RefreshApps* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.RefreshApps)
+}
+
+inline void RefreshApps::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+RefreshApps::~RefreshApps() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.RefreshApps)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void RefreshApps::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void RefreshApps::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void RefreshApps::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.RefreshApps)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* RefreshApps::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* RefreshApps::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.RefreshApps)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.RefreshApps)
+  return target;
+}
+
+size_t RefreshApps::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.RefreshApps)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void RefreshApps::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const RefreshApps*>(
+      &from));
+}
+
+void RefreshApps::MergeFrom(const RefreshApps& from) {
+  RefreshApps* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.RefreshApps)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void RefreshApps::CopyFrom(const RefreshApps& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.RefreshApps)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool RefreshApps::IsInitialized() const {
+  return true;
+}
+
+void RefreshApps::InternalSwap(RefreshApps* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+}
+
+std::string RefreshApps::GetTypeName() const {
+  return "dsa.control.v1.RefreshApps";
+}
+
+
+// ===================================================================
+
+class OpenAppSettings::_Internal {
+ public:
+};
+
+OpenAppSettings::OpenAppSettings(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.OpenAppSettings)
+}
+OpenAppSettings::OpenAppSettings(const OpenAppSettings& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  OpenAppSettings* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.package_name_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.package_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_package_name().empty()) {
+    _this->_impl_.package_name_.Set(from._internal_package_name(), 
+      _this->GetArenaForAllocation());
+  }
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.OpenAppSettings)
+}
+
+inline void OpenAppSettings::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.package_name_){}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.package_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+OpenAppSettings::~OpenAppSettings() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.OpenAppSettings)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void OpenAppSettings::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.package_name_.Destroy();
+}
+
+void OpenAppSettings::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void OpenAppSettings::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.OpenAppSettings)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.package_name_.ClearToEmpty();
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* OpenAppSettings::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string package_name = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_package_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* OpenAppSettings::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.OpenAppSettings)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string package_name = 1;
+  if (!this->_internal_package_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_package_name().data(), static_cast<int>(this->_internal_package_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.OpenAppSettings.package_name");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_package_name(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.OpenAppSettings)
+  return target;
+}
+
+size_t OpenAppSettings::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.OpenAppSettings)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string package_name = 1;
+  if (!this->_internal_package_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_package_name());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void OpenAppSettings::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const OpenAppSettings*>(
+      &from));
+}
+
+void OpenAppSettings::MergeFrom(const OpenAppSettings& from) {
+  OpenAppSettings* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.OpenAppSettings)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_package_name().empty()) {
+    _this->_internal_set_package_name(from._internal_package_name());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void OpenAppSettings::CopyFrom(const OpenAppSettings& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.OpenAppSettings)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool OpenAppSettings::IsInitialized() const {
+  return true;
+}
+
+void OpenAppSettings::InternalSwap(OpenAppSettings* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.package_name_, lhs_arena,
+      &other->_impl_.package_name_, rhs_arena
+  );
+}
+
+std::string OpenAppSettings::GetTypeName() const {
+  return "dsa.control.v1.OpenAppSettings";
+}
+
+
+// ===================================================================
+
+class UninstallApp::_Internal {
+ public:
+};
+
+UninstallApp::UninstallApp(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.UninstallApp)
+}
+UninstallApp::UninstallApp(const UninstallApp& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  UninstallApp* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.package_name_){}
+    , decltype(_impl_.request_id_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.package_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_package_name().empty()) {
+    _this->_impl_.package_name_.Set(from._internal_package_name(), 
+      _this->GetArenaForAllocation());
+  }
+  _this->_impl_.request_id_ = from._impl_.request_id_;
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.UninstallApp)
+}
+
+inline void UninstallApp::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.package_name_){}
+    , decltype(_impl_.request_id_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.package_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+UninstallApp::~UninstallApp() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.UninstallApp)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void UninstallApp::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.package_name_.Destroy();
+}
+
+void UninstallApp::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void UninstallApp::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.UninstallApp)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.package_name_.ClearToEmpty();
+  _impl_.request_id_ = 0u;
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* UninstallApp::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string package_name = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_package_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* UninstallApp::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.UninstallApp)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // string package_name = 2;
+  if (!this->_internal_package_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_package_name().data(), static_cast<int>(this->_internal_package_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.UninstallApp.package_name");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_package_name(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.UninstallApp)
+  return target;
+}
+
+size_t UninstallApp::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.UninstallApp)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string package_name = 2;
+  if (!this->_internal_package_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_package_name());
+  }
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void UninstallApp::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const UninstallApp*>(
+      &from));
+}
+
+void UninstallApp::MergeFrom(const UninstallApp& from) {
+  UninstallApp* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.UninstallApp)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_package_name().empty()) {
+    _this->_internal_set_package_name(from._internal_package_name());
+  }
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void UninstallApp::CopyFrom(const UninstallApp& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.UninstallApp)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool UninstallApp::IsInitialized() const {
+  return true;
+}
+
+void UninstallApp::InternalSwap(UninstallApp* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.package_name_, lhs_arena,
+      &other->_impl_.package_name_, rhs_arena
+  );
+  swap(_impl_.request_id_, other->_impl_.request_id_);
+}
+
+std::string UninstallApp::GetTypeName() const {
+  return "dsa.control.v1.UninstallApp";
+}
+
+
+// ===================================================================
+
+class UninstallResult::_Internal {
+ public:
+};
+
+UninstallResult::UninstallResult(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.UninstallResult)
+}
+UninstallResult::UninstallResult(const UninstallResult& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  UninstallResult* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.package_name_){}
+    , decltype(_impl_.message_){}
+    , decltype(_impl_.request_id_){}
+    , decltype(_impl_.status_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.package_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_package_name().empty()) {
+    _this->_impl_.package_name_.Set(from._internal_package_name(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.message_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.message_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_message().empty()) {
+    _this->_impl_.message_.Set(from._internal_message(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.request_id_, &from._impl_.request_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.status_) -
+    reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.status_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.UninstallResult)
+}
+
+inline void UninstallResult::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.package_name_){}
+    , decltype(_impl_.message_){}
+    , decltype(_impl_.request_id_){0u}
+    , decltype(_impl_.status_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.package_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.message_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.message_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+UninstallResult::~UninstallResult() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.UninstallResult)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void UninstallResult::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.package_name_.Destroy();
+  _impl_.message_.Destroy();
+}
+
+void UninstallResult::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void UninstallResult::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.UninstallResult)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.package_name_.ClearToEmpty();
+  _impl_.message_.ClearToEmpty();
+  ::memset(&_impl_.request_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.status_) -
+      reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.status_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* UninstallResult::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string package_name = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_package_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.UninstallStatus status = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_status(static_cast<::dsa::control::v1::UninstallStatus>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // string message = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_message();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* UninstallResult::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.UninstallResult)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // string package_name = 2;
+  if (!this->_internal_package_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_package_name().data(), static_cast<int>(this->_internal_package_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.UninstallResult.package_name");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_package_name(), target);
+  }
+
+  // .dsa.control.v1.UninstallStatus status = 3;
+  if (this->_internal_status() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      3, this->_internal_status(), target);
+  }
+
+  // string message = 4;
+  if (!this->_internal_message().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_message().data(), static_cast<int>(this->_internal_message().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.UninstallResult.message");
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_message(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.UninstallResult)
+  return target;
+}
+
+size_t UninstallResult::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.UninstallResult)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string package_name = 2;
+  if (!this->_internal_package_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_package_name());
+  }
+
+  // string message = 4;
+  if (!this->_internal_message().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_message());
+  }
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  // .dsa.control.v1.UninstallStatus status = 3;
+  if (this->_internal_status() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_status());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void UninstallResult::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const UninstallResult*>(
+      &from));
+}
+
+void UninstallResult::MergeFrom(const UninstallResult& from) {
+  UninstallResult* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.UninstallResult)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_package_name().empty()) {
+    _this->_internal_set_package_name(from._internal_package_name());
+  }
+  if (!from._internal_message().empty()) {
+    _this->_internal_set_message(from._internal_message());
+  }
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  if (from._internal_status() != 0) {
+    _this->_internal_set_status(from._internal_status());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void UninstallResult::CopyFrom(const UninstallResult& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.UninstallResult)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool UninstallResult::IsInitialized() const {
+  return true;
+}
+
+void UninstallResult::InternalSwap(UninstallResult* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.package_name_, lhs_arena,
+      &other->_impl_.package_name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.message_, lhs_arena,
+      &other->_impl_.message_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(UninstallResult, _impl_.status_)
+      + sizeof(UninstallResult::_impl_.status_)
+      - PROTOBUF_FIELD_OFFSET(UninstallResult, _impl_.request_id_)>(
+          reinterpret_cast<char*>(&_impl_.request_id_),
+          reinterpret_cast<char*>(&other->_impl_.request_id_));
+}
+
+std::string UninstallResult::GetTypeName() const {
+  return "dsa.control.v1.UninstallResult";
 }
 
 
@@ -28577,6 +29840,10 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::InstallResult& install_result(const Envelope* msg);
   static const ::dsa::control::v1::QueryPackage& query_package(const Envelope* msg);
   static const ::dsa::control::v1::PackageState& package_state(const Envelope* msg);
+  static const ::dsa::control::v1::UninstallApp& uninstall_app(const Envelope* msg);
+  static const ::dsa::control::v1::UninstallResult& uninstall_result(const Envelope* msg);
+  static const ::dsa::control::v1::RefreshApps& refresh_apps(const Envelope* msg);
+  static const ::dsa::control::v1::OpenAppSettings& open_app_settings(const Envelope* msg);
   static const ::dsa::control::v1::OpenLink& open_link(const Envelope* msg);
   static const ::dsa::control::v1::LinkHandling& link_handling(const Envelope* msg);
   static const ::dsa::control::v1::OpenFile& open_file(const Envelope* msg);
@@ -28798,6 +30065,22 @@ Envelope::_Internal::query_package(const Envelope* msg) {
 const ::dsa::control::v1::PackageState&
 Envelope::_Internal::package_state(const Envelope* msg) {
   return *msg->_impl_.body_.package_state_;
+}
+const ::dsa::control::v1::UninstallApp&
+Envelope::_Internal::uninstall_app(const Envelope* msg) {
+  return *msg->_impl_.body_.uninstall_app_;
+}
+const ::dsa::control::v1::UninstallResult&
+Envelope::_Internal::uninstall_result(const Envelope* msg) {
+  return *msg->_impl_.body_.uninstall_result_;
+}
+const ::dsa::control::v1::RefreshApps&
+Envelope::_Internal::refresh_apps(const Envelope* msg) {
+  return *msg->_impl_.body_.refresh_apps_;
+}
+const ::dsa::control::v1::OpenAppSettings&
+Envelope::_Internal::open_app_settings(const Envelope* msg) {
+  return *msg->_impl_.body_.open_app_settings_;
 }
 const ::dsa::control::v1::OpenLink&
 Envelope::_Internal::open_link(const Envelope* msg) {
@@ -29635,6 +30918,66 @@ void Envelope::set_allocated_package_state(::dsa::control::v1::PackageState* pac
     _impl_.body_.package_state_ = package_state;
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.package_state)
+}
+void Envelope::set_allocated_uninstall_app(::dsa::control::v1::UninstallApp* uninstall_app) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (uninstall_app) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(uninstall_app);
+    if (message_arena != submessage_arena) {
+      uninstall_app = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, uninstall_app, submessage_arena);
+    }
+    set_has_uninstall_app();
+    _impl_.body_.uninstall_app_ = uninstall_app;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.uninstall_app)
+}
+void Envelope::set_allocated_uninstall_result(::dsa::control::v1::UninstallResult* uninstall_result) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (uninstall_result) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(uninstall_result);
+    if (message_arena != submessage_arena) {
+      uninstall_result = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, uninstall_result, submessage_arena);
+    }
+    set_has_uninstall_result();
+    _impl_.body_.uninstall_result_ = uninstall_result;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.uninstall_result)
+}
+void Envelope::set_allocated_refresh_apps(::dsa::control::v1::RefreshApps* refresh_apps) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (refresh_apps) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(refresh_apps);
+    if (message_arena != submessage_arena) {
+      refresh_apps = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, refresh_apps, submessage_arena);
+    }
+    set_has_refresh_apps();
+    _impl_.body_.refresh_apps_ = refresh_apps;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.refresh_apps)
+}
+void Envelope::set_allocated_open_app_settings(::dsa::control::v1::OpenAppSettings* open_app_settings) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (open_app_settings) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(open_app_settings);
+    if (message_arena != submessage_arena) {
+      open_app_settings = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, open_app_settings, submessage_arena);
+    }
+    set_has_open_app_settings();
+    _impl_.body_.open_app_settings_ = open_app_settings;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.open_app_settings)
 }
 void Envelope::set_allocated_open_link(::dsa::control::v1::OpenLink* open_link) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -30588,6 +31931,26 @@ Envelope::Envelope(const Envelope& from)
           from._internal_package_state());
       break;
     }
+    case kUninstallApp: {
+      _this->_internal_mutable_uninstall_app()->::dsa::control::v1::UninstallApp::MergeFrom(
+          from._internal_uninstall_app());
+      break;
+    }
+    case kUninstallResult: {
+      _this->_internal_mutable_uninstall_result()->::dsa::control::v1::UninstallResult::MergeFrom(
+          from._internal_uninstall_result());
+      break;
+    }
+    case kRefreshApps: {
+      _this->_internal_mutable_refresh_apps()->::dsa::control::v1::RefreshApps::MergeFrom(
+          from._internal_refresh_apps());
+      break;
+    }
+    case kOpenAppSettings: {
+      _this->_internal_mutable_open_app_settings()->::dsa::control::v1::OpenAppSettings::MergeFrom(
+          from._internal_open_app_settings());
+      break;
+    }
     case kOpenLink: {
       _this->_internal_mutable_open_link()->::dsa::control::v1::OpenLink::MergeFrom(
           from._internal_open_link());
@@ -31128,6 +32491,30 @@ void Envelope::clear_body() {
       }
       break;
     }
+    case kUninstallApp: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.uninstall_app_;
+      }
+      break;
+    }
+    case kUninstallResult: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.uninstall_result_;
+      }
+      break;
+    }
+    case kRefreshApps: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.refresh_apps_;
+      }
+      break;
+    }
+    case kOpenAppSettings: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.open_app_settings_;
+      }
+      break;
+    }
     case kOpenLink: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.open_link_;
@@ -31664,6 +33051,14 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.OpenAppSettings open_app_settings = 30;
+      case 30:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 242)) {
+          ptr = ctx->ParseMessage(_internal_mutable_open_app_settings(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       // .dsa.control.v1.ScreenState screen_state = 40;
       case 40:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
@@ -31804,6 +33199,30 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
       case 66:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_package_state(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.UninstallApp uninstall_app = 67;
+      case 67:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          ptr = ctx->ParseMessage(_internal_mutable_uninstall_app(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.UninstallResult uninstall_result = 68;
+      case 68:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          ptr = ctx->ParseMessage(_internal_mutable_uninstall_result(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.RefreshApps refresh_apps = 69;
+      case 69:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          ptr = ctx->ParseMessage(_internal_mutable_refresh_apps(), ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -32393,6 +33812,13 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::clock_answer(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.OpenAppSettings open_app_settings = 30;
+  if (_internal_has_open_app_settings()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(30, _Internal::open_app_settings(this),
+        _Internal::open_app_settings(this).GetCachedSize(), target, stream);
+  }
+
   // .dsa.control.v1.ScreenState screen_state = 40;
   if (_internal_has_screen_state()) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -32517,6 +33943,27 @@ uint8_t* Envelope::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
       InternalWriteMessage(66, _Internal::package_state(this),
         _Internal::package_state(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.UninstallApp uninstall_app = 67;
+  if (_internal_has_uninstall_app()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(67, _Internal::uninstall_app(this),
+        _Internal::uninstall_app(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.UninstallResult uninstall_result = 68;
+  if (_internal_has_uninstall_result()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(68, _Internal::uninstall_result(this),
+        _Internal::uninstall_result(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.RefreshApps refresh_apps = 69;
+  if (_internal_has_refresh_apps()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(69, _Internal::refresh_apps(this),
+        _Internal::refresh_apps(this).GetCachedSize(), target, stream);
   }
 
   // .dsa.control.v1.GuestNotification notification = 70;
@@ -33152,6 +34599,34 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.package_state_);
       break;
     }
+    // .dsa.control.v1.UninstallApp uninstall_app = 67;
+    case kUninstallApp: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.uninstall_app_);
+      break;
+    }
+    // .dsa.control.v1.UninstallResult uninstall_result = 68;
+    case kUninstallResult: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.uninstall_result_);
+      break;
+    }
+    // .dsa.control.v1.RefreshApps refresh_apps = 69;
+    case kRefreshApps: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.refresh_apps_);
+      break;
+    }
+    // .dsa.control.v1.OpenAppSettings open_app_settings = 30;
+    case kOpenAppSettings: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.open_app_settings_);
+      break;
+    }
     // .dsa.control.v1.OpenLink open_link = 50;
     case kOpenLink: {
       total_size += 2 +
@@ -33729,6 +35204,26 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_package_state());
       break;
     }
+    case kUninstallApp: {
+      _this->_internal_mutable_uninstall_app()->::dsa::control::v1::UninstallApp::MergeFrom(
+          from._internal_uninstall_app());
+      break;
+    }
+    case kUninstallResult: {
+      _this->_internal_mutable_uninstall_result()->::dsa::control::v1::UninstallResult::MergeFrom(
+          from._internal_uninstall_result());
+      break;
+    }
+    case kRefreshApps: {
+      _this->_internal_mutable_refresh_apps()->::dsa::control::v1::RefreshApps::MergeFrom(
+          from._internal_refresh_apps());
+      break;
+    }
+    case kOpenAppSettings: {
+      _this->_internal_mutable_open_app_settings()->::dsa::control::v1::OpenAppSettings::MergeFrom(
+          from._internal_open_app_settings());
+      break;
+    }
     case kOpenLink: {
       _this->_internal_mutable_open_link()->::dsa::control::v1::OpenLink::MergeFrom(
           from._internal_open_link());
@@ -34067,6 +35562,22 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::AppInfo >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::InstalledApp*
 Arena::CreateMaybeMessage< ::dsa::control::v1::InstalledApp >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::InstalledApp >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::RefreshApps*
+Arena::CreateMaybeMessage< ::dsa::control::v1::RefreshApps >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::RefreshApps >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::OpenAppSettings*
+Arena::CreateMaybeMessage< ::dsa::control::v1::OpenAppSettings >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::OpenAppSettings >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::UninstallApp*
+Arena::CreateMaybeMessage< ::dsa::control::v1::UninstallApp >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::UninstallApp >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::UninstallResult*
+Arena::CreateMaybeMessage< ::dsa::control::v1::UninstallResult >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::UninstallResult >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::InstalledApps*
 Arena::CreateMaybeMessage< ::dsa::control::v1::InstalledApps >(Arena* arena) {

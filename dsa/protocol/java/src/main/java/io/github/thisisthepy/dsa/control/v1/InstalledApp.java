@@ -5,10 +5,12 @@ package io.github.thisisthepy.dsa.control.v1;
 
 /**
  * <pre>
- * Guest to host, from the agent: an app a launcher lists is installed in the guest, or its
- * name or icon changed. The host shows it in its own start menu. The agent sends it on each
- * connection for every such app, and again whenever the app is installed again or updated;
- * the InstalledApps that follows says which apps are still there.
+ * Guest to host, from the agent: an app a launcher lists is installed in the guest, or
+ * something about it changed: its name, icon, version or size. The host shows it in its own
+ * start menu and its list of installed apps. The agent sends it on each connection for every
+ * such app, and again whenever the app is installed again or updated, or the host asks
+ * (RefreshApps) and the app's sizes changed; the InstalledApps that follows says which apps
+ * are still there.
  * </pre>
  *
  * Protobuf type {@code dsa.control.v1.InstalledApp}
@@ -22,6 +24,7 @@ public  final class InstalledApp extends
     packageName_ = "";
     label_ = "";
     iconPng_ = com.google.protobuf.ByteString.EMPTY;
+    versionName_ = "";
   }
   public static final int PACKAGE_NAME_FIELD_NUMBER = 1;
   private java.lang.String packageName_;
@@ -179,6 +182,294 @@ public  final class InstalledApp extends
     iconPng_ = getDefaultInstance().getIconPng();
   }
 
+  public static final int VERSION_NAME_FIELD_NUMBER = 4;
+  private java.lang.String versionName_;
+  /**
+   * <pre>
+   * The installed version, as the package manager reports it.
+   * </pre>
+   *
+   * <code>string version_name = 4;</code>
+   * @return The versionName.
+   */
+  @java.lang.Override
+  public java.lang.String getVersionName() {
+    return versionName_;
+  }
+  /**
+   * <pre>
+   * The installed version, as the package manager reports it.
+   * </pre>
+   *
+   * <code>string version_name = 4;</code>
+   * @return The bytes for versionName.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getVersionNameBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(versionName_);
+  }
+  /**
+   * <pre>
+   * The installed version, as the package manager reports it.
+   * </pre>
+   *
+   * <code>string version_name = 4;</code>
+   * @param value The versionName to set.
+   */
+  private void setVersionName(
+      java.lang.String value) {
+    java.lang.Class<?> valueClass = value.getClass();
+  
+    versionName_ = value;
+  }
+  /**
+   * <pre>
+   * The installed version, as the package manager reports it.
+   * </pre>
+   *
+   * <code>string version_name = 4;</code>
+   */
+  private void clearVersionName() {
+    
+    versionName_ = getDefaultInstance().getVersionName();
+  }
+  /**
+   * <pre>
+   * The installed version, as the package manager reports it.
+   * </pre>
+   *
+   * <code>string version_name = 4;</code>
+   * @param value The bytes for versionName to set.
+   */
+  private void setVersionNameBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    versionName_ = value.toStringUtf8();
+    
+  }
+
+  public static final int VERSION_CODE_FIELD_NUMBER = 5;
+  private long versionCode_;
+  /**
+   * <code>int64 version_code = 5;</code>
+   * @return The versionCode.
+   */
+  @java.lang.Override
+  public long getVersionCode() {
+    return versionCode_;
+  }
+  /**
+   * <code>int64 version_code = 5;</code>
+   * @param value The versionCode to set.
+   */
+  private void setVersionCode(long value) {
+    
+    versionCode_ = value;
+  }
+  /**
+   * <code>int64 version_code = 5;</code>
+   */
+  private void clearVersionCode() {
+    
+    versionCode_ = 0L;
+  }
+
+  public static final int FIRST_INSTALL_TIME_MS_FIELD_NUMBER = 6;
+  private long firstInstallTimeMs_;
+  /**
+   * <pre>
+   * When the app was first installed and last updated, in milliseconds since the Unix epoch.
+   * </pre>
+   *
+   * <code>uint64 first_install_time_ms = 6;</code>
+   * @return The firstInstallTimeMs.
+   */
+  @java.lang.Override
+  public long getFirstInstallTimeMs() {
+    return firstInstallTimeMs_;
+  }
+  /**
+   * <pre>
+   * When the app was first installed and last updated, in milliseconds since the Unix epoch.
+   * </pre>
+   *
+   * <code>uint64 first_install_time_ms = 6;</code>
+   * @param value The firstInstallTimeMs to set.
+   */
+  private void setFirstInstallTimeMs(long value) {
+    
+    firstInstallTimeMs_ = value;
+  }
+  /**
+   * <pre>
+   * When the app was first installed and last updated, in milliseconds since the Unix epoch.
+   * </pre>
+   *
+   * <code>uint64 first_install_time_ms = 6;</code>
+   */
+  private void clearFirstInstallTimeMs() {
+    
+    firstInstallTimeMs_ = 0L;
+  }
+
+  public static final int LAST_UPDATE_TIME_MS_FIELD_NUMBER = 7;
+  private long lastUpdateTimeMs_;
+  /**
+   * <code>uint64 last_update_time_ms = 7;</code>
+   * @return The lastUpdateTimeMs.
+   */
+  @java.lang.Override
+  public long getLastUpdateTimeMs() {
+    return lastUpdateTimeMs_;
+  }
+  /**
+   * <code>uint64 last_update_time_ms = 7;</code>
+   * @param value The lastUpdateTimeMs to set.
+   */
+  private void setLastUpdateTimeMs(long value) {
+    
+    lastUpdateTimeMs_ = value;
+  }
+  /**
+   * <code>uint64 last_update_time_ms = 7;</code>
+   */
+  private void clearLastUpdateTimeMs() {
+    
+    lastUpdateTimeMs_ = 0L;
+  }
+
+  public static final int SYSTEM_APP_FIELD_NUMBER = 8;
+  private boolean systemApp_;
+  /**
+   * <pre>
+   * True for an app that is part of the Android image, which cannot be uninstalled.
+   * </pre>
+   *
+   * <code>bool system_app = 8;</code>
+   * @return The systemApp.
+   */
+  @java.lang.Override
+  public boolean getSystemApp() {
+    return systemApp_;
+  }
+  /**
+   * <pre>
+   * True for an app that is part of the Android image, which cannot be uninstalled.
+   * </pre>
+   *
+   * <code>bool system_app = 8;</code>
+   * @param value The systemApp to set.
+   */
+  private void setSystemApp(boolean value) {
+    
+    systemApp_ = value;
+  }
+  /**
+   * <pre>
+   * True for an app that is part of the Android image, which cannot be uninstalled.
+   * </pre>
+   *
+   * <code>bool system_app = 8;</code>
+   */
+  private void clearSystemApp() {
+    
+    systemApp_ = false;
+  }
+
+  public static final int APP_BYTES_FIELD_NUMBER = 9;
+  private long appBytes_;
+  /**
+   * <pre>
+   * The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+   * agent could not read them.
+   * </pre>
+   *
+   * <code>uint64 app_bytes = 9;</code>
+   * @return The appBytes.
+   */
+  @java.lang.Override
+  public long getAppBytes() {
+    return appBytes_;
+  }
+  /**
+   * <pre>
+   * The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+   * agent could not read them.
+   * </pre>
+   *
+   * <code>uint64 app_bytes = 9;</code>
+   * @param value The appBytes to set.
+   */
+  private void setAppBytes(long value) {
+    
+    appBytes_ = value;
+  }
+  /**
+   * <pre>
+   * The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+   * agent could not read them.
+   * </pre>
+   *
+   * <code>uint64 app_bytes = 9;</code>
+   */
+  private void clearAppBytes() {
+    
+    appBytes_ = 0L;
+  }
+
+  public static final int DATA_BYTES_FIELD_NUMBER = 10;
+  private long dataBytes_;
+  /**
+   * <code>uint64 data_bytes = 10;</code>
+   * @return The dataBytes.
+   */
+  @java.lang.Override
+  public long getDataBytes() {
+    return dataBytes_;
+  }
+  /**
+   * <code>uint64 data_bytes = 10;</code>
+   * @param value The dataBytes to set.
+   */
+  private void setDataBytes(long value) {
+    
+    dataBytes_ = value;
+  }
+  /**
+   * <code>uint64 data_bytes = 10;</code>
+   */
+  private void clearDataBytes() {
+    
+    dataBytes_ = 0L;
+  }
+
+  public static final int CACHE_BYTES_FIELD_NUMBER = 11;
+  private long cacheBytes_;
+  /**
+   * <code>uint64 cache_bytes = 11;</code>
+   * @return The cacheBytes.
+   */
+  @java.lang.Override
+  public long getCacheBytes() {
+    return cacheBytes_;
+  }
+  /**
+   * <code>uint64 cache_bytes = 11;</code>
+   * @param value The cacheBytes to set.
+   */
+  private void setCacheBytes(long value) {
+    
+    cacheBytes_ = value;
+  }
+  /**
+   * <code>uint64 cache_bytes = 11;</code>
+   */
+  private void clearCacheBytes() {
+    
+    cacheBytes_ = 0L;
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.InstalledApp parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -262,10 +553,12 @@ public  final class InstalledApp extends
 
   /**
    * <pre>
-   * Guest to host, from the agent: an app a launcher lists is installed in the guest, or its
-   * name or icon changed. The host shows it in its own start menu. The agent sends it on each
-   * connection for every such app, and again whenever the app is installed again or updated;
-   * the InstalledApps that follows says which apps are still there.
+   * Guest to host, from the agent: an app a launcher lists is installed in the guest, or
+   * something about it changed: its name, icon, version or size. The host shows it in its own
+   * start menu and its list of installed apps. The agent sends it on each connection for every
+   * such app, and again whenever the app is installed again or updated, or the host asks
+   * (RefreshApps) and the app's sizes changed; the InstalledApps that follows says which apps
+   * are still there.
    * </pre>
    *
    * Protobuf type {@code dsa.control.v1.InstalledApp}
@@ -442,6 +735,310 @@ public  final class InstalledApp extends
       return this;
     }
 
+    /**
+     * <pre>
+     * The installed version, as the package manager reports it.
+     * </pre>
+     *
+     * <code>string version_name = 4;</code>
+     * @return The versionName.
+     */
+    @java.lang.Override
+    public java.lang.String getVersionName() {
+      return instance.getVersionName();
+    }
+    /**
+     * <pre>
+     * The installed version, as the package manager reports it.
+     * </pre>
+     *
+     * <code>string version_name = 4;</code>
+     * @return The bytes for versionName.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getVersionNameBytes() {
+      return instance.getVersionNameBytes();
+    }
+    /**
+     * <pre>
+     * The installed version, as the package manager reports it.
+     * </pre>
+     *
+     * <code>string version_name = 4;</code>
+     * @param value The versionName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setVersionName(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setVersionName(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The installed version, as the package manager reports it.
+     * </pre>
+     *
+     * <code>string version_name = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearVersionName() {
+      copyOnWrite();
+      instance.clearVersionName();
+      return this;
+    }
+    /**
+     * <pre>
+     * The installed version, as the package manager reports it.
+     * </pre>
+     *
+     * <code>string version_name = 4;</code>
+     * @param value The bytes for versionName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setVersionNameBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setVersionNameBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>int64 version_code = 5;</code>
+     * @return The versionCode.
+     */
+    @java.lang.Override
+    public long getVersionCode() {
+      return instance.getVersionCode();
+    }
+    /**
+     * <code>int64 version_code = 5;</code>
+     * @param value The versionCode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setVersionCode(long value) {
+      copyOnWrite();
+      instance.setVersionCode(value);
+      return this;
+    }
+    /**
+     * <code>int64 version_code = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearVersionCode() {
+      copyOnWrite();
+      instance.clearVersionCode();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * When the app was first installed and last updated, in milliseconds since the Unix epoch.
+     * </pre>
+     *
+     * <code>uint64 first_install_time_ms = 6;</code>
+     * @return The firstInstallTimeMs.
+     */
+    @java.lang.Override
+    public long getFirstInstallTimeMs() {
+      return instance.getFirstInstallTimeMs();
+    }
+    /**
+     * <pre>
+     * When the app was first installed and last updated, in milliseconds since the Unix epoch.
+     * </pre>
+     *
+     * <code>uint64 first_install_time_ms = 6;</code>
+     * @param value The firstInstallTimeMs to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFirstInstallTimeMs(long value) {
+      copyOnWrite();
+      instance.setFirstInstallTimeMs(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * When the app was first installed and last updated, in milliseconds since the Unix epoch.
+     * </pre>
+     *
+     * <code>uint64 first_install_time_ms = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFirstInstallTimeMs() {
+      copyOnWrite();
+      instance.clearFirstInstallTimeMs();
+      return this;
+    }
+
+    /**
+     * <code>uint64 last_update_time_ms = 7;</code>
+     * @return The lastUpdateTimeMs.
+     */
+    @java.lang.Override
+    public long getLastUpdateTimeMs() {
+      return instance.getLastUpdateTimeMs();
+    }
+    /**
+     * <code>uint64 last_update_time_ms = 7;</code>
+     * @param value The lastUpdateTimeMs to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLastUpdateTimeMs(long value) {
+      copyOnWrite();
+      instance.setLastUpdateTimeMs(value);
+      return this;
+    }
+    /**
+     * <code>uint64 last_update_time_ms = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLastUpdateTimeMs() {
+      copyOnWrite();
+      instance.clearLastUpdateTimeMs();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * True for an app that is part of the Android image, which cannot be uninstalled.
+     * </pre>
+     *
+     * <code>bool system_app = 8;</code>
+     * @return The systemApp.
+     */
+    @java.lang.Override
+    public boolean getSystemApp() {
+      return instance.getSystemApp();
+    }
+    /**
+     * <pre>
+     * True for an app that is part of the Android image, which cannot be uninstalled.
+     * </pre>
+     *
+     * <code>bool system_app = 8;</code>
+     * @param value The systemApp to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSystemApp(boolean value) {
+      copyOnWrite();
+      instance.setSystemApp(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * True for an app that is part of the Android image, which cannot be uninstalled.
+     * </pre>
+     *
+     * <code>bool system_app = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSystemApp() {
+      copyOnWrite();
+      instance.clearSystemApp();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+     * agent could not read them.
+     * </pre>
+     *
+     * <code>uint64 app_bytes = 9;</code>
+     * @return The appBytes.
+     */
+    @java.lang.Override
+    public long getAppBytes() {
+      return instance.getAppBytes();
+    }
+    /**
+     * <pre>
+     * The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+     * agent could not read them.
+     * </pre>
+     *
+     * <code>uint64 app_bytes = 9;</code>
+     * @param value The appBytes to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAppBytes(long value) {
+      copyOnWrite();
+      instance.setAppBytes(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+     * agent could not read them.
+     * </pre>
+     *
+     * <code>uint64 app_bytes = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAppBytes() {
+      copyOnWrite();
+      instance.clearAppBytes();
+      return this;
+    }
+
+    /**
+     * <code>uint64 data_bytes = 10;</code>
+     * @return The dataBytes.
+     */
+    @java.lang.Override
+    public long getDataBytes() {
+      return instance.getDataBytes();
+    }
+    /**
+     * <code>uint64 data_bytes = 10;</code>
+     * @param value The dataBytes to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDataBytes(long value) {
+      copyOnWrite();
+      instance.setDataBytes(value);
+      return this;
+    }
+    /**
+     * <code>uint64 data_bytes = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDataBytes() {
+      copyOnWrite();
+      instance.clearDataBytes();
+      return this;
+    }
+
+    /**
+     * <code>uint64 cache_bytes = 11;</code>
+     * @return The cacheBytes.
+     */
+    @java.lang.Override
+    public long getCacheBytes() {
+      return instance.getCacheBytes();
+    }
+    /**
+     * <code>uint64 cache_bytes = 11;</code>
+     * @param value The cacheBytes to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCacheBytes(long value) {
+      copyOnWrite();
+      instance.setCacheBytes(value);
+      return this;
+    }
+    /**
+     * <code>uint64 cache_bytes = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCacheBytes() {
+      copyOnWrite();
+      instance.clearCacheBytes();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.InstalledApp)
   }
   @java.lang.Override
@@ -461,10 +1058,19 @@ public  final class InstalledApp extends
             "packageName_",
             "label_",
             "iconPng_",
+            "versionName_",
+            "versionCode_",
+            "firstInstallTimeMs_",
+            "lastUpdateTimeMs_",
+            "systemApp_",
+            "appBytes_",
+            "dataBytes_",
+            "cacheBytes_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\n";
+              "\u0000\u000b\u0000\u0000\u0001\u000b\u000b\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\n\u0004\u0208\u0005\u0002\u0006\u0003\u0007\u0003\b\u0007\t\u0003\n\u0003" +
+              "\u000b\u0003";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

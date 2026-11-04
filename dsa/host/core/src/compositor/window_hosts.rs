@@ -869,6 +869,7 @@ mod tests {
             package_name: package.into(),
             label: "App".into(),
             icon_png: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -888,6 +889,7 @@ mod tests {
             package_name: CLOCK.into(),
             label: "Clock".into(),
             icon_png: vec![1],
+            ..Default::default()
         };
         assert!(hosts.app(&clock, now).is_empty());
         assert_eq!(

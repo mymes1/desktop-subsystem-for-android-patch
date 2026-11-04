@@ -4,7 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.app.usage.StorageStatsManager
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.os.Process
+import android.os.storage.StorageManager
 import io.github.thisisthepy.dsa.agent.Log
 import io.github.thisisthepy.dsa.agent.tasks.LauncherApp
 import io.github.thisisthepy.dsa.agent.tasks.LauncherApps
@@ -36,10 +40,55 @@ class AndroidLauncherApps(
                 log.warn("could not draw the icon of $packageName", e)
                 ByteArray(0)
             }
-            apps[packageName] = LauncherApp(packageName, label, icon)
+            apps[packageName] = details(pm, packageName, label, icon)
         }
         return apps.values.toList()
     }
+
+    /**
+     * The app with its version, dates and sizes. What cannot be read stays empty, so the app is
+     * still listed: the sizes need the usage stats permission, which a broken grant could take.
+     */
+    private fun details(pm: PackageManager, packageName: String, label: String, icon: ByteArray): LauncherApp {
+        val info = try {
+            pm.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+        } catch (e: PackageManager.NameNotFoundException) {
+            return LauncherApp(packageName, label, icon)
+        }
+        val flags = info.applicationInfo?.flags ?: 0
+        val system = flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+        var appBytes = 0L
+        var dataBytes = 0L
+        var cacheBytes = 0L
+        try {
+            val stats = context.getSystemService(StorageStatsManager::class.java)
+                .queryStatsForPackage(StorageManager.UUID_DEFAULT, packageName, Process.myUserHandle())
+            appBytes = stats.appBytes
+            cacheBytes = stats.cacheBytes
+            // The data the stats report includes the cache; the host shows them apart.
+            dataBytes = maxOf(0L, stats.dataBytes - stats.cacheBytes)
+        } catch (e: Exception) {
+            if (!warnedSizes) {
+                warnedSizes = true
+                log.warn("could not read the apps' storage sizes; they are reported as zero", e)
+            }
+        }
+        return LauncherApp(
+            packageName = packageName,
+            label = label,
+            iconPng = icon,
+            versionName = info.versionName.orEmpty(),
+            versionCode = info.longVersionCode,
+            firstInstallTimeMs = info.firstInstallTime,
+            lastUpdateTimeMs = info.lastUpdateTime,
+            systemApp = system,
+            appBytes = appBytes,
+            dataBytes = dataBytes,
+            cacheBytes = cacheBytes,
+        )
+    }
+
+    private var warnedSizes = false
 
     override fun listen(onChange: () -> Unit) {
         val receiver = object : BroadcastReceiver() {

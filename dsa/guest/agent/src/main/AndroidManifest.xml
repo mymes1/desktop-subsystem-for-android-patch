@@ -61,6 +61,8 @@
     <uses-permission android:name="android.permission.READ_LOGS" />
     <!-- Installing the APKs the host sends, without asking the user to confirm each one. -->
     <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
+    <!-- Uninstalling an app the user removes on the host, without asking again in the guest. -->
+    <uses-permission android:name="android.permission.DELETE_PACKAGES" />
 
     <!--
       Making the agent the guest's browser while web links go to the host, and giving the

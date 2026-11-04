@@ -76,6 +76,29 @@ pub struct AppInfo {
     pub label: String,
     /// The app's launcher icon as a PNG image; empty when the guest gave none.
     pub icon_png: Vec<u8>,
+    /// The installed version, as Android's package manager reports it. Empty for an app that
+    /// only has a task, since a task says nothing of it.
+    pub version_name: String,
+    pub version_code: i64,
+    /// When the app was first installed and last updated, in milliseconds since the Unix
+    /// epoch; 0 when unknown.
+    pub first_install_time_ms: u64,
+    pub last_update_time_ms: u64,
+    /// Whether the app is part of the Android image, which cannot be uninstalled.
+    pub system_app: bool,
+    /// The storage the app takes, in bytes: its code, its data and its cache.
+    pub app_bytes: u64,
+    pub data_bytes: u64,
+    pub cache_bytes: u64,
+}
+
+impl AppInfo {
+    /// The storage the app takes in all, in bytes.
+    pub fn total_bytes(&self) -> u64 {
+        self.app_bytes
+            .saturating_add(self.data_bytes)
+            .saturating_add(self.cache_bytes)
+    }
 }
 
 /// A change to the guest's tasks.
@@ -428,6 +451,7 @@ impl TaskTable {
                         package_name: package.clone(),
                         label: package.clone(),
                         icon_png: Vec::new(),
+                        ..Default::default()
                     })
             })
             .collect();
@@ -732,6 +756,7 @@ mod tests {
             package_name: package.into(),
             label: label.into(),
             icon_png: vec![0x89, b'P', b'N', b'G'],
+            ..Default::default()
         }
     }
 

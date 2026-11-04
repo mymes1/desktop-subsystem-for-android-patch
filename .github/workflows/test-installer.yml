@@ -573,6 +573,51 @@ jobs:
           Set-AppTheme
           Remove-Item Env:DSA_CLI, Env:FAKE_DSA_SCENARIO -ErrorAction SilentlyContinue
 
+      # The Apps page, in both themes and both languages. Nothing is installed in the stand-in
+      # Android here, so a stand-in dsa answers the page's list (apps-fixture.ps1).
+      - name: Take pictures of the settings app's Apps page
+        run: |
+          . .github/scripts/installer/setup-ui.ps1
+          . .github/scripts/installer/apps-fixture.ps1
+          New-Item -ItemType Directory -Force screens | Out-Null
+          $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
+          $env:DSA_CLI = New-AppsFixture "$env:RUNNER_TEMP\apps-fixture" "$env:PROGRAM_DIR\dsa.exe"
+          try {
+            foreach ($lang in 'en-US', 'ko-KR') {
+              foreach ($theme in 'light', 'dark') {
+                Set-AppTheme -Dark:($theme -eq 'dark')
+                $app = Start-Process $exe -ArgumentList '--page', 'apps', '--lang', $lang -PassThru
+                $window = Wait-ProcessWindow $app.Id 90
+                if (-not $window) {
+                  Show-Desktop "settings-$theme-apps-$lang-timeout"
+                  throw "DSA Settings showed no window for the Apps page within 90 seconds"
+                }
+                Start-Sleep -Seconds 5
+                Save-WindowScreen $window "$PWD\screens\settings-$theme-apps-$lang.png"
+                if ($app.HasExited) { throw "DSA Settings exited while showing the Apps page (code $($app.ExitCode))" }
+                Stop-Process -Id $app.Id -Force
+                $app.WaitForExit(10000) | Out-Null
+
+                # The window Windows' list of installed apps opens (its UninstallString), at
+                # its confirmation, without uninstalling anything.
+                $app = Start-Process $exe -ArgumentList '--uninstall-app', 'com.example.notes', '--lang', $lang -PassThru
+                $window = Wait-ProcessWindow $app.Id 90
+                if (-not $window) {
+                  Show-Desktop "uninstall-$theme-$lang-timeout"
+                  throw "DSA Settings showed no uninstall window within 90 seconds"
+                }
+                Start-Sleep -Seconds 4
+                Save-WindowScreen $window "$PWD\screens\uninstall-$theme-$lang.png"
+                if ($app.HasExited) { throw "the uninstall window exited by itself (code $($app.ExitCode))" }
+                Stop-Process -Id $app.Id -Force
+                $app.WaitForExit(10000) | Out-Null
+              }
+            }
+          } finally {
+            Set-AppTheme
+            Remove-Item Env:DSA_CLI -ErrorAction SilentlyContinue
+          }
+
       # Task Manager and the taskbar name a program by its version information.
       - name: fr3_every_program_carries_its_name_and_version
         run: |
@@ -881,6 +926,14 @@ jobs:
           Set-Content "$userRoot\logs\dsa-wm.log" 'log'
           Set-Content "$userRoot\monitors.txt" '1920x1080'
           Set-Content "$userRoot\compositor.json" '{}'
+          # fr23: an Android app's entry in Windows' list of installed apps, as the window
+          # manager makes it, and another program's entry, which must stay.
+          $installedApps = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+          $ours = "$installedApps\Thisisthepy.DSA.org.example"
+          $theirs = "$installedApps\Dsa-Test-Another-Program"
+          New-Item -Force $ours | Out-Null
+          New-ItemProperty -Path $ours -Name DisplayName -Value 'Example' -Force | Out-Null
+          New-Item -Force $theirs | Out-Null
           $p = Start-Process 'dsa\target\installer\setup-test-0.0.10.exe' -Wait -PassThru -ArgumentList '/uninstall', '/quiet', '/log', 'uninstall.log'
           if ($p.ExitCode -ne 0) { Get-ChildItem uninstall*.log | ForEach-Object { Get-Content $_ -Tail 80 }; throw "uninstall failed ($($p.ExitCode))" }
           if (Get-Service DsaHost -ErrorAction SilentlyContinue) { throw "the service is still there" }
@@ -898,6 +951,9 @@ jobs:
           $left = Get-ChildItem $userRoot -Force -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -notin 'android.vhdx', 'android.image-version' }
           if ($left) { throw "uninstalling left in the user's folder: $($left.Name -join ', ')" }
+          if (Test-Path $ours) { throw "uninstalling left an Android app in Windows' list of installed apps" }
+          if (-not (Test-Path $theirs)) { throw "uninstalling removed another program's entry in the list of installed apps" }
+          Remove-Item -Force $theirs
           $wslconfig = "$env:USERPROFILE\.wslconfig"
           $currentHash = (Get-FileHash -Path $wslconfig -Algorithm SHA256).Hash
           if ($currentHash -ne $env:INITIAL_WSLCONFIG_HASH) { throw ".wslconfig was modified during uninstall" }

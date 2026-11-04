@@ -15,6 +15,13 @@ interface TaskActions {
      */
     fun launchApp(packageName: String): Boolean
 
+    /**
+     * Opens Android Settings' page of [packageName] (its permissions, storage and
+     * notifications), or the list of every installed app when it is null, as a new task in its
+     * own freeform window. False when the framework refused.
+     */
+    fun openAppSettings(packageName: String?): Boolean = false
+
     /** Ends the task. False when the framework has no such task or refused. */
     fun closeTask(taskId: Int): Boolean
 
@@ -75,6 +82,9 @@ enum class ResizeOutcome {
 sealed interface RequestResult {
     data class Launched(val packageName: String) : RequestResult
     data class LaunchFailed(val packageName: String, val reason: String) : RequestResult
+    /** Android's settings of [packageName] opened; null for the list of every app. */
+    data class SettingsOpened(val packageName: String?) : RequestResult
+    data class SettingsFailed(val packageName: String?, val reason: String) : RequestResult
     data class Closed(val taskId: Int) : RequestResult
     data class CloseRefused(val taskId: Int, val reason: String) : RequestResult
 
@@ -121,6 +131,7 @@ class HostRequests(
         }
         return when (envelope.bodyCase) {
             Envelope.BodyCase.LAUNCH_APP -> launch(envelope.launchApp.packageName)
+            Envelope.BodyCase.OPEN_APP_SETTINGS -> settings(envelope.openAppSettings.packageName)
             Envelope.BodyCase.CLOSE_TASK -> close(envelope.closeTask.taskId)
             Envelope.BodyCase.RESIZE_TASK -> envelope.resizeTask.let {
                 resize(it.taskId, it.width, it.height, it.live)
@@ -137,6 +148,16 @@ class HostRequests(
         packageName == ownPackage -> RequestResult.LaunchFailed(packageName, "the agent has no window to launch")
         actions.launchApp(packageName) -> RequestResult.Launched(packageName)
         else -> RequestResult.LaunchFailed(packageName, "the package has no launcher activity, or the framework refused to start it")
+    }
+
+    private fun settings(name: String): RequestResult {
+        val packageName = name.ifEmpty { null }
+        return when {
+            packageName != null && !PACKAGE_NAME.matches(packageName) ->
+                RequestResult.Malformed("OpenAppSettings names ${packageName.take(80)}, which is not a package name")
+            actions.openAppSettings(packageName) -> RequestResult.SettingsOpened(packageName)
+            else -> RequestResult.SettingsFailed(packageName, "Settings has no such page, or the framework refused to start it")
+        }
     }
 
     private fun close(taskId: Int): RequestResult = when {
@@ -167,5 +188,8 @@ class HostRequests(
         // The densities the hwcomposer accepts for the display.
         const val MIN_DENSITY = 72
         const val MAX_DENSITY = 960
+
+        // Dot-separated parts of letters, digits and underscores, as Android names packages.
+        val PACKAGE_NAME = Regex("[A-Za-z0-9_]+(\\.[A-Za-z0-9_]+)*")
     }
 }
