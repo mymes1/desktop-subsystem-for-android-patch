@@ -6,27 +6,25 @@ namespace Dsa.Settings.Core;
 /// <summary>Which screen the uninstall window shows.</summary>
 public enum UninstallPage
 {
-    /// <summary>Asking Android about the app.</summary>
-    Reading,
-    /// <summary>What will be removed, and the button that removes it.</summary>
-    Confirm,
     /// <summary>Android is uninstalling the app.</summary>
     Progress,
     Done,
     Failed,
 }
 
-/// <summary>The window Windows' list of installed apps opens to uninstall an Android app: it
-/// names the app, asks once, then shows the uninstall and how it ended. It runs dsa hidden, so
-/// no console window shows.</summary>
+/// <summary>The window Windows' list of installed apps opens to uninstall an Android app.
+/// Windows has already asked the user, so it does not ask again: it shows the app and the
+/// progress, uninstalls at once, then says how it ended. It runs dsa hidden, so no console
+/// window shows.</summary>
 public sealed class UninstallAppViewModel : ObservableObject
 {
     private readonly IDsaCli _cli;
     private readonly AppsService _apps;
     private readonly ITextSource _text;
-    private UninstallPage _page = UninstallPage.Reading;
+    private UninstallPage _page = UninstallPage.Progress;
     private InstalledAppInfo? _app;
     private string _resultText = "";
+    private bool _started;
 
     public UninstallAppViewModel(IDsaCli cli, ITextSource text, string package)
     {
@@ -39,7 +37,10 @@ public sealed class UninstallAppViewModel : ObservableObject
     public string Package { get; }
     public UninstallPage Page => _page;
     public InstalledAppInfo? App => _app;
-    public bool IsBusy => _page is UninstallPage.Reading or UninstallPage.Progress;
+    public bool IsBusy => _page == UninstallPage.Progress;
+
+    /// <summary>Whether the window closes by itself: after a successful uninstall.</summary>
+    public bool ClosesItself => _page == UninstallPage.Done;
 
     /// <summary>The app's name, or its package until Android has said it.</summary>
     public string Title => _app is { Label.Length: > 0 } app ? app.Label : Package;
@@ -49,10 +50,6 @@ public sealed class UninstallAppViewModel : ObservableObject
         : "";
 
     public string SizeChip => _app is { TotalBytes: > 0 } app ? AppsViewModel.Size(app.TotalBytes) : "";
-
-    public bool CanUninstall => _page == UninstallPage.Confirm;
-
-    public string Summary => string.Format(CultureInfo.CurrentCulture, _text.Get("UninstallWindow_Confirm"), Title);
 
     public string ProgressTitle => string.Format(CultureInfo.CurrentCulture, _text.Get("UninstallWindow_Busy"), Title);
 
@@ -66,10 +63,23 @@ public sealed class UninstallAppViewModel : ObservableObject
         ChangedAll();
     }
 
-    /// <summary>Asks Android about the app. A system app cannot be uninstalled, so it ends
-    /// there; anything else that goes wrong still lets the user try.</summary>
-    public async Task LoadAsync()
+    private string Refused(string status, string detail)
     {
+        var reason = _text.Get($"Apps_Refused_{status}");
+        return detail.Length == 0
+            ? string.Format(CultureInfo.CurrentCulture, _text.Get("UninstallWindow_Refused"), Title, reason)
+            : string.Format(CultureInfo.CurrentCulture, _text.Get("UninstallWindow_RefusedDetail"), Title, reason, detail);
+    }
+
+    /// <summary>Reads the app's name, icon and version to show, then uninstalls it in Android,
+    /// starting Android first when it is not running. Runs once.</summary>
+    public async Task RunAsync()
+    {
+        if (_started)
+        {
+            return;
+        }
+        _started = true;
         try
         {
             var result = await _cli.RunAsync(new[] { "apps", "info", Package, "--json" }).ConfigureAwait(true);
@@ -82,33 +92,16 @@ public sealed class UninstallAppViewModel : ObservableObject
         }
         catch (Exception e) when (e is JsonException or DsaException)
         {
+            // What the app is only helps to show it; the uninstall still goes ahead.
             _app = null;
         }
+        ChangedAll();
         if (_app is { SystemApp: true })
         {
             _resultText = Refused("system-app", "");
             Show(UninstallPage.Failed);
             return;
         }
-        Show(UninstallPage.Confirm);
-    }
-
-    private string Refused(string status, string detail)
-    {
-        var reason = _text.Get($"Apps_Refused_{status}");
-        return detail.Length == 0
-            ? string.Format(CultureInfo.CurrentCulture, _text.Get("UninstallWindow_Refused"), Title, reason)
-            : string.Format(CultureInfo.CurrentCulture, _text.Get("UninstallWindow_RefusedDetail"), Title, reason, detail);
-    }
-
-    /// <summary>Uninstalls the app in Android, starting Android first when it is not running.</summary>
-    public async Task UninstallAsync()
-    {
-        if (!CanUninstall)
-        {
-            return;
-        }
-        Show(UninstallPage.Progress);
         try
         {
             var report = await _apps.UninstallAsync(Package).ConfigureAwait(true);

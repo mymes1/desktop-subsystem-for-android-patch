@@ -63,6 +63,12 @@ if "%~1 %~2 %~3"=="apps info com.example.notes" (
   type "%~dp0notes.json"
   exit /b 0
 )
+rem The uninstall takes a while, so a picture shows the window's progress; nothing is removed.
+if "%~1 %~2 %~3"=="apps uninstall com.example.notes" (
+  ping -n 60 127.0.0.1 >nul
+  echo {"package":"com.example.notes","uninstalled":true,"status":"uninstalled","message":""}
+  exit /b 0
+)
 "$RealDsa" %*
 "@
     Set-Content -Encoding ascii "$Dir\dsa.cmd" $cmd

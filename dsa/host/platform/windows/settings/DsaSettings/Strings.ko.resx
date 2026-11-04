@@ -1128,20 +1128,8 @@
   <data name="UninstallWindow_Caption" xml:space="preserve">
     <value>Android 앱 제거</value>
   </data>
-  <data name="UninstallWindow_Reading" xml:space="preserve">
-    <value>Android에 앱 정보를 묻는 중...</value>
-  </data>
   <data name="UninstallWindow_Version" xml:space="preserve">
     <value>버전 {0}</value>
-  </data>
-  <data name="UninstallWindow_Confirm" xml:space="preserve">
-    <value>{0}과(와) 그 데이터를 Android에서 지웁니다. 되돌릴 수 없습니다.</value>
-  </data>
-  <data name="UninstallWindow_Uninstall" xml:space="preserve">
-    <value>제거</value>
-  </data>
-  <data name="UninstallWindow_Cancel" xml:space="preserve">
-    <value>취소</value>
   </data>
   <data name="UninstallWindow_Close" xml:space="preserve">
     <value>닫기</value>
@@ -1150,7 +1138,7 @@
     <value>{0} 제거 중</value>
   </data>
   <data name="UninstallWindow_BusyDetail" xml:space="preserve">
-    <value>Android가 꺼져 있으면 먼저 시작합니다.</value>
+    <value>앱과 그 데이터를 Android에서 지우고 있습니다. Android가 꺼져 있으면 먼저 시작합니다.</value>
   </data>
   <data name="UninstallWindow_DoneTitle" xml:space="preserve">
     <value>제거했습니다</value>

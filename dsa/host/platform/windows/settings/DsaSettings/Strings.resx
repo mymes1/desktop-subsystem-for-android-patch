@@ -1128,20 +1128,8 @@
   <data name="UninstallWindow_Caption" xml:space="preserve">
     <value>Uninstall an Android app</value>
   </data>
-  <data name="UninstallWindow_Reading" xml:space="preserve">
-    <value>Asking Android about the app...</value>
-  </data>
   <data name="UninstallWindow_Version" xml:space="preserve">
     <value>Version {0}</value>
-  </data>
-  <data name="UninstallWindow_Confirm" xml:space="preserve">
-    <value>{0} and its data will be removed from Android. This cannot be undone.</value>
-  </data>
-  <data name="UninstallWindow_Uninstall" xml:space="preserve">
-    <value>Uninstall</value>
-  </data>
-  <data name="UninstallWindow_Cancel" xml:space="preserve">
-    <value>Cancel</value>
   </data>
   <data name="UninstallWindow_Close" xml:space="preserve">
     <value>Close</value>
@@ -1150,7 +1138,7 @@
     <value>Uninstalling {0}</value>
   </data>
   <data name="UninstallWindow_BusyDetail" xml:space="preserve">
-    <value>Android starts first if it is not running.</value>
+    <value>Removing the app and its data from Android. Android starts first if it is not running.</value>
   </data>
   <data name="UninstallWindow_DoneTitle" xml:space="preserve">
     <value>Uninstalled</value>

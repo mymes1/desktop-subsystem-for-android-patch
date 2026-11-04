@@ -6,7 +6,8 @@
 //! key, named `Thisisthepy.DSA.<package>` like the app's AppUserModelID, so the app shows there
 //! with its name, its icon (from its window program), its version, its size and the date it was
 //! installed. Uninstalling it there runs the settings app with `--uninstall-app <package>`: a
-//! small window names the app, asks once, and runs `dsa apps uninstall <package>` hidden, which
+//! small window shows the app and, without asking again (Windows has), runs
+//! `dsa apps uninstall <package>` hidden, which
 //! uninstalls the app in Android. The settings app is a windowed program, so no console window
 //! flashes up as it would for `dsa` itself.
 //!
@@ -81,7 +82,7 @@ pub fn install_date(ms: u64) -> Option<String> {
 
 /// The command that uninstalls `package`: the settings app (at `uninstaller`) with
 /// `--uninstall-app <package>`. Windows runs it as it is; the settings app is a windowed
-/// program, so no console window shows, and it asks, then runs `dsa apps uninstall` hidden.
+/// program, so no console window shows, and it runs `dsa apps uninstall` hidden at once.
 pub fn uninstall_command(uninstaller: &Path, package: &str) -> String {
     format!("\"{}\" --uninstall-app {package}", uninstaller.display())
 }
