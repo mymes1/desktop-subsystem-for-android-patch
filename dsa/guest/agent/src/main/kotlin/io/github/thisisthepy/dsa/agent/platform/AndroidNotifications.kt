@@ -146,6 +146,22 @@ class AndroidNotifications(private val context: Context, private val log: Log) :
         context.startActivity(intent, options.toBundle())
     }
 
+    /** Sends the action's intent, as pressing its button in the shade does. */
+    override fun runAction(key: String, index: Int): Boolean {
+        val sbn = shown[key] ?: return false
+        val action = sbn.notification.actions?.getOrNull(index) ?: return false
+        val intent = action.actionIntent ?: return false
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
+        options.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+        return try {
+            intent.send(context, 0, null, null, null, null, options.toBundle())
+            true
+        } catch (e: PendingIntent.CanceledException) {
+            log.warn("the action of a notification of ${sbn.packageName} was cancelled by its app", e)
+            false
+        }
+    }
+
     override fun cancel(key: String): Boolean {
         if (!shown.containsKey(key)) return false
         val service = HostNotificationListener.instance ?: return false
@@ -183,6 +199,7 @@ class AndroidNotifications(private val context: Context, private val log: Log) :
             groupSummary = notification.flags and Notification.FLAG_GROUP_SUMMARY != 0,
             clearable = sbn.isClearable,
             whenMillis = notification.`when`,
+            actions = notification.actions.orEmpty().map { it.title?.toString().orEmpty() },
         )
     }
 

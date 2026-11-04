@@ -24,7 +24,15 @@ class FakeNotifications : NotificationSource {
     val shown = linkedMapOf<String, GuestNotice>()
     val opened = mutableListOf<String>()
     val cancelled = mutableListOf<String>()
+    val actionsRun = mutableListOf<Pair<String, Int>>()
     var listener: NoticeListener? = null
+
+    override fun runAction(key: String, index: Int): Boolean {
+        val notice = shown[key] ?: return false
+        if (index !in notice.actions.indices) return false
+        actionsRun += key to index
+        return true
+    }
 
     override fun listen(listener: NoticeListener) {
         this.listener = listener
@@ -72,10 +80,12 @@ fun notice(
     groupSummary: Boolean = false,
     clearable: Boolean = true,
     icon: ByteArray = byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte()),
+    actions: List<String> = emptyList(),
+    appLabel: String = "Chat",
 ) = GuestNotice(
     key = key,
     packageName = packageName,
-    appLabel = "Chat",
+    appLabel = appLabel,
     title = title,
     text = text,
     iconPng = icon,
@@ -86,6 +96,7 @@ fun notice(
     groupSummary = groupSummary,
     clearable = clearable,
     whenMillis = 1_700_000_000_000,
+    actions = actions,
 )
 
 class NotificationForwarderTest {

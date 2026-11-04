@@ -77,6 +77,11 @@
       clock stands still or drifts while the host sleeps.
     -->
     <uses-permission android:name="android.permission.SET_TIME" />
+    <!--
+      Stopping an app that runs in the background when the user stops it from the host's
+      notification area or the settings app, as Settings' "Force stop" does.
+    -->
+    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
 
     <application
         android:name=".platform.AgentApplication"

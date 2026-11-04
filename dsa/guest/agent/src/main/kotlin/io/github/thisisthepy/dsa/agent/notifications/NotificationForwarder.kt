@@ -24,6 +24,8 @@ data class GuestNotice(
     val groupSummary: Boolean,
     val clearable: Boolean,
     val whenMillis: Long,
+    /** The titles of its actions, in its order ("Pause", "Next"). */
+    val actions: List<String> = emptyList(),
 ) {
     override fun equals(other: Any?): Boolean =
         other is GuestNotice && key == other.key && packageName == other.packageName &&
@@ -31,7 +33,8 @@ data class GuestNotice(
             iconPng.contentEquals(other.iconPng) && importance == other.importance &&
             priority == other.priority && ongoing == other.ongoing &&
             foregroundService == other.foregroundService && groupSummary == other.groupSummary &&
-            clearable == other.clearable && whenMillis == other.whenMillis
+            clearable == other.clearable && whenMillis == other.whenMillis &&
+            actions == other.actions
 
     override fun hashCode(): Int = key.hashCode()
 }
@@ -61,6 +64,12 @@ interface NotificationSource {
 
     /** Cancels the notification. False when there is no such notification. */
     fun cancel(key: String): Boolean
+
+    /**
+     * Runs the notification's action with [index], as pressing its button does. False when
+     * there is no such notification or action.
+     */
+    fun runAction(key: String, index: Int): Boolean = false
 
     companion object {
         val NONE = object : NotificationSource {
@@ -92,6 +101,8 @@ class NotificationForwarder(
     private val send: (ByteArray) -> Boolean,
     private val log: Log,
     private val isConnected: () -> Boolean,
+    /** Hears of every notification too, on the agent's thread: the apps that run in the background. */
+    private val also: NoticeListener? = null,
 ) {
     /** The keys the host has, so a removal is sent only for what it was told of. */
     private val forwarded = mutableSetOf<String>()
@@ -102,15 +113,24 @@ class NotificationForwarder(
             val forwarder = this
             source.listen(object : NoticeListener {
                 override fun connected() {
-                    post { forwarder.resend() }
+                    post {
+                        forwarder.resend()
+                        also?.connected()
+                    }
                 }
 
                 override fun posted(notice: GuestNotice) {
-                    post { forwarder.posted(notice) }
+                    post {
+                        forwarder.posted(notice)
+                        also?.posted(notice)
+                    }
                 }
 
                 override fun removed(key: String) {
-                    post { forwarder.removed(key) }
+                    post {
+                        forwarder.removed(key)
+                        also?.removed(key)
+                    }
                 }
             })
         } catch (e: Exception) {
@@ -203,7 +223,8 @@ class NotificationForwarder(
      *   summary ("3 new messages") would only repeat the members, which are forwarded.
      * - Not the ongoing notice of a foreground service ("syncing", "playing"). Android shows
      *   it while the service runs, and updates it often; on the host each update would pop up
-     *   again, and the host's taskbar already shows which apps run.
+     *   again. The host shows such an app in its notification area instead
+     *   ([io.github.thisisthepy.dsa.agent.background.BackgroundApps]).
      * - Not of minimum importance: Android shows those nowhere but in the shade, folded away.
      * - Not empty: with no title and no text there is nothing to show.
      */
