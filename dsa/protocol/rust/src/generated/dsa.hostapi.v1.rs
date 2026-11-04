@@ -58,9 +58,40 @@ pub struct ListTasks {}
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WatchTasks {}
 /// Asks for the apps installed in the caller's Android that a launcher lists, as the host's
-/// start menu shows them.
+/// start menu shows them. With `refresh`, the caller's Android must be running: it reads the
+/// apps again, sizes included, and the answer waits for that fresh list.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct ListApps {}
+pub struct ListApps {
+    #[prost(bool, tag = "1")]
+    pub refresh: bool,
+}
+/// Opens Android's own settings for an app (its permissions, storage and notifications) in a
+/// window of its own. An empty `package_name` opens Android's list of every installed app.
+/// Answered with Done once Android has been asked.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct OpenAppSettings {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
+/// Uninstalls an app the user installed in the caller's Android. Android must be running. The
+/// answer is UninstallResult.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UninstallApp {
+    /// An Android package name, such as "com.example.notes".
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
+/// The answer to UninstallApp.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UninstallResult {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "UninstallStatus", tag = "2")]
+    pub status: i32,
+    /// Android's own words, for the log and a bug report.
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+}
 /// The user closed a task's window: asks the caller's Android to end the task.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct CloseTask {
@@ -596,7 +627,9 @@ pub struct TaskFrames {
     pub display_id: u32,
 }
 /// The name and launcher icon of an app the caller's Android has a task of. Sent before the
-/// app's first task, and again before the next one once the app has had no task.
+/// app's first task, and again before the next one once the app has had no task. In the list
+/// of installed apps it also carries the app's version, dates and sizes; for a task they are
+/// left empty.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct AppInfo {
     #[prost(string, tag = "1")]
@@ -608,6 +641,27 @@ pub struct AppInfo {
     /// when Android gave none.
     #[prost(bytes = "vec", tag = "3")]
     pub icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// The installed version, as the package manager reports it.
+    #[prost(string, tag = "4")]
+    pub version_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "5")]
+    pub version_code: i64,
+    /// When the app was first installed and last updated, in milliseconds since the Unix epoch.
+    #[prost(uint64, tag = "6")]
+    pub first_install_time_ms: u64,
+    #[prost(uint64, tag = "7")]
+    pub last_update_time_ms: u64,
+    /// True for an app that is part of the Android image, which cannot be uninstalled.
+    #[prost(bool, tag = "8")]
+    pub system_app: bool,
+    /// The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+    /// agent could not read them.
+    #[prost(uint64, tag = "9")]
+    pub app_bytes: u64,
+    #[prost(uint64, tag = "10")]
+    pub data_bytes: u64,
+    #[prost(uint64, tag = "11")]
+    pub cache_bytes: u64,
 }
 /// The apps installed in the caller's Android that a launcher lists. The list is kept while
 /// the Android is stopped, because its apps stay installed.
@@ -1105,7 +1159,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 70, 71, 37"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 70, 71, 37"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1179,6 +1233,10 @@ pub mod request {
         WidgetPointer(super::WidgetPointer),
         #[prost(message, tag = "36")]
         GetPackage(super::GetPackage),
+        #[prost(message, tag = "39")]
+        OpenAppSettings(super::OpenAppSettings),
+        #[prost(message, tag = "38")]
+        UninstallApp(super::UninstallApp),
         #[prost(message, tag = "70")]
         WatchLog(super::WatchLog),
         #[prost(message, tag = "71")]
@@ -1193,7 +1251,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -1229,6 +1287,8 @@ pub mod response {
         Widgets(super::Widgets),
         #[prost(message, tag = "15")]
         PackageState(super::PackageState),
+        #[prost(message, tag = "16")]
+        UninstallResult(super::UninstallResult),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -1428,6 +1488,50 @@ impl SessionState {
             "SESSION_STATE_FROZEN" => Some(Self::Frozen),
             "SESSION_STATE_STOPPING" => Some(Self::Stopping),
             "SESSION_STATE_STALLED" => Some(Self::Stalled),
+            _ => None,
+        }
+    }
+}
+/// Whether an app was uninstalled, and if not, why.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum UninstallStatus {
+    Unspecified = 0,
+    /// The app is gone.
+    Success = 1,
+    /// No app of that package is installed.
+    NotInstalled = 2,
+    /// The app is part of the Android image; only apps the user installed can be uninstalled.
+    SystemApp = 3,
+    /// Android refused: the app is a device administrator, or a policy keeps it.
+    Blocked = 4,
+    /// Anything else. The message says what.
+    Other = 5,
+}
+impl UninstallStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "UNINSTALL_STATUS_UNSPECIFIED",
+            Self::Success => "UNINSTALL_STATUS_SUCCESS",
+            Self::NotInstalled => "UNINSTALL_STATUS_NOT_INSTALLED",
+            Self::SystemApp => "UNINSTALL_STATUS_SYSTEM_APP",
+            Self::Blocked => "UNINSTALL_STATUS_BLOCKED",
+            Self::Other => "UNINSTALL_STATUS_OTHER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "UNINSTALL_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "UNINSTALL_STATUS_SUCCESS" => Some(Self::Success),
+            "UNINSTALL_STATUS_NOT_INSTALLED" => Some(Self::NotInstalled),
+            "UNINSTALL_STATUS_SYSTEM_APP" => Some(Self::SystemApp),
+            "UNINSTALL_STATUS_BLOCKED" => Some(Self::Blocked),
+            "UNINSTALL_STATUS_OTHER" => Some(Self::Other),
             _ => None,
         }
     }
