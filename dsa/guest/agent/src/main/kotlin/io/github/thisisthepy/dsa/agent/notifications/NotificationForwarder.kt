@@ -100,9 +100,9 @@ class NotificationForwarder(
     private val source: NotificationSource,
     private val send: (ByteArray) -> Boolean,
     private val log: Log,
-    private val isConnected: () -> Boolean,
     /** Hears of every notification too, on the agent's thread: the apps that run in the background. */
     private val also: NoticeListener? = null,
+    private val isConnected: () -> Boolean,
 ) {
     /** The keys the host has, so a removal is sent only for what it was told of. */
     private val forwarded = mutableSetOf<String>()

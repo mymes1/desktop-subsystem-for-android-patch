@@ -429,7 +429,13 @@ pub fn stop_dialog_template(question: &str, texts: &Texts, title: &str) -> Vec<u
             BUTTON,
             texts.stop,
         ),
-        (WS_TABSTOP, [200, 88, 50, 14], CANCEL_ID, BUTTON, texts.cancel),
+        (
+            WS_TABSTOP,
+            [200, 88, 50, 14],
+            CANCEL_ID,
+            BUTTON,
+            texts.cancel,
+        ),
     ];
     let mut out = Vec::new();
     dword(

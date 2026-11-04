@@ -1044,7 +1044,7 @@ pub struct Settings {
     pub resize_trace: bool,
     /// Whether stopping an app that runs in the background skips the question that confirms
     /// it. Off by default: the first stop asks, and the user may tick "do not ask again".
-    #[prost(bool, tag = "13")]
+    #[prost(bool, tag = "14")]
     pub stop_without_asking: bool,
 }
 /// Turns the connection into the accessibility tree of one of the caller's task windows, for a
