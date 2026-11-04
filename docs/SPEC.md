@@ -171,6 +171,23 @@ INTENT D7의 네 단계를 구현한다.
 - 영어와 한국어를 지원하고, 시스템 언어를 따른다.
 - 수용 기준: 설정 앱에서 렌더링 GPU를 바꾸면 다음 시작부터 그 GPU에서 렌더링하고, 메모리 화면이 VM과 게스트 내역을 보여 준다. (수동 확인)
 
+#### 기기 정체성
+이미지는 Cuttlefish의 이름(제조사 Google, 모델 `Cuttlefish x86_64 phone 64-bit only`, 기기 `vsoc_x86_64_only`)을 그대로 두지 않고 DSA의 이름을 쓴다. 앱과 사용자가 보는 기기 이름이 실제로 쓰는 제품과 맞아야 하기 때문이다. 사용자는 그 값을 설정에서 바꿀 수 있다. 옛 기기 이름을 확인하는 앱과 호환하기 위해서다.
+- 기본값: 제조사 `thisisthepy`, 브랜드 `DSA`, 모델 `Desktop Subsystem for Android`, 기기와 제품 이름 `dsa_x86_64`, `ro.build.characteristics`는 `tablet`이다. 지문은 `DSA/dsa_x86_64/dsa_x86_64:<릴리스>/<빌드 ID>/<증분>:user/release-keys`다. 이미지는 user 빌드이므로 지문의 빌드 유형도 `user`다. 증분에는 이미지마다 붙이는 내용 태그가 그대로 남는다.
+- `tablet`은 AOSP의 태블릿 구성이 쓰는 값이다. 앱의 화면 배치는 이 값이 아니라 창 크기(가장 짧은 너비)로 정해지므로, 큰 화면 배치를 고르게 하면서 휴대전화 전용 앱을 막지 않는다. `phone` 같은 다른 값도 고를 수 있다.
+- 이 값은 모든 파티션(system, system_ext, vendor, product, odm, vendor_dlkm과 이미지에 있는 나머지)의 `ro.product.<파티션>.{brand,manufacturer,model,device,name}`, 그것에서 나오는 `ro.product.{brand,manufacturer,model,device,name}`, 파티션마다의 지문, `ro.build.fingerprint`, `ro.build.product`, `ro.build.flavor`, `ro.build.description`에 똑같이 들어간다. `ro.build.display.id`는 user 빌드처럼 빌드 ID만 담는다. 앱이 읽는 `Build.MANUFACTURER`, `Build.BRAND`, `Build.MODEL`, `Build.DEVICE`, `Build.PRODUCT`, `Build.FINGERPRINT`가 이 값이다. 이미지 검사(`check-image.py`)가 이것을 확인한다.
+- 설정 앱의 "기기 정보" 페이지와 `dsa settings set device.<항목> <값>`으로 바꾸는 항목: 제조사(`manufacturer`), 브랜드(`brand`), 모델(`model`), 기기(`device`), 제품 이름(`name`), 형태(`characteristics`), 지문. 지문은 구성 요소(`fingerprint.release`, `fingerprint.id`, `fingerprint.incremental`, `fingerprint.type`, `fingerprint.tags`)를 하나씩 바꾸거나, 지문 문자열 전체(`fingerprint`)를 적는다. 전체 문자열을 적으면 그것이 구성 요소보다 앞선다. 적지 않은 구성 요소는 이미지의 값을 쓰고, 브랜드, 제품 이름, 기기는 위의 항목을 따른다.
+- "기본값으로 되돌리기" 단추와 `dsa settings reset device`가 모든 항목을, `dsa settings reset device.<항목>`이 한 항목을 기본값으로 되돌린다.
+- 값은 사용자별이고, 동반 서비스가 `settings\users\<SID>.device.json`에 둔다(FR-19). 설정 앱은 이 파일을 직접 쓰지 않는다.
+- 바꾼 값은 다음 안드로이드 시작부터 적용된다. `ro.*` 속성은 부팅 중 한 번 정해지면 바꿀 수 없기 때문이다. 페이지는 이것을 알리고, 안드로이드가 실행 중이면 "지금 안드로이드 다시 시작" 단추를 보여 준다.
+- 전달 방법: 기본값과 다른 값이 있으면 호스트가 부팅마다 만드는 initrd 복사본에 속성 파일 하나(`/system/etc/ramdisk/build.prop`)를 덧붙인다. 첫 단계 init이 그 파일을 둘째 단계로 넘기고, 이미지의 product `build.prop`이 맨 끝에서 그 파일의 정체성 속성만 가져온다. 속성 서비스가 `ro.*`를 잠그기 전에 init 자신이 읽으므로 SELinux 정책을 넓히지 않는다. 모두 기본값이면 파일을 덧붙이지 않고, 이미지의 값이 그대로 쓰인다.
+- 입력을 검사한다. 제조사와 모델은 1~64자의 인쇄 가능한 ASCII이고 앞뒤 공백이 없다. 브랜드, 기기, 제품 이름은 1~32자의 영문자, 숫자, `.`, `_`, `-`이고 영문자나 숫자로 시작한다. 형태는 쉼표로 나눈 소문자, 숫자, `_`의 낱말이고 64자 이하다. 지문은 `브랜드/제품/기기:릴리스/ID/증분:유형/태그` 꼴이고 256자 이하이며, 유형은 `user`, `userdebug`, `eng` 중 하나다. 틀린 값은 아무것도 바꾸지 않고 이유와 함께 거부한다.
+- 페이지는 지문이나 모델을 바꾸면 앱 호환성(기기를 확인하는 앱, 결제와 무결성 검사)에 영향을 줄 수 있다고 경고한다. 정체성을 바꾸면 패키지 관리자가 다음 부팅을 업데이트로 보고 앱을 한 번 다시 검사한다.
+- 수용 기준: 이미지 검사가 모든 `build.prop`에서 위의 기본값을 확인하고, 정체성 속성에 Cuttlefish의 이름(`Cuttlefish`, `vsoc_`, `aosp_cf_`)이나 지문의 `userdebug`가 남아 있으면 실패한다.
+- 수용 기준: 기본값과 다른 정체성이 있으면 부팅용 initrd 끝(bootconfig 앞)에 그 값을 담은 속성 파일이 붙고, 모두 기본값이면 붙지 않는다. 지문 구성 요소와 전체 문자열이 위의 규칙대로 합쳐진다.
+- 수용 기준: 틀린 값(허용하지 않는 문자, 길이 초과, 형식이 틀린 지문)은 거부되고 저장된 값이 바뀌지 않는다.
+- 수용 기준: 설정 앱이나 CLI로 값을 바꾸고 안드로이드를 다시 시작하면, 앱이 읽는 `Build.MANUFACTURER`, `Build.BRAND`, `Build.MODEL`, `Build.DEVICE`, `Build.PRODUCT`, `Build.FINGERPRINT`와 `ro.build.characteristics`가 설정과 같고, 기본값으로 되돌리고 다시 시작하면 기본값으로 돌아온다. (수동 확인)
+
 ### FR-18 접근성 (`Agreed`)
 태스크 창 안의 안드로이드 UI를 호스트의 접근성 트리로 내보낸다. 지금은 앱 내용이 호스트에게 그림 한 장이어서, 스크린 리더가 읽지 못하고 UI 자동화 도구도 항목을 찾지 못하기 때문이다.
 - 에이전트가 게스트의 접근성 노드(역할, 이름, 값, 상태, 위치, 가능한 동작)를 읽어 제어 채널로 보낸다. 호스트는 이것을 태스크 창의 UI Automation 트리로 내보낸다.
@@ -195,7 +212,7 @@ DSA가 실행 중에 만드는 파일은 정해진 두 루트 아래 정해진 �
 | `dsa-hostd.json` | 동반 서비스 구성 | 설치 프로그램이 쓰고 서비스가 읽는다 |
 | `images\` | 안드로이드 이미지 저장소 | 모든 사용자의 VM이 같은 이미지로 부팅한다 |
 | `updates\` | 내려받은 프로그램 설치 파일과 업데이트 상태 | 서비스가 SYSTEM으로 실행하므로 사용자가 바꿀 수 없어야 한다 |
-| `settings\` | `machine.json`, `users\<SID>.json`, 위젯 배치 | 사용자가 설정 앱에서 바꾸는 값. 서비스만 쓴다 |
+| `settings\` | `machine.json`, `users\<SID>.json`, `users\<SID>.device.json`(기기 정체성), 위젯 배치 | 사용자가 설정 앱에서 바꾸는 값. 서비스만 쓴다 |
 | `logs\` | `dsa-hostd.log`, `android-<SID>.log`(게스트 콘솔) | 서비스와 안드로이드의 로그 |
 | `tmp\` | VM 부팅마다 만드는 initrd 같은 피할 수 없는 임시 파일 | 아래 임시 파일 규칙 |
 
@@ -338,6 +355,7 @@ DSA가 실행 중에 만드는 파일은 정해진 두 루트 아래 정해진 �
 - FR-12 실제 Windows에서 설정 앱의 위젯 페이지로 시계 위젯과 설정 화면이 있는 위젯을 하나씩 두고, 오른쪽 단추 메뉴로 크기를 바꾸고 빼며, 밝은 테마와 어두운 테마, 한국어와 영어에서 페이지를 확인
 - FR-14 메이저 버전 업그레이드 뒤 앱과 데이터 유지
 - FR-15 실제 Windows에서 이전 버전을 새 버전으로 올리기와 실패 시 이전 버전 유지
+- FR-17 실제 Windows에서 설정 앱의 기기 정보 페이지로 모델, 브랜드, 지문을 바꾸고 안드로이드를 다시 시작하면 기기 정보를 보여 주는 앱이 새 값을 보이고, 기본값으로 되돌리고 다시 시작하면 기본값을 보이며, 페이지를 밝은 테마와 어두운 테마, 한국어와 영어에서 확인
 - FR-18 내레이터로 앱 항목 읽기
 - FR-19 이전 버전 위에 설치하면 예전 위치의 파일이 옮겨지고 안드로이드 디스크가 그대로 쓰이며, 제거하면 모든 사용자 프로필에서 안드로이드 디스크만 남는다
 - FR-20 실제 Windows에서 설정 앱으로 개발자 모드를 켜고 `adb connect 127.0.0.1:58526`, `adb shell`, `adb logcat`, `adb install`이 승인 없이 동작하고, 끄면 포트가 닫힌다
