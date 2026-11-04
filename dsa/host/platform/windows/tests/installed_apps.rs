@@ -40,8 +40,8 @@ fn value<'a>(entry: &'a Entry, name: &str) -> Option<&'a Value> {
 #[test]
 fn fr23_each_app_is_listed_with_its_name_icon_version_publisher_size_and_uninstall() {
     let program = Path::new(r"C:\Users\u\AppData\Local\DSA\apps\com.example.notes\Notes.exe");
-    let cli = Path::new(r"C:\Program Files\DSA\dsa.exe");
-    let entry = entry(&notes(), program, cli);
+    let uninstaller = Path::new(r"C:\Program Files\DSA\settings\DsaSettings.exe");
+    let entry = entry(&notes(), program, uninstaller);
     assert_eq!(entry.key, "Thisisthepy.DSA.com.example.notes");
     assert_eq!(
         value(&entry, "DisplayName"),
@@ -69,13 +69,29 @@ fn fr23_each_app_is_listed_with_its_name_icon_version_publisher_size_and_uninsta
     assert_eq!(
         value(&entry, "UninstallString"),
         Some(&Value::Text(
-            r#""C:\Program Files\DSA\dsa.exe" apps uninstall com.example.notes"#.into()
+            r#""C:\Program Files\DSA\settings\DsaSettings.exe" --uninstall-app com.example.notes"#
+                .into()
         ))
     );
     assert_eq!(
-        uninstall_command(cli, "com.example.notes"),
-        r#""C:\Program Files\DSA\dsa.exe" apps uninstall com.example.notes"#
+        uninstall_command(uninstaller, "com.example.notes"),
+        r#""C:\Program Files\DSA\settings\DsaSettings.exe" --uninstall-app com.example.notes"#
     );
+}
+
+/// Windows runs the UninstallString as it is, so a console program there flashes a console
+/// window; the settings app is a windowed program and shows its own uninstall window.
+#[test]
+fn fr23_uninstalling_from_windows_runs_the_windowed_settings_app_not_the_console_cli() {
+    let wm = Path::new(r"C:\Program Files\DSA\dsa-wm.exe");
+    let uninstaller = dsa_host_windows::start_menu::uninstaller_beside(wm).unwrap();
+    assert_eq!(
+        uninstaller,
+        Path::new(r"C:\Program Files\DSA\settings\DsaSettings.exe")
+    );
+    let command = uninstall_command(&uninstaller, "com.example.notes");
+    assert!(!command.contains("dsa.exe"), "{command}");
+    assert!(command.ends_with("--uninstall-app com.example.notes"), "{command}");
 }
 
 #[test]

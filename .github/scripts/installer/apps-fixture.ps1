@@ -51,10 +51,16 @@ function New-AppsFixture([string]$Dir, [string]$RealDsa) {
         )
     }
     $list | ConvertTo-Json -Depth 5 -Compress | Set-Content -Encoding ascii "$Dir\apps.json"
+    # `dsa apps info com.example.notes`, for the uninstall window.
+    $list.apps[0] | ConvertTo-Json -Depth 5 -Compress | Set-Content -Encoding ascii "$Dir\notes.json"
     $cmd = @"
 @echo off
 if "%~1 %~2"=="apps list" (
   type "%~dp0apps.json"
+  exit /b 0
+)
+if "%~1 %~2 %~3"=="apps info com.example.notes" (
+  type "%~dp0notes.json"
   exit /b 0
 )
 "$RealDsa" %*

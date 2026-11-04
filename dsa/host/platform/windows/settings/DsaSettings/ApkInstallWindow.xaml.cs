@@ -100,7 +100,7 @@ public partial class ApkInstallWindow : Window
 
     /// <summary>Fills a 3 px strip with an indicator that slides across it, for a step that
     /// has no measure, in the progress bar's colours.</summary>
-    private static void Marquee(Grid strip)
+    internal static void Marquee(Grid strip)
     {
         var track = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center };
         track.SetResourceReference(Border.BackgroundProperty, "Track");

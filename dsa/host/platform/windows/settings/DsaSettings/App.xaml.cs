@@ -21,6 +21,10 @@ public partial class App : Application
     /// the app then shows the APK install window instead of the settings.</summary>
     internal const string InstallApkArgument = "--install-apk";
 
+    /// <summary>The argument that names an app to uninstall: the UninstallString of each
+    /// Android app in Windows' list of installed apps runs the app with it.</summary>
+    internal const string UninstallAppArgument = "--uninstall-app";
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -44,6 +48,13 @@ public partial class App : Application
         if (at >= 0 && at + 1 < e.Args.Length)
         {
             ApkInstallWindow.Open(e.Args[at + 1]);
+            return;
+        }
+        // Windows' list of installed apps opens the uninstall window alone, with no console.
+        var uninstall = Array.IndexOf(e.Args, UninstallAppArgument);
+        if (uninstall >= 0 && uninstall + 1 < e.Args.Length)
+        {
+            UninstallAppWindow.Open(e.Args[uninstall + 1]);
             return;
         }
         new MainWindow().Show();

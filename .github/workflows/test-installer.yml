@@ -489,6 +489,20 @@ jobs:
                 if ($app.HasExited) { throw "DSA Settings exited while showing the Apps page (code $($app.ExitCode))" }
                 Stop-Process -Id $app.Id -Force
                 $app.WaitForExit(10000) | Out-Null
+
+                # The window Windows' list of installed apps opens (its UninstallString), at
+                # its confirmation, without uninstalling anything.
+                $app = Start-Process $exe -ArgumentList '--uninstall-app', 'com.example.notes', '--lang', $lang -PassThru
+                $window = Wait-ProcessWindow $app.Id 90
+                if (-not $window) {
+                  Show-Desktop "uninstall-$theme-$lang-timeout"
+                  throw "DSA Settings showed no uninstall window within 90 seconds"
+                }
+                Start-Sleep -Seconds 4
+                Save-WindowScreen $window "$PWD\screens\uninstall-$theme-$lang.png"
+                if ($app.HasExited) { throw "the uninstall window exited by itself (code $($app.ExitCode))" }
+                Stop-Process -Id $app.Id -Force
+                $app.WaitForExit(10000) | Out-Null
               }
             }
           } finally {

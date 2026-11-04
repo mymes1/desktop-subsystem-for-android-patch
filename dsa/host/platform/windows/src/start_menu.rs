@@ -483,13 +483,16 @@ impl StartMenuSetup {
     }
 }
 
-/// The `dsa` command installed beside the window manager, which Windows' list of installed
-/// apps runs to uninstall an app.
-pub fn default_cli() -> Option<PathBuf> {
-    std::env::current_exe()
-        .ok()?
-        .parent()
-        .map(|dir| dir.join("dsa.exe"))
+/// The settings app of the installation whose window manager is `wm`
+/// (`<install>\settings\DsaSettings.exe`), which Windows' list of installed apps runs to
+/// uninstall an app. It is a windowed program, unlike `dsa.exe`, so no console flashes up.
+pub fn uninstaller_beside(wm: &std::path::Path) -> Option<PathBuf> {
+    wm.parent().map(|dir| dir.join("settings").join("DsaSettings.exe"))
+}
+
+/// The settings app installed with this window manager.
+pub fn default_uninstaller() -> Option<PathBuf> {
+    uninstaller_beside(&std::env::current_exe().ok()?)
 }
 
 /// Keeps the Start menu, and Windows' list of installed apps, in step with each list of
@@ -502,7 +505,7 @@ pub fn keep(
 ) {
     let _com = ComApartment::enter();
     let mut previous: Option<BTreeSet<String>> = None;
-    let cli = default_cli();
+    let uninstaller = default_uninstaller();
     let keys = crate::installed_apps::RegistryKeys::current_user();
     while let Ok(mut apps) = installed.recv() {
         while let Ok(newer) = installed.try_recv() {
@@ -511,8 +514,8 @@ pub fn keep(
         for problem in setup.sync(&apps, &ShellLinks) {
             note(logger.as_deref(), &format!("Start menu: {problem}"));
         }
-        if let Some(cli) = &cli {
-            let entries = crate::installed_apps::entries(&apps, &setup.apps_dir, cli);
+        if let Some(uninstaller) = &uninstaller {
+            let entries = crate::installed_apps::entries(&apps, &setup.apps_dir, uninstaller);
             for problem in crate::installed_apps::sync(&entries, &keys) {
                 note(logger.as_deref(), &format!("Installed apps: {problem}"));
             }

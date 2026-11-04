@@ -361,7 +361,10 @@ Features), as it did with WSA, so it can be found and uninstalled there.
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Thisisthepy.DSA.<package>`, with
   `DisplayName`, `DisplayIcon` (the app's window program), `DisplayVersion`, `Publisher`,
   `InstallDate`, `EstimatedSize`, `NoModify`, `NoRepair` and `UninstallString`, which runs
-  `dsa apps uninstall <package>`. Windows asks the user to confirm first.
+  `settings\DsaSettings.exe --uninstall-app <package>`. That opens a small window, laid out
+  like the APK install window, that names the app, asks once, and runs
+  `dsa apps uninstall <package>` hidden. The settings app is a windowed program, so no
+  console window flashes up as it would if Windows ran `dsa` itself.
 - Keys whose names start with `Thisisthepy.DSA.` are DSA's; no other key is ever changed or
   removed. A key of an app no longer installed goes.
 - Uninstalling DSA removes them in every profile (`dsa-hostd remove-user-data`), loading the
