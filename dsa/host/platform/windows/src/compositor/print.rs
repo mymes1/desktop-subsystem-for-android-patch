@@ -610,10 +610,10 @@ mod windows_print {
         // SAFETY: the dialog's device context, valid until `chosen` is dropped.
         let area = unsafe {
             Area {
-                width: GetDeviceCaps(dc, HORZRES),
-                height: GetDeviceCaps(dc, VERTRES),
-                dpi_x: GetDeviceCaps(dc, LOGPIXELSX),
-                dpi_y: GetDeviceCaps(dc, LOGPIXELSY),
+                width: GetDeviceCaps(dc, HORZRES as _),
+                height: GetDeviceCaps(dc, VERTRES as _),
+                dpi_x: GetDeviceCaps(dc, LOGPIXELSX as _),
+                dpi_y: GetDeviceCaps(dc, LOGPIXELSY as _),
             }
         };
         let name = wide(&job.title());

@@ -229,7 +229,6 @@ pub trait UserAndroid: Send + Sync {
     fn host_location(&self, event: LocationEvent) {
         let _ = event;
     }
-    }
     /// The apps that run in the background in this Android and every change to them.
     /// `None` when it does not report them.
     fn watch_background(&self) -> Option<BackgroundWatch> {

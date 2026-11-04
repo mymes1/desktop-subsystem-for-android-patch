@@ -4598,6 +4598,18 @@ impl Worker {
                     "control channel: dropping a sensor message, which belongs on the sensor port"
                 );
             }
+            Some(Body::CameraList(_))
+            | Some(Body::CameraOpen(_))
+            | Some(Body::CameraOpened(_))
+            | Some(Body::CameraFrame(_))
+            | Some(Body::CameraStop(_))
+            | Some(Body::CameraStill(_))
+            | Some(Body::CameraStillTaken(_))
+            | Some(Body::CameraError(_)) => {
+                eprintln!(
+                    "control channel: dropping a camera message, which belongs on the camera port"
+                );
+            }
             Some(Body::LogRecords(_))
             | Some(Body::DiagnosticsFile(_))
             | Some(Body::DiagnosticsDone(_)) => {

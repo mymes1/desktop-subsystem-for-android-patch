@@ -59,7 +59,7 @@ mod system {
     }
 
     /// What DSA needs of each kind of Windows sensor.
-    trait WindowsSensor: 'static {
+    trait WindowsSensor: Sized + 'static {
         fn open() -> WinResult<Self>;
         fn minimum_ms(&self) -> WinResult<u32>;
         fn set_report_ms(&self, ms: u32) -> WinResult<()>;

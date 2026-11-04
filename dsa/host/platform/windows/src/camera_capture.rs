@@ -74,7 +74,7 @@ mod system {
     };
     use windows::core::{GUID, PWSTR};
     use windows::Devices::Enumeration::{DeviceClass, DeviceInformation};
-    use windows::Foundation::AsyncStatus;
+    use windows_future::AsyncStatus;
     use windows::Win32::Foundation::E_ACCESSDENIED;
     use windows::Win32::Graphics::Imaging::{
         CLSID_WICImagingFactory, GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppBGR,
