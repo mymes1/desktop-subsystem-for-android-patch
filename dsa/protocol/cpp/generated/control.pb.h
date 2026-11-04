@@ -78,15 +78,6 @@ extern AuthChallengeDefaultTypeInternal _AuthChallenge_default_instance_;
 class AuthProof;
 struct AuthProofDefaultTypeInternal;
 extern AuthProofDefaultTypeInternal _AuthProof_default_instance_;
-class BackgroundApp;
-struct BackgroundAppDefaultTypeInternal;
-extern BackgroundAppDefaultTypeInternal _BackgroundApp_default_instance_;
-class BackgroundAppAction;
-struct BackgroundAppActionDefaultTypeInternal;
-extern BackgroundAppActionDefaultTypeInternal _BackgroundAppAction_default_instance_;
-class BackgroundAppGone;
-struct BackgroundAppGoneDefaultTypeInternal;
-extern BackgroundAppGoneDefaultTypeInternal _BackgroundAppGone_default_instance_;
 class CancelInstall;
 struct CancelInstallDefaultTypeInternal;
 extern CancelInstallDefaultTypeInternal _CancelInstall_default_instance_;
@@ -108,6 +99,9 @@ extern CloseTaskDefaultTypeInternal _CloseTask_default_instance_;
 class CollectDiagnostics;
 struct CollectDiagnosticsDefaultTypeInternal;
 extern CollectDiagnosticsDefaultTypeInternal _CollectDiagnostics_default_instance_;
+class DeveloperMode;
+struct DeveloperModeDefaultTypeInternal;
+extern DeveloperModeDefaultTypeInternal _DeveloperMode_default_instance_;
 class DeviceIdle;
 struct DeviceIdleDefaultTypeInternal;
 extern DeviceIdleDefaultTypeInternal _DeviceIdle_default_instance_;
@@ -201,15 +195,6 @@ extern LogRecordsDefaultTypeInternal _LogRecords_default_instance_;
 class LogStream;
 struct LogStreamDefaultTypeInternal;
 extern LogStreamDefaultTypeInternal _LogStream_default_instance_;
-class MediaControl;
-struct MediaControlDefaultTypeInternal;
-extern MediaControlDefaultTypeInternal _MediaControl_default_instance_;
-class MediaSession;
-struct MediaSessionDefaultTypeInternal;
-extern MediaSessionDefaultTypeInternal _MediaSession_default_instance_;
-class MediaSessionGone;
-struct MediaSessionGoneDefaultTypeInternal;
-extern MediaSessionGoneDefaultTypeInternal _MediaSessionGone_default_instance_;
 class NodeRange;
 struct NodeRangeDefaultTypeInternal;
 extern NodeRangeDefaultTypeInternal _NodeRange_default_instance_;
@@ -339,9 +324,6 @@ template<> ::dsa::control::v1::ApkChunk* Arena::CreateMaybeMessage<::dsa::contro
 template<> ::dsa::control::v1::AppInfo* Arena::CreateMaybeMessage<::dsa::control::v1::AppInfo>(Arena*);
 template<> ::dsa::control::v1::AuthChallenge* Arena::CreateMaybeMessage<::dsa::control::v1::AuthChallenge>(Arena*);
 template<> ::dsa::control::v1::AuthProof* Arena::CreateMaybeMessage<::dsa::control::v1::AuthProof>(Arena*);
-template<> ::dsa::control::v1::BackgroundApp* Arena::CreateMaybeMessage<::dsa::control::v1::BackgroundApp>(Arena*);
-template<> ::dsa::control::v1::BackgroundAppAction* Arena::CreateMaybeMessage<::dsa::control::v1::BackgroundAppAction>(Arena*);
-template<> ::dsa::control::v1::BackgroundAppGone* Arena::CreateMaybeMessage<::dsa::control::v1::BackgroundAppGone>(Arena*);
 template<> ::dsa::control::v1::CancelInstall* Arena::CreateMaybeMessage<::dsa::control::v1::CancelInstall>(Arena*);
 template<> ::dsa::control::v1::ClipboardSharing* Arena::CreateMaybeMessage<::dsa::control::v1::ClipboardSharing>(Arena*);
 template<> ::dsa::control::v1::ClipboardText* Arena::CreateMaybeMessage<::dsa::control::v1::ClipboardText>(Arena*);
@@ -349,6 +331,7 @@ template<> ::dsa::control::v1::ClockAnswer* Arena::CreateMaybeMessage<::dsa::con
 template<> ::dsa::control::v1::ClockProbe* Arena::CreateMaybeMessage<::dsa::control::v1::ClockProbe>(Arena*);
 template<> ::dsa::control::v1::CloseTask* Arena::CreateMaybeMessage<::dsa::control::v1::CloseTask>(Arena*);
 template<> ::dsa::control::v1::CollectDiagnostics* Arena::CreateMaybeMessage<::dsa::control::v1::CollectDiagnostics>(Arena*);
+template<> ::dsa::control::v1::DeveloperMode* Arena::CreateMaybeMessage<::dsa::control::v1::DeveloperMode>(Arena*);
 template<> ::dsa::control::v1::DeviceIdle* Arena::CreateMaybeMessage<::dsa::control::v1::DeviceIdle>(Arena*);
 template<> ::dsa::control::v1::DiagnosticsDone* Arena::CreateMaybeMessage<::dsa::control::v1::DiagnosticsDone>(Arena*);
 template<> ::dsa::control::v1::DiagnosticsFile* Arena::CreateMaybeMessage<::dsa::control::v1::DiagnosticsFile>(Arena*);
@@ -380,9 +363,6 @@ template<> ::dsa::control::v1::LogDump* Arena::CreateMaybeMessage<::dsa::control
 template<> ::dsa::control::v1::LogRecord* Arena::CreateMaybeMessage<::dsa::control::v1::LogRecord>(Arena*);
 template<> ::dsa::control::v1::LogRecords* Arena::CreateMaybeMessage<::dsa::control::v1::LogRecords>(Arena*);
 template<> ::dsa::control::v1::LogStream* Arena::CreateMaybeMessage<::dsa::control::v1::LogStream>(Arena*);
-template<> ::dsa::control::v1::MediaControl* Arena::CreateMaybeMessage<::dsa::control::v1::MediaControl>(Arena*);
-template<> ::dsa::control::v1::MediaSession* Arena::CreateMaybeMessage<::dsa::control::v1::MediaSession>(Arena*);
-template<> ::dsa::control::v1::MediaSessionGone* Arena::CreateMaybeMessage<::dsa::control::v1::MediaSessionGone>(Arena*);
 template<> ::dsa::control::v1::NodeRange* Arena::CreateMaybeMessage<::dsa::control::v1::NodeRange>(Arena*);
 template<> ::dsa::control::v1::NotificationClicked* Arena::CreateMaybeMessage<::dsa::control::v1::NotificationClicked>(Arena*);
 template<> ::dsa::control::v1::NotificationDismissed* Arena::CreateMaybeMessage<::dsa::control::v1::NotificationDismissed>(Arena*);
@@ -590,77 +570,6 @@ inline const std::string& PowerHintKind_Name(T enum_t_value) {
 }
 bool PowerHintKind_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, PowerHintKind* value);
-enum BackgroundAppCommand : int {
-  BACKGROUND_APP_COMMAND_UNSPECIFIED = 0,
-  BACKGROUND_APP_COMMAND_OPEN = 1,
-  BACKGROUND_APP_COMMAND_ACTION = 2,
-  BACKGROUND_APP_COMMAND_STOP = 3,
-  BackgroundAppCommand_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
-  BackgroundAppCommand_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
-};
-bool BackgroundAppCommand_IsValid(int value);
-constexpr BackgroundAppCommand BackgroundAppCommand_MIN = BACKGROUND_APP_COMMAND_UNSPECIFIED;
-constexpr BackgroundAppCommand BackgroundAppCommand_MAX = BACKGROUND_APP_COMMAND_STOP;
-constexpr int BackgroundAppCommand_ARRAYSIZE = BackgroundAppCommand_MAX + 1;
-
-const std::string& BackgroundAppCommand_Name(BackgroundAppCommand value);
-template<typename T>
-inline const std::string& BackgroundAppCommand_Name(T enum_t_value) {
-  static_assert(::std::is_same<T, BackgroundAppCommand>::value ||
-    ::std::is_integral<T>::value,
-    "Incorrect type passed to function BackgroundAppCommand_Name.");
-  return BackgroundAppCommand_Name(static_cast<BackgroundAppCommand>(enum_t_value));
-}
-bool BackgroundAppCommand_Parse(
-    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, BackgroundAppCommand* value);
-enum MediaPlayback : int {
-  MEDIA_PLAYBACK_UNSPECIFIED = 0,
-  MEDIA_PLAYBACK_STOPPED = 1,
-  MEDIA_PLAYBACK_PLAYING = 2,
-  MEDIA_PLAYBACK_PAUSED = 3,
-  MediaPlayback_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
-  MediaPlayback_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
-};
-bool MediaPlayback_IsValid(int value);
-constexpr MediaPlayback MediaPlayback_MIN = MEDIA_PLAYBACK_UNSPECIFIED;
-constexpr MediaPlayback MediaPlayback_MAX = MEDIA_PLAYBACK_PAUSED;
-constexpr int MediaPlayback_ARRAYSIZE = MediaPlayback_MAX + 1;
-
-const std::string& MediaPlayback_Name(MediaPlayback value);
-template<typename T>
-inline const std::string& MediaPlayback_Name(T enum_t_value) {
-  static_assert(::std::is_same<T, MediaPlayback>::value ||
-    ::std::is_integral<T>::value,
-    "Incorrect type passed to function MediaPlayback_Name.");
-  return MediaPlayback_Name(static_cast<MediaPlayback>(enum_t_value));
-}
-bool MediaPlayback_Parse(
-    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, MediaPlayback* value);
-enum MediaCommand : int {
-  MEDIA_COMMAND_UNSPECIFIED = 0,
-  MEDIA_COMMAND_PLAY = 1,
-  MEDIA_COMMAND_PAUSE = 2,
-  MEDIA_COMMAND_NEXT = 3,
-  MEDIA_COMMAND_PREVIOUS = 4,
-  MEDIA_COMMAND_STOP = 5,
-  MediaCommand_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
-  MediaCommand_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
-};
-bool MediaCommand_IsValid(int value);
-constexpr MediaCommand MediaCommand_MIN = MEDIA_COMMAND_UNSPECIFIED;
-constexpr MediaCommand MediaCommand_MAX = MEDIA_COMMAND_STOP;
-constexpr int MediaCommand_ARRAYSIZE = MediaCommand_MAX + 1;
-
-const std::string& MediaCommand_Name(MediaCommand value);
-template<typename T>
-inline const std::string& MediaCommand_Name(T enum_t_value) {
-  static_assert(::std::is_same<T, MediaCommand>::value ||
-    ::std::is_integral<T>::value,
-    "Incorrect type passed to function MediaCommand_Name.");
-  return MediaCommand_Name(static_cast<MediaCommand>(enum_t_value));
-}
-bool MediaCommand_Parse(
-    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, MediaCommand* value);
 enum InstallStatus : int {
   INSTALL_STATUS_UNSPECIFIED = 0,
   INSTALL_STATUS_SUCCESS = 1,
@@ -5399,6 +5308,136 @@ class ClipboardSharing final :
 };
 // -------------------------------------------------------------------
 
+class DeveloperMode final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DeveloperMode) */ {
+ public:
+  inline DeveloperMode() : DeveloperMode(nullptr) {}
+  ~DeveloperMode() override;
+  explicit PROTOBUF_CONSTEXPR DeveloperMode(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  DeveloperMode(const DeveloperMode& from);
+  DeveloperMode(DeveloperMode&& from) noexcept
+    : DeveloperMode() {
+    *this = ::std::move(from);
+  }
+
+  inline DeveloperMode& operator=(const DeveloperMode& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DeveloperMode& operator=(DeveloperMode&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const DeveloperMode& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const DeveloperMode* internal_default_instance() {
+    return reinterpret_cast<const DeveloperMode*>(
+               &_DeveloperMode_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    30;
+
+  friend void swap(DeveloperMode& a, DeveloperMode& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(DeveloperMode* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DeveloperMode* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  DeveloperMode* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<DeveloperMode>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const DeveloperMode& from);
+  void MergeFrom(const DeveloperMode& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(DeveloperMode* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.DeveloperMode";
+  }
+  protected:
+  explicit DeveloperMode(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kOnFieldNumber = 1,
+  };
+  // bool on = 1;
+  void clear_on();
+  bool on() const;
+  void set_on(bool value);
+  private:
+  bool _internal_on() const;
+  void _internal_set_on(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.DeveloperMode)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    bool on_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class GuestNotification final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GuestNotification) */ {
  public:
@@ -5438,7 +5477,7 @@ class GuestNotification final :
                &_GuestNotification_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    30;
+    31;
 
   friend void swap(GuestNotification& a, GuestNotification& b) {
     a.Swap(&b);
@@ -5697,7 +5736,7 @@ class NotificationRemoved final :
                &_NotificationRemoved_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    31;
+    32;
 
   friend void swap(NotificationRemoved& a, NotificationRemoved& b) {
     a.Swap(&b);
@@ -5832,7 +5871,7 @@ class NotificationClicked final :
                &_NotificationClicked_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    32;
+    33;
 
   friend void swap(NotificationClicked& a, NotificationClicked& b) {
     a.Swap(&b);
@@ -5967,7 +6006,7 @@ class NotificationDismissed final :
                &_NotificationDismissed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    33;
+    34;
 
   friend void swap(NotificationDismissed& a, NotificationDismissed& b) {
     a.Swap(&b);
@@ -6063,1074 +6102,6 @@ class NotificationDismissed final :
 };
 // -------------------------------------------------------------------
 
-class BackgroundApp final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.BackgroundApp) */ {
- public:
-  inline BackgroundApp() : BackgroundApp(nullptr) {}
-  ~BackgroundApp() override;
-  explicit PROTOBUF_CONSTEXPR BackgroundApp(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  BackgroundApp(const BackgroundApp& from);
-  BackgroundApp(BackgroundApp&& from) noexcept
-    : BackgroundApp() {
-    *this = ::std::move(from);
-  }
-
-  inline BackgroundApp& operator=(const BackgroundApp& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BackgroundApp& operator=(BackgroundApp&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const BackgroundApp& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const BackgroundApp* internal_default_instance() {
-    return reinterpret_cast<const BackgroundApp*>(
-               &_BackgroundApp_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    34;
-
-  friend void swap(BackgroundApp& a, BackgroundApp& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(BackgroundApp* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BackgroundApp* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BackgroundApp* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<BackgroundApp>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const BackgroundApp& from);
-  void MergeFrom(const BackgroundApp& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(BackgroundApp* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.BackgroundApp";
-  }
-  protected:
-  explicit BackgroundApp(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kActionsFieldNumber = 6,
-    kPackageNameFieldNumber = 1,
-    kAppLabelFieldNumber = 2,
-    kIconPngFieldNumber = 3,
-    kTitleFieldNumber = 4,
-    kTextFieldNumber = 5,
-  };
-  // repeated string actions = 6;
-  int actions_size() const;
-  private:
-  int _internal_actions_size() const;
-  public:
-  void clear_actions();
-  const std::string& actions(int index) const;
-  std::string* mutable_actions(int index);
-  void set_actions(int index, const std::string& value);
-  void set_actions(int index, std::string&& value);
-  void set_actions(int index, const char* value);
-  void set_actions(int index, const char* value, size_t size);
-  std::string* add_actions();
-  void add_actions(const std::string& value);
-  void add_actions(std::string&& value);
-  void add_actions(const char* value);
-  void add_actions(const char* value, size_t size);
-  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& actions() const;
-  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_actions();
-  private:
-  const std::string& _internal_actions(int index) const;
-  std::string* _internal_add_actions();
-  public:
-
-  // string package_name = 1;
-  void clear_package_name();
-  const std::string& package_name() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_package_name(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_package_name();
-  PROTOBUF_NODISCARD std::string* release_package_name();
-  void set_allocated_package_name(std::string* package_name);
-  private:
-  const std::string& _internal_package_name() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
-  std::string* _internal_mutable_package_name();
-  public:
-
-  // string app_label = 2;
-  void clear_app_label();
-  const std::string& app_label() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_app_label(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_app_label();
-  PROTOBUF_NODISCARD std::string* release_app_label();
-  void set_allocated_app_label(std::string* app_label);
-  private:
-  const std::string& _internal_app_label() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_app_label(const std::string& value);
-  std::string* _internal_mutable_app_label();
-  public:
-
-  // bytes icon_png = 3;
-  void clear_icon_png();
-  const std::string& icon_png() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_icon_png(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_icon_png();
-  PROTOBUF_NODISCARD std::string* release_icon_png();
-  void set_allocated_icon_png(std::string* icon_png);
-  private:
-  const std::string& _internal_icon_png() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_icon_png(const std::string& value);
-  std::string* _internal_mutable_icon_png();
-  public:
-
-  // string title = 4;
-  void clear_title();
-  const std::string& title() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_title(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_title();
-  PROTOBUF_NODISCARD std::string* release_title();
-  void set_allocated_title(std::string* title);
-  private:
-  const std::string& _internal_title() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_title(const std::string& value);
-  std::string* _internal_mutable_title();
-  public:
-
-  // string text = 5;
-  void clear_text();
-  const std::string& text() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_text(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_text();
-  PROTOBUF_NODISCARD std::string* release_text();
-  void set_allocated_text(std::string* text);
-  private:
-  const std::string& _internal_text() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_text(const std::string& value);
-  std::string* _internal_mutable_text();
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.BackgroundApp)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> actions_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr app_label_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr icon_png_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr title_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr text_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class BackgroundAppGone final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.BackgroundAppGone) */ {
- public:
-  inline BackgroundAppGone() : BackgroundAppGone(nullptr) {}
-  ~BackgroundAppGone() override;
-  explicit PROTOBUF_CONSTEXPR BackgroundAppGone(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  BackgroundAppGone(const BackgroundAppGone& from);
-  BackgroundAppGone(BackgroundAppGone&& from) noexcept
-    : BackgroundAppGone() {
-    *this = ::std::move(from);
-  }
-
-  inline BackgroundAppGone& operator=(const BackgroundAppGone& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BackgroundAppGone& operator=(BackgroundAppGone&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const BackgroundAppGone& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const BackgroundAppGone* internal_default_instance() {
-    return reinterpret_cast<const BackgroundAppGone*>(
-               &_BackgroundAppGone_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    35;
-
-  friend void swap(BackgroundAppGone& a, BackgroundAppGone& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(BackgroundAppGone* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BackgroundAppGone* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BackgroundAppGone* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<BackgroundAppGone>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const BackgroundAppGone& from);
-  void MergeFrom(const BackgroundAppGone& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(BackgroundAppGone* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.BackgroundAppGone";
-  }
-  protected:
-  explicit BackgroundAppGone(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kPackageNameFieldNumber = 1,
-  };
-  // string package_name = 1;
-  void clear_package_name();
-  const std::string& package_name() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_package_name(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_package_name();
-  PROTOBUF_NODISCARD std::string* release_package_name();
-  void set_allocated_package_name(std::string* package_name);
-  private:
-  const std::string& _internal_package_name() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
-  std::string* _internal_mutable_package_name();
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.BackgroundAppGone)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class BackgroundAppAction final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.BackgroundAppAction) */ {
- public:
-  inline BackgroundAppAction() : BackgroundAppAction(nullptr) {}
-  ~BackgroundAppAction() override;
-  explicit PROTOBUF_CONSTEXPR BackgroundAppAction(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  BackgroundAppAction(const BackgroundAppAction& from);
-  BackgroundAppAction(BackgroundAppAction&& from) noexcept
-    : BackgroundAppAction() {
-    *this = ::std::move(from);
-  }
-
-  inline BackgroundAppAction& operator=(const BackgroundAppAction& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline BackgroundAppAction& operator=(BackgroundAppAction&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const BackgroundAppAction& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const BackgroundAppAction* internal_default_instance() {
-    return reinterpret_cast<const BackgroundAppAction*>(
-               &_BackgroundAppAction_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    36;
-
-  friend void swap(BackgroundAppAction& a, BackgroundAppAction& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(BackgroundAppAction* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(BackgroundAppAction* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  BackgroundAppAction* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<BackgroundAppAction>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const BackgroundAppAction& from);
-  void MergeFrom(const BackgroundAppAction& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(BackgroundAppAction* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.BackgroundAppAction";
-  }
-  protected:
-  explicit BackgroundAppAction(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kPackageNameFieldNumber = 1,
-    kCommandFieldNumber = 2,
-    kActionFieldNumber = 3,
-  };
-  // string package_name = 1;
-  void clear_package_name();
-  const std::string& package_name() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_package_name(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_package_name();
-  PROTOBUF_NODISCARD std::string* release_package_name();
-  void set_allocated_package_name(std::string* package_name);
-  private:
-  const std::string& _internal_package_name() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
-  std::string* _internal_mutable_package_name();
-  public:
-
-  // .dsa.control.v1.BackgroundAppCommand command = 2;
-  void clear_command();
-  ::dsa::control::v1::BackgroundAppCommand command() const;
-  void set_command(::dsa::control::v1::BackgroundAppCommand value);
-  private:
-  ::dsa::control::v1::BackgroundAppCommand _internal_command() const;
-  void _internal_set_command(::dsa::control::v1::BackgroundAppCommand value);
-  public:
-
-  // int32 action = 3;
-  void clear_action();
-  int32_t action() const;
-  void set_action(int32_t value);
-  private:
-  int32_t _internal_action() const;
-  void _internal_set_action(int32_t value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.BackgroundAppAction)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
-    int command_;
-    int32_t action_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class MediaSession final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.MediaSession) */ {
- public:
-  inline MediaSession() : MediaSession(nullptr) {}
-  ~MediaSession() override;
-  explicit PROTOBUF_CONSTEXPR MediaSession(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  MediaSession(const MediaSession& from);
-  MediaSession(MediaSession&& from) noexcept
-    : MediaSession() {
-    *this = ::std::move(from);
-  }
-
-  inline MediaSession& operator=(const MediaSession& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline MediaSession& operator=(MediaSession&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const MediaSession& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const MediaSession* internal_default_instance() {
-    return reinterpret_cast<const MediaSession*>(
-               &_MediaSession_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    37;
-
-  friend void swap(MediaSession& a, MediaSession& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(MediaSession* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(MediaSession* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  MediaSession* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<MediaSession>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const MediaSession& from);
-  void MergeFrom(const MediaSession& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(MediaSession* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.MediaSession";
-  }
-  protected:
-  explicit MediaSession(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kPackageNameFieldNumber = 1,
-    kAppLabelFieldNumber = 2,
-    kTitleFieldNumber = 3,
-    kArtistFieldNumber = 4,
-    kAlbumFieldNumber = 5,
-    kArtPngFieldNumber = 6,
-    kPlaybackFieldNumber = 7,
-    kCanPlayFieldNumber = 8,
-    kCanPauseFieldNumber = 9,
-    kCanNextFieldNumber = 10,
-    kCanPreviousFieldNumber = 11,
-  };
-  // string package_name = 1;
-  void clear_package_name();
-  const std::string& package_name() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_package_name(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_package_name();
-  PROTOBUF_NODISCARD std::string* release_package_name();
-  void set_allocated_package_name(std::string* package_name);
-  private:
-  const std::string& _internal_package_name() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
-  std::string* _internal_mutable_package_name();
-  public:
-
-  // string app_label = 2;
-  void clear_app_label();
-  const std::string& app_label() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_app_label(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_app_label();
-  PROTOBUF_NODISCARD std::string* release_app_label();
-  void set_allocated_app_label(std::string* app_label);
-  private:
-  const std::string& _internal_app_label() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_app_label(const std::string& value);
-  std::string* _internal_mutable_app_label();
-  public:
-
-  // string title = 3;
-  void clear_title();
-  const std::string& title() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_title(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_title();
-  PROTOBUF_NODISCARD std::string* release_title();
-  void set_allocated_title(std::string* title);
-  private:
-  const std::string& _internal_title() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_title(const std::string& value);
-  std::string* _internal_mutable_title();
-  public:
-
-  // string artist = 4;
-  void clear_artist();
-  const std::string& artist() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_artist(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_artist();
-  PROTOBUF_NODISCARD std::string* release_artist();
-  void set_allocated_artist(std::string* artist);
-  private:
-  const std::string& _internal_artist() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_artist(const std::string& value);
-  std::string* _internal_mutable_artist();
-  public:
-
-  // string album = 5;
-  void clear_album();
-  const std::string& album() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_album(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_album();
-  PROTOBUF_NODISCARD std::string* release_album();
-  void set_allocated_album(std::string* album);
-  private:
-  const std::string& _internal_album() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_album(const std::string& value);
-  std::string* _internal_mutable_album();
-  public:
-
-  // bytes art_png = 6;
-  void clear_art_png();
-  const std::string& art_png() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_art_png(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_art_png();
-  PROTOBUF_NODISCARD std::string* release_art_png();
-  void set_allocated_art_png(std::string* art_png);
-  private:
-  const std::string& _internal_art_png() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_art_png(const std::string& value);
-  std::string* _internal_mutable_art_png();
-  public:
-
-  // .dsa.control.v1.MediaPlayback playback = 7;
-  void clear_playback();
-  ::dsa::control::v1::MediaPlayback playback() const;
-  void set_playback(::dsa::control::v1::MediaPlayback value);
-  private:
-  ::dsa::control::v1::MediaPlayback _internal_playback() const;
-  void _internal_set_playback(::dsa::control::v1::MediaPlayback value);
-  public:
-
-  // bool can_play = 8;
-  void clear_can_play();
-  bool can_play() const;
-  void set_can_play(bool value);
-  private:
-  bool _internal_can_play() const;
-  void _internal_set_can_play(bool value);
-  public:
-
-  // bool can_pause = 9;
-  void clear_can_pause();
-  bool can_pause() const;
-  void set_can_pause(bool value);
-  private:
-  bool _internal_can_pause() const;
-  void _internal_set_can_pause(bool value);
-  public:
-
-  // bool can_next = 10;
-  void clear_can_next();
-  bool can_next() const;
-  void set_can_next(bool value);
-  private:
-  bool _internal_can_next() const;
-  void _internal_set_can_next(bool value);
-  public:
-
-  // bool can_previous = 11;
-  void clear_can_previous();
-  bool can_previous() const;
-  void set_can_previous(bool value);
-  private:
-  bool _internal_can_previous() const;
-  void _internal_set_can_previous(bool value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.MediaSession)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr app_label_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr title_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr artist_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr album_;
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr art_png_;
-    int playback_;
-    bool can_play_;
-    bool can_pause_;
-    bool can_next_;
-    bool can_previous_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class MediaSessionGone final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.MediaSessionGone) */ {
- public:
-  inline MediaSessionGone() : MediaSessionGone(nullptr) {}
-  ~MediaSessionGone() override;
-  explicit PROTOBUF_CONSTEXPR MediaSessionGone(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  MediaSessionGone(const MediaSessionGone& from);
-  MediaSessionGone(MediaSessionGone&& from) noexcept
-    : MediaSessionGone() {
-    *this = ::std::move(from);
-  }
-
-  inline MediaSessionGone& operator=(const MediaSessionGone& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline MediaSessionGone& operator=(MediaSessionGone&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const MediaSessionGone& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const MediaSessionGone* internal_default_instance() {
-    return reinterpret_cast<const MediaSessionGone*>(
-               &_MediaSessionGone_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    38;
-
-  friend void swap(MediaSessionGone& a, MediaSessionGone& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(MediaSessionGone* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(MediaSessionGone* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  MediaSessionGone* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<MediaSessionGone>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const MediaSessionGone& from);
-  void MergeFrom(const MediaSessionGone& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(MediaSessionGone* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.MediaSessionGone";
-  }
-  protected:
-  explicit MediaSessionGone(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kPackageNameFieldNumber = 1,
-  };
-  // string package_name = 1;
-  void clear_package_name();
-  const std::string& package_name() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_package_name(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_package_name();
-  PROTOBUF_NODISCARD std::string* release_package_name();
-  void set_allocated_package_name(std::string* package_name);
-  private:
-  const std::string& _internal_package_name() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
-  std::string* _internal_mutable_package_name();
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.MediaSessionGone)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class MediaControl final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.MediaControl) */ {
- public:
-  inline MediaControl() : MediaControl(nullptr) {}
-  ~MediaControl() override;
-  explicit PROTOBUF_CONSTEXPR MediaControl(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  MediaControl(const MediaControl& from);
-  MediaControl(MediaControl&& from) noexcept
-    : MediaControl() {
-    *this = ::std::move(from);
-  }
-
-  inline MediaControl& operator=(const MediaControl& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline MediaControl& operator=(MediaControl&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const MediaControl& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const MediaControl* internal_default_instance() {
-    return reinterpret_cast<const MediaControl*>(
-               &_MediaControl_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    39;
-
-  friend void swap(MediaControl& a, MediaControl& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(MediaControl* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(MediaControl* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  MediaControl* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<MediaControl>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const MediaControl& from);
-  void MergeFrom(const MediaControl& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(MediaControl* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.MediaControl";
-  }
-  protected:
-  explicit MediaControl(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kPackageNameFieldNumber = 1,
-    kCommandFieldNumber = 2,
-  };
-  // string package_name = 1;
-  void clear_package_name();
-  const std::string& package_name() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_package_name(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_package_name();
-  PROTOBUF_NODISCARD std::string* release_package_name();
-  void set_allocated_package_name(std::string* package_name);
-  private:
-  const std::string& _internal_package_name() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
-  std::string* _internal_mutable_package_name();
-  public:
-
-  // .dsa.control.v1.MediaCommand command = 2;
-  void clear_command();
-  ::dsa::control::v1::MediaCommand command() const;
-  void set_command(::dsa::control::v1::MediaCommand value);
-  private:
-  ::dsa::control::v1::MediaCommand _internal_command() const;
-  void _internal_set_command(::dsa::control::v1::MediaCommand value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.MediaControl)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
-    int command_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
 class RequestGuestMemory final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.RequestGuestMemory) */ {
  public:
@@ -7170,7 +6141,7 @@ class RequestGuestMemory final :
                &_RequestGuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    40;
+    35;
 
   friend void swap(RequestGuestMemory& a, RequestGuestMemory& b) {
     a.Swap(&b);
@@ -7287,7 +6258,7 @@ class ProcessMemory final :
                &_ProcessMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    41;
+    36;
 
   friend void swap(ProcessMemory& a, ProcessMemory& b) {
     a.Swap(&b);
@@ -7455,7 +6426,7 @@ class GuestMemory final :
                &_GuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    42;
+    37;
 
   friend void swap(GuestMemory& a, GuestMemory& b) {
     a.Swap(&b);
@@ -7737,7 +6708,7 @@ class AgentConnected final :
                &_AgentConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    43;
+    38;
 
   friend void swap(AgentConnected& a, AgentConnected& b) {
     a.Swap(&b);
@@ -7854,7 +6825,7 @@ class GuestBoot final :
                &_GuestBoot_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    44;
+    39;
 
   friend void swap(GuestBoot& a, GuestBoot& b) {
     a.Swap(&b);
@@ -7995,7 +6966,7 @@ class InstallApk final :
                &_InstallApk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    45;
+    40;
 
   friend void swap(InstallApk& a, InstallApk& b) {
     a.Swap(&b);
@@ -8152,7 +7123,7 @@ class ApkChunk final :
                &_ApkChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    46;
+    41;
 
   friend void swap(ApkChunk& a, ApkChunk& b) {
     a.Swap(&b);
@@ -8309,7 +7280,7 @@ class QueryPackage final :
                &_QueryPackage_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    47;
+    42;
 
   friend void swap(QueryPackage& a, QueryPackage& b) {
     a.Swap(&b);
@@ -8455,7 +7426,7 @@ class PackageState final :
                &_PackageState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    48;
+    43;
 
   friend void swap(PackageState& a, PackageState& b) {
     a.Swap(&b);
@@ -8649,7 +7620,7 @@ class OpenLink final :
                &_OpenLink_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    49;
+    44;
 
   friend void swap(OpenLink& a, OpenLink& b) {
     a.Swap(&b);
@@ -8784,7 +7755,7 @@ class LinkHandling final :
                &_LinkHandling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    50;
+    45;
 
   friend void swap(LinkHandling& a, LinkHandling& b) {
     a.Swap(&b);
@@ -8914,7 +7885,7 @@ class OpenFile final :
                &_OpenFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    51;
+    46;
 
   friend void swap(OpenFile& a, OpenFile& b) {
     a.Swap(&b);
@@ -9082,7 +8053,7 @@ class FileChunk final :
                &_FileChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    52;
+    47;
 
   friend void swap(FileChunk& a, FileChunk& b) {
     a.Swap(&b);
@@ -9239,7 +8210,7 @@ class CancelInstall final :
                &_CancelInstall_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    53;
+    48;
 
   friend void swap(CancelInstall& a, CancelInstall& b) {
     a.Swap(&b);
@@ -9369,7 +8340,7 @@ class InstallProgress final :
                &_InstallProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    54;
+    49;
 
   friend void swap(InstallProgress& a, InstallProgress& b) {
     a.Swap(&b);
@@ -9510,7 +8481,7 @@ class InstallResult final :
                &_InstallResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    55;
+    50;
 
   friend void swap(InstallResult& a, InstallResult& b) {
     a.Swap(&b);
@@ -9683,7 +8654,7 @@ class FileProgress final :
                &_FileProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    56;
+    51;
 
   friend void swap(FileProgress& a, FileProgress& b) {
     a.Swap(&b);
@@ -9840,7 +8811,7 @@ class ClockProbe final :
                &_ClockProbe_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    57;
+    52;
 
   friend void swap(ClockProbe& a, ClockProbe& b) {
     a.Swap(&b);
@@ -9970,7 +8941,7 @@ class VideoCodecSupport final :
                &_VideoCodecSupport_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    58;
+    53;
 
   friend void swap(VideoCodecSupport& a, VideoCodecSupport& b) {
     a.Swap(&b);
@@ -10122,7 +9093,7 @@ class VideoCapabilities final :
                &_VideoCapabilities_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    59;
+    54;
 
   friend void swap(VideoCapabilities& a, VideoCapabilities& b) {
     a.Swap(&b);
@@ -10261,7 +9232,7 @@ class VideoDecoderOpen final :
                &_VideoDecoderOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    60;
+    55;
 
   friend void swap(VideoDecoderOpen& a, VideoDecoderOpen& b) {
     a.Swap(&b);
@@ -10413,7 +9384,7 @@ class VideoDecoderOpened final :
                &_VideoDecoderOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    61;
+    56;
 
   friend void swap(VideoDecoderOpened& a, VideoDecoderOpened& b) {
     a.Swap(&b);
@@ -10559,7 +9530,7 @@ class VideoPacket final :
                &_VideoPacket_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    62;
+    57;
 
   friend void swap(VideoPacket& a, VideoPacket& b) {
     a.Swap(&b);
@@ -10738,7 +9709,7 @@ class VideoFrame final :
                &_VideoFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    63;
+    58;
 
   friend void swap(VideoFrame& a, VideoFrame& b) {
     a.Swap(&b);
@@ -10939,7 +9910,7 @@ class VideoFlush final :
                &_VideoFlush_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    64;
+    59;
 
   friend void swap(VideoFlush& a, VideoFlush& b) {
     a.Swap(&b);
@@ -11056,7 +10027,7 @@ class VideoFlushed final :
                &_VideoFlushed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    65;
+    60;
 
   friend void swap(VideoFlushed& a, VideoFlushed& b) {
     a.Swap(&b);
@@ -11173,7 +10144,7 @@ class VideoError final :
                &_VideoError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    66;
+    61;
 
   friend void swap(VideoError& a, VideoError& b) {
     a.Swap(&b);
@@ -11308,7 +10279,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    67;
+    62;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -11449,7 +10420,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    68;
+    63;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -11579,7 +10550,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    69;
+    64;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -11850,7 +10821,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    70;
+    65;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -12011,7 +10982,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    71;
+    66;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -12157,7 +11128,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    72;
+    67;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -12314,7 +11285,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    68;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -12464,7 +11435,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    69;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -12608,7 +11579,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    70;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -12738,7 +11709,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    71;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -12923,7 +11894,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    72;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -13091,7 +12062,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    73;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -13265,7 +12236,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    74;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -13406,7 +12377,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    75;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -13558,7 +12529,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    76;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -14001,7 +12972,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    77;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -14234,7 +13205,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    78;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -14424,7 +13395,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    79;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -14592,7 +13563,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    80;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -14755,7 +13726,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    81;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -14907,7 +13878,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    82;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -15135,7 +14106,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    83;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -15312,7 +14283,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    89;
+    84;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -15442,7 +14413,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    90;
+    85;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -15615,7 +14586,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    91;
+    86;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -15788,6 +14759,7 @@ class Envelope final :
     kScreenState = 40,
     kPowerState = 41,
     kPowerHint = 110,
+    kDeveloperMode = 140,
     kDeviceIdle = 42,
     kHostMemory = 43,
     kHostSleep = 44,
@@ -15808,12 +14780,6 @@ class Envelope final :
     kNotificationRemoved = 71,
     kNotificationClicked = 72,
     kNotificationDismissed = 73,
-    kBackgroundApp = 74,
-    kBackgroundAppGone = 75,
-    kBackgroundAppAction = 76,
-    kMediaSession = 77,
-    kMediaSessionGone = 78,
-    kMediaControl = 79,
     kListWidgetProviders = 90,
     kWidgetProviders = 91,
     kAddWidget = 92,
@@ -15850,7 +14816,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    92;
+    87;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -15945,6 +14911,7 @@ class Envelope final :
     kScreenStateFieldNumber = 40,
     kPowerStateFieldNumber = 41,
     kPowerHintFieldNumber = 110,
+    kDeveloperModeFieldNumber = 140,
     kDeviceIdleFieldNumber = 42,
     kHostMemoryFieldNumber = 43,
     kHostSleepFieldNumber = 44,
@@ -15965,12 +14932,6 @@ class Envelope final :
     kNotificationRemovedFieldNumber = 71,
     kNotificationClickedFieldNumber = 72,
     kNotificationDismissedFieldNumber = 73,
-    kBackgroundAppFieldNumber = 74,
-    kBackgroundAppGoneFieldNumber = 75,
-    kBackgroundAppActionFieldNumber = 76,
-    kMediaSessionFieldNumber = 77,
-    kMediaSessionGoneFieldNumber = 78,
-    kMediaControlFieldNumber = 79,
     kListWidgetProvidersFieldNumber = 90,
     kWidgetProvidersFieldNumber = 91,
     kAddWidgetFieldNumber = 92,
@@ -16558,6 +15519,24 @@ class Envelope final :
       ::dsa::control::v1::PowerHint* power_hint);
   ::dsa::control::v1::PowerHint* unsafe_arena_release_power_hint();
 
+  // .dsa.control.v1.DeveloperMode developer_mode = 140;
+  bool has_developer_mode() const;
+  private:
+  bool _internal_has_developer_mode() const;
+  public:
+  void clear_developer_mode();
+  const ::dsa::control::v1::DeveloperMode& developer_mode() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::DeveloperMode* release_developer_mode();
+  ::dsa::control::v1::DeveloperMode* mutable_developer_mode();
+  void set_allocated_developer_mode(::dsa::control::v1::DeveloperMode* developer_mode);
+  private:
+  const ::dsa::control::v1::DeveloperMode& _internal_developer_mode() const;
+  ::dsa::control::v1::DeveloperMode* _internal_mutable_developer_mode();
+  public:
+  void unsafe_arena_set_allocated_developer_mode(
+      ::dsa::control::v1::DeveloperMode* developer_mode);
+  ::dsa::control::v1::DeveloperMode* unsafe_arena_release_developer_mode();
+
   // .dsa.control.v1.DeviceIdle device_idle = 42;
   bool has_device_idle() const;
   private:
@@ -16917,114 +15896,6 @@ class Envelope final :
   void unsafe_arena_set_allocated_notification_dismissed(
       ::dsa::control::v1::NotificationDismissed* notification_dismissed);
   ::dsa::control::v1::NotificationDismissed* unsafe_arena_release_notification_dismissed();
-
-  // .dsa.control.v1.BackgroundApp background_app = 74;
-  bool has_background_app() const;
-  private:
-  bool _internal_has_background_app() const;
-  public:
-  void clear_background_app();
-  const ::dsa::control::v1::BackgroundApp& background_app() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::BackgroundApp* release_background_app();
-  ::dsa::control::v1::BackgroundApp* mutable_background_app();
-  void set_allocated_background_app(::dsa::control::v1::BackgroundApp* background_app);
-  private:
-  const ::dsa::control::v1::BackgroundApp& _internal_background_app() const;
-  ::dsa::control::v1::BackgroundApp* _internal_mutable_background_app();
-  public:
-  void unsafe_arena_set_allocated_background_app(
-      ::dsa::control::v1::BackgroundApp* background_app);
-  ::dsa::control::v1::BackgroundApp* unsafe_arena_release_background_app();
-
-  // .dsa.control.v1.BackgroundAppGone background_app_gone = 75;
-  bool has_background_app_gone() const;
-  private:
-  bool _internal_has_background_app_gone() const;
-  public:
-  void clear_background_app_gone();
-  const ::dsa::control::v1::BackgroundAppGone& background_app_gone() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::BackgroundAppGone* release_background_app_gone();
-  ::dsa::control::v1::BackgroundAppGone* mutable_background_app_gone();
-  void set_allocated_background_app_gone(::dsa::control::v1::BackgroundAppGone* background_app_gone);
-  private:
-  const ::dsa::control::v1::BackgroundAppGone& _internal_background_app_gone() const;
-  ::dsa::control::v1::BackgroundAppGone* _internal_mutable_background_app_gone();
-  public:
-  void unsafe_arena_set_allocated_background_app_gone(
-      ::dsa::control::v1::BackgroundAppGone* background_app_gone);
-  ::dsa::control::v1::BackgroundAppGone* unsafe_arena_release_background_app_gone();
-
-  // .dsa.control.v1.BackgroundAppAction background_app_action = 76;
-  bool has_background_app_action() const;
-  private:
-  bool _internal_has_background_app_action() const;
-  public:
-  void clear_background_app_action();
-  const ::dsa::control::v1::BackgroundAppAction& background_app_action() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::BackgroundAppAction* release_background_app_action();
-  ::dsa::control::v1::BackgroundAppAction* mutable_background_app_action();
-  void set_allocated_background_app_action(::dsa::control::v1::BackgroundAppAction* background_app_action);
-  private:
-  const ::dsa::control::v1::BackgroundAppAction& _internal_background_app_action() const;
-  ::dsa::control::v1::BackgroundAppAction* _internal_mutable_background_app_action();
-  public:
-  void unsafe_arena_set_allocated_background_app_action(
-      ::dsa::control::v1::BackgroundAppAction* background_app_action);
-  ::dsa::control::v1::BackgroundAppAction* unsafe_arena_release_background_app_action();
-
-  // .dsa.control.v1.MediaSession media_session = 77;
-  bool has_media_session() const;
-  private:
-  bool _internal_has_media_session() const;
-  public:
-  void clear_media_session();
-  const ::dsa::control::v1::MediaSession& media_session() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::MediaSession* release_media_session();
-  ::dsa::control::v1::MediaSession* mutable_media_session();
-  void set_allocated_media_session(::dsa::control::v1::MediaSession* media_session);
-  private:
-  const ::dsa::control::v1::MediaSession& _internal_media_session() const;
-  ::dsa::control::v1::MediaSession* _internal_mutable_media_session();
-  public:
-  void unsafe_arena_set_allocated_media_session(
-      ::dsa::control::v1::MediaSession* media_session);
-  ::dsa::control::v1::MediaSession* unsafe_arena_release_media_session();
-
-  // .dsa.control.v1.MediaSessionGone media_session_gone = 78;
-  bool has_media_session_gone() const;
-  private:
-  bool _internal_has_media_session_gone() const;
-  public:
-  void clear_media_session_gone();
-  const ::dsa::control::v1::MediaSessionGone& media_session_gone() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::MediaSessionGone* release_media_session_gone();
-  ::dsa::control::v1::MediaSessionGone* mutable_media_session_gone();
-  void set_allocated_media_session_gone(::dsa::control::v1::MediaSessionGone* media_session_gone);
-  private:
-  const ::dsa::control::v1::MediaSessionGone& _internal_media_session_gone() const;
-  ::dsa::control::v1::MediaSessionGone* _internal_mutable_media_session_gone();
-  public:
-  void unsafe_arena_set_allocated_media_session_gone(
-      ::dsa::control::v1::MediaSessionGone* media_session_gone);
-  ::dsa::control::v1::MediaSessionGone* unsafe_arena_release_media_session_gone();
-
-  // .dsa.control.v1.MediaControl media_control = 79;
-  bool has_media_control() const;
-  private:
-  bool _internal_has_media_control() const;
-  public:
-  void clear_media_control();
-  const ::dsa::control::v1::MediaControl& media_control() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::MediaControl* release_media_control();
-  ::dsa::control::v1::MediaControl* mutable_media_control();
-  void set_allocated_media_control(::dsa::control::v1::MediaControl* media_control);
-  private:
-  const ::dsa::control::v1::MediaControl& _internal_media_control() const;
-  ::dsa::control::v1::MediaControl* _internal_mutable_media_control();
-  public:
-  void unsafe_arena_set_allocated_media_control(
-      ::dsa::control::v1::MediaControl* media_control);
-  ::dsa::control::v1::MediaControl* unsafe_arena_release_media_control();
 
   // .dsa.control.v1.ListWidgetProviders list_widget_providers = 90;
   bool has_list_widget_providers() const;
@@ -17566,6 +16437,7 @@ class Envelope final :
   void set_has_screen_state();
   void set_has_power_state();
   void set_has_power_hint();
+  void set_has_developer_mode();
   void set_has_device_idle();
   void set_has_host_memory();
   void set_has_host_sleep();
@@ -17586,12 +16458,6 @@ class Envelope final :
   void set_has_notification_removed();
   void set_has_notification_clicked();
   void set_has_notification_dismissed();
-  void set_has_background_app();
-  void set_has_background_app_gone();
-  void set_has_background_app_action();
-  void set_has_media_session();
-  void set_has_media_session_gone();
-  void set_has_media_control();
   void set_has_list_widget_providers();
   void set_has_widget_providers();
   void set_has_add_widget();
@@ -17662,6 +16528,7 @@ class Envelope final :
       ::dsa::control::v1::ScreenState* screen_state_;
       ::dsa::control::v1::PowerState* power_state_;
       ::dsa::control::v1::PowerHint* power_hint_;
+      ::dsa::control::v1::DeveloperMode* developer_mode_;
       ::dsa::control::v1::DeviceIdle* device_idle_;
       ::dsa::control::v1::HostMemory* host_memory_;
       ::dsa::control::v1::HostSleep* host_sleep_;
@@ -17682,12 +16549,6 @@ class Envelope final :
       ::dsa::control::v1::NotificationRemoved* notification_removed_;
       ::dsa::control::v1::NotificationClicked* notification_clicked_;
       ::dsa::control::v1::NotificationDismissed* notification_dismissed_;
-      ::dsa::control::v1::BackgroundApp* background_app_;
-      ::dsa::control::v1::BackgroundAppGone* background_app_gone_;
-      ::dsa::control::v1::BackgroundAppAction* background_app_action_;
-      ::dsa::control::v1::MediaSession* media_session_;
-      ::dsa::control::v1::MediaSessionGone* media_session_gone_;
-      ::dsa::control::v1::MediaControl* media_control_;
       ::dsa::control::v1::ListWidgetProviders* list_widget_providers_;
       ::dsa::control::v1::WidgetProviders* widget_providers_;
       ::dsa::control::v1::AddWidget* add_widget_;
@@ -20338,6 +19199,30 @@ inline void ClipboardSharing::set_on(bool value) {
 
 // -------------------------------------------------------------------
 
+// DeveloperMode
+
+// bool on = 1;
+inline void DeveloperMode::clear_on() {
+  _impl_.on_ = false;
+}
+inline bool DeveloperMode::_internal_on() const {
+  return _impl_.on_;
+}
+inline bool DeveloperMode::on() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DeveloperMode.on)
+  return _internal_on();
+}
+inline void DeveloperMode::_internal_set_on(bool value) {
+  
+  _impl_.on_ = value;
+}
+inline void DeveloperMode::set_on(bool value) {
+  _internal_set_on(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DeveloperMode.on)
+}
+
+// -------------------------------------------------------------------
+
 // GuestNotification
 
 // string key = 1;
@@ -20880,1015 +19765,6 @@ inline void NotificationDismissed::set_allocated_key(std::string* key) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.NotificationDismissed.key)
-}
-
-// -------------------------------------------------------------------
-
-// BackgroundApp
-
-// string package_name = 1;
-inline void BackgroundApp::clear_package_name() {
-  _impl_.package_name_.ClearToEmpty();
-}
-inline const std::string& BackgroundApp::package_name() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundApp.package_name)
-  return _internal_package_name();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void BackgroundApp::set_package_name(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundApp.package_name)
-}
-inline std::string* BackgroundApp::mutable_package_name() {
-  std::string* _s = _internal_mutable_package_name();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.BackgroundApp.package_name)
-  return _s;
-}
-inline const std::string& BackgroundApp::_internal_package_name() const {
-  return _impl_.package_name_.Get();
-}
-inline void BackgroundApp::_internal_set_package_name(const std::string& value) {
-  
-  _impl_.package_name_.Set(value, GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::_internal_mutable_package_name() {
-  
-  return _impl_.package_name_.Mutable(GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::release_package_name() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.BackgroundApp.package_name)
-  return _impl_.package_name_.Release();
-}
-inline void BackgroundApp::set_allocated_package_name(std::string* package_name) {
-  if (package_name != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.package_name_.IsDefault()) {
-    _impl_.package_name_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.BackgroundApp.package_name)
-}
-
-// string app_label = 2;
-inline void BackgroundApp::clear_app_label() {
-  _impl_.app_label_.ClearToEmpty();
-}
-inline const std::string& BackgroundApp::app_label() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundApp.app_label)
-  return _internal_app_label();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void BackgroundApp::set_app_label(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.app_label_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundApp.app_label)
-}
-inline std::string* BackgroundApp::mutable_app_label() {
-  std::string* _s = _internal_mutable_app_label();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.BackgroundApp.app_label)
-  return _s;
-}
-inline const std::string& BackgroundApp::_internal_app_label() const {
-  return _impl_.app_label_.Get();
-}
-inline void BackgroundApp::_internal_set_app_label(const std::string& value) {
-  
-  _impl_.app_label_.Set(value, GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::_internal_mutable_app_label() {
-  
-  return _impl_.app_label_.Mutable(GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::release_app_label() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.BackgroundApp.app_label)
-  return _impl_.app_label_.Release();
-}
-inline void BackgroundApp::set_allocated_app_label(std::string* app_label) {
-  if (app_label != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.app_label_.SetAllocated(app_label, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.app_label_.IsDefault()) {
-    _impl_.app_label_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.BackgroundApp.app_label)
-}
-
-// bytes icon_png = 3;
-inline void BackgroundApp::clear_icon_png() {
-  _impl_.icon_png_.ClearToEmpty();
-}
-inline const std::string& BackgroundApp::icon_png() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundApp.icon_png)
-  return _internal_icon_png();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void BackgroundApp::set_icon_png(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.icon_png_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundApp.icon_png)
-}
-inline std::string* BackgroundApp::mutable_icon_png() {
-  std::string* _s = _internal_mutable_icon_png();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.BackgroundApp.icon_png)
-  return _s;
-}
-inline const std::string& BackgroundApp::_internal_icon_png() const {
-  return _impl_.icon_png_.Get();
-}
-inline void BackgroundApp::_internal_set_icon_png(const std::string& value) {
-  
-  _impl_.icon_png_.Set(value, GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::_internal_mutable_icon_png() {
-  
-  return _impl_.icon_png_.Mutable(GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::release_icon_png() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.BackgroundApp.icon_png)
-  return _impl_.icon_png_.Release();
-}
-inline void BackgroundApp::set_allocated_icon_png(std::string* icon_png) {
-  if (icon_png != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.icon_png_.SetAllocated(icon_png, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.icon_png_.IsDefault()) {
-    _impl_.icon_png_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.BackgroundApp.icon_png)
-}
-
-// string title = 4;
-inline void BackgroundApp::clear_title() {
-  _impl_.title_.ClearToEmpty();
-}
-inline const std::string& BackgroundApp::title() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundApp.title)
-  return _internal_title();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void BackgroundApp::set_title(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.title_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundApp.title)
-}
-inline std::string* BackgroundApp::mutable_title() {
-  std::string* _s = _internal_mutable_title();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.BackgroundApp.title)
-  return _s;
-}
-inline const std::string& BackgroundApp::_internal_title() const {
-  return _impl_.title_.Get();
-}
-inline void BackgroundApp::_internal_set_title(const std::string& value) {
-  
-  _impl_.title_.Set(value, GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::_internal_mutable_title() {
-  
-  return _impl_.title_.Mutable(GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::release_title() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.BackgroundApp.title)
-  return _impl_.title_.Release();
-}
-inline void BackgroundApp::set_allocated_title(std::string* title) {
-  if (title != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.title_.SetAllocated(title, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.title_.IsDefault()) {
-    _impl_.title_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.BackgroundApp.title)
-}
-
-// string text = 5;
-inline void BackgroundApp::clear_text() {
-  _impl_.text_.ClearToEmpty();
-}
-inline const std::string& BackgroundApp::text() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundApp.text)
-  return _internal_text();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void BackgroundApp::set_text(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.text_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundApp.text)
-}
-inline std::string* BackgroundApp::mutable_text() {
-  std::string* _s = _internal_mutable_text();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.BackgroundApp.text)
-  return _s;
-}
-inline const std::string& BackgroundApp::_internal_text() const {
-  return _impl_.text_.Get();
-}
-inline void BackgroundApp::_internal_set_text(const std::string& value) {
-  
-  _impl_.text_.Set(value, GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::_internal_mutable_text() {
-  
-  return _impl_.text_.Mutable(GetArenaForAllocation());
-}
-inline std::string* BackgroundApp::release_text() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.BackgroundApp.text)
-  return _impl_.text_.Release();
-}
-inline void BackgroundApp::set_allocated_text(std::string* text) {
-  if (text != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.text_.SetAllocated(text, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.text_.IsDefault()) {
-    _impl_.text_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.BackgroundApp.text)
-}
-
-// repeated string actions = 6;
-inline int BackgroundApp::_internal_actions_size() const {
-  return _impl_.actions_.size();
-}
-inline int BackgroundApp::actions_size() const {
-  return _internal_actions_size();
-}
-inline void BackgroundApp::clear_actions() {
-  _impl_.actions_.Clear();
-}
-inline std::string* BackgroundApp::add_actions() {
-  std::string* _s = _internal_add_actions();
-  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.BackgroundApp.actions)
-  return _s;
-}
-inline const std::string& BackgroundApp::_internal_actions(int index) const {
-  return _impl_.actions_.Get(index);
-}
-inline const std::string& BackgroundApp::actions(int index) const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundApp.actions)
-  return _internal_actions(index);
-}
-inline std::string* BackgroundApp::mutable_actions(int index) {
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.BackgroundApp.actions)
-  return _impl_.actions_.Mutable(index);
-}
-inline void BackgroundApp::set_actions(int index, const std::string& value) {
-  _impl_.actions_.Mutable(index)->assign(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundApp.actions)
-}
-inline void BackgroundApp::set_actions(int index, std::string&& value) {
-  _impl_.actions_.Mutable(index)->assign(std::move(value));
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundApp.actions)
-}
-inline void BackgroundApp::set_actions(int index, const char* value) {
-  GOOGLE_DCHECK(value != nullptr);
-  _impl_.actions_.Mutable(index)->assign(value);
-  // @@protoc_insertion_point(field_set_char:dsa.control.v1.BackgroundApp.actions)
-}
-inline void BackgroundApp::set_actions(int index, const char* value, size_t size) {
-  _impl_.actions_.Mutable(index)->assign(
-    reinterpret_cast<const char*>(value), size);
-  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.BackgroundApp.actions)
-}
-inline std::string* BackgroundApp::_internal_add_actions() {
-  return _impl_.actions_.Add();
-}
-inline void BackgroundApp::add_actions(const std::string& value) {
-  _impl_.actions_.Add()->assign(value);
-  // @@protoc_insertion_point(field_add:dsa.control.v1.BackgroundApp.actions)
-}
-inline void BackgroundApp::add_actions(std::string&& value) {
-  _impl_.actions_.Add(std::move(value));
-  // @@protoc_insertion_point(field_add:dsa.control.v1.BackgroundApp.actions)
-}
-inline void BackgroundApp::add_actions(const char* value) {
-  GOOGLE_DCHECK(value != nullptr);
-  _impl_.actions_.Add()->assign(value);
-  // @@protoc_insertion_point(field_add_char:dsa.control.v1.BackgroundApp.actions)
-}
-inline void BackgroundApp::add_actions(const char* value, size_t size) {
-  _impl_.actions_.Add()->assign(reinterpret_cast<const char*>(value), size);
-  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.BackgroundApp.actions)
-}
-inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
-BackgroundApp::actions() const {
-  // @@protoc_insertion_point(field_list:dsa.control.v1.BackgroundApp.actions)
-  return _impl_.actions_;
-}
-inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
-BackgroundApp::mutable_actions() {
-  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.BackgroundApp.actions)
-  return &_impl_.actions_;
-}
-
-// -------------------------------------------------------------------
-
-// BackgroundAppGone
-
-// string package_name = 1;
-inline void BackgroundAppGone::clear_package_name() {
-  _impl_.package_name_.ClearToEmpty();
-}
-inline const std::string& BackgroundAppGone::package_name() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundAppGone.package_name)
-  return _internal_package_name();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void BackgroundAppGone::set_package_name(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundAppGone.package_name)
-}
-inline std::string* BackgroundAppGone::mutable_package_name() {
-  std::string* _s = _internal_mutable_package_name();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.BackgroundAppGone.package_name)
-  return _s;
-}
-inline const std::string& BackgroundAppGone::_internal_package_name() const {
-  return _impl_.package_name_.Get();
-}
-inline void BackgroundAppGone::_internal_set_package_name(const std::string& value) {
-  
-  _impl_.package_name_.Set(value, GetArenaForAllocation());
-}
-inline std::string* BackgroundAppGone::_internal_mutable_package_name() {
-  
-  return _impl_.package_name_.Mutable(GetArenaForAllocation());
-}
-inline std::string* BackgroundAppGone::release_package_name() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.BackgroundAppGone.package_name)
-  return _impl_.package_name_.Release();
-}
-inline void BackgroundAppGone::set_allocated_package_name(std::string* package_name) {
-  if (package_name != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.package_name_.IsDefault()) {
-    _impl_.package_name_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.BackgroundAppGone.package_name)
-}
-
-// -------------------------------------------------------------------
-
-// BackgroundAppAction
-
-// string package_name = 1;
-inline void BackgroundAppAction::clear_package_name() {
-  _impl_.package_name_.ClearToEmpty();
-}
-inline const std::string& BackgroundAppAction::package_name() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundAppAction.package_name)
-  return _internal_package_name();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void BackgroundAppAction::set_package_name(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundAppAction.package_name)
-}
-inline std::string* BackgroundAppAction::mutable_package_name() {
-  std::string* _s = _internal_mutable_package_name();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.BackgroundAppAction.package_name)
-  return _s;
-}
-inline const std::string& BackgroundAppAction::_internal_package_name() const {
-  return _impl_.package_name_.Get();
-}
-inline void BackgroundAppAction::_internal_set_package_name(const std::string& value) {
-  
-  _impl_.package_name_.Set(value, GetArenaForAllocation());
-}
-inline std::string* BackgroundAppAction::_internal_mutable_package_name() {
-  
-  return _impl_.package_name_.Mutable(GetArenaForAllocation());
-}
-inline std::string* BackgroundAppAction::release_package_name() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.BackgroundAppAction.package_name)
-  return _impl_.package_name_.Release();
-}
-inline void BackgroundAppAction::set_allocated_package_name(std::string* package_name) {
-  if (package_name != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.package_name_.IsDefault()) {
-    _impl_.package_name_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.BackgroundAppAction.package_name)
-}
-
-// .dsa.control.v1.BackgroundAppCommand command = 2;
-inline void BackgroundAppAction::clear_command() {
-  _impl_.command_ = 0;
-}
-inline ::dsa::control::v1::BackgroundAppCommand BackgroundAppAction::_internal_command() const {
-  return static_cast< ::dsa::control::v1::BackgroundAppCommand >(_impl_.command_);
-}
-inline ::dsa::control::v1::BackgroundAppCommand BackgroundAppAction::command() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundAppAction.command)
-  return _internal_command();
-}
-inline void BackgroundAppAction::_internal_set_command(::dsa::control::v1::BackgroundAppCommand value) {
-  
-  _impl_.command_ = value;
-}
-inline void BackgroundAppAction::set_command(::dsa::control::v1::BackgroundAppCommand value) {
-  _internal_set_command(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundAppAction.command)
-}
-
-// int32 action = 3;
-inline void BackgroundAppAction::clear_action() {
-  _impl_.action_ = 0;
-}
-inline int32_t BackgroundAppAction::_internal_action() const {
-  return _impl_.action_;
-}
-inline int32_t BackgroundAppAction::action() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.BackgroundAppAction.action)
-  return _internal_action();
-}
-inline void BackgroundAppAction::_internal_set_action(int32_t value) {
-  
-  _impl_.action_ = value;
-}
-inline void BackgroundAppAction::set_action(int32_t value) {
-  _internal_set_action(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.BackgroundAppAction.action)
-}
-
-// -------------------------------------------------------------------
-
-// MediaSession
-
-// string package_name = 1;
-inline void MediaSession::clear_package_name() {
-  _impl_.package_name_.ClearToEmpty();
-}
-inline const std::string& MediaSession::package_name() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.package_name)
-  return _internal_package_name();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void MediaSession::set_package_name(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.package_name)
-}
-inline std::string* MediaSession::mutable_package_name() {
-  std::string* _s = _internal_mutable_package_name();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.MediaSession.package_name)
-  return _s;
-}
-inline const std::string& MediaSession::_internal_package_name() const {
-  return _impl_.package_name_.Get();
-}
-inline void MediaSession::_internal_set_package_name(const std::string& value) {
-  
-  _impl_.package_name_.Set(value, GetArenaForAllocation());
-}
-inline std::string* MediaSession::_internal_mutable_package_name() {
-  
-  return _impl_.package_name_.Mutable(GetArenaForAllocation());
-}
-inline std::string* MediaSession::release_package_name() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.MediaSession.package_name)
-  return _impl_.package_name_.Release();
-}
-inline void MediaSession::set_allocated_package_name(std::string* package_name) {
-  if (package_name != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.package_name_.IsDefault()) {
-    _impl_.package_name_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.MediaSession.package_name)
-}
-
-// string app_label = 2;
-inline void MediaSession::clear_app_label() {
-  _impl_.app_label_.ClearToEmpty();
-}
-inline const std::string& MediaSession::app_label() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.app_label)
-  return _internal_app_label();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void MediaSession::set_app_label(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.app_label_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.app_label)
-}
-inline std::string* MediaSession::mutable_app_label() {
-  std::string* _s = _internal_mutable_app_label();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.MediaSession.app_label)
-  return _s;
-}
-inline const std::string& MediaSession::_internal_app_label() const {
-  return _impl_.app_label_.Get();
-}
-inline void MediaSession::_internal_set_app_label(const std::string& value) {
-  
-  _impl_.app_label_.Set(value, GetArenaForAllocation());
-}
-inline std::string* MediaSession::_internal_mutable_app_label() {
-  
-  return _impl_.app_label_.Mutable(GetArenaForAllocation());
-}
-inline std::string* MediaSession::release_app_label() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.MediaSession.app_label)
-  return _impl_.app_label_.Release();
-}
-inline void MediaSession::set_allocated_app_label(std::string* app_label) {
-  if (app_label != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.app_label_.SetAllocated(app_label, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.app_label_.IsDefault()) {
-    _impl_.app_label_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.MediaSession.app_label)
-}
-
-// string title = 3;
-inline void MediaSession::clear_title() {
-  _impl_.title_.ClearToEmpty();
-}
-inline const std::string& MediaSession::title() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.title)
-  return _internal_title();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void MediaSession::set_title(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.title_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.title)
-}
-inline std::string* MediaSession::mutable_title() {
-  std::string* _s = _internal_mutable_title();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.MediaSession.title)
-  return _s;
-}
-inline const std::string& MediaSession::_internal_title() const {
-  return _impl_.title_.Get();
-}
-inline void MediaSession::_internal_set_title(const std::string& value) {
-  
-  _impl_.title_.Set(value, GetArenaForAllocation());
-}
-inline std::string* MediaSession::_internal_mutable_title() {
-  
-  return _impl_.title_.Mutable(GetArenaForAllocation());
-}
-inline std::string* MediaSession::release_title() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.MediaSession.title)
-  return _impl_.title_.Release();
-}
-inline void MediaSession::set_allocated_title(std::string* title) {
-  if (title != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.title_.SetAllocated(title, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.title_.IsDefault()) {
-    _impl_.title_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.MediaSession.title)
-}
-
-// string artist = 4;
-inline void MediaSession::clear_artist() {
-  _impl_.artist_.ClearToEmpty();
-}
-inline const std::string& MediaSession::artist() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.artist)
-  return _internal_artist();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void MediaSession::set_artist(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.artist_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.artist)
-}
-inline std::string* MediaSession::mutable_artist() {
-  std::string* _s = _internal_mutable_artist();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.MediaSession.artist)
-  return _s;
-}
-inline const std::string& MediaSession::_internal_artist() const {
-  return _impl_.artist_.Get();
-}
-inline void MediaSession::_internal_set_artist(const std::string& value) {
-  
-  _impl_.artist_.Set(value, GetArenaForAllocation());
-}
-inline std::string* MediaSession::_internal_mutable_artist() {
-  
-  return _impl_.artist_.Mutable(GetArenaForAllocation());
-}
-inline std::string* MediaSession::release_artist() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.MediaSession.artist)
-  return _impl_.artist_.Release();
-}
-inline void MediaSession::set_allocated_artist(std::string* artist) {
-  if (artist != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.artist_.SetAllocated(artist, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.artist_.IsDefault()) {
-    _impl_.artist_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.MediaSession.artist)
-}
-
-// string album = 5;
-inline void MediaSession::clear_album() {
-  _impl_.album_.ClearToEmpty();
-}
-inline const std::string& MediaSession::album() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.album)
-  return _internal_album();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void MediaSession::set_album(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.album_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.album)
-}
-inline std::string* MediaSession::mutable_album() {
-  std::string* _s = _internal_mutable_album();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.MediaSession.album)
-  return _s;
-}
-inline const std::string& MediaSession::_internal_album() const {
-  return _impl_.album_.Get();
-}
-inline void MediaSession::_internal_set_album(const std::string& value) {
-  
-  _impl_.album_.Set(value, GetArenaForAllocation());
-}
-inline std::string* MediaSession::_internal_mutable_album() {
-  
-  return _impl_.album_.Mutable(GetArenaForAllocation());
-}
-inline std::string* MediaSession::release_album() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.MediaSession.album)
-  return _impl_.album_.Release();
-}
-inline void MediaSession::set_allocated_album(std::string* album) {
-  if (album != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.album_.SetAllocated(album, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.album_.IsDefault()) {
-    _impl_.album_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.MediaSession.album)
-}
-
-// bytes art_png = 6;
-inline void MediaSession::clear_art_png() {
-  _impl_.art_png_.ClearToEmpty();
-}
-inline const std::string& MediaSession::art_png() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.art_png)
-  return _internal_art_png();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void MediaSession::set_art_png(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.art_png_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.art_png)
-}
-inline std::string* MediaSession::mutable_art_png() {
-  std::string* _s = _internal_mutable_art_png();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.MediaSession.art_png)
-  return _s;
-}
-inline const std::string& MediaSession::_internal_art_png() const {
-  return _impl_.art_png_.Get();
-}
-inline void MediaSession::_internal_set_art_png(const std::string& value) {
-  
-  _impl_.art_png_.Set(value, GetArenaForAllocation());
-}
-inline std::string* MediaSession::_internal_mutable_art_png() {
-  
-  return _impl_.art_png_.Mutable(GetArenaForAllocation());
-}
-inline std::string* MediaSession::release_art_png() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.MediaSession.art_png)
-  return _impl_.art_png_.Release();
-}
-inline void MediaSession::set_allocated_art_png(std::string* art_png) {
-  if (art_png != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.art_png_.SetAllocated(art_png, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.art_png_.IsDefault()) {
-    _impl_.art_png_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.MediaSession.art_png)
-}
-
-// .dsa.control.v1.MediaPlayback playback = 7;
-inline void MediaSession::clear_playback() {
-  _impl_.playback_ = 0;
-}
-inline ::dsa::control::v1::MediaPlayback MediaSession::_internal_playback() const {
-  return static_cast< ::dsa::control::v1::MediaPlayback >(_impl_.playback_);
-}
-inline ::dsa::control::v1::MediaPlayback MediaSession::playback() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.playback)
-  return _internal_playback();
-}
-inline void MediaSession::_internal_set_playback(::dsa::control::v1::MediaPlayback value) {
-  
-  _impl_.playback_ = value;
-}
-inline void MediaSession::set_playback(::dsa::control::v1::MediaPlayback value) {
-  _internal_set_playback(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.playback)
-}
-
-// bool can_play = 8;
-inline void MediaSession::clear_can_play() {
-  _impl_.can_play_ = false;
-}
-inline bool MediaSession::_internal_can_play() const {
-  return _impl_.can_play_;
-}
-inline bool MediaSession::can_play() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.can_play)
-  return _internal_can_play();
-}
-inline void MediaSession::_internal_set_can_play(bool value) {
-  
-  _impl_.can_play_ = value;
-}
-inline void MediaSession::set_can_play(bool value) {
-  _internal_set_can_play(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.can_play)
-}
-
-// bool can_pause = 9;
-inline void MediaSession::clear_can_pause() {
-  _impl_.can_pause_ = false;
-}
-inline bool MediaSession::_internal_can_pause() const {
-  return _impl_.can_pause_;
-}
-inline bool MediaSession::can_pause() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.can_pause)
-  return _internal_can_pause();
-}
-inline void MediaSession::_internal_set_can_pause(bool value) {
-  
-  _impl_.can_pause_ = value;
-}
-inline void MediaSession::set_can_pause(bool value) {
-  _internal_set_can_pause(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.can_pause)
-}
-
-// bool can_next = 10;
-inline void MediaSession::clear_can_next() {
-  _impl_.can_next_ = false;
-}
-inline bool MediaSession::_internal_can_next() const {
-  return _impl_.can_next_;
-}
-inline bool MediaSession::can_next() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.can_next)
-  return _internal_can_next();
-}
-inline void MediaSession::_internal_set_can_next(bool value) {
-  
-  _impl_.can_next_ = value;
-}
-inline void MediaSession::set_can_next(bool value) {
-  _internal_set_can_next(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.can_next)
-}
-
-// bool can_previous = 11;
-inline void MediaSession::clear_can_previous() {
-  _impl_.can_previous_ = false;
-}
-inline bool MediaSession::_internal_can_previous() const {
-  return _impl_.can_previous_;
-}
-inline bool MediaSession::can_previous() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSession.can_previous)
-  return _internal_can_previous();
-}
-inline void MediaSession::_internal_set_can_previous(bool value) {
-  
-  _impl_.can_previous_ = value;
-}
-inline void MediaSession::set_can_previous(bool value) {
-  _internal_set_can_previous(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSession.can_previous)
-}
-
-// -------------------------------------------------------------------
-
-// MediaSessionGone
-
-// string package_name = 1;
-inline void MediaSessionGone::clear_package_name() {
-  _impl_.package_name_.ClearToEmpty();
-}
-inline const std::string& MediaSessionGone::package_name() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaSessionGone.package_name)
-  return _internal_package_name();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void MediaSessionGone::set_package_name(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaSessionGone.package_name)
-}
-inline std::string* MediaSessionGone::mutable_package_name() {
-  std::string* _s = _internal_mutable_package_name();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.MediaSessionGone.package_name)
-  return _s;
-}
-inline const std::string& MediaSessionGone::_internal_package_name() const {
-  return _impl_.package_name_.Get();
-}
-inline void MediaSessionGone::_internal_set_package_name(const std::string& value) {
-  
-  _impl_.package_name_.Set(value, GetArenaForAllocation());
-}
-inline std::string* MediaSessionGone::_internal_mutable_package_name() {
-  
-  return _impl_.package_name_.Mutable(GetArenaForAllocation());
-}
-inline std::string* MediaSessionGone::release_package_name() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.MediaSessionGone.package_name)
-  return _impl_.package_name_.Release();
-}
-inline void MediaSessionGone::set_allocated_package_name(std::string* package_name) {
-  if (package_name != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.package_name_.IsDefault()) {
-    _impl_.package_name_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.MediaSessionGone.package_name)
-}
-
-// -------------------------------------------------------------------
-
-// MediaControl
-
-// string package_name = 1;
-inline void MediaControl::clear_package_name() {
-  _impl_.package_name_.ClearToEmpty();
-}
-inline const std::string& MediaControl::package_name() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaControl.package_name)
-  return _internal_package_name();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void MediaControl::set_package_name(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaControl.package_name)
-}
-inline std::string* MediaControl::mutable_package_name() {
-  std::string* _s = _internal_mutable_package_name();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.MediaControl.package_name)
-  return _s;
-}
-inline const std::string& MediaControl::_internal_package_name() const {
-  return _impl_.package_name_.Get();
-}
-inline void MediaControl::_internal_set_package_name(const std::string& value) {
-  
-  _impl_.package_name_.Set(value, GetArenaForAllocation());
-}
-inline std::string* MediaControl::_internal_mutable_package_name() {
-  
-  return _impl_.package_name_.Mutable(GetArenaForAllocation());
-}
-inline std::string* MediaControl::release_package_name() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.MediaControl.package_name)
-  return _impl_.package_name_.Release();
-}
-inline void MediaControl::set_allocated_package_name(std::string* package_name) {
-  if (package_name != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.package_name_.IsDefault()) {
-    _impl_.package_name_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.MediaControl.package_name)
-}
-
-// .dsa.control.v1.MediaCommand command = 2;
-inline void MediaControl::clear_command() {
-  _impl_.command_ = 0;
-}
-inline ::dsa::control::v1::MediaCommand MediaControl::_internal_command() const {
-  return static_cast< ::dsa::control::v1::MediaCommand >(_impl_.command_);
-}
-inline ::dsa::control::v1::MediaCommand MediaControl::command() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.MediaControl.command)
-  return _internal_command();
-}
-inline void MediaControl::_internal_set_command(::dsa::control::v1::MediaCommand value) {
-  
-  _impl_.command_ = value;
-}
-inline void MediaControl::set_command(::dsa::control::v1::MediaCommand value) {
-  _internal_set_command(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.MediaControl.command)
 }
 
 // -------------------------------------------------------------------
@@ -29753,6 +27629,80 @@ inline ::dsa::control::v1::PowerHint* Envelope::mutable_power_hint() {
   return _msg;
 }
 
+// .dsa.control.v1.DeveloperMode developer_mode = 140;
+inline bool Envelope::_internal_has_developer_mode() const {
+  return body_case() == kDeveloperMode;
+}
+inline bool Envelope::has_developer_mode() const {
+  return _internal_has_developer_mode();
+}
+inline void Envelope::set_has_developer_mode() {
+  _impl_._oneof_case_[0] = kDeveloperMode;
+}
+inline void Envelope::clear_developer_mode() {
+  if (_internal_has_developer_mode()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.developer_mode_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::DeveloperMode* Envelope::release_developer_mode() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.developer_mode)
+  if (_internal_has_developer_mode()) {
+    clear_has_body();
+    ::dsa::control::v1::DeveloperMode* temp = _impl_.body_.developer_mode_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.developer_mode_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::DeveloperMode& Envelope::_internal_developer_mode() const {
+  return _internal_has_developer_mode()
+      ? *_impl_.body_.developer_mode_
+      : reinterpret_cast< ::dsa::control::v1::DeveloperMode&>(::dsa::control::v1::_DeveloperMode_default_instance_);
+}
+inline const ::dsa::control::v1::DeveloperMode& Envelope::developer_mode() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.developer_mode)
+  return _internal_developer_mode();
+}
+inline ::dsa::control::v1::DeveloperMode* Envelope::unsafe_arena_release_developer_mode() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.developer_mode)
+  if (_internal_has_developer_mode()) {
+    clear_has_body();
+    ::dsa::control::v1::DeveloperMode* temp = _impl_.body_.developer_mode_;
+    _impl_.body_.developer_mode_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_developer_mode(::dsa::control::v1::DeveloperMode* developer_mode) {
+  clear_body();
+  if (developer_mode) {
+    set_has_developer_mode();
+    _impl_.body_.developer_mode_ = developer_mode;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.developer_mode)
+}
+inline ::dsa::control::v1::DeveloperMode* Envelope::_internal_mutable_developer_mode() {
+  if (!_internal_has_developer_mode()) {
+    clear_body();
+    set_has_developer_mode();
+    _impl_.body_.developer_mode_ = CreateMaybeMessage< ::dsa::control::v1::DeveloperMode >(GetArenaForAllocation());
+  }
+  return _impl_.body_.developer_mode_;
+}
+inline ::dsa::control::v1::DeveloperMode* Envelope::mutable_developer_mode() {
+  ::dsa::control::v1::DeveloperMode* _msg = _internal_mutable_developer_mode();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.developer_mode)
+  return _msg;
+}
+
 // .dsa.control.v1.DeviceIdle device_idle = 42;
 inline bool Envelope::_internal_has_device_idle() const {
   return body_case() == kDeviceIdle;
@@ -31230,450 +29180,6 @@ inline ::dsa::control::v1::NotificationDismissed* Envelope::_internal_mutable_no
 inline ::dsa::control::v1::NotificationDismissed* Envelope::mutable_notification_dismissed() {
   ::dsa::control::v1::NotificationDismissed* _msg = _internal_mutable_notification_dismissed();
   // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.notification_dismissed)
-  return _msg;
-}
-
-// .dsa.control.v1.BackgroundApp background_app = 74;
-inline bool Envelope::_internal_has_background_app() const {
-  return body_case() == kBackgroundApp;
-}
-inline bool Envelope::has_background_app() const {
-  return _internal_has_background_app();
-}
-inline void Envelope::set_has_background_app() {
-  _impl_._oneof_case_[0] = kBackgroundApp;
-}
-inline void Envelope::clear_background_app() {
-  if (_internal_has_background_app()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.background_app_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::BackgroundApp* Envelope::release_background_app() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.background_app)
-  if (_internal_has_background_app()) {
-    clear_has_body();
-    ::dsa::control::v1::BackgroundApp* temp = _impl_.body_.background_app_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.background_app_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::BackgroundApp& Envelope::_internal_background_app() const {
-  return _internal_has_background_app()
-      ? *_impl_.body_.background_app_
-      : reinterpret_cast< ::dsa::control::v1::BackgroundApp&>(::dsa::control::v1::_BackgroundApp_default_instance_);
-}
-inline const ::dsa::control::v1::BackgroundApp& Envelope::background_app() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.background_app)
-  return _internal_background_app();
-}
-inline ::dsa::control::v1::BackgroundApp* Envelope::unsafe_arena_release_background_app() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.background_app)
-  if (_internal_has_background_app()) {
-    clear_has_body();
-    ::dsa::control::v1::BackgroundApp* temp = _impl_.body_.background_app_;
-    _impl_.body_.background_app_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_background_app(::dsa::control::v1::BackgroundApp* background_app) {
-  clear_body();
-  if (background_app) {
-    set_has_background_app();
-    _impl_.body_.background_app_ = background_app;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.background_app)
-}
-inline ::dsa::control::v1::BackgroundApp* Envelope::_internal_mutable_background_app() {
-  if (!_internal_has_background_app()) {
-    clear_body();
-    set_has_background_app();
-    _impl_.body_.background_app_ = CreateMaybeMessage< ::dsa::control::v1::BackgroundApp >(GetArenaForAllocation());
-  }
-  return _impl_.body_.background_app_;
-}
-inline ::dsa::control::v1::BackgroundApp* Envelope::mutable_background_app() {
-  ::dsa::control::v1::BackgroundApp* _msg = _internal_mutable_background_app();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.background_app)
-  return _msg;
-}
-
-// .dsa.control.v1.BackgroundAppGone background_app_gone = 75;
-inline bool Envelope::_internal_has_background_app_gone() const {
-  return body_case() == kBackgroundAppGone;
-}
-inline bool Envelope::has_background_app_gone() const {
-  return _internal_has_background_app_gone();
-}
-inline void Envelope::set_has_background_app_gone() {
-  _impl_._oneof_case_[0] = kBackgroundAppGone;
-}
-inline void Envelope::clear_background_app_gone() {
-  if (_internal_has_background_app_gone()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.background_app_gone_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::BackgroundAppGone* Envelope::release_background_app_gone() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.background_app_gone)
-  if (_internal_has_background_app_gone()) {
-    clear_has_body();
-    ::dsa::control::v1::BackgroundAppGone* temp = _impl_.body_.background_app_gone_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.background_app_gone_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::BackgroundAppGone& Envelope::_internal_background_app_gone() const {
-  return _internal_has_background_app_gone()
-      ? *_impl_.body_.background_app_gone_
-      : reinterpret_cast< ::dsa::control::v1::BackgroundAppGone&>(::dsa::control::v1::_BackgroundAppGone_default_instance_);
-}
-inline const ::dsa::control::v1::BackgroundAppGone& Envelope::background_app_gone() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.background_app_gone)
-  return _internal_background_app_gone();
-}
-inline ::dsa::control::v1::BackgroundAppGone* Envelope::unsafe_arena_release_background_app_gone() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.background_app_gone)
-  if (_internal_has_background_app_gone()) {
-    clear_has_body();
-    ::dsa::control::v1::BackgroundAppGone* temp = _impl_.body_.background_app_gone_;
-    _impl_.body_.background_app_gone_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_background_app_gone(::dsa::control::v1::BackgroundAppGone* background_app_gone) {
-  clear_body();
-  if (background_app_gone) {
-    set_has_background_app_gone();
-    _impl_.body_.background_app_gone_ = background_app_gone;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.background_app_gone)
-}
-inline ::dsa::control::v1::BackgroundAppGone* Envelope::_internal_mutable_background_app_gone() {
-  if (!_internal_has_background_app_gone()) {
-    clear_body();
-    set_has_background_app_gone();
-    _impl_.body_.background_app_gone_ = CreateMaybeMessage< ::dsa::control::v1::BackgroundAppGone >(GetArenaForAllocation());
-  }
-  return _impl_.body_.background_app_gone_;
-}
-inline ::dsa::control::v1::BackgroundAppGone* Envelope::mutable_background_app_gone() {
-  ::dsa::control::v1::BackgroundAppGone* _msg = _internal_mutable_background_app_gone();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.background_app_gone)
-  return _msg;
-}
-
-// .dsa.control.v1.BackgroundAppAction background_app_action = 76;
-inline bool Envelope::_internal_has_background_app_action() const {
-  return body_case() == kBackgroundAppAction;
-}
-inline bool Envelope::has_background_app_action() const {
-  return _internal_has_background_app_action();
-}
-inline void Envelope::set_has_background_app_action() {
-  _impl_._oneof_case_[0] = kBackgroundAppAction;
-}
-inline void Envelope::clear_background_app_action() {
-  if (_internal_has_background_app_action()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.background_app_action_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::BackgroundAppAction* Envelope::release_background_app_action() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.background_app_action)
-  if (_internal_has_background_app_action()) {
-    clear_has_body();
-    ::dsa::control::v1::BackgroundAppAction* temp = _impl_.body_.background_app_action_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.background_app_action_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::BackgroundAppAction& Envelope::_internal_background_app_action() const {
-  return _internal_has_background_app_action()
-      ? *_impl_.body_.background_app_action_
-      : reinterpret_cast< ::dsa::control::v1::BackgroundAppAction&>(::dsa::control::v1::_BackgroundAppAction_default_instance_);
-}
-inline const ::dsa::control::v1::BackgroundAppAction& Envelope::background_app_action() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.background_app_action)
-  return _internal_background_app_action();
-}
-inline ::dsa::control::v1::BackgroundAppAction* Envelope::unsafe_arena_release_background_app_action() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.background_app_action)
-  if (_internal_has_background_app_action()) {
-    clear_has_body();
-    ::dsa::control::v1::BackgroundAppAction* temp = _impl_.body_.background_app_action_;
-    _impl_.body_.background_app_action_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_background_app_action(::dsa::control::v1::BackgroundAppAction* background_app_action) {
-  clear_body();
-  if (background_app_action) {
-    set_has_background_app_action();
-    _impl_.body_.background_app_action_ = background_app_action;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.background_app_action)
-}
-inline ::dsa::control::v1::BackgroundAppAction* Envelope::_internal_mutable_background_app_action() {
-  if (!_internal_has_background_app_action()) {
-    clear_body();
-    set_has_background_app_action();
-    _impl_.body_.background_app_action_ = CreateMaybeMessage< ::dsa::control::v1::BackgroundAppAction >(GetArenaForAllocation());
-  }
-  return _impl_.body_.background_app_action_;
-}
-inline ::dsa::control::v1::BackgroundAppAction* Envelope::mutable_background_app_action() {
-  ::dsa::control::v1::BackgroundAppAction* _msg = _internal_mutable_background_app_action();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.background_app_action)
-  return _msg;
-}
-
-// .dsa.control.v1.MediaSession media_session = 77;
-inline bool Envelope::_internal_has_media_session() const {
-  return body_case() == kMediaSession;
-}
-inline bool Envelope::has_media_session() const {
-  return _internal_has_media_session();
-}
-inline void Envelope::set_has_media_session() {
-  _impl_._oneof_case_[0] = kMediaSession;
-}
-inline void Envelope::clear_media_session() {
-  if (_internal_has_media_session()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.media_session_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::MediaSession* Envelope::release_media_session() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.media_session)
-  if (_internal_has_media_session()) {
-    clear_has_body();
-    ::dsa::control::v1::MediaSession* temp = _impl_.body_.media_session_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.media_session_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::MediaSession& Envelope::_internal_media_session() const {
-  return _internal_has_media_session()
-      ? *_impl_.body_.media_session_
-      : reinterpret_cast< ::dsa::control::v1::MediaSession&>(::dsa::control::v1::_MediaSession_default_instance_);
-}
-inline const ::dsa::control::v1::MediaSession& Envelope::media_session() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.media_session)
-  return _internal_media_session();
-}
-inline ::dsa::control::v1::MediaSession* Envelope::unsafe_arena_release_media_session() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.media_session)
-  if (_internal_has_media_session()) {
-    clear_has_body();
-    ::dsa::control::v1::MediaSession* temp = _impl_.body_.media_session_;
-    _impl_.body_.media_session_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_media_session(::dsa::control::v1::MediaSession* media_session) {
-  clear_body();
-  if (media_session) {
-    set_has_media_session();
-    _impl_.body_.media_session_ = media_session;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.media_session)
-}
-inline ::dsa::control::v1::MediaSession* Envelope::_internal_mutable_media_session() {
-  if (!_internal_has_media_session()) {
-    clear_body();
-    set_has_media_session();
-    _impl_.body_.media_session_ = CreateMaybeMessage< ::dsa::control::v1::MediaSession >(GetArenaForAllocation());
-  }
-  return _impl_.body_.media_session_;
-}
-inline ::dsa::control::v1::MediaSession* Envelope::mutable_media_session() {
-  ::dsa::control::v1::MediaSession* _msg = _internal_mutable_media_session();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.media_session)
-  return _msg;
-}
-
-// .dsa.control.v1.MediaSessionGone media_session_gone = 78;
-inline bool Envelope::_internal_has_media_session_gone() const {
-  return body_case() == kMediaSessionGone;
-}
-inline bool Envelope::has_media_session_gone() const {
-  return _internal_has_media_session_gone();
-}
-inline void Envelope::set_has_media_session_gone() {
-  _impl_._oneof_case_[0] = kMediaSessionGone;
-}
-inline void Envelope::clear_media_session_gone() {
-  if (_internal_has_media_session_gone()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.media_session_gone_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::MediaSessionGone* Envelope::release_media_session_gone() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.media_session_gone)
-  if (_internal_has_media_session_gone()) {
-    clear_has_body();
-    ::dsa::control::v1::MediaSessionGone* temp = _impl_.body_.media_session_gone_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.media_session_gone_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::MediaSessionGone& Envelope::_internal_media_session_gone() const {
-  return _internal_has_media_session_gone()
-      ? *_impl_.body_.media_session_gone_
-      : reinterpret_cast< ::dsa::control::v1::MediaSessionGone&>(::dsa::control::v1::_MediaSessionGone_default_instance_);
-}
-inline const ::dsa::control::v1::MediaSessionGone& Envelope::media_session_gone() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.media_session_gone)
-  return _internal_media_session_gone();
-}
-inline ::dsa::control::v1::MediaSessionGone* Envelope::unsafe_arena_release_media_session_gone() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.media_session_gone)
-  if (_internal_has_media_session_gone()) {
-    clear_has_body();
-    ::dsa::control::v1::MediaSessionGone* temp = _impl_.body_.media_session_gone_;
-    _impl_.body_.media_session_gone_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_media_session_gone(::dsa::control::v1::MediaSessionGone* media_session_gone) {
-  clear_body();
-  if (media_session_gone) {
-    set_has_media_session_gone();
-    _impl_.body_.media_session_gone_ = media_session_gone;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.media_session_gone)
-}
-inline ::dsa::control::v1::MediaSessionGone* Envelope::_internal_mutable_media_session_gone() {
-  if (!_internal_has_media_session_gone()) {
-    clear_body();
-    set_has_media_session_gone();
-    _impl_.body_.media_session_gone_ = CreateMaybeMessage< ::dsa::control::v1::MediaSessionGone >(GetArenaForAllocation());
-  }
-  return _impl_.body_.media_session_gone_;
-}
-inline ::dsa::control::v1::MediaSessionGone* Envelope::mutable_media_session_gone() {
-  ::dsa::control::v1::MediaSessionGone* _msg = _internal_mutable_media_session_gone();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.media_session_gone)
-  return _msg;
-}
-
-// .dsa.control.v1.MediaControl media_control = 79;
-inline bool Envelope::_internal_has_media_control() const {
-  return body_case() == kMediaControl;
-}
-inline bool Envelope::has_media_control() const {
-  return _internal_has_media_control();
-}
-inline void Envelope::set_has_media_control() {
-  _impl_._oneof_case_[0] = kMediaControl;
-}
-inline void Envelope::clear_media_control() {
-  if (_internal_has_media_control()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.media_control_;
-    }
-    clear_has_body();
-  }
-}
-inline ::dsa::control::v1::MediaControl* Envelope::release_media_control() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.media_control)
-  if (_internal_has_media_control()) {
-    clear_has_body();
-    ::dsa::control::v1::MediaControl* temp = _impl_.body_.media_control_;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    _impl_.body_.media_control_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::dsa::control::v1::MediaControl& Envelope::_internal_media_control() const {
-  return _internal_has_media_control()
-      ? *_impl_.body_.media_control_
-      : reinterpret_cast< ::dsa::control::v1::MediaControl&>(::dsa::control::v1::_MediaControl_default_instance_);
-}
-inline const ::dsa::control::v1::MediaControl& Envelope::media_control() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.media_control)
-  return _internal_media_control();
-}
-inline ::dsa::control::v1::MediaControl* Envelope::unsafe_arena_release_media_control() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.media_control)
-  if (_internal_has_media_control()) {
-    clear_has_body();
-    ::dsa::control::v1::MediaControl* temp = _impl_.body_.media_control_;
-    _impl_.body_.media_control_ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Envelope::unsafe_arena_set_allocated_media_control(::dsa::control::v1::MediaControl* media_control) {
-  clear_body();
-  if (media_control) {
-    set_has_media_control();
-    _impl_.body_.media_control_ = media_control;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.media_control)
-}
-inline ::dsa::control::v1::MediaControl* Envelope::_internal_mutable_media_control() {
-  if (!_internal_has_media_control()) {
-    clear_body();
-    set_has_media_control();
-    _impl_.body_.media_control_ = CreateMaybeMessage< ::dsa::control::v1::MediaControl >(GetArenaForAllocation());
-  }
-  return _impl_.body_.media_control_;
-}
-inline ::dsa::control::v1::MediaControl* Envelope::mutable_media_control() {
-  ::dsa::control::v1::MediaControl* _msg = _internal_mutable_media_control();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.media_control)
   return _msg;
 }
 
@@ -33935,16 +31441,6 @@ inline Envelope::BodyCase Envelope::body_case() const {
 
 // -------------------------------------------------------------------
 
-// -------------------------------------------------------------------
-
-// -------------------------------------------------------------------
-
-// -------------------------------------------------------------------
-
-// -------------------------------------------------------------------
-
-// -------------------------------------------------------------------
-
 
 // @@protoc_insertion_point(namespace_scope)
 
@@ -33961,9 +31457,6 @@ template <> struct is_proto_enum< ::dsa::control::v1::PointerAction> : ::std::tr
 template <> struct is_proto_enum< ::dsa::control::v1::PointerTool> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::KeyAction> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PowerHintKind> : ::std::true_type {};
-template <> struct is_proto_enum< ::dsa::control::v1::BackgroundAppCommand> : ::std::true_type {};
-template <> struct is_proto_enum< ::dsa::control::v1::MediaPlayback> : ::std::true_type {};
-template <> struct is_proto_enum< ::dsa::control::v1::MediaCommand> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::InstallStatus> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::FileAction> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::VideoCodec> : ::std::true_type {};

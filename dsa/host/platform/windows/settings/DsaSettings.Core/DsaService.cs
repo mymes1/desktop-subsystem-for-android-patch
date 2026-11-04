@@ -101,8 +101,10 @@ public sealed class DsaService
         OptionalString(json, "log_dir"),
         Bool(json, "clipboard", missing: true),
         Bool(json, "links_in_android"),
-        Bool(json, "stop_without_asking"),
-        OptionalString(json, "android_version"));
+        OptionalString(json, "android_version"),
+        Bool(json, "developer_mode"),
+        Int(json, "adb_port") is > 0 and var port ? port : SettingsInfo.DefaultAdbPort,
+        Bool(json, "stop_without_asking"));
 
     public async Task<SettingsInfo> SettingsAsync() =>
         ReadSettings(await RunJsonAsync("settings").ConfigureAwait(true));
@@ -118,10 +120,15 @@ public sealed class DsaService
 
     public Task<SettingsInfo> SetClipboardAsync(bool on) => SetAsync("clipboard", on ? "on" : "off");
 
+    public Task<SettingsInfo> SetDeveloperModeAsync(bool on) => SetAsync("developer-mode", on ? "on" : "off");
+
     /// <summary>Whether stopping an app from the notification area skips the question that
     /// confirms it.</summary>
     public Task<SettingsInfo> SetStopWithoutAskingAsync(bool on) =>
         SetAsync("stop-without-asking", on ? "on" : "off");
+
+    public Task<SettingsInfo> SetAdbPortAsync(int port) =>
+        SetAsync("adb-port", port.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
     public Task<SettingsInfo> SetProgramUpdatesAsync(bool on) => SetAsync("program-updates", on ? "on" : "off");
 

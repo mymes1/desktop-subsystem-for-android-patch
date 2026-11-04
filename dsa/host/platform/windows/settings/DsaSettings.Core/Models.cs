@@ -37,9 +37,18 @@ public sealed record SettingsInfo(
     string? LogDir,
     bool Clipboard = true,
     bool LinksInAndroid = false,
-    bool StopWithoutAsking = false,
-    string? AndroidVersion = null)
+    string? AndroidVersion = null,
+    bool DeveloperMode = false,
+    int AdbPort = SettingsInfo.DefaultAdbPort,
+    bool StopWithoutAsking = false)
 {
+    /// <summary>The loopback port adb connects to in developer mode unless the user picks
+    /// another.</summary>
+    public const int DefaultAdbPort = 58526;
+
+    /// <summary>What to type to connect adb while developer mode is on.</summary>
+    public string AdbConnect => $"adb connect 127.0.0.1:{AdbPort}";
+
     public RenderGpuKind RenderGpuKind => RenderGpu.ToLowerInvariant() switch
     {
         "display" => RenderGpuKind.Display,

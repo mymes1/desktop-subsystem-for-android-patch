@@ -105,8 +105,10 @@
 //! whether DSA (`program-updates`) and the Android image (`image-updates`) are updated, and
 //! whether every DSA process writes the input trace (`input-trace`) and each stage of each
 //! resize (`resize-trace`) to its log, off by default. Those last four are the computer's, so
-//! only an administrator changes them. `stop-without-asking` (off by default) is whether
-//! stopping an app that runs in the background skips the question that confirms it.
+//! only an administrator changes them. `developer-mode` (off by default) lets adb reach the
+//! user's Android: while it is on, `adb connect 127.0.0.1:58526` connects, with no prompt to
+//! accept in Android. `adb-port` picks another loopback port than 58526. `stop-without-asking` (off by default)
+//! is whether stopping an app that runs in the background skips the question that confirms it.
 //! `dsa settings set <name> <value>` changes one;
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
 //! takes, on the host and inside Android. `dsa gpus` lists the GPUs of this machine, for
@@ -226,6 +228,8 @@ pub enum Change {
     ImageUpdates(bool),
     InputTrace(bool),
     ResizeTrace(bool),
+    DeveloperMode(bool),
+    AdbPort(u16),
     StopWithoutAsking(bool),
 }
 
@@ -245,11 +249,18 @@ impl Change {
             "image-updates" => switch().map(Change::ImageUpdates),
             "input-trace" => switch().map(Change::InputTrace),
             "resize-trace" => switch().map(Change::ResizeTrace),
+            "developer-mode" => switch().map(Change::DeveloperMode),
             "stop-without-asking" => switch().map(Change::StopWithoutAsking),
+            "adb-port" => match value.parse::<u16>() {
+                Ok(port) if port > 0 => Ok(Change::AdbPort(port)),
+                _ => Err(format!(
+                    "adb-port is a TCP port from 1 to 65535, not {value:?}"
+                )),
+            },
             _ => Err(format!(
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, image-updates, input-trace, \
-                 resize-trace and stop-without-asking"
+                 resize-trace, developer-mode, adb-port and stop-without-asking"
             )),
         }
     }
@@ -857,6 +868,9 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "image_updates": report.settings.image_updates,
         "input_trace": report.settings.input_trace,
         "resize_trace": report.settings.resize_trace,
+        "developer_mode": report.settings.developer_mode,
+        "adb_port": report.settings.adb_port,
+        "adb_address": adb_address(&report.settings),
         "stop_without_asking": report.settings.stop_without_asking,
         "program_updates_available": report.facts.program_updates_available,
         "image_updates_available": report.facts.image_updates_available,
@@ -864,6 +878,11 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "log_dir": report.facts.log_dir,
         "android_version": report.facts.android_version,
     })
+}
+
+/// The address `adb connect` takes in developer mode.
+pub fn adb_address(settings: &dsa_host_core::settings::Settings) -> String {
+    format!("127.0.0.1:{}", settings.adb_port)
 }
 
 fn on_off(value: bool) -> &'static str {
@@ -907,6 +926,11 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         ),
         format!("Input trace: {}", on_off(settings.input_trace)),
         format!("Resize trace: {}", on_off(settings.resize_trace)),
+        if settings.developer_mode {
+            format!("Developer mode: on (adb connect {})", adb_address(settings))
+        } else {
+            format!("Developer mode: off (adb port {})", settings.adb_port)
+        },
         format!(
             "Stop background apps without asking: {}",
             on_off(settings.stop_without_asking)
@@ -1020,6 +1044,8 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::ImageUpdates(on) => wanted.image_updates = *on,
             Change::InputTrace(on) => wanted.input_trace = *on,
             Change::ResizeTrace(on) => wanted.resize_trace = *on,
+            Change::DeveloperMode(on) => wanted.developer_mode = *on,
+            Change::AdbPort(port) => wanted.adb_port = *port,
             Change::StopWithoutAsking(on) => wanted.stop_without_asking = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
