@@ -518,7 +518,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut output = None;
     let mut wait_first_frame = false;
     let mut coordinates: Vec<u32> = Vec::new();
-    let mut args = args.iter();
+    let mut args = args.iter().peekable();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "logcat" if command.is_none() => command = Some(Command::Logcat),
@@ -565,7 +565,12 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 _ => return Err(format!("dsa logs takes collect -o <file.zip>\n{USAGE}")),
             },
             "arm-translation" if command.is_none() => {
-                command = Some(match args.next().map(String::as_str) {
+                // A bare option such as --json belongs to the default action, status.
+                let action = match args.peek() {
+                    Some(next) if next.starts_with("--") => None,
+                    _ => args.next().map(String::as_str),
+                };
+                command = Some(match action {
                     None | Some("status") => Command::ArmTranslationStatus,
                     Some("install") => {
                         let folder = args.next().ok_or(
