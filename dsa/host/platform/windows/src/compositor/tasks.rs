@@ -5,13 +5,14 @@
 //! None of these parts names a window, so all run against the in-memory transport in tests.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Receiver;
-use std::sync::Arc;
+use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::host_api::{HostApiClient, InputStream};
 use dsa_host_core::input::InputEvent;
+use dsa_host_core::compositor::resize_pacing::ResizePacer;
 use dsa_host_core::tasks::{coalesce, TaskRequest};
 use dsa_transport::Connector;
 
@@ -99,12 +100,36 @@ pub fn watch(
     }
 }
 
+/// The size of the latest frame each task drew since the request thread last looked.
+static DRAWN: Mutex<Vec<(i32, (u32, u32))>> = Mutex::new(Vec::new());
+
+/// How often the request thread looks for drawn frames while a size of a drag is held back.
+const PACE_TICK: Duration = Duration::from_millis(4);
+
+/// The app of `task_id` drew a frame of `size`: a size of a drag held back for it may go.
+pub fn frame_drawn(task_id: i32, size: (u32, u32)) {
+    let mut drawn = DRAWN.lock().unwrap_or_else(|e| e.into_inner());
+    match drawn.iter_mut().find(|(id, _)| *id == task_id) {
+        Some(entry) => entry.1 = size,
+        None => drawn.push((task_id, size)),
+    }
+}
+
+fn take_drawn(pacer: &mut ResizePacer) {
+    let drawn = std::mem::take(&mut *DRAWN.lock().unwrap_or_else(|e| e.into_inner()));
+    for (task_id, size) in drawn {
+        pacer.frame_drawn(task_id, size);
+    }
+}
+
 /// Sends each request to the guest until `requests` closes. A close that does not reach
 /// the guest is handed to `deliver` as [`ManagerEvent::CloseFailed`], so its window opens again.
 ///
 /// Requests that queued up while the last one was on its way are folded together first
 /// ([`coalesce`]): during a live resize only each task's latest size is sent, never the
-/// sizes it passed through.
+/// sizes it passed through. A size of a drag also waits until the app has drawn the size sent
+/// before it (`ResizePacer`), so an app slower than the drag is never handed a new size before
+/// it has drawn the last; the size that ends the drag is never held back.
 pub fn serve_requests(
     mut connector: Box<dyn Connector>,
     requests: Receiver<TaskRequest>,
@@ -112,10 +137,49 @@ pub fn serve_requests(
     logger: Option<Arc<CompositorLogger>>,
 ) {
     let mut client: Option<HostApiClient> = None;
-    while let Ok(first) = requests.recv() {
-        let mut waiting = vec![first];
+    let mut pacer = ResizePacer::new();
+    let mut held: Vec<TaskRequest> = Vec::new();
+    loop {
+        // Held sizes go first, so a newer size of the same task replaces them.
+        let before = std::mem::take(&mut held);
+        let mut waiting = before.clone();
+        if waiting.is_empty() {
+            match requests.recv() {
+                Ok(first) => waiting.push(first),
+                Err(_) => break,
+            }
+        } else {
+            match requests.recv_timeout(PACE_TICK) {
+                Ok(next) => waiting.push(next),
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
         waiting.extend(requests.try_iter());
-        for request in coalesce(waiting) {
+        take_drawn(&mut pacer);
+        let (go, still_held) = pacer.pace(coalesce(waiting), Instant::now());
+        for request in &still_held {
+            if let TaskRequest::Resize {
+                task_id,
+                width,
+                height,
+                ..
+            } = request
+            {
+                // Once per size held: the next pass carries the same request.
+                if !before.contains(request) {
+                    trace_stage(
+                        logger.as_deref(),
+                        *task_id,
+                        "wm.request_held",
+                        (*width, *height),
+                        "waiting for the app to draw the size before",
+                    );
+                }
+            }
+        }
+        held = still_held;
+        for request in go {
             let started = Instant::now();
             let mut outcome = Err(String::new());
             // A connection the service dropped is made again, once.

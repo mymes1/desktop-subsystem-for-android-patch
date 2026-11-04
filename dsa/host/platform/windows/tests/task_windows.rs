@@ -451,7 +451,7 @@ fn fr3_only_a_tasks_own_display_reaches_its_window_and_the_whole_screen_never_do
     assert_eq!(sink.target(5, 400, 300), None, "a display no task claimed");
 
     // A guest buffer of another size gets a texture of that size; resizing the window
-    // meanwhile stretches the last frame over it.
+    // meanwhile keeps the window at the size of the frame it shows.
     let resized = sink
         .target(3, 640, 480)
         .expect("a texture for the new size");

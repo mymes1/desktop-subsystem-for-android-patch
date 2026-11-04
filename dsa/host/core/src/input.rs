@@ -242,21 +242,21 @@ pub struct WindowGeometry {
 impl WindowGeometry {
     /// Converts a point in the client area to the task's guest pixels.
     ///
-    /// The client area shows the whole task, whatever the window's size and the monitor's
-    /// scale, so the conversion is the ratio of the two sizes. A point inside the client
-    /// area always lands inside the task, so a click on the window's edge never reaches the
-    /// task beside it on the guest display. A point outside (the mouse dragged out of the
-    /// window while a button is down) keeps going, as it would on a phone's screen edge.
+    /// The window shows the task's frames 1:1 and takes the size of the frame it shows, so a
+    /// point is the same pixel of the task. The task's size can lead the frame for a moment
+    /// (the guest has taken a new size and not drawn it yet), so a point inside the client
+    /// area is kept inside the task, and a click on the window's edge never reaches the task
+    /// beside it on the guest display. A point outside (the mouse dragged out of the window
+    /// while a button is down) keeps going, as it would on a phone's screen edge.
     pub fn to_guest(&self, (x, y): (f64, f64)) -> (f32, f32) {
         let axis = |position: f64, client: u32, task: u32| -> f32 {
             if client == 0 || task == 0 {
                 return position as f32;
             }
-            let scaled = position * f64::from(task) / f64::from(client);
             if (0.0..f64::from(client)).contains(&position) {
-                scaled.clamp(0.0, f64::from(task - 1)) as f32
+                position.clamp(0.0, f64::from(task - 1)) as f32
             } else {
-                scaled as f32
+                position as f32
             }
         };
         (
@@ -523,73 +523,36 @@ impl PointerMapper {
 mod tests {
     use super::*;
 
-    /// The client size a window has at `scale` when it shows a task of `task` pixels at
-    /// one window pixel per guest pixel per 100 %.
-    fn at_scale(task: (u32, u32), scale: f64) -> WindowGeometry {
-        let client = (
-            (f64::from(task.0) * scale).round() as u32,
-            (f64::from(task.1) * scale).round() as u32,
-        );
-        WindowGeometry { client, task }
-    }
-
-    fn corners(geometry: WindowGeometry) -> [((f64, f64), (f32, f32)); 4] {
-        let (cw, ch) = (f64::from(geometry.client.0), f64::from(geometry.client.1));
-        let (tw, th) = (geometry.task.0 as f32, geometry.task.1 as f32);
-        [
-            ((0.0, 0.0), (0.0, 0.0)),
-            ((cw - 1.0, 0.0), (tw - 1.0, 0.0)),
-            ((0.0, ch - 1.0), (0.0, th - 1.0)),
-            ((cw - 1.0, ch - 1.0), (tw - 1.0, th - 1.0)),
-        ]
-    }
-
-    fn assert_within(actual: (f32, f32), expected: (f32, f32), slack: f32, what: &str) {
-        assert!(
-            (actual.0 - expected.0).abs() <= slack && (actual.1 - expected.1).abs() <= slack,
-            "{what}: landed at {actual:?}, expected {expected:?} within {slack} px"
-        );
-    }
-
     #[test]
-    fn fr5_the_four_corners_land_within_2_px_at_every_scale() {
-        for task in [(548, 974), (1080, 1920), (800, 600), (1, 1)] {
-            for scale in [1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0] {
-                let geometry = at_scale(task, scale);
-                for (client, guest) in corners(geometry) {
-                    let landed = geometry.to_guest(client);
-                    assert_within(
-                        landed,
-                        guest,
-                        2.0,
-                        &format!("task {task:?} at {scale}x, client point {client:?}"),
-                    );
-                    // A corner of the window is always a point of the task.
-                    assert!(landed.0 >= 0.0 && landed.0 <= (task.0 - 1) as f32);
-                    assert!(landed.1 >= 0.0 && landed.1 <= (task.1 - 1) as f32);
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn fr5_a_window_smaller_than_its_task_still_reaches_every_corner() {
-        // A task taller than the screen opens in a smaller window of the same shape.
-        let geometry = WindowGeometry {
-            client: (585, 1040),
-            task: (720, 1280),
+    fn fr5_a_point_lands_on_the_same_pixel_of_the_task() {
+        // The guest reports a task smaller than the window for a moment.
+        let grown = WindowGeometry {
+            client: (1300, 900),
+            task: (900, 700),
         };
-        for (client, guest) in corners(geometry) {
-            assert_within(geometry.to_guest(client), guest, 2.0, "shrunk window");
+        for point in [(0.0, 0.0), (87.0, 54.0), (450.0, 350.0), (899.0, 699.0)] {
+            assert_eq!(grown.to_guest(point), (point.0 as f32, point.1 as f32));
         }
+        // Past the task's edge but inside the window: the task's nearest edge.
+        assert_eq!(grown.to_guest((1200.0, 100.0)), (899.0, 100.0));
+        assert_eq!(grown.to_guest((1299.0, 899.0)), (899.0, 699.0));
+        // A task larger than the window for a moment: points still land 1:1.
+        let shrunk = WindowGeometry {
+            client: (600, 500),
+            task: (900, 700),
+        };
+        assert_eq!(shrunk.to_guest((599.0, 499.0)), (599.0, 499.0));
+        assert_eq!(shrunk.to_guest((300.0, 20.0)), (300.0, 20.0));
     }
 
     #[test]
     fn fr5_a_point_is_relative_to_the_task_window() {
-        let geometry = at_scale((400, 300), 1.5);
-        assert_eq!(geometry.to_guest((300.0, 225.0)), (200.0, 150.0));
-        let geometry = at_scale((400, 300), 1.0);
+        let geometry = WindowGeometry {
+            client: (400, 300),
+            task: (400, 300),
+        };
         assert_eq!(geometry.to_guest((10.0, 20.0)), (10.0, 20.0));
+        assert_eq!(geometry.to_guest((399.0, 299.0)), (399.0, 299.0));
     }
 
     /// The Settings window the offset was reported on: placed at 900 by 1100 window pixels on
@@ -670,30 +633,15 @@ mod tests {
     }
 
     #[test]
-    fn fr5_a_frame_stretched_by_a_non_integer_ratio_has_no_offset_that_grows_across_it() {
-        // While a resize waits for the guest, the last frame is stretched over the window.
-        // The mapping follows the same ratio, so the error stays under a pixel everywhere
-        // instead of growing toward one side.
-        let geometry = WindowGeometry {
-            client: (869, 1031),
-            task: (1003, 1187),
-        };
-        for x in (0..869).step_by(7) {
-            let expected = f64::from(x) * 1003.0 / 869.0;
-            let landed = geometry.to_guest((f64::from(x), 0.0)).0;
-            assert!(
-                (f64::from(landed) - expected).abs() < 1.0,
-                "client x {x} landed at {landed}, expected {expected}"
-            );
-        }
-    }
-
-    #[test]
     fn fr5_a_drag_out_of_the_window_keeps_its_position() {
-        let geometry = at_scale((400, 300), 2.0);
-        assert_eq!(geometry.to_guest((-20.0, 700.0)), (-10.0, 350.0));
+        let geometry = WindowGeometry {
+            client: (800, 600),
+            task: (400, 300),
+        };
+        assert_eq!(geometry.to_guest((-20.0, 700.0)), (-20.0, 700.0));
     }
 
+    /// A window larger than the task it shows for a moment: points land 1:1.
     fn geometry() -> WindowGeometry {
         WindowGeometry {
             client: (800, 600),
@@ -728,7 +676,7 @@ mod tests {
         assert_eq!(down.capture, Some(Capture::Take));
         let event = down.events[0];
         assert_eq!((event.task_id, event.tool), (7, PointerTool::Mouse));
-        assert_eq!((event.x, event.y), (50.0, 25.0));
+        assert_eq!((event.x, event.y), (100.0, 50.0));
         assert_eq!(event.pressure, 1.0);
 
         let drag = mapper.handle(
@@ -823,7 +771,7 @@ mod tests {
         );
         let leave = mapper.handle(WindowInput::MouseLeave, geometry());
         assert_eq!(actions(&leave), vec![(PointerAction::HoverExit, 0)]);
-        assert_eq!((leave.events[0].x, leave.events[0].y), (30.0, 20.0));
+        assert_eq!((leave.events[0].x, leave.events[0].y), (60.0, 40.0));
         assert!(mapper
             .handle(WindowInput::MouseLeave, geometry())
             .events
@@ -842,7 +790,7 @@ mod tests {
         );
         assert_eq!(actions(&scroll), vec![(PointerAction::Scroll, 0)]);
         let event = scroll.events[0];
-        assert_eq!((event.x, event.y), (100.0, 50.0));
+        assert_eq!((event.x, event.y), (200.0, 100.0));
         assert_eq!((event.scroll_x, event.scroll_y), (0.0, -2.0));
     }
 
@@ -907,9 +855,9 @@ mod tests {
         assert_eq!(
             events,
             vec![
-                (PointerAction::Down, 11, 50.0, 50.0),
-                (PointerAction::Down, 12, 150.0, 50.0),
-                (PointerAction::Up, 11, 50.0, 60.0),
+                (PointerAction::Down, 11, 100.0, 100.0),
+                (PointerAction::Down, 12, 300.0, 100.0),
+                (PointerAction::Up, 11, 100.0, 120.0),
             ]
         );
     }

@@ -249,12 +249,15 @@ after two minutes. `"keep_window_manager": false` turns this off.
   the same size to the eye. Density is set per task, so windows on monitors of different
   scales are each sharp.
 - Resizing a window asks Android to give its task the window's new client size. During a
-  live resize only the latest size is sent, not every size the edge passed through. The
-  window shows its last frame stretched over the new size until a frame of that size
-  arrives, then shows that frame 1:1. A window cannot grow past what Android's display
-  can hold, because a larger window could only show its frames stretched. That display is
-  chosen when Android starts: a square as long as the longest monitor, from 1920 to 3840
-  pixels on a side, so a window fills any monitor in either orientation. The service cannot
+  live resize only the latest size is sent, and the next one waits until the app has drawn
+  the last (at most 150 ms), so an app slower than the drag always works on the latest
+  size. The window changes size only together with a frame of that size: it keeps the size
+  of the frame it shows until the app has drawn a new one, then takes that frame's size and
+  shows the frame in the same composition commit. It follows the mouse as fast as the app
+  draws, and a frame is never stretched, cropped or shown with a margin. The size a drag
+  ends at is reached exactly. A window cannot grow past what Android's display can hold.
+  That display is chosen when Android starts: a square as long as the longest monitor,
+  from 1920 to 3840 pixels on a side, so a window fills any monitor in either orientation. The service cannot
   see the user's monitors from session 0, so the window manager and the app windows record
   them in `%LOCALAPPDATA%\DSA\monitors.txt`. A monitor longer than the display, or one
   attached after Android started, caps its windows at the display's size, and a maximised
@@ -286,7 +289,7 @@ after two minutes. `"keep_window_manager": false` turns this off.
 - Each window measures how long it waits for a frame of its new size after a resize, and
   the log gets a summary (median, 95th percentile, longest, and how many took 100 ms or
   more) every 20 resizes and when the window closes. A window still waiting after 2
-  seconds is logged as showing a stretched frame.
+  seconds is logged as keeping its size.
 - Mouse, touch and pen input in a window goes to its task. A point in the window becomes
   the same point of the task in Android's pixels, whatever the window's size and the
   monitor's scale, and a point inside the window always lands inside the task. The right
