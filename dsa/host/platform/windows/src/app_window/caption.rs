@@ -37,7 +37,7 @@ use windows_sys::Win32::Graphics::Dwm::{
 };
 use windows_sys::Win32::Graphics::Gdi::{
     GetSysColor, ScreenToClient, COLOR_BTNFACE, COLOR_BTNTEXT, COLOR_GRAYTEXT, COLOR_HIGHLIGHT,
-    COLOR_HIGHLIGHTTEXT,
+    COLOR_HIGHLIGHTTEXT, SYS_COLOR_INDEX,
 };
 use windows_sys::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows_sys::Win32::UI::Controls::MARGINS;
@@ -107,8 +107,8 @@ unsafe fn high_contrast() -> bool {
 }
 
 /// A system color as 0xAARRGGBB, opaque.
-unsafe fn system_color(index: i32) -> u32 {
-    let bgr = GetSysColor(index as _);
+unsafe fn system_color(index: SYS_COLOR_INDEX) -> u32 {
+    let bgr = GetSysColor(index);
     0xFF00_0000 | ((bgr & 0xff) << 16) | (bgr & 0xff00) | ((bgr >> 16) & 0xff)
 }
 
@@ -118,13 +118,13 @@ unsafe fn palette(tone: CaptionTone) -> CaptionPalette {
     if !high_contrast() {
         return CaptionPalette::of(tone);
     }
-    let highlight = system_color(COLOR_HIGHLIGHT as i32);
-    let highlight_text = system_color(COLOR_HIGHLIGHTTEXT as i32);
+    let highlight = system_color(COLOR_HIGHLIGHT);
+    let highlight_text = system_color(COLOR_HIGHLIGHTTEXT);
     CaptionPalette {
-        rest: system_color(COLOR_BTNFACE as i32),
-        glyph: system_color(COLOR_BTNTEXT as i32),
+        rest: system_color(COLOR_BTNFACE),
+        glyph: system_color(COLOR_BTNTEXT),
         glyph_highlighted: highlight_text,
-        glyph_inactive: system_color(COLOR_GRAYTEXT as i32),
+        glyph_inactive: system_color(COLOR_GRAYTEXT),
         hover: highlight,
         pressed: highlight,
         close_hover: highlight,

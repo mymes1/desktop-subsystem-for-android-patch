@@ -74,6 +74,13 @@ pub struct LaunchApp {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
 }
+/// The user's Stop: asks the caller's Android to end every process of an app and give its
+/// memory back, even one a placed widget or a foreground service keeps running.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopApp {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
 /// The user resized a task's window: asks the caller's Android to give the task the
 /// window's client size, in Android display pixels. `live` is true while the user is still
 /// dragging the window's edge: the task takes the size without being reconfigured, and the
@@ -97,15 +104,6 @@ pub struct SetTaskDensity {
     pub task_id: i32,
     #[prost(uint32, tag = "2")]
     pub density_dpi: u32,
-}
-/// A task's window draws its title bar over the top `height` pixels of the task: asks the
-/// caller's Android to give the task a top system bar inset of that height. 0 removes it.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct SetTaskCaption {
-    #[prost(int32, tag = "1")]
-    pub task_id: i32,
-    #[prost(uint32, tag = "2")]
-    pub height: u32,
 }
 /// Turns the connection into a stream of input for the caller's Android: after the answer
 /// (Done), the client sends only PointerEvent, KeyEvent, ImeComposition and ImeCommit frames, which the service passes on
@@ -582,14 +580,6 @@ pub struct Task {
     pub min_width: u32,
     #[prost(uint32, tag = "10")]
     pub min_height: u32,
-    /// Whether the task's app asked for a light status bar (dark icons) or a dark one, which
-    /// the window's caption buttons follow.
-    #[prost(enumeration = "StatusBarAppearance", tag = "11")]
-    pub status_bar_appearance: i32,
-    /// The status bar color the app set, as 0xAARRGGBB; 0 when none. Used only while the
-    /// appearance is unspecified.
-    #[prost(fixed32, tag = "12")]
-    pub status_bar_color: u32,
 }
 /// The task ended.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -729,6 +719,24 @@ pub struct GuestMemory {
     /// How long ago Android sent this report, in seconds.
     #[prost(uint64, tag = "15")]
     pub age_seconds: u64,
+    /// What the guest's kernel itself holds, and the memory it was given, as the control
+    /// channel's GuestMemory says.
+    #[prost(uint64, tag = "16")]
+    pub slab_unreclaimable_kb: u64,
+    #[prost(uint64, tag = "17")]
+    pub kernel_stack_kb: u64,
+    #[prost(uint64, tag = "18")]
+    pub page_tables_kb: u64,
+    #[prost(uint64, tag = "19")]
+    pub vmalloc_used_kb: u64,
+    #[prost(uint64, tag = "20")]
+    pub percpu_kb: u64,
+    #[prost(uint64, tag = "21")]
+    pub cma_total_kb: u64,
+    #[prost(uint64, tag = "22")]
+    pub hugetlb_kb: u64,
+    #[prost(uint64, tag = "23")]
+    pub mem_online_kb: u64,
 }
 /// One host process that runs the caller's Android: its VM's memory process, the window
 /// manager, an app window.
@@ -944,6 +952,11 @@ pub struct Settings {
     /// summary at the end of a drag. Off by default; the same rules as input_trace.
     #[prost(bool, tag = "12")]
     pub resize_trace: bool,
+    /// The most memory the caller's Android may have, in MiB. 0, the default, is automatic: the
+    /// service's default size. It takes effect
+    /// the next time Android starts.
+    #[prost(uint32, tag = "16")]
+    pub memory_limit_mb: u32,
     /// Whether the caller's Android takes adb connections: the service then listens on
     /// 127.0.0.1:adb_port and bridges each connection to the guest's adbd. Off by default, and
     /// the caller's own. It applies at once, without restarting Android.
@@ -1092,7 +1105,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 37, 70, 71"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 70, 71, 37"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1166,12 +1179,12 @@ pub mod request {
         WidgetPointer(super::WidgetPointer),
         #[prost(message, tag = "36")]
         GetPackage(super::GetPackage),
-        #[prost(message, tag = "37")]
-        SetTaskCaption(super::SetTaskCaption),
         #[prost(message, tag = "70")]
         WatchLog(super::WatchLog),
         #[prost(message, tag = "71")]
         CollectDiagnostics(super::CollectDiagnostics),
+        #[prost(message, tag = "37")]
+        StopApp(super::StopApp),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1655,36 +1668,6 @@ impl KeyAction {
             "KEY_ACTION_UNSPECIFIED" => Some(Self::Unspecified),
             "KEY_ACTION_DOWN" => Some(Self::Down),
             "KEY_ACTION_UP" => Some(Self::Up),
-            _ => None,
-        }
-    }
-}
-/// Whether an app asked for dark status bar icons (a light status bar) or light ones.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum StatusBarAppearance {
-    Unspecified = 0,
-    Light = 1,
-    Dark = 2,
-}
-impl StatusBarAppearance {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "STATUS_BAR_APPEARANCE_UNSPECIFIED",
-            Self::Light => "STATUS_BAR_APPEARANCE_LIGHT",
-            Self::Dark => "STATUS_BAR_APPEARANCE_DARK",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "STATUS_BAR_APPEARANCE_UNSPECIFIED" => Some(Self::Unspecified),
-            "STATUS_BAR_APPEARANCE_LIGHT" => Some(Self::Light),
-            "STATUS_BAR_APPEARANCE_DARK" => Some(Self::Dark),
             _ => None,
         }
     }

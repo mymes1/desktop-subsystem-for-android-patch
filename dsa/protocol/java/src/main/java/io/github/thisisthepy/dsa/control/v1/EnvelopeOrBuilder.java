@@ -888,15 +888,15 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.DiagnosticsDone getDiagnosticsDone();
 
   /**
-   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 150;</code>
-   * @return Whether the setTaskCaption field is set.
+   * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+   * @return Whether the stopApp field is set.
    */
-  boolean hasSetTaskCaption();
+  boolean hasStopApp();
   /**
-   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 150;</code>
-   * @return The setTaskCaption.
+   * <code>.dsa.control.v1.StopApp stop_app = 136;</code>
+   * @return The stopApp.
    */
-  io.github.thisisthepy.dsa.control.v1.SetTaskCaption getSetTaskCaption();
+  io.github.thisisthepy.dsa.control.v1.StopApp getStopApp();
 
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

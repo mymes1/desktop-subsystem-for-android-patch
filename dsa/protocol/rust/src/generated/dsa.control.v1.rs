@@ -97,15 +97,6 @@ pub struct TaskUpdated {
     pub min_width: u32,
     #[prost(uint32, tag = "10")]
     pub min_height: u32,
-    /// What the task's app told the system about its status bar: whether it asked for dark
-    /// icons on a light status bar. The host draws its window's caption buttons in the
-    /// matching tone over the app's status bar area.
-    #[prost(enumeration = "StatusBarAppearance", tag = "11")]
-    pub status_bar_appearance: i32,
-    /// The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
-    /// transparent. Used only while the appearance is unspecified.
-    #[prost(fixed32, tag = "12")]
-    pub status_bar_color: u32,
 }
 /// Guest to host, from the agent: the task ended; the host closes its window.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -132,6 +123,13 @@ pub struct CloseTask {
 /// agent answers with TaskUpdated once the task is there.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct LaunchApp {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
+/// Host to guest: the user's Stop. The agent ends every process of the app, even one a
+/// placed widget or a foreground service keeps running, and the guest gives the memory back.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopApp {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
 }
@@ -167,19 +165,6 @@ pub struct SetTaskDensity {
     pub task_id: i32,
     #[prost(uint32, tag = "2")]
     pub density_dpi: u32,
-}
-/// Host to guest: the task's window draws its title bar over the top `height` pixels of the
-/// task (guest display pixels, which are the window's). The agent gives the task a top system
-/// bar inset of that height (status bars, system bars and caption bar), so the app keeps its
-/// toolbar below the caption buttons and draws its status bar background behind them. The
-/// host sends it when the window opens and whenever the height changes, as on a move to a
-/// monitor of another scale. 0 removes the inset.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct SetTaskCaption {
-    #[prost(int32, tag = "1")]
-    pub task_id: i32,
-    #[prost(uint32, tag = "2")]
-    pub height: u32,
 }
 /// Guest to host, from the agent: the name and launcher icon of an app the host shows a task
 /// of. The host's window for the app carries them, in the taskbar and the task list. The
@@ -562,6 +547,29 @@ pub struct GuestMemory {
     /// The processes with the largest proportional set size, largest first, at most 10.
     #[prost(message, repeated, tag = "14")]
     pub top_processes: ::prost::alloc::vec::Vec<ProcessMemory>,
+    /// What the kernel itself holds, from /proc/meminfo: slab it cannot free (SUnreclaim),
+    /// kernel stacks, page tables, vmalloc, per-CPU areas, and the contiguous memory area (CMA)
+    /// set aside for drivers.
+    #[prost(uint64, tag = "15")]
+    pub slab_unreclaimable_kb: u64,
+    #[prost(uint64, tag = "16")]
+    pub kernel_stack_kb: u64,
+    #[prost(uint64, tag = "17")]
+    pub page_tables_kb: u64,
+    #[prost(uint64, tag = "18")]
+    pub vmalloc_used_kb: u64,
+    #[prost(uint64, tag = "19")]
+    pub percpu_kb: u64,
+    #[prost(uint64, tag = "20")]
+    pub cma_total_kb: u64,
+    /// Huge pages reserved (HugePages_Total times Hugepagesize).
+    #[prost(uint64, tag = "21")]
+    pub hugetlb_kb: u64,
+    /// The memory the kernel was given, counted from its online memory blocks; what it gave to
+    /// MemTotal is this less what it reserved at boot (its own code, page structures, swiotlb,
+    /// pstore). 0 when the guest cannot read it.
+    #[prost(uint64, tag = "22")]
+    pub mem_online_kb: u64,
 }
 /// From the agent to the guest's control daemon, on each connection to it: the agent has
 /// subscribed and takes the host's frames. It stops at the daemon, which tells the host with
@@ -1245,7 +1253,7 @@ pub struct DiagnosticsDone {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 150"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1413,8 +1421,8 @@ pub mod envelope {
         DiagnosticsFile(super::DiagnosticsFile),
         #[prost(message, tag = "135")]
         DiagnosticsDone(super::DiagnosticsDone),
-        #[prost(message, tag = "150")]
-        SetTaskCaption(super::SetTaskCaption),
+        #[prost(message, tag = "136")]
+        StopApp(super::StopApp),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1518,40 +1526,6 @@ impl RejectReason {
             "REJECT_REASON_UNEXPECTED_ROLE" => Some(Self::UnexpectedRole),
             "REJECT_REASON_MALFORMED_HELLO" => Some(Self::MalformedHello),
             "REJECT_REASON_AUTHENTICATION_FAILED" => Some(Self::AuthenticationFailed),
-            _ => None,
-        }
-    }
-}
-/// Whether an app asked for dark status bar icons (a light status bar) or light ones.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum StatusBarAppearance {
-    /// The app did not say, or the agent could not read it.
-    Unspecified = 0,
-    /// Dark icons on a light status bar (WindowInsetsController's
-    /// APPEARANCE_LIGHT_STATUS_BARS).
-    Light = 1,
-    /// Light icons on a dark status bar.
-    Dark = 2,
-}
-impl StatusBarAppearance {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "STATUS_BAR_APPEARANCE_UNSPECIFIED",
-            Self::Light => "STATUS_BAR_APPEARANCE_LIGHT",
-            Self::Dark => "STATUS_BAR_APPEARANCE_DARK",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "STATUS_BAR_APPEARANCE_UNSPECIFIED" => Some(Self::Unspecified),
-            "STATUS_BAR_APPEARANCE_LIGHT" => Some(Self::Light),
-            "STATUS_BAR_APPEARANCE_DARK" => Some(Self::Dark),
             _ => None,
         }
     }
