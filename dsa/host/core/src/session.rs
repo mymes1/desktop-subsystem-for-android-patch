@@ -3544,7 +3544,10 @@ impl Worker {
     fn handle_starting(&mut self, command: Command) -> bool {
         match command {
             Command::Start => true,
-            Command::Send(_, reply) | Command::Freeze(reply) | Command::Notification(_, reply) => {
+            Command::Send(_, reply)
+            | Command::Freeze(reply)
+            | Command::Notification(_, reply)
+            | Command::Background(_, reply) => {
                 let _ = reply.send(Err(SessionError::NotActive(SessionState::Starting)));
                 true
             }
