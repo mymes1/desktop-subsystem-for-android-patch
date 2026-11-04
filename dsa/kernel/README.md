@@ -53,51 +53,53 @@ in probe order, which changes when the host attaches another disk.
 - **Bootconfig**, which carries each boot's control channel secret from the host. The
   guest reads it from `/proc/bootconfig`, which apps cannot read.
 - **Its own release name** (`-dsa`), so it is never mistaken for the WSL kernel.
-- **pstore with ramoops**, so the kernel's last messages, a panic's report and Android's last
-  log lines (pmsg) are kept in a region of RAM and shown in `/sys/fs/pstore` after a warm
-  restart. `dsa logs collect` carries what is there.
+- **pstore on a disk (pstore/blk)**, so the kernel's last messages, an oops's report and
+  Android's last log lines (pmsg) are kept on a small disk and shown in `/sys/fs/pstore` at
+  the next boot. `dsa logs collect` carries what is there, and the guest then clears it.
 
-## The ramoops region
+## The pstore disk
 
-The host puts the region on the kernel command line it boots every x86_64 VM with
-(`dsa/host/platform/windows/src/vm.rs`):
+A panic ends the VM: HCS runs it with `StopOnReset`, and `panic=-1` restarts the guest at
+once, so the next start is a new VM with empty memory. A log kept in RAM (ramoops) would be
+gone by then, so the kernel keeps it on a disk instead.
+
+The host attaches `pstore.vhd`, beside the user's Android disk, as the last disk of the VM
+(`dsa/host/platform/windows/src/pstore_disk.rs`). It is a fixed VHD of 4 MiB, so it never
+grows, with one GPT partition whose UUID is fixed. The host names that partition on the kernel
+command line:
 
 ```
-memmap=1M$0x10000000 ramoops.mem_address=0x10000000 ramoops.mem_size=0x100000
-ramoops.record_size=0x20000 ramoops.console_size=0x40000 ramoops.pmsg_size=0x40000 ramoops.ecc=1
+pstore_blk.blkdev=PARTUUID=5f8b3c2e-9a41-4d6e-b07c-1e2d3f4a5b6c pstore_blk.best_effort=y
+pstore_blk.kmsg_size=64 pstore_blk.console_size=256 pstore_blk.pmsg_size=256
 ```
 
-- **Where: 1 MiB at 256 MiB.** A Hyper-V VM's memory starts at 0 and is contiguous up to
-  the gap below 4 GiB, so 256 MiB is RAM in every VM DSA makes (the smallest is far larger).
-  It is above the kernel's own image, which the boot protocol loads at 16 MiB and which
-  decompresses to well under 240 MiB, and below where the boot loader puts the initrd, as
-  high under 2 GiB as it fits. `memmap=...$...` marks it reserved before the kernel uses any
-  memory, so nothing else is ever placed there.
-- **How it is split:** the panic and oops records take 128 KiB each, the console 256 KiB and
-  pmsg 256 KiB; ECC lets the kernel tell a corrupted record from a good one.
-- **What it costs:** 1 MiB of the guest's memory that free page reporting never hands back.
-- **What it keeps, and what it does not:** RAM keeps the region only across a warm restart of
-  the same VM. HCS runs the VM with `StopOnReset`, so a guest that panics (`panic=-1` restarts
-  it at once) ends its VM, and the next start is a new VM with empty memory. Until the host
-  keeps a VM across a reset, the panic's report reaches the host on the serial console
-  instead, which the host keeps in the console log and `dsa logs collect` carries
-  (`host/android-console.log`).
+- **Found by UUID:** the guest names its disks in the order they finish probing, so the
+  partition UUID finds the disk whatever its name.
+- **Waiting for the disk:** pstore/blk looks its disk up at `late_initcall`, and Hyper-V's
+  storage and SCSI disk drivers probe asynchronously, so the disk may not exist yet.
+  `patches/pstore-blk-wait-for-disk.patch` waits for the probes started so far first, as
+  mounting the root file system does.
+- **How it is split:** the console and pmsg take 256 KiB each, and the rest of the partition
+  (about 2.5 MiB) holds oops records of 64 KiB, the oldest replaced first.
+- **What it costs:** no guest memory is reserved, unlike ramoops' region.
 
+What a panic leaves, and what it does not: pstore/blk writes through the normal block path,
+which cannot run once the kernel has panicked (Hyper-V's storage driver has no panic write).
+The console and pmsg zones are written as they fill, and from atomic context about half a
+second later, so they hold the log up to just before the panic. An oops the kernel survives is
+written whole. The panic's own report is not; it reaches the host on the serial console, which
+the host keeps in the console log and `dsa logs collect` carries (`host/android-console.log`).
+
+Once the host has the records, the guest unlinks them from `/sys/fs/pstore`, which erases them
+from the disk, so the next collection does not carry them again.
 ashmem is not enabled and does not exist in this kernel; Android uses memfd.
 
 Two options of Android's own kernel are not in the upstream source: `DM_DEFAULT_KEY`
 (metadata encryption) and `INCREMENTAL_FS` (streaming app installs). The guest image is
 configured not to need them.
 
-On arm64 the region is reserved by name instead, with the same split:
-
-```
-reserve_mem=1M:4096:dsa_ramoops ramoops.mem_name=dsa_ramoops ...
-```
-
-`memmap=` exists only on x86, and a Hyper-V ARM64 VM's memory map is the firmware's, so a
-fixed address is not known to be RAM there. `reserve_mem=` lets the kernel pick the region
-early in boot and ramoops find it by name.
+The pstore disk works the same on arm64: it is found by its partition UUID, so no memory
+region has to be reserved on either architecture.
 
 ## Building
 

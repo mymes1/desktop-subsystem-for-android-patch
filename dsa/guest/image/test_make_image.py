@@ -24,6 +24,12 @@ SPEC.loader.exec_module(make_image)
 
 
 class ImageLayoutTests(unittest.TestCase):
+    def test_fr21_channeld_may_clear_the_pstore_records_the_host_collected(self):
+        # init leaves /sys/fs/pstore read only to system; the daemon makes it writable to
+        # itself and unlinks each collected record, which erases it from the pstore disk.
+        cil = (Path(__file__).parent / "sepolicy" / "channeld.cil").read_text()
+        self.assertRegex(cil, r"\(allow dsa_channeld pstorefs \(dir \([^)]*\bsetattr\b[^)]*\bremove_name\b")
+        self.assertRegex(cil, r"\(allow dsa_channeld pstorefs \(file \([^)]*\bunlink\b")
     def test_fr1_selects_vendor_apexes_without_the_cuttlefish_launcher(self):
         cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         self.assertIn("androidboot.boot_devices=vmbus", cmdline)

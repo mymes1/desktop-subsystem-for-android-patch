@@ -231,6 +231,13 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names and "dsa_channeld" not in z.read(
             "SYSTEM/etc/selinux/plat_sepolicy.cil").decode():
         problems.append("plat_sepolicy.cil has no dsa_channeld domain, so init cannot start the daemon")
+    # The guest kernel's last log stays on the small pstore disk until the daemon unlinks the
+    # records the host has collected; without that the disk fills and keeps old crashes.
+    if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names and not re.search(
+            r"\(allow\s+dsa_channeld\s+pstorefs\s+\(\s*file\s+\([^)]*\bunlink\b",
+            z.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()):
+        problems.append("the SELinux policy does not let dsa_channeld clear pstore records the host "
+                        "has collected")
     if "META/file_contexts.bin" in names and b"dsa_channeld_exec" not in z.read("META/file_contexts.bin"):
         problems.append("META/file_contexts.bin does not label dsa-channeld, so the vendor image leaves it "
                         "vendor_file and init refuses to start it")

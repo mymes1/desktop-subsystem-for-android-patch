@@ -335,6 +335,14 @@ impl GuestLauncher for AndroidVmLauncher {
         }
         config.fine_grained_memory =
             windows_build().is_some_and(|(build, ubr)| fine_grained_memory_supported(build, ubr));
+        // The guest kernel's last log of the boot before is on this disk; one that is missing
+        // or damaged is made again, empty, and Android starts either way.
+        if let Some(pstore) = &config.pstore_disk {
+            if let Err(why) = crate::pstore_disk::ensure(pstore) {
+                eprintln!("{why}; Android starts without its last log");
+                config.pstore_disk = None;
+            }
+        }
         let document = config
             .to_hcs_document()
             .map_err(|e| e.to_string())?
@@ -345,6 +353,7 @@ impl GuestLauncher for AndroidVmLauncher {
         // user, SYSTEM and administrators, so the VM is let in to that one file first.
         let mut access = vec![config.data_disk.clone()];
         access.extend(boot.vm_access());
+        access.extend(config.pstore_disk.iter().cloned());
         for path in &access {
             grant_vm_access(&self.id, path).map_err(|e| {
                 format!(

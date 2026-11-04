@@ -88,6 +88,7 @@ that builds their paths. The settings app and the installer follow the same layo
 | Each user (`%LOCALAPPDATA%\DSA`) | |
 |---|---|
 | `android.vhdx`, `android.image-version` | the user's Android disk and the image it holds |
+| `pstore.vhd` | a fixed 4 MiB disk where the guest kernel keeps its last log across a crash; uninstalling removes it |
 | `apps\<package>\` | each app's window program |
 | `notifications\` | the icons notifications show |
 | `logs\` | `dsa-wm.log`, `dsa-app-window.log` |

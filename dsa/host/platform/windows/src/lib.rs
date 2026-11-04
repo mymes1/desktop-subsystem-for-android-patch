@@ -85,6 +85,7 @@ pub mod pipe;
 pub mod power;
 #[cfg(windows)]
 pub mod profile;
+pub mod pstore_disk;
 pub mod render_gpu;
 #[cfg(windows)]
 pub mod scheduling;
