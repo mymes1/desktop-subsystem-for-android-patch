@@ -1,4 +1,4 @@
-# The fast quality gate. Runs on every pull request, whatever its base.
+# The fast quality gate. Runs on every push to develop, and on the release pull request into main.
 #
 # The repository checks (the planning documents are present on develop, no em dashes,
 # README files do not link documents that main does not have, the release sync script
@@ -8,14 +8,17 @@
 name: Test
 
 on:
-  # Every pull request, whatever its base. Work lands on develop through pull requests,
-  # and the release pull request into main is gated by the same run.
+  # Features are integrated on develop and fixed there, so develop is what is tested. The
+  # release pull request into main is gated by the same run.
+  push:
+    branches: [develop]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
   group: test-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -45,14 +48,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # The pull request's merge commit and its first parent, the base it merges into.
-          fetch-depth: 2
+          # The whole history, so a push can be compared with the commit before it.
+          fetch-depth: 0
 
       - name: Compare with the base
         id: find
         run: |
+          before="${{ github.event.before }}"
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/changed"
+          elif [[ "${{ github.event_name }}" == "push" && -n "$before" && ! "$before" =~ ^0+$ ]] && git cat-file -e "$before" 2>/dev/null; then
+            git diff --name-only "$before" HEAD > "$RUNNER_TEMP/changed"
           else
             echo ".github/workflows/test.yml" > "$RUNNER_TEMP/changed"
           fi

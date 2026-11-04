@@ -2,7 +2,9 @@
 name: Graphics test
 
 on:
-  pull_request:
+  # Only develop is built and tested: features are integrated there and fixed there.
+  push:
+    branches: [develop]
     paths:
       - "dsa/graphics/**"
       - "dsa/host/platform/windows/**"

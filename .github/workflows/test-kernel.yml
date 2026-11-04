@@ -9,7 +9,9 @@
 name: Kernel test
 
 on:
-  pull_request:
+  # Only develop is built and tested: features are integrated there and fixed there.
+  push:
+    branches: [develop]
     paths:
       - "dsa/kernel/**"
       - ".github/workflows/test-kernel.yml"
@@ -24,7 +26,7 @@ on:
 
 concurrency:
   group: kernel-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 permissions:
   contents: read
