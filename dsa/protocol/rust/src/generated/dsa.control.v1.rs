@@ -126,6 +126,13 @@ pub struct LaunchApp {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
 }
+/// Host to guest: the user's Stop. The agent ends every process of the app, even one a
+/// placed widget or a foreground service keeps running, and the guest gives the memory back.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopApp {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
 /// Host to guest: the user resized the task's window; the task takes the window's client
 /// size, in guest display pixels. Only the latest size counts: during a live resize the host
 /// sends the size it has now, not every size it passed through. The agent keeps the task
@@ -540,6 +547,29 @@ pub struct GuestMemory {
     /// The processes with the largest proportional set size, largest first, at most 10.
     #[prost(message, repeated, tag = "14")]
     pub top_processes: ::prost::alloc::vec::Vec<ProcessMemory>,
+    /// What the kernel itself holds, from /proc/meminfo: slab it cannot free (SUnreclaim),
+    /// kernel stacks, page tables, vmalloc, per-CPU areas, and the contiguous memory area (CMA)
+    /// set aside for drivers.
+    #[prost(uint64, tag = "15")]
+    pub slab_unreclaimable_kb: u64,
+    #[prost(uint64, tag = "16")]
+    pub kernel_stack_kb: u64,
+    #[prost(uint64, tag = "17")]
+    pub page_tables_kb: u64,
+    #[prost(uint64, tag = "18")]
+    pub vmalloc_used_kb: u64,
+    #[prost(uint64, tag = "19")]
+    pub percpu_kb: u64,
+    #[prost(uint64, tag = "20")]
+    pub cma_total_kb: u64,
+    /// Huge pages reserved (HugePages_Total times Hugepagesize).
+    #[prost(uint64, tag = "21")]
+    pub hugetlb_kb: u64,
+    /// The memory the kernel was given, counted from its online memory blocks; what it gave to
+    /// MemTotal is this less what it reserved at boot (its own code, page structures, swiotlb,
+    /// pstore). 0 when the guest cannot read it.
+    #[prost(uint64, tag = "22")]
+    pub mem_online_kb: u64,
 }
 /// From the agent to the guest's control daemon, on each connection to it: the agent has
 /// subscribed and takes the host's frames. It stops at the daemon, which tells the host with
@@ -1116,53 +1146,6 @@ pub struct AccessibilityActionResult {
     #[prost(string, tag = "4")]
     pub error: ::prost::alloc::string::String,
 }
-/// Guest to host, first after the handshake: the stream's format. The host closes the
-/// connection when it cannot play the format.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AudioOutputOpen {
-    /// Frames per second. The guest uses 48000.
-    #[prost(uint32, tag = "1")]
-    pub sample_rate: u32,
-    /// The guest uses 2 (left, right).
-    #[prost(uint32, tag = "2")]
-    pub channel_count: u32,
-    #[prost(enumeration = "AudioSampleFormat", tag = "3")]
-    pub format: i32,
-    /// How many frames the guest sends at a time, so the host can size its buffer.
-    #[prost(uint32, tag = "4")]
-    pub frames_per_burst: u32,
-    /// Names the stream in the host's log, such as "primary".
-    #[prost(string, tag = "5")]
-    pub name: ::prost::alloc::string::String,
-}
-/// Host to guest: the stream is open, and how much sound the host keeps queued before the
-/// device plays it.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AudioOutputReady {
-    /// The frames the host holds back to absorb late deliveries, at the stream's rate.
-    #[prost(uint32, tag = "1")]
-    pub buffered_frames: u32,
-    /// The output device's own latency in frames at the stream's rate, 0 when not known.
-    #[prost(uint32, tag = "2")]
-    pub device_frames: u32,
-}
-/// Guest to host: sound to play.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AudioPcm {
-    /// The index, counted from the stream's first frame, of the first frame in `data`. A gap
-    /// after the end of the last AudioPcm is silence the guest did not send (its own underrun).
-    #[prost(uint64, tag = "1")]
-    pub position: u64,
-    /// Whole frames in the stream's format.
-    #[prost(bytes = "vec", tag = "2")]
-    pub data: ::prost::alloc::vec::Vec<u8>,
-}
-/// Guest to host: a change of the stream's state.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AudioOutputControl {
-    #[prost(enumeration = "AudioOutputCommand", tag = "1")]
-    pub command: i32,
-}
 /// Host to guest, to the channel daemon: what the guest's log stream carries from now on.
 /// While `on`, the daemon reads logd and sends the records that pass on the log port (a
 /// vsock port of its own, so a busy log never delays input or window messages). With `on`
@@ -1270,7 +1253,7 @@ pub struct DiagnosticsDone {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1410,14 +1393,6 @@ pub mod envelope {
         AccessibilityAction(super::AccessibilityAction),
         #[prost(message, tag = "83")]
         AccessibilityActionResult(super::AccessibilityActionResult),
-        #[prost(message, tag = "100")]
-        AudioOutputOpen(super::AudioOutputOpen),
-        #[prost(message, tag = "101")]
-        AudioOutputReady(super::AudioOutputReady),
-        #[prost(message, tag = "102")]
-        AudioPcm(super::AudioPcm),
-        #[prost(message, tag = "103")]
-        AudioOutputControl(super::AudioOutputControl),
         #[prost(message, tag = "120")]
         VideoCapabilities(super::VideoCapabilities),
         #[prost(message, tag = "121")]
@@ -1446,6 +1421,8 @@ pub mod envelope {
         DiagnosticsFile(super::DiagnosticsFile),
         #[prost(message, tag = "135")]
         DiagnosticsDone(super::DiagnosticsDone),
+        #[prost(message, tag = "136")]
+        StopApp(super::StopApp),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1483,9 +1460,6 @@ pub enum Role {
     Unspecified = 0,
     Host = 1,
     Guest = 2,
-    /// The guest's audio HAL, on the audio port. It plays sound and nothing else, so the host
-    /// asks it for no secret, and the control port refuses it.
-    GuestAudio = 3,
     /// The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
     /// host asks it for no secret, and the control port refuses it.
     GuestVideo = 4,
@@ -1500,7 +1474,6 @@ impl Role {
             Self::Unspecified => "ROLE_UNSPECIFIED",
             Self::Host => "ROLE_HOST",
             Self::Guest => "ROLE_GUEST",
-            Self::GuestAudio => "ROLE_GUEST_AUDIO",
             Self::GuestVideo => "ROLE_GUEST_VIDEO",
         }
     }
@@ -1510,7 +1483,6 @@ impl Role {
             "ROLE_UNSPECIFIED" => Some(Self::Unspecified),
             "ROLE_HOST" => Some(Self::Host),
             "ROLE_GUEST" => Some(Self::Guest),
-            "ROLE_GUEST_AUDIO" => Some(Self::GuestAudio),
             "ROLE_GUEST_VIDEO" => Some(Self::GuestVideo),
             _ => None,
         }
@@ -1894,73 +1866,6 @@ impl NodeAction {
             "NODE_ACTION_FOCUS" => Some(Self::Focus),
             "NODE_ACTION_ACCESSIBILITY_FOCUS" => Some(Self::AccessibilityFocus),
             "NODE_ACTION_SELECT" => Some(Self::Select),
-            _ => None,
-        }
-    }
-}
-/// The sample formats a stream can carry. Little-endian, interleaved.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum AudioSampleFormat {
-    Unspecified = 0,
-    S16le = 1,
-}
-impl AudioSampleFormat {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "AUDIO_SAMPLE_FORMAT_UNSPECIFIED",
-            Self::S16le => "AUDIO_SAMPLE_FORMAT_S16LE",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "AUDIO_SAMPLE_FORMAT_UNSPECIFIED" => Some(Self::Unspecified),
-            "AUDIO_SAMPLE_FORMAT_S16LE" => Some(Self::S16le),
-            _ => None,
-        }
-    }
-}
-/// What the guest asks of a stream.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum AudioOutputCommand {
-    Unspecified = 0,
-    /// Play what arrives.
-    Start = 1,
-    /// Hold what is queued, and play nothing until the next START.
-    Pause = 2,
-    /// Drop what is queued and not yet played.
-    Flush = 3,
-    /// Drop what is queued and let the device go idle until the next START.
-    Standby = 4,
-}
-impl AudioOutputCommand {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "AUDIO_OUTPUT_COMMAND_UNSPECIFIED",
-            Self::Start => "AUDIO_OUTPUT_COMMAND_START",
-            Self::Pause => "AUDIO_OUTPUT_COMMAND_PAUSE",
-            Self::Flush => "AUDIO_OUTPUT_COMMAND_FLUSH",
-            Self::Standby => "AUDIO_OUTPUT_COMMAND_STANDBY",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "AUDIO_OUTPUT_COMMAND_UNSPECIFIED" => Some(Self::Unspecified),
-            "AUDIO_OUTPUT_COMMAND_START" => Some(Self::Start),
-            "AUDIO_OUTPUT_COMMAND_PAUSE" => Some(Self::Pause),
-            "AUDIO_OUTPUT_COMMAND_FLUSH" => Some(Self::Flush),
-            "AUDIO_OUTPUT_COMMAND_STANDBY" => Some(Self::Standby),
             _ => None,
         }
     }
