@@ -1,0 +1,6 @@
+; Desktop Subsystem for Android (DSA)
+; The primary audio module (dsa-audio) runs in the audio HAL's domain and sends each output
+; stream's sound to the host's audio port over AF_VSOCK. Its stream threads raise their own
+; priority, as the platform's audio HAL does.
+(allow hal_audio_server self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+(allow hal_audio_server self (capability (sys_nice)))

@@ -96,6 +96,8 @@ windows = { version = "0.62", features = [
     "Storage",
     "Storage_Streams",
     "Win32_System_WinRT",
+    # Playing the guest's sound on the default output device (WASAPI).
+    "Win32_Media_Audio",
 ] }
 
 [build-dependencies]

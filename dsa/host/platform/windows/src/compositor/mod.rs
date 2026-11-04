@@ -17,9 +17,11 @@
 //! ([`links`]). It shows the notifications of the user's Android as toasts, and passes the
 //! user's dismissals back ([`notifications`]). It shows the widgets the user placed on the
 //! desktop, each in a borderless window of its own on the desktop ([`widgets`]). It prints the documents apps in Android print on the user's
-//! printers, through the Windows print dialog ([`print`]).
+//! printers, through the Windows print dialog ([`print`]). It plays the sound of the user's
+//! Android on their default output device ([`audio`]).
 
 pub mod adapter;
+pub mod audio;
 pub mod clipboard;
 pub mod display_gpu;
 pub mod frames;
@@ -44,6 +46,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::audio::{serve_port as serve_audio_port, AudioDevice, AUDIO_PORT};
 use dsa_host_core::compositor::{
     GraphicsRenderer, GraphicsStreamKind, StreamTracker, GRAPHICS_COMMAND_PORT,
     GRAPHICS_PROCESS_PIPE_PORT,
@@ -106,6 +109,8 @@ pub struct Compositor {
     local_api_connector: Box<dyn Fn() -> Box<dyn Connector> + Send>,
     bind_command: Option<BindFn>,
     bind_process_pipe: Option<BindFn>,
+    /// Binds the audio port (5568), where the guest's audio module sends its sound.
+    bind_audio: Option<BindFn>,
     /// Binds the video port, where the guest's codec HAL has its streams decoded. None in
     /// tests, which have no GPU decoders.
     bind_video: Option<BindFn>,
@@ -189,6 +194,12 @@ impl Compositor {
             RawHvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
         });
 
+        // The audio port carries framed control messages, not a raw stream.
+        let bind_audio: BindFn = Box::new(move |vm_id| {
+            let service_id = Guid::vsock_service(AUDIO_PORT);
+            HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
+        });
+
         let bind_video: BindFn = Box::new(move |vm_id| {
             let service_id = Guid::vsock_service(dsa_host_core::video::VIDEO_PORT);
             HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
@@ -203,6 +214,7 @@ impl Compositor {
             bind_command: Some(bind_command),
             bind_process_pipe: Some(bind_process_pipe),
             bind_video: Some(bind_video),
+            bind_audio: Some(bind_audio),
             logger: None,
             presenter: None,
             host_listener: Some(session_host_listener()),
@@ -234,6 +246,7 @@ impl Compositor {
             bind_command: Some(bind_command),
             bind_process_pipe: Some(bind_process_pipe),
             bind_video: None,
+            bind_audio: None,
             logger: None,
             presenter: None,
             host_listener: None,
@@ -348,6 +361,7 @@ impl Compositor {
         let widgets_thread = self.start_widgets(&stop);
         let video_thread = self.start_video(&stop);
         let print_thread = self.start_print(&stop);
+        let audio_thread = self.start_audio(&stop);
 
         // 1. Monitor thread that tracks the VM ID and state via the local API.
         let monitor_stop = Arc::clone(&stop);
@@ -546,6 +560,9 @@ impl Compositor {
         if let Some(thread) = print_thread {
             let _ = thread.join();
         }
+        if let Some(thread) = audio_thread {
+            let _ = thread.join();
+        }
 
         if let Some(logger) = &self.logger {
             logger.log("dsa-wm stopped cleanly");
@@ -580,6 +597,35 @@ impl Compositor {
                     stop,
                     log,
                 );
+            })
+            .ok()
+    }
+
+    /// Starts playing the sound of the user's Android on their default output device, on a
+    /// thread of its own that ends with `stop`: it listens on the audio port of the user's
+    /// VM, and plays each stream the guest opens there. A device that cannot play is logged
+    /// and the stream goes on unheard, so the guest is never held up.
+    fn start_audio(&mut self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        let bind = self.bind_audio.take()?;
+        let mut listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind);
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-audio".into())
+            .spawn(move || {
+                let log: Arc<dyn Fn(&str) + Send + Sync> =
+                    Arc::new(move |line: &str| note(logger.as_deref(), line));
+                let device: Arc<dyn AudioDevice> =
+                    Arc::new(audio::DefaultOutput::new(Arc::clone(&log)));
+                let build = format!("dsa-wm {}", crate::VERSION);
+                serve_audio_port(&mut listener, device, &build, &stop, log);
+            })
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the audio port's thread: {e}"),
+                )
             })
             .ok()
     }

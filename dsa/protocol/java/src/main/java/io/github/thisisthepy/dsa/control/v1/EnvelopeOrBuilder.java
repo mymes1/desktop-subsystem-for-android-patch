@@ -734,6 +734,50 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.AccessibilityActionResult getAccessibilityActionResult();
 
   /**
+   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+   * @return Whether the audioOutputOpen field is set.
+   */
+  boolean hasAudioOutputOpen();
+  /**
+   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+   * @return The audioOutputOpen.
+   */
+  io.github.thisisthepy.dsa.control.v1.AudioOutputOpen getAudioOutputOpen();
+
+  /**
+   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+   * @return Whether the audioOutputReady field is set.
+   */
+  boolean hasAudioOutputReady();
+  /**
+   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+   * @return The audioOutputReady.
+   */
+  io.github.thisisthepy.dsa.control.v1.AudioOutputReady getAudioOutputReady();
+
+  /**
+   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+   * @return Whether the audioPcm field is set.
+   */
+  boolean hasAudioPcm();
+  /**
+   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+   * @return The audioPcm.
+   */
+  io.github.thisisthepy.dsa.control.v1.AudioPcm getAudioPcm();
+
+  /**
+   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+   * @return Whether the audioOutputControl field is set.
+   */
+  boolean hasAudioOutputControl();
+  /**
+   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+   * @return The audioOutputControl.
+   */
+  io.github.thisisthepy.dsa.control.v1.AudioOutputControl getAudioOutputControl();
+
+  /**
    * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
    * @return Whether the videoCapabilities field is set.
    */

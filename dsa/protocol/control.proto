@@ -32,6 +32,9 @@ enum Role {
   ROLE_UNSPECIFIED = 0;
   ROLE_HOST = 1;
   ROLE_GUEST = 2;
+  // The guest's audio HAL, on the audio port. It plays sound and nothing else, so the host
+  // asks it for no secret, and the control port refuses it.
+  ROLE_GUEST_AUDIO = 3;
   // The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
   // host asks it for no secret, and the control port refuses it.
   ROLE_GUEST_VIDEO = 4;
@@ -1063,6 +1066,67 @@ message AccessibilityActionResult {
   string error = 4;
 }
 
+// The audio port (vsock 5568): the guest's audio HAL plays one output stream per connection
+// through the host's default output device. The HAL sends the Hello with ROLE_GUEST_AUDIO,
+// the host answers HelloAccepted or HelloRejected, and the HAL then opens the stream with
+// AudioOutputOpen. The host plays every open stream; the platform's mixer sums them.
+
+// The sample formats a stream can carry. Little-endian, interleaved.
+enum AudioSampleFormat {
+  AUDIO_SAMPLE_FORMAT_UNSPECIFIED = 0;
+  AUDIO_SAMPLE_FORMAT_S16LE = 1;
+}
+
+// Guest to host, first after the handshake: the stream's format. The host closes the
+// connection when it cannot play the format.
+message AudioOutputOpen {
+  // Frames per second. The guest uses 48000.
+  uint32 sample_rate = 1;
+  // The guest uses 2 (left, right).
+  uint32 channel_count = 2;
+  AudioSampleFormat format = 3;
+  // How many frames the guest sends at a time, so the host can size its buffer.
+  uint32 frames_per_burst = 4;
+  // Names the stream in the host's log, such as "primary".
+  string name = 5;
+}
+
+// Host to guest: the stream is open, and how much sound the host keeps queued before the
+// device plays it.
+message AudioOutputReady {
+  // The frames the host holds back to absorb late deliveries, at the stream's rate.
+  uint32 buffered_frames = 1;
+  // The output device's own latency in frames at the stream's rate, 0 when not known.
+  uint32 device_frames = 2;
+}
+
+// Guest to host: sound to play.
+message AudioPcm {
+  // The index, counted from the stream's first frame, of the first frame in `data`. A gap
+  // after the end of the last AudioPcm is silence the guest did not send (its own underrun).
+  uint64 position = 1;
+  // Whole frames in the stream's format.
+  bytes data = 2;
+}
+
+// What the guest asks of a stream.
+enum AudioOutputCommand {
+  AUDIO_OUTPUT_COMMAND_UNSPECIFIED = 0;
+  // Play what arrives.
+  AUDIO_OUTPUT_COMMAND_START = 1;
+  // Hold what is queued, and play nothing until the next START.
+  AUDIO_OUTPUT_COMMAND_PAUSE = 2;
+  // Drop what is queued and not yet played.
+  AUDIO_OUTPUT_COMMAND_FLUSH = 3;
+  // Drop what is queued and let the device go idle until the next START.
+  AUDIO_OUTPUT_COMMAND_STANDBY = 4;
+}
+
+// Guest to host: a change of the stream's state.
+message AudioOutputControl {
+  AudioOutputCommand command = 1;
+}
+
 // The guest's log, as logd keeps it in memory. A record's buffer is logd's log ID plus one,
 // so 0 stays "unspecified".
 enum LogBuffer {
@@ -1279,6 +1343,10 @@ message Envelope {
     AccessibilityTree accessibility_tree = 81;
     AccessibilityAction accessibility_action = 82;
     AccessibilityActionResult accessibility_action_result = 83;
+    AudioOutputOpen audio_output_open = 100;
+    AudioOutputReady audio_output_ready = 101;
+    AudioPcm audio_pcm = 102;
+    AudioOutputControl audio_output_control = 103;
     VideoCapabilities video_capabilities = 120;
     VideoDecoderOpen video_decoder_open = 121;
     VideoDecoderOpened video_decoder_opened = 122;

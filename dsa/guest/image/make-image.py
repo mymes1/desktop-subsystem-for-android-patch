@@ -916,6 +916,27 @@ CUTTLEFISH_POWER_APEXES = [
     "com.android.hardware.power",
     "com.google.cf.health",
 ]
+# DSA's primary audio module (dsa/guest/audio), which plays the guest's sound on the host's
+# default output device. It runs in the audio HAL's domain and serves IModule/default, which
+# the image's audio APEX already declares. That APEX's service makes a module for each one
+# its policy file lists, so the primary one leaves the file and the service keeps the rest
+# (remote submix, Bluetooth), the configuration and the effects.
+AUDIO_DIR = REPO / "dsa/guest/audio"
+AUDIO_BINARY = "VENDOR/bin/hw/dsa-audio"
+AUDIO_RC = "VENDOR/etc/init/dsa-audio.rc"
+AUDIO_CONTEXT = "/vendor/bin/hw/dsa-audio u:object_r:hal_audio_default_exec:s0"
+AUDIO_POLICY_CONFIG = re.compile(r"^VENDOR/etc/audio_policy_configuration[^/]*\.xml$")
+PRIMARY_AUDIO_INCLUDE = re.compile(
+    r'[ \t]*(<!--[^>]*Primary Audio HAL[^>]*-->[ \t]*\n[ \t]*)?'
+    r'<xi:include href="primary_audio_policy_configuration\.xml"\s*/>[ \t]*\n?'
+)
+
+
+def without_primary_audio_module(text):
+    """The audio policy file without its primary module, which dsa-audio serves instead."""
+    return PRIMARY_AUDIO_INCLUDE.sub("", text)
+
+
 # DSA's Codec 2.0 HAL (dsa/guest/codec2), whose video decoders decode on the host's GPU. It
 # runs in the vendor codec domain (mediacodec); codec2.cil lets it reach the host's video port
 # and map the buffers it writes pictures into. Its decoders are listed in
@@ -1024,7 +1045,8 @@ AGENT_FS_CONFIG = [
 ]
 
 
-def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power=False, codec2=False):
+def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power=False, codec2=False,
+                                audio=False):
     """Adds same_process_hal_file contexts for guest graphics libraries if not present, and
     opens the DRM cards to every graphics client.
 
@@ -1051,6 +1073,8 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
         entries += POWER_CONTEXTS
     if codec2:
         entries.append((r"/vendor/bin/hw/dsa-codec2", CODEC2_CONTEXT))
+    if audio:
+        entries.append((r"/vendor/bin/hw/dsa-audio", AUDIO_CONTEXT))
     # Usually there already, as /(vendor|system/vendor)/overlay(/.*)?.
     entries.append(("overlay(/.*)?", VENDOR_OVERLAY_CONTEXT))
     for pattern, rule in entries:
@@ -1121,7 +1145,7 @@ def add_filesystem_config(fs_config_text, rules):
 
 
 def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=False, power=False,
-                                    codec2=False):
+                                    codec2=False, audio=False):
     """Adds filesystem configuration entries for the files DSA adds to vendor if not present."""
     lines = fs_config_text.splitlines()
     entries = [
@@ -1153,6 +1177,11 @@ def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=F
         path = name.lower()
         mode = "0 2000 755" if "/bin/" in path else "0 0 644"
         entries.append((path, f"{path} {mode} capabilities=0x0"))
+    if audio:
+        entries += [
+            ("vendor/bin/hw/dsa-audio", "vendor/bin/hw/dsa-audio 0 2000 755 capabilities=0x0"),
+            ("vendor/etc/init/dsa-audio.rc", "vendor/etc/init/dsa-audio.rc 0 0 644 capabilities=0x0"),
+        ]
     for path, rule in entries:
         if not any(line.startswith(path + " ") for line in lines):
             lines.append(rule)
@@ -1169,6 +1198,7 @@ POWER_POLICY = HERE / "sepolicy/power.cil"
 CODEC2_POLICY = HERE / "sepolicy/codec2.cil"
 AGENT_POLICY = HERE / "sepolicy/agent.cil"
 MEMORY_POLICY = HERE / "sepolicy/memory.cil"
+AUDIO_POLICY = HERE / "sepolicy/audio.cil"
 ADB_POLICY = HERE / "sepolicy/adb.cil"
 KERNEL_POLICY = HERE / "sepolicy/kernel.cil"
 
@@ -1302,7 +1332,7 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, power_hal=None,
-           codec2=None):
+           codec2=None, audio=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -1335,9 +1365,12 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             for name, source in CODEC2_FILES.items()
         }
     has_codec2 = codec2_payloads is not None
+    audio_payload = Path(audio).read_bytes() if audio else None
+    has_audio = audio_payload is not None
     build_tag = image_build_tag([
         graphics_payload, vulkan_payload, channeld_payload, agent_payload, hwcomposer_payload,
         overlay_payload, *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
+        audio_payload,
     ])
     replaced_graphics_payload = False
     replaced_vulkan_payload = False
@@ -1379,6 +1412,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             if has_codec2:
                 # The codec HAL reaches the host's video port.
                 plat_patched += "\n" + CODEC2_POLICY.read_text()
+            if has_audio:
+                # The audio module's socket to the host.
+                plat_patched += "\n" + AUDIO_POLICY.read_text()
             if agent_payload is not None:
                 # What the agent needs to put the guest into Doze and set its battery.
                 plat_patched += "\n" + AGENT_POLICY.read_text()
@@ -1413,7 +1449,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             text = zin.read(name).decode() if name in names else ""
             if name == "VENDOR/etc/selinux/vendor_file_contexts":
                 text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer,
-                                                   has_power, codec2=has_codec2)
+                                                   has_power, codec2=has_codec2, audio=has_audio)
             file_contexts.append(text if text.endswith("\n") or not text else text + "\n")
         compiled_file_contexts = compile_file_contexts(otatools, "".join(file_contexts))
 
@@ -1492,16 +1528,19 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                             text += f"{prefix}fstab.dsa 0 0 644 capabilities=0x0\n"
                     if name == "META/vendor_filesystem_config.txt":
                         text = update_vendor_filesystem_config(text, channeld_payload is not None, has_hwcomposer,
-                                                               has_power, codec2=has_codec2)
+                                                               has_power, codec2=has_codec2, audio=has_audio)
                         if overlay_payload is not None:
                             text = add_filesystem_config(text, FRAMEWORK_OVERLAY_FS_CONFIG)
                     data = text.encode()
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
-                                                       has_hwcomposer, has_power, codec2=has_codec2).encode()
+                                                       has_hwcomposer, has_power, codec2=has_codec2,
+                                                       audio=has_audio).encode()
                 elif name == VENDOR_SERVICE_CONTEXTS and (channeld_payload is not None or has_codec2):
                     data = update_vendor_service_contexts(
                         data.decode(), codec2=has_codec2, channeld=channeld_payload is not None).encode()
+                elif has_audio and AUDIO_POLICY_CONFIG.match(name):
+                    data = without_primary_audio_module(data.decode()).encode()
                 elif name == VENDOR_PROPERTY_CONTEXTS:
                     data = update_vendor_property_contexts(data.decode()).encode()
             info.compress_type = zipfile.ZIP_STORED
@@ -1528,6 +1567,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if has_codec2:
             for name, payload in codec2_payloads.items():
                 zout.writestr(name, payload)
+        if has_audio:
+            zout.writestr(AUDIO_BINARY, audio_payload)
+            zout.writestr(AUDIO_RC, (AUDIO_DIR / "dsa-audio.rc").read_bytes())
         if (channeld_payload is not None or has_codec2) and VENDOR_SERVICE_CONTEXTS not in names:
             zout.writestr(VENDOR_SERVICE_CONTEXTS, update_vendor_service_contexts(
                 "", codec2=has_codec2, channeld=channeld_payload is not None))
@@ -1543,7 +1585,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(
                 "VENDOR/etc/selinux/vendor_file_contexts",
                 update_vendor_file_contexts("", channeld_payload is not None, has_hwcomposer, has_power,
-                                            codec2=has_codec2).encode(),
+                                            codec2=has_codec2, audio=has_audio).encode(),
             )
     if graphics_payload is not None and not replaced_graphics_payload:
         dest.unlink(missing_ok=True)
@@ -2194,6 +2236,9 @@ def main():
     parser.add_argument("--codec2", type=Path,
                         help="DSA's codec HAL (dsa-codec2) built for the guest; its video decoders "
                              "decode on the host's GPU")
+    parser.add_argument("--audio", type=Path,
+                        help="DSA's primary audio module (dsa-audio) built for the guest; it plays the "
+                             "guest's sound on the host's default output device")
     parser.add_argument("--power-hal", type=Path,
                         help="a folder holding DSA's power and health HALs (dsa-power, dsa-health) built "
                              "for the guest; they replace Cuttlefish's, take the guest's power hints to "
@@ -2255,7 +2300,7 @@ def main():
     modify(target_files, modified, graphics_library=graphics_library, vulkan_driver=vulkan_driver,
            otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
            framework_overlay=framework_overlay, power_hal=args.power_hal,
-           codec2=args.codec2)
+           codec2=args.codec2, audio=args.audio)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path

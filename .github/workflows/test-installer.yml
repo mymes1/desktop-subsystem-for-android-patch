@@ -621,6 +621,14 @@ jobs:
           Write-Host "Process pipe ElementName: $pipeName"
           if ($pipeName -ne 'Desktop Subsystem for Android Graphics Process Pipe') {
             throw "Process pipe ElementName mismatch: $pipeName"
+          }          $audioKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\000015c0-facb-11e6-bd58-64006a7986d3'
+          if (-not (Test-Path $audioKey)) {
+            throw "Audio GuestCommunicationServices key does not exist: $audioKey"
+          }
+          $audioName = (Get-ItemProperty $audioKey).ElementName
+          Write-Host "Audio ElementName: $audioName"
+          if ($audioName -ne 'Desktop Subsystem for Android Audio') {
+            throw "Audio ElementName mismatch: $audioName"
           }
 
       - name: nfr5_service_recovery_and_start_type
@@ -905,6 +913,9 @@ jobs:
           }
           if (Test-Path $pipeKey) {
             throw "Process pipe GuestCommunicationServices key is still present after uninstall"
+          }          $audioKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\000015c0-facb-11e6-bd58-64006a7986d3'
+          if (Test-Path $audioKey) {
+            throw "Audio GuestCommunicationServices key is still present after uninstall"
           }
 
       # A program file left from another version, or changed by hand after it was installed,

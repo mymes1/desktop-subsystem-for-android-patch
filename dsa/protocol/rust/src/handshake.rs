@@ -73,6 +73,7 @@ fn role_name(role: i32) -> String {
     match Role::try_from(role) {
         Ok(Role::Host) => "the host".into(),
         Ok(Role::Guest) => "the guest".into(),
+        Ok(Role::GuestAudio) => "the guest's audio HAL".into(),
         Ok(Role::GuestVideo) => "the guest's video codec HAL".into(),
         Ok(Role::Unspecified) => "no role".into(),
         Err(_) => format!("an unknown role ({role})"),
@@ -232,7 +233,7 @@ pub fn host_accept(
     Ok(peer)
 }
 
-/// The host side of a port that asks for no secret, such as the video port: waits at most
+/// The host side of a port that asks for no secret, such as the audio and video ports: waits at most
 /// `timeout` for the peer's `Hello`, checks its version, its schema hash and that it says it
 /// is `role`, and answers. Returns the peer's `Hello` when accepted.
 ///
