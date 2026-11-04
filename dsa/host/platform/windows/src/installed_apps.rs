@@ -5,8 +5,10 @@
 //! (for the user's own) with a display name. The window manager gives each Android app such a
 //! key, named `Thisisthepy.DSA.<package>` like the app's AppUserModelID, so the app shows there
 //! with its name, its icon (from its window program), its version, its size and the date it was
-//! installed. Uninstalling it there runs `dsa apps uninstall <package>`, which uninstalls the
-//! app in Android; Windows asks the user to confirm first.
+//! installed. Uninstalling it there runs the settings app with `--uninstall-app <package>`: a
+//! small window names the app, asks once, and runs `dsa apps uninstall <package>` hidden, which
+//! uninstalls the app in Android. The settings app is a windowed program, so no console window
+//! flashes up as it would for `dsa` itself.
 //!
 //! The keys follow the apps whenever Android says which it has, together with the Start menu.
 //! The window manager only ever writes and removes keys whose names start with
@@ -77,14 +79,16 @@ pub fn install_date(ms: u64) -> Option<String> {
     Some(format!("{year:04}{month:02}{day:02}"))
 }
 
-/// The command that uninstalls `package`: `dsa` (at `cli`) with `apps uninstall <package>`.
-pub fn uninstall_command(cli: &Path, package: &str) -> String {
-    format!("\"{}\" apps uninstall {package}", cli.display())
+/// The command that uninstalls `package`: the settings app (at `uninstaller`) with
+/// `--uninstall-app <package>`. Windows runs it as it is; the settings app is a windowed
+/// program, so no console window shows, and it asks, then runs `dsa apps uninstall` hidden.
+pub fn uninstall_command(uninstaller: &Path, package: &str) -> String {
+    format!("\"{}\" --uninstall-app {package}", uninstaller.display())
 }
 
 /// The key of `app`, whose window program (and so its icon) is at `program`, uninstalled with
-/// the `dsa` command at `cli`.
-pub fn entry(app: &AppInfo, program: &Path, cli: &Path) -> Entry {
+/// the settings app at `uninstaller`.
+pub fn entry(app: &AppInfo, program: &Path, uninstaller: &Path) -> Entry {
     let label = app.label.trim();
     let name = if label.is_empty() {
         app.package_name.as_str()
@@ -100,7 +104,7 @@ pub fn entry(app: &AppInfo, program: &Path, cli: &Path) -> Entry {
         ("Publisher", Value::Text(PUBLISHER.to_string())),
         (
             "UninstallString",
-            Value::Text(uninstall_command(cli, &app.package_name)),
+            Value::Text(uninstall_command(uninstaller, &app.package_name)),
         ),
         ("NoModify", Value::Number(1)),
         ("NoRepair", Value::Number(1)),
@@ -161,8 +165,8 @@ pub fn sync(entries: &[Entry], keys: &dyn InstalledAppKeys) -> Vec<String> {
 }
 
 /// The entries of `apps`, each with the window program the Start menu made for it in
-/// `apps_dir`, uninstalled with the `dsa` command at `cli`.
-pub fn entries(apps: &[AppInfo], apps_dir: &Path, cli: &Path) -> Vec<Entry> {
+/// `apps_dir`, uninstalled with the settings app at `uninstaller`.
+pub fn entries(apps: &[AppInfo], apps_dir: &Path, uninstaller: &Path) -> Vec<Entry> {
     apps.iter()
         .filter(|app| is_valid_package(&app.package_name))
         .map(|app| {
@@ -173,7 +177,7 @@ pub fn entries(apps: &[AppInfo], apps_dir: &Path, cli: &Path) -> Vec<Entry> {
                 label
             };
             let program = crate::app_exe::program_path(apps_dir, &app.package_name, label);
-            entry(app, &program, cli)
+            entry(app, &program, uninstaller)
         })
         .collect()
 }

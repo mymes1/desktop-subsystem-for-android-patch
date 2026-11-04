@@ -838,4 +838,46 @@
   <data name="Apps_Refused_other" xml:space="preserve">
     <value>Android could not uninstall it</value>
   </data>
+  <data name="UninstallWindow_Caption" xml:space="preserve">
+    <value>Uninstall an Android app</value>
+  </data>
+  <data name="UninstallWindow_Reading" xml:space="preserve">
+    <value>Asking Android about the app...</value>
+  </data>
+  <data name="UninstallWindow_Version" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
+  <data name="UninstallWindow_Confirm" xml:space="preserve">
+    <value>{0} and its data will be removed from Android. This cannot be undone.</value>
+  </data>
+  <data name="UninstallWindow_Uninstall" xml:space="preserve">
+    <value>Uninstall</value>
+  </data>
+  <data name="UninstallWindow_Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="UninstallWindow_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="UninstallWindow_Busy" xml:space="preserve">
+    <value>Uninstalling {0}</value>
+  </data>
+  <data name="UninstallWindow_BusyDetail" xml:space="preserve">
+    <value>Android starts first if it is not running.</value>
+  </data>
+  <data name="UninstallWindow_DoneTitle" xml:space="preserve">
+    <value>Uninstalled</value>
+  </data>
+  <data name="UninstallWindow_DoneText" xml:space="preserve">
+    <value>{0} was removed from Android.</value>
+  </data>
+  <data name="UninstallWindow_FailedTitle" xml:space="preserve">
+    <value>Not uninstalled</value>
+  </data>
+  <data name="UninstallWindow_Refused" xml:space="preserve">
+    <value>{0} was not uninstalled: {1}.</value>
+  </data>
+  <data name="UninstallWindow_RefusedDetail" xml:space="preserve">
+    <value>{0} was not uninstalled: {1} ({2}).</value>
+  </data>
 </root>
