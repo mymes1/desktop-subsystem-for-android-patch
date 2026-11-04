@@ -101,6 +101,7 @@ public  final class Envelope extends
     DIAGNOSTICS_FILE(134),
     DIAGNOSTICS_DONE(135),
     STOP_APP(136),
+    GUEST_MEMORY_PRESSURE(141),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -197,6 +198,7 @@ public  final class Envelope extends
         case 134: return DIAGNOSTICS_FILE;
         case 135: return DIAGNOSTICS_DONE;
         case 136: return STOP_APP;
+        case 141: return GUEST_MEMORY_PRESSURE;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -4268,6 +4270,56 @@ public  final class Envelope extends
     }
   }
 
+  public static final int GUEST_MEMORY_PRESSURE_FIELD_NUMBER = 141;
+  /**
+   * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+   */
+  @java.lang.Override
+  public boolean hasGuestMemoryPressure() {
+    return bodyCase_ == 141;
+  }
+  /**
+   * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure getGuestMemoryPressure() {
+    if (bodyCase_ == 141) {
+       return (io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+   */
+  private void setGuestMemoryPressure(io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 141;
+  }
+  /**
+   * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+   */
+  private void mergeGuestMemoryPressure(io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure value) {
+    value.getClass();
+  if (bodyCase_ == 141 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure.newBuilder((io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 141;
+  }
+  /**
+   * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+   */
+  private void clearGuestMemoryPressure() {
+    if (bodyCase_ == 141) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -8267,6 +8319,54 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+     */
+    @java.lang.Override
+    public boolean hasGuestMemoryPressure() {
+      return instance.hasGuestMemoryPressure();
+    }
+    /**
+     * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure getGuestMemoryPressure() {
+      return instance.getGuestMemoryPressure();
+    }
+    /**
+     * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+     */
+    public Builder setGuestMemoryPressure(io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure value) {
+      copyOnWrite();
+      instance.setGuestMemoryPressure(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+     */
+    public Builder setGuestMemoryPressure(
+        io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGuestMemoryPressure(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+     */
+    public Builder mergeGuestMemoryPressure(io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure value) {
+      copyOnWrite();
+      instance.mergeGuestMemoryPressure(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+     */
+    public Builder clearGuestMemoryPressure() {
+      copyOnWrite();
+      instance.clearGuestMemoryPressure();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -8366,9 +8466,10 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.DiagnosticsDone.class,
             io.github.thisisthepy.dsa.control.v1.StopApp.class,
             io.github.thisisthepy.dsa.control.v1.DeveloperMode.class,
+            io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure.class,
           };
           java.lang.String info =
-              "\u0000Q\u0001\u0000\u0001\u008cQ\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
+              "\u0000R\u0001\u0000\u0001\u008dR\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
               "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
               "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
               "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
@@ -8378,7 +8479,7 @@ public  final class Envelope extends
               "P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000" +
               "`<\u0000a<\u0000b<\u0000c<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
               "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
-              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000";
+              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000\u008d<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

@@ -340,6 +340,21 @@ pub struct PowerState {
     #[prost(bool, tag = "5")]
     pub power_saver: bool,
 }
+/// Guest to host, from the control daemon: how much memory the guest has and how hard it
+/// works to find more. The host grows the VM's memory by hot-adding it when the guest runs
+/// short, and gives it back when the guest no longer needs it. Sent every few seconds while
+/// the guest is short, and at least every 30 seconds otherwise.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GuestMemoryPressure {
+    #[prost(uint64, tag = "1")]
+    pub mem_total_kb: u64,
+    #[prost(uint64, tag = "2")]
+    pub mem_available_kb: u64,
+    /// The share of the last 10 seconds some task waited for memory (PSI "some avg10"), in
+    /// hundredths of a percent.
+    #[prost(uint32, tag = "3")]
+    pub stall_centipercent: u32,
+}
 /// Host to guest: whether the host computer is short of memory. While it is, the guest gives
 /// memory back the way a phone's low memory killer would, cheapest first: the agent ends the
 /// cached app processes (apps the user is not using), and the control daemon then has the
@@ -1253,7 +1268,7 @@ pub struct DiagnosticsDone {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 141"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1423,6 +1438,8 @@ pub mod envelope {
         DiagnosticsDone(super::DiagnosticsDone),
         #[prost(message, tag = "136")]
         StopApp(super::StopApp),
+        #[prost(message, tag = "141")]
+        GuestMemoryPressure(super::GuestMemoryPressure),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.

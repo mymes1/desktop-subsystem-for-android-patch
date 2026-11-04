@@ -898,5 +898,16 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.StopApp getStopApp();
 
+  /**
+   * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+   * @return Whether the guestMemoryPressure field is set.
+   */
+  boolean hasGuestMemoryPressure();
+  /**
+   * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+   * @return The guestMemoryPressure.
+   */
+  io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure getGuestMemoryPressure();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }
