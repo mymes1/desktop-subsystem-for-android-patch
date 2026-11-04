@@ -346,6 +346,8 @@ impl FrameTarget for RemoteWindow {
             state.sequence += 1;
             state.sequence
         };
+        // The app has drawn this size: the next size of a drag may go to it.
+        super::tasks::frame_drawn(self.task_id, (width, height));
         let started = Instant::now();
         let sent = self.link.send(Body::Frame(Frame {
             task_id: self.task_id,

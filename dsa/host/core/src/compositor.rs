@@ -14,6 +14,7 @@
 pub mod frame_buffers;
 pub mod present_watch;
 pub mod resize_latency;
+pub mod resize_pacing;
 pub mod resize_sync;
 pub mod shown_windows;
 pub mod task_windows;
