@@ -42,6 +42,9 @@ import io.github.thisisthepy.dsa.agent.tasks.TaskSource
 import io.github.thisisthepy.dsa.agent.trace.FrameStatsTrace
 import io.github.thisisthepy.dsa.agent.trace.InputTrace
 import io.github.thisisthepy.dsa.agent.trace.ResizeTrace
+import io.github.thisisthepy.dsa.agent.widgets.WidgetManager
+import io.github.thisisthepy.dsa.agent.widgets.WidgetPlatform
+import io.github.thisisthepy.dsa.agent.widgets.WidgetStore
 import io.github.thisisthepy.dsa.agent.windowing.FreeformSetup
 import io.github.thisisthepy.dsa.agent.windowing.TaskArranger
 import io.github.thisisthepy.dsa.agent.windowing.WindowingControl
@@ -76,7 +79,8 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * notifications go to the host's notification centre, and a click or a dismissal there comes
  * back to them ([NotificationForwarder]). While a host accessibility client watches a task, the
  * agent's accessibility service is on and the task's accessibility tree goes to the host
- * ([AccessibilityExport]); otherwise the service is off.
+ * ([AccessibilityExport]); otherwise the service is off. The widgets the user placed on the
+ * host's desktop are hosted and drawn here, and their images go to the host ([WidgetManager]).
  */
 class Agent(
     private val ownPackage: String,
@@ -106,6 +110,8 @@ class Agent(
     clipboard: GuestClipboard = GuestClipboard.NONE,
     notifications: NotificationSource = NotificationSource.NONE,
     packageInstaller: PackageInstallerPort = PackageInstallerPort.NONE,
+    widgets: WidgetPlatform = WidgetPlatform.NONE,
+    widgetStore: WidgetStore = WidgetStore.memory(),
     accessibility: AccessibilitySource = AccessibilitySource.NONE,
     clock: () -> Long = { System.nanoTime() / 1_000_000 },
 ) {
@@ -170,6 +176,13 @@ class Agent(
         post = { work -> scheduler.post(work) },
         onInstalled = { requestAppsRefresh() },
     )
+    private val widgetManager = WidgetManager(
+        widgets,
+        widgetStore,
+        { frame -> channel.send(frame) },
+        log,
+        isConnected = { channel.connected },
+    )
     private val freeform = FreeformSetup(windowing, scheduler, log)
     private val arranger = TaskArranger(actions, windowing::displaySize, log)
     private val installed = InstalledAppReporter(ownPackage) { frame -> channel.send(frame) }
@@ -205,6 +218,7 @@ class Agent(
             lifecycle.start { work -> scheduler.post(work) }
             clipboardSync.start { work -> scheduler.post(work) }
             notificationForwarder.start { work -> scheduler.post(work) }
+            widgetManager.start { work -> scheduler.post(work) }
             listenToApps()
             channel.start()
             requestRefresh()
@@ -267,6 +281,7 @@ class Agent(
         lifecycle.connected()
         clipboardSync.connected()
         notificationForwarder.connected()
+        widgetManager.connected()
         apkInstaller.connected()
         installed.resend()
         memoryReporter?.connected()
@@ -327,7 +342,14 @@ class Agent(
         } catch (e: InvalidProtocolBufferException) {
             return false
         }
+        if (envelope.bodyCase == Envelope.BodyCase.SCREEN_STATE) widgetManager.screen(envelope.screenState.on)
         if (lifecycle.handle(envelope)) return true
+        try {
+            if (widgetManager.handle(envelope)) return true
+        } catch (e: Exception) {
+            log.warn("acting on a widget frame from the host failed", e)
+            return true
+        }
         if (clipboardSync.handle(envelope)) return true
         if (notificationForwarder.handle(envelope)) return true
         if (apkInstaller.handle(envelope)) return true
