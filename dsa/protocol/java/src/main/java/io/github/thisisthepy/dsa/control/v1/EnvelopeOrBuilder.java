@@ -360,6 +360,61 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.DeveloperMode getDeveloperMode();
 
   /**
+   * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
+   * @return Whether the armTranslationInstall field is set.
+   */
+  boolean hasArmTranslationInstall();
+  /**
+   * <code>.dsa.control.v1.ArmTranslationInstall arm_translation_install = 150;</code>
+   * @return The armTranslationInstall.
+   */
+  io.github.thisisthepy.dsa.control.v1.ArmTranslationInstall getArmTranslationInstall();
+
+  /**
+   * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
+   * @return Whether the armTranslationChunk field is set.
+   */
+  boolean hasArmTranslationChunk();
+  /**
+   * <code>.dsa.control.v1.ArmTranslationChunk arm_translation_chunk = 151;</code>
+   * @return The armTranslationChunk.
+   */
+  io.github.thisisthepy.dsa.control.v1.ArmTranslationChunk getArmTranslationChunk();
+
+  /**
+   * <code>.dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;</code>
+   * @return Whether the armTranslationRemove field is set.
+   */
+  boolean hasArmTranslationRemove();
+  /**
+   * <code>.dsa.control.v1.ArmTranslationRemove arm_translation_remove = 152;</code>
+   * @return The armTranslationRemove.
+   */
+  io.github.thisisthepy.dsa.control.v1.ArmTranslationRemove getArmTranslationRemove();
+
+  /**
+   * <code>.dsa.control.v1.ArmTranslationQuery arm_translation_query = 153;</code>
+   * @return Whether the armTranslationQuery field is set.
+   */
+  boolean hasArmTranslationQuery();
+  /**
+   * <code>.dsa.control.v1.ArmTranslationQuery arm_translation_query = 153;</code>
+   * @return The armTranslationQuery.
+   */
+  io.github.thisisthepy.dsa.control.v1.ArmTranslationQuery getArmTranslationQuery();
+
+  /**
+   * <code>.dsa.control.v1.ArmTranslationState arm_translation_state = 154;</code>
+   * @return Whether the armTranslationState field is set.
+   */
+  boolean hasArmTranslationState();
+  /**
+   * <code>.dsa.control.v1.ArmTranslationState arm_translation_state = 154;</code>
+   * @return The armTranslationState.
+   */
+  io.github.thisisthepy.dsa.control.v1.ArmTranslationState getArmTranslationState();
+
+  /**
    * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>
    * @return Whether the deviceIdle field is set.
    */
@@ -1117,6 +1172,182 @@ public interface EnvelopeOrBuilder extends
    * @return The printJobResult.
    */
   io.github.thisisthepy.dsa.control.v1.PrintJobResult getPrintJobResult();
+
+  /**
+   * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+   * @return Whether the guestMemoryPressure field is set.
+   */
+  boolean hasGuestMemoryPressure();
+  /**
+   * <code>.dsa.control.v1.GuestMemoryPressure guest_memory_pressure = 141;</code>
+   * @return The guestMemoryPressure.
+   */
+  io.github.thisisthepy.dsa.control.v1.GuestMemoryPressure getGuestMemoryPressure();
+
+  /**
+   * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+   * @return Whether the locationRequest field is set.
+   */
+  boolean hasLocationRequest();
+  /**
+   * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+   * @return The locationRequest.
+   */
+  io.github.thisisthepy.dsa.control.v1.LocationRequest getLocationRequest();
+
+  /**
+   * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+   * @return Whether the locationStatus field is set.
+   */
+  boolean hasLocationStatus();
+  /**
+   * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+   * @return The locationStatus.
+   */
+  io.github.thisisthepy.dsa.control.v1.LocationStatus getLocationStatus();
+
+  /**
+   * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+   * @return Whether the locationFix field is set.
+   */
+  boolean hasLocationFix();
+  /**
+   * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+   * @return The locationFix.
+   */
+  io.github.thisisthepy.dsa.control.v1.LocationFix getLocationFix();
+
+  /**
+   * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+   * @return Whether the sensorList field is set.
+   */
+  boolean hasSensorList();
+  /**
+   * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+   * @return The sensorList.
+   */
+  io.github.thisisthepy.dsa.control.v1.SensorList getSensorList();
+
+  /**
+   * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+   * @return Whether the sensorActivate field is set.
+   */
+  boolean hasSensorActivate();
+  /**
+   * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+   * @return The sensorActivate.
+   */
+  io.github.thisisthepy.dsa.control.v1.SensorActivate getSensorActivate();
+
+  /**
+   * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+   * @return Whether the sensorReadings field is set.
+   */
+  boolean hasSensorReadings();
+  /**
+   * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+   * @return The sensorReadings.
+   */
+  io.github.thisisthepy.dsa.control.v1.SensorReadings getSensorReadings();
+
+  /**
+   * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+   * @return Whether the cameraList field is set.
+   */
+  boolean hasCameraList();
+  /**
+   * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+   * @return The cameraList.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraList getCameraList();
+
+  /**
+   * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+   * @return Whether the cameraOpen field is set.
+   */
+  boolean hasCameraOpen();
+  /**
+   * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+   * @return The cameraOpen.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraOpen getCameraOpen();
+
+  /**
+   * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+   * @return Whether the cameraOpened field is set.
+   */
+  boolean hasCameraOpened();
+  /**
+   * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+   * @return The cameraOpened.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraOpened getCameraOpened();
+
+  /**
+   * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+   * @return Whether the cameraFrame field is set.
+   */
+  boolean hasCameraFrame();
+  /**
+   * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+   * @return The cameraFrame.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraFrame getCameraFrame();
+
+  /**
+   * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+   * @return Whether the cameraStop field is set.
+   */
+  boolean hasCameraStop();
+  /**
+   * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+   * @return The cameraStop.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraStop getCameraStop();
+
+  /**
+   * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+   * @return Whether the cameraStill field is set.
+   */
+  boolean hasCameraStill();
+  /**
+   * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+   * @return The cameraStill.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraStill getCameraStill();
+
+  /**
+   * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+   * @return Whether the cameraStillTaken field is set.
+   */
+  boolean hasCameraStillTaken();
+  /**
+   * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+   * @return The cameraStillTaken.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraStillTaken getCameraStillTaken();
+
+  /**
+   * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+   * @return Whether the cameraError field is set.
+   */
+  boolean hasCameraError();
+  /**
+   * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+   * @return The cameraError.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraError getCameraError();
+
+  /**
+   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 155;</code>
+   * @return Whether the setTaskCaption field is set.
+   */
+  boolean hasSetTaskCaption();
+  /**
+   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 155;</code>
+   * @return The setTaskCaption.
+   */
+  io.github.thisisthepy.dsa.control.v1.SetTaskCaption getSetTaskCaption();
 
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }
