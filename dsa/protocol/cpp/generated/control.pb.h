@@ -183,6 +183,15 @@ extern LinkHandlingDefaultTypeInternal _LinkHandling_default_instance_;
 class ListWidgetProviders;
 struct ListWidgetProvidersDefaultTypeInternal;
 extern ListWidgetProvidersDefaultTypeInternal _ListWidgetProviders_default_instance_;
+class LocationFix;
+struct LocationFixDefaultTypeInternal;
+extern LocationFixDefaultTypeInternal _LocationFix_default_instance_;
+class LocationRequest;
+struct LocationRequestDefaultTypeInternal;
+extern LocationRequestDefaultTypeInternal _LocationRequest_default_instance_;
+class LocationStatus;
+struct LocationStatusDefaultTypeInternal;
+extern LocationStatusDefaultTypeInternal _LocationStatus_default_instance_;
 class LogDump;
 struct LogDumpDefaultTypeInternal;
 extern LogDumpDefaultTypeInternal _LogDump_default_instance_;
@@ -362,6 +371,9 @@ template<> ::dsa::control::v1::KeyEvent* Arena::CreateMaybeMessage<::dsa::contro
 template<> ::dsa::control::v1::LaunchApp* Arena::CreateMaybeMessage<::dsa::control::v1::LaunchApp>(Arena*);
 template<> ::dsa::control::v1::LinkHandling* Arena::CreateMaybeMessage<::dsa::control::v1::LinkHandling>(Arena*);
 template<> ::dsa::control::v1::ListWidgetProviders* Arena::CreateMaybeMessage<::dsa::control::v1::ListWidgetProviders>(Arena*);
+template<> ::dsa::control::v1::LocationFix* Arena::CreateMaybeMessage<::dsa::control::v1::LocationFix>(Arena*);
+template<> ::dsa::control::v1::LocationRequest* Arena::CreateMaybeMessage<::dsa::control::v1::LocationRequest>(Arena*);
+template<> ::dsa::control::v1::LocationStatus* Arena::CreateMaybeMessage<::dsa::control::v1::LocationStatus>(Arena*);
 template<> ::dsa::control::v1::LogDump* Arena::CreateMaybeMessage<::dsa::control::v1::LogDump>(Arena*);
 template<> ::dsa::control::v1::LogRecord* Arena::CreateMaybeMessage<::dsa::control::v1::LogRecord>(Arena*);
 template<> ::dsa::control::v1::LogRecords* Arena::CreateMaybeMessage<::dsa::control::v1::LogRecords>(Arena*);
@@ -574,6 +586,29 @@ inline const std::string& PowerHintKind_Name(T enum_t_value) {
 }
 bool PowerHintKind_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, PowerHintKind* value);
+enum LocationAccess : int {
+  LOCATION_ACCESS_UNSPECIFIED = 0,
+  LOCATION_ACCESS_ALLOWED = 1,
+  LOCATION_ACCESS_DENIED = 2,
+  LOCATION_ACCESS_UNAVAILABLE = 3,
+  LocationAccess_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  LocationAccess_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool LocationAccess_IsValid(int value);
+constexpr LocationAccess LocationAccess_MIN = LOCATION_ACCESS_UNSPECIFIED;
+constexpr LocationAccess LocationAccess_MAX = LOCATION_ACCESS_UNAVAILABLE;
+constexpr int LocationAccess_ARRAYSIZE = LocationAccess_MAX + 1;
+
+const std::string& LocationAccess_Name(LocationAccess value);
+template<typename T>
+inline const std::string& LocationAccess_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, LocationAccess>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function LocationAccess_Name.");
+  return LocationAccess_Name(static_cast<LocationAccess>(enum_t_value));
+}
+bool LocationAccess_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, LocationAccess* value);
 enum InstallStatus : int {
   INSTALL_STATUS_UNSPECIFIED = 0,
   INSTALL_STATUS_SUCCESS = 1,
@@ -5052,6 +5087,533 @@ class PowerHint final :
 };
 // -------------------------------------------------------------------
 
+class LocationRequest final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.LocationRequest) */ {
+ public:
+  inline LocationRequest() : LocationRequest(nullptr) {}
+  ~LocationRequest() override;
+  explicit PROTOBUF_CONSTEXPR LocationRequest(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  LocationRequest(const LocationRequest& from);
+  LocationRequest(LocationRequest&& from) noexcept
+    : LocationRequest() {
+    *this = ::std::move(from);
+  }
+
+  inline LocationRequest& operator=(const LocationRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline LocationRequest& operator=(LocationRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const LocationRequest& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const LocationRequest* internal_default_instance() {
+    return reinterpret_cast<const LocationRequest*>(
+               &_LocationRequest_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    28;
+
+  friend void swap(LocationRequest& a, LocationRequest& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(LocationRequest* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(LocationRequest* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  LocationRequest* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<LocationRequest>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const LocationRequest& from);
+  void MergeFrom(const LocationRequest& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(LocationRequest* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.LocationRequest";
+  }
+  protected:
+  explicit LocationRequest(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kActiveFieldNumber = 1,
+    kIntervalMsFieldNumber = 2,
+  };
+  // bool active = 1;
+  void clear_active();
+  bool active() const;
+  void set_active(bool value);
+  private:
+  bool _internal_active() const;
+  void _internal_set_active(bool value);
+  public:
+
+  // uint32 interval_ms = 2;
+  void clear_interval_ms();
+  uint32_t interval_ms() const;
+  void set_interval_ms(uint32_t value);
+  private:
+  uint32_t _internal_interval_ms() const;
+  void _internal_set_interval_ms(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.LocationRequest)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    bool active_;
+    uint32_t interval_ms_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class LocationStatus final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.LocationStatus) */ {
+ public:
+  inline LocationStatus() : LocationStatus(nullptr) {}
+  ~LocationStatus() override;
+  explicit PROTOBUF_CONSTEXPR LocationStatus(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  LocationStatus(const LocationStatus& from);
+  LocationStatus(LocationStatus&& from) noexcept
+    : LocationStatus() {
+    *this = ::std::move(from);
+  }
+
+  inline LocationStatus& operator=(const LocationStatus& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline LocationStatus& operator=(LocationStatus&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const LocationStatus& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const LocationStatus* internal_default_instance() {
+    return reinterpret_cast<const LocationStatus*>(
+               &_LocationStatus_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    29;
+
+  friend void swap(LocationStatus& a, LocationStatus& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(LocationStatus* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(LocationStatus* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  LocationStatus* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<LocationStatus>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const LocationStatus& from);
+  void MergeFrom(const LocationStatus& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(LocationStatus* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.LocationStatus";
+  }
+  protected:
+  explicit LocationStatus(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kDetailFieldNumber = 2,
+    kAccessFieldNumber = 1,
+  };
+  // string detail = 2;
+  void clear_detail();
+  const std::string& detail() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_detail(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_detail();
+  PROTOBUF_NODISCARD std::string* release_detail();
+  void set_allocated_detail(std::string* detail);
+  private:
+  const std::string& _internal_detail() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_detail(const std::string& value);
+  std::string* _internal_mutable_detail();
+  public:
+
+  // .dsa.control.v1.LocationAccess access = 1;
+  void clear_access();
+  ::dsa::control::v1::LocationAccess access() const;
+  void set_access(::dsa::control::v1::LocationAccess value);
+  private:
+  ::dsa::control::v1::LocationAccess _internal_access() const;
+  void _internal_set_access(::dsa::control::v1::LocationAccess value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.LocationStatus)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr detail_;
+    int access_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class LocationFix final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.LocationFix) */ {
+ public:
+  inline LocationFix() : LocationFix(nullptr) {}
+  ~LocationFix() override;
+  explicit PROTOBUF_CONSTEXPR LocationFix(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  LocationFix(const LocationFix& from);
+  LocationFix(LocationFix&& from) noexcept
+    : LocationFix() {
+    *this = ::std::move(from);
+  }
+
+  inline LocationFix& operator=(const LocationFix& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline LocationFix& operator=(LocationFix&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const LocationFix& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const LocationFix* internal_default_instance() {
+    return reinterpret_cast<const LocationFix*>(
+               &_LocationFix_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    30;
+
+  friend void swap(LocationFix& a, LocationFix& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(LocationFix* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(LocationFix* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  LocationFix* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<LocationFix>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const LocationFix& from);
+  void MergeFrom(const LocationFix& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(LocationFix* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.LocationFix";
+  }
+  protected:
+  explicit LocationFix(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kLatitudeDegreesFieldNumber = 1,
+    kLongitudeDegreesFieldNumber = 2,
+    kHorizontalAccuracyMetersFieldNumber = 3,
+    kVerticalAccuracyMetersFieldNumber = 6,
+    kAltitudeMetersFieldNumber = 5,
+    kHasAltitudeFieldNumber = 4,
+    kHasSpeedFieldNumber = 7,
+    kHasBearingFieldNumber = 9,
+    kSpeedMetersPerSecondFieldNumber = 8,
+    kUnixTimeMsFieldNumber = 11,
+    kBearingDegreesFieldNumber = 10,
+  };
+  // double latitude_degrees = 1;
+  void clear_latitude_degrees();
+  double latitude_degrees() const;
+  void set_latitude_degrees(double value);
+  private:
+  double _internal_latitude_degrees() const;
+  void _internal_set_latitude_degrees(double value);
+  public:
+
+  // double longitude_degrees = 2;
+  void clear_longitude_degrees();
+  double longitude_degrees() const;
+  void set_longitude_degrees(double value);
+  private:
+  double _internal_longitude_degrees() const;
+  void _internal_set_longitude_degrees(double value);
+  public:
+
+  // float horizontal_accuracy_meters = 3;
+  void clear_horizontal_accuracy_meters();
+  float horizontal_accuracy_meters() const;
+  void set_horizontal_accuracy_meters(float value);
+  private:
+  float _internal_horizontal_accuracy_meters() const;
+  void _internal_set_horizontal_accuracy_meters(float value);
+  public:
+
+  // float vertical_accuracy_meters = 6;
+  void clear_vertical_accuracy_meters();
+  float vertical_accuracy_meters() const;
+  void set_vertical_accuracy_meters(float value);
+  private:
+  float _internal_vertical_accuracy_meters() const;
+  void _internal_set_vertical_accuracy_meters(float value);
+  public:
+
+  // double altitude_meters = 5;
+  void clear_altitude_meters();
+  double altitude_meters() const;
+  void set_altitude_meters(double value);
+  private:
+  double _internal_altitude_meters() const;
+  void _internal_set_altitude_meters(double value);
+  public:
+
+  // bool has_altitude = 4;
+  void clear_has_altitude();
+  bool has_altitude() const;
+  void set_has_altitude(bool value);
+  private:
+  bool _internal_has_altitude() const;
+  void _internal_set_has_altitude(bool value);
+  public:
+
+  // bool has_speed = 7;
+  void clear_has_speed();
+  bool has_speed() const;
+  void set_has_speed(bool value);
+  private:
+  bool _internal_has_speed() const;
+  void _internal_set_has_speed(bool value);
+  public:
+
+  // bool has_bearing = 9;
+  void clear_has_bearing();
+  bool has_bearing() const;
+  void set_has_bearing(bool value);
+  private:
+  bool _internal_has_bearing() const;
+  void _internal_set_has_bearing(bool value);
+  public:
+
+  // float speed_meters_per_second = 8;
+  void clear_speed_meters_per_second();
+  float speed_meters_per_second() const;
+  void set_speed_meters_per_second(float value);
+  private:
+  float _internal_speed_meters_per_second() const;
+  void _internal_set_speed_meters_per_second(float value);
+  public:
+
+  // uint64 unix_time_ms = 11;
+  void clear_unix_time_ms();
+  uint64_t unix_time_ms() const;
+  void set_unix_time_ms(uint64_t value);
+  private:
+  uint64_t _internal_unix_time_ms() const;
+  void _internal_set_unix_time_ms(uint64_t value);
+  public:
+
+  // float bearing_degrees = 10;
+  void clear_bearing_degrees();
+  float bearing_degrees() const;
+  void set_bearing_degrees(float value);
+  private:
+  float _internal_bearing_degrees() const;
+  void _internal_set_bearing_degrees(float value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.LocationFix)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    double latitude_degrees_;
+    double longitude_degrees_;
+    float horizontal_accuracy_meters_;
+    float vertical_accuracy_meters_;
+    double altitude_meters_;
+    bool has_altitude_;
+    bool has_speed_;
+    bool has_bearing_;
+    float speed_meters_per_second_;
+    uint64_t unix_time_ms_;
+    float bearing_degrees_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class DeviceIdle final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DeviceIdle) */ {
  public:
@@ -5091,7 +5653,7 @@ class DeviceIdle final :
                &_DeviceIdle_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    28;
+    31;
 
   friend void swap(DeviceIdle& a, DeviceIdle& b) {
     a.Swap(&b);
@@ -5221,7 +5783,7 @@ class ClipboardText final :
                &_ClipboardText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    29;
+    32;
 
   friend void swap(ClipboardText& a, ClipboardText& b) {
     a.Swap(&b);
@@ -5356,7 +5918,7 @@ class ClipboardSharing final :
                &_ClipboardSharing_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    30;
+    33;
 
   friend void swap(ClipboardSharing& a, ClipboardSharing& b) {
     a.Swap(&b);
@@ -5486,7 +6048,7 @@ class DeveloperMode final :
                &_DeveloperMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    31;
+    34;
 
   friend void swap(DeveloperMode& a, DeveloperMode& b) {
     a.Swap(&b);
@@ -5616,7 +6178,7 @@ class GuestNotification final :
                &_GuestNotification_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    32;
+    35;
 
   friend void swap(GuestNotification& a, GuestNotification& b) {
     a.Swap(&b);
@@ -5875,7 +6437,7 @@ class NotificationRemoved final :
                &_NotificationRemoved_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    33;
+    36;
 
   friend void swap(NotificationRemoved& a, NotificationRemoved& b) {
     a.Swap(&b);
@@ -6010,7 +6572,7 @@ class NotificationClicked final :
                &_NotificationClicked_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    34;
+    37;
 
   friend void swap(NotificationClicked& a, NotificationClicked& b) {
     a.Swap(&b);
@@ -6145,7 +6707,7 @@ class NotificationDismissed final :
                &_NotificationDismissed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    35;
+    38;
 
   friend void swap(NotificationDismissed& a, NotificationDismissed& b) {
     a.Swap(&b);
@@ -6280,7 +6842,7 @@ class RequestGuestMemory final :
                &_RequestGuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    36;
+    39;
 
   friend void swap(RequestGuestMemory& a, RequestGuestMemory& b) {
     a.Swap(&b);
@@ -6397,7 +6959,7 @@ class ProcessMemory final :
                &_ProcessMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    37;
+    40;
 
   friend void swap(ProcessMemory& a, ProcessMemory& b) {
     a.Swap(&b);
@@ -6565,7 +7127,7 @@ class GuestMemory final :
                &_GuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    38;
+    41;
 
   friend void swap(GuestMemory& a, GuestMemory& b) {
     a.Swap(&b);
@@ -6935,7 +7497,7 @@ class AgentConnected final :
                &_AgentConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    39;
+    42;
 
   friend void swap(AgentConnected& a, AgentConnected& b) {
     a.Swap(&b);
@@ -7052,7 +7614,7 @@ class GuestBoot final :
                &_GuestBoot_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    40;
+    43;
 
   friend void swap(GuestBoot& a, GuestBoot& b) {
     a.Swap(&b);
@@ -7193,7 +7755,7 @@ class InstallApk final :
                &_InstallApk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    41;
+    44;
 
   friend void swap(InstallApk& a, InstallApk& b) {
     a.Swap(&b);
@@ -7350,7 +7912,7 @@ class ApkChunk final :
                &_ApkChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    42;
+    45;
 
   friend void swap(ApkChunk& a, ApkChunk& b) {
     a.Swap(&b);
@@ -7507,7 +8069,7 @@ class QueryPackage final :
                &_QueryPackage_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    43;
+    46;
 
   friend void swap(QueryPackage& a, QueryPackage& b) {
     a.Swap(&b);
@@ -7653,7 +8215,7 @@ class PackageState final :
                &_PackageState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    44;
+    47;
 
   friend void swap(PackageState& a, PackageState& b) {
     a.Swap(&b);
@@ -7847,7 +8409,7 @@ class OpenLink final :
                &_OpenLink_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    45;
+    48;
 
   friend void swap(OpenLink& a, OpenLink& b) {
     a.Swap(&b);
@@ -7982,7 +8544,7 @@ class LinkHandling final :
                &_LinkHandling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    46;
+    49;
 
   friend void swap(LinkHandling& a, LinkHandling& b) {
     a.Swap(&b);
@@ -8112,7 +8674,7 @@ class OpenFile final :
                &_OpenFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    47;
+    50;
 
   friend void swap(OpenFile& a, OpenFile& b) {
     a.Swap(&b);
@@ -8280,7 +8842,7 @@ class FileChunk final :
                &_FileChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    48;
+    51;
 
   friend void swap(FileChunk& a, FileChunk& b) {
     a.Swap(&b);
@@ -8437,7 +8999,7 @@ class CancelInstall final :
                &_CancelInstall_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    49;
+    52;
 
   friend void swap(CancelInstall& a, CancelInstall& b) {
     a.Swap(&b);
@@ -8567,7 +9129,7 @@ class InstallProgress final :
                &_InstallProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    50;
+    53;
 
   friend void swap(InstallProgress& a, InstallProgress& b) {
     a.Swap(&b);
@@ -8708,7 +9270,7 @@ class InstallResult final :
                &_InstallResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    51;
+    54;
 
   friend void swap(InstallResult& a, InstallResult& b) {
     a.Swap(&b);
@@ -8881,7 +9443,7 @@ class FileProgress final :
                &_FileProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    52;
+    55;
 
   friend void swap(FileProgress& a, FileProgress& b) {
     a.Swap(&b);
@@ -9038,7 +9600,7 @@ class ClockProbe final :
                &_ClockProbe_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    53;
+    56;
 
   friend void swap(ClockProbe& a, ClockProbe& b) {
     a.Swap(&b);
@@ -9168,7 +9730,7 @@ class VideoCodecSupport final :
                &_VideoCodecSupport_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    54;
+    57;
 
   friend void swap(VideoCodecSupport& a, VideoCodecSupport& b) {
     a.Swap(&b);
@@ -9320,7 +9882,7 @@ class VideoCapabilities final :
                &_VideoCapabilities_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    55;
+    58;
 
   friend void swap(VideoCapabilities& a, VideoCapabilities& b) {
     a.Swap(&b);
@@ -9459,7 +10021,7 @@ class VideoDecoderOpen final :
                &_VideoDecoderOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    56;
+    59;
 
   friend void swap(VideoDecoderOpen& a, VideoDecoderOpen& b) {
     a.Swap(&b);
@@ -9611,7 +10173,7 @@ class VideoDecoderOpened final :
                &_VideoDecoderOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    57;
+    60;
 
   friend void swap(VideoDecoderOpened& a, VideoDecoderOpened& b) {
     a.Swap(&b);
@@ -9757,7 +10319,7 @@ class VideoPacket final :
                &_VideoPacket_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    58;
+    61;
 
   friend void swap(VideoPacket& a, VideoPacket& b) {
     a.Swap(&b);
@@ -9936,7 +10498,7 @@ class VideoFrame final :
                &_VideoFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    59;
+    62;
 
   friend void swap(VideoFrame& a, VideoFrame& b) {
     a.Swap(&b);
@@ -10137,7 +10699,7 @@ class VideoFlush final :
                &_VideoFlush_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    60;
+    63;
 
   friend void swap(VideoFlush& a, VideoFlush& b) {
     a.Swap(&b);
@@ -10254,7 +10816,7 @@ class VideoFlushed final :
                &_VideoFlushed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    61;
+    64;
 
   friend void swap(VideoFlushed& a, VideoFlushed& b) {
     a.Swap(&b);
@@ -10371,7 +10933,7 @@ class VideoError final :
                &_VideoError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    62;
+    65;
 
   friend void swap(VideoError& a, VideoError& b) {
     a.Swap(&b);
@@ -10506,7 +11068,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    63;
+    66;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -10647,7 +11209,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    64;
+    67;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -10777,7 +11339,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    65;
+    68;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -11064,7 +11626,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    66;
+    69;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -11225,7 +11787,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    67;
+    70;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -11371,7 +11933,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    68;
+    71;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -11528,7 +12090,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    69;
+    72;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -11678,7 +12240,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    70;
+    73;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -11822,7 +12384,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    71;
+    74;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -11952,7 +12514,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    72;
+    75;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -12137,7 +12699,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    76;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -12305,7 +12867,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    77;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -12479,7 +13041,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    78;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -12620,7 +13182,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    79;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -12772,7 +13334,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    80;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -13215,7 +13777,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    81;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -13448,7 +14010,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    82;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -13638,7 +14200,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    83;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -13806,7 +14368,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    84;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -13969,7 +14531,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    85;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -14121,7 +14683,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    86;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -14349,7 +14911,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    87;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -14526,7 +15088,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    88;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -14656,7 +15218,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    89;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -14829,7 +15391,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    90;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -15052,6 +15614,9 @@ class Envelope final :
     kDiagnosticsFile = 134,
     kDiagnosticsDone = 135,
     kStopApp = 136,
+    kLocationRequest = 200,
+    kLocationStatus = 201,
+    kLocationFix = 202,
     BODY_NOT_SET = 0,
   };
 
@@ -15060,7 +15625,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    91;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -15205,6 +15770,9 @@ class Envelope final :
     kDiagnosticsFileFieldNumber = 134,
     kDiagnosticsDoneFieldNumber = 135,
     kStopAppFieldNumber = 136,
+    kLocationRequestFieldNumber = 200,
+    kLocationStatusFieldNumber = 201,
+    kLocationFixFieldNumber = 202,
   };
   // .dsa.control.v1.Hello hello = 1;
   bool has_hello() const;
@@ -16664,6 +17232,60 @@ class Envelope final :
       ::dsa::control::v1::StopApp* stop_app);
   ::dsa::control::v1::StopApp* unsafe_arena_release_stop_app();
 
+  // .dsa.control.v1.LocationRequest location_request = 200;
+  bool has_location_request() const;
+  private:
+  bool _internal_has_location_request() const;
+  public:
+  void clear_location_request();
+  const ::dsa::control::v1::LocationRequest& location_request() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::LocationRequest* release_location_request();
+  ::dsa::control::v1::LocationRequest* mutable_location_request();
+  void set_allocated_location_request(::dsa::control::v1::LocationRequest* location_request);
+  private:
+  const ::dsa::control::v1::LocationRequest& _internal_location_request() const;
+  ::dsa::control::v1::LocationRequest* _internal_mutable_location_request();
+  public:
+  void unsafe_arena_set_allocated_location_request(
+      ::dsa::control::v1::LocationRequest* location_request);
+  ::dsa::control::v1::LocationRequest* unsafe_arena_release_location_request();
+
+  // .dsa.control.v1.LocationStatus location_status = 201;
+  bool has_location_status() const;
+  private:
+  bool _internal_has_location_status() const;
+  public:
+  void clear_location_status();
+  const ::dsa::control::v1::LocationStatus& location_status() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::LocationStatus* release_location_status();
+  ::dsa::control::v1::LocationStatus* mutable_location_status();
+  void set_allocated_location_status(::dsa::control::v1::LocationStatus* location_status);
+  private:
+  const ::dsa::control::v1::LocationStatus& _internal_location_status() const;
+  ::dsa::control::v1::LocationStatus* _internal_mutable_location_status();
+  public:
+  void unsafe_arena_set_allocated_location_status(
+      ::dsa::control::v1::LocationStatus* location_status);
+  ::dsa::control::v1::LocationStatus* unsafe_arena_release_location_status();
+
+  // .dsa.control.v1.LocationFix location_fix = 202;
+  bool has_location_fix() const;
+  private:
+  bool _internal_has_location_fix() const;
+  public:
+  void clear_location_fix();
+  const ::dsa::control::v1::LocationFix& location_fix() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::LocationFix* release_location_fix();
+  ::dsa::control::v1::LocationFix* mutable_location_fix();
+  void set_allocated_location_fix(::dsa::control::v1::LocationFix* location_fix);
+  private:
+  const ::dsa::control::v1::LocationFix& _internal_location_fix() const;
+  ::dsa::control::v1::LocationFix* _internal_mutable_location_fix();
+  public:
+  void unsafe_arena_set_allocated_location_fix(
+      ::dsa::control::v1::LocationFix* location_fix);
+  ::dsa::control::v1::LocationFix* unsafe_arena_release_location_fix();
+
   void clear_body();
   BodyCase body_case() const;
   // @@protoc_insertion_point(class_scope:dsa.control.v1.Envelope)
@@ -16750,6 +17372,9 @@ class Envelope final :
   void set_has_diagnostics_file();
   void set_has_diagnostics_done();
   void set_has_stop_app();
+  void set_has_location_request();
+  void set_has_location_status();
+  void set_has_location_fix();
 
   inline bool has_body() const;
   inline void clear_has_body();
@@ -16842,6 +17467,9 @@ class Envelope final :
       ::dsa::control::v1::DiagnosticsFile* diagnostics_file_;
       ::dsa::control::v1::DiagnosticsDone* diagnostics_done_;
       ::dsa::control::v1::StopApp* stop_app_;
+      ::dsa::control::v1::LocationRequest* location_request_;
+      ::dsa::control::v1::LocationStatus* location_status_;
+      ::dsa::control::v1::LocationFix* location_fix_;
     } body_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     uint32_t _oneof_case_[1];
@@ -19412,6 +20040,348 @@ inline void PowerHint::_internal_set_duration_ms(int32_t value) {
 inline void PowerHint::set_duration_ms(int32_t value) {
   _internal_set_duration_ms(value);
   // @@protoc_insertion_point(field_set:dsa.control.v1.PowerHint.duration_ms)
+}
+
+// -------------------------------------------------------------------
+
+// LocationRequest
+
+// bool active = 1;
+inline void LocationRequest::clear_active() {
+  _impl_.active_ = false;
+}
+inline bool LocationRequest::_internal_active() const {
+  return _impl_.active_;
+}
+inline bool LocationRequest::active() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationRequest.active)
+  return _internal_active();
+}
+inline void LocationRequest::_internal_set_active(bool value) {
+  
+  _impl_.active_ = value;
+}
+inline void LocationRequest::set_active(bool value) {
+  _internal_set_active(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationRequest.active)
+}
+
+// uint32 interval_ms = 2;
+inline void LocationRequest::clear_interval_ms() {
+  _impl_.interval_ms_ = 0u;
+}
+inline uint32_t LocationRequest::_internal_interval_ms() const {
+  return _impl_.interval_ms_;
+}
+inline uint32_t LocationRequest::interval_ms() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationRequest.interval_ms)
+  return _internal_interval_ms();
+}
+inline void LocationRequest::_internal_set_interval_ms(uint32_t value) {
+  
+  _impl_.interval_ms_ = value;
+}
+inline void LocationRequest::set_interval_ms(uint32_t value) {
+  _internal_set_interval_ms(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationRequest.interval_ms)
+}
+
+// -------------------------------------------------------------------
+
+// LocationStatus
+
+// .dsa.control.v1.LocationAccess access = 1;
+inline void LocationStatus::clear_access() {
+  _impl_.access_ = 0;
+}
+inline ::dsa::control::v1::LocationAccess LocationStatus::_internal_access() const {
+  return static_cast< ::dsa::control::v1::LocationAccess >(_impl_.access_);
+}
+inline ::dsa::control::v1::LocationAccess LocationStatus::access() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationStatus.access)
+  return _internal_access();
+}
+inline void LocationStatus::_internal_set_access(::dsa::control::v1::LocationAccess value) {
+  
+  _impl_.access_ = value;
+}
+inline void LocationStatus::set_access(::dsa::control::v1::LocationAccess value) {
+  _internal_set_access(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationStatus.access)
+}
+
+// string detail = 2;
+inline void LocationStatus::clear_detail() {
+  _impl_.detail_.ClearToEmpty();
+}
+inline const std::string& LocationStatus::detail() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationStatus.detail)
+  return _internal_detail();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void LocationStatus::set_detail(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.detail_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationStatus.detail)
+}
+inline std::string* LocationStatus::mutable_detail() {
+  std::string* _s = _internal_mutable_detail();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.LocationStatus.detail)
+  return _s;
+}
+inline const std::string& LocationStatus::_internal_detail() const {
+  return _impl_.detail_.Get();
+}
+inline void LocationStatus::_internal_set_detail(const std::string& value) {
+  
+  _impl_.detail_.Set(value, GetArenaForAllocation());
+}
+inline std::string* LocationStatus::_internal_mutable_detail() {
+  
+  return _impl_.detail_.Mutable(GetArenaForAllocation());
+}
+inline std::string* LocationStatus::release_detail() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.LocationStatus.detail)
+  return _impl_.detail_.Release();
+}
+inline void LocationStatus::set_allocated_detail(std::string* detail) {
+  if (detail != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.detail_.SetAllocated(detail, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.detail_.IsDefault()) {
+    _impl_.detail_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.LocationStatus.detail)
+}
+
+// -------------------------------------------------------------------
+
+// LocationFix
+
+// double latitude_degrees = 1;
+inline void LocationFix::clear_latitude_degrees() {
+  _impl_.latitude_degrees_ = 0;
+}
+inline double LocationFix::_internal_latitude_degrees() const {
+  return _impl_.latitude_degrees_;
+}
+inline double LocationFix::latitude_degrees() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.latitude_degrees)
+  return _internal_latitude_degrees();
+}
+inline void LocationFix::_internal_set_latitude_degrees(double value) {
+  
+  _impl_.latitude_degrees_ = value;
+}
+inline void LocationFix::set_latitude_degrees(double value) {
+  _internal_set_latitude_degrees(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.latitude_degrees)
+}
+
+// double longitude_degrees = 2;
+inline void LocationFix::clear_longitude_degrees() {
+  _impl_.longitude_degrees_ = 0;
+}
+inline double LocationFix::_internal_longitude_degrees() const {
+  return _impl_.longitude_degrees_;
+}
+inline double LocationFix::longitude_degrees() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.longitude_degrees)
+  return _internal_longitude_degrees();
+}
+inline void LocationFix::_internal_set_longitude_degrees(double value) {
+  
+  _impl_.longitude_degrees_ = value;
+}
+inline void LocationFix::set_longitude_degrees(double value) {
+  _internal_set_longitude_degrees(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.longitude_degrees)
+}
+
+// float horizontal_accuracy_meters = 3;
+inline void LocationFix::clear_horizontal_accuracy_meters() {
+  _impl_.horizontal_accuracy_meters_ = 0;
+}
+inline float LocationFix::_internal_horizontal_accuracy_meters() const {
+  return _impl_.horizontal_accuracy_meters_;
+}
+inline float LocationFix::horizontal_accuracy_meters() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.horizontal_accuracy_meters)
+  return _internal_horizontal_accuracy_meters();
+}
+inline void LocationFix::_internal_set_horizontal_accuracy_meters(float value) {
+  
+  _impl_.horizontal_accuracy_meters_ = value;
+}
+inline void LocationFix::set_horizontal_accuracy_meters(float value) {
+  _internal_set_horizontal_accuracy_meters(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.horizontal_accuracy_meters)
+}
+
+// bool has_altitude = 4;
+inline void LocationFix::clear_has_altitude() {
+  _impl_.has_altitude_ = false;
+}
+inline bool LocationFix::_internal_has_altitude() const {
+  return _impl_.has_altitude_;
+}
+inline bool LocationFix::has_altitude() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.has_altitude)
+  return _internal_has_altitude();
+}
+inline void LocationFix::_internal_set_has_altitude(bool value) {
+  
+  _impl_.has_altitude_ = value;
+}
+inline void LocationFix::set_has_altitude(bool value) {
+  _internal_set_has_altitude(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.has_altitude)
+}
+
+// double altitude_meters = 5;
+inline void LocationFix::clear_altitude_meters() {
+  _impl_.altitude_meters_ = 0;
+}
+inline double LocationFix::_internal_altitude_meters() const {
+  return _impl_.altitude_meters_;
+}
+inline double LocationFix::altitude_meters() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.altitude_meters)
+  return _internal_altitude_meters();
+}
+inline void LocationFix::_internal_set_altitude_meters(double value) {
+  
+  _impl_.altitude_meters_ = value;
+}
+inline void LocationFix::set_altitude_meters(double value) {
+  _internal_set_altitude_meters(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.altitude_meters)
+}
+
+// float vertical_accuracy_meters = 6;
+inline void LocationFix::clear_vertical_accuracy_meters() {
+  _impl_.vertical_accuracy_meters_ = 0;
+}
+inline float LocationFix::_internal_vertical_accuracy_meters() const {
+  return _impl_.vertical_accuracy_meters_;
+}
+inline float LocationFix::vertical_accuracy_meters() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.vertical_accuracy_meters)
+  return _internal_vertical_accuracy_meters();
+}
+inline void LocationFix::_internal_set_vertical_accuracy_meters(float value) {
+  
+  _impl_.vertical_accuracy_meters_ = value;
+}
+inline void LocationFix::set_vertical_accuracy_meters(float value) {
+  _internal_set_vertical_accuracy_meters(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.vertical_accuracy_meters)
+}
+
+// bool has_speed = 7;
+inline void LocationFix::clear_has_speed() {
+  _impl_.has_speed_ = false;
+}
+inline bool LocationFix::_internal_has_speed() const {
+  return _impl_.has_speed_;
+}
+inline bool LocationFix::has_speed() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.has_speed)
+  return _internal_has_speed();
+}
+inline void LocationFix::_internal_set_has_speed(bool value) {
+  
+  _impl_.has_speed_ = value;
+}
+inline void LocationFix::set_has_speed(bool value) {
+  _internal_set_has_speed(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.has_speed)
+}
+
+// float speed_meters_per_second = 8;
+inline void LocationFix::clear_speed_meters_per_second() {
+  _impl_.speed_meters_per_second_ = 0;
+}
+inline float LocationFix::_internal_speed_meters_per_second() const {
+  return _impl_.speed_meters_per_second_;
+}
+inline float LocationFix::speed_meters_per_second() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.speed_meters_per_second)
+  return _internal_speed_meters_per_second();
+}
+inline void LocationFix::_internal_set_speed_meters_per_second(float value) {
+  
+  _impl_.speed_meters_per_second_ = value;
+}
+inline void LocationFix::set_speed_meters_per_second(float value) {
+  _internal_set_speed_meters_per_second(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.speed_meters_per_second)
+}
+
+// bool has_bearing = 9;
+inline void LocationFix::clear_has_bearing() {
+  _impl_.has_bearing_ = false;
+}
+inline bool LocationFix::_internal_has_bearing() const {
+  return _impl_.has_bearing_;
+}
+inline bool LocationFix::has_bearing() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.has_bearing)
+  return _internal_has_bearing();
+}
+inline void LocationFix::_internal_set_has_bearing(bool value) {
+  
+  _impl_.has_bearing_ = value;
+}
+inline void LocationFix::set_has_bearing(bool value) {
+  _internal_set_has_bearing(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.has_bearing)
+}
+
+// float bearing_degrees = 10;
+inline void LocationFix::clear_bearing_degrees() {
+  _impl_.bearing_degrees_ = 0;
+}
+inline float LocationFix::_internal_bearing_degrees() const {
+  return _impl_.bearing_degrees_;
+}
+inline float LocationFix::bearing_degrees() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.bearing_degrees)
+  return _internal_bearing_degrees();
+}
+inline void LocationFix::_internal_set_bearing_degrees(float value) {
+  
+  _impl_.bearing_degrees_ = value;
+}
+inline void LocationFix::set_bearing_degrees(float value) {
+  _internal_set_bearing_degrees(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.bearing_degrees)
+}
+
+// uint64 unix_time_ms = 11;
+inline void LocationFix::clear_unix_time_ms() {
+  _impl_.unix_time_ms_ = uint64_t{0u};
+}
+inline uint64_t LocationFix::_internal_unix_time_ms() const {
+  return _impl_.unix_time_ms_;
+}
+inline uint64_t LocationFix::unix_time_ms() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LocationFix.unix_time_ms)
+  return _internal_unix_time_ms();
+}
+inline void LocationFix::_internal_set_unix_time_ms(uint64_t value) {
+  
+  _impl_.unix_time_ms_ = value;
+}
+inline void LocationFix::set_unix_time_ms(uint64_t value) {
+  _internal_set_unix_time_ms(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LocationFix.unix_time_ms)
 }
 
 // -------------------------------------------------------------------
@@ -31858,6 +32828,228 @@ inline ::dsa::control::v1::StopApp* Envelope::mutable_stop_app() {
   return _msg;
 }
 
+// .dsa.control.v1.LocationRequest location_request = 200;
+inline bool Envelope::_internal_has_location_request() const {
+  return body_case() == kLocationRequest;
+}
+inline bool Envelope::has_location_request() const {
+  return _internal_has_location_request();
+}
+inline void Envelope::set_has_location_request() {
+  _impl_._oneof_case_[0] = kLocationRequest;
+}
+inline void Envelope::clear_location_request() {
+  if (_internal_has_location_request()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.location_request_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::LocationRequest* Envelope::release_location_request() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.location_request)
+  if (_internal_has_location_request()) {
+    clear_has_body();
+    ::dsa::control::v1::LocationRequest* temp = _impl_.body_.location_request_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.location_request_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::LocationRequest& Envelope::_internal_location_request() const {
+  return _internal_has_location_request()
+      ? *_impl_.body_.location_request_
+      : reinterpret_cast< ::dsa::control::v1::LocationRequest&>(::dsa::control::v1::_LocationRequest_default_instance_);
+}
+inline const ::dsa::control::v1::LocationRequest& Envelope::location_request() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.location_request)
+  return _internal_location_request();
+}
+inline ::dsa::control::v1::LocationRequest* Envelope::unsafe_arena_release_location_request() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.location_request)
+  if (_internal_has_location_request()) {
+    clear_has_body();
+    ::dsa::control::v1::LocationRequest* temp = _impl_.body_.location_request_;
+    _impl_.body_.location_request_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_location_request(::dsa::control::v1::LocationRequest* location_request) {
+  clear_body();
+  if (location_request) {
+    set_has_location_request();
+    _impl_.body_.location_request_ = location_request;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.location_request)
+}
+inline ::dsa::control::v1::LocationRequest* Envelope::_internal_mutable_location_request() {
+  if (!_internal_has_location_request()) {
+    clear_body();
+    set_has_location_request();
+    _impl_.body_.location_request_ = CreateMaybeMessage< ::dsa::control::v1::LocationRequest >(GetArenaForAllocation());
+  }
+  return _impl_.body_.location_request_;
+}
+inline ::dsa::control::v1::LocationRequest* Envelope::mutable_location_request() {
+  ::dsa::control::v1::LocationRequest* _msg = _internal_mutable_location_request();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.location_request)
+  return _msg;
+}
+
+// .dsa.control.v1.LocationStatus location_status = 201;
+inline bool Envelope::_internal_has_location_status() const {
+  return body_case() == kLocationStatus;
+}
+inline bool Envelope::has_location_status() const {
+  return _internal_has_location_status();
+}
+inline void Envelope::set_has_location_status() {
+  _impl_._oneof_case_[0] = kLocationStatus;
+}
+inline void Envelope::clear_location_status() {
+  if (_internal_has_location_status()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.location_status_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::LocationStatus* Envelope::release_location_status() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.location_status)
+  if (_internal_has_location_status()) {
+    clear_has_body();
+    ::dsa::control::v1::LocationStatus* temp = _impl_.body_.location_status_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.location_status_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::LocationStatus& Envelope::_internal_location_status() const {
+  return _internal_has_location_status()
+      ? *_impl_.body_.location_status_
+      : reinterpret_cast< ::dsa::control::v1::LocationStatus&>(::dsa::control::v1::_LocationStatus_default_instance_);
+}
+inline const ::dsa::control::v1::LocationStatus& Envelope::location_status() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.location_status)
+  return _internal_location_status();
+}
+inline ::dsa::control::v1::LocationStatus* Envelope::unsafe_arena_release_location_status() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.location_status)
+  if (_internal_has_location_status()) {
+    clear_has_body();
+    ::dsa::control::v1::LocationStatus* temp = _impl_.body_.location_status_;
+    _impl_.body_.location_status_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_location_status(::dsa::control::v1::LocationStatus* location_status) {
+  clear_body();
+  if (location_status) {
+    set_has_location_status();
+    _impl_.body_.location_status_ = location_status;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.location_status)
+}
+inline ::dsa::control::v1::LocationStatus* Envelope::_internal_mutable_location_status() {
+  if (!_internal_has_location_status()) {
+    clear_body();
+    set_has_location_status();
+    _impl_.body_.location_status_ = CreateMaybeMessage< ::dsa::control::v1::LocationStatus >(GetArenaForAllocation());
+  }
+  return _impl_.body_.location_status_;
+}
+inline ::dsa::control::v1::LocationStatus* Envelope::mutable_location_status() {
+  ::dsa::control::v1::LocationStatus* _msg = _internal_mutable_location_status();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.location_status)
+  return _msg;
+}
+
+// .dsa.control.v1.LocationFix location_fix = 202;
+inline bool Envelope::_internal_has_location_fix() const {
+  return body_case() == kLocationFix;
+}
+inline bool Envelope::has_location_fix() const {
+  return _internal_has_location_fix();
+}
+inline void Envelope::set_has_location_fix() {
+  _impl_._oneof_case_[0] = kLocationFix;
+}
+inline void Envelope::clear_location_fix() {
+  if (_internal_has_location_fix()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.location_fix_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::LocationFix* Envelope::release_location_fix() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.location_fix)
+  if (_internal_has_location_fix()) {
+    clear_has_body();
+    ::dsa::control::v1::LocationFix* temp = _impl_.body_.location_fix_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.location_fix_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::LocationFix& Envelope::_internal_location_fix() const {
+  return _internal_has_location_fix()
+      ? *_impl_.body_.location_fix_
+      : reinterpret_cast< ::dsa::control::v1::LocationFix&>(::dsa::control::v1::_LocationFix_default_instance_);
+}
+inline const ::dsa::control::v1::LocationFix& Envelope::location_fix() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.location_fix)
+  return _internal_location_fix();
+}
+inline ::dsa::control::v1::LocationFix* Envelope::unsafe_arena_release_location_fix() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.location_fix)
+  if (_internal_has_location_fix()) {
+    clear_has_body();
+    ::dsa::control::v1::LocationFix* temp = _impl_.body_.location_fix_;
+    _impl_.body_.location_fix_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_location_fix(::dsa::control::v1::LocationFix* location_fix) {
+  clear_body();
+  if (location_fix) {
+    set_has_location_fix();
+    _impl_.body_.location_fix_ = location_fix;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.location_fix)
+}
+inline ::dsa::control::v1::LocationFix* Envelope::_internal_mutable_location_fix() {
+  if (!_internal_has_location_fix()) {
+    clear_body();
+    set_has_location_fix();
+    _impl_.body_.location_fix_ = CreateMaybeMessage< ::dsa::control::v1::LocationFix >(GetArenaForAllocation());
+  }
+  return _impl_.body_.location_fix_;
+}
+inline ::dsa::control::v1::LocationFix* Envelope::mutable_location_fix() {
+  ::dsa::control::v1::LocationFix* _msg = _internal_mutable_location_fix();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.location_fix)
+  return _msg;
+}
+
 inline bool Envelope::has_body() const {
   return body_case() != BODY_NOT_SET;
 }
@@ -31870,6 +33062,12 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
@@ -32062,6 +33260,7 @@ template <> struct is_proto_enum< ::dsa::control::v1::PointerAction> : ::std::tr
 template <> struct is_proto_enum< ::dsa::control::v1::PointerTool> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::KeyAction> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PowerHintKind> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::LocationAccess> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::InstallStatus> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::FileAction> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::VideoCodec> : ::std::true_type {};

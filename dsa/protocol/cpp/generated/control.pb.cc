@@ -436,6 +436,57 @@ struct PowerHintDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PowerHintDefaultTypeInternal _PowerHint_default_instance_;
+PROTOBUF_CONSTEXPR LocationRequest::LocationRequest(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.active_)*/false
+  , /*decltype(_impl_.interval_ms_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct LocationRequestDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR LocationRequestDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~LocationRequestDefaultTypeInternal() {}
+  union {
+    LocationRequest _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 LocationRequestDefaultTypeInternal _LocationRequest_default_instance_;
+PROTOBUF_CONSTEXPR LocationStatus::LocationStatus(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.detail_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.access_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct LocationStatusDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR LocationStatusDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~LocationStatusDefaultTypeInternal() {}
+  union {
+    LocationStatus _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 LocationStatusDefaultTypeInternal _LocationStatus_default_instance_;
+PROTOBUF_CONSTEXPR LocationFix::LocationFix(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.latitude_degrees_)*/0
+  , /*decltype(_impl_.longitude_degrees_)*/0
+  , /*decltype(_impl_.horizontal_accuracy_meters_)*/0
+  , /*decltype(_impl_.vertical_accuracy_meters_)*/0
+  , /*decltype(_impl_.altitude_meters_)*/0
+  , /*decltype(_impl_.has_altitude_)*/false
+  , /*decltype(_impl_.has_speed_)*/false
+  , /*decltype(_impl_.has_bearing_)*/false
+  , /*decltype(_impl_.speed_meters_per_second_)*/0
+  , /*decltype(_impl_.unix_time_ms_)*/uint64_t{0u}
+  , /*decltype(_impl_.bearing_degrees_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct LocationFixDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR LocationFixDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~LocationFixDefaultTypeInternal() {}
+  union {
+    LocationFix _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 LocationFixDefaultTypeInternal _LocationFix_default_instance_;
 PROTOBUF_CONSTEXPR DeviceIdle::DeviceIdle(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.idle_)*/false
@@ -1818,6 +1869,65 @@ bool PowerHintKind_Parse(
       PowerHintKind_entries, 3, name, &int_value);
   if (success) {
     *value = static_cast<PowerHintKind>(int_value);
+  }
+  return success;
+}
+bool LocationAccess_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> LocationAccess_strings[4] = {};
+
+static const char LocationAccess_names[] =
+  "LOCATION_ACCESS_ALLOWED"
+  "LOCATION_ACCESS_DENIED"
+  "LOCATION_ACCESS_UNAVAILABLE"
+  "LOCATION_ACCESS_UNSPECIFIED";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry LocationAccess_entries[] = {
+  { {LocationAccess_names + 0, 23}, 1 },
+  { {LocationAccess_names + 23, 22}, 2 },
+  { {LocationAccess_names + 45, 27}, 3 },
+  { {LocationAccess_names + 72, 27}, 0 },
+};
+
+static const int LocationAccess_entries_by_number[] = {
+  3, // 0 -> LOCATION_ACCESS_UNSPECIFIED
+  0, // 1 -> LOCATION_ACCESS_ALLOWED
+  1, // 2 -> LOCATION_ACCESS_DENIED
+  2, // 3 -> LOCATION_ACCESS_UNAVAILABLE
+};
+
+const std::string& LocationAccess_Name(
+    LocationAccess value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          LocationAccess_entries,
+          LocationAccess_entries_by_number,
+          4, LocationAccess_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      LocationAccess_entries,
+      LocationAccess_entries_by_number,
+      4, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     LocationAccess_strings[idx].get();
+}
+bool LocationAccess_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, LocationAccess* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      LocationAccess_entries, 4, name, &int_value);
+  if (success) {
+    *value = static_cast<LocationAccess>(int_value);
   }
   return success;
 }
@@ -9149,6 +9259,967 @@ void PowerHint::InternalSwap(PowerHint* other) {
 
 std::string PowerHint::GetTypeName() const {
   return "dsa.control.v1.PowerHint";
+}
+
+
+// ===================================================================
+
+class LocationRequest::_Internal {
+ public:
+};
+
+LocationRequest::LocationRequest(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.LocationRequest)
+}
+LocationRequest::LocationRequest(const LocationRequest& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  LocationRequest* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.active_){}
+    , decltype(_impl_.interval_ms_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.active_, &from._impl_.active_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.interval_ms_) -
+    reinterpret_cast<char*>(&_impl_.active_)) + sizeof(_impl_.interval_ms_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.LocationRequest)
+}
+
+inline void LocationRequest::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.active_){false}
+    , decltype(_impl_.interval_ms_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+LocationRequest::~LocationRequest() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.LocationRequest)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void LocationRequest::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void LocationRequest::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void LocationRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.LocationRequest)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.active_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.interval_ms_) -
+      reinterpret_cast<char*>(&_impl_.active_)) + sizeof(_impl_.interval_ms_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* LocationRequest::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // bool active = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.active_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 interval_ms = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.interval_ms_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* LocationRequest::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.LocationRequest)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // bool active = 1;
+  if (this->_internal_active() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(1, this->_internal_active(), target);
+  }
+
+  // uint32 interval_ms = 2;
+  if (this->_internal_interval_ms() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_interval_ms(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.LocationRequest)
+  return target;
+}
+
+size_t LocationRequest::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.LocationRequest)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // bool active = 1;
+  if (this->_internal_active() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // uint32 interval_ms = 2;
+  if (this->_internal_interval_ms() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_interval_ms());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void LocationRequest::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const LocationRequest*>(
+      &from));
+}
+
+void LocationRequest::MergeFrom(const LocationRequest& from) {
+  LocationRequest* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.LocationRequest)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_active() != 0) {
+    _this->_internal_set_active(from._internal_active());
+  }
+  if (from._internal_interval_ms() != 0) {
+    _this->_internal_set_interval_ms(from._internal_interval_ms());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void LocationRequest::CopyFrom(const LocationRequest& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.LocationRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool LocationRequest::IsInitialized() const {
+  return true;
+}
+
+void LocationRequest::InternalSwap(LocationRequest* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(LocationRequest, _impl_.interval_ms_)
+      + sizeof(LocationRequest::_impl_.interval_ms_)
+      - PROTOBUF_FIELD_OFFSET(LocationRequest, _impl_.active_)>(
+          reinterpret_cast<char*>(&_impl_.active_),
+          reinterpret_cast<char*>(&other->_impl_.active_));
+}
+
+std::string LocationRequest::GetTypeName() const {
+  return "dsa.control.v1.LocationRequest";
+}
+
+
+// ===================================================================
+
+class LocationStatus::_Internal {
+ public:
+};
+
+LocationStatus::LocationStatus(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.LocationStatus)
+}
+LocationStatus::LocationStatus(const LocationStatus& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  LocationStatus* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.detail_){}
+    , decltype(_impl_.access_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.detail_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.detail_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_detail().empty()) {
+    _this->_impl_.detail_.Set(from._internal_detail(), 
+      _this->GetArenaForAllocation());
+  }
+  _this->_impl_.access_ = from._impl_.access_;
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.LocationStatus)
+}
+
+inline void LocationStatus::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.detail_){}
+    , decltype(_impl_.access_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.detail_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.detail_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+LocationStatus::~LocationStatus() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.LocationStatus)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void LocationStatus::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.detail_.Destroy();
+}
+
+void LocationStatus::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void LocationStatus::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.LocationStatus)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.detail_.ClearToEmpty();
+  _impl_.access_ = 0;
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* LocationStatus::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // .dsa.control.v1.LocationAccess access = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_access(static_cast<::dsa::control::v1::LocationAccess>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // string detail = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_detail();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* LocationStatus::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.LocationStatus)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // .dsa.control.v1.LocationAccess access = 1;
+  if (this->_internal_access() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      1, this->_internal_access(), target);
+  }
+
+  // string detail = 2;
+  if (!this->_internal_detail().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_detail().data(), static_cast<int>(this->_internal_detail().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.LocationStatus.detail");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_detail(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.LocationStatus)
+  return target;
+}
+
+size_t LocationStatus::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.LocationStatus)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string detail = 2;
+  if (!this->_internal_detail().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_detail());
+  }
+
+  // .dsa.control.v1.LocationAccess access = 1;
+  if (this->_internal_access() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_access());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void LocationStatus::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const LocationStatus*>(
+      &from));
+}
+
+void LocationStatus::MergeFrom(const LocationStatus& from) {
+  LocationStatus* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.LocationStatus)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_detail().empty()) {
+    _this->_internal_set_detail(from._internal_detail());
+  }
+  if (from._internal_access() != 0) {
+    _this->_internal_set_access(from._internal_access());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void LocationStatus::CopyFrom(const LocationStatus& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.LocationStatus)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool LocationStatus::IsInitialized() const {
+  return true;
+}
+
+void LocationStatus::InternalSwap(LocationStatus* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.detail_, lhs_arena,
+      &other->_impl_.detail_, rhs_arena
+  );
+  swap(_impl_.access_, other->_impl_.access_);
+}
+
+std::string LocationStatus::GetTypeName() const {
+  return "dsa.control.v1.LocationStatus";
+}
+
+
+// ===================================================================
+
+class LocationFix::_Internal {
+ public:
+};
+
+LocationFix::LocationFix(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.LocationFix)
+}
+LocationFix::LocationFix(const LocationFix& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  LocationFix* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.latitude_degrees_){}
+    , decltype(_impl_.longitude_degrees_){}
+    , decltype(_impl_.horizontal_accuracy_meters_){}
+    , decltype(_impl_.vertical_accuracy_meters_){}
+    , decltype(_impl_.altitude_meters_){}
+    , decltype(_impl_.has_altitude_){}
+    , decltype(_impl_.has_speed_){}
+    , decltype(_impl_.has_bearing_){}
+    , decltype(_impl_.speed_meters_per_second_){}
+    , decltype(_impl_.unix_time_ms_){}
+    , decltype(_impl_.bearing_degrees_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.latitude_degrees_, &from._impl_.latitude_degrees_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.bearing_degrees_) -
+    reinterpret_cast<char*>(&_impl_.latitude_degrees_)) + sizeof(_impl_.bearing_degrees_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.LocationFix)
+}
+
+inline void LocationFix::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.latitude_degrees_){0}
+    , decltype(_impl_.longitude_degrees_){0}
+    , decltype(_impl_.horizontal_accuracy_meters_){0}
+    , decltype(_impl_.vertical_accuracy_meters_){0}
+    , decltype(_impl_.altitude_meters_){0}
+    , decltype(_impl_.has_altitude_){false}
+    , decltype(_impl_.has_speed_){false}
+    , decltype(_impl_.has_bearing_){false}
+    , decltype(_impl_.speed_meters_per_second_){0}
+    , decltype(_impl_.unix_time_ms_){uint64_t{0u}}
+    , decltype(_impl_.bearing_degrees_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+LocationFix::~LocationFix() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.LocationFix)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void LocationFix::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void LocationFix::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void LocationFix::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.LocationFix)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.latitude_degrees_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.bearing_degrees_) -
+      reinterpret_cast<char*>(&_impl_.latitude_degrees_)) + sizeof(_impl_.bearing_degrees_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* LocationFix::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // double latitude_degrees = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 9)) {
+          _impl_.latitude_degrees_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // double longitude_degrees = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 17)) {
+          _impl_.longitude_degrees_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // float horizontal_accuracy_meters = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 29)) {
+          _impl_.horizontal_accuracy_meters_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool has_altitude = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.has_altitude_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // double altitude_meters = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 41)) {
+          _impl_.altitude_meters_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
+          goto handle_unusual;
+        continue;
+      // float vertical_accuracy_meters = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 53)) {
+          _impl_.vertical_accuracy_meters_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool has_speed = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
+          _impl_.has_speed_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // float speed_meters_per_second = 8;
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 69)) {
+          _impl_.speed_meters_per_second_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool has_bearing = 9;
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 72)) {
+          _impl_.has_bearing_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // float bearing_degrees = 10;
+      case 10:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 85)) {
+          _impl_.bearing_degrees_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 unix_time_ms = 11;
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
+          _impl_.unix_time_ms_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* LocationFix::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.LocationFix)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // double latitude_degrees = 1;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_latitude_degrees = this->_internal_latitude_degrees();
+  uint64_t raw_latitude_degrees;
+  memcpy(&raw_latitude_degrees, &tmp_latitude_degrees, sizeof(tmp_latitude_degrees));
+  if (raw_latitude_degrees != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(1, this->_internal_latitude_degrees(), target);
+  }
+
+  // double longitude_degrees = 2;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_longitude_degrees = this->_internal_longitude_degrees();
+  uint64_t raw_longitude_degrees;
+  memcpy(&raw_longitude_degrees, &tmp_longitude_degrees, sizeof(tmp_longitude_degrees));
+  if (raw_longitude_degrees != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(2, this->_internal_longitude_degrees(), target);
+  }
+
+  // float horizontal_accuracy_meters = 3;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_horizontal_accuracy_meters = this->_internal_horizontal_accuracy_meters();
+  uint32_t raw_horizontal_accuracy_meters;
+  memcpy(&raw_horizontal_accuracy_meters, &tmp_horizontal_accuracy_meters, sizeof(tmp_horizontal_accuracy_meters));
+  if (raw_horizontal_accuracy_meters != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(3, this->_internal_horizontal_accuracy_meters(), target);
+  }
+
+  // bool has_altitude = 4;
+  if (this->_internal_has_altitude() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(4, this->_internal_has_altitude(), target);
+  }
+
+  // double altitude_meters = 5;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_altitude_meters = this->_internal_altitude_meters();
+  uint64_t raw_altitude_meters;
+  memcpy(&raw_altitude_meters, &tmp_altitude_meters, sizeof(tmp_altitude_meters));
+  if (raw_altitude_meters != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(5, this->_internal_altitude_meters(), target);
+  }
+
+  // float vertical_accuracy_meters = 6;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_vertical_accuracy_meters = this->_internal_vertical_accuracy_meters();
+  uint32_t raw_vertical_accuracy_meters;
+  memcpy(&raw_vertical_accuracy_meters, &tmp_vertical_accuracy_meters, sizeof(tmp_vertical_accuracy_meters));
+  if (raw_vertical_accuracy_meters != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(6, this->_internal_vertical_accuracy_meters(), target);
+  }
+
+  // bool has_speed = 7;
+  if (this->_internal_has_speed() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(7, this->_internal_has_speed(), target);
+  }
+
+  // float speed_meters_per_second = 8;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_speed_meters_per_second = this->_internal_speed_meters_per_second();
+  uint32_t raw_speed_meters_per_second;
+  memcpy(&raw_speed_meters_per_second, &tmp_speed_meters_per_second, sizeof(tmp_speed_meters_per_second));
+  if (raw_speed_meters_per_second != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(8, this->_internal_speed_meters_per_second(), target);
+  }
+
+  // bool has_bearing = 9;
+  if (this->_internal_has_bearing() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(9, this->_internal_has_bearing(), target);
+  }
+
+  // float bearing_degrees = 10;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_bearing_degrees = this->_internal_bearing_degrees();
+  uint32_t raw_bearing_degrees;
+  memcpy(&raw_bearing_degrees, &tmp_bearing_degrees, sizeof(tmp_bearing_degrees));
+  if (raw_bearing_degrees != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(10, this->_internal_bearing_degrees(), target);
+  }
+
+  // uint64 unix_time_ms = 11;
+  if (this->_internal_unix_time_ms() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(11, this->_internal_unix_time_ms(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.LocationFix)
+  return target;
+}
+
+size_t LocationFix::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.LocationFix)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // double latitude_degrees = 1;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_latitude_degrees = this->_internal_latitude_degrees();
+  uint64_t raw_latitude_degrees;
+  memcpy(&raw_latitude_degrees, &tmp_latitude_degrees, sizeof(tmp_latitude_degrees));
+  if (raw_latitude_degrees != 0) {
+    total_size += 1 + 8;
+  }
+
+  // double longitude_degrees = 2;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_longitude_degrees = this->_internal_longitude_degrees();
+  uint64_t raw_longitude_degrees;
+  memcpy(&raw_longitude_degrees, &tmp_longitude_degrees, sizeof(tmp_longitude_degrees));
+  if (raw_longitude_degrees != 0) {
+    total_size += 1 + 8;
+  }
+
+  // float horizontal_accuracy_meters = 3;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_horizontal_accuracy_meters = this->_internal_horizontal_accuracy_meters();
+  uint32_t raw_horizontal_accuracy_meters;
+  memcpy(&raw_horizontal_accuracy_meters, &tmp_horizontal_accuracy_meters, sizeof(tmp_horizontal_accuracy_meters));
+  if (raw_horizontal_accuracy_meters != 0) {
+    total_size += 1 + 4;
+  }
+
+  // float vertical_accuracy_meters = 6;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_vertical_accuracy_meters = this->_internal_vertical_accuracy_meters();
+  uint32_t raw_vertical_accuracy_meters;
+  memcpy(&raw_vertical_accuracy_meters, &tmp_vertical_accuracy_meters, sizeof(tmp_vertical_accuracy_meters));
+  if (raw_vertical_accuracy_meters != 0) {
+    total_size += 1 + 4;
+  }
+
+  // double altitude_meters = 5;
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_altitude_meters = this->_internal_altitude_meters();
+  uint64_t raw_altitude_meters;
+  memcpy(&raw_altitude_meters, &tmp_altitude_meters, sizeof(tmp_altitude_meters));
+  if (raw_altitude_meters != 0) {
+    total_size += 1 + 8;
+  }
+
+  // bool has_altitude = 4;
+  if (this->_internal_has_altitude() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // bool has_speed = 7;
+  if (this->_internal_has_speed() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // bool has_bearing = 9;
+  if (this->_internal_has_bearing() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // float speed_meters_per_second = 8;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_speed_meters_per_second = this->_internal_speed_meters_per_second();
+  uint32_t raw_speed_meters_per_second;
+  memcpy(&raw_speed_meters_per_second, &tmp_speed_meters_per_second, sizeof(tmp_speed_meters_per_second));
+  if (raw_speed_meters_per_second != 0) {
+    total_size += 1 + 4;
+  }
+
+  // uint64 unix_time_ms = 11;
+  if (this->_internal_unix_time_ms() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_unix_time_ms());
+  }
+
+  // float bearing_degrees = 10;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_bearing_degrees = this->_internal_bearing_degrees();
+  uint32_t raw_bearing_degrees;
+  memcpy(&raw_bearing_degrees, &tmp_bearing_degrees, sizeof(tmp_bearing_degrees));
+  if (raw_bearing_degrees != 0) {
+    total_size += 1 + 4;
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void LocationFix::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const LocationFix*>(
+      &from));
+}
+
+void LocationFix::MergeFrom(const LocationFix& from) {
+  LocationFix* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.LocationFix)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_latitude_degrees = from._internal_latitude_degrees();
+  uint64_t raw_latitude_degrees;
+  memcpy(&raw_latitude_degrees, &tmp_latitude_degrees, sizeof(tmp_latitude_degrees));
+  if (raw_latitude_degrees != 0) {
+    _this->_internal_set_latitude_degrees(from._internal_latitude_degrees());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_longitude_degrees = from._internal_longitude_degrees();
+  uint64_t raw_longitude_degrees;
+  memcpy(&raw_longitude_degrees, &tmp_longitude_degrees, sizeof(tmp_longitude_degrees));
+  if (raw_longitude_degrees != 0) {
+    _this->_internal_set_longitude_degrees(from._internal_longitude_degrees());
+  }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_horizontal_accuracy_meters = from._internal_horizontal_accuracy_meters();
+  uint32_t raw_horizontal_accuracy_meters;
+  memcpy(&raw_horizontal_accuracy_meters, &tmp_horizontal_accuracy_meters, sizeof(tmp_horizontal_accuracy_meters));
+  if (raw_horizontal_accuracy_meters != 0) {
+    _this->_internal_set_horizontal_accuracy_meters(from._internal_horizontal_accuracy_meters());
+  }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_vertical_accuracy_meters = from._internal_vertical_accuracy_meters();
+  uint32_t raw_vertical_accuracy_meters;
+  memcpy(&raw_vertical_accuracy_meters, &tmp_vertical_accuracy_meters, sizeof(tmp_vertical_accuracy_meters));
+  if (raw_vertical_accuracy_meters != 0) {
+    _this->_internal_set_vertical_accuracy_meters(from._internal_vertical_accuracy_meters());
+  }
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_altitude_meters = from._internal_altitude_meters();
+  uint64_t raw_altitude_meters;
+  memcpy(&raw_altitude_meters, &tmp_altitude_meters, sizeof(tmp_altitude_meters));
+  if (raw_altitude_meters != 0) {
+    _this->_internal_set_altitude_meters(from._internal_altitude_meters());
+  }
+  if (from._internal_has_altitude() != 0) {
+    _this->_internal_set_has_altitude(from._internal_has_altitude());
+  }
+  if (from._internal_has_speed() != 0) {
+    _this->_internal_set_has_speed(from._internal_has_speed());
+  }
+  if (from._internal_has_bearing() != 0) {
+    _this->_internal_set_has_bearing(from._internal_has_bearing());
+  }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_speed_meters_per_second = from._internal_speed_meters_per_second();
+  uint32_t raw_speed_meters_per_second;
+  memcpy(&raw_speed_meters_per_second, &tmp_speed_meters_per_second, sizeof(tmp_speed_meters_per_second));
+  if (raw_speed_meters_per_second != 0) {
+    _this->_internal_set_speed_meters_per_second(from._internal_speed_meters_per_second());
+  }
+  if (from._internal_unix_time_ms() != 0) {
+    _this->_internal_set_unix_time_ms(from._internal_unix_time_ms());
+  }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_bearing_degrees = from._internal_bearing_degrees();
+  uint32_t raw_bearing_degrees;
+  memcpy(&raw_bearing_degrees, &tmp_bearing_degrees, sizeof(tmp_bearing_degrees));
+  if (raw_bearing_degrees != 0) {
+    _this->_internal_set_bearing_degrees(from._internal_bearing_degrees());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void LocationFix::CopyFrom(const LocationFix& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.LocationFix)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool LocationFix::IsInitialized() const {
+  return true;
+}
+
+void LocationFix::InternalSwap(LocationFix* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(LocationFix, _impl_.bearing_degrees_)
+      + sizeof(LocationFix::_impl_.bearing_degrees_)
+      - PROTOBUF_FIELD_OFFSET(LocationFix, _impl_.latitude_degrees_)>(
+          reinterpret_cast<char*>(&_impl_.latitude_degrees_),
+          reinterpret_cast<char*>(&other->_impl_.latitude_degrees_));
+}
+
+std::string LocationFix::GetTypeName() const {
+  return "dsa.control.v1.LocationFix";
 }
 
 
@@ -25554,6 +26625,9 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::DiagnosticsFile& diagnostics_file(const Envelope* msg);
   static const ::dsa::control::v1::DiagnosticsDone& diagnostics_done(const Envelope* msg);
   static const ::dsa::control::v1::StopApp& stop_app(const Envelope* msg);
+  static const ::dsa::control::v1::LocationRequest& location_request(const Envelope* msg);
+  static const ::dsa::control::v1::LocationStatus& location_status(const Envelope* msg);
+  static const ::dsa::control::v1::LocationFix& location_fix(const Envelope* msg);
 };
 
 const ::dsa::control::v1::Hello&
@@ -25879,6 +26953,18 @@ Envelope::_Internal::diagnostics_done(const Envelope* msg) {
 const ::dsa::control::v1::StopApp&
 Envelope::_Internal::stop_app(const Envelope* msg) {
   return *msg->_impl_.body_.stop_app_;
+}
+const ::dsa::control::v1::LocationRequest&
+Envelope::_Internal::location_request(const Envelope* msg) {
+  return *msg->_impl_.body_.location_request_;
+}
+const ::dsa::control::v1::LocationStatus&
+Envelope::_Internal::location_status(const Envelope* msg) {
+  return *msg->_impl_.body_.location_status_;
+}
+const ::dsa::control::v1::LocationFix&
+Envelope::_Internal::location_fix(const Envelope* msg) {
+  return *msg->_impl_.body_.location_fix_;
 }
 void Envelope::set_allocated_hello(::dsa::control::v1::Hello* hello) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -27095,6 +28181,51 @@ void Envelope::set_allocated_stop_app(::dsa::control::v1::StopApp* stop_app) {
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.stop_app)
 }
+void Envelope::set_allocated_location_request(::dsa::control::v1::LocationRequest* location_request) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (location_request) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(location_request);
+    if (message_arena != submessage_arena) {
+      location_request = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, location_request, submessage_arena);
+    }
+    set_has_location_request();
+    _impl_.body_.location_request_ = location_request;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.location_request)
+}
+void Envelope::set_allocated_location_status(::dsa::control::v1::LocationStatus* location_status) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (location_status) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(location_status);
+    if (message_arena != submessage_arena) {
+      location_status = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, location_status, submessage_arena);
+    }
+    set_has_location_status();
+    _impl_.body_.location_status_ = location_status;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.location_status)
+}
+void Envelope::set_allocated_location_fix(::dsa::control::v1::LocationFix* location_fix) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (location_fix) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(location_fix);
+    if (message_arena != submessage_arena) {
+      location_fix = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, location_fix, submessage_arena);
+    }
+    set_has_location_fix();
+    _impl_.body_.location_fix_ = location_fix;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.location_fix)
+}
 Envelope::Envelope(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
@@ -27515,6 +28646,21 @@ Envelope::Envelope(const Envelope& from)
     case kStopApp: {
       _this->_internal_mutable_stop_app()->::dsa::control::v1::StopApp::MergeFrom(
           from._internal_stop_app());
+      break;
+    }
+    case kLocationRequest: {
+      _this->_internal_mutable_location_request()->::dsa::control::v1::LocationRequest::MergeFrom(
+          from._internal_location_request());
+      break;
+    }
+    case kLocationStatus: {
+      _this->_internal_mutable_location_status()->::dsa::control::v1::LocationStatus::MergeFrom(
+          from._internal_location_status());
+      break;
+    }
+    case kLocationFix: {
+      _this->_internal_mutable_location_fix()->::dsa::control::v1::LocationFix::MergeFrom(
+          from._internal_location_fix());
       break;
     }
     case BODY_NOT_SET: {
@@ -28042,6 +29188,24 @@ void Envelope::clear_body() {
     case kStopApp: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.stop_app_;
+      }
+      break;
+    }
+    case kLocationRequest: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.location_request_;
+      }
+      break;
+    }
+    case kLocationStatus: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.location_status_;
+      }
+      break;
+    }
+    case kLocationFix: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.location_fix_;
       }
       break;
     }
@@ -28717,6 +29881,30 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.LocationRequest location_request = 200;
+      case 200:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
+          ptr = ctx->ParseMessage(_internal_mutable_location_request(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.LocationStatus location_status = 201;
+      case 201:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
+          ptr = ctx->ParseMessage(_internal_mutable_location_status(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.LocationFix location_fix = 202;
+      case 202:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
+          ptr = ctx->ParseMessage(_internal_mutable_location_fix(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -29313,6 +30501,27 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::developer_mode(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.LocationRequest location_request = 200;
+  if (_internal_has_location_request()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(200, _Internal::location_request(this),
+        _Internal::location_request(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.LocationStatus location_status = 201;
+  if (_internal_has_location_status()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(201, _Internal::location_status(this),
+        _Internal::location_status(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.LocationFix location_fix = 202;
+  if (_internal_has_location_fix()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(202, _Internal::location_fix(this),
+        _Internal::location_fix(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -29897,6 +31106,27 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.stop_app_);
       break;
     }
+    // .dsa.control.v1.LocationRequest location_request = 200;
+    case kLocationRequest: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.location_request_);
+      break;
+    }
+    // .dsa.control.v1.LocationStatus location_status = 201;
+    case kLocationStatus: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.location_status_);
+      break;
+    }
+    // .dsa.control.v1.LocationFix location_fix = 202;
+    case kLocationFix: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.location_fix_);
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -30328,6 +31558,21 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_stop_app());
       break;
     }
+    case kLocationRequest: {
+      _this->_internal_mutable_location_request()->::dsa::control::v1::LocationRequest::MergeFrom(
+          from._internal_location_request());
+      break;
+    }
+    case kLocationStatus: {
+      _this->_internal_mutable_location_status()->::dsa::control::v1::LocationStatus::MergeFrom(
+          from._internal_location_status());
+      break;
+    }
+    case kLocationFix: {
+      _this->_internal_mutable_location_fix()->::dsa::control::v1::LocationFix::MergeFrom(
+          from._internal_location_fix());
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -30474,6 +31719,18 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::GuestSleepReady >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::PowerHint*
 Arena::CreateMaybeMessage< ::dsa::control::v1::PowerHint >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::PowerHint >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::LocationRequest*
+Arena::CreateMaybeMessage< ::dsa::control::v1::LocationRequest >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::LocationRequest >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::LocationStatus*
+Arena::CreateMaybeMessage< ::dsa::control::v1::LocationStatus >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::LocationStatus >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::LocationFix*
+Arena::CreateMaybeMessage< ::dsa::control::v1::LocationFix >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::LocationFix >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::DeviceIdle*
 Arena::CreateMaybeMessage< ::dsa::control::v1::DeviceIdle >(Arena* arena) {

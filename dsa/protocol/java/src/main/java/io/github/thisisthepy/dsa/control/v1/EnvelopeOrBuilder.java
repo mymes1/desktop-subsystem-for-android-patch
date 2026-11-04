@@ -898,5 +898,38 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.StopApp getStopApp();
 
+  /**
+   * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+   * @return Whether the locationRequest field is set.
+   */
+  boolean hasLocationRequest();
+  /**
+   * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+   * @return The locationRequest.
+   */
+  io.github.thisisthepy.dsa.control.v1.LocationRequest getLocationRequest();
+
+  /**
+   * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+   * @return Whether the locationStatus field is set.
+   */
+  boolean hasLocationStatus();
+  /**
+   * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+   * @return The locationStatus.
+   */
+  io.github.thisisthepy.dsa.control.v1.LocationStatus getLocationStatus();
+
+  /**
+   * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+   * @return Whether the locationFix field is set.
+   */
+  boolean hasLocationFix();
+  /**
+   * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+   * @return The locationFix.
+   */
+  io.github.thisisthepy.dsa.control.v1.LocationFix getLocationFix();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

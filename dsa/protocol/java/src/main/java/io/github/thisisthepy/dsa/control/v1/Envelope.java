@@ -101,6 +101,9 @@ public  final class Envelope extends
     DIAGNOSTICS_FILE(134),
     DIAGNOSTICS_DONE(135),
     STOP_APP(136),
+    LOCATION_REQUEST(200),
+    LOCATION_STATUS(201),
+    LOCATION_FIX(202),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -197,6 +200,9 @@ public  final class Envelope extends
         case 134: return DIAGNOSTICS_FILE;
         case 135: return DIAGNOSTICS_DONE;
         case 136: return STOP_APP;
+        case 200: return LOCATION_REQUEST;
+        case 201: return LOCATION_STATUS;
+        case 202: return LOCATION_FIX;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -4268,6 +4274,156 @@ public  final class Envelope extends
     }
   }
 
+  public static final int LOCATION_REQUEST_FIELD_NUMBER = 200;
+  /**
+   * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+   */
+  @java.lang.Override
+  public boolean hasLocationRequest() {
+    return bodyCase_ == 200;
+  }
+  /**
+   * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.LocationRequest getLocationRequest() {
+    if (bodyCase_ == 200) {
+       return (io.github.thisisthepy.dsa.control.v1.LocationRequest) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.LocationRequest.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+   */
+  private void setLocationRequest(io.github.thisisthepy.dsa.control.v1.LocationRequest value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 200;
+  }
+  /**
+   * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+   */
+  private void mergeLocationRequest(io.github.thisisthepy.dsa.control.v1.LocationRequest value) {
+    value.getClass();
+  if (bodyCase_ == 200 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.LocationRequest.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.LocationRequest.newBuilder((io.github.thisisthepy.dsa.control.v1.LocationRequest) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 200;
+  }
+  /**
+   * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+   */
+  private void clearLocationRequest() {
+    if (bodyCase_ == 200) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LOCATION_STATUS_FIELD_NUMBER = 201;
+  /**
+   * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+   */
+  @java.lang.Override
+  public boolean hasLocationStatus() {
+    return bodyCase_ == 201;
+  }
+  /**
+   * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.LocationStatus getLocationStatus() {
+    if (bodyCase_ == 201) {
+       return (io.github.thisisthepy.dsa.control.v1.LocationStatus) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.LocationStatus.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+   */
+  private void setLocationStatus(io.github.thisisthepy.dsa.control.v1.LocationStatus value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 201;
+  }
+  /**
+   * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+   */
+  private void mergeLocationStatus(io.github.thisisthepy.dsa.control.v1.LocationStatus value) {
+    value.getClass();
+  if (bodyCase_ == 201 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.LocationStatus.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.LocationStatus.newBuilder((io.github.thisisthepy.dsa.control.v1.LocationStatus) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 201;
+  }
+  /**
+   * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+   */
+  private void clearLocationStatus() {
+    if (bodyCase_ == 201) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int LOCATION_FIX_FIELD_NUMBER = 202;
+  /**
+   * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+   */
+  @java.lang.Override
+  public boolean hasLocationFix() {
+    return bodyCase_ == 202;
+  }
+  /**
+   * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.LocationFix getLocationFix() {
+    if (bodyCase_ == 202) {
+       return (io.github.thisisthepy.dsa.control.v1.LocationFix) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.LocationFix.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+   */
+  private void setLocationFix(io.github.thisisthepy.dsa.control.v1.LocationFix value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 202;
+  }
+  /**
+   * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+   */
+  private void mergeLocationFix(io.github.thisisthepy.dsa.control.v1.LocationFix value) {
+    value.getClass();
+  if (bodyCase_ == 202 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.LocationFix.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.LocationFix.newBuilder((io.github.thisisthepy.dsa.control.v1.LocationFix) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 202;
+  }
+  /**
+   * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+   */
+  private void clearLocationFix() {
+    if (bodyCase_ == 202) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -8267,6 +8423,150 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+     */
+    @java.lang.Override
+    public boolean hasLocationRequest() {
+      return instance.hasLocationRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.LocationRequest getLocationRequest() {
+      return instance.getLocationRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+     */
+    public Builder setLocationRequest(io.github.thisisthepy.dsa.control.v1.LocationRequest value) {
+      copyOnWrite();
+      instance.setLocationRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+     */
+    public Builder setLocationRequest(
+        io.github.thisisthepy.dsa.control.v1.LocationRequest.Builder builderForValue) {
+      copyOnWrite();
+      instance.setLocationRequest(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+     */
+    public Builder mergeLocationRequest(io.github.thisisthepy.dsa.control.v1.LocationRequest value) {
+      copyOnWrite();
+      instance.mergeLocationRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LocationRequest location_request = 200;</code>
+     */
+    public Builder clearLocationRequest() {
+      copyOnWrite();
+      instance.clearLocationRequest();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+     */
+    @java.lang.Override
+    public boolean hasLocationStatus() {
+      return instance.hasLocationStatus();
+    }
+    /**
+     * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.LocationStatus getLocationStatus() {
+      return instance.getLocationStatus();
+    }
+    /**
+     * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+     */
+    public Builder setLocationStatus(io.github.thisisthepy.dsa.control.v1.LocationStatus value) {
+      copyOnWrite();
+      instance.setLocationStatus(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+     */
+    public Builder setLocationStatus(
+        io.github.thisisthepy.dsa.control.v1.LocationStatus.Builder builderForValue) {
+      copyOnWrite();
+      instance.setLocationStatus(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+     */
+    public Builder mergeLocationStatus(io.github.thisisthepy.dsa.control.v1.LocationStatus value) {
+      copyOnWrite();
+      instance.mergeLocationStatus(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LocationStatus location_status = 201;</code>
+     */
+    public Builder clearLocationStatus() {
+      copyOnWrite();
+      instance.clearLocationStatus();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+     */
+    @java.lang.Override
+    public boolean hasLocationFix() {
+      return instance.hasLocationFix();
+    }
+    /**
+     * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.LocationFix getLocationFix() {
+      return instance.getLocationFix();
+    }
+    /**
+     * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+     */
+    public Builder setLocationFix(io.github.thisisthepy.dsa.control.v1.LocationFix value) {
+      copyOnWrite();
+      instance.setLocationFix(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+     */
+    public Builder setLocationFix(
+        io.github.thisisthepy.dsa.control.v1.LocationFix.Builder builderForValue) {
+      copyOnWrite();
+      instance.setLocationFix(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+     */
+    public Builder mergeLocationFix(io.github.thisisthepy.dsa.control.v1.LocationFix value) {
+      copyOnWrite();
+      instance.mergeLocationFix(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.LocationFix location_fix = 202;</code>
+     */
+    public Builder clearLocationFix() {
+      copyOnWrite();
+      instance.clearLocationFix();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -8366,9 +8666,12 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.DiagnosticsDone.class,
             io.github.thisisthepy.dsa.control.v1.StopApp.class,
             io.github.thisisthepy.dsa.control.v1.DeveloperMode.class,
+            io.github.thisisthepy.dsa.control.v1.LocationRequest.class,
+            io.github.thisisthepy.dsa.control.v1.LocationStatus.class,
+            io.github.thisisthepy.dsa.control.v1.LocationFix.class,
           };
           java.lang.String info =
-              "\u0000Q\u0001\u0000\u0001\u008cQ\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
+              "\u0000T\u0001\u0000\u0001\u00caT\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
               "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
               "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
               "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
@@ -8378,7 +8681,8 @@ public  final class Envelope extends
               "P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000" +
               "`<\u0000a<\u0000b<\u0000c<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
               "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
-              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000";
+              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

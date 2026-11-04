@@ -182,6 +182,61 @@ pub struct ClipboardText {
 /// Android.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WatchNotifications {}
+/// Turns the connection into the location of the caller's Android: after the answer (Done),
+/// the service sends a LocationWanted at once and each time the Android starts or stops
+/// wanting locations. While one is wanted, the client runs the host's location service in the
+/// user's session, where the user's privacy settings apply, and sends a LocationFix for each
+/// position and a LocationStatus each time access changes. Neither is answered. The
+/// connection lasts across restarts of the Android, which wants no location while stopped.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchLocation {}
+/// Whether the caller's Android wants locations now, and how often.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LocationWanted {
+    #[prost(bool, tag = "1")]
+    pub active: bool,
+    /// In milliseconds; 0 lets the client choose.
+    #[prost(uint32, tag = "2")]
+    pub interval_ms: u32,
+}
+/// Whether the client can give locations, on a connection that carries the location.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LocationStatus {
+    #[prost(enumeration = "LocationAccess", tag = "1")]
+    pub access: i32,
+    #[prost(string, tag = "2")]
+    pub detail: ::prost::alloc::string::String,
+}
+/// One position from the host's location service, on a connection that carries the location.
+/// Each `has_` flag says whether the value after it is known.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct LocationFix {
+    #[prost(double, tag = "1")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "2")]
+    pub longitude_degrees: f64,
+    /// In meters; 0 when unknown.
+    #[prost(float, tag = "3")]
+    pub horizontal_accuracy_meters: f32,
+    #[prost(bool, tag = "4")]
+    pub has_altitude: bool,
+    #[prost(double, tag = "5")]
+    pub altitude_meters: f64,
+    /// In meters; 0 when unknown.
+    #[prost(float, tag = "6")]
+    pub vertical_accuracy_meters: f32,
+    #[prost(bool, tag = "7")]
+    pub has_speed: bool,
+    #[prost(float, tag = "8")]
+    pub speed_meters_per_second: f32,
+    #[prost(bool, tag = "9")]
+    pub has_bearing: bool,
+    #[prost(float, tag = "10")]
+    pub bearing_degrees: f32,
+    /// Milliseconds since the Unix epoch (UTC).
+    #[prost(uint64, tag = "11")]
+    pub unix_time_ms: u64,
+}
 /// A notification of the caller's Android, on a connection that watches them
 /// (WatchNotifications). One with the key of an earlier one replaces it.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1108,7 +1163,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 70, 71, 37"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 70, 71, 37, 200"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1188,6 +1243,8 @@ pub mod request {
         CollectDiagnostics(super::CollectDiagnostics),
         #[prost(message, tag = "37")]
         StopApp(super::StopApp),
+        #[prost(message, tag = "200")]
+        WatchLocation(super::WatchLocation),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1239,7 +1296,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 200, 201, 202"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1291,6 +1348,12 @@ pub mod envelope {
         LogEntries(super::LogEntries),
         #[prost(message, tag = "51")]
         DiagnosticsData(super::DiagnosticsData),
+        #[prost(message, tag = "200")]
+        LocationWanted(super::LocationWanted),
+        #[prost(message, tag = "201")]
+        LocationStatus(super::LocationStatus),
+        #[prost(message, tag = "202")]
+        LocationFix(super::LocationFix),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1463,6 +1526,41 @@ impl FileAction {
             "FILE_ACTION_UNSPECIFIED" => Some(Self::Unspecified),
             "FILE_ACTION_VIEW" => Some(Self::View),
             "FILE_ACTION_SEND" => Some(Self::Send),
+            _ => None,
+        }
+    }
+}
+/// Whether the user's host lets DSA read its location.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum LocationAccess {
+    Unspecified = 0,
+    Allowed = 1,
+    /// Location is off for DSA, or for the whole computer, in the privacy settings.
+    Denied = 2,
+    /// No location device, or the location service failed.
+    Unavailable = 3,
+}
+impl LocationAccess {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "LOCATION_ACCESS_UNSPECIFIED",
+            Self::Allowed => "LOCATION_ACCESS_ALLOWED",
+            Self::Denied => "LOCATION_ACCESS_DENIED",
+            Self::Unavailable => "LOCATION_ACCESS_UNAVAILABLE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LOCATION_ACCESS_UNSPECIFIED" => Some(Self::Unspecified),
+            "LOCATION_ACCESS_ALLOWED" => Some(Self::Allowed),
+            "LOCATION_ACCESS_DENIED" => Some(Self::Denied),
+            "LOCATION_ACCESS_UNAVAILABLE" => Some(Self::Unavailable),
             _ => None,
         }
     }

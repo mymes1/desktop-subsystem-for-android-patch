@@ -389,6 +389,65 @@ pub struct PowerHint {
     #[prost(int32, tag = "4")]
     pub duration_ms: i32,
 }
+/// Guest to host, from the guest's GNSS HAL: whether the framework wants locations now
+/// (between its start and stop of the GNSS engine), and how often. The host runs its own
+/// location service only while one is wanted, and sends a LocationFix each time it has a
+/// new position. The HAL sends this again each time it subscribes to the channel, and the
+/// channel daemon each time the host connects, so a host that connects again knows. When the
+/// HAL's process dies, the daemon tells the host that no location is wanted any longer.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LocationRequest {
+    #[prost(bool, tag = "1")]
+    pub active: bool,
+    /// How often the framework wants a location, in milliseconds. 0 lets the host choose.
+    #[prost(uint32, tag = "2")]
+    pub interval_ms: u32,
+}
+/// Host to guest: whether the host can give the guest locations, sent when a location is
+/// wanted and each time it changes while one is. A guest told DENIED or UNAVAILABLE gets no
+/// fix until it is told ALLOWED again.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LocationStatus {
+    #[prost(enumeration = "LocationAccess", tag = "1")]
+    pub access: i32,
+    /// Why, in words for the guest's log. Empty when there is nothing to add.
+    #[prost(string, tag = "2")]
+    pub detail: ::prost::alloc::string::String,
+}
+/// Host to guest: one position from the host's location service, which the GNSS HAL hands to
+/// the framework as the guest's GNSS location. Each `has_` flag says whether the value after
+/// it is known; a value that is not known is left out of the guest's location.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct LocationFix {
+    #[prost(double, tag = "1")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "2")]
+    pub longitude_degrees: f64,
+    /// The radius of 68% confidence around the position, in meters. 0 when unknown.
+    #[prost(float, tag = "3")]
+    pub horizontal_accuracy_meters: f32,
+    #[prost(bool, tag = "4")]
+    pub has_altitude: bool,
+    /// Above the WGS84 ellipsoid, in meters.
+    #[prost(double, tag = "5")]
+    pub altitude_meters: f64,
+    /// In meters; 0 when unknown.
+    #[prost(float, tag = "6")]
+    pub vertical_accuracy_meters: f32,
+    #[prost(bool, tag = "7")]
+    pub has_speed: bool,
+    #[prost(float, tag = "8")]
+    pub speed_meters_per_second: f32,
+    #[prost(bool, tag = "9")]
+    pub has_bearing: bool,
+    /// Degrees east of true north, from 0 up to 360.
+    #[prost(float, tag = "10")]
+    pub bearing_degrees: f32,
+    /// When the host's location service took the position, in milliseconds since the Unix
+    /// epoch (UTC).
+    #[prost(uint64, tag = "11")]
+    pub unix_time_ms: u64,
+}
 /// Guest to host, from the agent: whether the guest's device is in Doze (the device idle
 /// controller's deep idle state). The host takes the device not to be in Doze when the agent
 /// connects; the agent sends this on each change after that.
@@ -1256,7 +1315,7 @@ pub struct DiagnosticsDone {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 200, 201, 202"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1426,6 +1485,12 @@ pub mod envelope {
         DiagnosticsDone(super::DiagnosticsDone),
         #[prost(message, tag = "136")]
         StopApp(super::StopApp),
+        #[prost(message, tag = "200")]
+        LocationRequest(super::LocationRequest),
+        #[prost(message, tag = "201")]
+        LocationStatus(super::LocationStatus),
+        #[prost(message, tag = "202")]
+        LocationFix(super::LocationFix),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1684,6 +1749,43 @@ impl PowerHintKind {
             "POWER_HINT_KIND_UNSPECIFIED" => Some(Self::Unspecified),
             "POWER_HINT_KIND_MODE" => Some(Self::Mode),
             "POWER_HINT_KIND_BOOST" => Some(Self::Boost),
+            _ => None,
+        }
+    }
+}
+/// Whether the host lets DSA read its location.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum LocationAccess {
+    Unspecified = 0,
+    /// The host's location service runs for DSA.
+    Allowed = 1,
+    /// The user turned location off for DSA (or for the whole computer) in the host's privacy
+    /// settings. No fix comes until they turn it on again.
+    Denied = 2,
+    /// The host has no way to find its location now: no location device, or the service failed.
+    Unavailable = 3,
+}
+impl LocationAccess {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "LOCATION_ACCESS_UNSPECIFIED",
+            Self::Allowed => "LOCATION_ACCESS_ALLOWED",
+            Self::Denied => "LOCATION_ACCESS_DENIED",
+            Self::Unavailable => "LOCATION_ACCESS_UNAVAILABLE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LOCATION_ACCESS_UNSPECIFIED" => Some(Self::Unspecified),
+            "LOCATION_ACCESS_ALLOWED" => Some(Self::Allowed),
+            "LOCATION_ACCESS_DENIED" => Some(Self::Denied),
+            "LOCATION_ACCESS_UNAVAILABLE" => Some(Self::Unavailable),
             _ => None,
         }
     }
