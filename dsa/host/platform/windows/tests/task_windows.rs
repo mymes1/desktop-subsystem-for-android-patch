@@ -720,9 +720,19 @@ fn task_at_monitor_density(task_id: i32, width: i32, height: i32) -> Task {
     task
 }
 
-/// The DPI a new top-level window gets on this machine.
+/// The DPI a new top-level window gets on this machine. The window hosts are per-monitor
+/// aware, so the DPI is read as such a thread sees it: a test thread that is not aware is
+/// told 96 whatever the monitor's scale.
 fn dpi_of_new_windows() -> u32 {
-    unsafe { windows_sys::Win32::UI::HiDpi::GetDpiForSystem() }.max(96)
+    use windows_sys::Win32::UI::HiDpi::{
+        GetDpiForSystem, SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+    };
+    unsafe {
+        let previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let dpi = GetDpiForSystem();
+        SetThreadDpiAwarenessContext(previous);
+        dpi.max(96)
+    }
 }
 
 #[test]
@@ -910,13 +920,6 @@ fn fr4_a_maximised_task_window_shows_its_task_1_to_1_without_a_new_texture_or_a_
     });
     let open = windows_of(&running, 1);
     let hwnd = open[0].hwnd;
-    // Temporary: the window's state as it opened.
-    eprintln!(
-        "diagnostic: opened client={:?} zoomed={} requests={:?}",
-        client_size(hwnd),
-        unsafe { IsZoomed(hwnd as HWND) },
-        running.android.requests.lock().unwrap()
-    );
     let sink = presenter.sink.lock().unwrap().clone();
     let texture = sink.as_ref().map(|sink| {
         let handle = wait_for("display 3 to reach task 1's window", || {
@@ -933,19 +936,7 @@ fn fr4_a_maximised_task_window_shows_its_task_1_to_1_without_a_new_texture_or_a_
     thread::sleep(Duration::from_millis(200));
     let before = running.android.requests.lock().unwrap().len();
     let normal = client_size(hwnd);
-    // Temporary: the window's state just before the maximise.
-    eprintln!(
-        "diagnostic: before maximise client={normal:?} zoomed={} requests={:?}",
-        unsafe { IsZoomed(hwnd as HWND) },
-        running.android.requests.lock().unwrap()
-    );
     unsafe { ShowWindow(hwnd as HWND, SW_MAXIMIZE) };
-    // Temporary: the window's state just after it.
-    eprintln!(
-        "diagnostic: after maximise client={:?} zoomed={}",
-        client_size(hwnd),
-        unsafe { IsZoomed(hwnd as HWND) }
-    );
     assert_ne!(unsafe { IsZoomed(hwnd as HWND) }, 0);
     // The task is given the size live, so its app lays itself out again instead of being
     // recreated at a size it has not drawn at.
