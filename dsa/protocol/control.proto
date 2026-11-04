@@ -1285,8 +1285,8 @@ message Envelope {
     DiagnosticsFile diagnostics_file = 134;
     DiagnosticsDone diagnostics_done = 135;
     StopApp stop_app = 136;
-    SensorList sensor_list = 200;
-    SensorActivate sensor_activate = 201;
-    SensorReadings sensor_readings = 202;
+    SensorList sensor_list = 240;
+    SensorActivate sensor_activate = 241;
+    SensorReadings sensor_readings = 242;
   }
 }
