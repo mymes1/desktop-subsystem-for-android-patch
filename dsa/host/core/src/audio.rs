@@ -146,7 +146,8 @@ impl JitterBuffer {
                 // The guest skipped frames: keep the timeline with silence, but never more
                 // than the queue can hold.
                 let gap = ((position - next) as usize).min(self.max_frames);
-                self.samples.resize(self.samples.len() + gap * CHANNELS as usize, 0);
+                self.samples
+                    .resize(self.samples.len() + gap * CHANNELS as usize, 0);
                 self.stats.gap_frames += gap as u64;
             } else if position < next {
                 // Frames already queued, sent again.
