@@ -106,6 +106,9 @@ pub struct Compositor {
     /// Binds the video port, where the guest's codec HAL has its streams decoded. None in
     /// tests, which have no GPU decoders.
     bind_video: Option<BindFn>,
+    /// Binds the camera port, where the guest's camera HAL uses this computer's cameras.
+    /// None in tests, which have no cameras.
+    bind_camera: Option<BindFn>,
     logger: Option<Arc<CompositorLogger>>,
     /// What copies each display's frames into the task windows, when there is one.
     presenter: Option<Arc<dyn DisplayPresenter>>,
@@ -189,6 +192,11 @@ impl Compositor {
             HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
         });
 
+        let bind_camera: BindFn = Box::new(move |vm_id| {
+            let service_id = Guid::vsock_service(dsa_host_core::camera::CAMERA_PORT);
+            HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
+        });
+
         Compositor {
             config,
             renderer,
@@ -198,6 +206,7 @@ impl Compositor {
             bind_command: Some(bind_command),
             bind_process_pipe: Some(bind_process_pipe),
             bind_video: Some(bind_video),
+            bind_camera: Some(bind_camera),
             logger: None,
             presenter: None,
             host_listener: Some(session_host_listener()),
@@ -228,6 +237,7 @@ impl Compositor {
             bind_command: Some(bind_command),
             bind_process_pipe: Some(bind_process_pipe),
             bind_video: None,
+            bind_camera: None,
             logger: None,
             presenter: None,
             host_listener: None,
@@ -340,6 +350,7 @@ impl Compositor {
         let notifications_thread = self.start_notifications(&stop);
         let widgets_thread = self.start_widgets(&stop);
         let video_thread = self.start_video(&stop);
+        let camera_thread = self.start_camera(&stop);
 
         // 1. Monitor thread that tracks the VM ID and state via the local API.
         let monitor_stop = Arc::clone(&stop);
@@ -535,6 +546,9 @@ impl Compositor {
         if let Some(thread) = video_thread {
             let _ = thread.join();
         }
+        if let Some(thread) = camera_thread {
+            let _ = thread.join();
+        }
 
         if let Some(logger) = &self.logger {
             logger.log("dsa-wm stopped cleanly");
@@ -565,6 +579,40 @@ impl Compositor {
                 dsa_host_core::video::serve(
                     Box::new(listener),
                     Arc::new(decoders),
+                    build,
+                    stop,
+                    log,
+                );
+            })
+            .ok()
+    }
+
+    /// Starts lending this computer's cameras to the apps in the guest, on a thread of its own
+    /// that ends with `stop`: the guest's camera HAL connects to the camera port to list them
+    /// and for each camera an app opens. A camera is opened only while an app uses it, in
+    /// this user's session, so Windows applies this user's privacy settings and shows its
+    /// in-use indicator for DSA.
+    fn start_camera(&mut self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        let bind = self.bind_camera.take()?;
+        let listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind);
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-camera".into())
+            .spawn(move || {
+                let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |line: &str| {
+                    if let Some(logger) = &logger {
+                        logger.log(line);
+                    }
+                });
+                let camera_log = Arc::clone(&log);
+                let cameras = crate::camera_capture::MediaFoundationCameras::new(Box::new(
+                    move |line: &str| camera_log(line),
+                ));
+                let build = format!("dsa-wm {}", crate::VERSION);
+                dsa_host_core::camera::serve(
+                    Box::new(listener),
+                    Arc::new(cameras),
                     build,
                     stop,
                     log,

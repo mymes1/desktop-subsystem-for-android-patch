@@ -84,6 +84,9 @@ windows = { version = "0.62", features = [
     "Data_Xml_Dom",
     "Foundation",
     "UI_Notifications",
+    # The cameras the apps in the guest use: where each camera's enclosure places it.
+    "Devices_Enumeration",
+    "Foundation_Collections",
     # Decoding the PNG frames of the widgets on the desktop.
     "Win32_Graphics_Imaging",
 ] }

@@ -26,6 +26,9 @@ use dsa_protocol::control::{
     WidgetList, WidgetPointer, WidgetProvider, WidgetProviders, WidgetUpdated,
 };
 use dsa_protocol::control::{
+    CameraDevice, CameraFacing, CameraFrame, CameraList, CameraMode, CameraOpen, CameraStill,
+};
+use dsa_protocol::control::{
     CollectDiagnostics, DiagnosticsDone, DiagnosticsFile, LogBuffer, LogDump, LogRecord,
     LogRecords, LogStream, VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen,
     VideoFlush, VideoFrame, VideoPacket,
@@ -202,6 +205,52 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
             })),
         ),
         ("video_flush", wrap(Body::VideoFlush(VideoFlush {}))),
+        (
+            "camera_list",
+            wrap(Body::CameraList(CameraList {
+                cameras: vec![CameraDevice {
+                    id: "front".into(),
+                    name: "Integrated Camera".into(),
+                    facing: CameraFacing::Front as i32,
+                    sensor_orientation: 90,
+                    modes: vec![CameraMode {
+                        width: 1280,
+                        height: 720,
+                        max_fps: 30,
+                        min_fps: 15,
+                    }],
+                }],
+            })),
+        ),
+        (
+            "camera_open",
+            wrap(Body::CameraOpen(CameraOpen {
+                id: "front".into(),
+                width: 1280,
+                height: 720,
+                fps: 30,
+            })),
+        ),
+        (
+            "camera_frame",
+            wrap(Body::CameraFrame(CameraFrame {
+                sequence: 7,
+                timestamp_ns: 33_333_333,
+                width: 2,
+                height: 2,
+                stride: 2,
+                nv12: vec![0x10, 0x10, 0x10, 0x10, 0x80, 0x80],
+            })),
+        ),
+        (
+            "camera_still",
+            wrap(Body::CameraStill(CameraStill {
+                request_id: 4,
+                width: 1920,
+                height: 1080,
+                quality: 95,
+            })),
+        ),
         (
             "video_frame",
             wrap(Body::VideoFrame(VideoFrame {

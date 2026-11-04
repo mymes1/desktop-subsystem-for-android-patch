@@ -123,6 +123,41 @@ std::map<std::string, v1::Envelope> Cases() {
   }
   cases["video_flush"].mutable_video_flush();
   {
+    v1::CameraDevice* camera = cases["camera_list"].mutable_camera_list()->add_cameras();
+    camera->set_id("front");
+    camera->set_name("Integrated Camera");
+    camera->set_facing(v1::CAMERA_FACING_FRONT);
+    camera->set_sensor_orientation(90);
+    v1::CameraMode* mode = camera->add_modes();
+    mode->set_width(1280);
+    mode->set_height(720);
+    mode->set_max_fps(30);
+    mode->set_min_fps(15);
+  }
+  {
+    v1::CameraOpen* open = cases["camera_open"].mutable_camera_open();
+    open->set_id("front");
+    open->set_width(1280);
+    open->set_height(720);
+    open->set_fps(30);
+  }
+  {
+    v1::CameraFrame* frame = cases["camera_frame"].mutable_camera_frame();
+    frame->set_sequence(7);
+    frame->set_timestamp_ns(33333333);
+    frame->set_width(2);
+    frame->set_height(2);
+    frame->set_stride(2);
+    frame->set_nv12(std::string("\x10\x10\x10\x10\x80\x80", 6));
+  }
+  {
+    v1::CameraStill* still = cases["camera_still"].mutable_camera_still();
+    still->set_request_id(4);
+    still->set_width(1920);
+    still->set_height(1080);
+    still->set_quality(95);
+  }
+  {
     v1::VideoFrame* frame = cases["video_frame"].mutable_video_frame();
     frame->set_frame_index(3);
     frame->set_timestamp_us(100000);

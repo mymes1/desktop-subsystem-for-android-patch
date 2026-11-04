@@ -15,6 +15,7 @@ on:
       - "dsa/guest/channeld/**"
       - "dsa/guest/hwcomposer/**"
       - "dsa/guest/codec2/**"
+      - "dsa/guest/camera/**"
       - "dsa/guest/power/**"
       - "dsa/guest/aidl/**"
       - "dsa/guest/transport/**"
@@ -191,6 +192,41 @@ jobs:
           path: .scratch/build-codec2/dsa-codec2
           if-no-files-found: error
 
+  camera:
+    name: Build the guest camera HAL
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-camera for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/camera/build.sh .scratch .scratch/build-camera
+
+      - name: Verify the binary links only the platform's C libraries
+        run: |
+          target=".scratch/build-camera/dsa-camera"
+          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so libnativewindow.so" || \
+            test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libnativewindow.so"
+
+      - name: Keep the camera HAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-camera
+          path: .scratch/build-camera/dsa-camera
+          if-no-files-found: error
+
   power-hal:
     name: Build the guest power and health HALs
     runs-on: ubuntu-latest
@@ -259,7 +295,7 @@ jobs:
 
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }})
-    needs: [guest-graphics, channeld, hwcomposer, power-hal, codec2, agent]
+    needs: [guest-graphics, channeld, hwcomposer, power-hal, codec2, camera, agent]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -364,6 +400,16 @@ jobs:
         run: |
           uv run dsa/graphics/check-guest-driver.py --executable .scratch/codec2/dsa-codec2 .scratch/aosp-inputs/*/*target_files*.zip
 
+      - name: Download the guest camera HAL
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-camera
+          path: .scratch/camera
+
+      - name: Check the camera HAL starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/camera/dsa-camera .scratch/aosp-inputs/*/*target_files*.zip
+
       - name: Download the guest power and health HALs
         uses: actions/download-artifact@v4
         with:
@@ -389,6 +435,7 @@ jobs:
           args+=(--channeld .scratch/channeld/dsa-channeld)
           args+=(--hwcomposer .scratch/hwcomposer/dsa-hwcomposer)
           args+=(--codec2 .scratch/codec2/dsa-codec2)
+          args+=(--camera .scratch/camera/dsa-camera)
           args+=(--power-hal .scratch/power-hal)
           args+=(--agent .scratch/agent/DsaAgent.apk)
           args+=(--aapt2 .scratch/build-tools/aapt2)

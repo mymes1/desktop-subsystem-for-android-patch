@@ -27,6 +27,7 @@
 //! - [`notifications`]: the notifications of the guest, which the host shows.
 //! - [`widgets`]: the widgets of the guest, which the host places on its desktop.
 //! - [`video`]: the guest's video, decoded on the host's hardware decoder.
+//! - [`camera`]: the host's cameras, used by the apps in the guest.
 //! - [`ime`]: text input through the host's input method in a task's window.
 //! - [`settings`]: the settings a user changes from the settings app, kept by the service.
 //! - [`memory`]: how much memory a user's Android takes, in the guest and on the host.
@@ -39,6 +40,7 @@ pub mod adb_bridge;
 pub mod apk;
 pub mod apk_info;
 pub mod bootconfig;
+pub mod camera;
 pub mod clipboard;
 pub mod clock_trace;
 pub mod compositor;

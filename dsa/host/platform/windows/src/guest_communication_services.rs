@@ -13,6 +13,7 @@ use std::io;
 use std::ptr::{null, null_mut};
 
 use dsa_host_core::compositor::{GRAPHICS_COMMAND_PORT, GRAPHICS_PROCESS_PIPE_PORT};
+use dsa_host_core::camera::CAMERA_PORT;
 use dsa_host_core::video::VIDEO_PORT;
 use windows_sys::Win32::Foundation::{LocalFree, ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, HLOCAL};
 use windows_sys::Win32::Security::Authorization::{
@@ -64,6 +65,10 @@ pub const GRAPHICS_PROCESS_PIPE_ELEMENT_NAME: &str =
 
 /// Friendly name for the video decoding service (port 5569).
 pub const VIDEO_ELEMENT_NAME: &str = "Desktop Subsystem for Android Video Decoding";
+
+/// Friendly name for the camera service (port 5572), where the apps in the guest use the
+/// computer's cameras.
+pub const CAMERA_ELEMENT_NAME: &str = "Desktop Subsystem for Android Camera";
 
 fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
@@ -282,8 +287,8 @@ pub fn unregister_service_guid(guid: Guid) -> Result<(), String> {
 }
 
 /// Registers the graphics command stream (port 5566) and process pipe (port 5567) service GUIDs
-/// under `root` at `base_path`, and the video decoding port (5569), which the window manager
-/// also serves.
+/// under `root` at `base_path`, and the video decoding (5569) and camera (5572) ports, which
+/// the window manager also serves.
 pub fn register_graphics_service_guids_under(
     root: RegistryHive,
     base_path: &str,
@@ -309,6 +314,13 @@ pub fn register_graphics_service_guids_under(
         base_path,
         Guid::vsock_service(VIDEO_PORT),
         VIDEO_ELEMENT_NAME,
+        Some(DEFAULT_SERVICE_SDDL),
+    )?;
+    register_service_guid_under(
+        root,
+        base_path,
+        Guid::vsock_service(CAMERA_PORT),
+        CAMERA_ELEMENT_NAME,
         Some(DEFAULT_SERVICE_SDDL),
     )?;
     Ok(())

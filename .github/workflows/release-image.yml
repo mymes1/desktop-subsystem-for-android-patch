@@ -194,6 +194,33 @@ jobs:
           path: .scratch/build-codec2/dsa-codec2
           if-no-files-found: error
 
+  camera:
+    name: Build the guest camera HAL
+    if: inputs.rebuild_images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-camera for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/camera/build.sh .scratch .scratch/build-camera
+
+      - name: Keep the camera HAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-camera
+          path: .scratch/build-camera/dsa-camera
+          if-no-files-found: error
+
   power-hal:
     name: Build the guest power and health HALs
     if: inputs.rebuild_images
@@ -255,7 +282,7 @@ jobs:
 
   image:
     name: Make and publish the guest image (ubuntu-latest, Android ${{ matrix.android }})
-    needs: [kernel, guest-graphics, channeld, hwcomposer, power-hal, codec2, agent]
+    needs: [kernel, guest-graphics, channeld, hwcomposer, power-hal, codec2, camera, agent]
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -325,6 +352,12 @@ jobs:
           name: guest-codec2
           path: .scratch/codec2
 
+      - name: Download the guest camera HAL
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-camera
+          path: .scratch/camera
+
       - name: Download the guest agent
         uses: actions/download-artifact@v4
         with:
@@ -364,6 +397,10 @@ jobs:
         run: |
           uv run dsa/graphics/check-guest-driver.py --executable .scratch/codec2/dsa-codec2 .scratch/aosp-inputs/*/*target_files*.zip
 
+      - name: Check the camera HAL starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/camera/dsa-camera .scratch/aosp-inputs/*/*target_files*.zip
+
       - name: Check the power and health HALs start on the image
         run: |
           for hal in dsa-power dsa-health; do
@@ -378,6 +415,7 @@ jobs:
           --channeld .scratch/channeld/dsa-channeld
           --hwcomposer .scratch/hwcomposer/dsa-hwcomposer
           --codec2 .scratch/codec2/dsa-codec2
+          --camera .scratch/camera/dsa-camera
           --power-hal .scratch/power-hal
           --agent .scratch/agent/DsaAgent.apk
           --aapt2 .scratch/build-tools/aapt2

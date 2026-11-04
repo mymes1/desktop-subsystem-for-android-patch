@@ -1073,6 +1073,74 @@ class ImageLayoutTests(unittest.TestCase):
     def test_pr4_without_the_codec_hal_codec_buffers_stay_pooled(self):
         self.assertNotIn("debug.stagefright.c2-poolmask", make_image.edit_props("ro.debuggable=1\n"))
 
+    def test_fr26_the_camera_hal_replaces_the_emulated_cameras(self):
+        # The host's cameras are Android's: the image carries the camera provider HAL, its
+        # label, its service's label, its policy and the camera features, and drops
+        # Cuttlefish's emulated cameras.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            camera = root / "dsa-camera"
+            camera.write_bytes(b"\x7fELF camera")
+            emulated = "VENDOR/apex/com.google.emulated.camera.provider.hal.apex"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_service_contexts", "")
+                archive.writestr("META/apexkeys.txt",
+                                 'name="com.google.emulated.camera.provider.hal.apex" public_key="k"\n')
+                archive.writestr(emulated, b"apex")
+
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, camera=camera)
+
+            with zipfile.ZipFile(modified) as archive:
+                names = archive.namelist()
+                self.assertNotIn(emulated, names)
+                self.assertNotIn(b"emulated.camera", archive.read("META/apexkeys.txt"))
+                self.assertEqual(archive.read("VENDOR/bin/hw/dsa-camera"), b"\x7fELF camera")
+                self.assertIn("service vendor.dsa-camera /vendor/bin/hw/dsa-camera",
+                              archive.read("VENDOR/etc/init/dsa-camera.rc").decode())
+                manifest = archive.read("VENDOR/etc/vintf/manifest/dsa-camera.xml").decode()
+                self.assertIn("<name>android.hardware.camera.provider</name>", manifest)
+                self.assertIn("<fqname>ICameraProvider/internal/0</fqname>", manifest)
+                features = archive.read("VENDOR/etc/permissions/dsa-camera-features.xml").decode()
+                for feature in ["android.hardware.camera.any", "android.hardware.camera.front",
+                                "android.hardware.camera.external"]:
+                    self.assertIn(f'name="{feature}"', features)
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+                self.assertIn("vendor/bin/hw/dsa-camera 0 2000 755 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/permissions/dsa-camera-features.xml 0 0 644 capabilities=0x0", fs_config)
+                self.assertIn("/vendor/bin/hw/dsa-camera u:object_r:hal_camera_default_exec:s0",
+                              archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode())
+                self.assertIn(
+                    "android.hardware.camera.provider.ICameraProvider/internal/0 u:object_r:hal_camera_service:s0",
+                    archive.read("VENDOR/etc/selinux/vendor_service_contexts").decode())
+                self.assertIn("(allow hal_camera_server self (vsock_socket",
+                              archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
+
+    def test_fr26_without_the_camera_hal_the_emulated_cameras_stay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            emulated = "VENDOR/apex/com.google.emulated.camera.provider.hal.apex"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr(emulated, b"apex")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertIn(emulated, archive.namelist())
+                self.assertNotIn("VENDOR/bin/hw/dsa-camera", archive.namelist())
+
+    def test_fr26_the_kernel_command_line_selects_no_emulated_camera_with_the_camera_hal(self):
+        selection = "androidboot.vendor.apex.com.google.emulated.camera.provider.hal="
+        self.assertIn(selection, make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)"))
+        self.assertNotIn(selection, make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)", camera=True))
+        self.assertNotIn(selection, make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)", hwcomposer=True,
+                                                              camera=True))
+
     def test_fr3_without_the_dsa_hwcomposer_the_cuttlefish_composer_stays(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1259,6 +1327,8 @@ class ImageLayoutTests(unittest.TestCase):
             self.assertIn("VENDOR/bin/hw/dsa-health is missing", proc.stdout)
             # Without the codec HAL every video decodes on the guest's processors.
             self.assertIn("VENDOR/bin/hw/dsa-codec2 is missing", proc.stdout)
+            # Without the camera HAL apps never see the host's cameras.
+            self.assertIn("VENDOR/bin/hw/dsa-camera is missing", proc.stdout)
             self.assertIn("androidboot.dsa.display_width", proc.stdout)
 
     def test_fr3_check_image_rejects_the_wifi_trace_setup(self):
