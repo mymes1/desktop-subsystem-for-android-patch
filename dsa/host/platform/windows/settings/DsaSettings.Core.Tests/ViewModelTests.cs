@@ -47,6 +47,9 @@ internal sealed class KeyText : ITextSource
         "Widgets_At" => "{0},{1} {2}x{3}",
         "Widgets_Placed" => "placed {0}",
         "Widgets_Removed" => "removed {0}",
+        "Background_Playing" => "playing {0}",
+        "Background_Paused" => "paused {0}",
+        "Background_Stopped" => "stopped {0}",
         _ => key,
     };
 }

@@ -727,4 +727,52 @@
   <data name="Logs_Priority_F" xml:space="preserve">
     <value>치명적 오류</value>
   </data>
+  <data name="NavBackground.Content" xml:space="preserve">
+    <value>백그라운드에서 실행 중</value>
+  </data>
+  <data name="BackgroundTitle.Text" xml:space="preserve">
+    <value>백그라운드에서 실행 중</value>
+  </data>
+  <data name="BackgroundRefreshButton.Content" xml:space="preserve">
+    <value>새로 고침</value>
+  </data>
+  <data name="BackgroundIntro.Text" xml:space="preserve">
+    <value>이 안드로이드 앱들은 창을 닫은 뒤에도 음악 재생, 파일 내려받기, VPN 같은 일을 하며 계속 실행됩니다. 앱마다 작업 표시줄의 알림 영역에도 아이콘이 있습니다. 앱을 중지하면 하던 일을 멈추고 쓰던 메모리를 돌려받습니다.</value>
+  </data>
+  <data name="BackgroundErrorBar.Title" xml:space="preserve">
+    <value>백그라운드에서 실행 중인 앱을 읽거나 바꾸지 못했습니다</value>
+  </data>
+  <data name="BackgroundDoneBar.Title" xml:space="preserve">
+    <value>완료</value>
+  </data>
+  <data name="BackgroundAppsHeader.Text" xml:space="preserve">
+    <value>앱</value>
+  </data>
+  <data name="BackgroundNone.Text" xml:space="preserve">
+    <value>백그라운드에서 실행 중인 앱이 없습니다.</value>
+  </data>
+  <data name="BackgroundOpenButton.Content" xml:space="preserve">
+    <value>열기</value>
+  </data>
+  <data name="BackgroundStopButton.Content" xml:space="preserve">
+    <value>중지</value>
+  </data>
+  <data name="BackgroundStoppingHeader.Text" xml:space="preserve">
+    <value>앱 중지</value>
+  </data>
+  <data name="BackgroundAskCard.Header" xml:space="preserve">
+    <value>알림 영역에서 앱을 중지하기 전에 묻기</value>
+  </data>
+  <data name="BackgroundAskCard.Description" xml:space="preserve">
+    <value>다시 묻지 않도록 골랐다면 여기서 다시 켤 수 있습니다.</value>
+  </data>
+  <data name="Background_Playing" xml:space="preserve">
+    <value>재생 중: {0}</value>
+  </data>
+  <data name="Background_Paused" xml:space="preserve">
+    <value>일시 정지됨: {0}</value>
+  </data>
+  <data name="Background_Stopped" xml:space="preserve">
+    <value>{0}을(를) 중지했습니다.</value>
+  </data>
 </root>

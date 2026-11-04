@@ -11,6 +11,7 @@ public partial class MainWindow : FluentWindow
     {
         ["general"] = typeof(GeneralPage),
         ["memory"] = typeof(MemoryPage),
+        ["background"] = typeof(BackgroundPage),
         ["display"] = typeof(DisplayPage),
         ["updates"] = typeof(UpdatesPage),
         ["advanced"] = typeof(AdvancedPage),
@@ -83,7 +84,7 @@ public partial class MainWindow : FluentWindow
         return key?.GetValue("AppsUseLightTheme") is int light && light == 0;
     }
 
-    /// <summary>The page to open with: <c>--page memory</c> (general, memory, display,
+    /// <summary>The page to open with: <c>--page memory</c> (general, memory, background, display,
     /// updates, advanced or about) opens another than General.</summary>
     private static Type StartPage()
     {

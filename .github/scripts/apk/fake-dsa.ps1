@@ -57,6 +57,25 @@ switch ($args[0]) {
     '{"installed":true,"status":"installed","package":"com.example.notes","message":""}'
   }
   'launch' { "Launching $($args[1])" }
+  # The settings app's "Running in the background" page, with a music app and a download.
+  'background' {
+    $icon = [Convert]::ToBase64String([IO.File]::ReadAllBytes("$PSScriptRoot\icon.png"))
+    @{
+      apps = @(
+        @{ package = 'com.example.music'; label = 'Music'; title = 'Playing'; text = 'Morning Light - The Examples'
+           actions = @('Pause', 'Next'); icon_png = $icon },
+        @{ package = 'com.example.files'; label = 'Files'; title = 'Downloading 3 files'; text = '42% of 120 MB'
+           actions = @('Cancel'); icon_png = $icon }
+      )
+      media = @(
+        @{ package = 'com.example.music'; label = 'Music'; title = 'Morning Light'; artist = 'The Examples'
+           album = 'Daybreak'; playback = 'playing' }
+      )
+    } | ConvertTo-Json -Depth 6 -Compress
+  }
+  'settings' {
+    '{"render_gpu":"display","freeze":false,"clipboard":true,"links_in_android":false,"stop_without_asking":false,"program_updates":true,"image_updates":true,"program_updates_available":true,"image_updates_available":true,"version":"0.0.9","log_dir":""}'
+  }
   default {
     [Console]::Error.WriteLine("dsa: the stand-in does not know $($args -join ' ')")
     exit 2

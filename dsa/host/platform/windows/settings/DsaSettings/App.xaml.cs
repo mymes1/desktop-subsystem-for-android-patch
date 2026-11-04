@@ -15,6 +15,7 @@ public partial class App : Application
     internal static MemoryViewModel Memory { get; } = new(Service, Text);
     internal static InstallViewModel Install { get; } = new(Service, Text);
     internal static WidgetsViewModel Widgets { get; } = new(Service, Text);
+    internal static BackgroundViewModel Background { get; } = new(Service, Text);
 
     /// <summary>The argument that names an APK to install: Explorer opens APK files with it, and
     /// the app then shows the APK install window instead of the settings.</summary>
