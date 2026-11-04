@@ -519,8 +519,8 @@ mod tests {
             ..CaptionState::default()
         };
         for (tone, value) in [
-            (CaptionTone::DarkGlyphs, 0),
-            (CaptionTone::LightGlyphs, 255),
+            (CaptionTone::DarkGlyphs, 0u8),
+            (CaptionTone::LightGlyphs, 255u8),
         ] {
             let image = paint_buttons(&layout, 96, &CaptionPalette::of(tone), &state);
             assert_eq!(image.len(), (138 * 31 * 4) as usize);
