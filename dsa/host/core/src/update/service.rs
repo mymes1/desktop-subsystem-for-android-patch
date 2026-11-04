@@ -286,6 +286,22 @@ impl UserAndroid for UpdatingAndroid {
     fn links_in_android(&self, on: bool) {
         UserAndroid::links_in_android(&*self.session, on)
     }
+    fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn std::io::Read,
+    ) -> Result<crate::arm_translation::GuestArmTranslation, crate::host_api::InstallError> {
+        UserAndroid::install_arm_translation(&*self.session, size, sha256, content)
+    }
+    fn remove_arm_translation(
+        &self,
+    ) -> Result<crate::arm_translation::GuestArmTranslation, crate::host_api::InstallError> {
+        UserAndroid::remove_arm_translation(&*self.session)
+    }
+    fn arm_translation(&self) -> Option<crate::arm_translation::GuestArmTranslation> {
+        UserAndroid::arm_translation(&*self.session)
+    }
     fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
         UserAndroid::developer_mode(&*self.session, on, port)
     }

@@ -17,7 +17,9 @@
 //!                              "input_trace": false, "resize_trace": false}
 //! <dir>/users/<user>.json     {"render_gpu": "display", "freeze": false, "clipboard": true,
 //!                              "links_in_android": false, "developer_mode": false,
-//!                              "adb_port": 58526}
+//!                              "adb_port": 58526, "arm_translation": true}
+//! <dir>/users/<user>.arm-translation.json
+//!                             the ARM translation package the user installed, if any
 //! ```
 //!
 //! A missing file means the defaults. A user who has never saved settings starts from what
@@ -28,6 +30,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+
+use crate::arm_translation::Package;
 
 /// The longest render GPU value accepted, in characters.
 const MAX_RENDER_GPU: usize = 128;
@@ -68,6 +72,9 @@ pub struct Settings {
     /// The port on `127.0.0.1` adb connects to in developer mode. [`DEFAULT_ADB_PORT`] by
     /// default.
     pub adb_port: u16,
+    /// Whether the user's Android uses an installed ARM translation package, from its next
+    /// start. On by default; it does nothing while no package is installed.
+    pub arm_translation: bool,
 }
 
 impl Default for Settings {
@@ -84,6 +91,7 @@ impl Default for Settings {
             resize_trace: false,
             developer_mode: false,
             adb_port: DEFAULT_ADB_PORT,
+            arm_translation: true,
         }
     }
 }
@@ -151,6 +159,8 @@ pub struct UserSettings {
     pub developer_mode: bool,
     #[serde(default = "default_adb_port")]
     pub adb_port: u16,
+    #[serde(default = "yes")]
+    pub arm_translation: bool,
 }
 
 impl Default for UserSettings {
@@ -163,6 +173,7 @@ impl Default for UserSettings {
             clipboard: true,
             developer_mode: false,
             adb_port: DEFAULT_ADB_PORT,
+            arm_translation: true,
         }
     }
 }
@@ -178,6 +189,7 @@ impl UserSettings {
             clipboard: settings.clipboard,
             developer_mode: settings.developer_mode,
             adb_port: normalise_adb_port(settings.adb_port),
+            arm_translation: settings.arm_translation,
         }
     }
 }
@@ -235,6 +247,10 @@ pub trait SettingsStore: Send + Sync {
     /// Replaces the machine's settings alone, as the service does itself (bringing over a
     /// choice an earlier release kept elsewhere), with no user to act for.
     fn set_machine(&self, machine: MachineSettings) -> Result<(), String>;
+    /// The ARM translation package `user` has installed, if any.
+    fn arm_translation(&self, user: &str) -> Result<Option<Package>, String>;
+    /// Records the ARM translation package `user` has installed, or that there is none.
+    fn set_arm_translation(&self, user: &str, package: Option<&Package>) -> Result<(), String>;
 }
 
 /// Finds the render GPU a user chose before they first saved settings, if any.
@@ -271,6 +287,13 @@ impl FileSettings {
             .dir
             .join("users")
             .join(format!("{}.json", user_file_stem(user)?)))
+    }
+
+    fn arm_translation_file(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self
+            .dir
+            .join("users")
+            .join(format!("{}.arm-translation.json", user_file_stem(user)?)))
     }
 
     fn read_machine(&self) -> Result<MachineSettings, String> {
@@ -328,6 +351,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         resize_trace: machine.resize_trace,
         developer_mode: mine.developer_mode,
         adb_port: normalise_adb_port(mine.adb_port),
+        arm_translation: mine.arm_translation,
     }
 }
 
@@ -377,6 +401,25 @@ impl SettingsStore for FileSettings {
         let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         write_json(&self.machine_file(), &machine)
     }
+
+    fn arm_translation(&self, user: &str) -> Result<Option<Package>, String> {
+        let file = self.arm_translation_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        read_json(&file)
+    }
+
+    fn set_arm_translation(&self, user: &str, package: Option<&Package>) -> Result<(), String> {
+        let file = self.arm_translation_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        match package {
+            Some(package) => write_json(&file, package),
+            None => match std::fs::remove_file(&file) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(format!("removing {}: {e}", file.display())),
+            },
+        }
+    }
 }
 
 /// Settings kept in memory, for tests and for a service that keeps no folder.
@@ -384,6 +427,7 @@ impl SettingsStore for FileSettings {
 pub struct MemorySettings {
     users: Mutex<std::collections::HashMap<String, UserSettings>>,
     machine: Mutex<MachineSettings>,
+    arm_translation: Mutex<std::collections::HashMap<String, Package>>,
 }
 
 impl SettingsStore for MemorySettings {
@@ -418,6 +462,27 @@ impl SettingsStore for MemorySettings {
 
     fn set_machine(&self, machine: MachineSettings) -> Result<(), String> {
         *self.machine.lock().unwrap_or_else(|e| e.into_inner()) = machine;
+        Ok(())
+    }
+
+    fn arm_translation(&self, user: &str) -> Result<Option<Package>, String> {
+        Ok(self
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(user)
+            .cloned())
+    }
+
+    fn set_arm_translation(&self, user: &str, package: Option<&Package>) -> Result<(), String> {
+        let mut packages = self
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        match package {
+            Some(package) => packages.insert(user.to_string(), package.clone()),
+            None => packages.remove(user),
+        };
         Ok(())
     }
 }
@@ -466,6 +531,7 @@ mod tests {
                     resize_trace: false,
                     developer_mode: true,
                     adb_port: 5037,
+                    arm_translation: false,
                 },
             )
             .unwrap();
@@ -660,6 +726,41 @@ mod tests {
             !again.get("uid:1001").unwrap().developer_mode,
             "the user's own"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr25_arm_translation_is_on_by_default_and_its_package_is_kept_per_user() {
+        let dir = scratch("arm-translation");
+        let store = FileSettings::new(&dir);
+        assert!(store.get("uid:1000").unwrap().arm_translation);
+        assert_eq!(store.arm_translation("uid:1000").unwrap(), None);
+        let package = Package {
+            name: "Translator".into(),
+            version: "1".into(),
+            library: "libtranslator.so".into(),
+            abis: vec!["arm64-v8a".into()],
+            license: "Apache-2.0".into(),
+        };
+        store.set_arm_translation("uid:1000", Some(&package)).unwrap();
+        let again = FileSettings::new(&dir);
+        assert_eq!(again.arm_translation("uid:1000").unwrap(), Some(package));
+        assert_eq!(again.arm_translation("uid:1001").unwrap(), None);
+        again.set_arm_translation("uid:1000", None).unwrap();
+        assert_eq!(again.arm_translation("uid:1000").unwrap(), None);
+        // Removing what is not there is not an error.
+        again.set_arm_translation("uid:1000", None).unwrap();
+        let off = again
+            .set(
+                "uid:1000",
+                &Settings {
+                    arm_translation: false,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        assert!(!off.arm_translation);
+        assert!(!FileSettings::new(&dir).get("uid:1000").unwrap().arm_translation);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

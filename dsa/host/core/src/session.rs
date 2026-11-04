@@ -109,6 +109,7 @@ use crate::accessibility::{
 };
 use crate::adb_bridge::{AdbBridge, BridgeStream, GuestAdb};
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::arm_translation::GuestArmTranslation;
 use crate::clipboard;
 use crate::clock_trace::ClockTrace;
 use crate::files::{self, FileAction, FileTransfer};
@@ -559,6 +560,11 @@ struct Shared {
     last_install: AtomicU32,
     /// Held for the length of an install, so a second one waits for the first.
     install_turn: Mutex<()>,
+    /// Who waits for the control daemon's word on ARM translation, while one exchange is under
+    /// way.
+    arm_translation: Mutex<Option<Sender<control::ArmTranslationState>>>,
+    /// Held for the length of an exchange about ARM translation, so they go one at a time.
+    arm_translation_turn: Mutex<()>,
     /// The widgets the agent hosts and who is watching them.
     widgets: Mutex<WidgetHub>,
     /// The requests about widgets waiting for the agent's answer, by request ID.
@@ -751,6 +757,17 @@ impl Shared {
 
     /// Hands the agent's word on an install to whoever sends that APK. Word on an install
     /// that is not under way is dropped and logged.
+    /// Hands the control daemon's word on ARM translation to whoever waits for it.
+    fn arm_translation_event(&self, state: control::ArmTranslationState) {
+        let waiting = self.arm_translation.lock().unwrap_or_else(|e| e.into_inner());
+        match waiting.as_ref() {
+            Some(waiting) => {
+                let _ = waiting.send(state);
+            }
+            None => eprintln!("arm translation: dropped the guest's word, which nobody waits for"),
+        }
+    }
+
     fn install_event(&self, transfer_id: u32, event: InstallEvent) {
         let installs = self.installs.lock().unwrap_or_else(|e| e.into_inner());
         match installs.get(&transfer_id) {
@@ -896,6 +913,8 @@ impl Session {
             installs: Mutex::new(HashMap::new()),
             last_install: AtomicU32::new(0),
             install_turn: Mutex::new(()),
+            arm_translation: Mutex::new(None),
+            arm_translation_turn: Mutex::new(()),
             widgets: Mutex::new(WidgetHub::default()),
             widget_requests: Mutex::new(HashMap::new()),
             last_widget_request: AtomicU32::new(0),
@@ -1300,6 +1319,183 @@ impl Session {
                 Err(RecvTimeoutError::Disconnected) => return Err(SessionError::Gone),
             }
         }
+    }
+
+    /// Sends an ARM translation package's system image, `size` bytes read from `content` whose
+    /// SHA-256 is `sha256`, to the guest's control daemon, which keeps it on the user's disk
+    /// for the next boot. Returns where translation stands once the image is in place, or why
+    /// it is not. Needs a running guest. The image goes in chunks of [`apk::CHUNK_BYTES`],
+    /// never more than [`apk::CHUNKS_IN_FLIGHT`] ahead of what the daemon says it has written.
+    pub fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<GuestArmTranslation, SessionError> {
+        let _turn = self
+            .shared
+            .arm_translation_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let state = self.state();
+        if !matches!(
+            state,
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) {
+            return Err(SessionError::NotActive(state));
+        }
+        let transfer_id = self
+            .shared
+            .last_install
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+        let (tx, events) = mpsc::channel();
+        *self
+            .shared
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        eprintln!(
+            "arm translation: sending a {size} byte image to Android as transfer {transfer_id}"
+        );
+        let result = self.send_arm_translation(transfer_id, size, sha256, content, &events);
+        *self
+            .shared
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+        match &result {
+            Ok(guest) => eprintln!(
+                "arm translation: the image is in place; this boot's ABIs are {}",
+                guest.abilist
+            ),
+            Err(why) => eprintln!("arm translation: the image did not reach Android: {why}"),
+        }
+        result
+    }
+
+    fn send_arm_translation(
+        &self,
+        transfer_id: u32,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+        events: &Receiver<control::ArmTranslationState>,
+    ) -> Result<GuestArmTranslation, SessionError> {
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::ArmTranslationInstall(control::ArmTranslationInstall {
+                transfer_id,
+                size,
+                sha256: sha256.to_vec(),
+            })),
+        }))?;
+        let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;
+        let mut sent = 0u64;
+        let mut written = 0u64;
+        let mut waited = Duration::ZERO;
+        loop {
+            while sent < size && sent < written + window {
+                let length = (size - sent).min(apk::CHUNK_BYTES as u64) as usize;
+                let mut data = vec![0u8; length];
+                if let Err(error) = content.read_exact(&mut data) {
+                    return Err(SessionError::InstallRefused(format!(
+                        "the ARM translation image did not arrive whole: {error}"
+                    )));
+                }
+                self.send(dsa_protocol::encode(&control::Envelope {
+                    body: Some(Body::ArmTranslationChunk(control::ArmTranslationChunk {
+                        transfer_id,
+                        offset: sent,
+                        data,
+                    })),
+                }))?;
+                sent += length as u64;
+            }
+            match events.recv_timeout(INSTALL_POLL) {
+                Ok(state) if state.transfer_id == transfer_id => {
+                    if !state.error.is_empty() {
+                        return Err(SessionError::InstallRefused(state.error));
+                    }
+                    if state.done {
+                        return Ok(guest_arm_translation(state));
+                    }
+                    written = written.max(state.received);
+                    waited = Duration::ZERO;
+                }
+                Ok(_) => {}
+                Err(RecvTimeoutError::Timeout) => {
+                    let state = self.state();
+                    if !matches!(
+                        state,
+                        SessionState::Active | SessionState::Dozing | SessionState::Frozen
+                    ) {
+                        return Err(SessionError::NotActive(state));
+                    }
+                    waited += INSTALL_POLL;
+                    if waited >= CHUNK_TIMEOUT {
+                        return Err(SessionError::InstallRefused(format!(
+                            "Android has not answered about the ARM translation image for {} s; \
+                             it may be busy, try again",
+                            CHUNK_TIMEOUT.as_secs()
+                        )));
+                    }
+                }
+                Err(RecvTimeoutError::Disconnected) => return Err(SessionError::Gone),
+            }
+        }
+    }
+
+    /// Asks the guest's control daemon to remove the ARM translation package's image.
+    pub fn remove_arm_translation(&self) -> Result<GuestArmTranslation, SessionError> {
+        let state = self.arm_translation_exchange(Body::ArmTranslationRemove(
+            control::ArmTranslationRemove {},
+        ))?;
+        if state.error.is_empty() {
+            Ok(guest_arm_translation(state))
+        } else {
+            Err(SessionError::InstallRefused(state.error))
+        }
+    }
+
+    /// Asks the guest's control daemon where ARM translation stands. Needs a guest that is
+    /// active or dozing: a frozen one is not thawed for it.
+    pub fn arm_translation(&self) -> Result<GuestArmTranslation, SessionError> {
+        let state = self.state();
+        if !matches!(state, SessionState::Active | SessionState::Dozing) {
+            return Err(SessionError::NotActive(state));
+        }
+        self.arm_translation_exchange(Body::ArmTranslationQuery(control::ArmTranslationQuery {}))
+            .map(guest_arm_translation)
+    }
+
+    /// Sends `body` to the control daemon and waits for its ArmTranslationState.
+    fn arm_translation_exchange(
+        &self,
+        body: Body,
+    ) -> Result<control::ArmTranslationState, SessionError> {
+        let _turn = self
+            .shared
+            .arm_translation_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let (tx, events) = mpsc::channel();
+        *self
+            .shared
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        let sent = self.send(dsa_protocol::encode(&control::Envelope { body: Some(body) }));
+        let answer = sent.and_then(|()| {
+            events.recv_timeout(ARM_TRANSLATION_WAIT).map_err(|_| {
+                SessionError::NoAnswer("Android did not say where ARM translation stands".into())
+            })
+        });
+        *self
+            .shared
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+        answer
     }
 
     /// Tells the agent an install will not be finished, and waits a moment for it to say it
@@ -2203,6 +2399,18 @@ fn send_quietly(shared: &Shared, commands: &Sender<Command>, body: Body) {
 
 /// How often an active session checks for requests while it waits on the channel.
 const POLL: Duration = Duration::from_millis(20);
+
+/// How long a question about ARM translation waits for the guest's control daemon.
+const ARM_TRANSLATION_WAIT: Duration = Duration::from_secs(5);
+
+/// What the guest's control daemon says of ARM translation, as the host keeps it.
+fn guest_arm_translation(state: control::ArmTranslationState) -> GuestArmTranslation {
+    GuestArmTranslation {
+        installed: state.installed,
+        active: state.active,
+        abilist: state.abilist,
+    }
+}
 
 /// How often an install looks at the session while it waits for the agent.
 const INSTALL_POLL: Duration = Duration::from_millis(500);
@@ -3713,6 +3921,7 @@ impl Worker {
                 progress.transfer_id,
                 InstallEvent::Progress(progress.received),
             ),
+            Some(Body::ArmTranslationState(state)) => self.shared.arm_translation_event(state),
             Some(Body::InstallResult(result)) => self.shared.install_event(
                 result.transfer_id,
                 InstallEvent::Done(InstallOutcome::from_control(&result)),
@@ -3793,6 +4002,10 @@ impl Worker {
             | Some(Body::FileChunk(_))
             | Some(Body::ClipboardSharing(_))
             | Some(Body::DeveloperMode(_))
+            | Some(Body::ArmTranslationInstall(_))
+            | Some(Body::ArmTranslationChunk(_))
+            | Some(Body::ArmTranslationRemove(_))
+            | Some(Body::ArmTranslationQuery(_))
             | Some(Body::NotificationClicked(_))
             | Some(Body::NotificationDismissed(_))
             | Some(Body::InstallApk(_))

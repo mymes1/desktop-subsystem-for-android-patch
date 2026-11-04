@@ -22,6 +22,7 @@ use crate::accessibility::{
     TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstallStatus, InstalledPackage};
+use crate::arm_translation::{GuestArmTranslation, Package};
 use crate::files::{FileAction, FileTransfer, MAX_FILE_BYTES};
 use crate::host_api::{
     running_of, stop_every, ClientError, HostApiClient, HostApiService, InstallError,
@@ -109,6 +110,8 @@ pub struct FakeAndroid {
     accessibility_watchers: Mutex<Vec<(i32, Sender<GuestAccessibility>)>>,
     /// The accessibility actions it was asked for, in order.
     pub accessibility_actions: Mutex<Vec<(i32, ActionRequest)>>,
+    /// The ARM translation image on its disk, if any.
+    pub arm_image: Mutex<Option<Vec<u8>>>,
 }
 
 /// What the fake Android says of an APK: one whose content starts with [`BAD_APK`] is not an APK
@@ -168,6 +171,7 @@ impl FakeAndroid {
             accessibility_watches: Arc::new(Mutex::new(Vec::new())),
             accessibility_watchers: Mutex::new(Vec::new()),
             accessibility_actions: Mutex::new(Vec::new()),
+            arm_image: Mutex::new(None),
         }
     }
 
@@ -431,6 +435,37 @@ impl UserAndroid for FakeAndroid {
         self.running_or().map_err(TaskRequestError::NotRunning)?;
         self.widget_pointers.lock().unwrap().push(pointer);
         Ok(())
+    }
+    fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn std::io::Read,
+    ) -> Result<GuestArmTranslation, InstallError> {
+        if self.state() != SessionState::Active {
+            return Err(InstallError::NotRunning("Android is not running".into()));
+        }
+        let mut image = vec![0u8; size as usize];
+        content
+            .read_exact(&mut image)
+            .map_err(|e| InstallError::Refused(format!("the image did not arrive whole: {e}")))?;
+        use sha2::Digest;
+        if sha2::Sha256::digest(&image).as_slice() != sha256 {
+            return Err(InstallError::Refused("its SHA-256 differs".into()));
+        }
+        *self.arm_image.lock().unwrap() = Some(image);
+        Ok(self.arm_translation().unwrap_or_default())
+    }
+    fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
+        *self.arm_image.lock().unwrap() = None;
+        Ok(self.arm_translation().unwrap_or_default())
+    }
+    fn arm_translation(&self) -> Option<GuestArmTranslation> {
+        (self.state() == SessionState::Active).then(|| GuestArmTranslation {
+            installed: self.arm_image.lock().unwrap().is_some(),
+            active: false,
+            abilist: "x86_64".into(),
+        })
     }
     fn install_apk(
         &self,
@@ -817,6 +852,14 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr20_developer_mode_is_off_by_default_and_reaches_the_callers_android() {
             $crate::host_api_conformance::developer_mode_reaches_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr25_an_arm_translation_package_is_installed_reported_and_removed() {
+            $crate::host_api_conformance::arm_translation_reaches_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr25_an_unusable_arm_translation_package_is_refused() {
+            $crate::host_api_conformance::unusable_arm_translation_is_refused(&mut || $make);
         }
         #[test]
         fn fr20_a_developer_mode_port_that_cannot_open_is_reported() {
@@ -2141,6 +2184,103 @@ pub fn developer_mode_reaches_the_caller(make: MakeLocal<'_>) {
         *androids.of(&user).unwrap().developer_mode.lock().unwrap(),
         vec![(true, 58526), (true, 5037), (false, 58526)]
     );
+}
+
+fn arm_package() -> Package {
+    Package {
+        name: "Translator".into(),
+        version: "1.0".into(),
+        library: "libtranslator.so".into(),
+        abis: vec!["arm64-v8a".into()],
+        license: "Apache-2.0".into(),
+    }
+}
+
+pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
+    use sha2::Digest;
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    let none = client.arm_translation().expect("asking where translation stands");
+    assert_eq!(none.package, None);
+    assert!(none.enabled, "on by default");
+    assert!(!none.restart_needed);
+
+    client.start().unwrap();
+    let image: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+    let installed = connect(&mut *connector)
+        .install_arm_translation(
+            &arm_package(),
+            image.len() as u64,
+            &sha2::Sha256::digest(&image),
+            &mut image.as_slice(),
+        )
+        .expect("installing the package");
+    assert_eq!(installed.package, Some(arm_package()));
+    let guest = installed.guest.clone().expect("the running Android answered");
+    assert!(guest.installed);
+    assert!(!guest.active, "a package is used from the next start");
+    assert!(installed.restart_needed);
+    let android = androids.of(&user).unwrap();
+    assert_eq!(android.arm_image.lock().unwrap().as_deref(), Some(&image[..]));
+    assert_eq!(store.arm_translation(&user).unwrap(), Some(arm_package()));
+
+    let removed = client.remove_arm_translation().expect("removing the package");
+    assert_eq!(removed.package, None);
+    assert!(!removed.restart_needed);
+    assert!(android.arm_image.lock().unwrap().is_none());
+    assert_eq!(store.arm_translation(&user).unwrap(), None);
+}
+
+pub fn unusable_arm_translation_is_refused(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    connect(&mut *connector).start().unwrap();
+    let image = vec![1u8; 64];
+    let thirty_two = [0u8; 32];
+    for package in [
+        Package {
+            abis: vec!["armeabi-v7a".into()],
+            ..arm_package()
+        },
+        Package {
+            library: "../libtranslator.so".into(),
+            ..arm_package()
+        },
+    ] {
+        match connect(&mut *connector).install_arm_translation(
+            &package,
+            image.len() as u64,
+            &thirty_two,
+            &mut image.as_slice(),
+        ) {
+            Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::InstallRefused),
+            other => panic!("expected the package to be refused, got {other:?}"),
+        }
+    }
+    // A transfer that does not arrive intact leaves nothing recorded.
+    match connect(&mut *connector).install_arm_translation(
+        &arm_package(),
+        image.len() as u64,
+        &thirty_two,
+        &mut image.as_slice(),
+    ) {
+        Err(ClientError::Service { code, detail }) => {
+            assert_eq!(code, ErrorCode::InstallRefused);
+            assert!(detail.contains("SHA-256"), "{detail}");
+        }
+        other => panic!("expected the image to be refused, got {other:?}"),
+    }
+    assert_eq!(store.arm_translation(&user).unwrap(), None);
+    assert!(androids.of(&user).unwrap().arm_image.lock().unwrap().is_none());
 }
 
 pub fn developer_mode_port_refusal_is_reported(make: MakeLocal<'_>) {

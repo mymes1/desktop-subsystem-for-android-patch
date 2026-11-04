@@ -305,7 +305,14 @@ pub fn create_user_android(
         }
     }
     .with_console_log(console_log)
-    .with_boot_dir(config.machine_root().tmp());
+    .with_boot_dir(config.machine_root().tmp())
+    .with_bootconfig({
+        // An installed ARM translation package is used only while the user's setting is on,
+        // and only from a boot that is told so.
+        let store = settings_store(config);
+        let user = sid.to_string();
+        Box::new(move || arm_translation_bootconfig(&*store, &user))
+    });
     let launcher = if config.keep_window_manager {
         let mut keeper = WindowManagerKeeper::new(UserWindowManager::new(sid));
         launcher.with_prerequisite(Box::new(move || keeper.check(Instant::now())))
@@ -582,6 +589,30 @@ fn take_old_trace_markers(config: &HostConfig, store: &dyn SettingsStore, build:
 
 /// The settings in the service's own folder. A user who has never saved settings starts
 /// from the render GPU in their own `compositor.json`, if they chose one there.
+/// The bootconfig that tells `user`'s next boot to use their ARM translation package, or
+/// nothing.
+fn arm_translation_bootconfig(store: &dyn SettingsStore, user: &str) -> String {
+    let package = store.arm_translation(user).unwrap_or_else(|why| {
+        eprintln!("arm translation: {user}'s package is not known ({why}); booting without it");
+        None
+    });
+    let enabled = store.get(user).map(|s| s.arm_translation).unwrap_or(true);
+    let text = dsa_host_core::arm_translation::bootconfig(package.as_ref(), enabled);
+    if let Some(package) = &package {
+        eprintln!(
+            "arm translation: {user} has {} {}; this boot {}",
+            package.name,
+            package.version,
+            if text.is_empty() {
+                "goes without it (turned off)"
+            } else {
+                "uses it"
+            }
+        );
+    }
+    text.to_string()
+}
+
 fn settings_store(config: &HostConfig) -> Arc<dyn SettingsStore> {
     let dir = config.settings_dir();
     Arc::new(

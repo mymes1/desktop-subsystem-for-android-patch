@@ -62,7 +62,13 @@ pub struct AndroidVmLauncher {
     data_disk: Option<PathBuf>,
     /// What Android's log has shown during this boot, which the console no longer carries.
     log_signs: Arc<Mutex<ConsoleSigns>>,
+    /// More bootconfig for each boot, beside the secret.
+    bootconfig: Option<BootconfigSource>,
 }
+
+/// Supplies more bootconfig lines (`key = "value"`) for each boot. See
+/// [`AndroidVmLauncher::with_bootconfig`].
+pub type BootconfigSource = Box<dyn FnMut() -> String + Send>;
 
 /// See [`AndroidVmLauncher::with_prerequisite`].
 pub type Prerequisite = Box<dyn FnMut() -> Option<String> + Send>;
@@ -76,11 +82,12 @@ impl Drop for TransientFile {
     }
 }
 
-/// Writes `initrd` with `secret` appended as bootconfig to `path`, readable only by the
-/// account the host runs as until the VM is let in.
+/// Writes `initrd` with `secret` and `more` appended as bootconfig to `path`, readable only
+/// by the account the host runs as until the VM is let in.
 fn write_boot_initrd(
     initrd: &Path,
     secret: &BootSecret,
+    more: &str,
     path: &Path,
 ) -> Result<TransientFile, String> {
     let image = std::fs::read(initrd)
@@ -90,7 +97,8 @@ fn write_boot_initrd(
             .map_err(|e| format!("could not create {}: {e}", folder.display()))?;
     }
     let file = TransientFile(path.to_path_buf());
-    std::fs::write(path, bootconfig::append(&image, &bootconfig_entry(secret)))
+    let text = format!("{}{more}", bootconfig_entry(secret));
+    std::fs::write(path, bootconfig::append(&image, &text))
         .map_err(|e| format!("could not write the boot's initrd {}: {e}", path.display()))?;
     Ok(file)
 }
@@ -116,7 +124,16 @@ impl AndroidVmLauncher {
             prerequisite: None,
             data_disk: None,
             log_signs: Arc::new(Mutex::new(ConsoleSigns::default())),
+            bootconfig: None,
         }
+    }
+
+    /// Asks `source` at each start for more bootconfig lines, beside the boot's secret: what
+    /// the guest is to know before its init reads any property, such as whether to use an
+    /// installed ARM translation package.
+    pub fn with_bootconfig(mut self, source: BootconfigSource) -> AndroidVmLauncher {
+        self.bootconfig = Some(source);
+        self
     }
 
     /// Reads the signs of a late boot from `signs` as well as from the console: whoever reads
@@ -236,9 +253,11 @@ impl GuestLauncher for AndroidVmLauncher {
         };
         // Removed on every way out of this function: by then the VM has read it or will
         // never run.
+        let more = self.bootconfig.as_mut().map(|source| source()).unwrap_or_default();
         let boot_initrd = write_boot_initrd(
             &initrd,
             secret,
+            &more,
             &self
                 .boot_dir
                 .join(crate::paths::unique_name(&self.id, ".initrd")),

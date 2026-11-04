@@ -61,6 +61,7 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::arm_translation::{self, GuestArmTranslation, Package};
 use crate::diagnostics::HostFile;
 use crate::files::{self, FileAction, FileTransfer};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
@@ -254,6 +255,31 @@ pub trait UserAndroid: Send + Sync {
             "this Android does not install APKs".into(),
         ))
     }
+    /// Sends an ARM translation package's system image, `size` bytes read from `content` whose
+    /// SHA-256 is `sha256`, to this Android's disk, and returns where translation stands once
+    /// the image is in place. The package is used from Android's next start.
+    fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<GuestArmTranslation, InstallError> {
+        let _ = (size, sha256, content);
+        Err(InstallError::Refused(
+            "this Android cannot take an ARM translation package".into(),
+        ))
+    }
+    /// Removes the ARM translation package's image from this Android's disk.
+    fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
+        Err(InstallError::Refused(
+            "this Android cannot take an ARM translation package".into(),
+        ))
+    }
+    /// Where ARM translation stands in this Android while it runs; `None` when it is not
+    /// running or does not say.
+    fn arm_translation(&self) -> Option<GuestArmTranslation> {
+        None
+    }
     /// What this Android has installed of `package`, if anything: its version and signing
     /// certificates.
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
@@ -313,6 +339,18 @@ pub enum InstallError {
     NotRunning(String),
     /// The APK was not taken, or did not arrive whole; the detail says why.
     Refused(String),
+}
+
+/// Why an ARM translation package's image did not reach the session's Android, as the local
+/// API reports it.
+fn arm_install_error(error: SessionError) -> InstallError {
+    match error {
+        SessionError::NotActive(state) => InstallError::NotRunning(format!(
+            "Android is {state}; start it and try again"
+        )),
+        SessionError::InstallRefused(why) => InstallError::Refused(why),
+        other => InstallError::Refused(format!("Android could not be reached: {other}")),
+    }
 }
 
 impl UserAndroid for Session {
@@ -444,6 +482,20 @@ impl UserAndroid for Session {
     }
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
         Session::package_state(self, package, PACKAGE_QUERY_WAIT).map_err(request_error)
+    }
+    fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<GuestArmTranslation, InstallError> {
+        Session::install_arm_translation(self, size, sha256, content).map_err(arm_install_error)
+    }
+    fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
+        Session::remove_arm_translation(self).map_err(arm_install_error)
+    }
+    fn arm_translation(&self) -> Option<GuestArmTranslation> {
+        Session::arm_translation(self).ok()
     }
     fn watch_accessibility(&self, task_id: i32) -> Option<AccessibilityWatch> {
         Some(Session::watch_accessibility(self, task_id))
@@ -845,6 +897,67 @@ pub struct SettingsReport {
     pub settings: Settings,
     pub facts: ServiceFacts,
 }
+
+/// Where ARM translation stands for a user.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArmTranslationStatus {
+    /// The package the user installed, if any.
+    pub package: Option<Package>,
+    /// The user's `arm-translation` setting.
+    pub enabled: bool,
+    /// What the user's running Android says; `None` when it is not running.
+    pub guest: Option<GuestArmTranslation>,
+    /// What is installed and switched on applies only once Android starts again.
+    pub restart_needed: bool,
+}
+
+impl ArmTranslationStatus {
+    fn to_wire(&self) -> types::ArmTranslation {
+        let guest = self.guest.clone().unwrap_or_default();
+        types::ArmTranslation {
+            package: self.package.as_ref().map(package_to_wire),
+            enabled: self.enabled,
+            guest_known: self.guest.is_some(),
+            guest_installed: guest.installed,
+            guest_active: guest.active,
+            abilist: guest.abilist,
+            restart_needed: self.restart_needed,
+        }
+    }
+
+    fn from_wire(status: types::ArmTranslation) -> ArmTranslationStatus {
+        ArmTranslationStatus {
+            package: status.package.map(package_from_wire),
+            enabled: status.enabled,
+            guest: status.guest_known.then_some(GuestArmTranslation {
+                installed: status.guest_installed,
+                active: status.guest_active,
+                abilist: status.abilist,
+            }),
+            restart_needed: status.restart_needed,
+        }
+    }
+}
+
+fn package_to_wire(package: &Package) -> types::ArmTranslationPackage {
+    types::ArmTranslationPackage {
+        name: package.name.clone(),
+        version: package.version.clone(),
+        library: package.library.clone(),
+        abis: package.abis.clone(),
+        license: package.license.clone(),
+    }
+}
+
+fn package_from_wire(package: types::ArmTranslationPackage) -> Package {
+    Package {
+        name: package.name,
+        version: package.version,
+        library: package.library,
+        abis: package.abis,
+        license: package.license,
+    }
+}
 /// How long the service waits for the fresh memory report it asks Android for.
 const MEMORY_WAIT: Duration = Duration::from_secs(3);
 
@@ -1066,6 +1179,14 @@ impl HostApiService {
             }
             if let Some(request::Body::InstallApk(install)) = &request.body {
                 return self.install_apk(connection, &peer, request.id, install.clone());
+            }
+            if let Some(request::Body::InstallArmTranslation(install)) = &request.body {
+                return self.install_arm_translation(
+                    connection,
+                    &peer,
+                    request.id,
+                    install.clone(),
+                );
             }
             if let Some(request::Body::WatchLinks(_)) = request.body {
                 return self.watch_links(connection, &peer, request.id);
@@ -2262,6 +2383,8 @@ impl HostApiService {
             }
             Some(request::Body::ActOnNotification(act)) => self.act_on_notification(peer, act),
             Some(request::Body::ListWidgetProviders(_)) => self.widget_providers(peer),
+            Some(request::Body::GetArmTranslation(_)) => self.get_arm_translation(peer),
+            Some(request::Body::RemoveArmTranslation(_)) => self.remove_arm_translation(peer),
             Some(request::Body::GetPackage(get)) => self.package_state(peer, &get.package_name),
             Some(request::Body::AddWidget(add)) => self.add_widget(peer, add),
             Some(request::Body::RemoveWidget(remove)) => self.remove_widget(peer, remove.widget_id),
@@ -2304,6 +2427,9 @@ impl HostApiService {
                         | request::Body::StreamInput(_)
                         | request::Body::WatchClipboard(_)
                         | request::Body::InstallApk(_)
+                        | request::Body::InstallArmTranslation(_)
+                        | request::Body::GetArmTranslation(_)
+                        | request::Body::RemoveArmTranslation(_)
                         | request::Body::WatchLinks(_)
                         | request::Body::OpenFile(_)
                         | request::Body::WatchNotifications(_)
@@ -2428,6 +2554,168 @@ impl HostApiService {
 }
 
 impl HostApiService {
+    /// Where ARM translation stands for `peer`: the package they installed, their setting,
+    /// and what their running Android says.
+    fn arm_translation_status(
+        &self,
+        peer: &Peer,
+        store: &dyn SettingsStore,
+        guest: Option<GuestArmTranslation>,
+    ) -> Result<ArmTranslationStatus, String> {
+        let package = store.arm_translation(&peer.user)?;
+        let enabled = store.get(&peer.user)?.arm_translation;
+        let guest = guest.or_else(|| {
+            self.androids
+                .android(&peer.user)
+                .ok()
+                .and_then(|android| android.arm_translation())
+        });
+        Ok(ArmTranslationStatus {
+            restart_needed: arm_translation::restart_needed(
+                package.as_ref(),
+                enabled,
+                guest.as_ref(),
+            ),
+            package,
+            enabled,
+            guest,
+        })
+    }
+
+    fn get_arm_translation(&self, peer: &Peer) -> response::Body {
+        let Some((store, _)) = &self.settings else {
+            return Self::no_settings();
+        };
+        match self.arm_translation_status(peer, &**store, None) {
+            Ok(status) => response::Body::ArmTranslation(status.to_wire()),
+            Err(why) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    /// Removes the caller's ARM translation package: from their Android's disk when it runs,
+    /// and from their settings, so no later boot uses it.
+    fn remove_arm_translation(&self, peer: &Peer) -> response::Body {
+        let Some((store, _)) = &self.settings else {
+            return Self::no_settings();
+        };
+        let mut guest = None;
+        if let Ok(android) = self.androids.android(&peer.user) {
+            if matches!(
+                android.state(),
+                SessionState::Active | SessionState::Dozing | SessionState::Frozen
+            ) {
+                match android.remove_arm_translation() {
+                    Ok(state) => guest = Some(state),
+                    Err(InstallError::NotRunning(why)) => {
+                        return error(ErrorCode::NotRunning, why)
+                    }
+                    Err(InstallError::Refused(why)) => return error(ErrorCode::Unavailable, why),
+                }
+            }
+        }
+        if let Err(why) = store.set_arm_translation(&peer.user, None) {
+            return error(ErrorCode::Unavailable, why);
+        }
+        eprintln!("arm translation: {} removed their package", peer.user);
+        match self.arm_translation_status(peer, &**store, guest) {
+            Ok(status) => response::Body::ArmTranslation(status.to_wire()),
+            Err(why) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    /// Answers an InstallArmTranslation request: refuses a package whose description is not
+    /// usable, else streams the image the client sends after Done to the caller's Android, and
+    /// once it is there records the package with the caller's settings and answers again with
+    /// where translation stands. The connection ends with the install.
+    fn install_arm_translation(
+        &self,
+        mut connection: Box<dyn Connection>,
+        peer: &Peer,
+        id: u64,
+        install: types::InstallArmTranslation,
+    ) {
+        let answer = |connection: &mut dyn Connection, body: response::Body| {
+            let _ = send(
+                connection,
+                Body::Response(Response {
+                    id,
+                    body: Some(body),
+                }),
+            );
+        };
+        let refuse = |mut connection: Box<dyn Connection>, body: response::Body| {
+            answer(&mut *connection, body);
+            connection.close();
+        };
+        let Some((store, _)) = &self.settings else {
+            return refuse(connection, Self::no_settings());
+        };
+        let package = install
+            .package
+            .map(package_from_wire)
+            .ok_or_else(|| "the request does not describe the package".to_string())
+            .and_then(|package| package.check().map(|()| package))
+            .and_then(|package| {
+                if install.size == 0 || install.size > arm_translation::MAX_IMAGE_BYTES {
+                    Err(format!(
+                        "the package's image is {} bytes; it must have from 1 byte to {} MiB",
+                        install.size,
+                        arm_translation::MAX_IMAGE_BYTES >> 20
+                    ))
+                } else if install.sha256.len() != 32 {
+                    Err("the request does not carry the image's SHA-256".to_string())
+                } else {
+                    Ok(package)
+                }
+            });
+        let package = match package {
+            Ok(package) => package,
+            Err(why) => {
+                eprintln!("arm translation: refused a package from {}: {why}", peer.user);
+                return refuse(connection, error(ErrorCode::InstallRefused, why));
+            }
+        };
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return refuse(connection, error(ErrorCode::Unavailable, why)),
+        };
+        let state = android.state();
+        if !matches!(
+            state,
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) {
+            let why = format!("Android is {state}; start it and install the package again");
+            return refuse(connection, error(ErrorCode::NotRunning, why));
+        }
+        answer(&mut *connection, response::Body::Done(types::Done {}));
+        eprintln!(
+            "arm translation: {} is installing {} {} ({} bytes)",
+            peer.user, package.name, package.version, install.size
+        );
+        let mut content = ApkChunks {
+            connection: &mut *connection,
+            user: &peer.user,
+            left: install.size,
+            piece: Vec::new(),
+            at: 0,
+        };
+        let installed =
+            android.install_arm_translation(install.size, &install.sha256, &mut content);
+        let body = match installed {
+            Ok(guest) => match store.set_arm_translation(&peer.user, Some(&package)) {
+                Ok(()) => match self.arm_translation_status(peer, &**store, Some(guest)) {
+                    Ok(status) => response::Body::ArmTranslation(status.to_wire()),
+                    Err(why) => error(ErrorCode::Unavailable, why),
+                },
+                Err(why) => error(ErrorCode::Unavailable, why),
+            },
+            Err(InstallError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(InstallError::Refused(why)) => error(ErrorCode::InstallRefused, why),
+        };
+        answer(&mut *connection, body);
+        connection.close();
+    }
+
     fn no_settings() -> response::Body {
         error(
             ErrorCode::Unavailable,
@@ -2468,6 +2756,7 @@ impl HostApiService {
             input_trace: wanted.input_trace,
             resize_trace: wanted.resize_trace,
             developer_mode: wanted.developer_mode,
+            arm_translation: wanted.arm_translation,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -2575,6 +2864,7 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         resize_trace: settings.resize_trace,
         developer_mode: settings.developer_mode,
         adb_port: settings.adb_port.into(),
+        arm_translation: settings.arm_translation,
         program_updates_available: facts.program_updates_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
@@ -2599,6 +2889,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             adb_port: crate::settings::normalise_adb_port(
                 u16::try_from(settings.adb_port).unwrap_or(0),
             ),
+            arm_translation: settings.arm_translation,
         },
         facts: ServiceFacts {
             version: settings.version,
@@ -2817,6 +3108,83 @@ impl HostApiClient {
         match self.exchange(body, self.timeout)? {
             response::Body::Settings(settings) => Ok(settings_from_wire(settings)),
             _ => Err(ClientError::Malformed("expected the settings".into())),
+        }
+    }
+
+    /// Where ARM translation stands for the caller.
+    pub fn arm_translation(&mut self) -> Result<ArmTranslationStatus, ClientError> {
+        let body = request::Body::GetArmTranslation(types::GetArmTranslation {});
+        match self.exchange(body, self.timeout)? {
+            response::Body::ArmTranslation(status) => Ok(ArmTranslationStatus::from_wire(status)),
+            _ => Err(ClientError::Malformed(
+                "expected where ARM translation stands".into(),
+            )),
+        }
+    }
+
+    /// Removes the caller's ARM translation package; Android goes without it from its next
+    /// start.
+    pub fn remove_arm_translation(&mut self) -> Result<ArmTranslationStatus, ClientError> {
+        let body = request::Body::RemoveArmTranslation(types::RemoveArmTranslation {});
+        match self.exchange(body, INSTALL_ANSWER_WAIT)? {
+            response::Body::ArmTranslation(status) => Ok(ArmTranslationStatus::from_wire(status)),
+            _ => Err(ClientError::Malformed(
+                "expected where ARM translation stands".into(),
+            )),
+        }
+    }
+
+    /// Installs the ARM translation package `package` for the caller: its system image,
+    /// `size` bytes read from `content` whose SHA-256 is `sha256`, goes to the caller's
+    /// Android, which uses it from its next start. The connection ends with the install, so
+    /// the client is used up.
+    pub fn install_arm_translation(
+        mut self,
+        package: &Package,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<ArmTranslationStatus, ClientError> {
+        let id = self.next_id;
+        let body = request::Body::InstallArmTranslation(types::InstallArmTranslation {
+            package: Some(package_to_wire(package)),
+            size,
+            sha256: sha256.to_vec(),
+        });
+        match self.exchange(body, self.timeout)? {
+            response::Body::Done(_) => {}
+            _ => {
+                return Err(ClientError::Malformed(
+                    "expected the answer that the package is taken".into(),
+                ))
+            }
+        }
+        let mut left = size;
+        let mut piece = vec![0u8; apk::LOCAL_CHUNK_BYTES];
+        while left > 0 {
+            let length = left.min(piece.len() as u64) as usize;
+            if let Err(error) = content.read_exact(&mut piece[..length]) {
+                self.connection.close();
+                return Err(ClientError::Service {
+                    code: ErrorCode::InstallRefused,
+                    detail: format!("the package's image could not be read: {error}"),
+                });
+            }
+            // A service that has answered already closes the connection; its answer is still
+            // there to read.
+            let chunk = Body::ApkChunk(types::ApkChunk {
+                data: piece[..length].to_vec(),
+            });
+            if send(&mut *self.connection, chunk).is_err() {
+                break;
+            }
+            left -= length as u64;
+        }
+        match self.answer(id, INSTALL_ANSWER_WAIT)? {
+            response::Body::ArmTranslation(status) => Ok(ArmTranslationStatus::from_wire(status)),
+            _ => Err(ClientError::Malformed(
+                "expected where ARM translation stands".into(),
+            )),
         }
     }
 

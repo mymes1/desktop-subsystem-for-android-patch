@@ -38,6 +38,7 @@ pub mod accessibility;
 pub mod adb_bridge;
 pub mod apk;
 pub mod apk_info;
+pub mod arm_translation;
 pub mod bootconfig;
 pub mod clipboard;
 pub mod clock_trace;
