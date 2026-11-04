@@ -255,10 +255,16 @@ jobs:
         run: dsa/protocol/cpp/test.sh
 
   settings-app:
-    name: Test and build the settings app (windows-latest)
+    name: Test and build the settings app (${{ matrix.os }}, ${{ matrix.rid }})
     needs: changes
     if: needs.changes.outputs.settings == 'true'
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, rid: win-x64 }
+          - { os: windows-11-arm, rid: win-arm64 }
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     defaults:
       run:
@@ -278,7 +284,7 @@ jobs:
 
       # The WPF app itself, as the installer publishes it.
       - name: Build the app
-        run: dotnet publish DsaSettings/DsaSettings.csproj -c Release -r win-x64 -o ../../../../target/settings-app
+        run: dotnet publish DsaSettings/DsaSettings.csproj -c Release -r ${{ matrix.rid }} -o ../../../../target/settings-app
 
   hwcomposer:
     name: Test the guest hwcomposer's task rules (ubuntu-latest)
