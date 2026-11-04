@@ -592,6 +592,102 @@ mod tests {
         assert_eq!(geometry.to_guest((10.0, 20.0)), (10.0, 20.0));
     }
 
+    /// The Settings window the offset was reported on: placed at 900 by 1100 window pixels on
+    /// a 2880 by 1800 monitor at 200%. Windows draws the side and bottom borders outside the
+    /// client area, and the window's messages carry client coordinates, so those borders never
+    /// reach the mapping. The title bar is inside the client area, over the app, and its band
+    /// is answered by the window's hit test before any point reaches the mapping. The task is the client area's size,
+    /// one guest pixel per window pixel, in sizes that are not whole dp at 320 dpi.
+    fn settings_at_200_percent() -> WindowGeometry {
+        WindowGeometry {
+            client: (869, 1031),
+            task: (869, 1031),
+        }
+    }
+
+    #[test]
+    fn fr22_under_the_title_bar_the_app_gets_the_points_below_the_band_unmoved() {
+        use crate::compositor::caption::{CaptionHit, CaptionLayout};
+        // The Settings window at 200%, now with its client area reaching the window's top
+        // edge: the task is the whole client area, title bar band included, and the band (62
+        // pixels, a standard caption at 192 dpi) belongs to Windows.
+        let geometry = settings_at_200_percent();
+        let layout = CaptionLayout::new(geometry.client.0, 62, 192, 16);
+        let (width, height) = geometry.client;
+        for y in 0..height {
+            for x in 0..width {
+                let hit = layout.hit(x as i32, y as i32);
+                if y < 62 {
+                    assert_ne!(hit, CaptionHit::Client, "({x}, {y}) is in the band");
+                    continue;
+                }
+                assert_eq!(hit, CaptionHit::Client, "({x}, {y}) is below the band");
+                let landed = geometry.to_guest((f64::from(x), f64::from(y)));
+                assert_eq!(landed, (x as f32, y as f32), "client pixel ({x}, {y})");
+            }
+        }
+        // The bottom corners reach the app exactly; the top ones are the window's.
+        for corner in [(0, height - 1), (width - 1, height - 1)] {
+            let landed = geometry.to_guest((f64::from(corner.0), f64::from(corner.1)));
+            assert_eq!(landed, (corner.0 as f32, corner.1 as f32));
+        }
+        assert_ne!(layout.hit(0, 0), CaptionHit::Client);
+        assert_ne!(layout.hit(width as i32 - 1, 0), CaptionHit::Client);
+    }
+
+    #[test]
+    fn fr5_at_200_percent_every_client_pixel_lands_on_the_same_task_pixel() {
+        let geometry = settings_at_200_percent();
+        for y in 0..geometry.client.1 {
+            for x in 0..geometry.client.0 {
+                let landed = geometry.to_guest((f64::from(x), f64::from(y)));
+                assert_eq!(
+                    landed,
+                    (x as f32, y as f32),
+                    "client pixel ({x}, {y}) of a window shown 1:1 landed elsewhere"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fr5_at_200_percent_a_hover_and_a_click_on_the_back_button_land_on_the_same_point() {
+        // The back arrow of Settings' toolbar, in client pixels.
+        let arrow = (87.0, 54.0);
+        let mut mapper = PointerMapper::new(7);
+        let geometry = settings_at_200_percent();
+        let hover = mapper.handle(WindowInput::MouseMove { position: arrow }, geometry);
+        let press = mapper.handle(button(MouseButton::Left, true, arrow), geometry);
+        let hovered = hover.events[0];
+        assert_eq!(hovered.action, PointerAction::HoverMove);
+        let down = press
+            .events
+            .iter()
+            .find(|event| event.action == PointerAction::Down)
+            .expect("a press is a down");
+        assert_eq!((hovered.x, hovered.y), (87.0, 54.0));
+        assert_eq!((down.x, down.y), (hovered.x, hovered.y));
+    }
+
+    #[test]
+    fn fr5_a_frame_stretched_by_a_non_integer_ratio_has_no_offset_that_grows_across_it() {
+        // While a resize waits for the guest, the last frame is stretched over the window.
+        // The mapping follows the same ratio, so the error stays under a pixel everywhere
+        // instead of growing toward one side.
+        let geometry = WindowGeometry {
+            client: (869, 1031),
+            task: (1003, 1187),
+        };
+        for x in (0..869).step_by(7) {
+            let expected = f64::from(x) * 1003.0 / 869.0;
+            let landed = geometry.to_guest((f64::from(x), 0.0)).0;
+            assert!(
+                (f64::from(landed) - expected).abs() < 1.0,
+                "client x {x} landed at {landed}, expected {expected}"
+            );
+        }
+    }
+
     #[test]
     fn fr5_a_drag_out_of_the_window_keeps_its_position() {
         let geometry = at_scale((400, 300), 2.0);

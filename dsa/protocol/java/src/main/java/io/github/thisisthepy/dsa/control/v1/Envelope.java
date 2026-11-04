@@ -51,6 +51,7 @@ public  final class Envelope extends
     SCREEN_STATE(40),
     POWER_STATE(41),
     POWER_HINT(110),
+    DEVELOPER_MODE(140),
     DEVICE_IDLE(42),
     HOST_MEMORY(43),
     HOST_SLEEP(44),
@@ -99,7 +100,6 @@ public  final class Envelope extends
     COLLECT_DIAGNOSTICS(133),
     DIAGNOSTICS_FILE(134),
     DIAGNOSTICS_DONE(135),
-    SET_TASK_CAPTION(140),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -146,6 +146,7 @@ public  final class Envelope extends
         case 40: return SCREEN_STATE;
         case 41: return POWER_STATE;
         case 110: return POWER_HINT;
+        case 140: return DEVELOPER_MODE;
         case 42: return DEVICE_IDLE;
         case 43: return HOST_MEMORY;
         case 44: return HOST_SLEEP;
@@ -194,7 +195,6 @@ public  final class Envelope extends
         case 133: return COLLECT_DIAGNOSTICS;
         case 134: return DIAGNOSTICS_FILE;
         case 135: return DIAGNOSTICS_DONE;
-        case 140: return SET_TASK_CAPTION;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -1761,6 +1761,56 @@ public  final class Envelope extends
    */
   private void clearPowerHint() {
     if (bodyCase_ == 110) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DEVELOPER_MODE_FIELD_NUMBER = 140;
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  @java.lang.Override
+  public boolean hasDeveloperMode() {
+    return bodyCase_ == 140;
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DeveloperMode getDeveloperMode() {
+    if (bodyCase_ == 140) {
+       return (io.github.thisisthepy.dsa.control.v1.DeveloperMode) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DeveloperMode.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  private void setDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 140;
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  private void mergeDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+    value.getClass();
+  if (bodyCase_ == 140 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DeveloperMode.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DeveloperMode.newBuilder((io.github.thisisthepy.dsa.control.v1.DeveloperMode) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 140;
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  private void clearDeveloperMode() {
+    if (bodyCase_ == 140) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -4166,56 +4216,6 @@ public  final class Envelope extends
     }
   }
 
-  public static final int SET_TASK_CAPTION_FIELD_NUMBER = 140;
-  /**
-   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-   */
-  @java.lang.Override
-  public boolean hasSetTaskCaption() {
-    return bodyCase_ == 140;
-  }
-  /**
-   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.SetTaskCaption getSetTaskCaption() {
-    if (bodyCase_ == 140) {
-       return (io.github.thisisthepy.dsa.control.v1.SetTaskCaption) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.SetTaskCaption.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-   */
-  private void setSetTaskCaption(io.github.thisisthepy.dsa.control.v1.SetTaskCaption value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 140;
-  }
-  /**
-   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-   */
-  private void mergeSetTaskCaption(io.github.thisisthepy.dsa.control.v1.SetTaskCaption value) {
-    value.getClass();
-  if (bodyCase_ == 140 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.SetTaskCaption.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.SetTaskCaption.newBuilder((io.github.thisisthepy.dsa.control.v1.SetTaskCaption) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 140;
-  }
-  /**
-   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-   */
-  private void clearSetTaskCaption() {
-    if (bodyCase_ == 140) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -5812,6 +5812,54 @@ public  final class Envelope extends
     public Builder clearPowerHint() {
       copyOnWrite();
       instance.clearPowerHint();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    @java.lang.Override
+    public boolean hasDeveloperMode() {
+      return instance.hasDeveloperMode();
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DeveloperMode getDeveloperMode() {
+      return instance.getDeveloperMode();
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder setDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+      copyOnWrite();
+      instance.setDeveloperMode(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder setDeveloperMode(
+        io.github.thisisthepy.dsa.control.v1.DeveloperMode.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDeveloperMode(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder mergeDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+      copyOnWrite();
+      instance.mergeDeveloperMode(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder clearDeveloperMode() {
+      copyOnWrite();
+      instance.clearDeveloperMode();
       return this;
     }
 
@@ -8119,54 +8167,6 @@ public  final class Envelope extends
       return this;
     }
 
-    /**
-     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-     */
-    @java.lang.Override
-    public boolean hasSetTaskCaption() {
-      return instance.hasSetTaskCaption();
-    }
-    /**
-     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.SetTaskCaption getSetTaskCaption() {
-      return instance.getSetTaskCaption();
-    }
-    /**
-     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-     */
-    public Builder setSetTaskCaption(io.github.thisisthepy.dsa.control.v1.SetTaskCaption value) {
-      copyOnWrite();
-      instance.setSetTaskCaption(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-     */
-    public Builder setSetTaskCaption(
-        io.github.thisisthepy.dsa.control.v1.SetTaskCaption.Builder builderForValue) {
-      copyOnWrite();
-      instance.setSetTaskCaption(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-     */
-    public Builder mergeSetTaskCaption(io.github.thisisthepy.dsa.control.v1.SetTaskCaption value) {
-      copyOnWrite();
-      instance.mergeSetTaskCaption(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
-     */
-    public Builder clearSetTaskCaption() {
-      copyOnWrite();
-      instance.clearSetTaskCaption();
-      return this;
-    }
-
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -8264,7 +8264,7 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.CollectDiagnostics.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsFile.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsDone.class,
-            io.github.thisisthepy.dsa.control.v1.SetTaskCaption.class,
+            io.github.thisisthepy.dsa.control.v1.DeveloperMode.class,
           };
           java.lang.String info =
               "\u0000P\u0001\u0000\u0001\u008cP\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
