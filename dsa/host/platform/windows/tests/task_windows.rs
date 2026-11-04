@@ -910,6 +910,13 @@ fn fr4_a_maximised_task_window_shows_its_task_1_to_1_without_a_new_texture_or_a_
     });
     let open = windows_of(&running, 1);
     let hwnd = open[0].hwnd;
+    // Temporary: the window's state as it opened.
+    eprintln!(
+        "diagnostic: opened client={:?} zoomed={} requests={:?}",
+        client_size(hwnd),
+        unsafe { IsZoomed(hwnd as HWND) },
+        running.android.requests.lock().unwrap()
+    );
     let sink = presenter.sink.lock().unwrap().clone();
     let texture = sink.as_ref().map(|sink| {
         let handle = wait_for("display 3 to reach task 1's window", || {
@@ -926,7 +933,19 @@ fn fr4_a_maximised_task_window_shows_its_task_1_to_1_without_a_new_texture_or_a_
     thread::sleep(Duration::from_millis(200));
     let before = running.android.requests.lock().unwrap().len();
     let normal = client_size(hwnd);
+    // Temporary: the window's state just before the maximise.
+    eprintln!(
+        "diagnostic: before maximise client={normal:?} zoomed={} requests={:?}",
+        unsafe { IsZoomed(hwnd as HWND) },
+        running.android.requests.lock().unwrap()
+    );
     unsafe { ShowWindow(hwnd as HWND, SW_MAXIMIZE) };
+    // Temporary: the window's state just after it.
+    eprintln!(
+        "diagnostic: after maximise client={:?} zoomed={}",
+        client_size(hwnd),
+        unsafe { IsZoomed(hwnd as HWND) }
+    );
     assert_ne!(unsafe { IsZoomed(hwnd as HWND) }, 0);
     // The task is given the size live, so its app lays itself out again instead of being
     // recreated at a size it has not drawn at.
