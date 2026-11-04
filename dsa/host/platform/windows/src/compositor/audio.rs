@@ -1,4 +1,5 @@
-//! The guest's sound on the user's default output device, through WASAPI.
+//! The guest's sound on the user's default output device, through WASAPI. The guest's
+//! microphone, the default capture device, is in [`super::microphone`].
 //!
 //! The window manager runs in the user's session, so the sound plays where the user hears
 //! it. Each stream of the audio port gets a shared-mode client of the default output device
@@ -15,7 +16,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::audio::{
-    AudioDevice, DeviceFormat, Playback, Renderer, SampleType, SharedBuffer, CHANNELS, SAMPLE_RATE,
+    AudioDevice, CaptureSink, DeviceFormat, Playback, Recording, Renderer, SampleType, SharedBuffer,
+    CHANNELS, SAMPLE_RATE,
 };
 use windows::core::PWSTR;
 use windows::Win32::Foundation::HANDLE;
@@ -33,7 +35,7 @@ use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
 use windows_sys::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 
 /// The guest's format, which the client asks Windows to convert from.
-const FORMAT: DeviceFormat = DeviceFormat {
+pub(super) const FORMAT: DeviceFormat = DeviceFormat {
     sample_rate: SAMPLE_RATE,
     channels: CHANNELS,
     sample: SampleType::I16,
@@ -48,7 +50,8 @@ const DEFAULT_CHECK: Duration = Duration::from_secs(1);
 /// How long the stream waits before it opens a device again after one failed.
 const RETRY: Duration = Duration::from_millis(500);
 
-/// The user's default output device.
+/// The user's default output device, and their default capture device for the guest's
+/// microphone.
 pub struct DefaultOutput {
     log: Arc<dyn Fn(&str) + Send + Sync>,
 }
@@ -109,13 +112,17 @@ impl AudioDevice for DefaultOutput {
             Err(_) => Err("the default output device did not open in time".into()),
         }
     }
+
+    fn record(&self, name: &str, sink: CaptureSink) -> Result<Box<dyn Recording>, String> {
+        super::microphone::record(name, sink, Arc::clone(&self.log))
+    }
 }
 
 /// COM on this thread, for as long as it lives.
-struct Com;
+pub(super) struct Com;
 
 impl Com {
-    fn enter() -> Result<Com, String> {
+    pub(super) fn enter() -> Result<Com, String> {
         // SAFETY: initialises COM for this thread; undone on drop.
         unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }
             .ok()
@@ -132,10 +139,10 @@ impl Drop for Com {
 }
 
 /// An event the device sets each time it wants more sound.
-struct Event(windows_sys::Win32::Foundation::HANDLE);
+pub(super) struct Event(pub(super) windows_sys::Win32::Foundation::HANDLE);
 
 impl Event {
-    fn new() -> Result<Event, String> {
+    pub(super) fn new() -> Result<Event, String> {
         // SAFETY: an unnamed auto-reset event with default security.
         let handle = unsafe { CreateEventW(std::ptr::null(), 0, 0, std::ptr::null()) };
         if handle.is_null() {
@@ -148,7 +155,7 @@ impl Event {
     }
 
     /// Whether the event was set within `timeout`.
-    fn wait(&self, timeout: Duration) -> bool {
+    pub(super) fn wait(&self, timeout: Duration) -> bool {
         // SAFETY: a valid event handle this struct owns.
         unsafe { WaitForSingleObject(self.0, timeout.as_millis() as u32) == WAIT_OBJECT_0 }
     }
@@ -177,7 +184,7 @@ impl Drop for Client {
     }
 }
 
-fn device_id(device: &IMMDevice) -> Result<String, String> {
+pub(super) fn device_id(device: &IMMDevice) -> Result<String, String> {
     // SAFETY: a device of this thread's COM; the string is freed below.
     let id: PWSTR = unsafe { device.GetId() }.map_err(|e| format!("the device has no ID: {e}"))?;
     // SAFETY: GetId returned a valid NUL-terminated string.

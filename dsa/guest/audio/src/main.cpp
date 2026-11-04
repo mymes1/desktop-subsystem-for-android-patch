@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // dsa-audio: the guest's primary audio module, which plays the guest's sound on the host's
-// default output device. It serves android.hardware.audio.core.IModule/default; the image's
-// own audio service keeps the remote submix and Bluetooth modules, the configuration and the
-// effects.
+// default output device and records from its default capture device. It serves
+// android.hardware.audio.core.IModule/default; the image's own audio service keeps the
+// remote submix and Bluetooth modules, the configuration and the effects.
 
 #include <android/binder_manager.h>
 #include <android/binder_process.h>

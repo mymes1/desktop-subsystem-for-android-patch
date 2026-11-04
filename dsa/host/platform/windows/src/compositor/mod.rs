@@ -18,13 +18,15 @@
 //! user's dismissals back ([`notifications`]). It shows the widgets the user placed on the
 //! desktop, each in a borderless window of its own on the desktop ([`widgets`]). It prints the documents apps in Android print on the user's
 //! printers, through the Windows print dialog ([`print`]). It plays the sound of the user's
-//! Android on their default output device ([`audio`]).
+//! Android on their default output device ([`audio`]), and records their default capture
+//! device for its microphone ([`microphone`]).
 
 pub mod adapter;
 pub mod audio;
 pub mod clipboard;
 pub mod display_gpu;
 pub mod frames;
+pub mod microphone;
 pub mod hosts;
 pub mod links;
 pub mod log;

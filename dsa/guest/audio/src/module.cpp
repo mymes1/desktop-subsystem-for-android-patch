@@ -9,8 +9,10 @@
 #include <sched.h>
 
 #include <algorithm>
+#include <string>
 
 #include "log.h"
+#include "stream_in.h"
 #include "stream_out.h"
 
 namespace dsa::audio {
@@ -63,9 +65,18 @@ AudioProfile hostProfile() {
 
 AudioIoFlags outputFlags(int32_t flags) { return AudioIoFlags::make<AudioIoFlags::Tag::output>(flags); }
 
+AudioIoFlags inputFlags(int32_t flags) { return AudioIoFlags::make<AudioIoFlags::Tag::input>(flags); }
+
 AudioPortExt speakerExt() {
     AudioPortDeviceExt device;
     device.device.type.type = AudioDeviceType::OUT_SPEAKER;
+    device.flags = 1 << AudioPortDeviceExt::FLAG_INDEX_DEFAULT_DEVICE;
+    return AudioPortExt::make<AudioPortExt::Tag::device>(device);
+}
+
+AudioPortExt micExt() {
+    AudioPortDeviceExt device;
+    device.device.type.type = AudioDeviceType::IN_MICROPHONE;
     device.flags = 1 << AudioPortDeviceExt::FLAG_INDEX_DEFAULT_DEVICE;
     return AudioPortExt::make<AudioPortExt::Tag::device>(device);
 }
@@ -105,12 +116,33 @@ Module::Module() {
     speaker.flags = outputFlags(0);
     speaker.ext = speakerExt();
 
-    mPorts = {mix, speaker};
+    // The input: the microphone records into its mix port.
+    AudioPort inputMix;
+    inputMix.id = kInputMixPortId;
+    inputMix.name = "primary input";
+    inputMix.profiles = {hostProfile()};
+    inputMix.flags = inputFlags(0);
+    AudioPortMixExt inputMixExt;
+    inputMixExt.maxOpenStreamCount = 1;
+    inputMixExt.maxActiveStreamCount = 1;
+    inputMix.ext = AudioPortExt::make<AudioPortExt::Tag::mix>(inputMixExt);
+
+    AudioPort mic;
+    mic.id = kMicPortId;
+    mic.name = "Built-In Mic";
+    mic.profiles = {hostProfile()};
+    mic.flags = inputFlags(0);
+    mic.ext = micExt();
+
+    mPorts = {mix, speaker, inputMix, mic};
 
     core::AudioRoute route;
     route.sourcePortIds = {kMixPortId};
     route.sinkPortId = kSpeakerPortId;
-    mRoutes = {route};
+    core::AudioRoute inputRoute;
+    inputRoute.sourcePortIds = {kMicPortId};
+    inputRoute.sinkPortId = kInputMixPortId;
+    mRoutes = {route, inputRoute};
 
     AudioPortConfig speakerConfig;
     speakerConfig.id = kSpeakerConfigId;
@@ -120,7 +152,12 @@ Module::Module() {
     speakerConfig.sampleRate = hostRate();
     speakerConfig.flags = speaker.flags;
     speakerConfig.ext = speaker.ext;
-    mConfigs = {speakerConfig};
+    AudioPortConfig micConfig = speakerConfig;
+    micConfig.id = kMicConfigId;
+    micConfig.portId = kMicPortId;
+    micConfig.flags = mic.flags;
+    micConfig.ext = mic.ext;
+    mConfigs = {speakerConfig, micConfig};
 }
 
 const AudioPort* Module::findPort(int32_t id) const {
@@ -136,7 +173,7 @@ std::vector<AudioPortConfig>::iterator Module::findConfig(int32_t id) {
 }
 
 bool Module::configInUse(int32_t id) const {
-    if (mStreams.count(id) != 0) return true;
+    if (mStreams.count(id) != 0 || mInputs.count(id) != 0) return true;
     for (const auto& patch : mPatches) {
         const auto& sources = patch.sourcePortConfigIds;
         const auto& sinks = patch.sinkPortConfigIds;
@@ -151,6 +188,11 @@ bool Module::configInUse(int32_t id) const {
 void Module::streamClosed(int32_t portConfigId) {
     std::lock_guard<std::mutex> lock(mLock);
     mStreams.erase(portConfigId);
+}
+
+void Module::inputClosed(int32_t portConfigId) {
+    std::lock_guard<std::mutex> lock(mLock);
+    mInputs.erase(portConfigId);
 }
 
 ndk::ScopedAStatus Module::setModuleDebug(const core::ModuleDebug&) { return ndk::ScopedAStatus::ok(); }
@@ -229,10 +271,48 @@ ndk::ScopedAStatus Module::getAudioRoutesForAudioPort(int32_t in_portId,
     return ndk::ScopedAStatus::ok();
 }
 
-ndk::ScopedAStatus Module::openInputStream(const core::IModule::OpenInputStreamArguments&,
-                                           core::IModule::OpenInputStreamReturn*) {
-    // No port records sound.
-    return error(EX_ILLEGAL_ARGUMENT);
+ndk::ScopedAStatus Module::openInputStream(const core::IModule::OpenInputStreamArguments& in_args,
+                                           core::IModule::OpenInputStreamReturn* _aidl_return) {
+    std::lock_guard<std::mutex> lock(mLock);
+    auto config = findConfig(in_args.portConfigId);
+    if (config == mConfigs.end() || config->portId != kInputMixPortId) {
+        AUDIO_LOGE("openInputStream: %d is not a configuration of the input", in_args.portConfigId);
+        return error(EX_ILLEGAL_ARGUMENT);
+    }
+    if (!mInputs.empty()) {
+        AUDIO_LOGE("openInputStream: the input already has a stream");
+        return error(EX_ILLEGAL_STATE);
+    }
+    if (in_args.bufferSizeFrames < kBurstFrames) {
+        AUDIO_LOGE("openInputStream: a buffer of %lld frames is under the %d the input needs",
+                   static_cast<long long>(in_args.bufferSizeFrames), kBurstFrames);
+        return error(EX_ILLEGAL_ARGUMENT);
+    }
+    const int64_t bufferFrames = std::min<int64_t>(in_args.bufferSizeFrames, kSampleRate);
+    std::weak_ptr<Module> self = ref<Module>();
+    std::shared_ptr<std::atomic<bool>> muted = mMicMute;
+    std::string why;
+    // Opening the stream opens the host's capture device, so the device is open only while
+    // a stream is.
+    auto stream = StreamIn::create(
+            in_args.portConfigId, bufferFrames, [muted] { return muted->load(); },
+            [self](int32_t id) {
+                if (auto module = self.lock()) module->inputClosed(id);
+            },
+            &_aidl_return->desc, &why);
+    if (stream == nullptr) {
+        // The host lets no program record, or has no microphone: the app's recording fails.
+        AUDIO_LOGE("openInputStream: the host does not record: %s", why.c_str());
+        return error(EX_ILLEGAL_STATE);
+    }
+    ndk::SpAIBinder binder = stream->asBinder();
+    AIBinder_setMinSchedulerPolicy(binder.get(), SCHED_NORMAL, kAudioPriority);
+    AIBinder_setInheritRt(binder.get(), true);
+    mInputs[in_args.portConfigId] = stream;
+    _aidl_return->stream = stream;
+    AUDIO_LOGI("opened the input stream on configuration %d, %lld frames", in_args.portConfigId,
+               static_cast<long long>(bufferFrames));
+    return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Module::openOutputStream(const core::IModule::OpenOutputStreamArguments& in_args,
@@ -287,9 +367,12 @@ ndk::ScopedAStatus Module::setAudioPatch(const core::AudioPatch& in_requested,
     }
     auto source = findConfig(sources[0]);
     auto sink = findConfig(sinks[0]);
-    if (source == mConfigs.end() || sink == mConfigs.end() || source->portId != kMixPortId ||
-        sink->portId != kSpeakerPortId) {
-        // The one route is the output to the speaker.
+    const bool output = source != mConfigs.end() && sink != mConfigs.end() &&
+                        source->portId == kMixPortId && sink->portId == kSpeakerPortId;
+    const bool input = source != mConfigs.end() && sink != mConfigs.end() &&
+                       source->portId == kMicPortId && sink->portId == kInputMixPortId;
+    if (!output && !input) {
+        // The two routes are the output to the speaker and the microphone to the input.
         return error(EX_ILLEGAL_ARGUMENT);
     }
     auto existing = mPatches.end();
@@ -377,8 +460,8 @@ ndk::ScopedAStatus Module::resetAudioPortConfig(int32_t in_portConfigId) {
     auto it = findConfig(in_portConfigId);
     if (it == mConfigs.end()) return error(EX_ILLEGAL_ARGUMENT);
     if (configInUse(in_portConfigId)) return error(EX_ILLEGAL_STATE);
-    // The speaker's own configuration stays; it never changes.
-    if (in_portConfigId != kSpeakerConfigId) {
+    // The devices' own configurations stay; they never change.
+    if (in_portConfigId != kSpeakerConfigId && in_portConfigId != kMicConfigId) {
         mConfigs.erase(it);
     }
     return ndk::ScopedAStatus::ok();
@@ -391,14 +474,12 @@ ndk::ScopedAStatus Module::getMasterVolume(float*) { return error(EX_UNSUPPORTED
 ndk::ScopedAStatus Module::setMasterVolume(float) { return error(EX_UNSUPPORTED_OPERATION); }
 
 ndk::ScopedAStatus Module::getMicMute(bool* _aidl_return) {
-    std::lock_guard<std::mutex> lock(mLock);
-    *_aidl_return = mMicMute;
+    *_aidl_return = mMicMute->load();
     return ndk::ScopedAStatus::ok();
 }
 
 ndk::ScopedAStatus Module::setMicMute(bool in_mute) {
-    std::lock_guard<std::mutex> lock(mLock);
-    mMicMute = in_mute;
+    mMicMute->store(in_mute);
     return ndk::ScopedAStatus::ok();
 }
 

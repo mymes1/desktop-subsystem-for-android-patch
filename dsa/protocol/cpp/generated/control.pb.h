@@ -72,6 +72,12 @@ extern ApkChunkDefaultTypeInternal _ApkChunk_default_instance_;
 class AppInfo;
 struct AppInfoDefaultTypeInternal;
 extern AppInfoDefaultTypeInternal _AppInfo_default_instance_;
+class AudioInputOpen;
+struct AudioInputOpenDefaultTypeInternal;
+extern AudioInputOpenDefaultTypeInternal _AudioInputOpen_default_instance_;
+class AudioInputOpened;
+struct AudioInputOpenedDefaultTypeInternal;
+extern AudioInputOpenedDefaultTypeInternal _AudioInputOpened_default_instance_;
 class AudioOutputControl;
 struct AudioOutputControlDefaultTypeInternal;
 extern AudioOutputControlDefaultTypeInternal _AudioOutputControl_default_instance_;
@@ -349,6 +355,8 @@ template<> ::dsa::control::v1::AddWidget* Arena::CreateMaybeMessage<::dsa::contr
 template<> ::dsa::control::v1::AgentConnected* Arena::CreateMaybeMessage<::dsa::control::v1::AgentConnected>(Arena*);
 template<> ::dsa::control::v1::ApkChunk* Arena::CreateMaybeMessage<::dsa::control::v1::ApkChunk>(Arena*);
 template<> ::dsa::control::v1::AppInfo* Arena::CreateMaybeMessage<::dsa::control::v1::AppInfo>(Arena*);
+template<> ::dsa::control::v1::AudioInputOpen* Arena::CreateMaybeMessage<::dsa::control::v1::AudioInputOpen>(Arena*);
+template<> ::dsa::control::v1::AudioInputOpened* Arena::CreateMaybeMessage<::dsa::control::v1::AudioInputOpened>(Arena*);
 template<> ::dsa::control::v1::AudioOutputControl* Arena::CreateMaybeMessage<::dsa::control::v1::AudioOutputControl>(Arena*);
 template<> ::dsa::control::v1::AudioOutputOpen* Arena::CreateMaybeMessage<::dsa::control::v1::AudioOutputOpen>(Arena*);
 template<> ::dsa::control::v1::AudioOutputReady* Arena::CreateMaybeMessage<::dsa::control::v1::AudioOutputReady>(Arena*);
@@ -14334,6 +14342,331 @@ class AudioPcm final :
 };
 // -------------------------------------------------------------------
 
+class AudioInputOpen final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AudioInputOpen) */ {
+ public:
+  inline AudioInputOpen() : AudioInputOpen(nullptr) {}
+  ~AudioInputOpen() override;
+  explicit PROTOBUF_CONSTEXPR AudioInputOpen(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  AudioInputOpen(const AudioInputOpen& from);
+  AudioInputOpen(AudioInputOpen&& from) noexcept
+    : AudioInputOpen() {
+    *this = ::std::move(from);
+  }
+
+  inline AudioInputOpen& operator=(const AudioInputOpen& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AudioInputOpen& operator=(AudioInputOpen&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const AudioInputOpen& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const AudioInputOpen* internal_default_instance() {
+    return reinterpret_cast<const AudioInputOpen*>(
+               &_AudioInputOpen_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    84;
+
+  friend void swap(AudioInputOpen& a, AudioInputOpen& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(AudioInputOpen* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AudioInputOpen* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  AudioInputOpen* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<AudioInputOpen>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const AudioInputOpen& from);
+  void MergeFrom(const AudioInputOpen& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(AudioInputOpen* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.AudioInputOpen";
+  }
+  protected:
+  explicit AudioInputOpen(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kNameFieldNumber = 5,
+    kSampleRateFieldNumber = 1,
+    kChannelCountFieldNumber = 2,
+    kFormatFieldNumber = 3,
+    kFramesPerBurstFieldNumber = 4,
+  };
+  // string name = 5;
+  void clear_name();
+  const std::string& name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* name);
+  private:
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
+  std::string* _internal_mutable_name();
+  public:
+
+  // uint32 sample_rate = 1;
+  void clear_sample_rate();
+  uint32_t sample_rate() const;
+  void set_sample_rate(uint32_t value);
+  private:
+  uint32_t _internal_sample_rate() const;
+  void _internal_set_sample_rate(uint32_t value);
+  public:
+
+  // uint32 channel_count = 2;
+  void clear_channel_count();
+  uint32_t channel_count() const;
+  void set_channel_count(uint32_t value);
+  private:
+  uint32_t _internal_channel_count() const;
+  void _internal_set_channel_count(uint32_t value);
+  public:
+
+  // .dsa.control.v1.AudioSampleFormat format = 3;
+  void clear_format();
+  ::dsa::control::v1::AudioSampleFormat format() const;
+  void set_format(::dsa::control::v1::AudioSampleFormat value);
+  private:
+  ::dsa::control::v1::AudioSampleFormat _internal_format() const;
+  void _internal_set_format(::dsa::control::v1::AudioSampleFormat value);
+  public:
+
+  // uint32 frames_per_burst = 4;
+  void clear_frames_per_burst();
+  uint32_t frames_per_burst() const;
+  void set_frames_per_burst(uint32_t value);
+  private:
+  uint32_t _internal_frames_per_burst() const;
+  void _internal_set_frames_per_burst(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.AudioInputOpen)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
+    uint32_t sample_rate_;
+    uint32_t channel_count_;
+    int format_;
+    uint32_t frames_per_burst_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class AudioInputOpened final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AudioInputOpened) */ {
+ public:
+  inline AudioInputOpened() : AudioInputOpened(nullptr) {}
+  ~AudioInputOpened() override;
+  explicit PROTOBUF_CONSTEXPR AudioInputOpened(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  AudioInputOpened(const AudioInputOpened& from);
+  AudioInputOpened(AudioInputOpened&& from) noexcept
+    : AudioInputOpened() {
+    *this = ::std::move(from);
+  }
+
+  inline AudioInputOpened& operator=(const AudioInputOpened& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AudioInputOpened& operator=(AudioInputOpened&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const AudioInputOpened& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const AudioInputOpened* internal_default_instance() {
+    return reinterpret_cast<const AudioInputOpened*>(
+               &_AudioInputOpened_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    85;
+
+  friend void swap(AudioInputOpened& a, AudioInputOpened& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(AudioInputOpened* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AudioInputOpened* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  AudioInputOpened* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<AudioInputOpened>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const AudioInputOpened& from);
+  void MergeFrom(const AudioInputOpened& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(AudioInputOpened* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.AudioInputOpened";
+  }
+  protected:
+  explicit AudioInputOpened(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kErrorFieldNumber = 1,
+    kDeviceFramesFieldNumber = 2,
+  };
+  // string error = 1;
+  void clear_error();
+  const std::string& error() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_error(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_error();
+  PROTOBUF_NODISCARD std::string* release_error();
+  void set_allocated_error(std::string* error);
+  private:
+  const std::string& _internal_error() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_error(const std::string& value);
+  std::string* _internal_mutable_error();
+  public:
+
+  // uint32 device_frames = 2;
+  void clear_device_frames();
+  uint32_t device_frames() const;
+  void set_device_frames(uint32_t value);
+  private:
+  uint32_t _internal_device_frames() const;
+  void _internal_set_device_frames(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.AudioInputOpened)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
+    uint32_t device_frames_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class AudioOutputControl final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AudioOutputControl) */ {
  public:
@@ -14373,7 +14706,7 @@ class AudioOutputControl final :
                &_AudioOutputControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    86;
 
   friend void swap(AudioOutputControl& a, AudioOutputControl& b) {
     a.Swap(&b);
@@ -14503,7 +14836,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    87;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -14666,7 +14999,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    88;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -14818,7 +15151,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    89;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -15046,7 +15379,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    90;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -15223,7 +15556,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    89;
+    91;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -15353,7 +15686,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    90;
+    92;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -15526,7 +15859,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    91;
+    93;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -16448,6 +16781,8 @@ class Envelope final :
     kAudioOutputReady = 101,
     kAudioPcm = 102,
     kAudioOutputControl = 103,
+    kAudioInputOpen = 104,
+    kAudioInputOpened = 105,
     kVideoCapabilities = 120,
     kVideoDecoderOpen = 121,
     kVideoDecoderOpened = 122,
@@ -16475,7 +16810,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    92;
+    94;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -16609,6 +16944,8 @@ class Envelope final :
     kAudioOutputReadyFieldNumber = 101,
     kAudioPcmFieldNumber = 102,
     kAudioOutputControlFieldNumber = 103,
+    kAudioInputOpenFieldNumber = 104,
+    kAudioInputOpenedFieldNumber = 105,
     kVideoCapabilitiesFieldNumber = 120,
     kVideoDecoderOpenFieldNumber = 121,
     kVideoDecoderOpenedFieldNumber = 122,
@@ -17889,6 +18226,42 @@ class Envelope final :
       ::dsa::control::v1::AudioOutputControl* audio_output_control);
   ::dsa::control::v1::AudioOutputControl* unsafe_arena_release_audio_output_control();
 
+  // .dsa.control.v1.AudioInputOpen audio_input_open = 104;
+  bool has_audio_input_open() const;
+  private:
+  bool _internal_has_audio_input_open() const;
+  public:
+  void clear_audio_input_open();
+  const ::dsa::control::v1::AudioInputOpen& audio_input_open() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::AudioInputOpen* release_audio_input_open();
+  ::dsa::control::v1::AudioInputOpen* mutable_audio_input_open();
+  void set_allocated_audio_input_open(::dsa::control::v1::AudioInputOpen* audio_input_open);
+  private:
+  const ::dsa::control::v1::AudioInputOpen& _internal_audio_input_open() const;
+  ::dsa::control::v1::AudioInputOpen* _internal_mutable_audio_input_open();
+  public:
+  void unsafe_arena_set_allocated_audio_input_open(
+      ::dsa::control::v1::AudioInputOpen* audio_input_open);
+  ::dsa::control::v1::AudioInputOpen* unsafe_arena_release_audio_input_open();
+
+  // .dsa.control.v1.AudioInputOpened audio_input_opened = 105;
+  bool has_audio_input_opened() const;
+  private:
+  bool _internal_has_audio_input_opened() const;
+  public:
+  void clear_audio_input_opened();
+  const ::dsa::control::v1::AudioInputOpened& audio_input_opened() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::AudioInputOpened* release_audio_input_opened();
+  ::dsa::control::v1::AudioInputOpened* mutable_audio_input_opened();
+  void set_allocated_audio_input_opened(::dsa::control::v1::AudioInputOpened* audio_input_opened);
+  private:
+  const ::dsa::control::v1::AudioInputOpened& _internal_audio_input_opened() const;
+  ::dsa::control::v1::AudioInputOpened* _internal_mutable_audio_input_opened();
+  public:
+  void unsafe_arena_set_allocated_audio_input_opened(
+      ::dsa::control::v1::AudioInputOpened* audio_input_opened);
+  ::dsa::control::v1::AudioInputOpened* unsafe_arena_release_audio_input_opened();
+
   // .dsa.control.v1.VideoCapabilities video_capabilities = 120;
   bool has_video_capabilities() const;
   private:
@@ -18306,6 +18679,8 @@ class Envelope final :
   void set_has_audio_output_ready();
   void set_has_audio_pcm();
   void set_has_audio_output_control();
+  void set_has_audio_input_open();
+  void set_has_audio_input_opened();
   void set_has_video_capabilities();
   void set_has_video_decoder_open();
   void set_has_video_decoder_opened();
@@ -18406,6 +18781,8 @@ class Envelope final :
       ::dsa::control::v1::AudioOutputReady* audio_output_ready_;
       ::dsa::control::v1::AudioPcm* audio_pcm_;
       ::dsa::control::v1::AudioOutputControl* audio_output_control_;
+      ::dsa::control::v1::AudioInputOpen* audio_input_open_;
+      ::dsa::control::v1::AudioInputOpened* audio_input_opened_;
       ::dsa::control::v1::VideoCapabilities* video_capabilities_;
       ::dsa::control::v1::VideoDecoderOpen* video_decoder_open_;
       ::dsa::control::v1::VideoDecoderOpened* video_decoder_opened_;
@@ -26929,6 +27306,214 @@ inline void AudioPcm::set_allocated_data(std::string* data) {
 
 // -------------------------------------------------------------------
 
+// AudioInputOpen
+
+// uint32 sample_rate = 1;
+inline void AudioInputOpen::clear_sample_rate() {
+  _impl_.sample_rate_ = 0u;
+}
+inline uint32_t AudioInputOpen::_internal_sample_rate() const {
+  return _impl_.sample_rate_;
+}
+inline uint32_t AudioInputOpen::sample_rate() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioInputOpen.sample_rate)
+  return _internal_sample_rate();
+}
+inline void AudioInputOpen::_internal_set_sample_rate(uint32_t value) {
+  
+  _impl_.sample_rate_ = value;
+}
+inline void AudioInputOpen::set_sample_rate(uint32_t value) {
+  _internal_set_sample_rate(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioInputOpen.sample_rate)
+}
+
+// uint32 channel_count = 2;
+inline void AudioInputOpen::clear_channel_count() {
+  _impl_.channel_count_ = 0u;
+}
+inline uint32_t AudioInputOpen::_internal_channel_count() const {
+  return _impl_.channel_count_;
+}
+inline uint32_t AudioInputOpen::channel_count() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioInputOpen.channel_count)
+  return _internal_channel_count();
+}
+inline void AudioInputOpen::_internal_set_channel_count(uint32_t value) {
+  
+  _impl_.channel_count_ = value;
+}
+inline void AudioInputOpen::set_channel_count(uint32_t value) {
+  _internal_set_channel_count(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioInputOpen.channel_count)
+}
+
+// .dsa.control.v1.AudioSampleFormat format = 3;
+inline void AudioInputOpen::clear_format() {
+  _impl_.format_ = 0;
+}
+inline ::dsa::control::v1::AudioSampleFormat AudioInputOpen::_internal_format() const {
+  return static_cast< ::dsa::control::v1::AudioSampleFormat >(_impl_.format_);
+}
+inline ::dsa::control::v1::AudioSampleFormat AudioInputOpen::format() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioInputOpen.format)
+  return _internal_format();
+}
+inline void AudioInputOpen::_internal_set_format(::dsa::control::v1::AudioSampleFormat value) {
+  
+  _impl_.format_ = value;
+}
+inline void AudioInputOpen::set_format(::dsa::control::v1::AudioSampleFormat value) {
+  _internal_set_format(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioInputOpen.format)
+}
+
+// uint32 frames_per_burst = 4;
+inline void AudioInputOpen::clear_frames_per_burst() {
+  _impl_.frames_per_burst_ = 0u;
+}
+inline uint32_t AudioInputOpen::_internal_frames_per_burst() const {
+  return _impl_.frames_per_burst_;
+}
+inline uint32_t AudioInputOpen::frames_per_burst() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioInputOpen.frames_per_burst)
+  return _internal_frames_per_burst();
+}
+inline void AudioInputOpen::_internal_set_frames_per_burst(uint32_t value) {
+  
+  _impl_.frames_per_burst_ = value;
+}
+inline void AudioInputOpen::set_frames_per_burst(uint32_t value) {
+  _internal_set_frames_per_burst(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioInputOpen.frames_per_burst)
+}
+
+// string name = 5;
+inline void AudioInputOpen::clear_name() {
+  _impl_.name_.ClearToEmpty();
+}
+inline const std::string& AudioInputOpen::name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioInputOpen.name)
+  return _internal_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AudioInputOpen::set_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioInputOpen.name)
+}
+inline std::string* AudioInputOpen::mutable_name() {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AudioInputOpen.name)
+  return _s;
+}
+inline const std::string& AudioInputOpen::_internal_name() const {
+  return _impl_.name_.Get();
+}
+inline void AudioInputOpen::_internal_set_name(const std::string& value) {
+  
+  _impl_.name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AudioInputOpen::_internal_mutable_name() {
+  
+  return _impl_.name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AudioInputOpen::release_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.AudioInputOpen.name)
+  return _impl_.name_.Release();
+}
+inline void AudioInputOpen::set_allocated_name(std::string* name) {
+  if (name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AudioInputOpen.name)
+}
+
+// -------------------------------------------------------------------
+
+// AudioInputOpened
+
+// string error = 1;
+inline void AudioInputOpened::clear_error() {
+  _impl_.error_.ClearToEmpty();
+}
+inline const std::string& AudioInputOpened::error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioInputOpened.error)
+  return _internal_error();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AudioInputOpened::set_error(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.error_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioInputOpened.error)
+}
+inline std::string* AudioInputOpened::mutable_error() {
+  std::string* _s = _internal_mutable_error();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AudioInputOpened.error)
+  return _s;
+}
+inline const std::string& AudioInputOpened::_internal_error() const {
+  return _impl_.error_.Get();
+}
+inline void AudioInputOpened::_internal_set_error(const std::string& value) {
+  
+  _impl_.error_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AudioInputOpened::_internal_mutable_error() {
+  
+  return _impl_.error_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AudioInputOpened::release_error() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.AudioInputOpened.error)
+  return _impl_.error_.Release();
+}
+inline void AudioInputOpened::set_allocated_error(std::string* error) {
+  if (error != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.error_.SetAllocated(error, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.error_.IsDefault()) {
+    _impl_.error_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AudioInputOpened.error)
+}
+
+// uint32 device_frames = 2;
+inline void AudioInputOpened::clear_device_frames() {
+  _impl_.device_frames_ = 0u;
+}
+inline uint32_t AudioInputOpened::_internal_device_frames() const {
+  return _impl_.device_frames_;
+}
+inline uint32_t AudioInputOpened::device_frames() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioInputOpened.device_frames)
+  return _internal_device_frames();
+}
+inline void AudioInputOpened::_internal_set_device_frames(uint32_t value) {
+  
+  _impl_.device_frames_ = value;
+}
+inline void AudioInputOpened::set_device_frames(uint32_t value) {
+  _internal_set_device_frames(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioInputOpened.device_frames)
+}
+
+// -------------------------------------------------------------------
+
 // AudioOutputControl
 
 // .dsa.control.v1.AudioOutputCommand command = 1;
@@ -33449,6 +34034,154 @@ inline ::dsa::control::v1::AudioOutputControl* Envelope::mutable_audio_output_co
   return _msg;
 }
 
+// .dsa.control.v1.AudioInputOpen audio_input_open = 104;
+inline bool Envelope::_internal_has_audio_input_open() const {
+  return body_case() == kAudioInputOpen;
+}
+inline bool Envelope::has_audio_input_open() const {
+  return _internal_has_audio_input_open();
+}
+inline void Envelope::set_has_audio_input_open() {
+  _impl_._oneof_case_[0] = kAudioInputOpen;
+}
+inline void Envelope::clear_audio_input_open() {
+  if (_internal_has_audio_input_open()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.audio_input_open_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::AudioInputOpen* Envelope::release_audio_input_open() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.audio_input_open)
+  if (_internal_has_audio_input_open()) {
+    clear_has_body();
+    ::dsa::control::v1::AudioInputOpen* temp = _impl_.body_.audio_input_open_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.audio_input_open_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::AudioInputOpen& Envelope::_internal_audio_input_open() const {
+  return _internal_has_audio_input_open()
+      ? *_impl_.body_.audio_input_open_
+      : reinterpret_cast< ::dsa::control::v1::AudioInputOpen&>(::dsa::control::v1::_AudioInputOpen_default_instance_);
+}
+inline const ::dsa::control::v1::AudioInputOpen& Envelope::audio_input_open() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.audio_input_open)
+  return _internal_audio_input_open();
+}
+inline ::dsa::control::v1::AudioInputOpen* Envelope::unsafe_arena_release_audio_input_open() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.audio_input_open)
+  if (_internal_has_audio_input_open()) {
+    clear_has_body();
+    ::dsa::control::v1::AudioInputOpen* temp = _impl_.body_.audio_input_open_;
+    _impl_.body_.audio_input_open_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_audio_input_open(::dsa::control::v1::AudioInputOpen* audio_input_open) {
+  clear_body();
+  if (audio_input_open) {
+    set_has_audio_input_open();
+    _impl_.body_.audio_input_open_ = audio_input_open;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.audio_input_open)
+}
+inline ::dsa::control::v1::AudioInputOpen* Envelope::_internal_mutable_audio_input_open() {
+  if (!_internal_has_audio_input_open()) {
+    clear_body();
+    set_has_audio_input_open();
+    _impl_.body_.audio_input_open_ = CreateMaybeMessage< ::dsa::control::v1::AudioInputOpen >(GetArenaForAllocation());
+  }
+  return _impl_.body_.audio_input_open_;
+}
+inline ::dsa::control::v1::AudioInputOpen* Envelope::mutable_audio_input_open() {
+  ::dsa::control::v1::AudioInputOpen* _msg = _internal_mutable_audio_input_open();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.audio_input_open)
+  return _msg;
+}
+
+// .dsa.control.v1.AudioInputOpened audio_input_opened = 105;
+inline bool Envelope::_internal_has_audio_input_opened() const {
+  return body_case() == kAudioInputOpened;
+}
+inline bool Envelope::has_audio_input_opened() const {
+  return _internal_has_audio_input_opened();
+}
+inline void Envelope::set_has_audio_input_opened() {
+  _impl_._oneof_case_[0] = kAudioInputOpened;
+}
+inline void Envelope::clear_audio_input_opened() {
+  if (_internal_has_audio_input_opened()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.audio_input_opened_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::AudioInputOpened* Envelope::release_audio_input_opened() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.audio_input_opened)
+  if (_internal_has_audio_input_opened()) {
+    clear_has_body();
+    ::dsa::control::v1::AudioInputOpened* temp = _impl_.body_.audio_input_opened_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.audio_input_opened_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::AudioInputOpened& Envelope::_internal_audio_input_opened() const {
+  return _internal_has_audio_input_opened()
+      ? *_impl_.body_.audio_input_opened_
+      : reinterpret_cast< ::dsa::control::v1::AudioInputOpened&>(::dsa::control::v1::_AudioInputOpened_default_instance_);
+}
+inline const ::dsa::control::v1::AudioInputOpened& Envelope::audio_input_opened() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.audio_input_opened)
+  return _internal_audio_input_opened();
+}
+inline ::dsa::control::v1::AudioInputOpened* Envelope::unsafe_arena_release_audio_input_opened() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.audio_input_opened)
+  if (_internal_has_audio_input_opened()) {
+    clear_has_body();
+    ::dsa::control::v1::AudioInputOpened* temp = _impl_.body_.audio_input_opened_;
+    _impl_.body_.audio_input_opened_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_audio_input_opened(::dsa::control::v1::AudioInputOpened* audio_input_opened) {
+  clear_body();
+  if (audio_input_opened) {
+    set_has_audio_input_opened();
+    _impl_.body_.audio_input_opened_ = audio_input_opened;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.audio_input_opened)
+}
+inline ::dsa::control::v1::AudioInputOpened* Envelope::_internal_mutable_audio_input_opened() {
+  if (!_internal_has_audio_input_opened()) {
+    clear_body();
+    set_has_audio_input_opened();
+    _impl_.body_.audio_input_opened_ = CreateMaybeMessage< ::dsa::control::v1::AudioInputOpened >(GetArenaForAllocation());
+  }
+  return _impl_.body_.audio_input_opened_;
+}
+inline ::dsa::control::v1::AudioInputOpened* Envelope::mutable_audio_input_opened() {
+  ::dsa::control::v1::AudioInputOpened* _msg = _internal_mutable_audio_input_opened();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.audio_input_opened)
+  return _msg;
+}
+
 // .dsa.control.v1.VideoCapabilities video_capabilities = 120;
 inline bool Envelope::_internal_has_video_capabilities() const {
   return body_case() == kVideoCapabilities;
@@ -34867,6 +35600,10 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

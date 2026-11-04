@@ -7,13 +7,15 @@ use std::thread;
 use std::time::Duration;
 
 use dsa_host_core::audio::{
-    serve_port, serve_stream, AudioDevice, DeviceFormat, JitterBuffer, Playback, Renderer,
+    serve_port, serve_stream, AudioDevice, CaptureSink, DeviceFormat, JitterBuffer, Playback,
+    Recording, Renderer,
     SampleType, SharedBuffer, StreamEnd, BYTES_PER_FRAME, MAX_BUFFER_FRAMES, MAX_STREAMS,
     TARGET_BUFFER_FRAMES,
 };
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
-    AudioOutputCommand, AudioOutputControl, AudioOutputOpen, AudioPcm, AudioSampleFormat, Envelope,
+    AudioInputOpen, AudioInputOpened, AudioOutputCommand, AudioOutputControl, AudioOutputOpen, AudioPcm,
+    AudioSampleFormat, Envelope,
     Hello, RejectReason, Role,
 };
 use dsa_protocol::handshake::local_hello;
@@ -238,6 +240,48 @@ fn pr4_a_format_without_channels_is_refused() {
 struct FakeDevice {
     playing: Arc<Mutex<Vec<(String, SharedBuffer)>>>,
     stopped: Arc<Mutex<usize>>,
+    /// The sink of the capture device while it records.
+    mic: Arc<Mutex<Option<CaptureSink>>>,
+    /// How many times the capture device opened, and closed.
+    mic_opened: Arc<Mutex<usize>>,
+    mic_closed: Arc<Mutex<usize>>,
+    /// Why the capture device does not open, when it does not.
+    mic_blocked: Option<String>,
+}
+
+struct FakeRecording {
+    mic: Arc<Mutex<Option<CaptureSink>>>,
+    closed: Arc<Mutex<usize>>,
+}
+
+impl Recording for FakeRecording {
+    fn device_frames(&self) -> u32 {
+        480
+    }
+}
+
+impl Drop for FakeRecording {
+    fn drop(&mut self) {
+        *self.mic.lock().unwrap() = None;
+        *self.closed.lock().unwrap() += 1;
+    }
+}
+
+impl FakeDevice {
+    /// Records rames frames on the capture device; false when it is not recording.
+    fn speak(&self, frames: usize, value: i16) -> bool {
+        match self.mic.lock().unwrap().as_mut() {
+            Some(sink) => {
+                sink(&pcm(frames, value));
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn recording(&self) -> bool {
+        self.mic.lock().unwrap().is_some()
+    }
 }
 
 struct FakePlayback(Arc<Mutex<usize>>);
@@ -257,6 +301,18 @@ impl AudioDevice for FakeDevice {
             .unwrap()
             .push((name.to_string(), source));
         Ok(Box::new(FakePlayback(Arc::clone(&self.stopped))))
+    }
+
+    fn record(&self, _name: &str, sink: CaptureSink) -> Result<Box<dyn Recording>, String> {
+        if let Some(why) = &self.mic_blocked {
+            return Err(why.clone());
+        }
+        *self.mic_opened.lock().unwrap() += 1;
+        *self.mic.lock().unwrap() = Some(sink);
+        Ok(Box::new(FakeRecording {
+            mic: Arc::clone(&self.mic),
+            closed: Arc::clone(&self.mic_closed),
+        }))
     }
 }
 
@@ -453,4 +509,168 @@ fn pr4_streams_play_side_by_side_up_to_the_limit() {
     }
     stop.store(true, Ordering::Relaxed);
     server.join().unwrap();
+}
+
+fn input_open_message() -> AudioInputOpen {
+    AudioInputOpen {
+        sample_rate: 48_000,
+        channel_count: 2,
+        format: AudioSampleFormat::S16le as i32,
+        frames_per_burst: 960,
+        name: "primary".into(),
+    }
+}
+
+/// Says Hello on the audio port and opens an input stream; returns what the host answered.
+fn open_input(guest: &mut dyn Connection) -> AudioInputOpened {
+    send(guest, Body::Hello(guest_hello()));
+    assert!(matches!(recv(guest), Some(Body::HelloAccepted(_))));
+    send(guest, Body::AudioInputOpen(input_open_message()));
+    match recv(guest) {
+        Some(Body::AudioInputOpened(opened)) => opened,
+        other => panic!("expected AudioInputOpened, got {other:?}"),
+    }
+}
+
+/// The next recorded piece the host sends.
+fn recv_pcm(guest: &mut dyn Connection) -> AudioPcm {
+    match recv(guest) {
+        Some(Body::AudioPcm(pcm)) => pcm,
+        other => panic!("expected AudioPcm, got {other:?}"),
+    }
+}
+
+#[test]
+fn fr26_the_capture_devices_sound_reaches_the_guests_input_stream() {
+    let device = FakeDevice::default();
+    let (handle, mut guest) = serve(device.clone());
+    let opened = open_input(guest.as_mut());
+    assert_eq!(opened.error, "");
+    assert_eq!(opened.device_frames, 480);
+    assert!(device.speak(480, 21));
+    assert!(device.speak(480, 22));
+    let first = recv_pcm(guest.as_mut());
+    assert_eq!(first.position, 0);
+    assert_eq!(first.data, pcm(480, 21));
+    let second = recv_pcm(guest.as_mut());
+    assert_eq!(second.position, 480);
+    assert_eq!(second.data, pcm(480, 22));
+    guest.close();
+    let end = handle.join().unwrap().unwrap();
+    assert_eq!(end.name, "primary");
+    assert_eq!(end.stats.received_frames, 960);
+    // Nothing went to the output device.
+    assert!(device.playing.lock().unwrap().is_empty());
+}
+
+#[test]
+fn fr26_the_capture_device_is_open_only_while_the_input_stream_is() {
+    let device = FakeDevice::default();
+    let (handle, mut guest) = serve(device.clone());
+    send(guest.as_mut(), Body::Hello(guest_hello()));
+    recv(guest.as_mut());
+    // The handshake alone opens nothing.
+    assert!(!device.recording());
+    send(guest.as_mut(), Body::AudioInputOpen(input_open_message()));
+    assert!(matches!(
+        recv(guest.as_mut()),
+        Some(Body::AudioInputOpened(_))
+    ));
+    assert!(device.recording());
+    guest.close();
+    handle.join().unwrap().unwrap();
+    assert!(!device.recording());
+    assert_eq!(*device.mic_opened.lock().unwrap(), 1);
+    assert_eq!(*device.mic_closed.lock().unwrap(), 1);
+}
+
+#[test]
+fn fr26_an_output_stream_never_opens_the_capture_device() {
+    let device = FakeDevice::default();
+    let (handle, mut guest) = serve(device.clone());
+    send(guest.as_mut(), Body::Hello(guest_hello()));
+    recv(guest.as_mut());
+    send(guest.as_mut(), Body::AudioOutputOpen(open_message()));
+    recv(guest.as_mut());
+    send(guest.as_mut(), control(AudioOutputCommand::Start));
+    guest.close();
+    handle.join().unwrap().unwrap();
+    assert_eq!(*device.mic_opened.lock().unwrap(), 0);
+}
+
+#[test]
+fn fr26_a_blocked_microphone_fails_the_open_and_the_host_goes_on() {
+    let device = FakeDevice {
+        mic_blocked: Some("the user turned the microphone off for desktop apps".into()),
+        ..FakeDevice::default()
+    };
+    let (mut listener, mut connector) = memory::pair();
+    let stop = Arc::new(AtomicBool::new(false));
+    let server = {
+        let device: Arc<dyn AudioDevice> = Arc::new(device.clone());
+        let stop = Arc::clone(&stop);
+        thread::spawn(move || {
+            serve_port(
+                &mut listener,
+                device,
+                "dsa-wm test",
+                &stop,
+                Arc::new(|_: &str| {}),
+            )
+        })
+    };
+    let mut guest = connector.connect(WAIT).unwrap();
+    let opened = open_input(guest.as_mut());
+    assert!(opened.error.contains("microphone off"), "{}", opened.error);
+    assert_eq!(guest.recv(Some(WAIT)), Err(TransportError::Closed));
+    // The port still serves: sound still plays, and a second try is answered the same way.
+    let mut output = connector.connect(WAIT).unwrap();
+    send(output.as_mut(), Body::Hello(guest_hello()));
+    assert!(matches!(recv(output.as_mut()), Some(Body::HelloAccepted(_))));
+    send(output.as_mut(), Body::AudioOutputOpen(open_message()));
+    assert!(matches!(
+        recv(output.as_mut()),
+        Some(Body::AudioOutputReady(_))
+    ));
+    let mut again = connector.connect(WAIT).unwrap();
+    assert!(!open_input(again.as_mut()).error.is_empty());
+    output.close();
+    stop.store(true, Ordering::Relaxed);
+    server.join().unwrap();
+}
+
+#[test]
+fn fr26_a_format_the_host_does_not_record_is_refused() {
+    let device = FakeDevice::default();
+    let (handle, mut guest) = serve(device.clone());
+    send(guest.as_mut(), Body::Hello(guest_hello()));
+    recv(guest.as_mut());
+    send(
+        guest.as_mut(),
+        Body::AudioInputOpen(AudioInputOpen {
+            channel_count: 1,
+            ..input_open_message()
+        }),
+    );
+    let error = handle.join().unwrap().unwrap_err();
+    assert!(error.contains("1 channels"), "{error}");
+    assert_eq!(guest.recv(Some(WAIT)), Err(TransportError::Closed));
+    assert_eq!(*device.mic_opened.lock().unwrap(), 0);
+}
+
+#[test]
+fn fr26_recorded_sound_the_guest_does_not_take_is_dropped_not_waited_on() {
+    let device = FakeDevice::default();
+    let (handle, mut guest) = serve(device.clone());
+    open_input(guest.as_mut());
+    // The capture device's thread never waits, however much it records.
+    let started = std::time::Instant::now();
+    for _ in 0..1000 {
+        assert!(device.speak(480, 1));
+    }
+    assert!(started.elapsed() < Duration::from_secs(5));
+    guest.close();
+    let end = handle.join().unwrap().unwrap();
+    let accounted = end.stats.received_frames + end.stats.dropped_frames;
+    assert!(accounted > 0 && accounted <= 480_000, "{accounted}");
 }

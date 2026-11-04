@@ -30,9 +30,11 @@ namespace effect = ::aidl::android::hardware::audio::effect;
 
 class StreamOut;
 
+// The part of a stream the output and the input share. `close` closes the stream and says
+// whether it was open.
 class StreamCommon final : public core::BnStreamCommon {
    public:
-    explicit StreamCommon(std::weak_ptr<StreamOut> stream) : mStream(std::move(stream)) {}
+    explicit StreamCommon(std::function<bool()> close) : mClose(std::move(close)) {}
 
     ndk::ScopedAStatus close() override;
     ndk::ScopedAStatus prepareToClose() override;
@@ -46,7 +48,7 @@ class StreamCommon final : public core::BnStreamCommon {
     ndk::ScopedAStatus createMmapBuffer(core::MmapBufferDescriptor* _aidl_return) override;
 
    private:
-    std::weak_ptr<StreamOut> mStream;
+    std::function<bool()> mClose;
 };
 
 class StreamOut final : public core::BnStreamOut {

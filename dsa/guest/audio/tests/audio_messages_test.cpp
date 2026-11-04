@@ -110,4 +110,38 @@ TEST(pr4_frames_go_after_their_little_endian_length) {
     EXPECT_EQ(framed[3], 0);
 }
 
+TEST(fr26_the_input_stream_opens_at_48_khz_stereo_16_bit) {
+    const v1::Envelope envelope = parse(encodeInputOpen("primary", 960));
+    EXPECT_TRUE(envelope.has_audio_input_open());
+    EXPECT_EQ(envelope.audio_input_open().sample_rate(), 48000u);
+    EXPECT_EQ(envelope.audio_input_open().channel_count(), 2u);
+    EXPECT_EQ(envelope.audio_input_open().format(), v1::AUDIO_SAMPLE_FORMAT_S16LE);
+    EXPECT_EQ(envelope.audio_input_open().frames_per_burst(), 960u);
+    EXPECT_EQ(envelope.audio_input_open().name(), std::string("primary"));
+}
+
+TEST(fr26_the_hosts_answer_to_an_input_and_its_sound_are_understood) {
+    v1::Envelope blocked;
+    blocked.mutable_audio_input_opened()->set_error("microphone access is off");
+    const auto blockedBytes = serialize(blocked);
+    const HostMessage b = decodeHostFrame(blockedBytes.data(), blockedBytes.size());
+    EXPECT_TRUE(std::holds_alternative<InputOpened>(b) &&
+                std::get<InputOpened>(b).error == "microphone access is off");
+
+    v1::Envelope opened;
+    opened.mutable_audio_input_opened()->set_device_frames(480);
+    const auto openedBytes = serialize(opened);
+    const HostMessage o = decodeHostFrame(openedBytes.data(), openedBytes.size());
+    EXPECT_TRUE(std::holds_alternative<InputOpened>(o) && std::get<InputOpened>(o).error.empty() &&
+                std::get<InputOpened>(o).deviceFrames == 480);
+
+    v1::Envelope pcm;
+    pcm.mutable_audio_pcm()->set_position(960);
+    pcm.mutable_audio_pcm()->set_data(std::string(8, '\x05'));
+    const auto pcmBytes = serialize(pcm);
+    const HostMessage p = decodeHostFrame(pcmBytes.data(), pcmBytes.size());
+    EXPECT_TRUE(std::holds_alternative<Pcm>(p) && std::get<Pcm>(p).position == 960 &&
+                std::get<Pcm>(p).data == std::string(8, '\x05'));
+}
+
 int main() { return dsa::test::runAll(); }

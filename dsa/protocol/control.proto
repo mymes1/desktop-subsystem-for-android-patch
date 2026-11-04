@@ -1070,6 +1070,10 @@ message AccessibilityActionResult {
 // through the host's default output device. The HAL sends the Hello with ROLE_GUEST_AUDIO,
 // the host answers HelloAccepted or HelloRejected, and the HAL then opens the stream with
 // AudioOutputOpen. The host plays every open stream; the platform's mixer sums them.
+//
+// A connection that opens with AudioInputOpen instead is an input stream: the host records
+// the default capture device while the connection is open, and sends what it records as
+// AudioPcm.
 
 // The sample formats a stream can carry. Little-endian, interleaved.
 enum AudioSampleFormat {
@@ -1100,13 +1104,39 @@ message AudioOutputReady {
   uint32 device_frames = 2;
 }
 
-// Guest to host: sound to play.
+// Sound, in the stream's format. Guest to host on an output stream: sound to play. Host to
+// guest on an input stream: sound recorded.
 message AudioPcm {
   // The index, counted from the stream's first frame, of the first frame in `data`. A gap
   // after the end of the last AudioPcm is silence the guest did not send (its own underrun).
   uint64 position = 1;
   // Whole frames in the stream's format.
   bytes data = 2;
+}
+
+// Guest to host, first after the handshake on an input stream: the format to record in. The
+// host opens the default capture device and answers AudioInputOpened. It closes the device
+// when the connection closes.
+message AudioInputOpen {
+  // Frames per second. The guest uses 48000.
+  uint32 sample_rate = 1;
+  // The guest uses 2 (left, right).
+  uint32 channel_count = 2;
+  AudioSampleFormat format = 3;
+  // How many frames the guest reads at a time.
+  uint32 frames_per_burst = 4;
+  // Names the stream in the host's log, such as "primary".
+  string name = 5;
+}
+
+// Host to guest: whether the capture device opened. When it did not (the user turned the
+// microphone off in the host's privacy settings, or there is no microphone), `error` says
+// why and the host closes the connection.
+message AudioInputOpened {
+  // Empty when the device records.
+  string error = 1;
+  // The capture device's own latency in frames at the stream's rate, 0 when not known.
+  uint32 device_frames = 2;
 }
 
 // What the guest asks of a stream.
@@ -1347,6 +1377,8 @@ message Envelope {
     AudioOutputReady audio_output_ready = 101;
     AudioPcm audio_pcm = 102;
     AudioOutputControl audio_output_control = 103;
+    AudioInputOpen audio_input_open = 104;
+    AudioInputOpened audio_input_opened = 105;
     VideoCapabilities video_capabilities = 120;
     VideoDecoderOpen video_decoder_open = 121;
     VideoDecoderOpened video_decoder_opened = 122;

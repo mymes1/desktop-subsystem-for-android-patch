@@ -778,6 +778,28 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.AudioOutputControl getAudioOutputControl();
 
   /**
+   * <code>.dsa.control.v1.AudioInputOpen audio_input_open = 104;</code>
+   * @return Whether the audioInputOpen field is set.
+   */
+  boolean hasAudioInputOpen();
+  /**
+   * <code>.dsa.control.v1.AudioInputOpen audio_input_open = 104;</code>
+   * @return The audioInputOpen.
+   */
+  io.github.thisisthepy.dsa.control.v1.AudioInputOpen getAudioInputOpen();
+
+  /**
+   * <code>.dsa.control.v1.AudioInputOpened audio_input_opened = 105;</code>
+   * @return Whether the audioInputOpened field is set.
+   */
+  boolean hasAudioInputOpened();
+  /**
+   * <code>.dsa.control.v1.AudioInputOpened audio_input_opened = 105;</code>
+   * @return The audioInputOpened.
+   */
+  io.github.thisisthepy.dsa.control.v1.AudioInputOpened getAudioInputOpened();
+
+  /**
    * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
    * @return Whether the videoCapabilities field is set.
    */

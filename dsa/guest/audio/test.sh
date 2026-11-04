@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Builds and runs the audio module's tests on the build machine: the output stream's
-# commands and pacing, the shared queues, the bytes waiting for the host's socket, and the
-# audio port's messages through the generated codec.
+# Builds and runs the audio module's tests on the build machine: the output and input
+# streams' commands and pacing, the shared queues, the bytes waiting for the host's socket,
+# the queue of the host's recorded sound, the input stream's connection to a fake host, and
+# the audio port's messages through the generated codec.
 #
 #   dsa/guest/audio/test.sh
 #
@@ -36,6 +37,14 @@ mkdir -p "$out"
     -o "$out/shared_queue_test"
 "$out/shared_queue_test"
 
+"$cxx" "${flags[@]}" "$here/src/input_stream_logic.cpp" "$here/tests/input_stream_logic_test.cpp" \
+    -o "$out/input_stream_logic_test"
+"$out/input_stream_logic_test"
+
+"$cxx" "${flags[@]}" "$here/src/capture_queue.cpp" "$here/tests/capture_queue_test.cpp" -pthread \
+    -o "$out/capture_queue_test"
+"$out/capture_queue_test"
+
 # The generated codec is not ours to warn about.
 "$cxx" -std=c++17 -I"$protocol/cpp/generated" "${protobuf[@]}" -c \
     "$protocol/cpp/generated/control.pb.cc" -o "$out/control.pb.o"
@@ -43,3 +52,9 @@ mkdir -p "$out"
     "$here/src/audio_messages.cpp" "$here/tests/audio_messages_test.cpp" "$out/control.pb.o" \
     -lprotobuf-lite -pthread -o "$out/audio_messages_test"
 "$out/audio_messages_test"
+
+"$cxx" "${flags[@]}" -I"$protocol/cpp/generated" "${protobuf[@]}" \
+    "$here/src/audio_messages.cpp" "$here/src/socket_io.cpp" "$here/src/capture_queue.cpp" \
+    "$here/src/input_link.cpp" "$here/tests/input_link_test.cpp" "$out/control.pb.o" \
+    -lprotobuf-lite -pthread -o "$out/input_link_test"
+"$out/input_link_test"

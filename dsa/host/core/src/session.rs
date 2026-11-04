@@ -4000,6 +4000,8 @@ impl Worker {
             | Some(Body::AudioOutputReady(_))
             | Some(Body::AudioPcm(_))
             | Some(Body::AudioOutputControl(_))
+            | Some(Body::AudioInputOpen(_))
+            | Some(Body::AudioInputOpened(_))
             | Some(Body::VideoCapabilities(_))
             | Some(Body::VideoDecoderOpen(_))
             | Some(Body::VideoDecoderOpened(_))

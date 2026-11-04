@@ -73,6 +73,11 @@ add_executable(dsa-audio
     src/main.cpp
     src/module.cpp
     src/stream_out.cpp
+    src/stream_in.cpp
+    src/input_stream_logic.cpp
+    src/input_link.cpp
+    src/capture_queue.cpp
+    src/socket_io.cpp
     src/output_stream_logic.cpp
     src/shared_queue.cpp
     src/host_link.cpp

@@ -82,6 +82,17 @@ std::vector<uint8_t> encodeControl(HostCommand command) {
     return encode(envelope);
 }
 
+std::vector<uint8_t> encodeInputOpen(const std::string& name, uint32_t framesPerBurst) {
+    v1::Envelope envelope;
+    v1::AudioInputOpen* open = envelope.mutable_audio_input_open();
+    open->set_sample_rate(48000);
+    open->set_channel_count(2);
+    open->set_format(v1::AUDIO_SAMPLE_FORMAT_S16LE);
+    open->set_frames_per_burst(framesPerBurst);
+    open->set_name(name);
+    return encode(envelope);
+}
+
 HostMessage decodeHostFrame(const uint8_t* data, size_t size) {
     v1::Envelope envelope;
     if (!envelope.ParseFromArray(data, static_cast<int>(size))) {
@@ -95,6 +106,11 @@ HostMessage decodeHostFrame(const uint8_t* data, size_t size) {
         case v1::Envelope::kAudioOutputReady:
             return Ready{envelope.audio_output_ready().buffered_frames(),
                          envelope.audio_output_ready().device_frames()};
+        case v1::Envelope::kAudioInputOpened:
+            return InputOpened{envelope.audio_input_opened().error(),
+                               envelope.audio_input_opened().device_frames()};
+        case v1::Envelope::kAudioPcm:
+            return Pcm{envelope.audio_pcm().position(), envelope.audio_pcm().data()};
         default:
             return std::monostate{};
     }
