@@ -98,8 +98,8 @@ that builds their paths. The settings app and the installer follow the same layo
 
 Outside them DSA writes only the Start menu shortcuts, its key `HKLM\SOFTWARE\thisisthepy\DSA`,
 the `Run` value that starts `dsa-wm`, the `.apk` association and context menu entries, the
-Hyper-V socket service registrations, and in each user's classes the notification protocol
-and each app's AppUserModelID.
+Hyper-V socket service registrations, in each user's classes the notification protocol
+and each app's AppUserModelID, and each app's entry in the user's list of installed apps.
 
 - No program uses the system's or the user's temporary folder. The service clears what
   earlier runs left in the machine's `tmp` when it starts.
@@ -351,6 +351,21 @@ menu, so Windows search finds it by name and opens it, even while Android is sto
   menu folder (`dsa-hostd remove-user-data`). A Start menu moved elsewhere by folder
   redirection keeps its shortcuts, because the uninstaller cannot read another user's
   redirection.
+
+### Installed apps in Windows Settings
+
+Each app also shows in Windows Settings under Apps > Installed apps (and in Programs and
+Features), as it did with WSA, so it can be found and uninstalled there.
+
+- Together with the Start menu, the window manager writes one key for each app,
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Thisisthepy.DSA.<package>`, with
+  `DisplayName`, `DisplayIcon` (the app's window program), `DisplayVersion`, `Publisher`,
+  `InstallDate`, `EstimatedSize`, `NoModify`, `NoRepair` and `UninstallString`, which runs
+  `dsa apps uninstall <package>`. Windows asks the user to confirm first.
+- Keys whose names start with `Thisisthepy.DSA.` are DSA's; no other key is ever changed or
+  removed. A key of an app no longer installed goes.
+- Uninstalling DSA removes them in every profile (`dsa-hostd remove-user-data`), loading the
+  user's `NTUSER.DAT` when the user is not signed in.
 
 ### Choosing the render GPU
 
