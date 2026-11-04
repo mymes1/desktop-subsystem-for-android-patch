@@ -118,7 +118,7 @@ pub fn fill_scale(frame: (u32, u32), view: (u32, u32)) -> (f32, f32) {
     (scale(frame.0, view.0), scale(frame.1, view.1))
 }
 
-/// The tone of the caption glyphs of 	ask's window.
+/// The tone of the caption glyphs of `task`'s window.
 fn tone_of(task: &Task) -> CaptionTone {
     caption_tone(task.status_bar, task.status_bar_color)
 }
