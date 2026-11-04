@@ -148,6 +148,13 @@ message SetTaskDensity {
   uint32 density_dpi = 2;
 }
 
+// A task's window draws its title bar over the top `height` pixels of the task: asks the
+// caller's Android to give the task a top system bar inset of that height. 0 removes it.
+message SetTaskCaption {
+  int32 task_id = 1;
+  uint32 height = 2;
+}
+
 // Turns the connection into a stream of input for the caller's Android: after the answer
 // (Done), the client sends only PointerEvent, KeyEvent, ImeComposition and ImeCommit frames, which the service passes on
 // as they come, without answering them. Input is never waited on, so a pointer that moves
@@ -581,6 +588,19 @@ message Task {
   // The smallest size Android gives the task, in its display pixels. 0 when unknown.
   uint32 min_width = 9;
   uint32 min_height = 10;
+  // Whether the task's app asked for a light status bar (dark icons) or a dark one, which
+  // the window's caption buttons follow.
+  StatusBarAppearance status_bar_appearance = 11;
+  // The status bar color the app set, as 0xAARRGGBB; 0 when none. Used only while the
+  // appearance is unspecified.
+  fixed32 status_bar_color = 12;
+}
+
+// Whether an app asked for dark status bar icons (a light status bar) or light ones.
+enum StatusBarAppearance {
+  STATUS_BAR_APPEARANCE_UNSPECIFIED = 0;
+  STATUS_BAR_APPEARANCE_LIGHT = 1;
+  STATUS_BAR_APPEARANCE_DARK = 2;
 }
 
 // The task ended.
@@ -1009,6 +1029,7 @@ message Request {
     WatchAccessibility watch_accessibility = 28;
     WidgetPointer widget_pointer = 35;
     GetPackage get_package = 36;
+    SetTaskCaption set_task_caption = 37;
     WatchLog watch_log = 70;
     CollectDiagnostics collect_diagnostics = 71;
   }
