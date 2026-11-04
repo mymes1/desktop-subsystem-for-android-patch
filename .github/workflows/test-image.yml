@@ -250,6 +250,7 @@ jobs:
           needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
           echo "needs: $needed"
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
+
       - name: Keep the audio module
         uses: actions/upload-artifact@v4
         with:
@@ -257,7 +258,8 @@ jobs:
           path: .scratch/build-audio/dsa-audio
           if-no-files-found: error
 
-  agent:    name: Build the guest agent
+  agent:
+    name: Build the guest agent
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

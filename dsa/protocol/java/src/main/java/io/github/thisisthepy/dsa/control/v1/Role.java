@@ -26,6 +26,15 @@ public enum Role
   ROLE_GUEST(2),
   /**
    * <pre>
+   * The guest's audio HAL, on the audio port. It plays sound and nothing else, so the host
+   * asks it for no secret, and the control port refuses it.
+   * </pre>
+   *
+   * <code>ROLE_GUEST_AUDIO = 3;</code>
+   */
+  ROLE_GUEST_AUDIO(3),
+  /**
+   * <pre>
    * The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
    * host asks it for no secret, and the control port refuses it.
    * </pre>
@@ -48,6 +57,15 @@ public enum Role
    * <code>ROLE_GUEST = 2;</code>
    */
   public static final int ROLE_GUEST_VALUE = 2;
+  /**
+   * <pre>
+   * The guest's audio HAL, on the audio port. It plays sound and nothing else, so the host
+   * asks it for no secret, and the control port refuses it.
+   * </pre>
+   *
+   * <code>ROLE_GUEST_AUDIO = 3;</code>
+   */
+  public static final int ROLE_GUEST_AUDIO_VALUE = 3;
   /**
    * <pre>
    * The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
@@ -83,6 +101,7 @@ public enum Role
       case 0: return ROLE_UNSPECIFIED;
       case 1: return ROLE_HOST;
       case 2: return ROLE_GUEST;
+      case 3: return ROLE_GUEST_AUDIO;
       case 4: return ROLE_GUEST_VIDEO;
       default: return null;
     }

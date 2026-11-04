@@ -4,10 +4,10 @@
 use dsa_host_core::audio::AUDIO_PORT;
 use dsa_host_core::compositor::{GRAPHICS_COMMAND_PORT, GRAPHICS_PROCESS_PIPE_PORT};
 use dsa_host_windows::guest_communication_services::{
-    is_service_guid_registered_under, read_service_element_name_under, register_service_guid_under,
-    register_graphics_service_guids_under, unregister_service_guid_under, RegistryHive,
-    AUDIO_ELEMENT_NAME, DEFAULT_SERVICE_SDDL, GRAPHICS_COMMAND_ELEMENT_NAME,
-    GRAPHICS_PROCESS_PIPE_ELEMENT_NAME,
+    is_service_guid_registered_under, read_service_element_name_under,
+    register_graphics_service_guids_under, register_service_guid_under,
+    unregister_service_guid_under, RegistryHive, AUDIO_ELEMENT_NAME, DEFAULT_SERVICE_SDDL,
+    GRAPHICS_COMMAND_ELEMENT_NAME, GRAPHICS_PROCESS_PIPE_ELEMENT_NAME,
 };
 use dsa_host_windows::guid::Guid;
 
@@ -120,7 +120,10 @@ fn pr4_the_audio_port_is_registered_beside_the_graphics_ports() {
     // a registered service.
     let base_key = format!("{}_audio", test_base_key());
     let audio_guid = Guid::vsock_service(AUDIO_PORT);
-    assert_eq!(audio_guid.to_string(), "000015c0-facb-11e6-bd58-64006a7986d3");
+    assert_eq!(
+        audio_guid.to_string(),
+        "000015c0-facb-11e6-bd58-64006a7986d3"
+    );
     register_graphics_service_guids_under(RegistryHive::CurrentUser, &base_key)
         .expect("register the service GUIDs");
     assert_eq!(
@@ -128,7 +131,11 @@ fn pr4_the_audio_port_is_registered_beside_the_graphics_ports() {
             .as_deref(),
         Some(AUDIO_ELEMENT_NAME)
     );
-    for port in [GRAPHICS_COMMAND_PORT, GRAPHICS_PROCESS_PIPE_PORT, AUDIO_PORT] {
+    for port in [
+        GRAPHICS_COMMAND_PORT,
+        GRAPHICS_PROCESS_PIPE_PORT,
+        AUDIO_PORT,
+    ] {
         let _ = unregister_service_guid_under(
             RegistryHive::CurrentUser,
             &base_key,

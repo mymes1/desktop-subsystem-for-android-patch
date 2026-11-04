@@ -36,8 +36,8 @@
 
 pub mod accessibility;
 pub mod apk;
-pub mod audio;
 pub mod apk_info;
+pub mod audio;
 pub mod bootconfig;
 pub mod clipboard;
 pub mod clock_trace;

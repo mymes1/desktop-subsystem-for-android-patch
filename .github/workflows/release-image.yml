@@ -244,7 +244,8 @@ jobs:
           path: .scratch/build-audio/dsa-audio
           if-no-files-found: error
 
-  agent:    name: Build the guest agent
+  agent:
+    name: Build the guest agent
     if: inputs.rebuild_images
     runs-on: ubuntu-latest
     steps:

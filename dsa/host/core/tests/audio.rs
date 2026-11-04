@@ -415,7 +415,13 @@ fn pr4_streams_play_side_by_side_up_to_the_limit() {
         let device: Arc<dyn AudioDevice> = Arc::new(device.clone());
         let stop = Arc::clone(&stop);
         thread::spawn(move || {
-            serve_port(&mut listener, device, "dsa-wm test", &stop, Arc::new(|_: &str| {}))
+            serve_port(
+                &mut listener,
+                device,
+                "dsa-wm test",
+                &stop,
+                Arc::new(|_: &str| {}),
+            )
         })
     };
     let mut guests = Vec::new();
@@ -424,7 +430,10 @@ fn pr4_streams_play_side_by_side_up_to_the_limit() {
         send(guest.as_mut(), Body::Hello(guest_hello()));
         assert!(matches!(recv(guest.as_mut()), Some(Body::HelloAccepted(_))));
         send(guest.as_mut(), Body::AudioOutputOpen(open_message()));
-        assert!(matches!(recv(guest.as_mut()), Some(Body::AudioOutputReady(_))));
+        assert!(matches!(
+            recv(guest.as_mut()),
+            Some(Body::AudioOutputReady(_))
+        ));
         send(guest.as_mut(), control(AudioOutputCommand::Start));
         guests.push(guest);
     }
@@ -433,7 +442,10 @@ fn pr4_streams_play_side_by_side_up_to_the_limit() {
     assert_eq!(extra.recv(Some(WAIT)), Err(TransportError::Closed));
     let deadline = std::time::Instant::now() + WAIT;
     while device.playing.lock().unwrap().len() < MAX_STREAMS {
-        assert!(std::time::Instant::now() < deadline, "not every stream played");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "not every stream played"
+        );
         thread::sleep(Duration::from_millis(5));
     }
     for mut guest in guests {

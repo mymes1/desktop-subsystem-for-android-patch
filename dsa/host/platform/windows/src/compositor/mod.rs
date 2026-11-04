@@ -42,11 +42,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::audio::{serve_port as serve_audio_port, AudioDevice, AUDIO_PORT};
 use dsa_host_core::compositor::{
     GraphicsRenderer, GraphicsStreamKind, StreamTracker, GRAPHICS_COMMAND_PORT,
     GRAPHICS_PROCESS_PIPE_PORT,
 };
-use dsa_host_core::audio::{serve_port as serve_audio_port, AudioDevice, AUDIO_PORT};
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::memory::{IdleTrim, IDLE_TRIM_DELAY};
 use dsa_host_core::session::SessionState;

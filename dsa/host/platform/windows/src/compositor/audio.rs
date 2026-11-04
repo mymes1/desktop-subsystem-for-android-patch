@@ -15,8 +15,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::audio::{
-    AudioDevice, DeviceFormat, Playback, Renderer, SampleType, SharedBuffer, CHANNELS,
-    SAMPLE_RATE,
+    AudioDevice, DeviceFormat, Playback, Renderer, SampleType, SharedBuffer, CHANNELS, SAMPLE_RATE,
 };
 use windows::core::PWSTR;
 use windows::Win32::Foundation::HANDLE;
@@ -232,13 +231,13 @@ fn open(enumerator: &IMMDeviceEnumerator) -> Result<(Client, u32), String> {
     let buffer_frames =
         unsafe { client.GetBufferSize() }.map_err(|e| format!("the device has no buffer: {e}"))?;
     // SAFETY: an initialised client.
-    let render: IAudioRenderClient = unsafe { client.GetService() }
-        .map_err(|e| format!("the device takes no sound: {e}"))?;
+    let render: IAudioRenderClient =
+        unsafe { client.GetService() }.map_err(|e| format!("the device takes no sound: {e}"))?;
     // The device's own delay, at the guest's rate (the stream's rate before conversion).
     // SAFETY: an initialised client.
     let latency = unsafe { client.GetStreamLatency() }.unwrap_or(0).max(0) as u64;
-    let device_frames = (latency * u64::from(SAMPLE_RATE) / 10_000_000) as u32
-        + buffer_frames.min(SAMPLE_RATE);
+    let device_frames =
+        (latency * u64::from(SAMPLE_RATE) / 10_000_000) as u32 + buffer_frames.min(SAMPLE_RATE);
     // SAFETY: an initialised client.
     unsafe { client.Start() }.map_err(|e| format!("the device did not start: {e}"))?;
     Ok((

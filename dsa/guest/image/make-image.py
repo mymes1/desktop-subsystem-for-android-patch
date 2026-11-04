@@ -1005,6 +1005,7 @@ AGENT_FS_CONFIG = [
 
 
 def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power=False, codec2=False,
+                                audio=False):
     """Adds same_process_hal_file contexts for guest graphics libraries if not present, and
     opens the DRM cards to every graphics client.
 
