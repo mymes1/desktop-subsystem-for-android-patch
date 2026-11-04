@@ -141,6 +141,9 @@ std::shared_ptr<StreamOut> StreamOut::create(int32_t portConfigId, int64_t buffe
     auto stream = ndk::SharedRefBase::make<StreamOut>(portConfigId, bufferFrames, std::move(onClosed));
     if (!stream->mCommands.valid() || !stream->mReplies.valid() || !stream->mData.valid()) {
         AUDIO_LOGE("cannot make the output stream's shared memory");
+        // It never opened, so the module is not told it closed: the module is opening it
+        // and holds its own lock.
+        stream->mOnClosed = nullptr;
         return nullptr;
     }
     descriptor->command = describe<StreamDescriptor::Command>(stream->mCommands);
