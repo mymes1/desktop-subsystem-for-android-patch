@@ -13,7 +13,9 @@
 name: Installer test
 
 on:
-  pull_request:
+  # Only develop is built and tested: features are integrated there and fixed there.
+  push:
+    branches: [develop]
     paths:
       - "dsa/**"
       - ".github/workflows/test-installer.yml"
@@ -21,7 +23,7 @@ on:
 
 concurrency:
   group: test-installer-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 permissions:
   contents: read

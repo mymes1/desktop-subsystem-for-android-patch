@@ -7,7 +7,9 @@
 name: Image test
 
 on:
-  pull_request:
+  # Only develop is built and tested: features are integrated there and fixed there.
+  push:
+    branches: [develop]
     paths:
       - "dsa/guest/image/**"
       - "dsa/graphics/**"
@@ -52,7 +54,7 @@ on:
 
 concurrency:
   group: test-image-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 permissions:
   contents: read
