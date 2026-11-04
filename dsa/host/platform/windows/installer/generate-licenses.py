@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 APACHE_2_0_TEXT = """                                 Apache License
@@ -678,6 +679,175 @@ def is_allowed_expression(expr: str, allow_list: set) -> bool:
         raise ValueError(f"Failed to parse SPDX expression '{expr}': {exc}")
 
 
+# Where each part of DSA is shipped, for the third-party notice.
+PART_TITLES = {
+    "setup": "Setup program (setup.exe, DsaSetup.exe)",
+    "settings": "Settings app (settings\\DsaSettings.exe)",
+    "graphics": "Host graphics path (gfxstream_backend.dll)",
+    "guest": "Guest image (vm\\bzImage and the Android image)",
+}
+DISTRIBUTIONS = {"linked", "build-only", "aggregate", "separate-program"}
+
+REPO_URL = "https://github.com/thisisthepy/desktop-subsystem-for-android"
+
+
+def load_components(workspace_dir: Path) -> dict:
+    """Reads third-party.toml: the licence policy and the components Cargo does not list."""
+    with (workspace_dir / "third-party.toml").open("rb") as f:
+        return tomllib.load(f)
+
+
+def _licence_tokens(expr: str):
+    normalized = expr.replace("/", " OR ")
+    return [t.strip() for t in re.split(r"(\(|\)|\bAND\b|\bOR\b)", normalized) if t.strip()]
+
+
+def component_problems(component: dict, policy: dict) -> list:
+    """Says why a component breaks the licence rule, or nothing when it follows it.
+
+    A licence from the allow list is always fine. A weak copyleft licence is fine for a
+    component shipped unmodified. A GPL licence is fine only for a separate program with a
+    source shipped beside it in the same release.
+    """
+    name = component.get("name", "<unnamed>")
+    problems = [f"{name}: has no {key}" for key in ("name", "license", "part", "distribution", "source")
+                if not component.get(key)]
+    if problems:
+        return problems
+    if component["part"] not in PART_TITLES:
+        problems.append(f"{name}: part '{component['part']}' is not one of {sorted(PART_TITLES)}")
+    if component["distribution"] not in DISTRIBUTIONS:
+        problems.append(f"{name}: distribution '{component['distribution']}' is not one of {sorted(DISTRIBUTIONS)}")
+
+    allow = set(policy.get("allow", []))
+    weak = set(policy.get("weak_copyleft", []))
+    separate = set(policy.get("separate_program", []))
+
+    def ok(token: str) -> bool:
+        if token in allow:
+            return True
+        if token in weak:
+            return component.get("modified") is False
+        if token in separate:
+            return component["distribution"] == "separate-program" and bool(component.get("shipped_source"))
+        return False
+
+    expr = component["license"]
+    tokens = _licence_tokens(expr)
+    py_expr = "".join(f" {t.lower()} " if t in ("AND", "OR", "(", ")") else f" {ok(t)} " for t in tokens)
+    try:
+        allowed = bool(eval(py_expr, {"__builtins__": {}}))
+    except Exception as exc:
+        return [f"{name}: cannot read the licence expression '{expr}': {exc}"]
+    if not allowed:
+        ids = [t for t in tokens if t not in ("AND", "OR", "(", ")")]
+        if any(t in separate for t in ids):
+            problems.append(
+                f"{name}: '{expr}' is allowed only for a separate program whose source is shipped beside it "
+                "(distribution = \"separate-program\" and shipped_source)")
+        elif any(t in weak for t in ids):
+            problems.append(f"{name}: '{expr}' is allowed only for a component shipped unmodified (modified = false)")
+        else:
+            problems.append(f"{name}: licence '{expr}' is not on the allow list in third-party.toml")
+    return problems
+
+
+def declared_packages(workspace_dir: Path) -> list:
+    """The package references the .NET projects and the agent's Gradle build declare.
+
+    Test projects are left out: nothing from them ships.
+    """
+    found = []
+    for csproj in sorted(workspace_dir.rglob("*.csproj")):
+        if ".Tests" in csproj.name or any(p in ("bin", "obj", "target") for p in csproj.parts):
+            continue
+        text = csproj.read_text(encoding="utf-8")
+        for m in re.finditer(r'<PackageReference\s+Include="([^"]+)"\s+Version="([^"]+)"', text):
+            found.append((csproj.relative_to(workspace_dir).as_posix(), m.group(1), m.group(2)))
+    for gradle in sorted(workspace_dir.rglob("build.gradle.kts")):
+        if any(p in ("build", ".gradle") for p in gradle.parts):
+            continue
+        text = gradle.read_text(encoding="utf-8")
+        for m in re.finditer(r'\b(?:implementation|api|runtimeOnly)\("([^":]+):([^":]+):([^"]+)"\)', text):
+            found.append((gradle.relative_to(workspace_dir).as_posix(), f"{m.group(1)}:{m.group(2)}", m.group(3)))
+    return found
+
+
+def check_components(workspace_dir: Path) -> list:
+    """Every problem with the components Cargo does not list: licences and unlisted packages."""
+    data = load_components(workspace_dir)
+    policy = data.get("policy", {})
+    components = data.get("component", [])
+    problems = []
+    for c in components:
+        problems.extend(component_problems(c, policy))
+    listed = {(c.get("package"), c.get("version")) for c in components if c.get("package")}
+    for where, package, version in declared_packages(workspace_dir):
+        if (package, version) not in listed:
+            problems.append(
+                f"{where}: package {package} {version} is not listed in third-party.toml "
+                "(add it with its licence)")
+    return problems
+
+
+def components_notice(workspace_dir: Path) -> str:
+    data = load_components(workspace_dir)
+    lines = [
+        "Third-party components of Desktop Subsystem for Android",
+        "=======================================================",
+        "",
+        "Rust crates are listed in rust-crates.txt. Every other component is listed here,",
+        "by the part of DSA that ships it.",
+        "",
+    ]
+    for part, title in PART_TITLES.items():
+        comps = [c for c in data.get("component", []) if c.get("part") == part]
+        if not comps:
+            continue
+        lines += [title, "-" * len(title)]
+        for c in comps:
+            lines.append(f"* {c['name']}" + (f" {c['version']}" if c.get("version") else ""))
+            lines.append(f"  Licence: {c['license']}")
+            lines.append(f"  Source: {c['source']}")
+            if c.get("notice"):
+                lines.append(f"  {c['notice']}")
+            if c.get("shipped_source"):
+                lines.append(f"  Its source is shipped beside it: see {c['shipped_source']}")
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+# The release asset that holds the kernel's corresponding source. The release workflow
+# publishes it beside every kernel it publishes (dsa/kernel/source-bundle.sh makes it).
+KERNEL_SOURCE_ASSET = "kernel-source.tar.gz"
+
+
+def kernel_source_notice(workspace_dir: Path, release_tag: str | None = None) -> str:
+    """Where the shipped kernel's source is: an asset of the release that ships it."""
+    tag_file = workspace_dir / "kernel" / "wsl-kernel.tag"
+    tag = tag_file.read_text(encoding="utf-8").strip() if tag_file.exists() else "named in dsa/kernel/wsl-kernel.tag"
+    if release_tag:
+        where = (f"the asset {KERNEL_SOURCE_ASSET} of release {release_tag}:\n"
+                 f"  {REPO_URL}/releases/download/{release_tag}/{KERNEL_SOURCE_ASSET}\n"
+                 f"  (release page: {REPO_URL}/releases/tag/{release_tag})")
+    else:
+        where = (f"the asset {KERNEL_SOURCE_ASSET} of the release this build was published as,\n"
+                 f"  on {REPO_URL}/releases")
+    return f"""Guest kernel: where its source is
+
+The guest kernel (vm\\bzImage) is a separate program licensed under the GNU General Public
+License, version 2 (see kernel-GPL-2.0.txt). It runs in its own virtual machine; no DSA
+program links with it.
+
+Its complete corresponding source is published beside it, as
+{where}
+
+The bundle holds the WSL2 Linux kernel at tag {tag}, DSA's patches, configuration fragment
+and build script, the merged configuration the kernel was built with, and how to rebuild
+it. Every Android image release that carries this kernel has the same asset.
+"""
+
+
 def get_packages_metadata(workspace_dir: Path):
     cmd = ["cargo", "metadata", "--format-version", "1"]
     res = subprocess.run(cmd, cwd=workspace_dir, capture_output=True, text=True, check=True)
@@ -690,7 +860,8 @@ def parse_cargo_lock(lock_path: Path):
     return entries
 
 
-def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | None = None):
+def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | None = None,
+                    release_tag: str | None = None):
     allow_list = load_deny_allow_list(workspace_dir)
     lock_path = workspace_dir / "Cargo.lock"
     if not lock_path.exists():
@@ -753,6 +924,8 @@ def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | No
     (out_dir / "aosp-notice.txt").write_text(AOSP_NOTICE, encoding="utf-8")
     (out_dir / "apache-2.0.txt").write_text(APACHE_2_0_TEXT, encoding="utf-8")
     (out_dir / "mit.txt").write_text(MIT_TEXT, encoding="utf-8")
+    (out_dir / "third-party-components.txt").write_text(components_notice(workspace_dir), encoding="utf-8")
+    (out_dir / "kernel-source-offer.txt").write_text(kernel_source_notice(workspace_dir, release_tag), encoding="utf-8")
 
     # 3. Master NOTICE.txt
     master_lines = [
@@ -773,6 +946,10 @@ def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | No
         "See the License for the specific language governing permissions and",
         "limitations under the License.",
         "",
+        "Desktop Subsystem for Android is an independent open source project. It is not",
+        "affiliated with, endorsed by or sponsored by Microsoft or Google.",
+        "Android is a trademark of Google LLC.",
+        "",
         "--------------------------------------------------------------------------------",
         "THIRD-PARTY COMPONENTS AND LICENSES",
         "--------------------------------------------------------------------------------",
@@ -783,6 +960,7 @@ def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | No
         "   - Source: Microsoft WSL2 Linux Kernel with DSA binder and partition patches",
         "   - License: GNU General Public License v2.0 (GPL-2.0-only)",
         "   - Full license text: see licenses/kernel-GPL-2.0.txt",
+        "   - Where its source is: see licenses/kernel-source-offer.txt",
         "   - Kernel configurations and build scripts: dsa/kernel/ in the source repository",
         "",
         "2. Windows Setup Program and WiX Runtime (setup.exe, DsaSetup.exe)",
@@ -817,6 +995,9 @@ def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | No
 
     master_lines.extend([
         "",
+        "Every component that is not a Rust crate, with its licence and source, is listed in",
+        "licenses/third-party-components.txt.",
+        "",
         "For additional license texts, refer to the files in the licenses/ directory.",
         "",
     ])
@@ -836,6 +1017,8 @@ def main():
     parser.add_argument("--out-dir", type=Path, default=Path(__file__).resolve().parents[4] / "dsa/target/installer/stage/licenses")
     parser.add_argument("--master-notice", type=Path, default=None)
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--release-tag", default=None,
+                        help="the GitHub release this build is published as; the kernel source notice names its asset")
     args = parser.parse_args()
 
     allow_list = load_deny_allow_list(args.workspace)
@@ -853,16 +1036,21 @@ def main():
         if not is_allowed_expression(license_expr, allow_list):
             violating.append((name, version, license_expr))
 
+    component_errors = check_components(args.workspace)
+    for problem in component_errors:
+        print(f"Error: {problem}", file=sys.stderr)
+
     if violating:
         for n, v, lic in violating:
             print(f"Error: {n} {v} has license '{lic}' which is not allowed by policy", file=sys.stderr)
+    if violating or component_errors:
         sys.exit(1)
 
     if args.check_only:
         print(f"All {len(lock_packages)} Rust dependencies comply with the licence policy.")
         return
 
-    generate_bundle(args.workspace, args.out_dir, args.master_notice)
+    generate_bundle(args.workspace, args.out_dir, args.master_notice, args.release_tag)
 
 
 if __name__ == "__main__":

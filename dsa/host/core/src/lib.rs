@@ -12,6 +12,8 @@
 //! - [`handshake`]: the control channel's handshake as a session uses it.
 //! - [`host_api`]: the local API service, which acts on each caller's own Android, and its
 //!   client.
+//! - [`host_config`]: the configuration file's defaults and rules that every host shares.
+//! - [`host_paths`]: where the host keeps its files, a port each platform fills in.
 //! - [`tasks`]: the guest's app tasks, which the session keeps and hands on.
 //! - [`input`]: pointer input in a task's window, as the guest task receives it.
 //! - [`keys`]: key input in a task's window.
@@ -26,6 +28,7 @@
 //! - [`clipboard`]: the text clipboard the host and the guest share.
 //! - [`notifications`]: the notifications of the guest, which the host shows.
 //! - [`widgets`]: the widgets of the guest, which the host places on its desktop.
+//! - [`print`]: the documents apps in the guest print, which the host prints.
 //! - [`video`]: the guest's video, decoded on the host's hardware decoder.
 //! - [`ime`]: text input through the host's input method in a task's window.
 //! - [`settings`]: the settings a user changes from the settings app, kept by the service.
@@ -49,6 +52,8 @@ pub mod guest_log;
 pub mod guest_log_api;
 pub mod handshake;
 pub mod host_api;
+pub mod host_config;
+pub mod host_paths;
 #[cfg(feature = "conformance")]
 pub mod host_api_conformance;
 pub mod ime;
@@ -60,6 +65,7 @@ pub mod memory;
 pub mod notifications;
 pub mod power;
 pub mod power_hints;
+pub mod print;
 pub mod resize_trace;
 pub mod session;
 pub mod settings;
