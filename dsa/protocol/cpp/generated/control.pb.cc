@@ -1004,6 +1004,7 @@ PROTOBUF_CONSTEXPR WidgetProvider::WidgetProvider(
   , /*decltype(_impl_.package_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.label_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.preview_png_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.app_label_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.min_width_dp_)*/0u
   , /*decltype(_impl_.min_height_dp_)*/0u
   , /*decltype(_impl_.default_width_dp_)*/0u
@@ -18486,6 +18487,7 @@ WidgetProvider::WidgetProvider(const WidgetProvider& from)
     , decltype(_impl_.package_name_){}
     , decltype(_impl_.label_){}
     , decltype(_impl_.preview_png_){}
+    , decltype(_impl_.app_label_){}
     , decltype(_impl_.min_width_dp_){}
     , decltype(_impl_.min_height_dp_){}
     , decltype(_impl_.default_width_dp_){}
@@ -18529,6 +18531,14 @@ WidgetProvider::WidgetProvider(const WidgetProvider& from)
     _this->_impl_.preview_png_.Set(from._internal_preview_png(), 
       _this->GetArenaForAllocation());
   }
+  _impl_.app_label_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.app_label_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_app_label().empty()) {
+    _this->_impl_.app_label_.Set(from._internal_app_label(), 
+      _this->GetArenaForAllocation());
+  }
   ::memcpy(&_impl_.min_width_dp_, &from._impl_.min_width_dp_,
     static_cast<size_t>(reinterpret_cast<char*>(&_impl_.needs_configuration_) -
     reinterpret_cast<char*>(&_impl_.min_width_dp_)) + sizeof(_impl_.needs_configuration_));
@@ -18544,6 +18554,7 @@ inline void WidgetProvider::SharedCtor(
     , decltype(_impl_.package_name_){}
     , decltype(_impl_.label_){}
     , decltype(_impl_.preview_png_){}
+    , decltype(_impl_.app_label_){}
     , decltype(_impl_.min_width_dp_){0u}
     , decltype(_impl_.min_height_dp_){0u}
     , decltype(_impl_.default_width_dp_){0u}
@@ -18570,6 +18581,10 @@ inline void WidgetProvider::SharedCtor(
   #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
     _impl_.preview_png_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.app_label_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.app_label_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
 WidgetProvider::~WidgetProvider() {
@@ -18587,6 +18602,7 @@ inline void WidgetProvider::SharedDtor() {
   _impl_.package_name_.Destroy();
   _impl_.label_.Destroy();
   _impl_.preview_png_.Destroy();
+  _impl_.app_label_.Destroy();
 }
 
 void WidgetProvider::SetCachedSize(int size) const {
@@ -18603,6 +18619,7 @@ void WidgetProvider::Clear() {
   _impl_.package_name_.ClearToEmpty();
   _impl_.label_.ClearToEmpty();
   _impl_.preview_png_.ClearToEmpty();
+  _impl_.app_label_.ClearToEmpty();
   ::memset(&_impl_.min_width_dp_, 0, static_cast<size_t>(
       reinterpret_cast<char*>(&_impl_.needs_configuration_) -
       reinterpret_cast<char*>(&_impl_.min_width_dp_)) + sizeof(_impl_.needs_configuration_));
@@ -18715,6 +18732,16 @@ const char* WidgetProvider::_InternalParse(const char* ptr, ::_pbi::ParseContext
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 96)) {
           _impl_.needs_configuration_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string app_label = 13;
+      case 13:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 106)) {
+          auto str = _internal_mutable_app_label();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
         } else
           goto handle_unusual;
         continue;
@@ -18831,6 +18858,16 @@ uint8_t* WidgetProvider::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteBoolToArray(12, this->_internal_needs_configuration(), target);
   }
 
+  // string app_label = 13;
+  if (!this->_internal_app_label().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_app_label().data(), static_cast<int>(this->_internal_app_label().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.WidgetProvider.app_label");
+    target = stream->WriteStringMaybeAliased(
+        13, this->_internal_app_label(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -18873,6 +18910,13 @@ size_t WidgetProvider::ByteSizeLong() const {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
         this->_internal_preview_png());
+  }
+
+  // string app_label = 13;
+  if (!this->_internal_app_label().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_app_label());
   }
 
   // uint32 min_width_dp = 5;
@@ -18948,6 +18992,9 @@ void WidgetProvider::MergeFrom(const WidgetProvider& from) {
   if (!from._internal_preview_png().empty()) {
     _this->_internal_set_preview_png(from._internal_preview_png());
   }
+  if (!from._internal_app_label().empty()) {
+    _this->_internal_set_app_label(from._internal_app_label());
+  }
   if (from._internal_min_width_dp() != 0) {
     _this->_internal_set_min_width_dp(from._internal_min_width_dp());
   }
@@ -19006,6 +19053,10 @@ void WidgetProvider::InternalSwap(WidgetProvider* other) {
   ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
       &_impl_.preview_png_, lhs_arena,
       &other->_impl_.preview_png_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.app_label_, lhs_arena,
+      &other->_impl_.app_label_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
       PROTOBUF_FIELD_OFFSET(WidgetProvider, _impl_.needs_configuration_)
