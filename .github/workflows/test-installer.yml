@@ -4,6 +4,11 @@
 # then does the same through setup.exe, quietly and through its screens. The
 # kernel and the Android image are built elsewhere, so the package here carries a
 # placeholder kernel and a small stand-in image laid out like a real one.
+#
+# It runs for both platforms: the x64 package on Windows Server 2022 and 2025, and the
+# arm64 package on an ARM64 Windows 11 runner. The arm64 package's kernel is named Image
+# (the arm64 kernel build's name for it) and its programs are built for
+# aarch64-pc-windows-msvc.
 
 name: Installer test
 
@@ -23,14 +28,17 @@ permissions:
 
 jobs:
   installer:
-    name: Build, install and uninstall the installer (windows, ${{ matrix.version }})
+    name: Build, install and uninstall the installer (windows, ${{ matrix.version }}, ${{ matrix.arch }})
     # Server 2022 (build 20348) has the Windows 10 window manager, so setup shows its
     # solid background and square corners there; Server 2025 (build 26100) has the
     # Windows 11 one, with Mica and rounded corners.
     strategy:
       fail-fast: false
       matrix:
-        version: [2022, 2025]
+        include:
+          - { version: "2022", arch: x64, kernel: bzImage, target: x86_64-pc-windows-msvc }
+          - { version: "2025", arch: x64, kernel: bzImage, target: x86_64-pc-windows-msvc }
+          - { version: 11-arm, arch: arm64, kernel: Image, target: aarch64-pc-windows-msvc }
     runs-on: windows-${{ matrix.version }}
     timeout-minutes: 60
     defaults:
@@ -41,8 +49,36 @@ jobs:
     env:
       PROGRAM_DIR: 'C:\DSA Test\Program'
       DATA_DIR: 'C:\DSA Test\Data'
+      DSA_ARCH: ${{ matrix.arch }}
+      KERNEL_NAME: ${{ matrix.kernel }}
+      RUST_TARGET: ${{ matrix.target }}
     steps:
       - uses: actions/checkout@v4
+
+      # The ARM64 runner image does not always carry these, so they are set up here.
+      - name: Set up Rust for ARM64 Windows
+        if: matrix.arch == 'arm64'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+
+      - name: Set up .NET 8 for ARM64 Windows
+        if: matrix.arch == 'arm64'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Set up Python for ARM64 Windows
+        if: matrix.arch == 'arm64'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check that this is the machine the package is for
+        run: |
+          $native = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+          Write-Host "runner processor: $native, package: $env:DSA_ARCH"
+          if (($env:DSA_ARCH -eq 'arm64') -ne ($native -eq 'ARM64')) { throw "the $env:DSA_ARCH package is tested on a $native runner" }
 
       - name: Install WiX 5
         run: |
@@ -55,10 +91,10 @@ jobs:
           $dir = New-Item -ItemType Directory -Force .scratch\stand-in-image
           Set-Content -Path "$dir\disk.vhdx" -Value "a disk" -NoNewline
           Set-Content -Path "$dir\initrd.img" -Value "a ramdisk" -NoNewline
-          Set-Content -Path "$dir\bzImage" -Value "a kernel" -NoNewline
+          Set-Content -Path "$dir\$env:KERNEL_NAME" -Value "a kernel" -NoNewline
           Set-Content -Path "$dir\NOTICE.txt" -Value "AOSP stand-in notice" -NoNewline
           @{ version = "17.0.0-1"; android_major = 17; build = 1; kernel_cmdline = "console=ttyS0";
-             files = @{ "disk.vhdx" = @{}; "initrd.img" = @{}; "bzImage" = @{}; "NOTICE.txt" = @{} } } |
+             files = @{ "disk.vhdx" = @{}; "initrd.img" = @{}; "$env:KERNEL_NAME" = @{}; "NOTICE.txt" = @{} } } |
             ConvertTo-Json -Depth 4 | Set-Content -Path "$dir\image.json"
 
       # The lists the installed service reads are files in this folder, signed with a key
@@ -79,7 +115,7 @@ jobs:
       # would not admit, so the test build also admits authenticated users.
       - name: Build the package and setup.exe
         run: >
-          dsa/host/platform/windows/installer/build.ps1 -Version 0.0.9 -PlaceholderKernel
+          dsa/host/platform/windows/installer/build.ps1 -Version 0.0.9 -PlaceholderKernel -Arch $env:DSA_ARCH
           -ImageDir .scratch\stand-in-image -AndroidMajor 17
           -PipeSddl "D:P(A;;GA;;;SY)(A;;GRGW;;;IU)(A;;GRGW;;;AU)"
           -ListUrl "$env:MIRROR\images.json" -TrustedKey $env:TEST_PUBLIC_KEY
@@ -713,7 +749,7 @@ jobs:
       - name: Check the first image and the configuration that names it
         run: |
           $image = "$env:DATA_DIR\images\images\17.0.0-1"
-          foreach ($name in 'image.json', 'disk.vhdx', 'initrd.img', 'bzImage', 'NOTICE.txt') {
+          foreach ($name in 'image.json', 'disk.vhdx', 'initrd.img', $env:KERNEL_NAME, 'NOTICE.txt') {
             if (-not (Test-Path "$image\$name")) { throw "the first image has no $name" }
           }
           $config = Get-Content -Raw "$env:DATA_DIR\dsa-hostd.json" | ConvertFrom-Json
@@ -734,7 +770,7 @@ jobs:
       # service's own first check (a minute after it started) cannot find it first.
       - name: Build version 0.0.10 and offer it in the program list
         run: |
-          dsa/host/platform/windows/installer/build.ps1 -Version 0.0.10 -PlaceholderKernel `
+          dsa/host/platform/windows/installer/build.ps1 -Version 0.0.10 -PlaceholderKernel -Arch $env:DSA_ARCH `
             -ImageDir .scratch\stand-in-image -AndroidMajor 17 `
             -PipeSddl "D:P(A;;GA;;;SY)(A;;GRGW;;;IU)(A;;GRGW;;;AU)" `
             -ListUrl "$env:MIRROR\images.json" -TrustedKey $env:TEST_PUBLIC_KEY `
@@ -890,10 +926,10 @@ jobs:
           $program = $env:REPLACE_PROGRAM_DIR
           New-Item -ItemType Directory -Force "$program\settings", "$program\licenses", "$program\vm" | Out-Null
           foreach ($name in 'dsa-hostd.exe', 'dsa-wm.exe', 'dsa-app-window.exe', 'dsa.exe') {
-            Copy-Item "dsa\target\release\$name" "$program\$name"
+            Copy-Item "dsa\target\$env:RUST_TARGET\release\$name" "$program\$name"
           }
           Copy-Item dsa\target\installer\settings-app\DsaSettings.exe "$program\settings\DsaSettings.exe"
-          foreach ($name in 'gfxstream_backend.dll', 'NOTICE.txt', 'licenses\NOTICE.txt', 'licenses\gfxstream.txt', 'vm\bzImage') {
+          foreach ($name in 'gfxstream_backend.dll', 'NOTICE.txt', 'licenses\NOTICE.txt', 'licenses\gfxstream.txt', "vm\$env:KERNEL_NAME") {
             Set-Content "$program\$name" 'a stale copy' -NoNewline
           }
           Get-ChildItem -Recurse -File $program | ForEach-Object { $_.LastWriteTime = (Get-Date).AddDays(1) }
@@ -1022,7 +1058,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: installer-windows-${{ matrix.version }}
+          name: installer-windows-${{ matrix.version }}-${{ matrix.arch }}
           path: |
             dsa/target/installer/*.msi
             dsa/target/installer/*.cab
@@ -1036,15 +1072,85 @@ jobs:
             setup-screen.png
             screens/*.png
             dsa/target/service-logs/
+  # The arm64 package, built on an x64 machine (cross-compiled for aarch64-pc-windows-msvc,
+  # the settings app for win-arm64), must refuse to install there: its package and its
+  # setup.exe both say no, and nothing is left behind.
+  arm64-on-x64:
+    name: fr27_the_arm64_package_installs_only_on_arm64_windows (windows, 2025)
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add the ARM64 Rust target
+        run: rustup target add aarch64-pc-windows-msvc
+
+      - name: Install WiX 5
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add -g WixToolset.Util.wixext/5.0.2
+
+      - name: Build the arm64 package and setup.exe
+        run: dsa/host/platform/windows/installer/build.ps1 -Version 0.0.9 -PlaceholderKernel -Arch arm64
+
+      - name: Check that the package and its programs are arm64
+        run: |
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $info = $installer.GetType().InvokeMember('SummaryInformation', 'GetProperty', $null, $installer, @((Resolve-Path dsa\target\installer\dsa-test-0.0.9.msi).Path, 0))
+          $template = $info.GetType().InvokeMember('Property', 'GetProperty', $null, $info, 7)
+          Write-Host "the package's platform: $template"
+          if ($template -notlike 'Arm64;*') { throw "the arm64 package's platform is '$template'" }
+          # IMAGE_FILE_MACHINE_ARM64 is 0xAA64, at the PE header's machine field.
+          foreach ($program in Get-ChildItem dsa\target\installer\stage\*.exe, dsa\target\installer\settings-app\DsaSettings.exe) {
+            $bytes = [System.IO.File]::ReadAllBytes($program.FullName)
+            $pe = [BitConverter]::ToInt32($bytes, 0x3c)
+            $machine = [BitConverter]::ToUInt16($bytes, $pe + 4)
+            if ($machine -ne 0xAA64) { throw "$($program.Name) is for machine 0x$('{0:X4}' -f $machine), not ARM64" }
+          }
+
+      - name: Check that neither installs on x64 Windows
+        run: |
+          $p = Start-Process msiexec -Wait -PassThru -ArgumentList '/i', 'dsa\target\installer\dsa-test-0.0.9.msi', '/qn', '/l*v', 'arm64-msi.log'
+          Write-Host "msiexec exit code: $($p.ExitCode)"
+          if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) { throw "the arm64 package installed on x64 Windows" }
+          $p = Start-Process 'dsa\target\installer\setup-test-0.0.9.exe' -Wait -PassThru -ArgumentList '/quiet', '/norestart', '/log', "$PWD\arm64-setup.log"
+          Write-Host "setup.exe exit code: $($p.ExitCode)"
+          if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) { throw "the arm64 setup.exe installed on x64 Windows" }
+          if (Get-Service DsaHost -ErrorAction SilentlyContinue) { throw "the DsaHost service was installed" }
+          if (Test-Path "$env:ProgramFiles\DSA") { throw "the program folder was made" }
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-arm64-on-x64
+          path: |
+            arm64-msi.log
+            arm64-setup.log
+
 
   # The package a person installs: the real guest kernel and the trust key of the published
   # images, the graphics library of the newest graphics build, no Android image (the
   # service downloads the newest supported one), and the published lists for updates. It
   # is built, checked and kept, never installed here: its service would download a whole
   # Android image.
+  #
+  # The x64 package takes its kernel from the newest published image and reads images.json
+  # and program.json. The arm64 package takes the arm64 kernel (the artifact kernel-arm64 of
+  # the newest kernel build that passed) and reads the arm64 lists, images-arm64.json and
+  # program-arm64.json, so an ARM64 PC is never offered an x64 image or setup file.
   real-installer:
-    name: Build the real installer (windows, 2025)
-    runs-on: windows-2025
+    name: Build the real installer (windows, ${{ matrix.runner }}, ${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: windows-2025, arch: x64, kernel: bzImage, gfxstream: host-gfxstream-windows, lists: "" }
+          - { runner: windows-11-arm, arch: arm64, kernel: Image, gfxstream: host-gfxstream-windows-arm64, lists: "-arm64" }
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       actions: read
@@ -1054,8 +1160,30 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
+      DSA_ARCH: ${{ matrix.arch }}
+      KERNEL_NAME: ${{ matrix.kernel }}
+      GFXSTREAM_ARTIFACT: ${{ matrix.gfxstream }}
+      LISTS: ${{ matrix.lists }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up Rust for ARM64 Windows
+        if: matrix.arch == 'arm64'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+
+      - name: Set up .NET 8 for ARM64 Windows
+        if: matrix.arch == 'arm64'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Set up Python for ARM64 Windows
+        if: matrix.arch == 'arm64'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
       - name: Install WiX 5
         run: |
@@ -1066,8 +1194,8 @@ jobs:
         run: |
           $run = gh run list --repo $env:REPO --workflow test-graphics.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId'
           if (-not $run) { throw "no graphics build has succeeded, so there is no gfxstream_backend.dll to package" }
-          gh run download $run --repo $env:REPO --name host-gfxstream-windows --dir .scratch\host-gfxstream
-          if ($LASTEXITCODE -ne 0) { throw "downloading host-gfxstream-windows from run $run failed" }
+          gh run download $run --repo $env:REPO --name $env:GFXSTREAM_ARTIFACT --dir .scratch\host-gfxstream
+          if ($LASTEXITCODE -ne 0) { throw "downloading $env:GFXSTREAM_ARTIFACT from run $run failed" }
           $dll = Get-ChildItem -Recurse -File .scratch\host-gfxstream -Filter gfxstream_backend.dll | Select-Object -First 1
           if (-not $dll -or $dll.Length -eq 0) { throw "run $run has no usable gfxstream_backend.dll" }
           Write-Host "gfxstream_backend.dll from graphics run $run ($($dll.Length) bytes)"
@@ -1094,29 +1222,44 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "the published image list does not verify" }
           $list = Get-Content -Raw "$published\images.json" | ConvertFrom-Json
           $newest = $list.images | Sort-Object android_major, build | Select-Object -Last 1
-          $kernel = $newest.files | Where-Object name -eq 'bzImage'
-          if (-not $kernel) { throw "the newest published image has no bzImage" }
-          Invoke-WebRequest -Uri $kernel.url -OutFile "$published\bzImage"
-          if ((Get-FileHash "$published\bzImage").Hash -ne $kernel.sha256.ToUpperInvariant()) { throw "the kernel does not match the signed list" }
+          if ($env:DSA_ARCH -eq 'x64') {
+            $kernel = $newest.files | Where-Object name -eq 'bzImage'
+            if (-not $kernel) { throw "the newest published image has no bzImage" }
+            Invoke-WebRequest -Uri $kernel.url -OutFile "$published\bzImage"
+            if ((Get-FileHash "$published\bzImage").Hash -ne $kernel.sha256.ToUpperInvariant()) { throw "the kernel does not match the signed list" }
+            $kernelFrom = "the published image $($newest.version)"
+          } else {
+            # The arm64 kernel of the newest kernel build that passed.
+            $run = gh run list --repo $env:REPO --workflow test-kernel.yml --status success --limit 20 --json databaseId --jq '.[].databaseId' |
+              Where-Object { gh api "repos/$env:REPO/actions/runs/$_/artifacts" --jq '.artifacts[].name' | Select-String -SimpleMatch -Quiet 'kernel-arm64' } |
+              Select-Object -First 1
+            if (-not $run) { throw "no kernel build that passed has a kernel-arm64 artifact, so there is no arm64 kernel to package" }
+            gh run download $run --repo $env:REPO --name kernel-arm64 --dir .scratch\kernel-arm64
+            if ($LASTEXITCODE -ne 0) { throw "downloading kernel-arm64 from run $run failed" }
+            $image = Get-ChildItem -Recurse -File .scratch\kernel-arm64 | Where-Object { $_.Name -like 'Image*' -and $_.Extension -notin '.gz', '.config' } | Select-Object -First 1
+            if (-not $image -or $image.Length -eq 0) { throw "kernel-arm64 from run $run has no Image" }
+            Copy-Item $image.FullName "$published\Image"
+            $kernelFrom = "kernel build $run"
+          }
           $major = ($list.supported_majors | Measure-Object -Maximum).Maximum
           # One patch above the newest published DSA, so it installs over that one; the
           # release of the same version later replaces it.
           $tag = gh release list --repo $env:REPO --limit 50 --json tagName --jq '[.[].tagName | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))][0]'
           $parts = $tag.TrimStart('v').Split('.')
           $version = "$($parts[0]).$($parts[1]).$([int]$parts[2] + 1)"
-          Write-Host "the real installer is version $version (the newest published DSA is $tag), Android $major, kernel of $($newest.version)"
+          Write-Host "the real $env:DSA_ARCH installer is version $version (the newest published DSA is $tag), Android $major, kernel of $kernelFrom"
           "PUBLIC_KEY=$public" >> $env:GITHUB_ENV
           "ANDROID_MAJOR=$major" >> $env:GITHUB_ENV
           "REAL_VERSION=$version" >> $env:GITHUB_ENV
-          "KERNEL=$published\bzImage" >> $env:GITHUB_ENV
+          "KERNEL=$published\$env:KERNEL_NAME" >> $env:GITHUB_ENV
 
       - name: Build the real package and setup.exe
         run: >
-          dsa/host/platform/windows/installer/build.ps1 -Version $env:REAL_VERSION
+          dsa/host/platform/windows/installer/build.ps1 -Version $env:REAL_VERSION -Arch $env:DSA_ARCH
           -Kernel $env:KERNEL -GfxstreamBackend $env:GFXSTREAM_DLL -AndroidMajor $env:ANDROID_MAJOR
-          -ListUrl "https://github.com/$env:REPO/releases/download/images/images.json"
+          -ListUrl "https://github.com/$env:REPO/releases/download/images/images$env:LISTS.json"
           -TrustedKey $env:PUBLIC_KEY
-          -ProgramListUrl "https://github.com/$env:REPO/releases/download/images/program.json"
+          -ProgramListUrl "https://github.com/$env:REPO/releases/download/images/program$env:LISTS.json"
 
       # Nothing in it may be a test package's: not its name, not its stand-ins, not its lists.
       - name: Check that the package is the real one
@@ -1137,7 +1280,7 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "taking the files out of the package failed ($($p.ExitCode))" }
           $dll = Get-ChildItem -Recurse -File real-admin -Filter gfxstream_backend.dll | Select-Object -First 1
           if ((Get-FileHash $dll.FullName).Hash -ne (Get-FileHash $env:GFXSTREAM_DLL).Hash) { throw "the package's gfxstream_backend.dll is not the graphics build's" }
-          $kernel = Get-ChildItem -Recurse -File real-admin -Filter bzImage | Select-Object -First 1
+          $kernel = Get-ChildItem -Recurse -File real-admin -Filter $env:KERNEL_NAME | Select-Object -First 1
           if ((Get-FileHash $kernel.FullName).Hash -ne (Get-FileHash $env:KERNEL).Hash) { throw "the package's kernel is not the published one" }
           if (Get-ChildItem -Recurse -File real-admin -Filter *.vhdx) { throw "the real package carries a disk" }
           $config = Get-Content -Raw (Get-ChildItem -Recurse -File real-admin -Filter dsa-hostd.json | Select-Object -First 1).FullName | ConvertFrom-Json
@@ -1152,7 +1295,7 @@ jobs:
       - name: Keep the real installer
         uses: actions/upload-artifact@v4
         with:
-          name: installer-real-windows
+          name: installer-real-windows${{ matrix.lists }}
           path: |
             dsa/target/installer/dsa-*.msi
             dsa/target/installer/setup-*.exe
