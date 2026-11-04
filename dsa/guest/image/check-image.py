@@ -271,6 +271,23 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if f"VENDOR/apex/{apex}.apex" in names:
             problems.append(f"{apex} is still in the image and would serve its HAL too")
 
+    # DSA's GNSS HAL: without it the guest's location is Cuttlefish's made-up one, not the
+    # host's.
+    if "VENDOR/bin/hw/dsa-gnss" not in names:
+        problems.append("VENDOR/bin/hw/dsa-gnss is missing from the image")
+    if "VENDOR/etc/init/dsa-gnss.rc" not in names:
+        problems.append("VENDOR/etc/init/dsa-gnss.rc is missing, so init never starts dsa-gnss")
+    gnss_manifest = "VENDOR/etc/vintf/manifest/dsa-gnss.xml"
+    if gnss_manifest not in names:
+        problems.append(f"{gnss_manifest} is missing, so the GNSS HAL is not declared")
+    elif "<fqname>IGnss/default</fqname>" not in z.read(gnss_manifest).decode():
+        problems.append("dsa-gnss.xml does not declare IGnss/default")
+    if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-gnss" not in z.read("META/file_contexts.bin"):
+        problems.append("META/file_contexts.bin does not label dsa-gnss, so init refuses to start it")
+    for apex in ["com.google.cf.gnss", "com.android.hardware.gnss"]:
+        if f"VENDOR/apex/{apex}.apex" in names:
+            problems.append(f"{apex} is still in the image and would serve the GNSS HAL too")
+
     # DSA's codec HAL: without it every video decodes on the guest's processors.
     if "VENDOR/bin/hw/dsa-codec2" not in names:
         problems.append("VENDOR/bin/hw/dsa-codec2 is missing from the image")

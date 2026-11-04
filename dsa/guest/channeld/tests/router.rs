@@ -11,7 +11,8 @@ use dsa_guest_channeld::router::{
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
     AgentConnected, AppInfo, AuthProof, CloseTask, Envelope, GuestBoot, Hello, LaunchApp,
-    PowerHint, PowerHintKind, PowerState, Rect, TaskFrames, TaskRemoved, TaskUpdated,
+    LocationRequest, PowerHint, PowerHintKind, PowerState, Rect, TaskFrames, TaskRemoved,
+    TaskUpdated,
 };
 
 /// A client's callback that keeps what it is given, and can be made to die.
@@ -542,4 +543,59 @@ fn fr20_developer_mode_reaches_the_switch_and_no_client() {
 
     assert_eq!(*switched.lock().unwrap(), vec![true, false, true]);
     assert!(agent.frames().is_empty(), "the agent is not told");
+}
+
+const GNSS_HAL: Peer = Peer(700);
+
+fn location_request(active: bool, interval_ms: u32) -> Vec<u8> {
+    frame(Body::LocationRequest(LocationRequest {
+        active,
+        interval_ms,
+    }))
+}
+
+#[test]
+fn fr26_a_location_request_goes_to_the_host_alone() {
+    let (router, host) = router();
+    let composer = Arc::new(Recorder::default());
+    router.subscribe(COMPOSER, composer.clone());
+    router.subscribe(GNSS_HAL, Arc::new(Recorder::default()));
+    let wanted = location_request(true, 1000);
+    router.from_guest(GNSS_HAL, wanted.clone()).unwrap();
+    assert_eq!(apart_from_boot(&host), vec![wanted]);
+    assert!(composer.frames().is_empty());
+}
+
+#[test]
+fn fr26_a_host_that_connects_again_learns_that_a_location_is_wanted() {
+    let (router, host) = router();
+    router.subscribe(GNSS_HAL, Arc::new(Recorder::default()));
+    let wanted = location_request(true, 1000);
+    router.from_guest(GNSS_HAL, wanted.clone()).unwrap();
+    host.try_iter().count();
+    router.host_connected();
+    assert_eq!(apart_from_boot(&host), vec![wanted]);
+
+    // Once none is wanted, a host that connects again hears nothing of it.
+    router
+        .from_guest(GNSS_HAL, location_request(false, 0))
+        .unwrap();
+    host.try_iter().count();
+    router.host_connected();
+    assert!(apart_from_boot(&host).is_empty());
+}
+
+#[test]
+fn fr26_the_host_hears_no_location_is_wanted_when_the_gnss_hal_dies() {
+    let (router, host) = router();
+    let id = router.subscribe(GNSS_HAL, Arc::new(Recorder::default()));
+    router
+        .from_guest(GNSS_HAL, location_request(true, 1000))
+        .unwrap();
+    host.try_iter().count();
+
+    assert!(router.remove(id));
+    assert_eq!(apart_from_boot(&host), vec![location_request(false, 0)]);
+    router.host_connected();
+    assert!(apart_from_boot(&host).is_empty());
 }

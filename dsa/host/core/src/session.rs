@@ -120,6 +120,7 @@ use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{PointerAction, PointerEvent};
 use crate::keys::KeyEvent;
 use crate::links::{self, LinkGate};
+use crate::location::{LocationEvent, LocationHub, Wanted};
 use crate::memory::{GuestMemory, GuestMemoryReport};
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent, RateLimit};
 use crate::power::PowerState;
@@ -573,6 +574,8 @@ struct Shared {
     accessibility: Mutex<AccessibilityHub>,
     /// Who hears of the guest's power hints.
     power_hint_watchers: Mutex<Vec<Sender<GuestPower>>>,
+    /// Whether the guest wants the host's location, and who hears of it.
+    location: Mutex<LocationHub>,
     /// Whether the user's developer mode is on, which each agent that connects is told.
     developer_mode: AtomicBool,
     /// Who reads the guest's log, its recent records, and the dumps and diagnostics under way.
@@ -837,6 +840,14 @@ impl Shared {
             .retain(|watcher| watcher.send(event).is_ok());
     }
 
+    /// What the guest wants of the host's location now; every watcher hears a change.
+    fn set_location(&self, wanted: Wanted) {
+        self.location
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .set(wanted);
+    }
+
     fn publish_notification(&self, event: NotificationEvent) {
         self.notification_watchers
             .lock()
@@ -903,6 +914,7 @@ impl Session {
             last_package_query: AtomicU32::new(0),
             accessibility: Mutex::new(AccessibilityHub::default()),
             power_hint_watchers: Mutex::new(Vec::new()),
+            location: Mutex::new(LocationHub::default()),
             developer_mode: AtomicBool::new(false),
             logs: Mutex::new(LogHub::default()),
             boot_secret: Mutex::new(None),
@@ -1432,6 +1444,30 @@ impl Session {
             .unwrap_or_else(|e| e.into_inner())
             .push(tx);
         rx
+    }
+
+    /// Whether the guest wants the host's location, from what it wants now on. The watch
+    /// lasts across restarts of the guest, which wants no location while it is stopped.
+    pub fn watch_location(&self) -> Receiver<Wanted> {
+        self.shared
+            .location
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .watch()
+    }
+
+    /// Gives the guest what the host's location service reported, while the guest wants a
+    /// location. What comes after it stopped wanting one is dropped.
+    pub fn host_location(&self, event: LocationEvent) {
+        let wanted = self
+            .shared
+            .location
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .wanted();
+        if wanted.active {
+            send_quietly(&self.shared, &self.commands, event.to_control());
+        }
     }
 
     /// The guest's notifications from now on: each one posted or changed, and each one gone.
@@ -3776,6 +3812,9 @@ impl Worker {
                 Ok(hint) => self.shared.publish_power(GuestPower::Hint(hint)),
                 Err(why) => eprintln!("power: dropped a hint from the guest: {why}"),
             },
+            Some(Body::LocationRequest(request)) => {
+                self.shared.set_location(Wanted::from_control(&request))
+            }
             Some(Body::ScreenState(_))
             | Some(Body::PowerState(_))
             | Some(Body::HostMemory(_))
@@ -3819,7 +3858,9 @@ impl Worker {
             | Some(Body::VideoFrame(_))
             | Some(Body::VideoFlush(_))
             | Some(Body::VideoFlushed(_))
-            | Some(Body::VideoError(_)) => {
+            | Some(Body::VideoError(_))
+            | Some(Body::LocationStatus(_))
+            | Some(Body::LocationFix(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }
             Some(Body::LogRecords(_))
@@ -3864,6 +3905,8 @@ impl Worker {
         self.clear_notifications();
         // And the modes and boosts its power HAL asked for.
         self.shared.publish_power(GuestPower::Stopped);
+        // And its wish for the host's location, so the host's location service stops.
+        self.shared.set_location(Wanted::NONE);
         self.shared.set_guest_memory(None);
         // A dump or diagnostics under way gets no more from this guest.
         self.shared

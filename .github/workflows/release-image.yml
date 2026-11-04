@@ -223,6 +223,33 @@ jobs:
             .scratch/build-power/dsa-health
           if-no-files-found: error
 
+  gnss-hal:
+    name: Build the guest GNSS HAL
+    if: inputs.rebuild_images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-gnss for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/gnss/build.sh .scratch .scratch/build-gnss
+
+      - name: Keep the GNSS HAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-gnss-hal
+          path: .scratch/build-gnss/dsa-gnss
+          if-no-files-found: error
+
   agent:
     name: Build the guest agent
     if: inputs.rebuild_images
@@ -255,7 +282,7 @@ jobs:
 
   image:
     name: Make and publish the guest image (ubuntu-latest, Android ${{ matrix.android }})
-    needs: [kernel, guest-graphics, channeld, hwcomposer, power-hal, codec2, agent]
+    needs: [kernel, guest-graphics, channeld, hwcomposer, power-hal, gnss-hal, codec2, agent]
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -325,6 +352,12 @@ jobs:
           name: guest-codec2
           path: .scratch/codec2
 
+      - name: Download the guest GNSS HAL
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-gnss-hal
+          path: .scratch/gnss-hal
+
       - name: Download the guest agent
         uses: actions/download-artifact@v4
         with:
@@ -370,6 +403,10 @@ jobs:
             uv run dsa/graphics/check-guest-driver.py --executable ".scratch/power-hal/$hal" .scratch/aosp-inputs/*/*target_files*.zip
           done
 
+      - name: Check the GNSS HAL starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/gnss-hal/dsa-gnss .scratch/aosp-inputs/*/*target_files*.zip
+
       - name: Make the image
         run: >
           uv run dsa/guest/image/make-image.py --major ${{ matrix.android }}
@@ -379,6 +416,7 @@ jobs:
           --hwcomposer .scratch/hwcomposer/dsa-hwcomposer
           --codec2 .scratch/codec2/dsa-codec2
           --power-hal .scratch/power-hal
+          --gnss-hal .scratch/gnss-hal/dsa-gnss
           --agent .scratch/agent/DsaAgent.apk
           --aapt2 .scratch/build-tools/aapt2
 
