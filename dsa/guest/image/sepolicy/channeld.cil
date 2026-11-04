@@ -115,3 +115,10 @@
 ; daemon first makes the folder, which init leaves read only to it, writable to it.
 (allow dsa_channeld pstorefs (dir (search read open getattr setattr write remove_name)))
 (allow dsa_channeld pstorefs (file (read open getattr unlink)))
+
+; ARM app translation: the daemon writes the package image the host sends to
+; /data/vendor/dsa/arm-translation (dsa-arm-translation.rc makes the directory, as the system
+; user the daemon runs as) and removes it when the host says so. init mounts it at the next
+; boot (arm-translation.cil).
+(allow dsa_channeld vendor_data_file (dir (search read open getattr write add_name remove_name)))
+(allow dsa_channeld vendor_data_file (file (create read write open getattr setattr unlink rename)))

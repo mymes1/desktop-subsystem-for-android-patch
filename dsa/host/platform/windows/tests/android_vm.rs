@@ -118,7 +118,7 @@ fn fr27_an_arm64_boot_gets_a_folder_of_its_own_with_the_kernel_and_the_initrd() 
     config.kernel = image.join("Image");
     std::fs::write(&config.kernel, b"MZ kernel").unwrap();
 
-    let boot = prepare_boot(GuestArch::Arm64, &mut config, &secret(), &boot_dir, "dsa-7-0")
+    let boot = prepare_boot(GuestArch::Arm64, &mut config, &secret(), "", &boot_dir, "dsa-7-0")
         .expect("the boot folder is written");
     let folder = boot_dir.join("dsa-7-0");
     assert_eq!(config.kernel, folder.join("Image"));
@@ -156,7 +156,7 @@ fn fr27_an_x86_64_boot_keeps_its_initrd_beside_the_others() {
     std::fs::create_dir_all(&boot_dir).unwrap();
     let mut config = missing_files();
     let kernel = config.kernel.clone();
-    let boot = prepare_boot(GuestArch::X86_64, &mut config, &secret(), &boot_dir, "dsa-7-1")
+    let boot = prepare_boot(GuestArch::X86_64, &mut config, &secret(), "", &boot_dir, "dsa-7-1")
         .expect("the initrd is written");
     assert_eq!(config.kernel, kernel, "booted from where it is");
     assert_eq!(boot.initrd(), boot_dir.join("dsa-7-1.initrd"));

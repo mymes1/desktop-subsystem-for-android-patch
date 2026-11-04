@@ -45,6 +45,33 @@
                                  IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnLinksToggled" />
             </ui:CardControl>
 
+            <TextBlock Text="{l:Text ArmHeader.Text}" Style="{StaticResource SectionHeader}" />
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Apps24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text ArmCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{Binding ArmStatus, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                        <TextBlock Text="{Binding ArmAbis, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                        <TextBlock Text="{l:Text ArmCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ArmTranslationSwitch" IsChecked="{Binding ArmTranslation, Mode=OneWay}"
+                                 IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnArmTranslationToggled" />
+            </ui:CardControl>
+            <ui:InfoBar Title="{l:Text ArmRestartBar.Title}" Message="{l:Text ArmRestartBar.Message}"
+                        Severity="Informational" IsClosable="False"
+                        IsOpen="{Binding ArmRestartNeeded, Mode=OneWay}" />
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Delete24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text ArmRemoveCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text ArmRemoveCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:Button Content="{l:Text ArmRemoveButton.Content}" Click="OnRemoveArmTranslation"
+                           IsEnabled="{Binding CanRemoveArmTranslation, Mode=OneWay}" />
+            </ui:CardControl>
+
             <TextBlock Text="{l:Text DeveloperHeader.Text}" Style="{StaticResource SectionHeader}" />
             <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon DeveloperBoard24}">
                 <ui:CardControl.Header>

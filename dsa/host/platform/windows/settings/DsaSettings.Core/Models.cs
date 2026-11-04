@@ -42,7 +42,8 @@ public sealed record SettingsInfo(
     int AdbPort = SettingsInfo.DefaultAdbPort,
     bool InputTrace = false,
     bool ResizeTrace = false,
-    int MemoryLimitMb = 0)
+    int MemoryLimitMb = 0,
+    bool ArmTranslation = true)
 {
     /// <summary>The loopback port adb connects to in developer mode unless the user picks
     /// another.</summary>
@@ -59,6 +60,21 @@ public sealed record SettingsInfo(
         _ => RenderGpuKind.Named,
     };
 }
+
+/// <summary>An ARM translation package, as it describes itself.</summary>
+public sealed record ArmPackageInfo(string Name, string Version, string Library, string License);
+
+/// <summary>What the running Android says of ARM translation.</summary>
+public sealed record ArmGuestInfo(bool Installed, bool Active, string Abilist);
+
+/// <summary>Whether apps built only for 64-bit ARM can run: the package the user installed,
+/// the setting, what the running Android booted with, and whether a restart is due.</summary>
+public sealed record ArmTranslationInfo(
+    ArmPackageInfo? Package,
+    bool Enabled,
+    bool Supported,
+    ArmGuestInfo? Android,
+    bool RestartNeeded);
 
 /// <summary>What a host process does for the user's Android.</summary>
 public enum HostRole

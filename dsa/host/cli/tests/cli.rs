@@ -916,6 +916,79 @@ fn fr20_developer_mode_is_off_by_default_and_dsa_turns_it_on_with_the_adb_addres
 }
 
 #[test]
+fn fr25_dsa_arm_translation_commands_are_parsed() {
+    use dsa_cli::Change;
+    assert_eq!(
+        parse(&args("arm-translation")).unwrap().command,
+        Cmd::ArmTranslationStatus
+    );
+    assert_eq!(
+        parse(&args("arm-translation status --json")).unwrap().command,
+        Cmd::ArmTranslationStatus
+    );
+    let install = parse(&args("arm-translation install C:\\packages\\digitalis")).unwrap();
+    assert_eq!(install.command, Cmd::ArmTranslationInstall);
+    assert_eq!(
+        install.file.as_deref(),
+        Some(std::path::Path::new("C:\\packages\\digitalis"))
+    );
+    assert_eq!(
+        parse(&args("arm-translation remove")).unwrap().command,
+        Cmd::ArmTranslationRemove
+    );
+    assert!(parse(&args("arm-translation install")).is_err());
+    assert!(parse(&args("arm-translation enable")).is_err());
+    assert_eq!(
+        parse(&args("settings set arm-translation off")).unwrap().change,
+        Some(Change::ArmTranslation(false))
+    );
+}
+
+#[test]
+fn fr25_dsa_installs_reports_and_removes_an_arm_translation_package() {
+    let folder = std::env::temp_dir().join(format!("dsa-cli-arm-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("arm-translation.json"),
+        r#"{"name": "Translator", "version": "1.0", "library": "libtranslator.so",
+            "abis": ["arm64-v8a"], "license": "Apache-2.0"}"#,
+    )
+    .unwrap();
+    let mut image = vec![0u8; 8192];
+    image[1024..1028].copy_from_slice(&0xE0F5_E1E2u32.to_le_bytes());
+    std::fs::write(folder.join("system.img"), &image).unwrap();
+
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let none = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert!(none["package"].is_null());
+    assert_eq!(none["supported"], false);
+    assert_eq!(none["enabled"], true);
+
+    let installed = dsa(&endpoint, &format!("arm-translation install {} --json", folder.display()));
+    let installed = json_of(&installed);
+    assert_eq!(installed["package"]["name"], "Translator");
+    assert_eq!(installed["supported"], true);
+    assert_eq!(installed["android"]["installed"], true);
+    assert_eq!(installed["restart_needed"], true);
+    let text = stdout(&dsa(&endpoint, "arm-translation status"));
+    assert!(text.contains("ARM apps: supported by Translator 1.0 (Apache-2.0)"), "{text}");
+    assert!(text.contains("Restart Android"), "{text}");
+
+    let removed = json_of(&dsa(&endpoint, "arm-translation remove --json"));
+    assert!(removed["package"].is_null());
+    assert_eq!(removed["android"]["installed"], false);
+
+    // A folder that is not a package is refused before Android is asked for anything.
+    std::fs::write(folder.join("system.img"), vec![0u8; 8192]).unwrap();
+    let refused = dsa(&endpoint, &format!("arm-translation install {}", folder.display()));
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains("erofs"), "{}", stderr(&refused));
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
 fn fr17_dsa_status_json_reports_the_state_and_the_last_reason() {
     let ((listener, _, _), endpoint) = local_pair();
     let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));

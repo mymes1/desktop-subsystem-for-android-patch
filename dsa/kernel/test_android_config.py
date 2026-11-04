@@ -57,6 +57,14 @@ class AndroidKernelConfigTests(unittest.TestCase):
         ]:
             self.assertIn(option, config)
 
+    def test_fr25_an_arm_translation_package_can_be_mounted_and_run(self):
+        # init mounts the package's erofs image through a loop device, lays it over /system
+        # with overlayfs, and registers its translator for ARM64 executables in binfmt_misc.
+        config = CONFIG.read_text()
+        for option in ["CONFIG_EROFS_FS=y", "CONFIG_BLK_DEV_LOOP=y", "CONFIG_OVERLAY_FS=y",
+                       "CONFIG_BINFMT_MISC=y"]:
+            self.assertIn(option, config)
+
     def test_fr1_binder_device_nodes_are_created_for_android_init(self):
         config = CONFIG.read_text()
         self.assertIn('CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"', config)

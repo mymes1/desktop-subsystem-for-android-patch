@@ -2930,5 +2930,100 @@ class Arm64GuestTests(unittest.TestCase):
         self.assertIn("images-arm64.json", release)
 
 
+class ArmTranslationImageTests(unittest.TestCase):
+    """The image's half of ARM app translation: nothing is on unless the host says a package is."""
+
+    def _modify(self, root):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 2000 755 capabilities=0x0\n")
+            archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\nro.dalvik.vm.native.bridge=0\n")
+        modified = root / "modified.zip"
+        make_image.modify(source, modified)
+        return zipfile.ZipFile(modified)
+
+    def test_fr25_the_product_props_import_the_bridge_only_when_the_host_turns_it_on(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            product = archive.read("PRODUCT/etc/build.prop").decode().splitlines()
+            self.assertEqual(
+                product[-1],
+                "import /system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop",
+            )
+            self.assertEqual(product.count(product[-1]), 1)
+            on = archive.read("SYSTEM/etc/dsa/arm-translation-on.prop").decode().splitlines()
+            for prop in [
+                "ro.dalvik.vm.native.bridge=libdsa_native_bridge.so",
+                "ro.dalvik.vm.isa.arm64=x86_64",
+                "ro.enable.native.bridge.exec=1",
+                "ro.product.cpu.abilist=x86_64,arm64-v8a",
+                "ro.product.cpu.abilist64=x86_64,arm64-v8a",
+            ]:
+                self.assertIn(prop, on)
+            self.assertFalse(any("armeabi" in line for line in on), "the guest has no 32-bit zygote")
+            off = archive.read("SYSTEM/etc/dsa/arm-translation-off.prop").decode().splitlines()
+            self.assertEqual([line for line in off if line and not line.startswith("#")], [])
+            config = archive.read("META/filesystem_config.txt").decode()
+            for rule in make_image.ARM_TRANSLATION_FS_CONFIG:
+                self.assertIn(rule, config)
+
+    def test_fr25_the_package_is_mounted_over_system_only_when_the_host_turns_it_on(self):
+        rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
+        trigger = "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n"
+        before, after = rc.split(trigger, 1)
+        section, rest = after.split("\n\n", 1)
+        self.assertIn("mount erofs loop@/data/vendor/dsa/arm-translation/system.img /mnt/dsa-arm-translation ro",
+                      section)
+        for directory in ["lib64", "bin", "etc"]:
+            self.assertIn(
+                f"mount overlay overlay /system/{directory} ro nodev nosuid "
+                f"lowerdir=/mnt/dsa-arm-translation/system/{directory}:/system/{directory}",
+                section,
+            )
+        self.assertIn("/proc/sys/fs/binfmt_misc/register", section)
+        # Every mount waits for the host's word.
+        self.assertNotIn("mount ", before)
+        self.assertNotIn("mount ", rest)
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertEqual(archive.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(), rc)
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertIn("(allow init system_lib_file (dir (mounton)))", policy)
+            self.assertIn("(allow init binfmt_miscfs (file (write open getattr)))", policy)
+
+    def test_fr25_check_image_rejects_an_image_that_turns_a_bridge_on_by_itself(self):
+        check_script = Path(__file__).with_name("check-image.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            img_dir = root / "image"
+            img_dir.mkdir()
+            keys_dir = root / "keys"
+            keys_dir.mkdir()
+            (img_dir / "image.json").write_text(json.dumps({"files": {}, "kernel_cmdline": ""}))
+            (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            outputs = []
+            for complete in [False, True]:
+                with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
+                    archive.writestr("META/apkcerts.txt", "")
+                    bridge = "0" if complete else "libhoudini.so"
+                    archive.writestr("SYSTEM/build.prop", f"ro.debuggable=0\nro.dalvik.vm.native.bridge={bridge}\n")
+                    if complete:
+                        archive.writestr("SYSTEM/etc/init/dsa-arm-translation.rc",
+                                         "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n")
+                        archive.writestr("SYSTEM/etc/dsa/arm-translation-on.prop", "")
+                        archive.writestr("SYSTEM/etc/dsa/arm-translation-off.prop", "")
+                        archive.writestr("PRODUCT/etc/build.prop", make_image.add_arm_translation_import(""))
+                    else:
+                        archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\n")
+                outputs.append(subprocess.run(
+                    [sys.executable, str(check_script), str(img_dir), str(keys_dir)],
+                    capture_output=True, text=True,
+                ).stdout)
+        for problem in ["dsa-arm-translation.rc is missing", "does not end with the ARM translation import",
+                        "sets ro.dalvik.vm.native.bridge=libhoudini.so"]:
+            self.assertIn(problem, outputs[0])
+            self.assertNotIn(problem, outputs[1])
+
+
 if __name__ == "__main__":
     unittest.main()

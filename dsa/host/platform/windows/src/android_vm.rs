@@ -67,7 +67,13 @@ pub struct AndroidVmLauncher {
     memory_max: MemoryMax,
     /// The size the running VM started with, in MiB.
     memory_base: Option<u64>,
+    /// More bootconfig for each boot, beside the secret.
+    bootconfig: Option<BootconfigSource>,
 }
+
+/// Supplies more bootconfig lines (`key = "value"`) for each boot. See
+/// [`AndroidVmLauncher::with_bootconfig`].
+pub type BootconfigSource = Box<dyn FnMut() -> String + Send>;
 
 /// See [`AndroidVmLauncher::with_prerequisite`].
 pub type Prerequisite = Box<dyn FnMut() -> Option<String> + Send>;
@@ -85,11 +91,12 @@ impl Drop for TransientFile {
     }
 }
 
-/// Writes `initrd` with `secret` appended as bootconfig to `path`, readable only by the
-/// account the host runs as until the VM is let in.
+/// Writes `initrd` with `secret` and `more` appended as bootconfig to `path`, readable only
+/// by the account the host runs as until the VM is let in.
 fn write_boot_initrd(
     initrd: &Path,
     secret: &BootSecret,
+    more: &str,
     path: &Path,
 ) -> Result<TransientFile, String> {
     let image = std::fs::read(initrd)
@@ -99,7 +106,8 @@ fn write_boot_initrd(
             .map_err(|e| format!("could not create {}: {e}", folder.display()))?;
     }
     let file = TransientFile(path.to_path_buf());
-    std::fs::write(path, bootconfig::append(&image, &bootconfig_entry(secret)))
+    let text = format!("{}{more}", bootconfig_entry(secret));
+    std::fs::write(path, bootconfig::append(&image, &text))
         .map_err(|e| format!("could not write the boot's initrd {}: {e}", path.display()))?;
     Ok(file)
 }
@@ -150,6 +158,7 @@ pub fn prepare_boot(
     arch: GuestArch,
     config: &mut AndroidVmConfig,
     secret: &BootSecret,
+    more: &str,
     boot_dir: &Path,
     unique: &str,
 ) -> Result<BootFiles, String> {
@@ -185,7 +194,7 @@ pub fn prepare_boot(
     } else {
         boot_dir.join(format!("{unique}.initrd"))
     };
-    let written = write_boot_initrd(&initrd, secret, &initrd_path)?;
+    let written = write_boot_initrd(&initrd, secret, more, &initrd_path)?;
     config.initrd = Some(initrd_path);
     Ok(BootFiles {
         initrd: written,
@@ -217,6 +226,7 @@ impl AndroidVmLauncher {
             log_signs: Arc::new(Mutex::new(ConsoleSigns::default())),
             memory_max: MemoryMax::default(),
             memory_base: None,
+            bootconfig: None,
         }
     }
 
@@ -225,6 +235,14 @@ impl AndroidVmLauncher {
     /// guest is short of it.
     pub fn with_memory_max(mut self, max: MemoryMax) -> AndroidVmLauncher {
         self.memory_max = max;
+        self
+    }
+
+    /// Asks `source` at each start for more bootconfig lines, beside the boot's secret: what
+    /// the guest is to know before its init reads any property, such as whether to use an
+    /// installed ARM translation package.
+    pub fn with_bootconfig(mut self, source: BootconfigSource) -> AndroidVmLauncher {
+        self.bootconfig = Some(source);
         self
     }
 
@@ -338,10 +356,12 @@ impl GuestLauncher for AndroidVmLauncher {
         self.data_disk = Some(config.data_disk.clone());
         // Removed on every way out of this function: by then the VM has read them or will
         // never run.
+        let more = self.bootconfig.as_mut().map(|source| source()).unwrap_or_default();
         let boot = prepare_boot(
             GuestArch::HOST,
             &mut config,
             secret,
+            &more,
             &self.boot_dir,
             &crate::paths::unique_name(&self.id, ""),
         )?;

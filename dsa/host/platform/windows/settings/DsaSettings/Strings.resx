@@ -322,6 +322,48 @@
   <data name="LinksCard.Description" xml:space="preserve">
     <value>Off by default: a web link you tap in an Android app opens in your default browser in Windows. On, it opens in an Android app, as on a phone. A link an installed app has verified as its own opens in that app either way.</value>
   </data>
+  <data name="ArmHeader.Text" xml:space="preserve">
+    <value>ARM apps</value>
+  </data>
+  <data name="ArmCard.Header" xml:space="preserve">
+    <value>Run apps built only for ARM</value>
+  </data>
+  <data name="ArmCard.Description" xml:space="preserve">
+    <value>Many Android apps contain code only for ARM processors. They install and run here only with an ARM translation package, which you install with dsa arm-translation install. DSA does not include one yet. This switch decides whether Android uses the installed package; it applies from the next start of Android. Only 64-bit ARM apps (arm64-v8a) can run.</value>
+  </data>
+  <data name="ArmRestartBar.Title" xml:space="preserve">
+    <value>Restart Android to apply</value>
+  </data>
+  <data name="ArmRestartBar.Message" xml:space="preserve">
+    <value>Android started before this change. Stop and start Android for ARM apps to follow it.</value>
+  </data>
+  <data name="ArmRemoveCard.Header" xml:space="preserve">
+    <value>Remove the ARM translation package</value>
+  </data>
+  <data name="ArmRemoveCard.Description" xml:space="preserve">
+    <value>Deletes the package from your Android disk. ARM apps you installed stay, but do not run after Android restarts.</value>
+  </data>
+  <data name="ArmRemoveButton.Content" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Arm_NotSupported" xml:space="preserve">
+    <value>Not supported: no ARM translation package is installed.</value>
+  </data>
+  <data name="Arm_Supported" xml:space="preserve">
+    <value>Supported by {0} {1} ({2}).</value>
+  </data>
+  <data name="Arm_TurnedOff" xml:space="preserve">
+    <value>Not supported: {0} {1} is installed but turned off.</value>
+  </data>
+  <data name="Arm_NoLicense" xml:space="preserve">
+    <value>licence not given</value>
+  </data>
+  <data name="Arm_Abis" xml:space="preserve">
+    <value>Android installs apps for: {0}</value>
+  </data>
+  <data name="Arm_NotRunning" xml:space="preserve">
+    <value>Android is not running, so what it supports now is not known.</value>
+  </data>
   <data name="DeveloperHeader.Text" xml:space="preserve">
     <value>Developer</value>
   </data>

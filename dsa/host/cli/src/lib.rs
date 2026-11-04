@@ -20,6 +20,7 @@
 //! dsa widgets [list | add <provider> | remove <id> | watch]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
+//! dsa arm-translation [status | install <folder> | remove]
 //! ```
 //!
 //! It acts on the Android of the user who runs it: the service learns that user from the
@@ -124,6 +125,18 @@
 //! takes, on the host and inside Android. `dsa gpus` lists the GPUs of this machine, for
 //! choosing the render GPU.
 //!
+//! `dsa arm-translation status` (or `dsa arm-translation`) says whether apps built only for
+//! 64-bit ARM (`arm64-v8a`) can be installed and run: which translation package is installed,
+//! whether the `arm-translation` setting is on, and which ABIs the running Android installs apps
+//! for. `dsa arm-translation install <folder>` installs a translation package: a folder holding
+//! `arm-translation.json` and `system.img`, as `dsa/guest/arm-translation/make-package.py`
+//! makes one. Android is started first when it is not running. `dsa arm-translation remove`
+//! removes it. Both apply from the next start of Android, and say so. With `--json` each prints
+//! `package` (`name`, `version`, `library`, `abis`, `license`, or null), `enabled`,
+//! `supported` (a package is installed and on), `android` (`installed`, `active` and `abilist`,
+//! or null while Android is not running) and `restart_needed`. `dsa settings set
+//! arm-translation off` keeps the package but boots Android without it.
+//!
 //! `dsa status` says `Active` only once Android has finished booting and its agent is connected.
 //! An Android that runs but has taken too long is `Stalled`, and a line after the state says why
 //! and what to do; so does `problem` in the JSON. `dsa start --wait` fails on it.
@@ -149,7 +162,10 @@ use std::time::{Duration, Instant};
 use dsa_host_core::apk::{ApkFile, InstallKind, InstallOutcome, InstalledPackage};
 use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer};
 use dsa_host_core::files::{FileAction, FileTransfer};
-use dsa_host_core::host_api::{ClientError, HostApiClient, SettingsReport, Status, TaskList};
+use dsa_host_core::arm_translation;
+use dsa_host_core::host_api::{
+    ArmTranslationStatus, ClientError, HostApiClient, SettingsReport, Status, TaskList,
+};
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::session::SessionState;
 use dsa_host_core::tasks::Task;
@@ -162,7 +178,8 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      install <file.apk> [--progress] | apk-info <file.apk> | open <file> | share <file> | \
      tasks | settings [set <name> <value>] | memory | gpus | \
      widgets [list | add <provider> | remove <id> | watch] | \
-     logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip>> \
+     logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
+     arm-translation [status | install <folder> | remove]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
 pub mod logs;
@@ -204,6 +221,12 @@ pub enum Command {
     Logcat,
     /// Save the diagnostics archive to [`Invocation::output`].
     LogsCollect,
+    /// Say whether ARM apps can run, and with which translation package.
+    ArmTranslationStatus,
+    /// Install the ARM translation package in the folder [`Invocation::file`].
+    ArmTranslationInstall,
+    /// Remove the ARM translation package.
+    ArmTranslationRemove,
 }
 
 /// What `dsa widgets` does.
@@ -234,6 +257,7 @@ pub enum Change {
     MemoryLimit(u32),
     DeveloperMode(bool),
     AdbPort(u16),
+    ArmTranslation(bool),
 }
 
 impl Change {
@@ -254,6 +278,7 @@ impl Change {
             "resize-trace" => switch().map(Change::ResizeTrace),
             "memory-limit" => parse_memory_limit(value).map(Change::MemoryLimit),
             "developer-mode" => switch().map(Change::DeveloperMode),
+            "arm-translation" => switch().map(Change::ArmTranslation),
             "adb-port" => match value.parse::<u16>() {
                 Ok(port) if port > 0 => Ok(Change::AdbPort(port)),
                 _ => Err(format!(
@@ -263,7 +288,7 @@ impl Change {
             _ => Err(format!(
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, image-updates, input-trace, \
-                 resize-trace, memory-limit, developer-mode and adb-port"
+                 resize-trace, memory-limit, developer-mode, adb-port and arm-translation"
             )),
         }
     }
@@ -406,6 +431,26 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 Some("collect") => command = Some(Command::LogsCollect),
                 _ => return Err(format!("dsa logs takes collect -o <file.zip>\n{USAGE}")),
             },
+            "arm-translation" if command.is_none() => {
+                command = Some(match args.next().map(String::as_str) {
+                    None | Some("status") => Command::ArmTranslationStatus,
+                    Some("install") => {
+                        let folder = args.next().ok_or(
+                            "dsa arm-translation install needs the folder of the translation \
+                             package",
+                        )?;
+                        file = Some(std::path::PathBuf::from(folder));
+                        Command::ArmTranslationInstall
+                    }
+                    Some("remove") => Command::ArmTranslationRemove,
+                    Some(other) => {
+                        return Err(format!(
+                            "dsa arm-translation takes status, install <folder> or remove, not \
+                             {other:?}\n{USAGE}"
+                        ))
+                    }
+                });
+            }
             "-d" if command == Some(Command::Logcat) => dump = true,
             "-b" if command == Some(Command::Logcat) => {
                 let names = args
@@ -878,6 +923,7 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "developer_mode": report.settings.developer_mode,
         "adb_port": report.settings.adb_port,
         "adb_address": adb_address(&report.settings),
+        "arm_translation": report.settings.arm_translation,
         "program_updates_available": report.facts.program_updates_available,
         "image_updates_available": report.facts.image_updates_available,
         "version": report.facts.version,
@@ -944,6 +990,10 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         } else {
             format!("Developer mode: off (adb port {})", settings.adb_port)
         },
+        format!(
+            "ARM translation: {} (dsa arm-translation status says whether a package is installed)",
+            on_off(settings.arm_translation)
+        ),
         format!("Service version: {}", facts.version),
     ];
     if let Some(version) = &facts.android_version {
@@ -1068,6 +1118,7 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::MemoryLimit(mb) => wanted.memory_limit_mb = *mb,
             Change::DeveloperMode(on) => wanted.developer_mode = *on,
             Change::AdbPort(port) => wanted.adb_port = *port,
+            Change::ArmTranslation(on) => wanted.arm_translation = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
     }
@@ -1309,6 +1360,112 @@ fn install(
             outcome.package_name.as_deref().unwrap_or("the app")
         )
     })
+}
+
+/// `dsa arm-translation install`: checks the package before anything starts, starts Android
+/// when it is not running, and sends the package's image.
+fn install_arm_translation(
+    invocation: &Invocation,
+    mut client: HostApiClient,
+    connector: &mut dyn Connector,
+) -> Result<String, String> {
+    let folder = invocation
+        .file
+        .as_deref()
+        .unwrap_or(std::path::Path::new(""));
+    let opened = arm_translation::open_package(folder)?;
+    let sha256 = arm_translation::file_sha256(&opened.image)?;
+    #[cfg(windows)]
+    if invocation.endpoint.is_none() {
+        ensure_window_manager()?;
+    }
+    client
+        .ensure_running(invocation.timeout, Duration::from_millis(250), |_| {})
+        .map_err(|e| format!("Android did not start: {e}"))?;
+    drop(client);
+    let mut image = std::fs::File::open(&opened.image)
+        .map_err(|e| format!("{} cannot be read: {e}", opened.image.display()))?;
+    let status = connect(connector, None, false, Duration::from_secs(10))?
+        .install_arm_translation(&opened.package, opened.size, &sha256, &mut image)
+        .map_err(|e| format!("the ARM translation package was not installed: {e}"))?;
+    let done = format!("Installed {} {}", opened.package.name, opened.package.version);
+    Ok(show_arm_translation(invocation, &status, Some(&done)))
+}
+
+/// Where ARM translation stands as one JSON object.
+pub fn arm_translation_json(status: &ArmTranslationStatus) -> Value {
+    json!({
+        "package": status.package.as_ref().map(|package| json!({
+            "name": package.name,
+            "version": package.version,
+            "library": package.library,
+            "abis": package.abis,
+            "license": package.license,
+        })),
+        "enabled": status.enabled,
+        "supported": status.package.is_some() && status.enabled,
+        "android": status.guest.as_ref().map(|guest| json!({
+            "installed": guest.installed,
+            "active": guest.active,
+            "abilist": guest.abilist,
+        })),
+        "restart_needed": status.restart_needed,
+    })
+}
+
+/// Where ARM translation stands, one fact per line, after `done` when an action was taken.
+pub fn describe_arm_translation(status: &ArmTranslationStatus, done: Option<&str>) -> String {
+    let mut lines: Vec<String> = done.map(str::to_string).into_iter().collect();
+    lines.push(match (&status.package, status.enabled) {
+        (None, _) => "ARM apps: not supported (no translation package is installed)".to_string(),
+        (Some(package), true) => format!(
+            "ARM apps: supported by {} {} ({})",
+            package.name,
+            package.version,
+            if package.license.is_empty() {
+                "licence not given"
+            } else {
+                &package.license
+            }
+        ),
+        (Some(package), false) => format!(
+            "ARM apps: not supported ({} {} is installed but turned off; dsa settings set \
+             arm-translation on)",
+            package.name, package.version
+        ),
+    });
+    match &status.guest {
+        Some(guest) => lines.push(format!(
+            "Android installs apps for: {}{}",
+            if guest.abilist.is_empty() {
+                "(not known)"
+            } else {
+                &guest.abilist
+            },
+            if guest.active {
+                " (translation is on in this boot)"
+            } else {
+                ""
+            }
+        )),
+        None => lines.push("Android is not running".to_string()),
+    }
+    if status.restart_needed {
+        lines.push("Restart Android to apply this (dsa stop --wait, then dsa start)".to_string());
+    }
+    lines.join("\n")
+}
+
+fn show_arm_translation(
+    invocation: &Invocation,
+    status: &ArmTranslationStatus,
+    done: Option<&str>,
+) -> String {
+    if invocation.json {
+        arm_translation_json(status).to_string()
+    } else {
+        describe_arm_translation(status, done)
+    }
 }
 
 /// The APK as it is read to be sent, saying how much of it has gone.
@@ -1839,6 +1996,18 @@ pub fn run_with_starter(
             return Ok(format!("Stopping {package} and giving its memory back"));
         }
         Command::Install => return install(invocation, client, connector),
+        Command::ArmTranslationStatus => {
+            let status = client.arm_translation().map_err(|e| e.to_string())?;
+            return Ok(show_arm_translation(invocation, &status, None));
+        }
+        Command::ArmTranslationInstall => {
+            return install_arm_translation(invocation, client, connector);
+        }
+        Command::ArmTranslationRemove => {
+            let status = client.remove_arm_translation().map_err(|e| e.to_string())?;
+            let done = "Removed the ARM translation package";
+            return Ok(show_arm_translation(invocation, &status, Some(done)));
+        }
         Command::Widgets => return widgets(invocation, client, connector),
         Command::Open | Command::Share => {
             return open_file(invocation, client, connector);
