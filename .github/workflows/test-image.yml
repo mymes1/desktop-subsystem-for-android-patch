@@ -14,6 +14,7 @@ on:
       - "dsa/kernel/**"
       - "dsa/guest/channeld/**"
       - "dsa/guest/hwcomposer/**"
+      - "dsa/guest/audio/**"
       - "dsa/guest/aidl/**"
       - "dsa/guest/transport/**"
       - "dsa/guest/agent/**"
@@ -21,6 +22,7 @@ on:
       - "dsa/protocol/**"
       - ".github/workflows/test-image.yml"
       - "scripts/tests/image-graphics-workflow.test.sh"
+      - "scripts/tests/image-audio-workflow.test.sh"
   workflow_dispatch:
     inputs:
       keep_disk:
@@ -151,6 +153,39 @@ jobs:
           path: .scratch/build-hwcomposer/dsa-hwcomposer
           if-no-files-found: error
 
+  audio:
+    name: Build the guest audio module
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-audio for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/audio/build.sh .scratch .scratch/build-audio
+
+      - name: Verify the binary links only the platform's C libraries
+        run: |
+          target=".scratch/build-audio/dsa-audio"
+          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
+
+      - name: Keep the audio module
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-audio
+          path: .scratch/build-audio/dsa-audio
+          if-no-files-found: error
+
   agent:
     name: Build the guest agent
     runs-on: ubuntu-latest
@@ -181,7 +216,7 @@ jobs:
 
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }})
-    needs: [guest-graphics, channeld, hwcomposer, agent]
+    needs: [guest-graphics, channeld, hwcomposer, audio, agent]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -275,6 +310,16 @@ jobs:
         run: |
           uv run dsa/graphics/check-guest-driver.py --executable .scratch/hwcomposer/dsa-hwcomposer .scratch/aosp-inputs/*/*target_files*.zip
 
+      - name: Download the guest audio module
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-audio
+          path: .scratch/audio
+
+      - name: Check the audio module starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/audio/dsa-audio .scratch/aosp-inputs/*/*target_files*.zip
+
       - name: Download the guest agent
         uses: actions/download-artifact@v4
         with:
@@ -287,6 +332,7 @@ jobs:
           args+=(--graphics-dir .scratch/guest-graphics --graphics-library .scratch/guest-graphics/libOpenglSystemCommon.so)
           args+=(--channeld .scratch/channeld/dsa-channeld)
           args+=(--hwcomposer .scratch/hwcomposer/dsa-hwcomposer)
+          args+=(--audio .scratch/audio/dsa-audio)
           args+=(--agent .scratch/agent/DsaAgent.apk)
           args+=(--aapt2 .scratch/build-tools/aapt2)
           uv run dsa/guest/image/make-image.py "${args[@]}"
@@ -313,29 +359,3 @@ jobs:
             dsa/target/image/*/image.json
             dsa/target/image/*/initrd.img
           if-no-files-found: error
-
-
-  hal-survey:
-    name: Fetch the HAL sources (temporary)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fetch
-        shell: bash {0}
-        run: |
-          rev=android-16.0.0_r1
-          get() { # repo dir paths...
-            local repo=$1 dir=$2; shift 2
-            git clone -q --filter=blob:none --no-checkout https://android.googlesource.com/$repo $dir
-            git -C $dir sparse-checkout set --no-cone "$@"
-            git -C $dir fetch -q --depth=1 --no-tags origin refs/tags/$rev
-            git -C $dir checkout -q FETCH_HEAD
-          }
-          mkdir src; cd src
-          get platform/hardware/interfaces hi 'audio/aidl/aidl_api/' 'audio/aidl/Android.bp' 'audio/aidl/default/*.cpp' 'audio/aidl/default/include/core-impl/' 'audio/aidl/default/main.cpp' 'common/aidl/aidl_api/' 'common/fmq/aidl/aidl_api/' 'media/c2/aidl/aidl_api/' 'media/c2/aidl/Android.bp' 'health/aidl/aidl_api/' 'health/aidl/Android.bp' 'health/aidl/default/' 'power/aidl/aidl_api/' 'power/aidl/Android.bp' 'graphics/common/aidl/aidl_api/android.hardware.graphics.common/6/' 'media/bufferpool/aidl/aidl_api/' 'media/bufferpool/aidl/Android.bp'
-          get platform/system/hardware/interfaces shi 'media/aidl_api/' 'media/Android.bp'
-          get platform/system/libfmq fmq 'include/fmq/' 'base/fmq/' 'EventFlag.cpp'
-          get platform/frameworks/av av 'media/libaudiohal/impl/StreamHalAidl.cpp' 'media/libaudiohal/impl/StreamHalAidl.h' 'media/libaudiohal/impl/DevicesFactoryHalAidl.cpp' 'media/libaudiohal/impl/DeviceHalAidl.cpp' 'media/libaudiohal/impl/Hal2AidlMapper.cpp' 'media/libaudiohal/impl/EffectsFactoryHalAidl.cpp' 'media/libaudiohal/FactoryHal.cpp' 'services/audiopolicy/engine/common/src/EngineBase.cpp' 'services/audiopolicy/engine/config/src/EngineConfig.cpp' 'services/audiopolicy/engine/config/src/EngineDefaultConfig.h' 'services/audiopolicy/common/managerdefinitions/src/AudioPolicyConfig.cpp' 'services/audiopolicy/service/AudioPolicyService.cpp' 'media/codec2/hal/aidl/' 'media/codec2/hal/services/' 'media/codec2/vndk/include/' 'media/codec2/core/include/' 'media/libstagefright/data/' 'media/codec2/hal/client/'
-          cd ..
-          tar --exclude=.git -cJf hal-src.tar.xz src
-          ls -la hal-src.tar.xz; sha256sum hal-src.tar.xz
-          echo SRC-BEGIN; base64 -w0 hal-src.tar.xz; echo; echo SRC-END

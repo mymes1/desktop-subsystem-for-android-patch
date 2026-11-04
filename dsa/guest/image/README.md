@@ -19,16 +19,17 @@ them with the project's keys.
 | `dsa-memory.rc` | Turns on the zram swap and tunes the kernel for it |
 | `dsa-channel-manifest.xml` | The vendor manifest entry declaring the daemon's binder service |
 | `dsa-trace.rc` | Turns on main thread timing in every app when the input trace is on |
-| `sepolicy/` | Policy added to the image: vsock for graphics, the control daemon's domain and binder service, the memory controls (`memory.cil`), and what the agent needs to force Doze and set the battery (`agent.cil`) |
+| `sepolicy/` | Policy added to the image: vsock for graphics, the control daemon's domain and binder service, the memory controls (`memory.cil`), the audio module's socket to the host (`audio.cil`), and what the agent needs to force Doze and set the battery (`agent.cil`) |
 
 ```
 dsa/guest/image/fetch.sh 17
 dsa/guest/image/make-keys.sh .scratch/image-keys
 ANDROID_NDK_HOME=/path/to/ndk dsa/guest/channeld/build-android.sh .scratch/channeld
 dsa/guest/hwcomposer/build.sh .scratch .scratch/build-hwcomposer
+dsa/guest/audio/build.sh .scratch .scratch/build-audio
 (cd dsa/guest/agent && ./gradlew assembleRelease)
 uv run dsa/guest/image/make-image.py --major 17 --keys .scratch/image-keys --channeld .scratch/channeld/dsa-channeld \
-    --hwcomposer .scratch/build-hwcomposer/dsa-hwcomposer \
+    --hwcomposer .scratch/build-hwcomposer/dsa-hwcomposer --audio .scratch/build-audio/dsa-audio \
     --agent dsa/guest/agent/build/outputs/apk/release/dsa-agent-release-unsigned.apk
 uv run dsa/guest/image/check-image.py dsa/target/image/17.0.0-16373615 .scratch/image-keys
 ```
@@ -101,6 +102,12 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   each task's frames rather than one picture of the whole display. The kernel command line
   sets its display (`androidboot.dsa.display_width`, `_height`, `_dpi`) and drops the
   settings only Cuttlefish's composer read.
+- DSA's primary audio module (`/vendor/bin/hw/dsa-audio`, from `dsa/guest/audio/`) is added when
+  `--audio` names it. It serves `IModule/default` in the audio HAL's domain and sends the
+  guest's sound to the host, which plays it on the user's default output device. The primary
+  module leaves `audio_policy_configuration.xml`, so the image's own audio service no longer
+  makes one that plays nowhere, and keeps the remote submix and Bluetooth modules.
+  `sepolicy/audio.cil` lets the audio HAL reach the host over vsock.
 - The agent (`dsa/guest/agent/`) is added as a privileged app in
   `/system_ext/priv-app/DsaAgent/`, with its privileged permission list, and is signed with
   the platform key. It tells the host about each app task, so each gets its own window.

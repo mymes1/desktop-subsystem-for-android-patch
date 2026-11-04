@@ -618,6 +618,27 @@ HWCOMPOSER_MANIFEST = "VENDOR/etc/vintf/manifest/dsa-hwcomposer.xml"
 # The vendor policy's composer domain: init starts the binary in it, and it may serve the
 # composer HAL, reach the host renderer over vsock and call dsa-channeld.
 HWCOMPOSER_CONTEXT = "/vendor/bin/hw/dsa-hwcomposer u:object_r:hal_graphics_composer_default_exec:s0"
+# DSA's primary audio module (dsa/guest/audio), which plays the guest's sound on the host's
+# default output device. It runs in the audio HAL's domain and serves IModule/default, which
+# the image's audio APEX already declares. That APEX's service makes a module for each one
+# its policy file lists, so the primary one leaves the file and the service keeps the rest
+# (remote submix, Bluetooth), the configuration and the effects.
+AUDIO_DIR = REPO / "dsa/guest/audio"
+AUDIO_BINARY = "VENDOR/bin/hw/dsa-audio"
+AUDIO_RC = "VENDOR/etc/init/dsa-audio.rc"
+AUDIO_CONTEXT = "/vendor/bin/hw/dsa-audio u:object_r:hal_audio_default_exec:s0"
+AUDIO_POLICY_CONFIG = re.compile(r"^VENDOR/etc/audio_policy_configuration[^/]*\.xml$")
+PRIMARY_AUDIO_INCLUDE = re.compile(
+    r'[ \t]*(<!--[^>]*Primary Audio HAL[^>]*-->[ \t]*\n[ \t]*)?'
+    r'<xi:include href="primary_audio_policy_configuration\.xml"\s*/>[ \t]*\n?'
+)
+
+
+def without_primary_audio_module(text):
+    """The audio policy file without its primary module, which dsa-audio serves instead."""
+    return PRIMARY_AUDIO_INCLUDE.sub("", text)
+
+
 CUTTLEFISH_COMPOSER_APEXES = [
     "com.android.hardware.graphics.composer.ranchu",
     "com.android.hardware.graphics.composer.drm_hwcomposer",
@@ -704,7 +725,7 @@ AGENT_FS_CONFIG = [
 CONSOLE_UEVENTD_LINE = "/dev/ttyS0 0660 system logd"
 
 
-def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False):
+def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, audio=False):
     """Adds same_process_hal_file contexts for guest graphics libraries if not present, and
     opens the DRM cards to every graphics client.
 
@@ -727,6 +748,8 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False):
         entries.append((r"/vendor/bin/dsa-channeld", CHANNELD_CONTEXT))
     if hwcomposer:
         entries.append((r"/vendor/bin/hw/dsa-hwcomposer", HWCOMPOSER_CONTEXT))
+    if audio:
+        entries.append((r"/vendor/bin/hw/dsa-audio", AUDIO_CONTEXT))
     # Usually there already, as /(vendor|system/vendor)/overlay(/.*)?.
     entries.append(("overlay(/.*)?", VENDOR_OVERLAY_CONTEXT))
     for pattern, rule in entries:
@@ -791,7 +814,7 @@ def add_filesystem_config(fs_config_text, rules):
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=False):
+def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=False, audio=False):
     """Adds filesystem configuration entries for the files DSA adds to vendor if not present."""
     lines = fs_config_text.splitlines()
     entries = [
@@ -820,6 +843,11 @@ def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=F
             ("vendor/etc/vintf/manifest/dsa-hwcomposer.xml",
              "vendor/etc/vintf/manifest/dsa-hwcomposer.xml 0 0 644 capabilities=0x0"),
         ]
+    if audio:
+        entries += [
+            ("vendor/bin/hw/dsa-audio", "vendor/bin/hw/dsa-audio 0 2000 755 capabilities=0x0"),
+            ("vendor/etc/init/dsa-audio.rc", "vendor/etc/init/dsa-audio.rc 0 0 644 capabilities=0x0"),
+        ]
     for path, rule in entries:
         if not any(line.startswith(path + " ") for line in lines):
             lines.append(rule)
@@ -834,6 +862,8 @@ SEPOLICY_FRAGMENT = HERE / "sepolicy/graphics-vsock.cil"
 CHANNELD_POLICY = HERE / "sepolicy/channeld.cil"
 AGENT_POLICY = HERE / "sepolicy/agent.cil"
 MEMORY_POLICY = HERE / "sepolicy/memory.cil"
+AUDIO_POLICY = HERE / "sepolicy/audio.cil"
+
 
 
 def narrow_vsock_neverallows(text):
@@ -964,12 +994,13 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 
 
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
-           agent=None, hwcomposer=None, framework_overlay=None):
+           agent=None, hwcomposer=None, framework_overlay=None, audio=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
     composer in place of Cuttlefish's when `hwcomposer` names one, and the framework
-    overlay when `framework_overlay` names its APK."""
+    overlay when `framework_overlay` names its APK, and DSA's primary audio module when `audio`
+    names one."""
     fstab = (HERE / "fstab.dsa").read_bytes()
     console_logcat = (HERE / "console-logcat.rc").read_bytes()
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
@@ -979,6 +1010,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     hwcomposer_payload = Path(hwcomposer).read_bytes() if hwcomposer else None
     overlay_payload = Path(framework_overlay).read_bytes() if framework_overlay else None
     has_hwcomposer = hwcomposer_payload is not None
+    audio_payload = Path(audio).read_bytes() if audio else None
+    has_audio = audio_payload is not None
     replaced_graphics_payload = False
     replaced_vulkan_payload = False
     kept_modules = re.compile(r"^(VENDOR_BOOT/RAMDISK|VENDOR_DLKM|SYSTEM_DLKM)/lib/modules/.*\.ko$")
@@ -1012,6 +1045,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             if agent_payload is not None:
                 # What the agent needs to put the guest into Doze and set its battery.
                 plat_patched += "\n" + AGENT_POLICY.read_text()
+            if has_audio:
+                # The audio module's socket to the host.
+                plat_patched += "\n" + AUDIO_POLICY.read_text()
             new_plat_bytes = plat_patched.encode()
             cil_map["SYSTEM/etc/selinux/plat_sepolicy.cil"] = new_plat_bytes
 
@@ -1042,7 +1078,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         for name in PARTITION_FILE_CONTEXTS:
             text = zin.read(name).decode() if name in names else ""
             if name == "VENDOR/etc/selinux/vendor_file_contexts":
-                text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer)
+                text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer, has_audio)
             file_contexts.append(text if text.endswith("\n") or not text else text + "\n")
         compiled_file_contexts = compile_file_contexts(otatools, "".join(file_contexts))
 
@@ -1118,7 +1154,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                 prefix = directory.lower()
                             text += f"{prefix}fstab.dsa 0 0 644 capabilities=0x0\n"
                     if name == "META/vendor_filesystem_config.txt":
-                        text = update_vendor_filesystem_config(text, channeld_payload is not None, has_hwcomposer)
+                        text = update_vendor_filesystem_config(text, channeld_payload is not None, has_hwcomposer,
+                                                               has_audio)
                         if overlay_payload is not None:
                             text = add_filesystem_config(text, FRAMEWORK_OVERLAY_FS_CONFIG)
                     data = text.encode()
@@ -1126,9 +1163,11 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = data.rstrip(b"\n") + b"\n" + CONSOLE_UEVENTD_LINE.encode() + b"\n"
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
-                                                       has_hwcomposer).encode()
+                                                       has_hwcomposer, has_audio).encode()
                 elif name == VENDOR_SERVICE_CONTEXTS and channeld_payload is not None:
                     data = update_vendor_service_contexts(data.decode()).encode()
+                elif has_audio and AUDIO_POLICY_CONFIG.match(name):
+                    data = without_primary_audio_module(data.decode()).encode()
                 elif name == VENDOR_PROPERTY_CONTEXTS:
                     data = update_vendor_property_contexts(data.decode()).encode()
             info.compress_type = zipfile.ZIP_STORED
@@ -1145,6 +1184,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(HWCOMPOSER_BINARY, hwcomposer_payload)
             zout.writestr(HWCOMPOSER_RC, (HWCOMPOSER_DIR / "dsa-hwcomposer.rc").read_bytes())
             zout.writestr(HWCOMPOSER_MANIFEST, (HWCOMPOSER_DIR / "dsa-hwcomposer.xml").read_bytes())
+        if has_audio:
+            zout.writestr(AUDIO_BINARY, audio_payload)
+            zout.writestr(AUDIO_RC, (AUDIO_DIR / "dsa-audio.rc").read_bytes())
         if channeld_payload is not None:
             zout.writestr(CHANNELD_BINARY, channeld_payload)
             zout.writestr(CHANNELD_RC, (HERE / "dsa-channeld.rc").read_bytes())
@@ -1162,7 +1204,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if "VENDOR/etc/selinux/vendor_file_contexts" not in names:
             zout.writestr(
                 "VENDOR/etc/selinux/vendor_file_contexts",
-                update_vendor_file_contexts("", channeld_payload is not None, has_hwcomposer).encode(),
+                update_vendor_file_contexts("", channeld_payload is not None, has_hwcomposer, has_audio).encode(),
             )
     if graphics_payload is not None and not replaced_graphics_payload:
         dest.unlink(missing_ok=True)
@@ -1405,6 +1447,9 @@ def main():
     parser.add_argument("--hwcomposer", type=Path,
                         help="DSA's composer HAL (dsa-hwcomposer) built for the guest; it replaces "
                              "Cuttlefish's, and sends the host each task's frames")
+    parser.add_argument("--audio", type=Path,
+                        help="DSA's primary audio module (dsa-audio) built for the guest; it plays the "
+                             "guest's sound on the host's default output device")
     parser.add_argument("--agent", type=Path,
                         help="the guest agent's APK (DsaAgent), unsigned or signed with any key; "
                         "the image signs it with the platform key")
@@ -1459,7 +1504,7 @@ def main():
 
     modified = work / "modified.zip"
     modify(target_files, modified, graphics_library=graphics_library, vulkan_driver=vulkan_driver,
-           otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
+           otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer, audio=args.audio,
            framework_overlay=framework_overlay)
 
     signed = work / "signed.zip"

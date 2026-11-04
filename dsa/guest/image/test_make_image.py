@@ -944,6 +944,71 @@ class ImageLayoutTests(unittest.TestCase):
                         archive.read(contexts).decode(),
                     )
 
+    def _audio_source(self, root):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n(typeattribute hal_audio_server)\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+            archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr("META/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr(
+                "VENDOR/etc/audio_policy_configuration.xml",
+                '<audioPolicyConfiguration version="7.0" xmlns:xi="http://www.w3.org/2001/XInclude">\n'
+                "    <modules>\n"
+                "        <!-- Primary Audio HAL -->\n"
+                '        <xi:include href="primary_audio_policy_configuration.xml"/>\n'
+                '        <xi:include href="r_submix_audio_policy_configuration.xml"/>\n'
+                "    </modules>\n"
+                "</audioPolicyConfiguration>\n",
+            )
+        return source
+
+    def test_pr4_the_dsa_audio_module_serves_the_primary_output(self):
+        # The image's audio service makes a module for each one its policy file lists, and
+        # makes the primary one (IModule/default) play nowhere on Hyper-V. With dsa-audio, the
+        # primary module leaves that file, so the service keeps the remote submix and
+        # Bluetooth modules and dsa-audio alone registers IModule/default.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self._audio_source(root)
+            audio = root / "dsa-audio"
+            audio.write_bytes(b"\x7fELF audio")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, audio=audio)
+
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(archive.read("VENDOR/bin/hw/dsa-audio"), b"\x7fELF audio")
+                rc = archive.read("VENDOR/etc/init/dsa-audio.rc").decode()
+                self.assertIn("service vendor.dsa-audio /vendor/bin/hw/dsa-audio", rc)
+                self.assertIn("user audioserver", rc)
+                self.assertIn("onrestart restart audioserver", rc)
+                policy = archive.read("VENDOR/etc/audio_policy_configuration.xml").decode()
+                self.assertNotIn("primary_audio_policy_configuration.xml", policy)
+                self.assertIn("r_submix_audio_policy_configuration.xml", policy)
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+                self.assertIn("vendor/bin/hw/dsa-audio 0 2000 755 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/init/dsa-audio.rc 0 0 644 capabilities=0x0", fs_config)
+                for contexts in ["VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"]:
+                    self.assertIn(
+                        "/vendor/bin/hw/dsa-audio u:object_r:hal_audio_default_exec:s0",
+                        archive.read(contexts).decode(),
+                    )
+                plat = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertIn("(allow hal_audio_server self (vsock_socket", plat)
+
+    def test_pr4_without_dsa_audio_the_image_keeps_its_primary_module(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self._audio_source(root)
+            modified = root / "modified.zip"
+            make_image.modify(source, modified)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertNotIn("VENDOR/bin/hw/dsa-audio", archive.namelist())
+                policy = archive.read("VENDOR/etc/audio_policy_configuration.xml").decode()
+                self.assertIn("primary_audio_policy_configuration.xml", policy)
+                plat = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertNotIn("(allow hal_audio_server self (vsock_socket", plat)
+
     def test_fr3_without_the_dsa_hwcomposer_the_cuttlefish_composer_stays(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
