@@ -1237,22 +1237,25 @@ mod win {
     }
 }
 
-/// Decodes widget frames with the Windows Imaging Component.
+/// Decodes widget frames, and the icons of the apps that run in the background, with the
+/// Windows Imaging Component.
 #[cfg(windows)]
-mod png {
+pub(crate) mod png {
+    use windows::core::GUID;
     use windows::Win32::Graphics::Imaging::{
-        CLSID_WICImagingFactory, GUID_WICPixelFormat32bppPBGRA, IWICBitmapSource,
-        IWICImagingFactory, IWICPalette, WICBitmapDitherTypeNone, WICBitmapInterpolationModeFant,
-        WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
+        CLSID_WICImagingFactory, GUID_WICPixelFormat32bppBGRA, GUID_WICPixelFormat32bppPBGRA,
+        IWICBitmapSource, IWICImagingFactory, IWICPalette, WICBitmapDitherTypeNone,
+        WICBitmapInterpolationModeFant, WICBitmapPaletteTypeCustom,
+        WICDecodeMetadataCacheOnDemand,
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
 
-    pub(super) struct Decoder {
+    pub(crate) struct Decoder {
         factory: IWICImagingFactory,
     }
 
     impl Decoder {
-        pub(super) fn new() -> Result<Decoder, String> {
+        pub(crate) fn new() -> Result<Decoder, String> {
             // SAFETY: COM is entered on this thread.
             let factory: IWICImagingFactory =
                 unsafe { CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER) }
@@ -1261,11 +1264,26 @@ mod png {
         }
 
         /// The PNG image `png`, scaled to `width` by `height`, as premultiplied BGRA rows.
-        pub(super) fn decode(
+        pub(crate) fn decode(&self, png: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+            self.decode_as(png, width, height, &GUID_WICPixelFormat32bppPBGRA)
+        }
+
+        /// The same with straight alpha, as an icon's colour bitmap takes it.
+        pub(crate) fn decode_straight(
             &self,
             png: &[u8],
             width: u32,
             height: u32,
+        ) -> Result<Vec<u8>, String> {
+            self.decode_as(png, width, height, &GUID_WICPixelFormat32bppBGRA)
+        }
+
+        fn decode_as(
+            &self,
+            png: &[u8],
+            width: u32,
+            height: u32,
+            format: &GUID,
         ) -> Result<Vec<u8>, String> {
             let fail = |what: &str, e: windows::core::Error| format!("{what}: {e}");
             // SAFETY: COM calls on interfaces this thread made, with buffers that outlive them.
@@ -1295,7 +1313,7 @@ mod png {
                 converter
                     .Initialize(
                         &frame,
-                        &GUID_WICPixelFormat32bppPBGRA,
+                        format,
                         WICBitmapDitherTypeNone,
                         None::<&IWICPalette>,
                         0.0,

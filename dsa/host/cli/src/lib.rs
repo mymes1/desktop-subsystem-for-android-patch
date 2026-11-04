@@ -16,6 +16,7 @@
 //! dsa memory
 //! dsa gpus
 //! dsa widgets [list | add <provider> | remove <id>]
+//! dsa background [list | open <package> | stop <package>]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
 //! ```
@@ -66,6 +67,17 @@
 //! `widgets` (each with `id`, `provider`, `label` and its `placement`), `add` prints the
 //! placed widget, and `remove` prints `removed` with the widget's ID.
 //!
+//! `dsa background list` (or `dsa background`) lists the apps that keep running in Android
+//! with no window because they run a foreground service (music playback, a download, a VPN),
+//! each with the notification the service keeps shown, and the active media sessions. It does
+//! not start Android; one that is not running has none. `dsa background open <package>`
+//! opens the app's window, and `dsa background stop <package>` stops the app (Android
+//! force-stops it, which ends its services and frees its memory). With `--json`, `list`
+//! prints `apps` (each with `package`, `label`, `title`, `text`, `actions` and `icon_png` in
+//! base64) and `media` (each with `package`, `label`, `title`, `artist`, `album` and
+//! `playback`: `playing`, `paused` or `stopped`), and `open` and `stop` print `opened` or
+//! `stopped` with the package.
+//!
 //! `dsa freeze` stops every process of the Android until one of its windows is shown
 //! again. Its notifications, alarms and widgets stop with it.
 //!
@@ -93,7 +105,8 @@
 //! whether DSA (`program-updates`) and the Android image (`image-updates`) are updated, and
 //! whether every DSA process writes the input trace (`input-trace`) and each stage of each
 //! resize (`resize-trace`) to its log, off by default. Those last four are the computer's, so
-//! only an administrator changes them.
+//! only an administrator changes them. `stop-without-asking` (off by default) is whether
+//! stopping an app that runs in the background skips the question that confirms it.
 //! `dsa settings set <name> <value>` changes one;
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
 //! takes, on the host and inside Android. `dsa gpus` lists the GPUs of this machine, for
@@ -123,6 +136,7 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::apk::{ApkFile, InstallKind, InstallOutcome, InstalledPackage};
 use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer};
+use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
 use dsa_host_core::host_api::{ClientError, HostApiClient, SettingsReport, Status, TaskList};
 use dsa_host_core::memory::MemorySnapshot;
@@ -135,6 +149,7 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | l
      install <file.apk> [--progress] | apk-info <file.apk> | open <file> | share <file> | \
      tasks | settings [set <name> <value>] | memory | gpus | \
      widgets [list | add <provider> | remove <id>] | \
+     background [list | open <package> | stop <package>] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip>> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
@@ -170,6 +185,8 @@ pub enum Command {
     Gpus,
     /// List, place or remove widgets ([`Invocation::widgets`]).
     Widgets,
+    /// List, open or stop the apps that run in the background ([`Invocation::background`]).
+    Background,
     /// Print Android's log ([`Invocation::log_filter`], [`Invocation::dump`]).
     Logcat,
     /// Save the diagnostics archive to [`Invocation::output`].
@@ -187,6 +204,17 @@ pub enum WidgetAction {
     Remove(i32),
 }
 
+/// What `dsa background` does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackgroundAction {
+    /// List the apps that run in the background and the media sessions.
+    List,
+    /// Open this package's window.
+    Open(String),
+    /// Stop this package.
+    Stop(String),
+}
+
 /// A setting `dsa settings set` changes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
@@ -198,6 +226,7 @@ pub enum Change {
     ImageUpdates(bool),
     InputTrace(bool),
     ResizeTrace(bool),
+    StopWithoutAsking(bool),
 }
 
 impl Change {
@@ -216,10 +245,11 @@ impl Change {
             "image-updates" => switch().map(Change::ImageUpdates),
             "input-trace" => switch().map(Change::InputTrace),
             "resize-trace" => switch().map(Change::ResizeTrace),
+            "stop-without-asking" => switch().map(Change::StopWithoutAsking),
             _ => Err(format!(
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
-                 clipboard, links-in-android, program-updates, image-updates, input-trace \
-                 and resize-trace"
+                 clipboard, links-in-android, program-updates, image-updates, input-trace, \
+                 resize-trace and stop-without-asking"
             )),
         }
     }
@@ -285,6 +315,8 @@ pub struct Invocation {
     pub change: Option<Change>,
     /// What to do with widgets, for `dsa widgets`.
     pub widgets: Option<WidgetAction>,
+    /// What to do with the apps that run in the background, for `dsa background`.
+    pub background: Option<BackgroundAction>,
     /// Print the answer as JSON.
     pub json: bool,
     /// Print each step of `dsa install` as it happens.
@@ -316,6 +348,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut file = None;
     let mut change = None;
     let mut widgets = None;
+    let mut background = None;
     let mut json = false;
     let mut progress = false;
     let mut buffers: u32 = 0;
@@ -348,7 +381,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             }
             "status" | "start" | "stop" | "freeze" | "update" | "launch" | "install"
             | "apk-info" | "open" | "share" | "tasks" | "settings" | "memory" | "gpus"
-            | "widgets"
+            | "widgets" | "background"
                 if command.is_none() =>
             {
                 command = Some(match arg.as_str() {
@@ -366,6 +399,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     "memory" => Command::Memory,
                     "gpus" => Command::Gpus,
                     "widgets" => Command::Widgets,
+                    "background" => Command::Background,
                     _ => Command::Stop,
                 });
             }
@@ -403,6 +437,30 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     .filter(|id: &i32| *id > 0)
                     .ok_or_else(|| format!("a widget's ID is a number above 0, not {id:?}"))?;
                 widgets = Some(WidgetAction::Remove(id));
+            }
+            "list" if command == Some(Command::Background) && background.is_none() => {
+                background = Some(BackgroundAction::List);
+            }
+            verb @ ("open" | "stop")
+                if command == Some(Command::Background) && background.is_none() =>
+            {
+                let name = args.next().ok_or_else(|| {
+                    format!(
+                        "dsa background {verb} needs the app's package; dsa background lists \
+                         them"
+                    )
+                })?;
+                if !dsa_host_core::background::valid_package(name) || !is_package_name(name) {
+                    return Err(format!(
+                        "{name:?} is not a package name; name the app by its package, such as \
+                         com.example.music"
+                    ));
+                }
+                background = Some(if verb == "open" {
+                    BackgroundAction::Open(name.clone())
+                } else {
+                    BackgroundAction::Stop(name.clone())
+                });
             }
             "--json" => json = true,
             "--progress" if command == Some(Command::Install) => progress = true,
@@ -447,6 +505,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     }
     let command = command.ok_or(USAGE)?;
     let widgets = (command == Command::Widgets).then(|| widgets.unwrap_or(WidgetAction::List));
+    let background = (command == Command::Background)
+        .then(|| background.unwrap_or(BackgroundAction::List));
     if command == Command::Install && file.is_none() {
         return Err(format!(
             "dsa install needs the APK file to install\n{USAGE}"
@@ -498,6 +558,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
         file,
         change,
         widgets,
+        background,
         json,
         progress,
         log_filter,
@@ -669,6 +730,112 @@ fn widgets(
     }
 }
 
+/// `dsa background`: lists the apps that run in the background, or opens or stops one. It
+/// never starts Android: an app runs in the background only in an Android that runs.
+fn background(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
+    match invocation
+        .background
+        .clone()
+        .unwrap_or(BackgroundAction::List)
+    {
+        BackgroundAction::List => {
+            let (apps, media) = client.background_apps().map_err(|e| e.to_string())?;
+            Ok(if invocation.json {
+                json!({
+                    "apps": apps.iter().map(background_app_json).collect::<Vec<_>>(),
+                    "media": media.iter().map(media_json).collect::<Vec<_>>(),
+                })
+                .to_string()
+            } else {
+                describe_background(&apps, &media)
+            })
+        }
+        BackgroundAction::Open(package) => {
+            client
+                .act_on_background(&package, BackgroundCommand::Open)
+                .map_err(|e| e.to_string())?;
+            Ok(if invocation.json {
+                json!({ "opened": package }).to_string()
+            } else {
+                format!("Opening {package}")
+            })
+        }
+        BackgroundAction::Stop(package) => {
+            client
+                .act_on_background(&package, BackgroundCommand::Stop)
+                .map_err(|e| e.to_string())?;
+            Ok(if invocation.json {
+                json!({ "stopped": package }).to_string()
+            } else {
+                format!("Stopped {package}")
+            })
+        }
+    }
+}
+
+/// An app that runs in the background as one JSON object.
+pub fn background_app_json(app: &BackgroundApp) -> Value {
+    json!({
+        "package": app.package_name,
+        "label": app.app_label,
+        "title": app.title,
+        "text": app.text,
+        "actions": app.actions,
+        "icon_png": base64(&app.icon_png),
+    })
+}
+
+/// A media session as one JSON object.
+pub fn media_json(session: &MediaSession) -> Value {
+    json!({
+        "package": session.package_name,
+        "label": session.app_label,
+        "title": session.title,
+        "artist": session.artist,
+        "album": session.album,
+        "playback": match session.playback {
+            Playback::Playing => "playing",
+            Playback::Paused => "paused",
+            Playback::Stopped => "stopped",
+        },
+    })
+}
+
+/// The apps that run in the background, one per line, and the media sessions.
+pub fn describe_background(apps: &[BackgroundApp], media: &[MediaSession]) -> String {
+    if apps.is_empty() && media.is_empty() {
+        return "No app runs in the background.".into();
+    }
+    let mut lines = Vec::new();
+    for app in apps {
+        let name = if app.app_label.is_empty() {
+            &app.package_name
+        } else {
+            &app.app_label
+        };
+        let mut line = format!("{name} ({})", app.package_name);
+        if !app.title.is_empty() {
+            let _ = write!(line, ": {}", app.title);
+        }
+        if !app.text.is_empty() {
+            let _ = write!(line, " - {}", app.text);
+        }
+        lines.push(line);
+    }
+    for session in media {
+        let state = match session.playback {
+            Playback::Playing => "playing",
+            Playback::Paused => "paused",
+            Playback::Stopped => "stopped",
+        };
+        lines.push(format!(
+            "Media of {}: {} {} ({state})",
+            session.package_name, session.title, session.artist
+        ));
+    }
+    lines.join("\n")
+}
+
 /// `status` as one JSON object.
 pub fn status_json(status: &Status) -> Value {
     json!({
@@ -690,6 +857,7 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "image_updates": report.settings.image_updates,
         "input_trace": report.settings.input_trace,
         "resize_trace": report.settings.resize_trace,
+        "stop_without_asking": report.settings.stop_without_asking,
         "program_updates_available": report.facts.program_updates_available,
         "image_updates_available": report.facts.image_updates_available,
         "version": report.facts.version,
@@ -738,6 +906,10 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         ),
         format!("Input trace: {}", on_off(settings.input_trace)),
         format!("Resize trace: {}", on_off(settings.resize_trace)),
+        format!(
+            "Stop background apps without asking: {}",
+            on_off(settings.stop_without_asking)
+        ),
         format!("Service version: {}", facts.version),
     ];
     if let Some(dir) = &facts.log_dir {
@@ -844,6 +1016,7 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::ImageUpdates(on) => wanted.image_updates = *on,
             Change::InputTrace(on) => wanted.input_trace = *on,
             Change::ResizeTrace(on) => wanted.resize_trace = *on,
+            Change::StopWithoutAsking(on) => wanted.stop_without_asking = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
     }
@@ -1399,6 +1572,7 @@ pub fn run_with_starter(
         }
         Command::Install => return install(invocation, client, connector),
         Command::Widgets => return widgets(invocation, client, connector),
+        Command::Background => return background(invocation, client),
         Command::Open | Command::Share => {
             return open_file(invocation, client, connector);
         }

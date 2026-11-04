@@ -24,6 +24,7 @@
 //! - [`files`]: host files the user opens or shares in an app in the guest.
 //! - [`clipboard`]: the text clipboard the host and the guest share.
 //! - [`notifications`]: the notifications of the guest, which the host shows.
+//! - [`background`]: the apps that keep running with no window, and their media sessions.
 //! - [`widgets`]: the widgets of the guest, which the host places on its desktop.
 //! - [`video`]: the guest's video, decoded on the host's hardware decoder.
 //! - [`ime`]: text input through the host's input method in a task's window.
@@ -36,6 +37,7 @@
 pub mod accessibility;
 pub mod apk;
 pub mod apk_info;
+pub mod background;
 pub mod bootconfig;
 pub mod clipboard;
 pub mod clock_trace;

@@ -1,8 +1,9 @@
 //! The settings a user changes from the settings app, kept by the service.
 //!
-//! Four of them are the user's own: the GPU their window manager renders on, whether their
-//! Android may be frozen when idle, whether their clipboard is shared with it, and whether web
-//! links open in apps in their Android instead of the host's browser. The others are the
+//! Five of them are the user's own: the GPU their window manager renders on, whether their
+//! Android may be frozen when idle, whether their clipboard is shared with it, whether web
+//! links open in apps in their Android instead of the host's browser, and whether stopping an
+//! app that runs in the background asks first. The others are the
 //! machine's, shared by every user: whether the service updates DSA itself, whether it
 //! downloads new Android images, and whether DSA's processes write the input trace and the
 //! per-stage resize trace to their logs.
@@ -15,7 +16,7 @@
 //! <dir>/machine.json          {"program_updates": true, "image_updates": true,
 //!                              "input_trace": false, "resize_trace": false}
 //! <dir>/users/<user>.json     {"render_gpu": "display", "freeze": false, "clipboard": true,
-//!                              "links_in_android": false}
+//!                              "links_in_android": false, "stop_without_asking": false}
 //! ```
 //!
 //! A missing file means the defaults. A user who has never saved settings starts from what
@@ -43,6 +44,9 @@ pub struct Settings {
     /// Whether text copied on the host can be pasted in the user's Android, and the reverse.
     /// On by default.
     pub clipboard: bool,
+    /// Whether stopping an app that runs in the background skips the question that confirms
+    /// it. Off by default, so the first stop asks.
+    pub stop_without_asking: bool,
     /// Whether the service updates DSA itself.
     pub program_updates: bool,
     /// Whether the service downloads new Android images.
@@ -62,6 +66,7 @@ impl Default for Settings {
             freeze: false,
             links_in_android: false,
             clipboard: true,
+            stop_without_asking: false,
             program_updates: true,
             image_updates: true,
             input_trace: false,
@@ -113,6 +118,8 @@ pub struct UserSettings {
     pub links_in_android: bool,
     #[serde(default = "yes")]
     pub clipboard: bool,
+    #[serde(default)]
+    pub stop_without_asking: bool,
 }
 
 impl Default for UserSettings {
@@ -122,6 +129,7 @@ impl Default for UserSettings {
             freeze: false,
             links_in_android: false,
             clipboard: true,
+            stop_without_asking: false,
         }
     }
 }
@@ -234,6 +242,7 @@ impl FileSettings {
                 freeze: false,
                 links_in_android: false,
                 clipboard: true,
+                stop_without_asking: false,
             }),
         }
     }
@@ -267,6 +276,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         freeze: mine.freeze,
         links_in_android: mine.links_in_android,
         clipboard: mine.clipboard,
+        stop_without_asking: mine.stop_without_asking,
         program_updates: machine.program_updates,
         image_updates: machine.image_updates,
         input_trace: machine.input_trace,
@@ -303,6 +313,7 @@ impl SettingsStore for FileSettings {
                 freeze: settings.freeze,
                 links_in_android: settings.links_in_android,
                 clipboard: settings.clipboard,
+                stop_without_asking: settings.stop_without_asking,
             },
         )?;
         write_json(&self.machine_file(), &machine_part(settings))?;
@@ -354,6 +365,7 @@ impl SettingsStore for MemorySettings {
                 freeze: settings.freeze,
                 links_in_android: settings.links_in_android,
                 clipboard: settings.clipboard,
+                stop_without_asking: settings.stop_without_asking,
             },
         );
         *self.machine.lock().unwrap_or_else(|e| e.into_inner()) = machine_part(settings);
@@ -410,6 +422,7 @@ mod tests {
                     freeze: true,
                     links_in_android: true,
                     clipboard: false,
+                    stop_without_asking: false,
                     program_updates: false,
                     image_updates: true,
                     input_trace: true,
@@ -507,6 +520,34 @@ mod tests {
             )
             .unwrap();
         assert!(!FileSettings::new(&dir).get("uid:1000").unwrap().clipboard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr22_stopping_asks_by_default_and_do_not_ask_again_is_kept() {
+        let dir = scratch("stop");
+        let store = FileSettings::new(&dir);
+        assert!(!store.get("uid:1000").unwrap().stop_without_asking);
+        // A file saved before the setting existed asks.
+        std::fs::create_dir_all(dir.join("users")).unwrap();
+        std::fs::write(
+            dir.join("users").join("uid_1001.json"),
+            r#"{"render_gpu": "display", "clipboard": false}"#,
+        )
+        .unwrap();
+        assert!(!store.get("uid:1001").unwrap().stop_without_asking);
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    stop_without_asking: true,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert!(again.get("uid:1000").unwrap().stop_without_asking);
+        assert!(!again.get("uid:1001").unwrap().stop_without_asking);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

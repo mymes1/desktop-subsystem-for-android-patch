@@ -19,6 +19,7 @@
 //! desktop, each in a borderless window of its own on the desktop ([`widgets`]).
 
 pub mod adapter;
+pub mod background;
 pub mod clipboard;
 pub mod display_gpu;
 pub mod frames;
@@ -123,6 +124,9 @@ pub struct Compositor {
     show_notifications: bool,
     /// Whether the widgets of the user's Android are shown on the desktop.
     show_widgets: bool,
+    /// Whether the apps that run in the background in the user's Android are shown in the
+    /// notification area, with their media sessions in Windows' media controls.
+    show_background: bool,
 }
 
 /// The installed apps an event from the watch of the tasks carries, if it carries them.
@@ -207,6 +211,7 @@ impl Compositor {
             share_clipboard: true,
             show_notifications: true,
             show_widgets: true,
+            show_background: true,
         }
     }
 
@@ -237,6 +242,7 @@ impl Compositor {
             share_clipboard: false,
             show_notifications: false,
             show_widgets: false,
+            show_background: false,
         }
     }
 
@@ -338,6 +344,7 @@ impl Compositor {
         let clipboard_thread = self.start_clipboard(&stop);
         let notifications_thread = self.start_notifications(&stop);
         let widgets_thread = self.start_widgets(&stop);
+        let background_thread = self.start_background(&stop);
         let video_thread = self.start_video(&stop);
 
         // 1. Monitor thread that tracks the VM ID and state via the local API.
@@ -531,6 +538,9 @@ impl Compositor {
         if let Some(thread) = widgets_thread {
             let _ = thread.join();
         }
+        if let Some(thread) = background_thread {
+            let _ = thread.join();
+        }
         if let Some(thread) = video_thread {
             let _ = thread.join();
         }
@@ -636,6 +646,41 @@ impl Compositor {
                 note(
                     failed.as_deref(),
                     &format!("could not start the widgets' thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts showing the apps that run in the background in the user's Android in the
+    /// notification area, on a thread of its own that ends with `stop`. A tray that cannot
+    /// open is logged; the rest of the window manager goes on.
+    fn start_background(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.show_background {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-background".into())
+            .spawn(move || {
+                let mut tray = match background::WindowsTray::open(logger.clone()) {
+                    Ok(tray) => tray,
+                    Err(why) => {
+                        note(
+                            logger.as_deref(),
+                            &format!("the apps that run in the background are not shown: {why}"),
+                        );
+                        return;
+                    }
+                };
+                background::sync(connector, &mut tray, stop, logger);
+            })
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the background apps' thread: {e}"),
                 )
             })
             .ok()

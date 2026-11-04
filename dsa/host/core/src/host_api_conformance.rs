@@ -22,6 +22,10 @@ use crate::accessibility::{
     TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstallStatus, InstalledPackage};
+use crate::background::{
+    BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundHub, BackgroundWatch,
+    MediaCommand, MediaSession, Playback,
+};
 use crate::files::{FileAction, FileTransfer, MAX_FILE_BYTES};
 use crate::host_api::{
     running_of, stop_every, ClientError, HostApiClient, HostApiService, InstallError,
@@ -31,7 +35,7 @@ use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{buttons, PointerAction, PointerEvent, PointerTool};
 use crate::keys::{keycode, meta, KeyAction, KeyEvent};
 use crate::notifications::{Notification, NotificationAction, NotificationEvent};
-use crate::session::SessionState;
+use crate::session::{BackgroundRequest, SessionState};
 use crate::settings::{MemorySettings, Settings, SettingsStore};
 use crate::tasks::{Bounds, Task, TaskEvent, TaskRequest, TaskRequestError, TaskTable, TaskWatch};
 use crate::widgets::{
@@ -82,6 +86,10 @@ pub struct FakeAndroid {
     /// What the user did with its notifications on the host, in order.
     pub notification_actions: Mutex<Vec<NotificationAction>>,
     notification_watchers: Mutex<Vec<Sender<NotificationEvent>>>,
+    /// The apps that run in the background in it, and who watches them.
+    background: Mutex<BackgroundHub>,
+    /// What the user did with its apps that run in the background, in order.
+    pub background_requests: Mutex<Vec<BackgroundRequest>>,
     /// The APKs it installed or refused, by name, with their whole content, in order.
     pub installs: Mutex<Vec<(String, Vec<u8>)>>,
     /// When each install began and ended, by name, in order: `+name` and `-name`.
@@ -148,6 +156,8 @@ impl FakeAndroid {
             clipboard_watchers: Mutex::new(Vec::new()),
             notification_actions: Mutex::new(Vec::new()),
             notification_watchers: Mutex::new(Vec::new()),
+            background: Mutex::new(BackgroundHub::default()),
+            background_requests: Mutex::new(Vec::new()),
             installs: Mutex::new(Vec::new()),
             install_steps: Mutex::new(Vec::new()),
             install_time: Mutex::new(Duration::ZERO),
@@ -188,6 +198,11 @@ impl FakeAndroid {
         } else {
             Err(format!("Android is {}, not running", self.state()))
         }
+    }
+
+    /// Changes its apps that run in the background as its agent would, and tells the watchers.
+    pub fn background_event(&self, event: BackgroundEvent) {
+        self.background.lock().unwrap().apply(event);
     }
 
     /// Changes its notifications as an app in this Android would, and tells the watchers.
@@ -341,6 +356,18 @@ impl UserAndroid for FakeAndroid {
             )));
         }
         self.notification_actions.lock().unwrap().push(action);
+        Ok(())
+    }
+    fn watch_background(&self) -> Option<BackgroundWatch> {
+        Some(self.background.lock().unwrap().watch())
+    }
+    fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+        let hub = self.background.lock().unwrap();
+        (hub.apps(), hub.media())
+    }
+    fn background_action(&self, request: BackgroundRequest) -> Result<(), TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        self.background_requests.lock().unwrap().push(request);
         Ok(())
     }
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
@@ -854,6 +881,24 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::notification_watcher_that_sends_is_disconnected(
                 &mut || $make,
             );
+        }
+        #[test]
+        fn fr22_apps_that_run_in_the_background_reach_a_watcher_and_a_list() {
+            $crate::host_api_conformance::background_apps_reach_a_watcher(&mut || $make);
+        }
+        #[test]
+        fn fr22_open_action_stop_and_media_keys_reach_the_callers_android() {
+            $crate::host_api_conformance::background_actions_reach_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr22_stopping_an_app_of_a_stopped_android_says_it_is_not_running() {
+            $crate::host_api_conformance::background_action_needs_a_running_android(
+                &mut || $make,
+            );
+        }
+        #[test]
+        fn nfr5_a_malformed_action_on_a_background_app_is_refused() {
+            $crate::host_api_conformance::malformed_background_action_is_refused(&mut || $make);
         }
         #[test]
         fn fr12_the_gallery_lists_the_widgets_the_callers_android_offers() {
@@ -2293,6 +2338,156 @@ pub fn malformed_file_is_refused(make: MakeLocal<'_>) {
     assert!(androids.of(&user).unwrap().files.lock().unwrap().is_empty());
     assert_eq!(
         connect(&mut *connector).status().unwrap().state,
+        SessionState::Active,
+        "the service goes on"
+    );
+}
+
+fn sample_background_app(title: &str) -> BackgroundApp {
+    BackgroundApp {
+        package_name: "com.example.music".into(),
+        app_label: "Music".into(),
+        icon_png: vec![0x89, b'P', b'N', b'G'],
+        title: title.into(),
+        text: "\u{c544}\u{c774}\u{c720}".into(),
+        actions: vec!["Pause".into(), "Next".into()],
+    }
+}
+
+fn sample_media() -> MediaSession {
+    MediaSession {
+        package_name: "com.example.music".into(),
+        app_label: "Music".into(),
+        title: "Song".into(),
+        artist: "Artist".into(),
+        album: "Album".into(),
+        art_png: vec![0x89, b'P', b'N', b'G'],
+        playback: Playback::Playing,
+        can_play: false,
+        can_pause: true,
+        can_next: true,
+        can_previous: true,
+    }
+}
+
+pub fn background_apps_reach_a_watcher(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let android = androids.of(&user).expect("the caller's Android");
+    let playing = sample_background_app("Playing");
+    android.background_event(BackgroundEvent::App(playing.clone()));
+
+    let mut watch = connect(&mut *connector)
+        .watch_background()
+        .expect("watching the apps that run in the background");
+    assert_eq!(watch.apps, vec![playing.clone()], "starts from the apps now");
+    assert!(watch.media.is_empty());
+    assert_eq!(watch.next(Duration::from_millis(50)).unwrap(), None);
+
+    let media = sample_media();
+    android.background_event(BackgroundEvent::Media(media.clone()));
+    assert_eq!(
+        watch.next(WAIT).unwrap(),
+        Some(BackgroundEvent::Media(media.clone()))
+    );
+    let paused = sample_background_app("Paused");
+    android.background_event(BackgroundEvent::App(paused.clone()));
+    assert_eq!(
+        watch.next(WAIT).unwrap(),
+        Some(BackgroundEvent::App(paused.clone()))
+    );
+    assert_eq!(
+        connect(&mut *connector).background_apps().unwrap(),
+        (vec![paused], vec![media])
+    );
+    android.background_event(BackgroundEvent::AppRemoved {
+        package_name: playing.package_name.clone(),
+    });
+    assert_eq!(
+        watch.next(WAIT).unwrap(),
+        Some(BackgroundEvent::AppRemoved {
+            package_name: playing.package_name
+        })
+    );
+}
+
+pub fn background_actions_reach_the_caller(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut client = connect(&mut *connector);
+    client.start().unwrap();
+    let package = "com.example.music";
+    client
+        .act_on_background(package, BackgroundCommand::Open)
+        .expect("opened");
+    client
+        .act_on_background(package, BackgroundCommand::Action(1))
+        .expect("action run");
+    client
+        .control_media(package, MediaCommand::Pause)
+        .expect("paused");
+    client
+        .act_on_background(package, BackgroundCommand::Stop)
+        .expect("stopped");
+    assert_eq!(
+        *androids
+            .of(&user)
+            .unwrap()
+            .background_requests
+            .lock()
+            .unwrap(),
+        vec![
+            BackgroundRequest::App(package.into(), BackgroundCommand::Open),
+            BackgroundRequest::App(package.into(), BackgroundCommand::Action(1)),
+            BackgroundRequest::Media(package.into(), MediaCommand::Pause),
+            BackgroundRequest::App(package.into(), BackgroundCommand::Stop),
+        ]
+    );
+}
+
+pub fn background_action_needs_a_running_android(make: MakeLocal<'_>) {
+    let (listener, mut connector, _) = make();
+    let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
+    let mut client = connect(&mut *connector);
+    match client.act_on_background("com.example.music", BackgroundCommand::Stop) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::NotRunning),
+        other => panic!("expected the Android not to be running, got {other:?}"),
+    }
+}
+
+pub fn malformed_background_action_is_refused(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut client = connect(&mut *connector);
+    client.start().unwrap();
+    for package in ["", "../../evil", "a b", "com.example/x"] {
+        match client.act_on_background(package, BackgroundCommand::Stop) {
+            Err(ClientError::Service { code, .. }) => {
+                assert_eq!(code, ErrorCode::UnknownRequest, "{package:?}")
+            }
+            other => panic!("expected {package:?} to be refused, got {other:?}"),
+        }
+    }
+    match client.act_on_background(
+        "com.example.music",
+        BackgroundCommand::Action(crate::background::MAX_ACTIONS as u32),
+    ) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::UnknownRequest),
+        other => panic!("expected an action past the last to be refused, got {other:?}"),
+    }
+    assert!(androids
+        .of(&user)
+        .unwrap()
+        .background_requests
+        .lock()
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        client.status().unwrap().state,
         SessionState::Active,
         "the service goes on"
     );

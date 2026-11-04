@@ -61,6 +61,10 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::background::{
+    self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundWatch, MediaCommand,
+    MediaSession, Playback,
+};
 use crate::diagnostics::HostFile;
 use crate::files::{self, FileAction, FileTransfer};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
@@ -72,7 +76,7 @@ use crate::memory::{
 };
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
-use crate::session::{Session, SessionError, SessionState};
+use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
 use crate::settings::{Settings, SettingsStore};
 use crate::tasks::{AppInfo, Bounds, Task, TaskEvent, TaskRequest, TaskRequestError, TaskWatch};
 use crate::widgets::{
@@ -180,6 +184,22 @@ pub trait UserAndroid: Send + Sync {
     /// The notifications of this Android from now on. `None` when it does not report them.
     fn watch_notifications(&self) -> Option<Receiver<NotificationEvent>> {
         None
+    }
+    /// The apps that run in the background in this Android and every change to them.
+    /// `None` when it does not report them.
+    fn watch_background(&self) -> Option<BackgroundWatch> {
+        None
+    }
+    /// The apps that run in the background in this Android now, and its media sessions.
+    fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+        (Vec::new(), Vec::new())
+    }
+    /// Passes what the user did with an app that runs in the background to this Android.
+    fn background_action(&self, request: BackgroundRequest) -> Result<(), TaskRequestError> {
+        let _ = request;
+        Err(TaskRequestError::Failed(
+            "this Android does not report the apps that run in the background".into(),
+        ))
     }
     /// The widgets this Android hosts now and every change to them. `None` when it hosts none.
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
@@ -395,6 +415,15 @@ impl UserAndroid for Session {
     }
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
         Some(Session::watch_widgets(self))
+    }
+    fn watch_background(&self) -> Option<BackgroundWatch> {
+        Some(Session::watch_background(self))
+    }
+    fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+        Session::background_apps(self)
+    }
+    fn background_action(&self, request: BackgroundRequest) -> Result<(), TaskRequestError> {
+        Session::background_action(self, request).map_err(request_error)
     }
     fn widgets(&self) -> Vec<(i32, WidgetProvider)> {
         Session::widgets(self)
@@ -1025,6 +1054,9 @@ impl HostApiService {
             }
             if let Some(request::Body::WatchWidgets(_)) = request.body {
                 return self.watch_widgets(connection, &peer, request.id);
+            }
+            if let Some(request::Body::WatchBackgroundApps(_)) = request.body {
+                return self.watch_background(connection, &peer, request.id);
             }
             if let Some(request::Body::InstallApk(install)) = &request.body {
                 return self.install_apk(connection, &peer, request.id, install.clone());
@@ -2069,6 +2101,169 @@ impl HostApiService {
         }
     }
 
+    /// The apps that run in the background in the caller's Android and its media sessions.
+    /// An Android that is not running has none.
+    fn list_background(&self, peer: &Peer) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        let (apps, media) = android.background_apps();
+        response::Body::BackgroundApps(background_to_wire(apps, media))
+    }
+
+    /// Answers a WatchBackgroundApps request with the apps there are now, then passes every
+    /// change until the client goes away. The client sends nothing more: anything it sends
+    /// closes the connection, except a frame that cannot be read, which is dropped.
+    fn watch_background(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let watched = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => android.watch_background().ok_or_else(|| {
+                error(
+                    ErrorCode::Unavailable,
+                    "this Android does not report the apps that run in the background".into(),
+                )
+            }),
+        };
+        let watch = match watched {
+            Ok(watch) => watch,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::BackgroundApps(background_to_wire(
+                watch.apps,
+                watch.media,
+            ))),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_err() {
+            return;
+        }
+        loop {
+            loop {
+                match watch.events.try_recv() {
+                    Ok(event) => {
+                        if send(&mut *connection, background_event_to_wire(event)).is_err() {
+                            return;
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        connection.close();
+                        return;
+                    }
+                }
+            }
+            let frame = match connection.recv(Some(CLIPBOARD_POLL)) {
+                Ok(frame) => frame,
+                Err(TransportError::Timeout) => continue,
+                Err(_) => return,
+            };
+            match decode(&frame) {
+                Ok(_) => {
+                    eprintln!(
+                        "local API: a client of {} sent something on a connection that watches \
+                         the apps that run in the background; closing its connection",
+                        peer.user
+                    );
+                    connection.close();
+                    return;
+                }
+                Err(error) => {
+                    eprintln!(
+                        "local API: a client of {} sent an unreadable frame on a connection \
+                         that watches the apps that run in the background ({error}); dropping it",
+                        peer.user
+                    );
+                }
+            }
+        }
+    }
+
+    /// Passes what the user did with an app that runs in the background to the caller's
+    /// Android.
+    fn act_on_background(&self, peer: &Peer, act: types::ActOnBackgroundApp) -> response::Body {
+        if !background::valid_package(&act.package_name) {
+            return error(
+                ErrorCode::UnknownRequest,
+                "the package name is not an Android package name".into(),
+            );
+        }
+        let command = match types::BackgroundAppCommand::try_from(act.command) {
+            Ok(types::BackgroundAppCommand::Open) => BackgroundCommand::Open,
+            Ok(types::BackgroundAppCommand::Action) => match u32::try_from(act.action) {
+                Ok(index) if (index as usize) < background::MAX_ACTIONS => {
+                    BackgroundCommand::Action(index)
+                }
+                _ => {
+                    return error(
+                        ErrorCode::UnknownRequest,
+                        format!(
+                            "a notification has at most {} actions; there is no action {}",
+                            background::MAX_ACTIONS,
+                            act.action
+                        ),
+                    )
+                }
+            },
+            Ok(types::BackgroundAppCommand::Stop) => BackgroundCommand::Stop,
+            _ => {
+                return error(
+                    ErrorCode::UnknownRequest,
+                    "an app that runs in the background can be opened, sent one of its \
+                     notification's actions, or stopped"
+                        .into(),
+                )
+            }
+        };
+        self.background_request(peer, BackgroundRequest::App(act.package_name, command))
+    }
+
+    /// Runs a media key's command on a media session of the caller's Android.
+    fn control_media(&self, peer: &Peer, control: types::ControlMedia) -> response::Body {
+        if !background::valid_package(&control.package_name) {
+            return error(
+                ErrorCode::UnknownRequest,
+                "the package name is not an Android package name".into(),
+            );
+        }
+        let command = match types::MediaCommand::try_from(control.command) {
+            Ok(types::MediaCommand::Play) => MediaCommand::Play,
+            Ok(types::MediaCommand::Pause) => MediaCommand::Pause,
+            Ok(types::MediaCommand::Next) => MediaCommand::Next,
+            Ok(types::MediaCommand::Previous) => MediaCommand::Previous,
+            Ok(types::MediaCommand::Stop) => MediaCommand::Stop,
+            _ => {
+                return error(
+                    ErrorCode::UnknownRequest,
+                    "a media command is play, pause, next, previous or stop".into(),
+                )
+            }
+        };
+        self.background_request(peer, BackgroundRequest::Media(control.package_name, command))
+    }
+
+    fn background_request(&self, peer: &Peer, request: BackgroundRequest) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.background_action(request) {
+            Ok(()) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
     /// Answers an InstallApk request: refuses an APK that is too large or not named as one,
     /// else streams the ApkChunk frames that follow to the caller's Android and answers again
     /// with how the install ended. The connection ends with the install.
@@ -2217,6 +2412,9 @@ impl HostApiService {
                 self.request(peer, TaskRequest::WindowsShown { shown: shown.shown })
             }
             Some(request::Body::ActOnNotification(act)) => self.act_on_notification(peer, act),
+            Some(request::Body::ListBackgroundApps(_)) => self.list_background(peer),
+            Some(request::Body::ActOnBackgroundApp(act)) => self.act_on_background(peer, act),
+            Some(request::Body::ControlMedia(control)) => self.control_media(peer, control),
             Some(request::Body::ListWidgetProviders(_)) => self.widget_providers(peer),
             Some(request::Body::GetPackage(get)) => self.package_state(peer, &get.package_name),
             Some(request::Body::AddWidget(add)) => self.add_widget(peer, add),
@@ -2264,6 +2462,10 @@ impl HostApiService {
                         | request::Body::OpenFile(_)
                         | request::Body::WatchNotifications(_)
                         | request::Body::ActOnNotification(_)
+                        | request::Body::ListBackgroundApps(_)
+                        | request::Body::WatchBackgroundApps(_)
+                        | request::Body::ActOnBackgroundApp(_)
+                        | request::Body::ControlMedia(_)
                         | request::Body::ListWidgetProviders(_)
                         | request::Body::GetPackage(_)
                         | request::Body::AddWidget(_)
@@ -2414,6 +2616,7 @@ impl HostApiService {
             render_gpu: wanted.render_gpu,
             freeze: wanted.freeze,
             clipboard: wanted.clipboard,
+            stop_without_asking: wanted.stop_without_asking,
             links_in_android: wanted.links_in_android,
             program_updates: wanted.program_updates,
             image_updates: wanted.image_updates,
@@ -2497,6 +2700,7 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         program_updates: settings.program_updates,
         image_updates: settings.image_updates,
         clipboard: settings.clipboard,
+        stop_without_asking: settings.stop_without_asking,
         input_trace: settings.input_trace,
         resize_trace: settings.resize_trace,
         program_updates_available: facts.program_updates_available,
@@ -2513,6 +2717,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             links_in_android: settings.links_in_android,
             freeze: settings.freeze,
             clipboard: settings.clipboard,
+            stop_without_asking: settings.stop_without_asking,
             program_updates: settings.program_updates,
             image_updates: settings.image_updates,
             input_trace: settings.input_trace,
@@ -3110,6 +3315,79 @@ impl HostApiClient {
         }))
     }
 
+    /// The apps that run in the background in the caller's Android, and its media sessions.
+    pub fn background_apps(
+        &mut self,
+    ) -> Result<(Vec<BackgroundApp>, Vec<MediaSession>), ClientError> {
+        match self.exchange(
+            request::Body::ListBackgroundApps(types::ListBackgroundApps {}),
+            self.timeout,
+        )? {
+            response::Body::BackgroundApps(list) => Ok(background_from_wire(list)),
+            _ => Err(ClientError::Malformed(
+                "expected the apps that run in the background".into(),
+            )),
+        }
+    }
+
+    /// Watches the apps that run in the background in the caller's Android. The connection
+    /// carries nothing else from here on, so the client is used up.
+    pub fn watch_background(mut self) -> Result<BackgroundStream, ClientError> {
+        match self.exchange(
+            request::Body::WatchBackgroundApps(types::WatchBackgroundApps {}),
+            self.timeout,
+        )? {
+            response::Body::BackgroundApps(list) => {
+                let (apps, media) = background_from_wire(list);
+                Ok(BackgroundStream {
+                    apps,
+                    media,
+                    connection: self.connection,
+                })
+            }
+            _ => Err(ClientError::Malformed(
+                "expected the apps that run in the background".into(),
+            )),
+        }
+    }
+
+    /// Passes what the user did with an app that runs in the background to the caller's
+    /// Android.
+    pub fn act_on_background(
+        &mut self,
+        package: &str,
+        command: BackgroundCommand,
+    ) -> Result<(), ClientError> {
+        let (kind, action) = match command {
+            BackgroundCommand::Open => (types::BackgroundAppCommand::Open, 0),
+            BackgroundCommand::Action(index) => (
+                types::BackgroundAppCommand::Action,
+                i32::try_from(index).unwrap_or(i32::MAX),
+            ),
+            BackgroundCommand::Stop => (types::BackgroundAppCommand::Stop, 0),
+        };
+        self.done(request::Body::ActOnBackgroundApp(types::ActOnBackgroundApp {
+            package_name: package.to_string(),
+            command: kind as i32,
+            action,
+        }))
+    }
+
+    /// Runs a media key's command on the package's media session.
+    pub fn control_media(&mut self, package: &str, command: MediaCommand) -> Result<(), ClientError> {
+        let command = match command {
+            MediaCommand::Play => types::MediaCommand::Play,
+            MediaCommand::Pause => types::MediaCommand::Pause,
+            MediaCommand::Next => types::MediaCommand::Next,
+            MediaCommand::Previous => types::MediaCommand::Previous,
+            MediaCommand::Stop => types::MediaCommand::Stop,
+        };
+        self.done(request::Body::ControlMedia(types::ControlMedia {
+            package_name: package.to_string(),
+            command: command as i32,
+        }))
+    }
+
     /// What the caller's Android has installed of `package`, if anything. Android must be
     /// running.
     pub fn package_state(
@@ -3519,6 +3797,53 @@ impl LinkStream {
     }
 }
 
+/// A connection that watches the apps that run in the background in the caller's Android,
+/// from [`HostApiClient::watch_background`], with the apps and sessions there were when it
+/// started.
+pub struct BackgroundStream {
+    pub apps: Vec<BackgroundApp>,
+    pub media: Vec<MediaSession>,
+    connection: Box<dyn Connection>,
+}
+
+impl BackgroundStream {
+    /// The next change, waiting at most `timeout`. `Ok(None)` means none came in time; an
+    /// error means the connection has ended, and a new watch is needed.
+    pub fn next(&mut self, timeout: Duration) -> Result<Option<BackgroundEvent>, ClientError> {
+        use types::background_app_event::Body as Event;
+        let frame = match self.connection.recv(Some(timeout)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => return Ok(None),
+            Err(error) => return Err(ClientError::Transport(error)),
+        };
+        match decode(&frame) {
+            Ok(Envelope {
+                body: Some(Body::BackgroundAppEvent(types::BackgroundAppEvent { body })),
+            }) => match body {
+                Some(Event::App(app)) => Ok(Some(BackgroundEvent::App(background_app_from_wire(
+                    app,
+                )))),
+                Some(Event::AppRemoved(removed)) => Ok(Some(BackgroundEvent::AppRemoved {
+                    package_name: removed.package_name,
+                })),
+                Some(Event::Media(session)) => {
+                    Ok(Some(BackgroundEvent::Media(media_from_wire(session))))
+                }
+                Some(Event::MediaRemoved(removed)) => Ok(Some(BackgroundEvent::MediaRemoved {
+                    package_name: removed.package_name,
+                })),
+                None => Err(ClientError::Malformed(
+                    "an empty change to the apps that run in the background".into(),
+                )),
+            },
+            Ok(_) => Err(ClientError::Malformed(
+                "expected a change to the apps that run in the background".into(),
+            )),
+            Err(error) => Err(ClientError::Malformed(error.to_string())),
+        }
+    }
+}
+
 /// A connection that watches the notifications of the caller's Android, from
 /// [`HostApiClient::watch_notifications`].
 pub struct NotificationStream {
@@ -3686,6 +4011,102 @@ fn frame_to_wire(frame: WidgetFrame) -> Body {
             png: frame.png,
         })),
     })
+}
+
+fn background_app_to_wire(app: BackgroundApp) -> types::BackgroundApp {
+    types::BackgroundApp {
+        package_name: app.package_name,
+        app_label: app.app_label,
+        icon_png: app.icon_png,
+        title: app.title,
+        text: app.text,
+        actions: app.actions,
+    }
+}
+
+fn media_to_wire(session: MediaSession) -> types::MediaSession {
+    let playback = match session.playback {
+        Playback::Stopped => types::MediaPlayback::Stopped,
+        Playback::Playing => types::MediaPlayback::Playing,
+        Playback::Paused => types::MediaPlayback::Paused,
+    };
+    types::MediaSession {
+        package_name: session.package_name,
+        app_label: session.app_label,
+        title: session.title,
+        artist: session.artist,
+        album: session.album,
+        art_png: session.art_png,
+        playback: playback as i32,
+        can_play: session.can_play,
+        can_pause: session.can_pause,
+        can_next: session.can_next,
+        can_previous: session.can_previous,
+    }
+}
+
+fn background_to_wire(
+    apps: Vec<BackgroundApp>,
+    media: Vec<MediaSession>,
+) -> types::BackgroundApps {
+    types::BackgroundApps {
+        apps: apps.into_iter().map(background_app_to_wire).collect(),
+        media: media.into_iter().map(media_to_wire).collect(),
+    }
+}
+
+fn background_event_to_wire(event: BackgroundEvent) -> Body {
+    use types::background_app_event::Body as Event;
+    let body = match event {
+        BackgroundEvent::App(app) => Event::App(background_app_to_wire(app)),
+        BackgroundEvent::AppRemoved { package_name } => {
+            Event::AppRemoved(types::BackgroundAppRemoved { package_name })
+        }
+        BackgroundEvent::Media(session) => Event::Media(media_to_wire(session)),
+        BackgroundEvent::MediaRemoved { package_name } => {
+            Event::MediaRemoved(types::MediaSessionRemoved { package_name })
+        }
+    };
+    Body::BackgroundAppEvent(types::BackgroundAppEvent { body: Some(body) })
+}
+
+fn background_app_from_wire(app: types::BackgroundApp) -> BackgroundApp {
+    BackgroundApp {
+        package_name: app.package_name,
+        app_label: app.app_label,
+        icon_png: app.icon_png,
+        title: app.title,
+        text: app.text,
+        actions: app.actions,
+    }
+}
+
+fn media_from_wire(session: types::MediaSession) -> MediaSession {
+    let playback = match types::MediaPlayback::try_from(session.playback) {
+        Ok(types::MediaPlayback::Playing) => Playback::Playing,
+        Ok(types::MediaPlayback::Paused) => Playback::Paused,
+        _ => Playback::Stopped,
+    };
+    MediaSession {
+        package_name: session.package_name,
+        app_label: session.app_label,
+        title: session.title,
+        artist: session.artist,
+        album: session.album,
+        art_png: session.art_png,
+        playback,
+        can_play: session.can_play,
+        can_pause: session.can_pause,
+        can_next: session.can_next,
+        can_previous: session.can_previous,
+    }
+}
+
+fn background_from_wire(list: types::BackgroundApps) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+    (
+        list.apps.into_iter().map(background_app_from_wire).collect(),
+        list.media.into_iter().map(media_from_wire).collect(),
+    )
 }
 
 fn notification_to_wire(event: NotificationEvent) -> Body {
