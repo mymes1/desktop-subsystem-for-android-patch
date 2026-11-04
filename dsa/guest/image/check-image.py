@@ -9,8 +9,10 @@ trace script is missing, when the agent is missing or not signed with the platfo
 Settings still has the preferences or code that crash it without Bluetooth, when a system
 app users open is not compiled for the guest's boot image and its own dex, when the files
 do not match image.json, when the kernel or a DSA guest binary is built for another
-architecture than the image's, or when the ramdisk lacks the directories and links
-Android's first stage init needs.
+architecture than the image's, when the ramdisk lacks the directories and links Android's
+first stage init needs, or when the kernel command line, a mount table or an init script
+names a disk by its kernel name (/dev/block/sda), which follows the order the disks were
+probed in.
 
 The signatures are read from the apps themselves. sign_target_files_apks copies
 META/apkcerts.txt over unchanged, so that file still names AOSP's keys after signing.
@@ -76,6 +78,14 @@ for name, expected in manifest["files"].items():
 
 with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     names = z.namelist()
+    # Mount tables, init scripts and shell scripts find disks by partition name or UUID; a
+    # kernel disk name (sda) points at whichever disk Hyper-V's SCSI controller probed first.
+    for name in names:
+        base = name.rsplit("/", 1)[-1]
+        if base.startswith("fstab.") or base.endswith((".rc", ".sh", ".prop")):
+            for reference in sorted(set(make_image.kernel_disk_names(z.read(name).decode(errors="replace")))):
+                problems.append(f"{name} names a disk by its probe order ({reference}), "
+                                "which changes when the host attaches another disk")
     for app in ["Launcher3QuickStep", "SystemUI", "LatinIME", "CuttlefishService"]:
         if any(f"/{app}/" in n and n.endswith(".apk") for n in names):
             problems.append(f"{app} is still in the image")
@@ -378,8 +388,12 @@ if "system.vhdx" in disks_to_check:
 else:
     if "androidboot.boot_part_uuid=" not in manifest["kernel_cmdline"]:
         problems.append("the kernel command line does not name the disk")
-if "blkdevparts=sda:" not in manifest["kernel_cmdline"]:
-    problems.append("the kernel command line does not restore Hyper-V GPT partition names")
+if f"blkdevparts={make_image.SYSTEM_DISK_GUID}:" not in manifest["kernel_cmdline"]:
+    problems.append("the kernel command line does not restore Hyper-V GPT partition names on the "
+                    f"system disk by its GUID {make_image.SYSTEM_DISK_GUID}")
+for reference in make_image.kernel_disk_names(manifest["kernel_cmdline"]):
+    problems.append(f"the kernel command line names a disk by its probe order ({reference}), "
+                    "which changes when the host attaches another disk")
 if "androidboot.selinux=permissive" in manifest["kernel_cmdline"]:
     problems.append("the kernel command line sets SELinux to permissive")
 for boot_arg in [
@@ -399,8 +413,9 @@ for boot_arg in ["androidboot.hardware.hwcomposer.mode=", "androidboot.vendor.ap
     if boot_arg in manifest["kernel_cmdline"]:
         problems.append(f"the kernel command line still sets {boot_arg} for Cuttlefish's composer")
 
-def ramdisk_entries(data):
-    """Name to mode of every entry in a ramdisk of gzip'd newc cpio archives."""
+def ramdisk_entries(data, texts=None):
+    """Name to mode of every entry in a ramdisk of gzip'd newc cpio archives. With `texts`,
+    also fills it with the contents of the mount tables and init scripts."""
     entries = {}
     archive = gzip.decompress(data)  # every gzip member, one after another
     at = 0
@@ -418,6 +433,9 @@ def ramdisk_entries(data):
         name_size = int(header[94:102], 16)
         name = archive[at + 110:at + 110 + name_size - 1].decode()
         at = (at + 110 + name_size + 3) & ~3
+        base = name.rsplit("/", 1)[-1]
+        if texts is not None and stat.S_ISREG(mode) and (base.startswith("fstab.") or base.endswith((".rc", ".sh"))):
+            texts[name.lstrip("./")] = archive[at:at + size].decode(errors="replace")
         at = (at + size + 3) & ~3
         if name == "TRAILER!!!":
             continue  # the next archive follows
@@ -425,7 +443,12 @@ def ramdisk_entries(data):
     return entries
 
 
-entries = ramdisk_entries((image / "initrd.img").read_bytes())
+ramdisk_texts = {}
+entries = ramdisk_entries((image / "initrd.img").read_bytes(), ramdisk_texts)
+for name, text in sorted(ramdisk_texts.items()):
+    for reference in sorted(set(make_image.kernel_disk_names(text))):
+        problems.append(f"initrd.img's {name} names a disk by its probe order ({reference}), "
+                        "which changes when the host attaches another disk")
 # First stage init mounts onto these and fails without them.
 mount_points = ["dev", "proc", "sys", "mnt", "debug_ramdisk", "second_stage_resources", "metadata"]
 missing = [d for d in mount_points if not stat.S_ISDIR(entries.get(d, 0))]

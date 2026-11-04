@@ -35,7 +35,9 @@ needs come on top as one fragment, so following a new WSL tag is a one-line chan
 
 The source is configured from Microsoft's baseline. A small checked-in patch extends the
 command-line partition parser so Hyper-V can provide Android the partition UUID and name
-metadata its virtual SCSI uevents omit.
+metadata its virtual SCSI uevents omit. The same patch lets `blkdevparts=` name a disk by
+the GUID in its GPT header as well as by its kernel name: Hyper-V names disks `sda`, `sdb`
+in probe order, which changes when the host attaches another disk.
 
 ## What the fragment adds
 

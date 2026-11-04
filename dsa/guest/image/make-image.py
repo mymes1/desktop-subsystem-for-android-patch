@@ -171,6 +171,10 @@ REMOVED_INIT_SCRIPTS = ["VENDOR/etc/init/seriallogging.rc"]
 # is fixed and passed on the kernel command line.
 SUPER_UUID = "6b1ad5ad-0d5a-4dd3-9a6b-5a0a1d5a5a17"
 MISC_UUID = "811d3bbb-a7ff-437a-857f-f54af996b190"
+# The system disk's own GPT GUID. The kernel command line names the system disk by it, not by
+# its kernel name (sda, sdb): a disk's kernel name follows the order Hyper-V's SCSI controller
+# probes the disks in, which changes when the host attaches another disk.
+SYSTEM_DISK_GUID = "d5a0d15c-5157-4e6d-8d5a-0000000005d5"
 DISK_SIZE = 64 << 30
 SYSTEM_SMALL_PARTITIONS = [
     ("vbmeta_a", 1 << 20),
@@ -427,14 +431,25 @@ def command_line_partitions(partitions, uuids=None):
     Hyper-V's virtual SCSI controller exposes the GPT partition devices but omits their
     PARTNAME uevent property. The kernel's command-line partition parser supplies those
     names before first-stage init starts. Every range comes from the GPT we just wrote, so
-    an AOSP super image changing size does not change the mapping by assumption.
+    an AOSP super image changing size does not change the mapping by assumption. The disk is
+    named by its GPT GUID, which DSA's kernel reads from the disk, so the names land on the
+    system disk whichever kernel name it gets.
     """
     entries = []
     uuids = {} if uuids is None else uuids
     for name, (offset, size) in partitions.items():
         identifier = f"{name}:{uuids[name]}" if name in uuids else name
         entries.append(f"{size}@{offset}({identifier})")
-    return "blkdevparts=sda:" + ",".join(entries)
+    return f"blkdevparts={SYSTEM_DISK_GUID}:" + ",".join(entries)
+
+
+# A disk's kernel name (sda, sdb) follows probe order, so nothing in the image may name one.
+KERNEL_DISK_NAME = re.compile(r"/dev/(?:block/)?(?:sd|vd)[a-z]+\d*|blkdevparts=(?:[^ ;]*;)*(?:sd|vd)[a-z]+:")
+
+
+def kernel_disk_names(text):
+    """The disk references in `text` that name a disk by its kernel name, not its identity."""
+    return KERNEL_DISK_NAME.findall(text)
 
 
 def removed_apexes(hwcomposer=False, power=False):
@@ -2063,7 +2078,7 @@ def system_disk(images, otatools, work, out):
     if unlisted:
         sys.exit(f"verified boot reads {', '.join(unlisted)}, which fstab.dsa does not list for first stage mount")
     sgdisk = shutil.which("sgdisk") or str(otatools / "bin/sgdisk")
-    cmd = [sgdisk, "--clear"]
+    cmd = [sgdisk, "--clear", f"--disk-guid={SYSTEM_DISK_GUID}"]
     number = 1
     for name, size in SYSTEM_SMALL_PARTITIONS:
         cmd += [f"--new={number}:0:+{size // 1024}K", f"--change-name={number}:{name}"]

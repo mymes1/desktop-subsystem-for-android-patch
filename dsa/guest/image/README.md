@@ -134,9 +134,14 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   the platform key. It tells the host about each app task, so each gets its own window.
 - The published kernel modules are dropped. They belong to Google's kernel; DSA boots its
   own kernel with the drivers built in.
-- `fstab.dsa` replaces the mount table. All partitions are on the user's one Android
-  disk, found by the super partition's UUID, because Android creates its partition links
-  for Hyper-V's SCSI disks only on that disk.
+- `fstab.dsa` replaces the mount table. Every partition is found by its name
+  (`/dev/block/by-name/...`), never by a kernel disk name such as `/dev/block/sda`. Hyper-V
+  names its SCSI disks in the order it probes them, and that order changes when the host
+  attaches another disk. The kernel command line names the system disk by the GUID written
+  into its GPT (`blkdevparts=<disk GUID>:...`), and DSA's kernel reads that GUID from each
+  disk, so the system disk's partition names land on it whichever kernel name it gets. The
+  data disk's partitions get their names from its own GPT. `check-image.py` fails an image
+  whose command line, mount tables or init scripts name a disk as `sda`.
 - Android's log (`logcat`) stays in logd's memory and is never written to a file or to the
   serial console. The control daemon reads it only while the host asks (`dsa logcat`, the
   settings app's log view, `dsa logs collect`) and sends it on a vsock port of its own.

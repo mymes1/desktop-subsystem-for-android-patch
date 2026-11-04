@@ -843,3 +843,36 @@ Digitalis의 배포 묶음(`docker/build-digitalis.sh`)은 번역기(`libberberi
 - PL011 주소 `0xeffec000`이 모든 ARM64 Windows 빌드에서 같은지. WSL이 고정값으로 쓰므로 같다고 본다.
 - `reserve_mem=`으로 잡은 ramoops가 Hyper-V ARM64에서 패닉 기록을 남기는지.
 - ARM64에서 `EnableColdHint`와 fine-grained memory 설정이 받아들여지는지. WSL은 아키텍처를 가리지 않고 설정한다.
+## R10. 디스크를 SCSI 탐색 순서가 아니라 고정된 정체로 찾기 (FR-1)
+
+질문: 게스트 이미지는 시스템 디스크가 `sda`라고 가정했다(`blkdevparts=sda:...`). 호스트가 pstore 디스크처럼 디스크를 하나 더 붙이면 Hyper-V SCSI 탐색 순서에 따라 이름이 바뀌어 다른 디스크로 부팅하거나 부팅에 실패할 수 있는가. 그렇다면 어떻게 고치는가.
+
+### 확인한 자료
+
+| 자료 | 버전 |
+|---|---|
+| WSL 커널 `block/partitions/cmdline.c`, `check.h`, `efi.c`, `core.c` | `linux-msft-wsl-6.18.54.1` |
+| AOSP `system/core/init` (`devices.cpp`, `block_dev_initializer.cpp`), `fs_mgr` | Android 16 / 17 |
+| 이 저장소의 `make-image.py`, `fstab.dsa`, `*.rc`, `vm.rs` | `develop` `cf3e880` |
+
+### 방법
+
+`/dev/block/sd`, `/dev/sd`, `blkdevparts=` 를 저장소 전체에서 찾았고, 커널 명령줄 파티션 파서가 디스크를 고르는 코드를 읽었다. 하드웨어에서는 아직 확인하지 않았다.
+
+### 찾은 것
+
+1. `/dev/block/sdX`를 직접 쓰는 곳은 없었다. `fstab.dsa`의 `/metadata`, `/data`, `misc`와 부트 컨트롤 HAL이 쓰는 `misc`, 첫 단계 마운트가 쓰는 `vbmeta`, `boot`, `super`는 모두 `/dev/block/by-name/` 링크로 찾는다. 이 링크는 파티션 이름(uevent `PARTNAME`)으로 만들어지므로 디스크 순서와 무관하다.
+2. 순서에 기대는 곳은 하나였다. 커널 명령줄의 `blkdevparts=sda:...`다. `cmdline_partition()`은 `state->disk->disk_name`, 곧 탐색 순서로 붙은 커널 이름으로 항목을 찾는다. pstore 디스크가 먼저 탐색되면 시스템 디스크의 파티션 범위와 이름이 pstore 디스크에 붙고, 시스템 디스크는 GPT 파서로 넘어간다. 이름이 엉뚱한 디스크에 붙으면 `by-name/super`가 다른 디스크를 가리킬 수 있다.
+3. 호스트는 SCSI 위치를 고정한다(0번 시스템, 1번 데이터). 그러나 리눅스 storvsc가 디스크에 `sd` 이름을 주는 순서는 비동기 탐색이 끝나는 순서이고, 위치 번호를 따른다는 보장이 없다. 그래서 위치 고정만으로는 충분하지 않다.
+
+### 결정
+
+- 시스템 디스크의 GPT에 고정된 디스크 GUID(`SYSTEM_DISK_GUID`)를 `sgdisk --disk-guid`로 쓰고, 커널 명령줄은 `blkdevparts=<그 GUID>:...`로 디스크를 그 GUID로 이름 짓는다.
+- 커널 패치(`cmdline-partition-uuid.patch`)를 넓힌다. 커널 이름으로 맞는 항목이 없으면 디스크의 GPT 헤더(LBA 1, 논리 블록 크기 기준)를 읽어 서명 `EFI PART`를 확인하고, 오프셋 56의 디스크 GUID를 `%pUl` 형식으로 바꿔 항목을 찾는다. 항목 이름 버퍼는 GUID가 들어가도록 37바이트로 늘린다. 기존 `sda:` 형식도 그대로 동작한다.
+- 데이터 디스크(`misc`, `metadata`, `userdata`)는 지금처럼 자기 GPT의 파티션 이름으로 찾는다. 사용자마다 템플릿을 복사하므로 디스크 GUID가 같아도 상관없다. 시스템 디스크 GUID와만 다르면 된다.
+- `check-image.py`는 커널 명령줄, 이미지 안의 `fstab.*`, `*.rc`, `*.sh`, `*.prop`, 램디스크의 마운트 표와 init 스크립트가 `/dev/block/sdX`, `/dev/sdX`, `blkdevparts=sdX:`를 쓰면 실패한다.
+
+### 남은 위험과 확인할 것
+
+- `androidboot.boot_devices=vmbus`는 VMBus 아래 모든 디스크의 파티션에 `by-name` 링크를 만든다. 다른 디스크가 `misc`, `super`, `userdata` 같은 같은 이름의 GPT 파티션을 가지면 링크가 충돌한다. pstore 디스크는 파티션 표가 없는 원시 디스크여야 한다.
+- 하드웨어 확인(예정): pstore 디스크를 SCSI 0번, 1번, 2번에 각각 붙여 부팅하고, 콘솔 로그의 파티션 줄(`sdX: (vbmeta_a)(...)(super)`)이 시스템 디스크에 붙는지, `ls -l /dev/block/by-name/`이 같은 디스크를 가리키는지, `/data`가 마운트되는지 본다. 결과는 이 절에 기록한다.

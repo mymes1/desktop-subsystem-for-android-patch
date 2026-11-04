@@ -25,7 +25,7 @@ SPEC.loader.exec_module(make_image)
 
 class ImageLayoutTests(unittest.TestCase):
     def test_fr1_selects_vendor_apexes_without_the_cuttlefish_launcher(self):
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)")
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         self.assertIn("androidboot.boot_devices=vmbus", cmdline)
         self.assertNotIn("androidboot.boot_part_uuid", cmdline)
         self.assertIn(
@@ -59,9 +59,90 @@ class ImageLayoutTests(unittest.TestCase):
         }
         self.assertEqual(
             make_image.command_line_partitions(layout, {"misc": make_image.MISC_UUID}),
-            "blkdevparts=sda:1048576@1048576(misc:811d3bbb-a7ff-437a-857f-f54af996b190),1048576@69206016(vbmeta_a),"
-            "1610612736@104857600(super)",
+            f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1048576@1048576(misc:811d3bbb-a7ff-437a-857f-f54af996b190),"
+            "1048576@69206016(vbmeta_a),1610612736@104857600(super)",
         )
+
+    def test_fr1_the_system_disk_is_named_by_its_gpt_guid_not_its_probe_order(self):
+        # Hyper-V's SCSI controller probes disks in an order that changes when the host
+        # attaches another (the pstore disk), so sda is not always the system disk.
+        cmdline = make_image.command_line_partitions({"super": (1 << 20, 1 << 30)})
+        self.assertTrue(cmdline.startswith(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:"))
+        self.assertEqual(make_image.kernel_disk_names(cmdline), [])
+        self.assertRegex(make_image.SYSTEM_DISK_GUID,
+                         r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+        self.assertNotIn(make_image.SYSTEM_DISK_GUID, (make_image.SUPER_UUID, make_image.MISC_UUID))
+
+    def test_fr1_the_system_disk_gpt_carries_the_guid_the_command_line_names(self):
+        calls = []
+        rows = [
+            f"   {n}   {2048 * n}   {2048 * n + 2047}   1.0 MiB   8300  {name}"
+            for n, (name, _) in enumerate(make_image.SYSTEM_SMALL_PARTITIONS + [("super", 0)], start=1)
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            images = root / "images"
+            images.mkdir()
+            (images / "super.img").write_bytes(bytes(4096))
+
+            def fake_run(*args, **kwargs):
+                calls.append([str(a) for a in args])
+
+            def fake_subprocess_run(cmd, *args, **kwargs):
+                return subprocess.CompletedProcess(cmd, 0, stdout="\n".join(rows), stderr="")
+
+            with patch.object(make_image, "run", side_effect=fake_run), \
+                 patch.object(make_image, "make_raw_disk", side_effect=lambda path, size: path.write_bytes(b"")), \
+                 patch.object(make_image, "materialize_backup_gpt"), \
+                 patch.object(make_image, "verified_boot_partitions", return_value=[]), \
+                 patch.object(make_image.subprocess, "run", side_effect=fake_subprocess_run):
+                cmdline = make_image.system_disk(images, root, root, root / "system.vhdx")
+        sgdisk = next(c for c in calls if "--clear" in c)
+        self.assertIn(f"--disk-guid={make_image.SYSTEM_DISK_GUID}", sgdisk)
+        self.assertTrue(cmdline.startswith(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:"))
+
+    def test_fr1_kernel_disk_names_are_found_and_stable_identities_are_not(self):
+        found = make_image.kernel_disk_names(
+            "/dev/block/sda1 /x ext4 defaults wait root=/dev/sdb2 blkdevparts=sdc:1@0(misc) /dev/vda")
+        self.assertEqual(found, ["/dev/block/sda1", "/dev/sdb2", "blkdevparts=sdc:", "/dev/vda"])
+        self.assertEqual(make_image.kernel_disk_names(
+            "/dev/block/by-name/userdata /dev/block/by-uuid/x /dev/block/zram0 /dev/block/dm-0 /sdcard "
+            f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)"), [])
+
+    def test_fr1_no_mount_table_or_init_script_names_a_disk_by_probe_order(self):
+        here = Path(SPEC.origin).parent
+        for path in [here / "fstab.dsa", *sorted(here.glob("*.rc"))]:
+            self.assertEqual(make_image.kernel_disk_names(path.read_text()), [], path.name)
+        cmdline = make_image.kernel_cmdline(make_image.command_line_partitions({"super": (1 << 20, 1 << 30)}))
+        self.assertEqual(make_image.kernel_disk_names(cmdline), [])
+
+    def test_fr1_check_image_rejects_a_disk_named_by_probe_order(self):
+        check_script = Path(__file__).with_name("check-image.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            img_dir = root / "image"
+            img_dir.mkdir()
+            keys_dir = root / "keys"
+            keys_dir.mkdir()
+            (keys_dir / "test.x509.pem").write_text("-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n")
+            manifest = {"files": {}, "kernel_cmdline": "console=ttyS0 blkdevparts=sda:1048576@1048576(misc)"}
+            (img_dir / "image.json").write_text(json.dumps(manifest))
+            (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
+                archive.writestr("SYSTEM/build.prop", "ro.debuggable=0\n")
+                archive.writestr("META/apkcerts.txt", "")
+                archive.writestr("VENDOR/etc/fstab.dsa", "/dev/block/sdb3 /data ext4 defaults wait\n")
+                archive.writestr("VENDOR/etc/init/disk.rc", "on fs\n    write /dev/block/sdc 0\n")
+            proc = subprocess.run(
+                [sys.executable, str(check_script), str(img_dir), str(keys_dir)],
+                capture_output=True,
+                text=True,
+            )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("the kernel command line names a disk by its probe order (blkdevparts=sda:)", proc.stdout)
+        self.assertIn("system disk by its GUID", proc.stdout)
+        self.assertIn("VENDOR/etc/fstab.dsa names a disk by its probe order (/dev/block/sdb3)", proc.stdout)
+        self.assertIn("VENDOR/etc/init/disk.rc names a disk by its probe order (/dev/block/sdc)", proc.stdout)
 
     def test_fr1_verified_hash_partition_needs_a_first_stage_entry(self):
         found = [("chain", "vbmeta_system"), ("chain", "boot"), ("chain", "init_boot"), ("hash", "vendor_boot")]
@@ -344,7 +425,7 @@ class ImageLayoutTests(unittest.TestCase):
 
 
     def test_pr3_kernel_cmdline_selects_guest_graphics_stack(self):
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)")
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         self.assertIn("androidboot.hardware.gltransport=hvsocket", cmdline)
         self.assertIn("androidboot.hardware.egl=angle", cmdline)
         self.assertIn("androidboot.hardware.vulkan=ranchu", cmdline)
@@ -360,14 +441,14 @@ class ImageLayoutTests(unittest.TestCase):
     def test_pr3_composer_starts_without_a_display_device(self):
         # Cuttlefish's composer otherwise looks for a virtio-gpu DRM card or a goldfish
         # display, finds neither under Hyper-V, and surfaceflinger aborts.
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)")
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         self.assertIn("androidboot.hardware.hwcomposer.mode=noop", cmdline)
         self.assertIn("androidboot.hardware.hwcomposer.display_finder_mode=noop", cmdline)
 
     def test_fr1_lights_hal_listens_on_an_unprivileged_vsock_port(self):
         # Without a port the Cuttlefish lights HAL binds vsock port 0, which needs
         # CAP_NET_BIND_SERVICE, and aborts; system_server waits for it and never boots.
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)")
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         port = int(cmdline.split("androidboot.vsock_lights_port=", 1)[1].split()[0])
         self.assertGreaterEqual(port, 1024)
         self.assertNotIn(port, {5000, 5566, 5567})
@@ -1087,7 +1168,7 @@ class ImageLayoutTests(unittest.TestCase):
                 self.assertNotIn("VENDOR/bin/hw/dsa-hwcomposer", archive.namelist())
 
     def test_fr3_the_kernel_command_line_sets_up_the_dsa_hwcomposer(self):
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)", hwcomposer=True)
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)", hwcomposer=True)
         # Cuttlefish's composer, and the settings it alone reads, are gone.
         self.assertNotIn("hwcomposer.mode=noop", cmdline)
         self.assertNotIn("display_finder_mode", cmdline)
@@ -2157,7 +2238,7 @@ class BootLogTests(unittest.TestCase):
     def test_fr1_kernel_does_not_audit_every_syscall(self):
         # audit=1 made the kernel audit each iptables change and BPF program load, with
         # syscall records, and overflow its queue for auditd before logd started.
-        self.assertNotIn("audit=1", make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)").split())
+        self.assertNotIn("audit=1", make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)").split())
 
     def test_fr1_unused_devtmpfs_nodes_are_not_logged_as_denials(self):
         policy = make_image.KERNEL_POLICY.read_text()

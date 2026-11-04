@@ -131,6 +131,17 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIn('device_rename(&pdev->dev, "vmbus")', patch)
         self.assertIn("device_move(&pdev->dev, &platform_bus, DPM_ORDER_NONE)", patch)
 
+    def test_fr1_command_line_partitions_find_the_disk_by_its_gpt_guid(self):
+        # Hyper-V names disks sda, sdb, ... in probe order, which changes when the host
+        # attaches another disk. The image names the system disk by the GUID in its GPT.
+        patch = (PATCHES / "cmdline-partition-uuid.patch").read_text()
+        self.assertIn("block/partitions/cmdline.c", patch)
+        self.assertIn("+\tchar name[UUID_STRING_LEN + 1];", patch)
+        self.assertIn('+\tif (!memcmp(header, "EFI PART", 8))', patch)
+        self.assertIn('"%pUl", header + 56', patch)
+        self.assertIn("+\t\t\tparts = cmdline_parts_find(bdev_parts, guid);", patch)
+        self.assertIn("queue_logical_block_size(state->disk->queue) >> 9", patch)
+
     def test_fr10_wakeup_sources_live_where_android_labels_them(self):
         # Android's suspend service reads every wakeup source's statistics. The platform
         # policy labels /sys/devices/virtual/wakeup, but a device's own wakeup source sits
