@@ -103,7 +103,8 @@ public sealed class DsaService
         Bool(json, "links_in_android"),
         OptionalString(json, "android_version"),
         Bool(json, "developer_mode"),
-        Int(json, "adb_port") is > 0 and var port ? port : SettingsInfo.DefaultAdbPort);
+        Int(json, "adb_port") is > 0 and var port ? port : SettingsInfo.DefaultAdbPort,
+        Bool(json, "arm_translation", missing: true));
 
     public async Task<SettingsInfo> SettingsAsync() =>
         ReadSettings(await RunJsonAsync("settings").ConfigureAwait(true));
@@ -123,6 +124,34 @@ public sealed class DsaService
 
     public Task<SettingsInfo> SetAdbPortAsync(int port) =>
         SetAsync("adb-port", port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    public Task<SettingsInfo> SetArmTranslationAsync(bool on) => SetAsync("arm-translation", on ? "on" : "off");
+
+    private static ArmTranslationInfo ReadArmTranslation(JsonElement json)
+    {
+        ArmPackageInfo? package = null;
+        if (json.TryGetProperty("package", out var p) && p.ValueKind == JsonValueKind.Object)
+        {
+            package = new ArmPackageInfo(String(p, "name"), String(p, "version"), String(p, "library"),
+                String(p, "license"));
+        }
+        ArmGuestInfo? android = null;
+        if (json.TryGetProperty("android", out var a) && a.ValueKind == JsonValueKind.Object)
+        {
+            android = new ArmGuestInfo(Bool(a, "installed"), Bool(a, "active"), String(a, "abilist"));
+        }
+        return new ArmTranslationInfo(package, Bool(json, "enabled", missing: true), Bool(json, "supported"),
+            android, Bool(json, "restart_needed"));
+    }
+
+    /// <summary>Whether ARM apps can run, and with which translation package.</summary>
+    public async Task<ArmTranslationInfo> ArmTranslationAsync() =>
+        ReadArmTranslation(await RunJsonAsync("arm-translation", "status").ConfigureAwait(true));
+
+    /// <summary>Removes the ARM translation package; Android goes without it from its next
+    /// start.</summary>
+    public async Task<ArmTranslationInfo> RemoveArmTranslationAsync() =>
+        ReadArmTranslation(await RunJsonAsync("arm-translation", "remove").ConfigureAwait(true));
 
     public Task<SettingsInfo> SetProgramUpdatesAsync(bool on) => SetAsync("program-updates", on ? "on" : "off");
 
