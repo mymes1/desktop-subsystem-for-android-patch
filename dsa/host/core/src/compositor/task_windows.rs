@@ -99,20 +99,6 @@ pub fn fit_within(size: (u32, u32), area: (u32, u32)) -> (u32, u32) {
     (fit(width, max_width), fit(height, max_height))
 }
 
-/// How much a frame of `frame` pixels is scaled to fill a view of `view` pixels, in each
-/// direction. While the user resizes a window, its last frame is stretched to fill it this
-/// way until the guest draws one at the new size.
-pub fn fill_scale(frame: (u32, u32), view: (u32, u32)) -> (f32, f32) {
-    let scale = |frame: u32, view: u32| {
-        if frame == 0 || view == 0 {
-            1.0
-        } else {
-            view as f32 / frame as f32
-        }
-    };
-    (scale(frame.0, view.0), scale(frame.1, view.1))
-}
-
 fn open(task: &Task) -> WindowChange {
     let (width, height) = window_size(&task.bounds);
     WindowChange::Open {
@@ -969,12 +955,5 @@ mod tests {
         assert_eq!(fit_within((800, 600), (1920, 1040)), (800, 600));
         assert_eq!(fit_within((4000, 100), (1000, 1000)), (1000, 25));
         assert_eq!(fit_within((10, 10), (0, 0)), (1, 1));
-    }
-
-    #[test]
-    fn fr3_the_last_frame_is_stretched_to_fill_a_resized_window() {
-        assert_eq!(fill_scale((400, 300), (800, 150)), (2.0, 0.5));
-        assert_eq!(fill_scale((400, 300), (400, 300)), (1.0, 1.0));
-        assert_eq!(fill_scale((0, 300), (800, 0)), (1.0, 1.0));
     }
 }

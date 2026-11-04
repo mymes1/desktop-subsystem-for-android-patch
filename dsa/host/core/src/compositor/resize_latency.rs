@@ -1,12 +1,13 @@
-//! How long a resized window shows its last frame stretched before a frame of its new size
-//! arrives.
+//! How long a resized window shows its last frame, at that frame's own size, before a frame
+//! of its new size arrives.
 //!
-//! Stretching the last frame only covers the wait for the guest to draw at the new size; a
-//! person should not notice it. [`ResizeLatency`] measures the wait for each window: from
-//! the moment its client area took a size to the first frame of exactly that size. A drag
-//! changes the size many times, so each measurement starts at the latest change. A window
-//! that waits longer than [`STUCK`] is reported once, because a stretched frame left on the
-//! screen is a defect, not a delay.
+//! Showing the last frame (1:1, cropped or with the app's background colour beside it) only
+//! covers the wait for the guest to draw at the new size; a person should not notice it.
+//! [`ResizeLatency`] measures the wait for each window: from the moment its client area took a
+//! size to the first frame of exactly that size. A drag changes the size many times, so each
+//! measurement starts at the latest change. A window that waits longer than [`STUCK`] is
+//! reported once, because a frame of the wrong size left on the screen is a defect, not a
+//! delay.
 
 use std::fmt;
 use std::time::{Duration, Instant};
@@ -14,7 +15,7 @@ use std::time::{Duration, Instant};
 /// A wait a person may notice. The summary counts the waits at least this long.
 pub const NOTICEABLE: Duration = Duration::from_millis(100);
 
-/// A wait after which the window counts as stuck on a stretched frame.
+/// A wait after which the window counts as stuck on a frame of an older size.
 pub const STUCK: Duration = Duration::from_secs(2);
 
 /// How many of the latest waits the summary covers.

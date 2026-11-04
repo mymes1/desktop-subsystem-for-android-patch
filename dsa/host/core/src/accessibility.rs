@@ -950,26 +950,17 @@ pub struct ScreenRect {
 }
 
 /// A node's `bounds`, in pixels of the task, on the host's screen: the window shows the task
-/// (`task_size`, in guest pixels) in its client area (`client_size`, in host pixels, which is
-/// the task's size unless a frame is shown stretched), whose top left is at `client_origin` on
-/// the screen. The result is cut to the client area, since nothing outside it is seen.
+/// (`task_size`, in guest pixels) 1:1 from the top left of its client area (`client_size`, in
+/// host pixels, which is the task's size unless the window waits for a frame of a new size),
+/// whose top left is at `client_origin` on the screen. Frames are never scaled to the window,
+/// so neither are the bounds. The result is cut to the client area, since nothing outside it
+/// is seen.
 pub fn to_screen(
     bounds: Bounds,
-    task_size: (u32, u32),
+    _task_size: (u32, u32),
     client_size: (u32, u32),
     client_origin: (i32, i32),
 ) -> ScreenRect {
-    let scale = |client: u32, task: u32| {
-        if task == 0 || client == 0 {
-            1.0
-        } else {
-            client as f64 / task as f64
-        }
-    };
-    let (sx, sy) = (
-        scale(client_size.0, task_size.0),
-        scale(client_size.1, task_size.1),
-    );
     let clamp = |value: f64, limit: u32| {
         if limit == 0 {
             value.max(0.0)
@@ -977,10 +968,10 @@ pub fn to_screen(
             value.clamp(0.0, limit as f64)
         }
     };
-    let left = clamp(bounds.left as f64 * sx, client_size.0);
-    let top = clamp(bounds.top as f64 * sy, client_size.1);
-    let right = clamp(bounds.right as f64 * sx, client_size.0);
-    let bottom = clamp(bounds.bottom as f64 * sy, client_size.1);
+    let left = clamp(bounds.left as f64, client_size.0);
+    let top = clamp(bounds.top as f64, client_size.1);
+    let right = clamp(bounds.right as f64, client_size.0);
+    let bottom = clamp(bounds.bottom as f64, client_size.1);
     ScreenRect {
         left: client_origin.0 as f64 + left,
         top: client_origin.1 as f64 + top,
@@ -989,23 +980,17 @@ pub fn to_screen(
     }
 }
 
-/// A point on the host's screen in pixels of the task, the inverse of [`to_screen`].
+/// A point on the host's screen in pixels of the task, the inverse of [`to_screen`]: one
+/// window pixel is one task pixel.
 pub fn from_screen(
     point: (f64, f64),
-    task_size: (u32, u32),
-    client_size: (u32, u32),
+    _task_size: (u32, u32),
+    _client_size: (u32, u32),
     client_origin: (i32, i32),
 ) -> (i32, i32) {
-    let scale = |client: u32, task: u32| {
-        if task == 0 || client == 0 {
-            1.0
-        } else {
-            task as f64 / client as f64
-        }
-    };
     (
-        ((point.0 - client_origin.0 as f64) * scale(client_size.0, task_size.0)).floor() as i32,
-        ((point.1 - client_origin.1 as f64) * scale(client_size.1, task_size.1)).floor() as i32,
+        (point.0 - client_origin.0 as f64).floor() as i32,
+        (point.1 - client_origin.1 as f64).floor() as i32,
     )
 }
 

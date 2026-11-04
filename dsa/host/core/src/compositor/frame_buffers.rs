@@ -54,20 +54,79 @@ pub fn texture_fits(current: (u32, u32), wanted: (u32, u32)) -> bool {
     current == wanted
 }
 
-/// The scale that makes a frame fill a client area of `view` pixels when the swapchain's
-/// buffers are `buffers` pixels. DirectComposition stretches a swapchain's source region
-/// over the whole of its buffers, so a frame of any size first takes the buffers' size, and
-/// the visual scales from there.
-pub fn visual_scale(buffers: (u32, u32), view: (u32, u32)) -> (f32, f32) {
-    let scale = |buffer: u32, view: u32| {
-        if buffer == 0 || view == 0 {
+/// How a frame sits in its window: the visual's scale, the part of the client area the frame
+/// covers, and whether the rest needs filling.
+///
+/// A frame is never scaled to the window, and never more in one direction than the other. Until
+/// a frame of the window's size arrives (while the user drags an edge, or while the app lays
+/// itself out again), the window shows the last frame pixel for pixel from its top left
+/// corner: a window that grew shows the app's background colour where the frame does not
+/// reach, and a window that shrank crops the frame rather than squashing it. A stretched frame
+/// looked distorted for as long as an app took to draw at the new size, which is long for an
+/// app such as Settings.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Placement {
+    /// The visual's scale. DirectComposition stretches a swapchain's source region over the
+    /// whole of its buffers, so this brings the frame back to its own size.
+    pub scale: (f32, f32),
+    /// The part of the client area the frame covers, from its top left corner: the frame,
+    /// cropped to the window.
+    pub covered: (u32, u32),
+    /// Whether some of the client area is outside the frame and shows the fill colour.
+    pub fill: bool,
+}
+
+/// Where a frame of `frame` pixels goes in a client area of `view` pixels when the swapchain's
+/// buffers are `buffers` pixels: at 1:1, from the top left corner.
+pub fn frame_placement(buffers: (u32, u32), frame: (u32, u32), view: (u32, u32)) -> Placement {
+    let scale = |frame: u32, buffer: u32| {
+        if frame == 0 || buffer == 0 {
             1.0
         } else {
-            view as f32 / buffer as f32
+            frame as f32 / buffer as f32
         }
     };
-    (scale(buffers.0, view.0), scale(buffers.1, view.1))
+    Placement {
+        scale: (scale(frame.0, buffers.0), scale(frame.1, buffers.1)),
+        covered: (frame.0.min(view.0), frame.1.min(view.1)),
+        fill: frame.0 < view.0 || frame.1 < view.1,
+    }
 }
+
+/// How many pixels are sampled along each of a frame's right and bottom edges to find the
+/// colour that fills the part of a window the frame does not reach.
+pub const EDGE_SAMPLES: u32 = 8;
+
+/// The pixels of a frame of `region` pixels whose colour fills the rest of a larger window:
+/// [`EDGE_SAMPLES`] down its last column, then as many along its last row. Those are the
+/// pixels next to the strip being filled, and in most apps they are the window's background.
+pub fn edge_points((width, height): (u32, u32)) -> Vec<(u32, u32)> {
+    let (width, height) = (width.max(1), height.max(1));
+    let along = |size: u32, i: u32| {
+        ((2 * u64::from(i) + 1) * u64::from(size) / (2 * u64::from(EDGE_SAMPLES))) as u32
+    };
+    let column = (0..EDGE_SAMPLES).map(move |i| (width - 1, along(height, i)));
+    let row = (0..EDGE_SAMPLES).map(move |i| (along(width, i), height - 1));
+    column.chain(row).collect()
+}
+
+/// The colour that fills the part of a window its frame does not cover, from the frame's
+/// `edge` pixels: the one most of them have (the first of those tied), opaque. `None` when
+/// there are none.
+pub fn fill_colour(edge: &[[u8; 4]]) -> Option<[u8; 4]> {
+    let mut best: Option<([u8; 4], usize)> = None;
+    for pixel in edge {
+        let count = edge.iter().filter(|other| *other == pixel).count();
+        match best {
+            Some((_, most)) if most >= count => {}
+            _ => best = Some((*pixel, count)),
+        }
+    }
+    best.map(|([red, green, blue, _], _)| [red, green, blue, 255])
+}
+
+/// The fill colour before any frame was sampled: Android's light window background.
+pub const DEFAULT_FILL: [u8; 4] = [255, 255, 255, 255];
 
 /// How many pixels a side the resize trace samples of a frame to see if it is all one colour.
 pub const SAMPLE_GRID: u32 = 8;
@@ -124,14 +183,85 @@ mod tests {
         assert!(swapchain_buffers() >= 3);
     }
 
+    /// How many window pixels one frame pixel takes, in each direction.
+    fn on_screen(placement: Placement, buffers: (u32, u32), frame: (u32, u32)) -> (f32, f32) {
+        (
+            placement.scale.0 * buffers.0 as f32 / frame.0 as f32,
+            placement.scale.1 * buffers.1 as f32 / frame.1 as f32,
+        )
+    }
+
     #[test]
-    fn fr4_a_frame_smaller_than_its_buffers_is_shown_at_the_window_size_not_stretched() {
-        // A 607x1080 frame in 1920x1080 buffers is stretched to 1920 wide first; the visual
-        // brings it back to the 607-pixel client area, so it shows 1:1.
-        let (x, y) = visual_scale((1920, 1080), (607, 1080));
-        assert!((1920.0 * x - 607.0).abs() < 0.01);
-        assert!((y - 1.0).abs() < f32::EPSILON);
-        assert_eq!(visual_scale((0, 0), (607, 1080)), (1.0, 1.0));
+    fn fr4_a_frame_is_never_scaled_non_uniformly_while_the_window_is_resized() {
+        let buffers = (1920, 1088);
+        // Wider and shorter, narrower and taller, both larger, both smaller, the same.
+        for (frame, view) in [
+            ((900, 700), (1300, 500)),
+            ((900, 700), (600, 950)),
+            ((900, 700), (1200, 900)),
+            ((900, 700), (500, 400)),
+            ((607, 1080), (607, 1080)),
+        ] {
+            let (x, y) = on_screen(frame_placement(buffers, frame, view), buffers, frame);
+            assert!((x - 1.0).abs() < 1e-4, "{frame:?} in {view:?}: {x} across");
+            assert!((y - 1.0).abs() < 1e-4, "{frame:?} in {view:?}: {y} down");
+        }
+    }
+
+    #[test]
+    fn fr4_a_window_larger_than_its_frame_is_filled_not_left_black() {
+        let placement = frame_placement((1920, 1088), (900, 700), (1300, 700));
+        assert_eq!(placement.covered, (900, 700));
+        assert!(placement.fill);
+        assert!(frame_placement((1920, 1088), (900, 700), (900, 760)).fill);
+    }
+
+    #[test]
+    fn fr4_a_window_smaller_than_its_frame_crops_it_instead_of_squashing_it() {
+        let placement = frame_placement((1920, 1088), (900, 700), (600, 500));
+        assert_eq!(placement.covered, (600, 500));
+        assert!(!placement.fill);
+        // A frame of the window's size covers it exactly.
+        let exact = frame_placement((1920, 1088), (600, 500), (600, 500));
+        assert_eq!(exact.covered, (600, 500));
+        assert!(!exact.fill);
+    }
+
+    #[test]
+    fn fr4_a_frame_of_the_buffers_size_keeps_the_identity_scale() {
+        assert_eq!(
+            frame_placement((1280, 720), (1280, 720), (1280, 720)).scale,
+            (1.0, 1.0)
+        );
+        assert_eq!(frame_placement((0, 0), (0, 0), (607, 1080)).scale, (1.0, 1.0));
+    }
+
+    #[test]
+    fn fr4_the_fill_is_sampled_from_the_frames_right_and_bottom_edges() {
+        let points = edge_points((900, 700));
+        assert_eq!(points.len(), (2 * EDGE_SAMPLES) as usize);
+        let (column, row) = points.split_at(EDGE_SAMPLES as usize);
+        for &(x, y) in column {
+            assert!(x == 899 && y < 700, "({x}, {y}) is not on the right edge");
+        }
+        for &(x, y) in row {
+            assert!(y == 699 && x < 900, "({x}, {y}) is not on the bottom edge");
+        }
+        assert!(edge_points((0, 0)).iter().all(|&point| point == (0, 0)));
+    }
+
+    #[test]
+    fn fr4_the_fill_is_the_colour_most_of_the_edge_has_and_is_opaque() {
+        let background = [0xf6, 0xf2, 0xfa, 0xff];
+        let text = [0x1d, 0x1b, 0x20, 0xff];
+        let mut edge = [background; 16];
+        edge[3] = text;
+        edge[9] = text;
+        assert_eq!(fill_colour(&edge), Some(background));
+        assert_eq!(fill_colour(&[[10, 20, 30, 0]]), Some([10, 20, 30, 255]));
+        assert_eq!(fill_colour(&[]), None);
+        // Never black unless the app's own edge is black.
+        assert_ne!(DEFAULT_FILL, [0, 0, 0, 255]);
     }
 
     #[test]

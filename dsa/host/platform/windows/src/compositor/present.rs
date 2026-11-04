@@ -5,18 +5,21 @@
 //! window manager places in the app window host's process; the window host opens it
 //! ([`Gpu::open_shared`]) on the same GPU. Each task window there has a DirectComposition
 //! visual holding a flip-model swapchain, and [`WindowPresenter::present`] copies the frame
-//! into the swapchain and presents it. The visual is scaled to fill the window, so while the
-//! user resizes it, the last frame is stretched over the new size until a frame of that size
-//! arrives, which is then shown 1:1. No frame passes through the CPU.
+//! into the swapchain and presents it. Every frame is shown 1:1 from the window's top left
+//! corner, never scaled to the window: while the user resizes it, the last frame stays at its
+//! own size until a frame of the new size arrives. A window that grew shows the app's
+//! background colour where the frame does not reach (a second visual behind the frame, one
+//! pixel of that colour scaled to the client area), and a window that shrank crops the frame.
+//! The colour is the one most of the frame's right and bottom edge pixels have, read back
+//! without waiting for the GPU. No frame passes through the CPU.
 //!
 //! The texture has the size of the guest's buffers, the largest a frame of the task can be,
 //! and each frame fills its top-left region. The swapchain's buffers take the texture's
 //! size once, and each frame sets only the swapchain's source size
 //! (`IDXGISwapChain2::SetSourceSize`) to the region it fills, so a window resize never
 //! resizes the swapchain's buffers. DirectComposition stretches the source region over the
-//! whole of the buffers, so the visual scales from the buffers' size to the client area,
-//! whatever the size of the frame. A new frame size therefore changes nothing about the
-//! visual; only a new client area does.
+//! whole of the buffers, so the visual scales from the buffers' size back to the frame's own
+//! size (`frame_placement`).
 //!
 //! While the user drags, a new size is held: the window asks the guest for it before it takes
 //! it ([`WindowPresenter::hold_view`]), and a frame of that size that arrives meanwhile is
@@ -28,7 +31,7 @@
 //!
 //! Each presenter measures how long its window waited for a frame of its new size
 //! (`ResizeLatency`) and logs a summary every 20 resizes and when the window closes, and a
-//! warning when a window is left showing a stretched frame.
+//! warning when a window is left showing a frame of an older size.
 //!
 //! While the input trace is on, each presenter also finds out when its presents reached the
 //! screen: it notes each present's count, reads the swapchain's frame statistics at the next
@@ -40,14 +43,14 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::frame_buffers::{
-    content_region, sample_points, swapchain_buffers, swapchain_change, uniform_colour,
-    visual_scale, SwapchainChange, SAMPLE_GRID,
+    content_region, edge_points, fill_colour, frame_placement, sample_points, swapchain_buffers,
+    swapchain_change, uniform_colour, SwapchainChange, DEFAULT_FILL, EDGE_SAMPLES, SAMPLE_GRID,
 };
 use dsa_host_core::compositor::present_watch::{FrameStatistics, PresentWatch};
 use dsa_host_core::compositor::resize_latency::ResizeLatency;
 use dsa_host_core::compositor::resize_sync::{self, frame_action, FrameAction, ResizeSync, Step};
 use windows::core::{Interface, BOOL, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE, HWND, LUID};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE, HWND, LUID, POINT};
 use windows::Win32::Graphics::Direct3D::{
     D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP,
 };
@@ -55,12 +58,14 @@ use windows::Win32::Graphics::Direct3D11::{
     D3D11CreateDevice, ID3D11Device, ID3D11Device1, ID3D11DeviceContext, ID3D11Query,
     ID3D11Texture2D, D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE, D3D11_BOX,
     D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_MAPPED_SUBRESOURCE,
-    D3D11_MAP_READ, D3D11_QUERY_DESC, D3D11_QUERY_EVENT, D3D11_RESOURCE_MISC_SHARED,
-    D3D11_RESOURCE_MISC_SHARED_NTHANDLE, D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC,
-    D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING,
+    D3D11_MAP_FLAG_DO_NOT_WAIT, D3D11_MAP_READ, D3D11_QUERY_DESC, D3D11_QUERY_EVENT,
+    D3D11_RESOURCE_MISC_SHARED, D3D11_RESOURCE_MISC_SHARED_NTHANDLE, D3D11_SDK_VERSION,
+    D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING,
 };
 use windows::Win32::Graphics::DirectComposition::{
-    DCompositionCreateDevice, IDCompositionDevice, IDCompositionTarget, IDCompositionVisual,
+    DCompositionCreateDevice, IDCompositionDevice, IDCompositionSurface, IDCompositionTarget,
+    IDCompositionVisual, DCOMPOSITION_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+    DCOMPOSITION_BORDER_MODE_HARD,
 };
 use windows::Win32::Graphics::Dxgi::Common::{
     DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC,
@@ -348,7 +353,22 @@ impl Drop for SharedTexture {
 
 struct State {
     target: IDCompositionTarget,
+    /// The frame's visual, above `background`.
     visual: IDCompositionVisual,
+    /// Behind the frame: the fill colour over the whole client area.
+    background: IDCompositionVisual,
+    /// One pixel of the fill colour, the background's content; made at the first commit.
+    fill_surface: Option<IDCompositionSurface>,
+    /// The colour the part of the window the frame does not cover shows.
+    fill: [u8; 4],
+    /// The colour in `fill_surface`, once drawn.
+    fill_drawn: Option<[u8; 4]>,
+    /// Where a frame's edge pixels are copied to find the fill colour.
+    edges: Option<ID3D11Texture2D>,
+    /// The size of the frame whose edges were last copied.
+    edges_of: (u32, u32),
+    /// A copy into `edges` not yet read.
+    edges_pending: bool,
     swapchain: Option<IDXGISwapChain2>,
     /// The size of the swapchain's buffers: the texture's, not a frame's.
     buffers: Option<(u32, u32)>,
@@ -356,8 +376,8 @@ struct State {
     frame: (u32, u32),
     /// The size of the window's client area.
     view: (u32, u32),
-    /// What the visual was last committed for: the buffers' size and the client area.
-    committed: Option<((u32, u32), (u32, u32))>,
+    /// What the visuals were last committed for.
+    committed: Option<Committed>,
     /// The size the window is about to take, while it waits for its frame.
     hold: Option<Hold>,
     query: Option<ID3D11Query>,
@@ -372,6 +392,15 @@ struct State {
     presents: PresentWatch,
     /// The swapchain gives no frame statistics; said once in the log.
     no_statistics: bool,
+}
+
+/// What a commit of the visuals depends on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Committed {
+    buffers: (u32, u32),
+    frame: (u32, u32),
+    view: (u32, u32),
+    fill: [u8; 4],
 }
 
 /// A size the window has asked the guest for and not yet taken.
@@ -418,20 +447,35 @@ impl WindowPresenter {
     ) -> Result<Arc<Self>, String> {
         let dcomp = gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: `hwnd` is a live window of this thread; the rest are plain COM calls.
-        let (target, visual) = unsafe {
+        let (target, visual, background) = unsafe {
             let target = dcomp
                 .CreateTargetForHwnd(HWND(hwnd as *mut c_void), true)
                 .map_err(|e| failed("attaching DirectComposition to a task window", e))?;
+            let root = dcomp
+                .CreateVisual()
+                .map_err(|e| failed("creating a task window's visual", e))?;
+            let background = dcomp
+                .CreateVisual()
+                .map_err(|e| failed("creating a task window's background visual", e))?;
             let visual = dcomp
                 .CreateVisual()
                 .map_err(|e| failed("creating a task window's visual", e))?;
+            // One pixel scaled over the client area: no blending at its edges.
+            let _ = background.SetBitmapInterpolationMode(
+                DCOMPOSITION_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+            );
+            let _ = background.SetBorderMode(DCOMPOSITION_BORDER_MODE_HARD);
+            root.AddVisual(&background, true, None::<&IDCompositionVisual>)
+                .map_err(|e| failed("adding a task window's background visual", e))?;
+            root.AddVisual(&visual, true, None::<&IDCompositionVisual>)
+                .map_err(|e| failed("adding a task window's frame visual", e))?;
             target
-                .SetRoot(&visual)
+                .SetRoot(&root)
                 .map_err(|e| failed("setting a task window's visual", e))?;
             dcomp
                 .Commit()
                 .map_err(|e| failed("committing a task window's visual", e))?;
-            (target, visual)
+            (target, visual, background)
         };
         drop(dcomp);
         Ok(Arc::new(WindowPresenter {
@@ -440,6 +484,13 @@ impl WindowPresenter {
             state: Mutex::new(State {
                 target,
                 visual,
+                background,
+                fill_surface: None,
+                fill: DEFAULT_FILL,
+                fill_drawn: None,
+                edges: None,
+                edges_of: (0, 0),
+                edges_pending: false,
                 swapchain: None,
                 buffers: None,
                 frame: (0, 0),
@@ -461,9 +512,9 @@ impl WindowPresenter {
     }
 
     /// The client area is now `view` pixels. A frame of a size the window was holding for is
-    /// presented now, together with the visual's new scale; otherwise the last frame is
-    /// stretched over the new size. Returns once the compositor has taken it, so a live
-    /// resize shows it with the new window size.
+    /// presented now, together with the visuals; otherwise the last frame stays at its own
+    /// size, cropped or with the fill colour around it. Returns once the compositor has taken
+    /// it, so a live resize shows it with the new window size.
     pub fn view_resized(&self, view: (u32, u32)) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.closed {
@@ -600,7 +651,8 @@ impl WindowPresenter {
         }
     }
 
-    /// Time has passed: a window left showing a stretched frame is logged, once per size.
+    /// Time has passed: a window left showing a frame of an older size is logged, once per
+    /// size.
     pub fn tick(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.closed {
@@ -618,8 +670,8 @@ impl WindowPresenter {
             note(
                 self.logger.as_deref(),
                 &format!(
-                    "a task window shows its last frame stretched: no {width}x{height} frame \
-                     came in the {} ms since it took that size",
+                    "a task window still shows a frame of an older size: no {width}x{height} \
+                     frame came in the {} ms since it took that size",
                     waited.as_millis()
                 ),
             );
@@ -842,25 +894,41 @@ impl WindowPresenter {
         }
     }
 
-    /// Scales the visual so a frame of any size fills the client area, and commits it, unless
-    /// that is what is on the compositor already. Returns whether it committed. A present
-    /// and a commit reach the compositor separately, so this comes right after the present
-    /// that goes with it.
+    /// Places the frame 1:1 at the window's top left corner and the fill colour behind it,
+    /// and commits them, unless that is what is on the compositor already. Returns whether it
+    /// committed. A present and a commit reach the compositor separately, so this comes right
+    /// after the present that goes with it.
     fn commit_visual(&self, state: &mut State) -> bool {
         let Some(buffers) = state.buffers else {
             // Nothing to show yet: the first frame commits it.
             return false;
         };
-        let wanted = (buffers, state.view);
+        // SAFETY: plain COM calls on objects this presenter owns, and the immediate context
+        // under its lock.
+        unsafe { self.read_edges(state) };
+        let wanted = Committed {
+            buffers,
+            frame: state.frame,
+            view: state.view,
+            fill: state.fill,
+        };
         if state.committed == Some(wanted) {
             return false;
         }
-        let (x, y) = visual_scale(buffers, state.view);
-        let matrix = Matrix3x2 {
-            M11: x,
+        let placement = frame_placement(buffers, state.frame, state.view);
+        let frame = Matrix3x2 {
+            M11: placement.scale.0,
             M12: 0.0,
             M21: 0.0,
-            M22: y,
+            M22: placement.scale.1,
+            M31: 0.0,
+            M32: 0.0,
+        };
+        let fill = Matrix3x2 {
+            M11: state.view.0.max(1) as f32,
+            M12: 0.0,
+            M21: 0.0,
+            M22: state.view.1.max(1) as f32,
             M31: 0.0,
             M32: 0.0,
         };
@@ -870,11 +938,164 @@ impl WindowPresenter {
         let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: plain COM calls on objects this presenter owns.
         unsafe {
-            let _ = state.visual.SetTransform2(&matrix);
+            if state.fill_drawn != Some(state.fill) {
+                if let Err(why) = self.draw_fill(state, &dcomp) {
+                    note(self.logger.as_deref(), &why);
+                }
+            }
+            let _ = state.visual.SetTransform2(&frame);
+            let _ = state.background.SetTransform2(&fill);
             let _ = dcomp.Commit();
         }
         state.committed = Some(wanted);
         true
+    }
+
+    /// Puts the fill colour in the background's one pixel, making it the first time.
+    unsafe fn draw_fill(
+        &self,
+        state: &mut State,
+        dcomp: &IDCompositionDevice,
+    ) -> Result<(), String> {
+        if state.fill_surface.is_none() {
+            let surface = dcomp
+                .CreateSurface(1, 1, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_ALPHA_MODE_IGNORE)
+                .map_err(|e| failed("creating a task window's background", e))?;
+            state
+                .background
+                .SetContent(&surface)
+                .map_err(|e| failed("showing a task window's background", e))?;
+            state.fill_surface = Some(surface);
+        }
+        let Some(surface) = &state.fill_surface else {
+            return Ok(());
+        };
+        let mut offset = POINT::default();
+        let texture: ID3D11Texture2D = surface
+            .BeginDraw(None, &mut offset)
+            .map_err(|e| failed("drawing a task window's background", e))?;
+        let (x, y) = (offset.x.max(0) as u32, offset.y.max(0) as u32);
+        let pixel = D3D11_BOX {
+            left: x,
+            top: y,
+            front: 0,
+            right: x + 1,
+            bottom: y + 1,
+            back: 1,
+        };
+        {
+            let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+            context.UpdateSubresource(
+                &texture,
+                0,
+                Some(&pixel as *const _),
+                state.fill.as_ptr() as *const c_void,
+                4,
+                4,
+            );
+        }
+        drop(texture);
+        surface
+            .EndDraw()
+            .map_err(|e| failed("drawing a task window's background", e))?;
+        state.fill_drawn = Some(state.fill);
+        Ok(())
+    }
+
+    /// Copies the edge pixels of the frame of `region` pixels in `texture`, where
+    /// [`Self::read_edges`] reads them once the GPU is done. Once per frame size: the fill only
+    /// shows while the window waits for a frame of a new size.
+    unsafe fn copy_edges(&self, state: &mut State, texture: &ID3D11Texture2D, region: (u32, u32)) {
+        if state.edges_of == region || region.0 == 0 || region.1 == 0 {
+            return;
+        }
+        if state.edges.is_none() {
+            let desc = D3D11_TEXTURE2D_DESC {
+                Width: 2 * EDGE_SAMPLES,
+                Height: 1,
+                MipLevels: 1,
+                ArraySize: 1,
+                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                SampleDesc: DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
+                Usage: D3D11_USAGE_STAGING,
+                BindFlags: 0,
+                CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+                MiscFlags: 0,
+            };
+            let made = self
+                .gpu
+                .device
+                .CreateTexture2D(&desc, None, Some(&mut state.edges));
+            if let Err(e) = made {
+                note(
+                    self.logger.as_deref(),
+                    &failed("creating the texture a frame's edges are copied into", e),
+                );
+                return;
+            }
+        }
+        let Some(edges) = &state.edges else {
+            return;
+        };
+        let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+        for (index, (x, y)) in edge_points(region).into_iter().enumerate() {
+            let pixel = D3D11_BOX {
+                left: x,
+                top: y,
+                front: 0,
+                right: x + 1,
+                bottom: y + 1,
+                back: 1,
+            };
+            context.CopySubresourceRegion(
+                edges,
+                0,
+                index as u32,
+                0,
+                0,
+                texture,
+                0,
+                Some(&pixel as *const _),
+            );
+        }
+        state.edges_of = region;
+        state.edges_pending = true;
+    }
+
+    /// Takes the fill colour from the edge pixels last copied, if the GPU has copied them;
+    /// never waits for it.
+    unsafe fn read_edges(&self, state: &mut State) {
+        if !state.edges_pending {
+            return;
+        }
+        let Some(edges) = &state.edges else {
+            return;
+        };
+        let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+        let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+        let flags = D3D11_MAP_FLAG_DO_NOT_WAIT.0 as u32;
+        if context.Map(edges, 0, D3D11_MAP_READ, flags, Some(&mut mapped)).is_err() {
+            // Still copying: the next commit looks again.
+            return;
+        }
+        let mut pixels = Vec::with_capacity((2 * EDGE_SAMPLES) as usize);
+        for index in 0..(2 * EDGE_SAMPLES) as usize {
+            let mut pixel = [0u8; 4];
+            std::ptr::copy_nonoverlapping(
+                (mapped.pData as *const u8).add(index * 4),
+                pixel.as_mut_ptr(),
+                4,
+            );
+            pixels.push(pixel);
+        }
+        context.Unmap(edges, 0);
+        state.edges_pending = false;
+        if let Some(colour) = fill_colour(&pixels) {
+            state.fill = colour;
+        }
     }
 
     /// Presents what is in the back buffer, of `size` pixels. Returns whether that size
@@ -1078,11 +1299,14 @@ impl WindowPresenter {
                 );
             }
             drop(back);
+            // Before the wait below, so the copy is done before the renderer writes the
+            // texture again.
+            self.copy_edges(state, texture, (width, height));
             if !stage {
                 new_size = self.present_back_buffer(state, (width, height))? || new_size;
                 // Right after the present, not after the wait below, so the two reach the
-                // compositor as close together as they can. Only a new client area or new
-                // buffers have anything to commit.
+                // compositor as close together as they can. Only a new frame size, client
+                // area, fill colour or new buffers have anything to commit.
                 self.commit_visual(state);
             }
             let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());

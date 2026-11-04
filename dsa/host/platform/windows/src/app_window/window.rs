@@ -17,11 +17,12 @@
 //! into the task's size and density. It never grows past the size the window manager says
 //! Android can draw, not even when maximised: on a monitor larger than that, a maximised
 //! window takes that size, centred on the work area, so the task stays 1:1, and it never
-//! shrinks below the smallest size an Android task is given. It shows its last frame stretched
-//! over a new size only until a frame of that size arrives. While the user drags an edge, each
-//! new size goes to the guest before the window takes it (`WM_WINDOWPOSCHANGING`), and the
-//! window takes it when the frame is in or a short wait runs out, so the stretch is rarely
-//! seen at all and the picture never slides with a left or top edge.
+//! shrinks below the smallest size an Android task is given. Until a frame of a new size
+//! arrives it shows its last frame 1:1, never stretched: cropped when the window shrank, with
+//! the app's background colour beside it when the window grew. While the user drags an edge,
+//! each new size goes to the guest before the window takes it (`WM_WINDOWPOSCHANGING`), and
+//! the window takes it when the frame is in or a short wait runs out, so the old frame is
+//! rarely seen at all and the picture seldom slides with a left or top edge.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -86,7 +87,7 @@ pub type Presenters = Arc<Mutex<HashMap<i32, Arc<WindowPresenter>>>>;
 const WM_APP_COMMANDS: u32 = WM_APP + 1;
 const WM_APP_QUIT: u32 = WM_APP + 2;
 
-/// The message window's timer, which reports windows left showing a stretched frame.
+/// The message window's timer, which reports windows left showing a frame of an older size.
 const TICK_TIMER: usize = 1;
 const TICK_MILLIS: u32 = 200;
 
@@ -423,7 +424,7 @@ unsafe extern "system" fn task_window_proc(
                     };
                     if let Some(presenter) = presenter {
                         // The frame held for this size goes up with it; without one, the last
-                        // frame is stretched over the new size before it is shown.
+                        // frame stays 1:1, cropped or with the background colour beside it.
                         presenter.view_resized((width, height));
                     }
                     // A size the window asked for before taking it asks nothing here.
@@ -453,7 +454,7 @@ unsafe extern "system" fn task_window_proc(
             let info = &mut *(lparam as *mut MINMAXINFO);
             let max = data.max_client.get();
             // Never larger than Android can draw: a larger window could only show the
-            // task's frames stretched. Maximising takes this size too.
+            // task's frames with an empty margin. Maximising takes this size too.
             if let Some(max) = max {
                 let (width, height) = outer_size(max, dpi);
                 info.ptMaxTrackSize = POINT {
@@ -758,7 +759,7 @@ impl Ui {
         self.publish();
     }
 
-    /// Logs the windows left showing a stretched frame.
+    /// Logs the windows left showing a frame of an older size.
     fn tick(&self) {
         let presenters: Vec<Arc<WindowPresenter>> = self
             .setup

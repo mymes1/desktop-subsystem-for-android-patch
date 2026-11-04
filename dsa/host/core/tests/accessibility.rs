@@ -383,11 +383,12 @@ fn fr18_bounds_go_to_the_screen_through_the_window() {
         (rect.left, rect.top, rect.width, rect.height),
         (110.0, 70.0, 100.0, 50.0)
     );
-    // A frame shown stretched to twice the task's size.
+    // A window grown to twice the task's size, waiting for a frame of that size: the frame
+    // is shown 1:1, never stretched, and so are the bounds.
     let rect = to_screen(bounds(10, 20, 110, 70), (400, 600), (800, 1200), (0, 0));
     assert_eq!(
         (rect.left, rect.top, rect.width, rect.height),
-        (20.0, 40.0, 200.0, 100.0)
+        (10.0, 20.0, 100.0, 50.0)
     );
     // Cut to the client area.
     let rect = to_screen(bounds(-50, 550, 450, 700), (400, 600), (400, 600), (0, 0));
@@ -397,7 +398,7 @@ fn fr18_bounds_go_to_the_screen_through_the_window() {
     );
     // And back.
     assert_eq!(
-        from_screen((120.0, 90.0), (400, 600), (800, 1200), (100, 50)),
+        from_screen((110.0, 70.0), (400, 600), (800, 1200), (100, 50)),
         (10, 20)
     );
 }

@@ -2,15 +2,15 @@
 //! takes the size.
 //!
 //! The guest needs tens of milliseconds to draw at a new size, and how many depends on the
-//! app. A window that took the size at once would show its last frame stretched for that
-//! long, on every step of the drag. A window therefore asks the guest for the size first and
+//! app. A window that took the size at once would show its last frame at the old size, with
+//! the app's background colour beside it or cropped, for that long, on every step of the drag. A window therefore asks the guest for the size first and
 //! keeps its old size, with its old frame, while the frame of the new size is on its way, and
 //! takes the size and shows the frame together. While it waits, the screen is whole: the old
 //! window with the old frame.
 //!
 //! How long it waits follows how fast the task has been answering ([`ResizeSync::budget`]),
-//! between [`MIN_BUDGET`] and [`MAX_BUDGET`]. Past that the drag feels held back more than a
-//! stretch looks wrong, so the window then takes the size with the last frame stretched. A
+//! between [`MIN_BUDGET`] and [`MAX_BUDGET`]. Past that the drag feels held back more than the
+//! old frame looks wrong, so the window then takes the size with the last frame at 1:1. A
 //! guest that never answers with a frame of exactly the window's size would make every step
 //! cost the whole budget, so after [`GIVE_UP_AFTER`] steps in a row that ran out of time the
 //! window stops waiting. It starts again as soon as a frame shows the task can keep up, or
@@ -57,7 +57,7 @@ pub enum Step {
     Show,
     /// Wait up to this long more for the frame.
     Wait(Duration),
-    /// The budget is spent: take the size with the frame stretched.
+    /// The budget is spent: take the size with the last frame at 1:1.
     GiveUp,
 }
 
@@ -202,7 +202,7 @@ pub enum FrameAction {
 ///
 /// A kept frame lives in the back buffer, the only copy of it. Another frame written there
 /// would lose it, and an app that draws once per size sends no second one, so the window would
-/// take the size with an older frame stretched and stay that way.
+/// take the size with an older frame and stay that way.
 pub fn frame_action(hold: Option<((u32, u32), bool)>, frame: (u32, u32)) -> FrameAction {
     match hold {
         Some((view, _)) if view == frame => FrameAction::Stage,
