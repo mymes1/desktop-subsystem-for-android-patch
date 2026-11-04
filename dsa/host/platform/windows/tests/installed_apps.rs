@@ -149,8 +149,11 @@ impl InstalledAppKeys for FakeKeys {
 #[test]
 fn fr23_keys_follow_the_apps_and_only_ours_are_touched() {
     let keys = FakeKeys::default();
-    keys.write("{1234-another-program}", &[("DisplayName", Value::Text("Other".into()))])
-        .unwrap();
+    keys.write(
+        "{1234-another-program}",
+        &[("DisplayName", Value::Text("Other".into()))],
+    )
+    .unwrap();
     let cli = Path::new(r"C:\dsa.exe");
     let clock = AppInfo {
         package_name: "com.example.clock".into(),
