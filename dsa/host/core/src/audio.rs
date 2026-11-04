@@ -566,17 +566,17 @@ pub fn serve_port(
                 }
                 active.fetch_add(1, Ordering::SeqCst);
                 let device = Arc::clone(&device);
-                let log = Arc::clone(&log);
-                let active = Arc::clone(&active);
+                let stream_log = Arc::clone(&log);
+                let stream_active = Arc::clone(&active);
                 let build = build.to_string();
                 let spawned = thread::Builder::new()
                     .name("dsa-audio-stream".into())
                     .spawn(move || {
-                        let line = |l: &str| log(l);
+                        let line = |l: &str| stream_log(l);
                         if let Err(e) = serve_stream(connection.as_mut(), &*device, &build, &line) {
-                            log(&e);
+                            stream_log(&e);
                         }
-                        active.fetch_sub(1, Ordering::SeqCst);
+                        stream_active.fetch_sub(1, Ordering::SeqCst);
                     });
                 if let Err(e) = spawned {
                     // The connection went with the closure; the guest connects again.

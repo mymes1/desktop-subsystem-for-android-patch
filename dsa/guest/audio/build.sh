@@ -73,7 +73,7 @@ core="$hw/audio/aidl/aidl_api/android.hardware.audio.core/4"
 generate() {
     local dir="$1" version="$2"
     shift 2
-    local args=(--lang=ndk --structured --stability=vintf --version="$version")
+    # The module runs on Android 14 and later, where every type the HAL uses is available.
     if [[ -f "$dir/.hash" ]]; then
         args+=(--hash="$(tail -n 1 "$dir/.hash")")
     fi
