@@ -47,6 +47,9 @@ internal sealed class KeyText : ITextSource
         "Widgets_At" => "{0},{1} {2}x{3}",
         "Widgets_Placed" => "placed {0}",
         "Widgets_Removed" => "removed {0}",
+        "Background_Playing" => "playing {0}",
+        "Background_Paused" => "paused {0}",
+        "Background_Stopped" => "stopped {0}",
         _ => key,
     };
 }
@@ -252,6 +255,59 @@ public class ViewModelTests
         await vm.SetAdbPortAsync("5037");
         Assert.Equal("adb connect 127.0.0.1:5037", vm.AdbConnect);
         Assert.Contains("settings set developer-mode on --json", cli.Calls);
+    }
+
+    [Fact]
+    public async Task Fr25_the_arm_section_says_whether_arm_apps_run_and_removes_the_package()
+    {
+        const string none =
+            "{\"package\":null,\"enabled\":true,\"supported\":false," +
+            "\"android\":{\"installed\":false,\"active\":false,\"abilist\":\"x86_64\"},\"restart_needed\":false}";
+        const string installed =
+            "{\"package\":{\"name\":\"Translator\",\"version\":\"1.0\",\"library\":\"libtranslator.so\"," +
+            "\"abis\":[\"arm64-v8a\"],\"license\":\"Apache-2.0\"},\"enabled\":true,\"supported\":true," +
+            "\"android\":{\"installed\":true,\"active\":false,\"abilist\":\"x86_64\"},\"restart_needed\":true}";
+        var cli = new FakeCli()
+            .Answer("settings --json", Settings)
+            .Fail("gpus --json", "dsa: no GPU list")
+            .Answer("arm-translation status --json", installed)
+            .Answer("arm-translation remove --json", none)
+            .Answer("settings set arm-translation off --json",
+                Settings.Replace("\"freeze\":false", "\"freeze\":false,\"arm_translation\":false"));
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.True(vm.ArmTranslation, "on when the service does not say otherwise");
+        Assert.True(vm.ArmSupported);
+        Assert.Equal("Arm_Supported", vm.ArmStatus);
+        Assert.Equal("Arm_Abis", vm.ArmAbis);
+        Assert.True(vm.ArmRestartNeeded);
+        Assert.True(vm.CanRemoveArmTranslation);
+
+        await vm.SetArmTranslationAsync(false);
+        Assert.False(vm.ArmTranslation);
+        Assert.Contains("settings set arm-translation off --json", cli.Calls);
+
+        await vm.RemoveArmTranslationAsync();
+        Assert.False(vm.ArmSupported);
+        Assert.False(vm.HasArmPackage);
+        Assert.False(vm.CanRemoveArmTranslation);
+        Assert.Equal("Arm_NotSupported", vm.ArmStatus);
+        Assert.Contains("arm-translation remove --json", cli.Calls);
+    }
+
+    [Fact]
+    public async Task Fr25_a_service_that_cannot_say_shows_arm_apps_as_not_supported()
+    {
+        var cli = new FakeCli()
+            .Answer("settings --json", Settings)
+            .Fail("gpus --json", "dsa: no GPU list")
+            .Fail("arm-translation status --json", "dsa: unexpected \"arm-translation\"");
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.False(vm.HasError);
+        Assert.False(vm.ArmSupported);
+        Assert.Equal("Arm_NotSupported", vm.ArmStatus);
+        Assert.Equal("Arm_NotRunning", vm.ArmAbis);
     }
 
     [Fact]

@@ -11,8 +11,8 @@
 //! reading the task ([`ClientPresence`]).
 //!
 //! Each node gets the control type of its role, its name, its bounds on the screen (the
-//! window's client area, where the task is shown, plus the node's place in the task, scaled
-//! when the frame is shown stretched), and the patterns it supports: Invoke, Value, Toggle,
+//! window's client area, where the task is shown 1:1, plus the node's place in the task),
+//! and the patterns it supports: Invoke, Value, Toggle,
 //! SelectionItem and Scroll ([`crate::ui_automation`]). A pattern call becomes the node's
 //! accessibility action in Android, so Invoke presses a list row without moving the cursor.
 //! As changes arrive the window raises structure, property and focus change events.

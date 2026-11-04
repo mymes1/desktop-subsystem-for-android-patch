@@ -14,11 +14,18 @@ public partial class App : Application
     internal static SettingsViewModel Settings { get; } = new(Service, Text);
     internal static MemoryViewModel Memory { get; } = new(Service, Text);
     internal static InstallViewModel Install { get; } = new(Service, Text);
+    internal static AppsViewModel Apps { get; } = new(new AppsService(Cli), Text);
     internal static WidgetsViewModel Widgets { get; } = new(Service, Text, Cli);
+    internal static DeviceIdentityViewModel DeviceIdentity { get; } = new(Cli, Service, Text);
+    internal static BackgroundViewModel Background { get; } = new(Service, Text);
 
     /// <summary>The argument that names an APK to install: Explorer opens APK files with it, and
     /// the app then shows the APK install window instead of the settings.</summary>
     internal const string InstallApkArgument = "--install-apk";
+
+    /// <summary>The argument that names an app to uninstall: the UninstallString of each
+    /// Android app in Windows' list of installed apps runs the app with it.</summary>
+    internal const string UninstallAppArgument = "--uninstall-app";
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -43,6 +50,13 @@ public partial class App : Application
         if (at >= 0 && at + 1 < e.Args.Length)
         {
             ApkInstallWindow.Open(e.Args[at + 1]);
+            return;
+        }
+        // Windows' list of installed apps opens the uninstall window alone, with no console.
+        var uninstall = Array.IndexOf(e.Args, UninstallAppArgument);
+        if (uninstall >= 0 && uninstall + 1 < e.Args.Length)
+        {
+            UninstallAppWindow.Open(e.Args[uninstall + 1]);
             return;
         }
         new MainWindow().Show();

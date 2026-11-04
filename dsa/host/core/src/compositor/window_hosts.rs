@@ -23,6 +23,7 @@ use dsa_protocol::window_host::{
 };
 use dsa_transport::Connection;
 
+use super::caption::CaptionTone;
 use super::task_windows::WindowChange;
 use crate::tasks::AppInfo;
 
@@ -87,6 +88,11 @@ pub enum ToHost {
         task_id: i32,
         cursor: crate::ime::ImeCursor,
     },
+    /// The tone of the window's caption buttons, which follows the app's status bar.
+    CaptionTone {
+        task_id: i32,
+        tone: CaptionTone,
+    },
 }
 
 impl ToHost {
@@ -97,6 +103,7 @@ impl ToHost {
             | ToHost::Resize { task_id, .. }
             | ToHost::TaskSize { task_id, .. }
             | ToHost::ImeCursor { task_id, .. }
+            | ToHost::CaptionTone { task_id, .. }
             | ToHost::Close { task_id } => *task_id,
         }
     }
@@ -121,6 +128,8 @@ pub enum FromHost {
     Dragging { task_id: i32, dragging: bool },
     /// The window was minimized (`shown` false), or shown again after it was.
     Shown { task_id: i32, shown: bool },
+    /// The window draws its title bar over its top `height` client pixels.
+    Caption { task_id: i32, height: u32 },
 }
 
 impl FromHost {
@@ -131,7 +140,8 @@ impl FromHost {
             | FromHost::Dpi { task_id, .. }
             | FromHost::Focus { task_id, .. }
             | FromHost::Dragging { task_id, .. }
-            | FromHost::Shown { task_id, .. } => *task_id,
+            | FromHost::Shown { task_id, .. }
+            | FromHost::Caption { task_id, .. } => *task_id,
         }
     }
 }
@@ -344,6 +354,10 @@ impl WindowHosts {
             WindowChange::ImeCursor { task_id, cursor } => self.forward(ToHost::ImeCursor {
                 task_id: *task_id,
                 cursor: *cursor,
+            }),
+            WindowChange::CaptionTone { task_id, tone } => self.forward(ToHost::CaptionTone {
+                task_id: *task_id,
+                tone: *tone,
             }),
         }
     }
@@ -670,6 +684,17 @@ pub fn to_wire(message: &ToHost) -> Body {
                 bottom: cursor.bottom,
             })
         }
+        ToHost::CaptionTone { task_id, tone } => {
+            use dsa_protocol::window_host::types::{CaptionTone as WireTone, SetCaptionTone};
+            let tone = match tone {
+                CaptionTone::DarkGlyphs => WireTone::DarkGlyphs,
+                CaptionTone::LightGlyphs => WireTone::LightGlyphs,
+            };
+            Body::SetCaptionTone(SetCaptionTone {
+                task_id,
+                tone: tone as i32,
+            })
+        }
     }
 }
 
@@ -713,6 +738,17 @@ pub fn to_host_from_wire(body: &Body) -> Option<ToHost> {
                 bottom: cursor.bottom,
             },
         },
+        Body::SetCaptionTone(set) => {
+            use dsa_protocol::window_host::types::CaptionTone as WireTone;
+            ToHost::CaptionTone {
+                task_id: set.task_id,
+                // A tone this build does not know reads as the default, dark glyphs.
+                tone: match set.tone() {
+                    WireTone::LightGlyphs => CaptionTone::LightGlyphs,
+                    WireTone::DarkGlyphs | WireTone::Unspecified => CaptionTone::DarkGlyphs,
+                },
+            }
+        }
         _ => return None,
     })
 }
@@ -739,6 +775,9 @@ pub fn report_to_wire(report: &FromHost) -> Body {
             Body::WindowDragging(WindowDragging { task_id, dragging })
         }
         FromHost::Shown { task_id, shown } => Body::WindowShown(WindowShown { task_id, shown }),
+        FromHost::Caption { task_id, height } => {
+            Body::WindowCaption(dsa_protocol::window_host::types::WindowCaption { task_id, height })
+        }
     }
 }
 
@@ -768,6 +807,10 @@ pub fn report_from_wire(body: &Body) -> Option<FromHost> {
         Body::WindowShown(ref shown) => FromHost::Shown {
             task_id: shown.task_id,
             shown: shown.shown,
+        },
+        Body::WindowCaption(ref caption) => FromHost::Caption {
+            task_id: caption.task_id,
+            height: caption.height,
         },
         _ => return None,
     })
@@ -869,6 +912,7 @@ mod tests {
             package_name: package.into(),
             label: "App".into(),
             icon_png: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -888,6 +932,7 @@ mod tests {
             package_name: CLOCK.into(),
             label: "Clock".into(),
             icon_png: vec![1],
+            ..Default::default()
         };
         assert!(hosts.app(&clock, now).is_empty());
         assert_eq!(
@@ -1218,6 +1263,14 @@ mod tests {
                     bottom: 60,
                 },
             },
+            ToHost::CaptionTone {
+                task_id: 8,
+                tone: CaptionTone::LightGlyphs,
+            },
+            ToHost::CaptionTone {
+                task_id: 9,
+                tone: CaptionTone::DarkGlyphs,
+            },
         ] {
             assert_eq!(to_host_from_wire(&to_wire(&message)), Some(message));
         }
@@ -1243,6 +1296,10 @@ mod tests {
             FromHost::Shown {
                 task_id: 8,
                 shown: false,
+            },
+            FromHost::Caption {
+                task_id: 9,
+                height: 62,
             },
         ] {
             assert_eq!(report_from_wire(&report_to_wire(&report)), Some(report));

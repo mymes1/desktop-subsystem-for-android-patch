@@ -1,0 +1,12 @@
+# ARM app translation, imported at the end of the product build.prop when the host has said
+# androidboot.dsa.arm_translation=on. The package mounted over /system (dsa-arm-translation.rc)
+# provides libdsa_native_bridge.so, the native bridge the zygote loads, and ARM64 joins the
+# ABIs the package manager installs apps for. The guest has no 32-bit zygote, so 32-bit ARM
+# does not.
+ro.dalvik.vm.native.bridge=libdsa_native_bridge.so
+ro.dalvik.vm.isa.arm64=x86_64
+ro.enable.native.bridge.exec=1
+ro.product.cpu.abilist=x86_64,arm64-v8a
+ro.product.cpu.abilist64=x86_64,arm64-v8a
+ro.product.product.cpu.abilist=x86_64,arm64-v8a
+ro.product.product.cpu.abilist64=x86_64,arm64-v8a

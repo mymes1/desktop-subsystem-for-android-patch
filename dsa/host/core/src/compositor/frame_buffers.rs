@@ -54,19 +54,19 @@ pub fn texture_fits(current: (u32, u32), wanted: (u32, u32)) -> bool {
     current == wanted
 }
 
-/// The scale that makes a frame fill a client area of `view` pixels when the swapchain's
-/// buffers are `buffers` pixels. DirectComposition stretches a swapchain's source region
-/// over the whole of its buffers, so a frame of any size first takes the buffers' size, and
-/// the visual scales from there.
-pub fn visual_scale(buffers: (u32, u32), view: (u32, u32)) -> (f32, f32) {
-    let scale = |buffer: u32, view: u32| {
-        if buffer == 0 || view == 0 {
+/// The visual's scale that shows a frame of `frame` pixels 1:1 when the swapchain's buffers
+/// are `buffers` pixels. DirectComposition stretches a swapchain's source region over the
+/// whole of its buffers, so this brings the frame back to its own size. A frame is never
+/// scaled to its window: the window takes the size of the frame it shows.
+pub fn frame_scale(buffers: (u32, u32), frame: (u32, u32)) -> (f32, f32) {
+    let scale = |frame: u32, buffer: u32| {
+        if frame == 0 || buffer == 0 {
             1.0
         } else {
-            view as f32 / buffer as f32
+            frame as f32 / buffer as f32
         }
     };
-    (scale(buffers.0, view.0), scale(buffers.1, view.1))
+    (scale(frame.0, buffers.0), scale(frame.1, buffers.1))
 }
 
 /// How many pixels a side the resize trace samples of a frame to see if it is all one colour.
@@ -125,13 +125,15 @@ mod tests {
     }
 
     #[test]
-    fn fr4_a_frame_smaller_than_its_buffers_is_shown_at_the_window_size_not_stretched() {
-        // A 607x1080 frame in 1920x1080 buffers is stretched to 1920 wide first; the visual
-        // brings it back to the 607-pixel client area, so it shows 1:1.
-        let (x, y) = visual_scale((1920, 1080), (607, 1080));
-        assert!((1920.0 * x - 607.0).abs() < 0.01);
-        assert!((y - 1.0).abs() < f32::EPSILON);
-        assert_eq!(visual_scale((0, 0), (607, 1080)), (1.0, 1.0));
+    fn fr4_a_frame_is_shown_1_to_1_whatever_its_buffers() {
+        let buffers = (1920, 1088);
+        for frame in [(900, 700), (607, 1080), (1920, 1088), (1, 1)] {
+            let (x, y) = frame_scale(buffers, frame);
+            // One frame pixel is one window pixel in each direction.
+            assert!((x * buffers.0 as f32 / frame.0 as f32 - 1.0).abs() < 1e-4);
+            assert!((y * buffers.1 as f32 / frame.1 as f32 - 1.0).abs() < 1e-4);
+        }
+        assert_eq!(frame_scale((0, 0), (607, 1080)), (1.0, 1.0));
     }
 
     #[test]

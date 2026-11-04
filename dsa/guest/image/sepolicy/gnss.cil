@@ -1,0 +1,9 @@
+; Desktop Subsystem for Android (DSA)
+; The guest's GNSS HAL (/vendor/bin/hw/dsa-gnss) runs in the platform's GNSS HAL domain,
+; labelled by vendor_file_contexts. It reaches the host through dsa-channeld's binder
+; service: it sends the framework's location requests and hears the host's positions. These
+; rules let it find the service and call it, and let the daemon call back its listener.
+
+(allow hal_gnss_server dsa_channel_service (service_manager (find)))
+(allow hal_gnss_server dsa_channeld (binder (call transfer)))
+(allow dsa_channeld hal_gnss_server (binder (call transfer)))

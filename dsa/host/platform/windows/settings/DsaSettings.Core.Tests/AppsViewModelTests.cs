@@ -1,0 +1,143 @@
+using System.Globalization;
+using Xunit;
+
+namespace Dsa.Settings.Core.Tests;
+
+internal sealed class AppsText : ITextSource
+{
+    public string Get(string key) => key switch
+    {
+        "Apps_Count" => "{0} apps",
+        "Apps_CountMatching" => "{0} of {1} apps",
+        "Apps_Version" => "v{0}",
+        "Apps_Installed" => "since {0}",
+        "Apps_System" => "system",
+        "Apps_Uninstalled" => "uninstalled {0}",
+        "Apps_NotUninstalled" => "kept {0}: {1} [{2}]",
+        "Apps_Refused_system-app" => "part of Android",
+        _ => key,
+    };
+}
+
+public class AppsViewModelTests
+{
+    // Notes (a user app, 2023-11-14) and Settings (a system app), as dsa apps list --json prints them.
+    private const string List =
+        "{\"apps\":[" +
+        "{\"package\":\"com.android.settings\",\"label\":\"Settings\",\"version_name\":\"16\",\"version_code\":36," +
+        "\"first_install_time_ms\":0,\"last_update_time_ms\":0,\"system_app\":true,\"app_bytes\":41943040," +
+        "\"data_bytes\":0,\"cache_bytes\":0,\"total_bytes\":41943040,\"icon_png\":\"iVBORwE=\"}," +
+        "{\"package\":\"com.example.notes\",\"label\":\"Notes\",\"version_name\":\"4.1\",\"version_code\":41," +
+        "\"first_install_time_ms\":1700000000000,\"last_update_time_ms\":1710000000000,\"system_app\":false," +
+        "\"app_bytes\":3145728,\"data_bytes\":1048576,\"cache_bytes\":0,\"total_bytes\":4194304,\"icon_png\":\"\"}]}";
+
+    private const string AfterUninstall =
+        "{\"apps\":[" +
+        "{\"package\":\"com.android.settings\",\"label\":\"Settings\",\"version_name\":\"16\",\"version_code\":36," +
+        "\"first_install_time_ms\":0,\"last_update_time_ms\":0,\"system_app\":true,\"app_bytes\":41943040," +
+        "\"data_bytes\":0,\"cache_bytes\":0,\"total_bytes\":41943040,\"icon_png\":\"iVBORwE=\"}]}";
+
+    public AppsViewModelTests()
+    {
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+    }
+
+    private static (AppsViewModel, FakeCli) Make(FakeCli cli) =>
+        (new AppsViewModel(new AppsService(cli), new AppsText()), cli);
+
+    [Fact]
+    public async Task Fr23_the_apps_page_lists_each_app_with_its_icon_version_size_and_date()
+    {
+        var (vm, _) = Make(new FakeCli().Answer("apps list --json", List));
+        await vm.RefreshAsync();
+        Assert.False(vm.HasError, vm.Error);
+        Assert.Equal(new[] { "Notes", "Settings" }, vm.Rows.Select(r => r.Label));
+        var notes = vm.Rows[0];
+        Assert.Equal("com.example.notes", notes.Package);
+        Assert.StartsWith("com.example.notes · v4.1 · since ", notes.Detail);
+        Assert.Contains("2023", notes.Detail);
+        Assert.Equal("4.0 MB", notes.Size);
+        Assert.True(notes.CanUninstall);
+        Assert.True(notes.NoIcon);
+        var settings = vm.Rows[1];
+        Assert.False(settings.CanUninstall);
+        Assert.True(settings.IsSystem);
+        Assert.EndsWith("· system", settings.Detail);
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x01 }, settings.Icon);
+        Assert.Equal("40.0 MB", settings.Size);
+        Assert.Equal("2 apps", vm.Count);
+    }
+
+    [Fact]
+    public async Task Fr23_search_finds_an_app_by_name_or_package()
+    {
+        var (vm, _) = Make(new FakeCli().Answer("apps list --json", List));
+        await vm.RefreshAsync();
+        vm.Search = "note";
+        Assert.Equal(new[] { "Notes" }, vm.Rows.Select(r => r.Label));
+        Assert.Equal("1 of 2 apps", vm.Count);
+        vm.Search = "android.set";
+        Assert.Equal(new[] { "Settings" }, vm.Rows.Select(r => r.Label));
+        vm.Search = "nothing";
+        Assert.Empty(vm.Rows);
+        Assert.True(vm.HasNoMatches);
+    }
+
+    [Fact]
+    public async Task Fr23_open_app_info_and_manage_apps_go_through_dsa()
+    {
+        var (vm, cli) = Make(new FakeCli()
+            .Answer("apps list --json", List)
+            .Answer("launch com.example.notes", "Launching com.example.notes")
+            .Answer("apps settings com.example.notes --json", "{\"opened\":\"com.example.notes\"}")
+            .Answer("apps settings --json", "{\"opened\":null}"));
+        await vm.RefreshAsync();
+        await vm.OpenAsync("com.example.notes");
+        await vm.InfoAsync("com.example.notes");
+        await vm.ManageAsync();
+        Assert.False(vm.HasError, vm.Error);
+        Assert.Equal(
+            new[] { "apps list --json", "launch com.example.notes", "apps settings com.example.notes --json", "apps settings --json" },
+            cli.Calls);
+    }
+
+    [Fact]
+    public async Task Fr23_uninstalling_a_user_app_removes_it_from_the_list()
+    {
+        var cli = new FakeCli()
+            .Answer("apps list --json", List)
+            .Answer("apps uninstall com.example.notes --json",
+                "{\"package\":\"com.example.notes\",\"uninstalled\":true,\"status\":\"uninstalled\",\"message\":\"Success\"}");
+        var (vm, _) = Make(cli);
+        await vm.RefreshAsync();
+        cli.Answer("apps list --json", AfterUninstall);
+        await vm.UninstallAsync("com.example.notes");
+        Assert.False(vm.HasError, vm.Error);
+        Assert.Equal("uninstalled Notes", vm.Message);
+        Assert.Equal(new[] { "Settings" }, vm.Rows.Select(r => r.Label));
+    }
+
+    [Fact]
+    public async Task Fr23_a_refused_uninstall_says_why_in_the_users_language()
+    {
+        var (vm, _) = Make(new FakeCli()
+            .Answer("apps list --json", List)
+            .Fail("apps uninstall com.android.settings --json",
+                "dsa: not uninstalled (system-app): The app is part of Android and cannot be uninstalled"));
+        await vm.RefreshAsync();
+        await vm.UninstallAsync("com.android.settings");
+        Assert.True(vm.HasError);
+        Assert.Equal("kept Settings: part of Android [The app is part of Android and cannot be uninstalled]", vm.Error);
+        Assert.Equal(2, vm.Rows.Count);
+    }
+
+    [Fact]
+    public async Task Fr23_a_service_that_cannot_be_reached_is_said_so()
+    {
+        var (vm, _) = Make(new FakeCli().Fail("apps list --json", "dsa: cannot reach the DSA service"));
+        await vm.RefreshAsync();
+        Assert.True(vm.HasError);
+        Assert.StartsWith("Problem_ServiceUnreachable", vm.Error);
+        Assert.Empty(vm.Rows);
+    }
+}

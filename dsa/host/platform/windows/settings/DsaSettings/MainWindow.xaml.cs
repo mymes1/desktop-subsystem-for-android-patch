@@ -15,9 +15,12 @@ public partial class MainWindow : FluentWindow
     {
         ["general"] = typeof(GeneralPage),
         ["memory"] = typeof(MemoryPage),
+        ["apps"] = typeof(AppsPage),
+        ["background"] = typeof(BackgroundPage),
         ["display"] = typeof(DisplayPage),
         ["updates"] = typeof(UpdatesPage),
         ["advanced"] = typeof(AdvancedPage),
+        ["device"] = typeof(DeviceIdentityPage),
         ["about"] = typeof(AboutPage),
         ["widgets"] = typeof(WidgetsPage),
         ["logs"] = typeof(LogsPage),
@@ -187,8 +190,8 @@ public partial class MainWindow : FluentWindow
         return key?.GetValue("AppsUseLightTheme") is int light && light == 0;
     }
 
-    /// <summary>The page to open with: <c>--page memory</c> (general, memory, display,
-    /// updates, advanced, about, widgets or logs) opens another than General.</summary>
+    /// <summary>The page to open with: <c>--page memory</c> (general, memory, background,
+    /// display, updates, advanced, device, about, widgets or logs) opens another than General.</summary>
     private static Type StartPage()
     {
         var args = Environment.GetCommandLineArgs();

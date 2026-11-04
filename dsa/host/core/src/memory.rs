@@ -511,6 +511,169 @@ pub fn vm_memory_mb(host_total_mb: u64, limit_mb: u32) -> u64 {
     }
 }
 
+/// How much the guest has and how hard it works to find memory, as its control daemon reports
+/// it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GuestPressure {
+    pub mem_total_kb: u64,
+    pub mem_available_kb: u64,
+    /// The share of the last 10 seconds some task waited for memory, in percent (PSI `some
+    /// avg10`).
+    pub stall_percent: f64,
+}
+
+impl GuestPressure {
+    pub fn from_control(p: &control::GuestMemoryPressure) -> GuestPressure {
+        GuestPressure {
+            mem_total_kb: p.mem_total_kb,
+            mem_available_kb: p.mem_available_kb,
+            stall_percent: f64::from(p.stall_centipercent) / 100.0,
+        }
+    }
+
+    fn used_mb(&self) -> u64 {
+        self.mem_total_kb.saturating_sub(self.mem_available_kb) / 1024
+    }
+}
+
+/// What [`MemoryGrowth`] asks the platform to do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GrowthAction {
+    /// Set the VM's memory to this many MiB: more is hot-added, less is ballooned out.
+    Resize(u64),
+    /// The memory added last did not reach the guest: stop growing, for the reason given.
+    GiveUp(String),
+}
+
+/// Grows the VM's memory when the guest runs short and gives it back when the guest no longer
+/// needs it, between a small base and a large maximum.
+///
+/// A VM made at its maximum size from the start costs the host the kernel's page records for
+/// all of it, used or not, about 1.6% of the maximum. Starting at the base and adding memory
+/// while running costs that only for memory actually added, and the guest still has no fixed
+/// ceiling below the maximum.
+///
+/// - Grow when the guest's available memory falls under a fifth of its total (at least
+///   512 MiB), or when its tasks stall on memory for 10% of the time: by half the current size,
+///   at least 1 GiB, up to the maximum, at most every 5 seconds.
+/// - Shrink when the guest has not been short for 30 seconds: to what it uses plus half again
+///   (at least 1 GiB of headroom), never below the base, at most every 30 seconds.
+/// - If memory added does not show in the guest's total within 30 seconds, give up growing:
+///   the platform or the guest cannot hot-add.
+#[derive(Debug, Clone)]
+pub struct MemoryGrowth {
+    base_mb: u64,
+    max_mb: u64,
+    current_mb: u64,
+    last_change: Option<Instant>,
+    calm_since: Option<Instant>,
+    /// The guest total before the last growth, and when it was asked for.
+    awaiting: Option<(u64, Instant)>,
+    stopped: bool,
+}
+
+/// Memory is added and removed in steps of this, in MiB, the guest's memory block size.
+const GROWTH_GRANULE_MB: u64 = 128;
+const GROW_COOLDOWN: Duration = Duration::from_secs(5);
+const SHRINK_COOLDOWN: Duration = Duration::from_secs(30);
+const SHRINK_AFTER_CALM: Duration = Duration::from_secs(30);
+const HOT_ADD_DEADLINE: Duration = Duration::from_secs(30);
+
+fn round_up_mb(mb: u64) -> u64 {
+    mb.div_ceil(GROWTH_GRANULE_MB) * GROWTH_GRANULE_MB
+}
+
+impl MemoryGrowth {
+    /// A VM that starts at `base_mb` and may grow to `max_mb`.
+    pub fn new(base_mb: u64, max_mb: u64) -> MemoryGrowth {
+        MemoryGrowth {
+            base_mb,
+            max_mb: max_mb.max(base_mb),
+            current_mb: base_mb,
+            last_change: None,
+            calm_since: None,
+            awaiting: None,
+            stopped: false,
+        }
+    }
+
+    /// The size the VM was last set to, in MiB.
+    pub fn current_mb(&self) -> u64 {
+        self.current_mb
+    }
+
+    /// Whether growing was given up.
+    pub fn stopped(&self) -> bool {
+        self.stopped
+    }
+
+    /// Takes in a pressure report and says what to do now, if anything.
+    pub fn on_pressure(&mut self, p: &GuestPressure, now: Instant) -> Option<GrowthAction> {
+        if self.stopped {
+            return None;
+        }
+        let total_mb = p.mem_total_kb / 1024;
+        if let Some((before_mb, asked)) = self.awaiting {
+            if total_mb > before_mb {
+                self.awaiting = None;
+            } else if now.saturating_duration_since(asked) >= HOT_ADD_DEADLINE {
+                self.stopped = true;
+                self.current_mb = self.current_mb.min(before_mb.max(self.base_mb));
+                return Some(GrowthAction::GiveUp(format!(
+                    "the guest's memory stayed at {total_mb} MiB {} s after more was added",
+                    HOT_ADD_DEADLINE.as_secs()
+                )));
+            } else {
+                return None;
+            }
+        }
+        let available_mb = p.mem_available_kb / 1024;
+        let short = available_mb < (total_mb / 5).max(512) || p.stall_percent >= 10.0;
+        let since_change = |cooldown| {
+            self.last_change
+                .is_none_or(|at| now.saturating_duration_since(at) >= cooldown)
+        };
+        if short {
+            self.calm_since = None;
+            if self.current_mb >= self.max_mb || !since_change(GROW_COOLDOWN) {
+                return None;
+            }
+            let step = (self.current_mb / 2).max(1024);
+            let target = round_up_mb(self.current_mb + step).min(self.max_mb);
+            self.awaiting = Some((total_mb, now));
+            return Some(self.resize(target, now));
+        }
+        let calm_since = *self.calm_since.get_or_insert(now);
+        if self.current_mb <= self.base_mb
+            || p.stall_percent >= 1.0
+            || now.saturating_duration_since(calm_since) < SHRINK_AFTER_CALM
+            || !since_change(SHRINK_COOLDOWN)
+        {
+            return None;
+        }
+        let used_mb = p.used_mb();
+        let want = round_up_mb(used_mb + (used_mb / 2).max(1024)).max(self.base_mb);
+        // Not worth a balloon for less than half a gibibyte.
+        if want + 512 > self.current_mb {
+            return None;
+        }
+        Some(self.resize(want, now))
+    }
+
+    fn resize(&mut self, mb: u64, now: Instant) -> GrowthAction {
+        self.current_mb = mb;
+        self.last_change = Some(now);
+        GrowthAction::Resize(mb)
+    }
+
+    /// The platform refused the last resize: stay at the size before it, and stop growing.
+    pub fn refused(&mut self, previous_mb: u64) {
+        self.current_mb = previous_mb;
+        self.awaiting = None;
+        self.stopped = true;
+    }
+}
+
 /// What a host process holds, in KiB, as far as the platform can tell; `None` where it
 /// cannot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

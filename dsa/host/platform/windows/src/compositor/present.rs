@@ -5,30 +5,30 @@
 //! window manager places in the app window host's process; the window host opens it
 //! ([`Gpu::open_shared`]) on the same GPU. Each task window there has a DirectComposition
 //! visual holding a flip-model swapchain, and [`WindowPresenter::present`] copies the frame
-//! into the swapchain and presents it. The visual is scaled to fill the window, so while the
-//! user resizes it, the last frame is stretched over the new size until a frame of that size
-//! arrives, which is then shown 1:1. No frame passes through the CPU.
+//! into the swapchain and presents it. A frame is never scaled to its window: the window
+//! takes the size of the frame it shows (`FrameFollow`). No frame passes through the CPU.
 //!
 //! The texture has the size of the guest's buffers, the largest a frame of the task can be,
 //! and each frame fills its top-left region. The swapchain's buffers take the texture's
 //! size once, and each frame sets only the swapchain's source size
 //! (`IDXGISwapChain2::SetSourceSize`) to the region it fills, so a window resize never
 //! resizes the swapchain's buffers. DirectComposition stretches the source region over the
-//! whole of the buffers, so the visual scales from the buffers' size to the client area,
-//! whatever the size of the frame. A new frame size therefore changes nothing about the
-//! visual; only a new client area does.
+//! whole of the buffers, so the visual scales from the buffers' size back to the frame's own
+//! size (`frame_scale`).
 //!
-//! While the user drags, a new size is held: the window asks the guest for it before it takes
-//! it ([`WindowPresenter::hold_view`]), and a frame of that size that arrives meanwhile is
-//! copied into the back buffer but not presented. When the window takes the size, the frame
-//! is presented and the visual scaled in one go ([`WindowPresenter::view_resized`]), so
-//! neither a slid picture nor an empty strip reaches the screen: until that moment the old
-//! window shows the old frame. The back buffer holds the only copy of that frame, so a frame of
-//! another size arriving meanwhile is left out.
+//! A frame of the window's size is presented at once. A frame of another size (the app has
+//! drawn a size the user dragged to, or the size a drag ended at) is copied into the back
+//! buffer but not presented, and the window is told ([`WindowPresenter::on_frame_ready`]). The
+//! window takes that size ([`WindowPresenter::size_for`] in `WM_WINDOWPOSCHANGING`), and the
+//! frame is presented and the visual committed in its `WM_SIZE`
+//! ([`WindowPresenter::view_resized`]), so the new window size and the frame of that size
+//! reach the screen together. Until then the window keeps the size of the frame it shows.
+//! The back buffer holds the only copy of the kept frame, so between the window choosing its
+//! size and taking it, a newer frame waits.
 //!
 //! Each presenter measures how long its window waited for a frame of its new size
 //! (`ResizeLatency`) and logs a summary every 20 resizes and when the window closes, and a
-//! warning when a window is left showing a stretched frame.
+//! warning when a window waits long for a frame of the size asked for.
 //!
 //! While the input trace is on, each presenter also finds out when its presents reached the
 //! screen: it notes each present's count, reads the swapchain's frame statistics at the next
@@ -42,21 +42,21 @@
 //! frame and when that frame was shown, and says both on the window (`window_marks`), where
 //! `dsa launch --wait-first-frame` reads them.
 
-use std::ffi::c_void;
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::frame_buffers::{
-    content_region, sample_points, swapchain_buffers, swapchain_change, uniform_colour,
-    visual_scale, SwapchainChange, SAMPLE_GRID,
+    content_region, frame_scale, sample_points, swapchain_buffers, swapchain_change,
+    uniform_colour, SwapchainChange, SAMPLE_GRID,
 };
+use dsa_host_core::compositor::frame_follow::{Arrival, FrameFollow};
 use dsa_host_core::compositor::present_watch::{FrameStatistics, PresentWatch};
 use dsa_host_core::compositor::resize_latency::ResizeLatency;
-use dsa_host_core::compositor::resize_sync::{self, frame_action, FrameAction, ResizeSync, Step};
 use dsa_host_core::compositor::visible_change::{self, area_around, Area, PressWatch, Verdict};
 use windows::core::{Interface, BOOL, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE, HWND, LUID};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE, HWND, LUID, POINT};
 use windows::Win32::Graphics::Direct3D::{
     D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP,
 };
@@ -69,10 +69,12 @@ use windows::Win32::Graphics::Direct3D11::{
     D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING,
 };
 use windows::Win32::Graphics::DirectComposition::{
-    DCompositionCreateDevice, IDCompositionDevice, IDCompositionTarget, IDCompositionVisual,
+    DCompositionCreateDevice, IDCompositionDevice, IDCompositionSurface, IDCompositionTarget,
+    IDCompositionVisual,
 };
 use windows::Win32::Graphics::Dxgi::Common::{
-    DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC,
+    DXGI_ALPHA_MODE_IGNORE, DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM,
+    DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC,
 };
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory2, IDXGIAdapter, IDXGIAdapter3, IDXGIDevice, IDXGIDevice3, IDXGIFactory2,
@@ -358,26 +360,28 @@ impl Drop for SharedTexture {
 
 struct State {
     target: IDCompositionTarget,
+    /// The frame's visual, under the caption's.
     visual: IDCompositionVisual,
+    /// The caption buttons' visual, above the frame's, and its surface and the surface's size.
+    caption: IDCompositionVisual,
+    caption_surface: Option<(IDCompositionSurface, (u32, u32))>,
     swapchain: Option<IDXGISwapChain2>,
     /// The size of the swapchain's buffers: the texture's, not a frame's.
     buffers: Option<(u32, u32)>,
     /// The size of the last frame shown: the swapchain's source size.
     frame: (u32, u32),
-    /// The size of the window's client area.
-    view: (u32, u32),
-    /// What the visual was last committed for: the buffers' size and the client area.
+    /// The client size last proposed for the window, which the guest is asked for.
+    asked: (u32, u32),
+    /// What the visual was last committed for: the buffers' size and the frame's.
     committed: Option<((u32, u32), (u32, u32))>,
-    /// The size the window is about to take, while it waits for its frame.
-    hold: Option<Hold>,
+    /// Which frame the window shows, which it keeps for the window to take, and its size.
+    follow: FrameFollow,
     query: Option<ID3D11Query>,
     /// Where the resize trace reads a frame's sample pixels; made when the trace first looks.
     samples: Option<ID3D11Texture2D>,
     closed: bool,
     /// How long the window waits for a frame of its size after each resize.
     latency: ResizeLatency,
-    /// Whether a step of a drag waits for its frame, and for how long.
-    sync: ResizeSync,
     /// The presents not yet known to be on the screen, while the input trace is on.
     presents: PresentWatch,
     /// The swapchain gives no frame statistics; said once in the log.
@@ -424,20 +428,16 @@ pub fn pressed(task_id: i32, point: (f32, f32)) {
         .insert(task_id, (point, host_clock()));
 }
 
-/// A size the window has asked the guest for and not yet taken.
-struct Hold {
-    view: (u32, u32),
-    since: Instant,
-    /// A frame of that size is in the back buffer, not yet presented.
-    staged: bool,
-}
-
 /// How many resizes go between two summaries of their waits in the log.
 const SUMMARY_EVERY: usize = 20;
 
-/// A hold the window never followed with a new size (Windows did not apply the position it
-/// proposed) is let go after this, so frames of that size are not kept from the screen.
-const HOLD_FORGOTTEN: Duration = Duration::from_millis(500);
+/// The longest a frame waits for the window to take the size of the frame kept before it.
+/// Windows applies a size within the message that proposed it, so this is only reached when
+/// the window never takes it.
+const CLAIM_WAIT: Duration = Duration::from_millis(100);
+
+/// Tells a window that a frame of another size is kept for it to take.
+pub type FrameReady = Box<dyn Fn() + Send + Sync>;
 
 /// Shows one task's frames in its window.
 pub struct WindowPresenter {
@@ -446,10 +446,10 @@ pub struct WindowPresenter {
     hwnd: isize,
     gpu: Arc<Gpu>,
     state: Mutex<State>,
-    /// The size of the latest frame that arrived, apart from the state so a window can wait
-    /// for a frame while the frame is being shown.
-    shown: Mutex<(u32, u32)>,
-    arrived: Condvar,
+    /// Wakes a frame waiting for the window to take the size of the frame kept before it.
+    claim_released: Condvar,
+    /// Tells the window a frame of another size is kept for it.
+    frame_ready: Mutex<Option<FrameReady>>,
     logger: Option<Arc<CompositorLogger>>,
 }
 
@@ -470,20 +470,31 @@ impl WindowPresenter {
     ) -> Result<Arc<Self>, String> {
         let dcomp = gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: `hwnd` is a live window of this thread; the rest are plain COM calls.
-        let (target, visual) = unsafe {
+        let (target, visual, caption) = unsafe {
             let target = dcomp
                 .CreateTargetForHwnd(HWND(hwnd as *mut c_void), true)
                 .map_err(|e| failed("attaching DirectComposition to a task window", e))?;
+            let root = dcomp
+                .CreateVisual()
+                .map_err(|e| failed("creating a task window's visual", e))?;
             let visual = dcomp
                 .CreateVisual()
                 .map_err(|e| failed("creating a task window's visual", e))?;
+            // The caption buttons are drawn over the app, whose content runs under them.
+            let caption = dcomp
+                .CreateVisual()
+                .map_err(|e| failed("creating a task window's caption visual", e))?;
+            root.AddVisual(&visual, false, None::<&IDCompositionVisual>)
+                .map_err(|e| failed("adding a task window's frame visual", e))?;
+            root.AddVisual(&caption, true, &visual)
+                .map_err(|e| failed("adding a task window's caption visual", e))?;
             target
-                .SetRoot(&visual)
+                .SetRoot(&root)
                 .map_err(|e| failed("setting a task window's visual", e))?;
             dcomp
                 .Commit()
                 .map_err(|e| failed("committing a task window's visual", e))?;
-            (target, visual)
+            (target, visual, caption)
         };
         drop(dcomp);
         Ok(Arc::new(WindowPresenter {
@@ -493,17 +504,18 @@ impl WindowPresenter {
             state: Mutex::new(State {
                 target,
                 visual,
+                caption,
+                caption_surface: None,
                 swapchain: None,
                 buffers: None,
                 frame: (0, 0),
-                view,
+                asked: view,
                 committed: None,
-                hold: None,
+                follow: FrameFollow::new(view),
                 query: None,
                 samples: None,
                 closed: false,
                 latency: ResizeLatency::new(),
-                sync: ResizeSync::new(),
                 presents: PresentWatch::new(),
                 no_statistics: false,
                 first_frame: None,
@@ -512,112 +524,91 @@ impl WindowPresenter {
                 readback: None,
                 watch: None,
             }),
-            shown: Mutex::new((0, 0)),
-            arrived: Condvar::new(),
+            claim_released: Condvar::new(),
+            frame_ready: Mutex::new(None),
             logger,
         }))
     }
 
-    /// The client area is now `view` pixels. A frame of a size the window was holding for is
-    /// presented now, together with the visual's new scale; otherwise the last frame is
-    /// stretched over the new size. Returns once the compositor has taken it, so a live
-    /// resize shows it with the new window size.
+    /// Has `ready` called, from the thread that shows frames, whenever a frame of another size
+    /// than the window's is kept for the window to take.
+    pub fn on_frame_ready(&self, ready: FrameReady) {
+        *self.frame_ready.lock().unwrap_or_else(|e| e.into_inner()) = Some(ready);
+    }
+
+    /// The size of the frame kept for the window to take, if one is.
+    pub fn kept_size(&self) -> Option<(u32, u32)> {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.follow.kept()
+    }
+
+    /// Something proposes a client area of `proposed` pixels for the window (a step of a drag,
+    /// a maximise, a move to another monitor), and whoever calls this has asked the guest for
+    /// it. Returns the client size the window takes instead: the kept frame's, or the size of
+    /// the frame it shows, so the window never shows a frame of another size. `None` before
+    /// any frame, when the window takes what is proposed.
+    pub fn size_for(&self, proposed: (u32, u32)) -> Option<(u32, u32)> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed {
+            return None;
+        }
+        let taken = state.follow.size_for(proposed);
+        if taken.is_some_and(|taken| taken != proposed) && proposed != state.asked {
+            state.asked = proposed;
+            self.size_asked(&mut state, proposed);
+        }
+        taken
+    }
+
+    /// The client area is now `view` pixels. The frame kept for that size is presented now,
+    /// together with the visual's new scale. Returns once the compositor has taken it, so a
+    /// live resize shows it with the new window size.
     pub fn view_resized(&self, view: (u32, u32)) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.closed {
             return;
         }
-        let changed = state.view != view;
-        state.view = view;
-        let held = state.hold.as_ref().is_some_and(|hold| hold.view == view);
-        if changed && !held {
-            self.size_asked(&mut state, view);
+        let took_frame = state.follow.view_taken(view);
+        if took_frame {
+            let started = Instant::now();
+            // SAFETY: plain COM calls on objects this presenter owns, and the immediate context
+            // under its lock.
+            match unsafe { self.present_back_buffer(&mut state, view) } {
+                Ok(new_size) => self.frame_shown(&mut state, view, new_size, None, started),
+                Err(why) => note(self.logger.as_deref(), &why),
+            }
         }
-        self.show_hold(&mut state);
         let committed = self.commit_visual(&mut state);
         drop(state);
+        self.claim_released.notify_all();
         if committed {
             self.wait_for_commit();
         }
-    }
-
-    /// The window is about to take a client area of `view` pixels, and whoever calls this
-    /// asks the guest for that size and waits ([`Self::wait_for_hold`]). Frames of that size
-    /// stay out of sight until the window has taken it. Returns false when this step of the
-    /// drag does not wait: the window just takes the size.
-    pub fn hold_view(&self, view: (u32, u32)) -> bool {
-        let now = Instant::now();
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let arrived = *self.shown.lock().unwrap_or_else(|e| e.into_inner());
-        if state.closed
-            || state.view == view
-            || arrived == (0, 0)
-            || arrived == view
-            || !state.sync.should_wait(now)
-        {
-            return false;
-        }
-        self.size_asked(&mut state, view);
-        state.hold = Some(Hold {
-            view,
-            since: now,
-            staged: false,
-        });
-        true
-    }
-
-    /// Waits until the frame of the size last held for is in, for as long as the budget
-    /// allows from `since`. Called on the window's thread, which holds no lock of the
-    /// presenter while it waits, so the connection thread takes frames meanwhile.
-    pub fn wait_for_hold(&self, view: (u32, u32), since: Instant) {
-        let budget = {
-            let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-            state.sync.budget()
-        };
-        let in_time = {
-            let mut shown = self.shown.lock().unwrap_or_else(|e| e.into_inner());
-            loop {
-                match resize_sync::step(view, *shown, since.elapsed(), budget) {
-                    Step::Show => break true,
-                    Step::GiveUp => break false,
-                    Step::Wait(left) => {
-                        shown = self
-                            .arrived
-                            .wait_timeout(shown, left)
-                            .unwrap_or_else(|e| e.into_inner())
-                            .0;
-                    }
-                }
+        if took_frame {
+            // The window's new size and its frame were handed over on this call stack, inside
+            // the SetWindowPos that changed the size. Waiting here until the desktop has
+            // composed them keeps the next step of the drag from queueing a newer size before
+            // this one is on the screen, which could show an older frame in a newer rectangle.
+            // SAFETY: a plain call with no arguments; it fails harmlessly when the desktop
+            // does not compose.
+            unsafe {
+                let _ = windows_sys::Win32::Graphics::Dwm::DwmFlush();
             }
-        };
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        state.sync.step_ended(in_time, Instant::now());
-    }
-
-    /// The window's position is settled: a hold it did not end by taking the size ends now,
-    /// and a frame kept for it is shown as any late frame is.
-    pub fn release_hold(&self) {
-        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if !state.closed {
-            self.show_hold(&mut state);
         }
     }
 
-    /// The user took hold of the window's edge (`true`) or let go.
-    pub fn dragging(&self, active: bool) {
+    /// The window's position is settled. A size it chose and did not take (Windows did not
+    /// apply it) no longer holds frames back.
+    pub fn release_claim(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if active {
-            state.sync.drag_started();
-        } else {
-            state.sync.drag_ended();
-        }
+        state.follow.release();
+        drop(state);
+        self.claim_released.notify_all();
     }
 
     /// The guest is being asked for `view`: where the wait for a frame of that size starts.
     fn size_asked(&self, state: &mut State, view: (u32, u32)) {
-        let now = Instant::now();
-        state.latency.view_changed(view, now);
-        state.sync.size_asked(view, now);
+        state.latency.view_changed(view, Instant::now());
         trace_stage(
             self.logger.as_deref(),
             self.task_id,
@@ -625,24 +616,6 @@ impl WindowPresenter {
             view,
             &format!("frame={}x{}", state.frame.0, state.frame.1),
         );
-    }
-
-    /// Ends the hold, presenting the frame kept for it if one is.
-    fn show_hold(&self, state: &mut State) {
-        let Some(hold) = state.hold.take() else {
-            return;
-        };
-        if !hold.staged {
-            return;
-        }
-        let started = Instant::now();
-        // SAFETY: plain COM calls on objects this presenter owns, and the immediate context
-        // under its lock.
-        let result = unsafe { self.present_back_buffer(state, hold.view) };
-        match result {
-            Ok(new_size) => self.frame_shown(state, hold.view, new_size, None, started),
-            Err(why) => note(self.logger.as_deref(), &why),
-        }
     }
 
     /// Waits until the compositor has taken the last commit. Holds no lock of the presenter's
@@ -658,30 +631,92 @@ impl WindowPresenter {
         }
     }
 
-    /// Time has passed: a window left showing a stretched frame is logged, once per size.
+    /// Time has passed: a window that waits long for a frame of the size asked for is logged,
+    /// once per size.
     pub fn tick(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.closed {
             return;
-        }
-        if state
-            .hold
-            .as_ref()
-            .is_some_and(|hold| hold.since.elapsed() > HOLD_FORGOTTEN)
-        {
-            self.show_hold(&mut state);
         }
         self.trace_shown(&mut state);
         if let Some(((width, height), waited)) = state.latency.stuck(Instant::now()) {
             note(
                 self.logger.as_deref(),
                 &format!(
-                    "a task window shows its last frame stretched: no {width}x{height} frame \
-                     came in the {} ms since it took that size",
+                    "a task window keeps its size: no {width}x{height} frame came in the {} ms \
+                     since it was asked for that size",
                     waited.as_millis()
                 ),
             );
         }
+    }
+
+    /// Shows the caption buttons: `pixels`, rows of premultiplied BGRA `size` pixels
+    /// large, with their left edge `left` client pixels from the window's. They stay until
+    /// the next call, over every frame.
+    pub fn show_caption(&self, left: i32, size: (u32, u32), pixels: &[u8]) -> Result<(), String> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed || size.0 == 0 || size.1 == 0 {
+            return Ok(());
+        }
+        if pixels.len() < (size.0 * size.1 * 4) as usize {
+            return Err("the caption image is smaller than its size".into());
+        }
+        let dcomp = self.gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: plain COM calls on objects this presenter owns; the update reads only
+        // `pixels`, which holds the whole image.
+        unsafe {
+            if state.caption_surface.as_ref().map(|(_, at)| *at) != Some(size) {
+                let surface = dcomp
+                    .CreateSurface(
+                        size.0,
+                        size.1,
+                        DXGI_FORMAT_B8G8R8A8_UNORM,
+                        DXGI_ALPHA_MODE_PREMULTIPLIED,
+                    )
+                    .map_err(|e| failed("creating a task window's caption surface", e))?;
+                state
+                    .caption
+                    .SetContent(&surface)
+                    .map_err(|e| failed("showing a task window's caption", e))?;
+                state.caption_surface = Some((surface, size));
+            }
+            let Some((surface, _)) = state.caption_surface.as_ref() else {
+                return Ok(());
+            };
+            let mut offset = POINT::default();
+            let texture: ID3D11Texture2D = surface
+                .BeginDraw(None, &mut offset)
+                .map_err(|e| failed("drawing a task window's caption", e))?;
+            let place = D3D11_BOX {
+                left: offset.x as u32,
+                top: offset.y as u32,
+                front: 0,
+                right: offset.x as u32 + size.0,
+                bottom: offset.y as u32 + size.1,
+                back: 1,
+            };
+            {
+                let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+                context.UpdateSubresource(
+                    &texture,
+                    0,
+                    Some(&place as *const D3D11_BOX),
+                    pixels.as_ptr() as *const c_void,
+                    size.0 * 4,
+                    0,
+                );
+            }
+            surface
+                .EndDraw()
+                .map_err(|e| failed("drawing a task window's caption", e))?;
+            let _ = state.caption.SetOffsetX2(left as f32);
+            let _ = state.caption.SetOffsetY2(0.0);
+            dcomp
+                .Commit()
+                .map_err(|e| failed("committing a task window's caption", e))?;
+        }
+        Ok(())
     }
 
     /// The window is closing: nothing more is shown in it.
@@ -717,31 +752,43 @@ impl WindowPresenter {
         }
         let region = content_region(content, texture.size);
         let started = Instant::now();
-        let hold = state.hold.as_ref().map(|hold| (hold.view, hold.staged));
-        let action = frame_action(hold, region);
-        if action == FrameAction::Drop {
-            state.sync.frame_arrived(region, Instant::now());
+        // A frame that arrives while the window is taking the size of the one kept before it
+        // waits, so that frame is not lost from the back buffer.
+        let deadline = started + CLAIM_WAIT;
+        let arrival = loop {
+            match state.follow.frame_arrived(region) {
+                Arrival::Wait => {
+                    let left = deadline.saturating_duration_since(Instant::now());
+                    if left.is_zero() {
+                        state.follow.release();
+                        continue;
+                    }
+                    state = self
+                        .claim_released
+                        .wait_timeout(state, left)
+                        .unwrap_or_else(|e| e.into_inner())
+                        .0;
+                    if state.closed {
+                        return Ok(());
+                    }
+                }
+                arrival => break arrival,
+            }
+        };
+        let keep = arrival == Arrival::Keep;
+        let shown =
+            self.present_locked(&mut state, &texture.texture, texture.size, region, keep)?;
+        self.trace_frame_colour(&mut state, &texture.texture, region);
+        if keep {
             trace_stage(
                 self.logger.as_deref(),
                 self.task_id,
-                "app.frame_left_out",
+                "app.frame_kept",
                 region,
-                &format!("held={:?}", hold.map(|(view, _)| view)),
+                &format!("view={}x{}", state.follow.view().0, state.follow.view().1),
             );
-            return Ok(());
-        }
-        let stage = action == FrameAction::Stage;
-        let shown =
-            self.present_locked(&mut state, &texture.texture, texture.size, region, stage)?;
-        self.trace_frame_colour(&mut state, &texture.texture, region);
-        if !stage {
+        } else {
             self.watch_press(&mut state, &texture.texture, region);
-        }
-        state.sync.frame_arrived(region, Instant::now());
-        if let Some(hold) = state.hold.as_mut() {
-            hold.staged = stage;
-        }
-        if !stage {
             self.frame_shown(
                 &mut state,
                 region,
@@ -750,10 +797,18 @@ impl WindowPresenter {
                 started,
             );
         }
-        // After the frame is in, so a window that waits for this frame shows it as soon as it
-        // wakes.
-        *self.shown.lock().unwrap_or_else(|e| e.into_inner()) = region;
-        self.arrived.notify_all();
+        drop(state);
+        if keep {
+            // The window takes the frame's size, and shows it then.
+            if let Some(ready) = self
+                .frame_ready
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .as_ref()
+            {
+                ready();
+            }
+        }
         Ok(())
     }
 
@@ -935,16 +990,7 @@ impl WindowPresenter {
             bottom: height,
             back: 1,
         };
-        context.CopySubresourceRegion(
-            last,
-            0,
-            0,
-            0,
-            0,
-            texture,
-            0,
-            Some(&whole as *const _),
-        );
+        context.CopySubresourceRegion(last, 0, 0, 0, 0, texture, 0, Some(&whole as *const _));
         Ok(())
     }
 
@@ -988,16 +1034,7 @@ impl WindowPresenter {
             bottom: area.bottom,
             back: 1,
         };
-        context.CopySubresourceRegion(
-            readback,
-            0,
-            0,
-            0,
-            0,
-            source,
-            0,
-            Some(&from as *const _),
-        );
+        context.CopySubresourceRegion(readback, 0, 0, 0, 0, source, 0, Some(&from as *const _));
         let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
         context
             .Map(readback, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
@@ -1120,11 +1157,10 @@ impl WindowPresenter {
                 "app.summary",
                 region,
                 &format!(
-                    "waited={} resize_buffers={} present={} budget={}",
+                    "waited={} resize_buffers={} present={}",
                     millis(waited),
                     resized.map(millis).unwrap_or_else(|| "0.0".into()),
-                    millis(presented.saturating_duration_since(started)),
-                    millis(state.sync.budget())
+                    millis(presented.saturating_duration_since(started))
                 ),
             );
             if state.latency.count() % SUMMARY_EVERY == 0 {
@@ -1135,7 +1171,7 @@ impl WindowPresenter {
         }
     }
 
-    /// Scales the visual so a frame of any size fills the client area, and commits it, unless
+    /// Scales the visual so the frame shows 1:1, and commits it, unless
     /// that is what is on the compositor already. Returns whether it committed. A present
     /// and a commit reach the compositor separately, so this comes right after the present
     /// that goes with it.
@@ -1144,11 +1180,11 @@ impl WindowPresenter {
             // Nothing to show yet: the first frame commits it.
             return false;
         };
-        let wanted = (buffers, state.view);
+        let wanted = (buffers, state.frame);
         if state.committed == Some(wanted) {
             return false;
         }
-        let (x, y) = visual_scale(buffers, state.view);
+        let (x, y) = frame_scale(buffers, state.frame);
         let matrix = Matrix3x2 {
             M11: x,
             M12: 0.0,

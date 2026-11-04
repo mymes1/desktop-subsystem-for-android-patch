@@ -142,6 +142,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly DsaService _service;
     private readonly ITextSource _text;
     private SettingsInfo? _settings;
+    private ArmTranslationInfo? _arm;
     private IReadOnlyList<GpuInfo> _gpus = Array.Empty<GpuInfo>();
     private string? _error;
     private bool _busy;
@@ -169,6 +170,37 @@ public sealed partial class SettingsViewModel : ObservableObject
     public int AdbPort => _settings?.AdbPort ?? SettingsInfo.DefaultAdbPort;
     /// <summary>The command that connects adb, shown while developer mode is on.</summary>
     public string AdbConnect => _settings?.AdbConnect ?? $"adb connect 127.0.0.1:{SettingsInfo.DefaultAdbPort}";
+    /// <summary>Whether Android uses an installed ARM translation package from its next
+    /// start.</summary>
+    public bool ArmTranslation => _settings?.ArmTranslation ?? true;
+    /// <summary>Whether apps built only for 64-bit ARM can be installed and run.</summary>
+    public bool ArmSupported => _arm?.Supported ?? false;
+    public bool HasArmPackage => _arm?.Package is not null;
+    public bool CanRemoveArmTranslation => CanChange && HasArmPackage;
+    public bool ArmRestartNeeded => _arm?.RestartNeeded ?? false;
+    /// <summary>One line on whether ARM apps run, and with what.</summary>
+    public string ArmStatus
+    {
+        get
+        {
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            if (_arm?.Package is not { } package)
+            {
+                return _text.Get("Arm_NotSupported");
+            }
+            if (!_arm.Enabled)
+            {
+                return string.Format(culture, _text.Get("Arm_TurnedOff"), package.Name, package.Version);
+            }
+            var license = package.License.Length > 0 ? package.License : _text.Get("Arm_NoLicense");
+            return string.Format(culture, _text.Get("Arm_Supported"), package.Name, package.Version, license);
+        }
+    }
+    /// <summary>The ABIs the running Android installs apps for, or that it is not running.</summary>
+    public string ArmAbis => _arm?.Android is { } android
+        ? string.Format(System.Globalization.CultureInfo.CurrentCulture, _text.Get("Arm_Abis"),
+            android.Abilist.Length > 0 ? android.Abilist : "?")
+        : _text.Get("Arm_NotRunning");
     public bool ProgramUpdates => _settings?.ProgramUpdates ?? false;
     public bool ImageUpdates => _settings?.ImageUpdates ?? false;
     public bool ProgramUpdatesAvailable => _settings?.ProgramUpdatesAvailable ?? false;
@@ -269,9 +301,55 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>Reads where ARM translation stands. A service that cannot say leaves the
+    /// section saying ARM apps are not supported.</summary>
+    private async Task LoadArmTranslationAsync()
+    {
+        try
+        {
+            _arm = await _service.ArmTranslationAsync().ConfigureAwait(true);
+        }
+        catch (DsaException)
+        {
+            _arm = null;
+        }
+        ChangedAll();
+    }
+
+    public async Task SetArmTranslationAsync(bool on)
+    {
+        if (on == ArmTranslation && Loaded)
+        {
+            return;
+        }
+        await ChangeAsync(() => _service.SetArmTranslationAsync(on)).ConfigureAwait(true);
+        await LoadArmTranslationAsync().ConfigureAwait(true);
+    }
+
+    public async Task RemoveArmTranslationAsync()
+    {
+        _busy = true;
+        _error = null;
+        ChangedAll();
+        try
+        {
+            _arm = await _service.RemoveArmTranslationAsync().ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            _error = Format.Problem(_text, e);
+        }
+        finally
+        {
+            _busy = false;
+            ChangedAll();
+        }
+    }
+
     public async Task LoadAsync()
     {
         await ChangeAsync(_service.SettingsAsync).ConfigureAwait(true);
+        await LoadArmTranslationAsync().ConfigureAwait(true);
         try
         {
             _gpus = await _service.GpusAsync().ConfigureAwait(true);

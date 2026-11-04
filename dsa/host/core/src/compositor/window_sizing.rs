@@ -151,7 +151,7 @@ impl WindowSizing {
     }
 
     /// The largest client area the window may have: what the guest can draw. A larger window
-    /// could only show the task's frames stretched.
+    /// could never match a frame of the task.
     pub fn max_client_size(&self) -> Option<(u32, u32)> {
         self.max
     }
@@ -354,7 +354,7 @@ impl WindowSizing {
 
     /// Time has passed. Returns the client size the window must take when the guest has not
     /// taken the size the host asked for within [`SETTLE`]: the window then shows the task
-    /// at the size it has, 1:1, rather than its frames stretched for good.
+    /// at the size it has, 1:1, rather than wait for a size that never comes.
     pub fn tick(&mut self, now: Instant) -> Option<(u32, u32)> {
         let (_, since) = self.asked?;
         if self.dragging || now.saturating_duration_since(since) < SETTLE {

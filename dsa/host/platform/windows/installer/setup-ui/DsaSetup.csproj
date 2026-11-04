@@ -20,9 +20,9 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>assets\logo.ico</ApplicationIcon>
     <Product>Desktop Subsystem for Android</Product>
-    <Company>Thisisthepy</Company>
+    <Company>ThisIsThePy</Company>
     <AssemblyTitle>Desktop Subsystem for Android Setup</AssemblyTitle>
-    <Copyright>Copyright thisisthepy. Licensed under the Apache License 2.0.</Copyright>
+    <Copyright>Copyright ThisIsThePy. Licensed under the Apache License 2.0.</Copyright>
     <Nullable>disable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>

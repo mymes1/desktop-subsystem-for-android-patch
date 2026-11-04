@@ -95,14 +95,23 @@ fn fake_logd() -> (FakeLogd, Sender<Vec<u8>>) {
     )
 }
 
-struct Pstore;
+/// pstore with one record, which notes the records it is told the host has.
+#[derive(Default)]
+struct Pstore(Arc<Mutex<Vec<String>>>);
 
 impl DiagnosticFiles for Pstore {
     fn files(&self) -> Vec<(String, Result<Vec<u8>, String>)> {
-        vec![(
-            "android/pstore/console-ramoops-0".into(),
-            Ok(b"Kernel panic".to_vec()),
-        )]
+        vec![
+            (
+                "android/pstore/console-ramoops-0".into(),
+                Ok(b"Kernel panic".to_vec()),
+            ),
+            ("android/pstore/unreadable".into(), Err("denied".into())),
+        ]
+    }
+
+    fn delivered(&self, names: &[String]) {
+        self.0.lock().unwrap().extend_from_slice(names);
     }
 }
 
@@ -128,7 +137,7 @@ fn port() -> (MemoryListener, Arc<PortConnector>, Arc<AtomicBool>) {
 fn bridge(logd: &FakeLogd, connect: Arc<PortConnector>, agent: bool) -> LogBridge {
     LogBridge::new(
         Arc::new(logd.clone()),
-        Arc::new(Pstore),
+        Arc::new(Pstore::default()),
         connect,
         Arc::new(move || agent),
     )
@@ -408,4 +417,56 @@ fn fr21_only_the_agent_sends_diagnostics_and_no_client_sends_the_log() {
         router.from_guest(agent, records),
         Err(SendError::NotAllowed(_))
     ));
+}
+
+#[test]
+fn fr21_pstore_records_are_cleared_once_the_host_has_them() {
+    let (logd, feed) = fake_logd();
+    drop(feed);
+    let (mut listener, connect, _) = port();
+    let delivered = Arc::new(Mutex::new(Vec::new()));
+    let bridge = LogBridge::new(
+        Arc::new(logd.clone()),
+        Arc::new(Pstore(Arc::clone(&delivered))),
+        connect,
+        Arc::new(|| false),
+    );
+    bridge.from_host(&host(Body::CollectDiagnostics(CollectDiagnostics {
+        request_id: 3,
+    })));
+    let mut connection = listener.accept(WAIT).unwrap();
+    loop {
+        let frame = connection.recv(Some(WAIT)).unwrap();
+        if let Some(Body::DiagnosticsDone(_)) = decode(&frame).unwrap().body {
+            break;
+        }
+    }
+    wait_until("the sent record is cleared", || {
+        !delivered.lock().unwrap().is_empty()
+    });
+    // Only what reached the host; a record that could not be read stays for the next time.
+    assert_eq!(
+        *delivered.lock().unwrap(),
+        ["android/pstore/console-ramoops-0"]
+    );
+}
+
+#[test]
+fn fr21_pstore_records_stay_when_the_host_cannot_be_reached() {
+    let (logd, feed) = fake_logd();
+    drop(feed);
+    let (_listener, connect, open) = port();
+    open.store(false, Ordering::SeqCst);
+    let delivered = Arc::new(Mutex::new(Vec::new()));
+    let bridge = LogBridge::new(
+        Arc::new(logd.clone()),
+        Arc::new(Pstore(Arc::clone(&delivered))),
+        connect,
+        Arc::new(|| false),
+    );
+    bridge.from_host(&host(Body::CollectDiagnostics(CollectDiagnostics {
+        request_id: 4,
+    })));
+    thread::sleep(Duration::from_millis(300));
+    assert!(delivered.lock().unwrap().is_empty());
 }

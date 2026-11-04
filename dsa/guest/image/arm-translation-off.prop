@@ -1,0 +1,2 @@
+# ARM app translation is off, or no package is installed: the image's own ABIs (x86_64) stand.
+# The product build.prop imports this file then, so the import always finds a file.

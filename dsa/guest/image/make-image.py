@@ -171,6 +171,10 @@ REMOVED_INIT_SCRIPTS = ["VENDOR/etc/init/seriallogging.rc"]
 # is fixed and passed on the kernel command line.
 SUPER_UUID = "6b1ad5ad-0d5a-4dd3-9a6b-5a0a1d5a5a17"
 MISC_UUID = "811d3bbb-a7ff-437a-857f-f54af996b190"
+# The system disk's own GPT GUID. The kernel command line names the system disk by it, not by
+# its kernel name (sda, sdb): a disk's kernel name follows the order Hyper-V's SCSI controller
+# probes the disks in, which changes when the host attaches another disk.
+SYSTEM_DISK_GUID = "d5a0d15c-5157-4e6d-8d5a-0000000005d5"
 DISK_SIZE = 64 << 30
 SYSTEM_SMALL_PARTITIONS = [
     ("vbmeta_a", 1 << 20),
@@ -427,32 +431,70 @@ def command_line_partitions(partitions, uuids=None):
     Hyper-V's virtual SCSI controller exposes the GPT partition devices but omits their
     PARTNAME uevent property. The kernel's command-line partition parser supplies those
     names before first-stage init starts. Every range comes from the GPT we just wrote, so
-    an AOSP super image changing size does not change the mapping by assumption.
+    an AOSP super image changing size does not change the mapping by assumption. The disk is
+    named by its GPT GUID, which DSA's kernel reads from the disk, so the names land on the
+    system disk whichever kernel name it gets.
     """
     entries = []
     uuids = {} if uuids is None else uuids
     for name, (offset, size) in partitions.items():
         identifier = f"{name}:{uuids[name]}" if name in uuids else name
         entries.append(f"{size}@{offset}({identifier})")
-    return "blkdevparts=sda:" + ",".join(entries)
+    return f"blkdevparts={SYSTEM_DISK_GUID}:" + ",".join(entries)
 
 
-def removed_apexes(hwcomposer=False, power=False):
+# A disk's kernel name (sda, sdb) follows probe order, so nothing in the image may name one.
+KERNEL_DISK_NAME = re.compile(r"/dev/(?:block/)?(?:sd|vd)[a-z]+\d*|blkdevparts=(?:[^ ;]*;)*(?:sd|vd)[a-z]+:")
+
+
+def kernel_disk_names(text):
+    """The disk references in `text` that name a disk by its kernel name, not its identity."""
+    return KERNEL_DISK_NAME.findall(text)
+
+
+def removed_apexes(hwcomposer=False, power=False, gnss=False, sensors=False,
+                   camera=False):
     """The vendor APEXes the guest must not have; Cuttlefish's composers too when DSA's
-    composer replaces them, and its power and health HALs when DSA's replace them."""
+    composer replaces them, its power and health HALs when DSA's replace them, its GNSS HAL
+    when DSA's replaces it, its sensors HAL when DSA's replaces it, and its emulated cameras
+    when DSA's camera HAL lends the host's."""
     return (REMOVED_APEXES + (CUTTLEFISH_COMPOSER_APEXES if hwcomposer else [])
-            + (CUTTLEFISH_POWER_APEXES if power else []))
+            + (CUTTLEFISH_POWER_APEXES if power else [])
+            + (CUTTLEFISH_GNSS_APEXES if gnss else [])
+            + (CUTTLEFISH_SENSORS_APEXES if sensors else [])
+            + (CUTTLEFISH_CAMERA_APEXES if camera else []))
 
 
-def removed(name, hwcomposer=False, power=False):
+def removed(name, hwcomposer=False, power=False, gnss=False, sensors=False, camera=False):
     """Whether a target_files member belongs to an app, a HAL or a service the guest must not have."""
     return (
         name in REMOVED_INIT_SCRIPTS
         or any(f"/{app}/" in name for app in REMOVED_APPS)
         or any(
             name in (f"VENDOR/apex/{apex}.apex", f"VENDOR/apex/{apex}.capex")
-            for apex in removed_apexes(hwcomposer, power)
+            for apex in removed_apexes(hwcomposer, power, gnss, sensors, camera)
         )
+        or (gnss and cuttlefish_gnss_file(name))
+    )
+
+
+def cuttlefish_gnss_file(name):
+    """Whether a target_files member is part of a GNSS HAL installed as plain files (its
+    binary, init script or VINTF fragment), other than DSA's own."""
+    if name in GNSS_FILES:
+        return False
+    return any(name.startswith(folder) and "gnss" in name[len(folder):].lower()
+               for folder in CUTTLEFISH_GNSS_FOLDERS)
+
+
+def other_sensors_manifest(name, data):
+    """Whether a target_files member is a vendor VINTF fragment, not DSA's, that declares a
+    sensors HAL. Two declarations of android.hardware.sensors would fail the device's VINTF
+    check, so the other one goes when DSA's sensors HAL is installed."""
+    return (
+        name.startswith("VENDOR/etc/vintf/manifest/")
+        and name not in SENSORS_FILES
+        and b"<name>android.hardware.sensors</name>" in data
     )
 
 
@@ -793,10 +835,116 @@ def tag_build_version(key, value, build_tag):
     return value
 
 
-def edit_props(text, codec2=False, vendor=False, build_tag=None):
-    """Returns a build.prop with DSA's properties. With `vendor`, it is one init reads as
-    vendor_init, which gets only the properties vendor_init may set. With `build_tag`, the
-    incremental version and the fingerprints carry it."""
+# The device identity the image reports instead of Cuttlefish's. A user may change it from the
+# settings; the host then hands the guest a property file in the boot's initrd, which first
+# stage init keeps for the second stage at RAMDISK_PROP, and the product build.prop, which
+# init reads last, ends with imports that take the identity properties from it.
+IDENTITY = {
+    "brand": "DSA",
+    "manufacturer": "thisisthepy",
+    "model": "Desktop Subsystem for Android",
+    "device": "dsa_x86_64",
+    "name": "dsa_x86_64",
+}
+# Large-screen layouts without keeping phone apps out: apps pick their layout from the
+# window's size, and AOSP's tablet configurations use this value.
+CHARACTERISTICS = "tablet"
+BUILD_TYPE = "user"
+PRODUCT_KEY = re.compile(r"^ro\.product\.(?:([a-z_]+)\.)?(brand|manufacturer|model|device|name)$")
+RAMDISK_PROP = "/second_stage_resources/system/etc/ramdisk/build.prop"
+IDENTITY_PARTITIONS = ["system", "system_ext", "vendor", "product", "odm", "vendor_dlkm",
+                       "odm_dlkm", "system_dlkm"]
+IDENTITY_IMPORTS = [
+    "ro.product.*",
+    "ro.build.characteristics",
+    "ro.build.product",
+    "ro.build.flavor",
+    "ro.build.description",
+    "ro.build.fingerprint",
+    *(f"ro.{p}.build.fingerprint" for p in IDENTITY_PARTITIONS),
+]
+# Read only for DSA's identity, not for the rest of what edit_props sets: the dlkm partitions'
+# files and the generic ramdisk's, which first stage init hands the second stage.
+IDENTITY_PROP_FILES = {
+    "VENDOR_DLKM/etc/build.prop",
+    "ODM_DLKM/etc/build.prop",
+    "SYSTEM_DLKM/etc/build.prop",
+    "INIT_BOOT/RAMDISK/system/etc/ramdisk/build.prop",
+    "BOOT/RAMDISK/system/etc/ramdisk/build.prop",
+}
+PRODUCT_PROP_FILE = "PRODUCT/etc/build.prop"
+
+
+def identity_value(key, value):
+    """Returns a build property's value with DSA's device identity in place of the build's."""
+    m = PRODUCT_KEY.match(key)
+    if m:
+        return IDENTITY[m.group(2)]
+    if key == "ro.build.characteristics":
+        return CHARACTERISTICS
+    if key == "ro.build.product":
+        return IDENTITY["device"]
+    if key == "ro.build.flavor":
+        return f"{IDENTITY['name']}-{BUILD_TYPE}"
+    if key == "ro.build.description":
+        # flavor release id incremental tags
+        words = value.split(" ")
+        return " ".join([f"{IDENTITY['name']}-{BUILD_TYPE}", *words[1:]])
+    if key == "ro.build.display.id":
+        # A user build shows only the build ID; Cuttlefish's says its flavor first.
+        words = value.split(" ")
+        return words[2] if len(words) >= 3 and "-" in words[0] else value
+    if FINGERPRINT_KEY.match(key) and value.count(":") == 2 and value.count("/") == 5:
+        # brand/name/device:release/id/incremental:type/tags
+        _, build, kind = value.split(":")
+        tags = kind.split("/", 1)[1]
+        return f"{IDENTITY['brand']}/{IDENTITY['name']}/{IDENTITY['device']}:{build}:{BUILD_TYPE}/{tags}"
+    return value
+
+
+def edit_identity(text, build_tag=None):
+    """Returns a property file with DSA's device identity, and with `build_tag` in its
+    incremental version and fingerprints."""
+    out = []
+    for line in text.splitlines():
+        if "=" in line and not line.startswith("#"):
+            key, value = line.split("=", 1)
+            value = identity_value(key, value)
+            if build_tag:
+                value = tag_build_version(key, value, build_tag)
+            line = f"{key}={value}"
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def identity_imports(text):
+    """Returns the product build.prop ending with the imports that let the host's property
+    file, when the boot carries one, replace the identity of every partition."""
+    lines = text.splitlines()
+    if not any(line.startswith("ro.build.characteristics=") for line in lines):
+        lines.append(f"ro.build.characteristics={CHARACTERISTICS}")
+    lines.append("# The device identity chosen in DSA's settings, when the boot carries one.")
+    lines += [f"import {RAMDISK_PROP} {key}" for key in IDENTITY_IMPORTS]
+    return "\n".join(lines) + "\n"
+
+
+def image_identity(system_props):
+    """The parts of the image's fingerprint a user does not choose, for image.json."""
+    props = dict(line.split("=", 1) for line in system_props.splitlines()
+                 if "=" in line and not line.startswith("#"))
+    return {
+        "release": props.get("ro.build.version.release_or_codename") or props.get("ro.build.version.release", ""),
+        "id": props.get("ro.build.id", ""),
+        "incremental": props.get("ro.build.version.incremental", ""),
+        "tags": props.get("ro.build.tags", "release-keys"),
+    }
+
+
+def edit_props(text, codec2=False, vendor=False, build_tag=None, product=False):
+    """Returns a build.prop with DSA's properties and device identity. With `vendor`, it is one
+    init reads as vendor_init, which gets only the properties vendor_init may set. With
+    `build_tag`, the incremental version and the fingerprints carry it. With `product`, it ends
+    with the imports of the identity the user chose."""
     props_to_apply = {**USER_PROPS, **ADB_PROPS, **GRAPHICS_PROPS, **MEMORY_PROPS, **LOADER_PROPS, **FRP_PROPS,
                       **LOG_PROPS, **(CODEC2_PROPS if codec2 else {})}
     if vendor:
@@ -808,11 +956,15 @@ def edit_props(text, codec2=False, vendor=False, build_tag=None):
             continue
         if key.endswith("build.type"):
             line = f"{key}=user"
-        if build_tag and "=" in line and not line.startswith("#"):
-            line = f"{key}={tag_build_version(key, line.split('=', 1)[1], build_tag)}"
+        if "=" in line and not line.startswith("#"):
+            value = identity_value(key, line.split("=", 1)[1])
+            if build_tag:
+                value = tag_build_version(key, value, build_tag)
+            line = f"{key}={value}"
         out.append(line)
     out += [f"{k}={v}" for k, v in props_to_apply.items()]
-    return "\n".join(out) + "\n"
+    text = "\n".join(out) + "\n"
+    return identity_imports(text) if product else text
 
 
 # Wi-Fi's init script makes a kernel trace instance when boot completes, for WifiService to
@@ -901,6 +1053,47 @@ CUTTLEFISH_POWER_APEXES = [
     "com.android.hardware.power",
     "com.google.cf.health",
 ]
+# DSA's primary audio module (dsa/guest/audio), which plays the guest's sound on the host's
+# default output device. It runs in the audio HAL's domain and serves IModule/default, which
+# the image's audio APEX already declares. That APEX's service makes a module for each one
+# its policy file lists, so the primary one leaves the file and the service keeps the rest
+# (remote submix, Bluetooth), the configuration and the effects.
+AUDIO_DIR = REPO / "dsa/guest/audio"
+AUDIO_BINARY = "VENDOR/bin/hw/dsa-audio"
+AUDIO_RC = "VENDOR/etc/init/dsa-audio.rc"
+AUDIO_CONTEXT = "/vendor/bin/hw/dsa-audio u:object_r:hal_audio_default_exec:s0"
+AUDIO_POLICY_CONFIG = re.compile(r"^VENDOR/etc/audio_policy_configuration[^/]*\.xml$")
+PRIMARY_AUDIO_INCLUDE = re.compile(
+    r'[ \t]*(<!--[^>]*Primary Audio HAL[^>]*-->[ \t]*\n[ \t]*)?'
+    r'<xi:include href="primary_audio_policy_configuration\.xml"\s*/>[ \t]*\n?'
+)
+
+
+def without_primary_audio_module(text):
+    """The audio policy file without its primary module, which dsa-audio serves instead."""
+    return PRIMARY_AUDIO_INCLUDE.sub("", text)
+
+
+# DSA's GNSS HAL (dsa/guest/gnss), which gives the guest the host computer's location, and the
+# Cuttlefish GNSS HAL it replaces, whichever way the image carries it: an APEX, or a binary
+# with its init script and VINTF fragment. Two HALs would both claim IGnss/default. It runs in
+# the vendor policy's GNSS domain; gnss.cil lets it reach dsa-channeld.
+GNSS_DIR = REPO / "dsa/guest/gnss"
+GNSS_FILES = {
+    "VENDOR/bin/hw/dsa-gnss": None,
+    "VENDOR/etc/init/dsa-gnss.rc": GNSS_DIR / "dsa-gnss.rc",
+    "VENDOR/etc/vintf/manifest/dsa-gnss.xml": GNSS_DIR / "dsa-gnss.xml",
+}
+GNSS_CONTEXT = "/vendor/bin/hw/dsa-gnss u:object_r:hal_gnss_default_exec:s0"
+CUTTLEFISH_GNSS_APEXES = [
+    "com.google.cf.gnss",
+    "com.android.hardware.gnss",
+]
+CUTTLEFISH_GNSS_FOLDERS = [
+    "VENDOR/bin/hw/",
+    "VENDOR/etc/init/",
+    "VENDOR/etc/vintf/manifest/",
+]
 # DSA's Codec 2.0 HAL (dsa/guest/codec2), whose video decoders decode on the host's GPU. It
 # runs in the vendor codec domain (mediacodec); codec2.cil lets it reach the host's video port
 # and map the buffers it writes pictures into. Its decoders are listed in
@@ -920,6 +1113,41 @@ CODEC2_SERVICE_CONTEXT = f"{CODEC2_INSTANCE} u:object_r:hal_codec2_service:s0"
 # surface keeps its pool (BUFFERQUEUE, 1 << 18), which reaches the HAL as the surface's
 # allocator. The guest's software decoders take handles as well.
 CODEC2_PROPS = {"debug.stagefright.c2-poolmask": str(1 << 18)}
+# DSA's sensors HAL (dsa/guest/sensors), which shows the host's accelerometer, gyroscope,
+# orientation and light sensors to Android, and the Cuttlefish APEXes whose sensors HAL it
+# replaces. It runs in the vendor sensors domain; sensors.cil lets it reach the host's sensor
+# port over vsock.
+SENSORS_DIR = REPO / "dsa/guest/sensors"
+SENSORS_FILES = {
+    "VENDOR/bin/hw/dsa-sensors": None,
+    "VENDOR/etc/init/dsa-sensors.rc": SENSORS_DIR / "dsa-sensors.rc",
+    "VENDOR/etc/vintf/manifest/dsa-sensors.xml": SENSORS_DIR / "dsa-sensors.xml",
+}
+SENSORS_CONTEXT = "/vendor/bin/hw/dsa-sensors u:object_r:hal_sensors_default_exec:s0"
+CUTTLEFISH_SENSORS_APEXES = [
+    "com.android.hardware.sensors",
+    "com.google.cf.sensors",
+]
+# DSA's camera provider HAL (dsa/guest/camera), which lends the host computer's cameras to
+# Android, and the Cuttlefish APEX whose emulated cameras it replaces. It runs in the vendor
+# camera HAL domain (hal_camera_default); camera.cil lets it reach the host's camera port and
+# map the apps' buffers it writes pictures into. Apps reach it through cameraserver, so
+# Android's camera permission applies. The features file declares the cameras a computer
+# has, so apps that need a camera install and offer it.
+CAMERA_DIR = REPO / "dsa/guest/camera"
+CAMERA_FILES = {
+    "VENDOR/bin/hw/dsa-camera": None,
+    "VENDOR/etc/init/dsa-camera.rc": CAMERA_DIR / "dsa-camera.rc",
+    "VENDOR/etc/vintf/manifest/dsa-camera.xml": CAMERA_DIR / "dsa-camera.xml",
+    "VENDOR/etc/permissions/dsa-camera-features.xml": CAMERA_DIR / "dsa-camera-features.xml",
+}
+CAMERA_CONTEXT = "/vendor/bin/hw/dsa-camera u:object_r:hal_camera_default_exec:s0"
+CAMERA_INSTANCE = "android.hardware.camera.provider.ICameraProvider/internal/0"
+CAMERA_SERVICE_CONTEXT = f"{CAMERA_INSTANCE} u:object_r:hal_camera_service:s0"
+CAMERA_APEX_MODULE = "com.google.emulated.camera.provider.hal"
+CUTTLEFISH_CAMERA_APEXES = [
+    "com.google.emulated.camera.provider.hal",
+]
 # The freeform display every task window lives on, as the hwcomposer reads it from
 # ro.boot.dsa.*. The host shows windows, not this display, so its size bounds a window's.
 # These are defaults: the host replaces the width and height from the user's monitors.
@@ -941,6 +1169,33 @@ TRACE_FS_CONFIG = [
     "system/etc/init/dsa-trace.rc 0 0 644 capabilities=0x0",
     "system/etc/init/dsa-console.rc 0 0 644 capabilities=0x0",
 ]
+# ARM app translation, for a translation package the user installs (`dsa arm-translation
+# install`). The host puts androidboot.dsa.arm_translation=on in the boot's bootconfig only
+# while one is installed and on. The product build.prop, read last, then imports the native
+# bridge and ABI properties from the "on" file; otherwise from the "off" file, which sets
+# nothing. ro.* properties are fixed once read, so this is decided at boot. The init script
+# mounts the package over /system before the zygote starts; a system script, because only init
+# itself may mount there.
+ARM_TRANSLATION_RC = "SYSTEM/etc/init/dsa-arm-translation.rc"
+ARM_TRANSLATION_PROPS = {
+    "SYSTEM/etc/dsa/arm-translation-on.prop": HERE / "arm-translation-on.prop",
+    "SYSTEM/etc/dsa/arm-translation-off.prop": HERE / "arm-translation-off.prop",
+}
+ARM_TRANSLATION_PRODUCT_PROPS = "PRODUCT/etc/build.prop"
+ARM_TRANSLATION_IMPORT = "import /system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop"
+ARM_TRANSLATION_FS_CONFIG = [
+    "system/etc/init/dsa-arm-translation.rc 0 0 644 capabilities=0x0",
+    "system/etc/dsa 0 0 755 capabilities=0x0",
+    "system/etc/dsa/arm-translation-on.prop 0 0 644 capabilities=0x0",
+    "system/etc/dsa/arm-translation-off.prop 0 0 644 capabilities=0x0",
+]
+
+
+def add_arm_translation_import(text):
+    """Returns the product build.prop with the ARM translation import as its last line, so the
+    imported properties win over every partition's own."""
+    lines = [line for line in text.splitlines() if line.strip() != ARM_TRANSLATION_IMPORT]
+    return "\n".join(lines + [ARM_TRANSLATION_IMPORT]) + "\n"
 # The property dsa-channeld sets to have init drop the caches and compact memory, so free
 # page reporting hands idle memory back to the host. vendor_property_contexts gives it the
 # type the daemon's policy lets it set.
@@ -1009,7 +1264,9 @@ AGENT_FS_CONFIG = [
 ]
 
 
-def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power=False, codec2=False):
+def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power=False, codec2=False,
+                                audio=False, gnss=False, sensors=False,
+                                camera=False):
     """Adds same_process_hal_file contexts for guest graphics libraries if not present, and
     opens the DRM cards to every graphics client.
 
@@ -1036,6 +1293,14 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
         entries += POWER_CONTEXTS
     if codec2:
         entries.append((r"/vendor/bin/hw/dsa-codec2", CODEC2_CONTEXT))
+    if audio:
+        entries.append((r"/vendor/bin/hw/dsa-audio", AUDIO_CONTEXT))
+    if gnss:
+        entries.append((r"/vendor/bin/hw/dsa-gnss", GNSS_CONTEXT))
+    if sensors:
+        entries.append((r"/vendor/bin/hw/dsa-sensors", SENSORS_CONTEXT))
+    if camera:
+        entries.append((r"/vendor/bin/hw/dsa-camera", CAMERA_CONTEXT))
     # Usually there already, as /(vendor|system/vendor)/overlay(/.*)?.
     entries.append(("overlay(/.*)?", VENDOR_OVERLAY_CONTEXT))
     for pattern, rule in entries:
@@ -1044,14 +1309,16 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def update_vendor_service_contexts(text, codec2=False, channeld=True):
-    """Labels the daemon's binder service in vendor_service_contexts if it is not yet, and the
-    codec HAL's when `codec2` is set."""
+def update_vendor_service_contexts(text, codec2=False, channeld=True, camera=False):
+    """Labels the daemon's binder service in vendor_service_contexts if it is not yet, the
+    codec HAL's when `codec2` is set, and the camera HAL's when `camera` is set."""
     lines = text.splitlines()
     if channeld and not any(line.split()[:1] == [CHANNEL_INSTANCE] for line in lines):
         lines.append(CHANNEL_SERVICE_CONTEXT)
     if codec2 and not any(line.split()[:1] == [CODEC2_INSTANCE] for line in lines):
         lines.append(CODEC2_SERVICE_CONTEXT)
+    if camera and not any(line.split()[:1] == [CAMERA_INSTANCE] for line in lines):
+        lines.append(CAMERA_SERVICE_CONTEXT)
     return "\n".join(lines) + "\n"
 
 
@@ -1106,7 +1373,8 @@ def add_filesystem_config(fs_config_text, rules):
 
 
 def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=False, power=False,
-                                    codec2=False):
+                                    codec2=False, audio=False, gnss=False, sensors=False,
+                                    camera=False):
     """Adds filesystem configuration entries for the files DSA adds to vendor if not present."""
     lines = fs_config_text.splitlines()
     entries = [
@@ -1134,10 +1402,18 @@ def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=F
             ("vendor/etc/vintf/manifest/dsa-hwcomposer.xml",
              "vendor/etc/vintf/manifest/dsa-hwcomposer.xml 0 0 644 capabilities=0x0"),
         ]
-    for name in (list(POWER_FILES) if power else []) + (list(CODEC2_FILES) if codec2 else []):
+    for name in ((list(POWER_FILES) if power else []) + (list(CODEC2_FILES) if codec2 else [])
+                 + (list(GNSS_FILES) if gnss else [])
+                 + (list(SENSORS_FILES) if sensors else [])
+                 + (list(CAMERA_FILES) if camera else [])):
         path = name.lower()
         mode = "0 2000 755" if "/bin/" in path else "0 0 644"
         entries.append((path, f"{path} {mode} capabilities=0x0"))
+    if audio:
+        entries += [
+            ("vendor/bin/hw/dsa-audio", "vendor/bin/hw/dsa-audio 0 2000 755 capabilities=0x0"),
+            ("vendor/etc/init/dsa-audio.rc", "vendor/etc/init/dsa-audio.rc 0 0 644 capabilities=0x0"),
+        ]
     for path, rule in entries:
         if not any(line.startswith(path + " ") for line in lines):
             lines.append(rule)
@@ -1151,11 +1427,16 @@ GFXSTREAM_ALLOWED_PERMS = {
 SEPOLICY_FRAGMENT = HERE / "sepolicy/graphics-vsock.cil"
 CHANNELD_POLICY = HERE / "sepolicy/channeld.cil"
 POWER_POLICY = HERE / "sepolicy/power.cil"
+GNSS_POLICY = HERE / "sepolicy/gnss.cil"
 CODEC2_POLICY = HERE / "sepolicy/codec2.cil"
+SENSORS_POLICY = HERE / "sepolicy/sensors.cil"
+CAMERA_POLICY = HERE / "sepolicy/camera.cil"
 AGENT_POLICY = HERE / "sepolicy/agent.cil"
 MEMORY_POLICY = HERE / "sepolicy/memory.cil"
+AUDIO_POLICY = HERE / "sepolicy/audio.cil"
 ADB_POLICY = HERE / "sepolicy/adb.cil"
 KERNEL_POLICY = HERE / "sepolicy/kernel.cil"
+ARM_TRANSLATION_POLICY = HERE / "sepolicy/arm-translation.cil"
 
 
 def narrow_vsock_neverallows(text):
@@ -1287,14 +1568,19 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, power_hal=None,
-           codec2=None):
+           codec2=None, audio=None, gnss_hal=None,
+           sensors=None, camera=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
     composer in place of Cuttlefish's when `hwcomposer` names one, the framework overlay
     when `framework_overlay` names its APK, and DSA's power and health HALs in place of
     Cuttlefish's when `power_hal` names the folder that holds dsa-power and dsa-health, and
-    DSA's codec HAL, whose video decoders decode on the host's GPU, when `codec2` names it."""
+    DSA's codec HAL, whose video decoders decode on the host's GPU, when `codec2` names it,
+    and DSA's GNSS HAL, which gives the guest the host's location, in place of Cuttlefish's
+    when `gnss_hal` names it, and DSA's sensors HAL in place of Cuttlefish's when `sensors`
+    names it, and DSA's camera HAL, which lends the host's cameras, in place of Cuttlefish's
+    emulated cameras when `camera` names it."""
     fstab = (HERE / "fstab.dsa").read_bytes()
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
     vulkan_payload = Path(vulkan_driver).read_bytes() if vulkan_driver else None
@@ -1320,9 +1606,36 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             for name, source in CODEC2_FILES.items()
         }
     has_codec2 = codec2_payloads is not None
+    audio_payload = Path(audio).read_bytes() if audio else None
+    has_audio = audio_payload is not None
+    gnss_payloads = None
+    if gnss_hal is not None:
+        if channeld is None:
+            raise ValueError("the GNSS HAL reaches the host through dsa-channeld; give --channeld too")
+        gnss_payloads = {
+            name: Path(gnss_hal).read_bytes() if source is None else source.read_bytes()
+            for name, source in GNSS_FILES.items()
+        }
+    has_gnss = gnss_payloads is not None
+    sensors_payloads = None
+    if sensors is not None:
+        sensors_payloads = {
+            name: Path(sensors).read_bytes() if source is None else source.read_bytes()
+            for name, source in SENSORS_FILES.items()
+        }
+    has_sensors = sensors_payloads is not None
+    camera_payloads = None
+    if camera is not None:
+        camera_payloads = {
+            name: Path(camera).read_bytes() if source is None else source.read_bytes()
+            for name, source in CAMERA_FILES.items()
+        }
+    has_camera = camera_payloads is not None
     build_tag = image_build_tag([
         graphics_payload, vulkan_payload, channeld_payload, agent_payload, hwcomposer_payload,
         overlay_payload, *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
+        audio_payload, *(gnss_payloads or {}).values(), *(sensors_payloads or {}).values(),
+        *(camera_payloads or {}).values(),
     ])
     replaced_graphics_payload = False
     replaced_vulkan_payload = False
@@ -1355,6 +1668,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             plat_patched += "\n" + ADB_POLICY.read_text()
             # The kernel thread whose devtmpfs nodes nothing uses.
             plat_patched += "\n" + KERNEL_POLICY.read_text()
+            # init mounting a user's ARM translation package over /system.
+            plat_patched += "\n" + ARM_TRANSLATION_POLICY.read_text()
             if channeld_payload is not None:
                 # Its rules name the domain they declare, so they go in whole.
                 plat_patched += "\n" + CHANNELD_POLICY.read_text()
@@ -1364,6 +1679,18 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             if has_codec2:
                 # The codec HAL reaches the host's video port.
                 plat_patched += "\n" + CODEC2_POLICY.read_text()
+            if has_audio:
+                # The audio module's socket to the host.
+                plat_patched += "\n" + AUDIO_POLICY.read_text()
+            if has_gnss:
+                # The GNSS HAL reaches the daemon.
+                plat_patched += "\n" + GNSS_POLICY.read_text()
+            if has_sensors:
+                # The sensors HAL reaches the host's sensor port.
+                plat_patched += "\n" + SENSORS_POLICY.read_text()
+            if has_camera:
+                # The camera HAL reaches the host's camera port.
+                plat_patched += "\n" + CAMERA_POLICY.read_text()
             if agent_payload is not None:
                 # What the agent needs to put the guest into Doze and set its battery.
                 plat_patched += "\n" + AGENT_POLICY.read_text()
@@ -1398,15 +1725,19 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             text = zin.read(name).decode() if name in names else ""
             if name == "VENDOR/etc/selinux/vendor_file_contexts":
                 text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer,
-                                                   has_power, codec2=has_codec2)
+                                                   has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera)
             file_contexts.append(text if text.endswith("\n") or not text else text + "\n")
         compiled_file_contexts = compile_file_contexts(otatools, "".join(file_contexts))
 
         for info in zin.infolist():
             name = info.filename
-            if removed(name, has_hwcomposer, has_power):
+            if removed(name, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera):
                 if name.endswith((".apk", ".apex", ".capex")):
                     print(f"removing {name}", flush=True)
+                continue
+            if (has_sensors and name.startswith("VENDOR/etc/vintf/manifest/")
+                    and other_sensors_manifest(name, zin.read(name))):
+                print(f"removing {name}, which declares another sensors HAL", flush=True)
                 continue
             if kept_modules.match(name):
                 continue
@@ -1439,7 +1770,12 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 if name in PROP_FILES:
                     data = edit_props(data.decode(), codec2=has_codec2,
                                       vendor=name in VENDOR_PROP_FILES,
-                                      build_tag=build_tag).encode()
+                                      build_tag=build_tag,
+                                      product=name == PRODUCT_PROP_FILE).encode()
+                    if name == ARM_TRANSLATION_PRODUCT_PROPS:
+                        data = add_arm_translation_import(data.decode()).encode()
+                elif name in IDENTITY_PROP_FILES:
+                    data = edit_identity(data.decode(), build_tag=build_tag).encode()
                 elif name == WIFI_RC:
                     data = edit_wifi_rc(data.decode()).encode()
                 elif name.endswith(SETTINGS_APK):
@@ -1449,7 +1785,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 elif name == "META/apexkeys.txt":
                     data = b"".join(
                         line + b"\n" for line in data.splitlines()
-                        if not any(f'name="{a}.apex"' in line.decode() for a in removed_apexes(has_hwcomposer, has_power))
+                        if not any(f'name="{a}.apex"' in line.decode() for a in removed_apexes(has_hwcomposer, has_power, has_gnss, has_sensors, has_camera))
                     )
                 elif name == "META/apkcerts.txt":
                     data = b"".join(
@@ -1462,7 +1798,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     if overlay_payload is not None:
                         data += FRAMEWORK_OVERLAY_APKCERTS.encode() + b"\n"
                 elif name == SYSTEM_FS_CONFIG:
-                    data = add_filesystem_config(data.decode(), TRACE_FS_CONFIG).encode()
+                    data = add_filesystem_config(data.decode(),
+                                                 TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG).encode()
                 elif name == SYSTEM_EXT_FS_CONFIG and agent_payload is not None:
                     data = add_filesystem_config(data.decode(), AGENT_FS_CONFIG).encode()
                 elif name in FSTAB_DIRS.values():
@@ -1477,16 +1814,21 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                             text += f"{prefix}fstab.dsa 0 0 644 capabilities=0x0\n"
                     if name == "META/vendor_filesystem_config.txt":
                         text = update_vendor_filesystem_config(text, channeld_payload is not None, has_hwcomposer,
-                                                               has_power, codec2=has_codec2)
+                                                               has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera)
                         if overlay_payload is not None:
                             text = add_filesystem_config(text, FRAMEWORK_OVERLAY_FS_CONFIG)
                     data = text.encode()
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
-                                                       has_hwcomposer, has_power, codec2=has_codec2).encode()
-                elif name == VENDOR_SERVICE_CONTEXTS and (channeld_payload is not None or has_codec2):
+                                                       has_hwcomposer, has_power, codec2=has_codec2,
+                                                       audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera).encode()
+                elif name == VENDOR_SERVICE_CONTEXTS and (channeld_payload is not None or has_codec2
+                                                          or has_camera):
                     data = update_vendor_service_contexts(
-                        data.decode(), codec2=has_codec2, channeld=channeld_payload is not None).encode()
+                        data.decode(), codec2=has_codec2, channeld=channeld_payload is not None,
+                        camera=has_camera).encode()
+                elif has_audio and AUDIO_POLICY_CONFIG.match(name):
+                    data = without_primary_audio_module(data.decode()).encode()
                 elif name == VENDOR_PROPERTY_CONTEXTS:
                     data = update_vendor_property_contexts(data.decode()).encode()
             info.compress_type = zipfile.ZIP_STORED
@@ -1496,6 +1838,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         zout.writestr(MEMORY_RC, (HERE / "dsa-memory.rc").read_bytes())
         zout.writestr(TRACE_RC, (HERE / "dsa-trace.rc").read_bytes())
         zout.writestr(CONSOLE_RC, (HERE / "dsa-console.rc").read_bytes())
+        zout.writestr(ARM_TRANSLATION_RC, (HERE / "dsa-arm-translation.rc").read_bytes())
+        for target, source_file in ARM_TRANSLATION_PROPS.items():
+            zout.writestr(target, source_file.read_bytes())
         if VENDOR_PROPERTY_CONTEXTS not in names:
             zout.writestr(VENDOR_PROPERTY_CONTEXTS, update_vendor_property_contexts(""))
         zout.writestr(UNAVAILABLE_FEATURES, (HERE / "unavailable-features.xml").read_bytes())
@@ -1513,9 +1858,21 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if has_codec2:
             for name, payload in codec2_payloads.items():
                 zout.writestr(name, payload)
-        if (channeld_payload is not None or has_codec2) and VENDOR_SERVICE_CONTEXTS not in names:
+        if has_audio:
+            zout.writestr(AUDIO_BINARY, audio_payload)
+            zout.writestr(AUDIO_RC, (AUDIO_DIR / "dsa-audio.rc").read_bytes())
+        if has_gnss:
+            for name, payload in gnss_payloads.items():
+                zout.writestr(name, payload)
+        if has_sensors:
+            for name, payload in sensors_payloads.items():
+                zout.writestr(name, payload)
+        if has_camera:
+            for name, payload in camera_payloads.items():
+                zout.writestr(name, payload)
+        if (channeld_payload is not None or has_codec2 or has_camera) and VENDOR_SERVICE_CONTEXTS not in names:
             zout.writestr(VENDOR_SERVICE_CONTEXTS, update_vendor_service_contexts(
-                "", codec2=has_codec2, channeld=channeld_payload is not None))
+                "", codec2=has_codec2, channeld=channeld_payload is not None, camera=has_camera))
         if overlay_payload is not None:
             zout.writestr(FRAMEWORK_OVERLAY_APK, overlay_payload)
         if agent_payload is not None:
@@ -1528,7 +1885,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(
                 "VENDOR/etc/selinux/vendor_file_contexts",
                 update_vendor_file_contexts("", channeld_payload is not None, has_hwcomposer, has_power,
-                                            codec2=has_codec2).encode(),
+                                            codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera).encode(),
             )
     if graphics_payload is not None and not replaced_graphics_payload:
         dest.unlink(missing_ok=True)
@@ -2063,7 +2420,7 @@ def system_disk(images, otatools, work, out):
     if unlisted:
         sys.exit(f"verified boot reads {', '.join(unlisted)}, which fstab.dsa does not list for first stage mount")
     sgdisk = shutil.which("sgdisk") or str(otatools / "bin/sgdisk")
-    cmd = [sgdisk, "--clear"]
+    cmd = [sgdisk, "--clear", f"--disk-guid={SYSTEM_DISK_GUID}"]
     number = 1
     for name, size in SYSTEM_SMALL_PARTITIONS:
         cmd += [f"--new={number}:0:+{size // 1024}K", f"--change-name={number}:{name}"]
@@ -2116,9 +2473,10 @@ def data_disk(otatools, work, out):
 SERIAL_CONSOLE = {"x86_64": ["console=ttyS0", "8250.nr_uarts=1"], "arm64": ["console=ttyAMA0"]}
 
 
-def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH):
+def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camera=False):
     """Returns the kernel command line shared by every DSA guest image of `arch`. With
-    `hwcomposer`, the image has DSA's composer in place of Cuttlefish's."""
+    `hwcomposer`, the image has DSA's composer in place of Cuttlefish's; with `camera`, DSA's
+    camera HAL in place of Cuttlefish's emulated cameras, whose APEX is then not selected."""
     if hwcomposer:
         composer = [f"androidboot.dsa.{key}={value}" for key, value in DISPLAY_BOOTCONFIG.items()]
         apexes = {module: apex for module, apex in VENDOR_APEX_BOOTCONFIG.items()
@@ -2132,6 +2490,8 @@ def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH):
             "androidboot.hardware.hwcomposer.display_finder_mode=noop",
         ]
         apexes = VENDOR_APEX_BOOTCONFIG
+    if camera:
+        apexes = {module: apex for module, apex in apexes.items() if module != CAMERA_APEX_MODULE}
     return " ".join([
         # No audit=1, as on Android devices: SELinux denials reach logd's auditd without it.
         # With it, the kernel also audited every iptables change and BPF program load with
@@ -2179,10 +2539,22 @@ def main():
     parser.add_argument("--codec2", type=Path,
                         help="DSA's codec HAL (dsa-codec2) built for the guest; its video decoders "
                              "decode on the host's GPU")
+    parser.add_argument("--audio", type=Path,
+                        help="DSA's primary audio module (dsa-audio) built for the guest; it plays the "
+                             "guest's sound on the host's default output device")
+    parser.add_argument("--sensors", type=Path,
+                        help="DSA's sensors HAL (dsa-sensors) built for the guest; it replaces "
+                             "Cuttlefish's, and shows the host's motion and light sensors")
+    parser.add_argument("--camera", type=Path,
+                        help="DSA's camera HAL (dsa-camera) built for the guest; it replaces "
+                             "Cuttlefish's emulated cameras with the host computer's")
     parser.add_argument("--power-hal", type=Path,
                         help="a folder holding DSA's power and health HALs (dsa-power, dsa-health) built "
                              "for the guest; they replace Cuttlefish's, take the guest's power hints to "
                              "the host and give the guest the host's battery")
+    parser.add_argument("--gnss-hal", type=Path,
+                        help="DSA's GNSS HAL (dsa-gnss) built for the guest; it replaces Cuttlefish's "
+                             "and gives the guest the host computer's location")
     parser.add_argument("--agent", type=Path,
                         help="the guest agent's APK (DsaAgent), unsigned or signed with any key; "
                         "the image signs it with the platform key")
@@ -2240,7 +2612,8 @@ def main():
     modify(target_files, modified, graphics_library=graphics_library, vulkan_driver=vulkan_driver,
            otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
            framework_overlay=framework_overlay, power_hal=args.power_hal,
-           codec2=args.codec2)
+           codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
+           sensors=args.sensors, camera=args.camera)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path
@@ -2292,7 +2665,8 @@ def main():
         shutil.copy(args.kernel, out / kernel)
         files.append(kernel)
 
-    cmdline = kernel_cmdline(partition_cmdline, hwcomposer=args.hwcomposer is not None, arch=args.arch)
+    cmdline = kernel_cmdline(partition_cmdline, hwcomposer=args.hwcomposer is not None, arch=args.arch,
+                             camera=args.camera is not None)
     manifest = {
         "version": spec["version"],
         "android_major": spec["android_major"],
@@ -2302,6 +2676,8 @@ def main():
         "build": int(spec["build_id"]) * 100 + spec.get("revision", 1),
         "source": {"branch": spec["branch"], "target": spec["target"], "arch": args.arch, "build_id": spec["build_id"], "revision": spec.get("revision", 1), "security_patch": spec["security_patch"]},
         "kernel_cmdline": cmdline,
+        # What the host needs to compose a fingerprint from a device identity the user chose.
+        "identity": image_identity(zipfile.ZipFile(signed).read("SYSTEM/build.prop").decode()),
         "files": {name: {"size": (out / name).stat().st_size, "sha256": sha256(out / name)} for name in files},
     }
     (out / "image.json").write_text(json.dumps(manifest, indent=2) + "\n")

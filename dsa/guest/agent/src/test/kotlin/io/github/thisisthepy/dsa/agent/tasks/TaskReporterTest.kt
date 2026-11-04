@@ -36,6 +36,29 @@ class TaskReporterTest {
     }
 
     @Test
+    fun fr22_a_task_carries_its_status_bar_and_is_sent_again_when_it_changes() {
+        val dark = appTask(4).copy(statusBar = StatusBarAppearance.DARK, statusBarColor = 0xFF202124.toInt())
+        reporter.update(listOf(dark))
+        val update = sent.single().taskUpdated
+        assertEquals(io.github.thisisthepy.dsa.control.v1.StatusBarAppearance.STATUS_BAR_APPEARANCE_DARK, update.statusBarAppearance)
+        assertEquals(0xFF202124.toInt(), update.statusBarColor)
+
+        sent.clear()
+        reporter.update(listOf(dark.copy(statusBar = StatusBarAppearance.LIGHT)))
+        assertEquals(
+            io.github.thisisthepy.dsa.control.v1.StatusBarAppearance.STATUS_BAR_APPEARANCE_LIGHT,
+            sent.single().taskUpdated.statusBarAppearance,
+        )
+
+        sent.clear()
+        reporter.update(listOf(appTask(4)))
+        assertEquals(
+            io.github.thisisthepy.dsa.control.v1.StatusBarAppearance.STATUS_BAR_APPEARANCE_UNSPECIFIED,
+            sent.single().taskUpdated.statusBarAppearance,
+        )
+    }
+
+    @Test
     fun fr3_an_unchanged_task_is_not_sent_again() {
         reporter.update(listOf(appTask(1), appTask(2)))
         sent.clear()

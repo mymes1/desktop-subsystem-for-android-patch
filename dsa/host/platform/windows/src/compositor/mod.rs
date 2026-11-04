@@ -17,15 +17,21 @@
 //! ([`links`]). It shows the notifications of the user's Android as toasts, and passes the
 //! user's dismissals back ([`notifications`]). It shows the widgets the user placed on the
 //! desktop, each in a borderless window of its own on the desktop ([`widgets`]). It prints the documents apps in Android print on the user's
-//! printers, through the Windows print dialog ([`print`]).
+//! printers, through the Windows print dialog ([`print`]). It plays the sound of the user's
+//! Android on their default output device ([`audio`]), and records their default capture
+//! device for its microphone ([`microphone`]).
 
 pub mod adapter;
+pub mod audio;
+pub mod background;
 pub mod clipboard;
 pub mod display_gpu;
 pub mod frames;
 pub mod hosts;
 pub mod links;
+pub mod location;
 pub mod log;
+pub mod microphone;
 pub mod notifications;
 pub mod present;
 pub mod print;
@@ -44,6 +50,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::audio::{serve_port as serve_audio_port, AudioDevice, AUDIO_PORT};
 use dsa_host_core::compositor::{
     GraphicsRenderer, GraphicsStreamKind, StreamTracker, GRAPHICS_COMMAND_PORT,
     GRAPHICS_PROCESS_PIPE_PORT,
@@ -106,9 +113,17 @@ pub struct Compositor {
     local_api_connector: Box<dyn Fn() -> Box<dyn Connector> + Send>,
     bind_command: Option<BindFn>,
     bind_process_pipe: Option<BindFn>,
+    /// Binds the audio port (5568), where the guest's audio module sends its sound.
+    bind_audio: Option<BindFn>,
     /// Binds the video port, where the guest's codec HAL has its streams decoded. None in
     /// tests, which have no GPU decoders.
     bind_video: Option<BindFn>,
+    /// Binds the sensor port, where the guest's sensors HAL reads this computer's sensors.
+    /// None in tests, which read no sensors.
+    bind_sensors: Option<BindFn>,
+    /// Binds the camera port, where the guest's camera HAL uses this computer's cameras.
+    /// None in tests, which have no cameras.
+    bind_camera: Option<BindFn>,
     logger: Option<Arc<CompositorLogger>>,
     /// What copies each display's frames into the task windows, when there is one.
     presenter: Option<Arc<dyn DisplayPresenter>>,
@@ -129,6 +144,11 @@ pub struct Compositor {
     show_widgets: bool,
     /// Whether the documents the user's Android prints are printed here.
     print_jobs: bool,
+    /// Whether the user's Android gets the computer's location from Windows.
+    give_location: bool,
+    /// Whether the apps that run in the background in the user's Android are shown in the
+    /// notification area, with their media sessions in Windows' media controls.
+    show_background: bool,
 }
 
 /// The installed apps an event from the watch of the tasks carries, if it carries them.
@@ -189,8 +209,23 @@ impl Compositor {
             RawHvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
         });
 
+        // The audio port carries framed control messages, not a raw stream.
+        let bind_audio: BindFn = Box::new(move |vm_id| {
+            let service_id = Guid::vsock_service(AUDIO_PORT);
+            HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
+        });
+
         let bind_video: BindFn = Box::new(move |vm_id| {
             let service_id = Guid::vsock_service(dsa_host_core::video::VIDEO_PORT);
+            HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
+        });
+
+        let bind_sensors: BindFn = Box::new(move |vm_id| {
+            let service_id = Guid::vsock_service(dsa_host_core::sensors::SENSOR_PORT);
+            HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
+        });
+        let bind_camera: BindFn = Box::new(move |vm_id| {
+            let service_id = Guid::vsock_service(dsa_host_core::camera::CAMERA_PORT);
             HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
         });
 
@@ -203,6 +238,9 @@ impl Compositor {
             bind_command: Some(bind_command),
             bind_process_pipe: Some(bind_process_pipe),
             bind_video: Some(bind_video),
+            bind_audio: Some(bind_audio),
+            bind_sensors: Some(bind_sensors),
+            bind_camera: Some(bind_camera),
             logger: None,
             presenter: None,
             host_listener: Some(session_host_listener()),
@@ -214,6 +252,8 @@ impl Compositor {
             show_notifications: true,
             show_widgets: true,
             print_jobs: true,
+            give_location: true,
+            show_background: true,
         }
     }
 
@@ -234,6 +274,9 @@ impl Compositor {
             bind_command: Some(bind_command),
             bind_process_pipe: Some(bind_process_pipe),
             bind_video: None,
+            bind_audio: None,
+            bind_sensors: None,
+            bind_camera: None,
             logger: None,
             presenter: None,
             host_listener: None,
@@ -245,6 +288,8 @@ impl Compositor {
             show_notifications: false,
             show_widgets: false,
             print_jobs: false,
+            give_location: false,
+            show_background: false,
         }
     }
 
@@ -344,10 +389,15 @@ impl Compositor {
         let task_windows = self.start_task_windows(&stop);
         let links_thread = self.start_links(&stop);
         let clipboard_thread = self.start_clipboard(&stop);
+        let location_thread = self.start_location(&stop);
         let notifications_thread = self.start_notifications(&stop);
         let widgets_thread = self.start_widgets(&stop);
+        let background_thread = self.start_background(&stop);
         let video_thread = self.start_video(&stop);
         let print_thread = self.start_print(&stop);
+        let audio_thread = self.start_audio(&stop);
+        let sensors_thread = self.start_sensors(&stop);
+        let camera_thread = self.start_camera(&stop);
 
         // 1. Monitor thread that tracks the VM ID and state via the local API.
         let monitor_stop = Arc::clone(&stop);
@@ -534,16 +584,31 @@ impl Compositor {
         if let Some(thread) = clipboard_thread {
             let _ = thread.join();
         }
+        if let Some(thread) = location_thread {
+            let _ = thread.join();
+        }
         if let Some(thread) = notifications_thread {
             let _ = thread.join();
         }
         if let Some(thread) = widgets_thread {
             let _ = thread.join();
         }
+        if let Some(thread) = background_thread {
+            let _ = thread.join();
+        }
         if let Some(thread) = video_thread {
             let _ = thread.join();
         }
         if let Some(thread) = print_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = audio_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = sensors_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = camera_thread {
             let _ = thread.join();
         }
 
@@ -576,6 +641,98 @@ impl Compositor {
                 dsa_host_core::video::serve(
                     Box::new(listener),
                     Arc::new(decoders),
+                    build,
+                    stop,
+                    log,
+                );
+            })
+            .ok()
+    }
+
+    /// Starts playing the sound of the user's Android on their default output device, on a
+    /// thread of its own that ends with `stop`: it listens on the audio port of the user's
+    /// VM, and plays each stream the guest opens there. A device that cannot play is logged
+    /// and the stream goes on unheard, so the guest is never held up.
+    fn start_audio(&mut self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        let bind = self.bind_audio.take()?;
+        let mut listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind);
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-audio".into())
+            .spawn(move || {
+                let log: Arc<dyn Fn(&str) + Send + Sync> =
+                    Arc::new(move |line: &str| note(logger.as_deref(), line));
+                let device: Arc<dyn AudioDevice> =
+                    Arc::new(audio::DefaultOutput::new(Arc::clone(&log)));
+                let build = format!("dsa-wm {}", crate::VERSION);
+                serve_audio_port(&mut listener, device, &build, &stop, log);
+            })
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the audio port's thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts serving this computer's sensors to the guest, on a thread of its own that ends
+    /// with `stop`: the guest's sensors HAL connects to the sensor port, and each sensor runs
+    /// only while an app in the guest listens to it. The window manager serves them because
+    /// it runs in the user's session, where Windows lets the user's own apps read sensors.
+    fn start_sensors(&mut self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        let bind = self.bind_sensors.take()?;
+        let listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind);
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-sensors".into())
+            .spawn(move || {
+                let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |line: &str| {
+                    if let Some(logger) = &logger {
+                        logger.log(line);
+                    }
+                });
+                let build = format!("dsa-wm {}", crate::VERSION);
+                dsa_host_core::sensors::serve(
+                    Box::new(listener),
+                    Arc::new(crate::sensors::WindowsSensors),
+                    build,
+                    stop,
+                    log,
+                );
+            })
+            .ok()
+    }
+
+    /// Starts lending this computer's cameras to the apps in the guest, on a thread of its own
+    /// that ends with `stop`: the guest's camera HAL connects to the camera port to list them
+    /// and for each camera an app opens. A camera is opened only while an app uses it, in
+    /// this user's session, so Windows applies this user's privacy settings and shows its
+    /// in-use indicator for DSA.
+    fn start_camera(&mut self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        let bind = self.bind_camera.take()?;
+        let listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind);
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-camera".into())
+            .spawn(move || {
+                let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |line: &str| {
+                    if let Some(logger) = &logger {
+                        logger.log(line);
+                    }
+                });
+                let camera_log = Arc::clone(&log);
+                let cameras = crate::camera_capture::MediaFoundationCameras::new(Box::new(
+                    move |line: &str| camera_log(line),
+                ));
+                let build = format!("dsa-wm {}", crate::VERSION);
+                dsa_host_core::camera::serve(
+                    Box::new(listener),
+                    Arc::new(cameras),
                     build,
                     stop,
                     log,
@@ -621,6 +778,28 @@ impl Compositor {
             .ok()
     }
 
+    /// Starts giving the user's Android the computer's location, on a thread of its own that
+    /// ends with `stop`. Windows' location service runs only while Android wants a location.
+    fn start_location(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.give_location {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-location".into())
+            .spawn(move || location::follow(connector, stop, logger))
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the location's thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
     /// Starts showing the widgets of the user's Android on the desktop, on a thread of its own
     /// that ends with `stop`. Windows that cannot open are logged; the rest of the window
     /// manager goes on.
@@ -651,6 +830,41 @@ impl Compositor {
                 note(
                     failed.as_deref(),
                     &format!("could not start the widgets' thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts showing the apps that run in the background in the user's Android in the
+    /// notification area, on a thread of its own that ends with `stop`. A tray that cannot
+    /// open is logged; the rest of the window manager goes on.
+    fn start_background(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.show_background {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-background".into())
+            .spawn(move || {
+                let mut tray = match background::WindowsTray::open(logger.clone()) {
+                    Ok(tray) => tray,
+                    Err(why) => {
+                        note(
+                            logger.as_deref(),
+                            &format!("the apps that run in the background are not shown: {why}"),
+                        );
+                        return;
+                    }
+                };
+                background::sync(connector, &mut tray, stop, logger);
+            })
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the background apps' thread: {e}"),
                 )
             })
             .ok()

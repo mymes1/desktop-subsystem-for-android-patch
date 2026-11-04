@@ -40,27 +40,13 @@ const MEMORY_GRANULARITY_MB: u32 = 2;
 /// console pipe.
 pub const CONSOLE_CMDLINE: &str = "earlycon=uart8250,io,0x3f8,115200 console=ttyS0,115200";
 
-/// The ramoops region the guest kernel keeps its last log in: 1 MiB of RAM at 256 MiB, reserved
-/// before the kernel uses any memory. The guest kernel's README says why there and how it is
-/// split.
-pub const RAMOOPS_CMDLINE: &str = "memmap=1M$0x10000000 ramoops.mem_address=0x10000000 \
-     ramoops.mem_size=0x100000 ramoops.record_size=0x20000 ramoops.console_size=0x40000 \
-     ramoops.pmsg_size=0x40000 ramoops.ecc=1";
-
 /// The ARM64 kernel's console: the VM's PL011 UART, at the address Hyper-V gives it on ARM64
 /// (the one WSL's `earlycon` names), from the first instruction, then the AMBA driver's
 /// `ttyAMA0`. HCS connects that port, as COM1, to the console pipe.
 pub const ARM64_CONSOLE_CMDLINE: &str = "earlycon=pl011,0xeffec000,115200 console=ttyAMA0,115200";
 
-/// The ARM64 kernel's ramoops region, split as on x86_64 but reserved by name: `memmap=` is an
-/// x86 parameter, and an ARM64 VM's memory map comes from its firmware, so no fixed address is
-/// known to be RAM. The kernel reserves 1 MiB early in boot and ramoops finds it by name.
-pub const ARM64_RAMOOPS_CMDLINE: &str = "reserve_mem=1M:4096:dsa_ramoops \
-     ramoops.mem_name=dsa_ramoops ramoops.record_size=0x20000 ramoops.console_size=0x40000 \
-     ramoops.pmsg_size=0x40000 ramoops.ecc=1";
-
 /// The architecture of the guest, which is the host's: Hyper-V runs guests of its own
-/// architecture only. It decides how the VM boots and which console and memory parameters
+/// architecture only. It decides how the VM boots and which console parameters
 /// the kernel is given.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuestArch {
@@ -84,14 +70,6 @@ impl GuestArch {
         match self {
             GuestArch::X86_64 => CONSOLE_CMDLINE,
             GuestArch::Arm64 => ARM64_CONSOLE_CMDLINE,
-        }
-    }
-
-    /// The ramoops parameters for the kernel command line.
-    pub fn ramoops_cmdline(self) -> &'static str {
-        match self {
-            GuestArch::X86_64 => RAMOOPS_CMDLINE,
-            GuestArch::Arm64 => ARM64_RAMOOPS_CMDLINE,
         }
     }
 
@@ -130,6 +108,9 @@ pub struct AndroidVmConfig {
     /// The user's disk (VHDX), attached writable and allowed to stay sparse. With no
     /// separate system image it holds Android as well.
     pub data_disk: PathBuf,
+    /// The small disk of fixed size the guest kernel keeps its last log on (pstore), attached
+    /// writable after the other disks. With none the guest keeps no log across a panic.
+    pub pstore_disk: Option<PathBuf>,
     /// SIDs, besides SYSTEM, allowed to bind and connect Hyper-V sockets to this VM: the user
     /// the VM runs for.
     pub socket_sids: Vec<String>,
@@ -155,6 +136,19 @@ pub struct AndroidVmConfig {
 /// The fault cluster for fine-grained memory, as a power of two of 4 KiB pages: 64 KiB. Free
 /// page reporting's order must be at least this, which its least value, 5, is.
 const FAULT_CLUSTER_SHIFT: u32 = 4;
+
+/// The HCS modify request that sets a running VM's memory to `mb` MiB, rounded down to the
+/// 2 MiB granularity. Memory above the size the VM started with is hot-added and onlined by
+/// the guest's Hyper-V balloon driver; a smaller size is taken back by ballooning.
+pub fn memory_resize_request(mb: u64) -> String {
+    let mb = mb - mb % u64::from(MEMORY_GRANULARITY_MB);
+    json!({
+        "ResourcePath": "VirtualMachine/ComputeTopology/Memory/SizeInMB",
+        "RequestType": "Update",
+        "Settings": mb,
+    })
+    .to_string()
+}
 
 /// Whether this Windows build can back a VM with small pages and short fault clusters: those
 /// with the fix for the deadlock such a VM can hit when it is torn down. These are the same
@@ -230,6 +224,9 @@ impl AndroidVmConfig {
         if let Some(system) = &self.system_image {
             paths.push(("system image", system));
         }
+        if let Some(pstore) = &self.pstore_disk {
+            paths.push(("pstore disk", pstore));
+        }
         if let Some(initrd) = &self.initrd {
             paths.push(("initrd", initrd));
         }
@@ -304,11 +301,14 @@ impl AndroidVmConfig {
     /// The kernel command line for a guest of `arch`.
     pub fn full_kernel_cmdline_for(&self, arch: GuestArch) -> String {
         let mut cmdline = format!(
-            "{} panic=-1 page_reporting.page_reporting_order={} {}",
+            "{} panic=-1 page_reporting.page_reporting_order={}",
             arch.console_cmdline(),
-            self.page_reporting_order,
-            arch.ramoops_cmdline()
+            self.page_reporting_order
         );
+        if self.pstore_disk.is_some() {
+            cmdline.push(' ');
+            cmdline.push_str(crate::pstore_disk::KERNEL_CMDLINE);
+        }
         if !self.kernel_cmdline.trim().is_empty() {
             cmdline.push(' ');
             cmdline.push_str(self.kernel_cmdline.trim());
@@ -393,6 +393,15 @@ impl AndroidVmConfig {
             }),
             None => json!({ "0": data }),
         };
+        let mut attachments = attachments;
+        if let Some(pstore) = &self.pstore_disk {
+            let lun = attachments.as_object().map_or(0, |a| a.len()).to_string();
+            attachments[lun] = json!({
+                "Type": "VirtualDisk",
+                "Path": path_string(pstore),
+                "ReadOnly": false,
+            });
+        }
         devices["Scsi"]["0"]["Attachments"] = attachments;
         let mut memory = json!({
             "SizeInMB": memory_mb,

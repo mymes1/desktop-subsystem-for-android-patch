@@ -15,7 +15,11 @@ on:
       - "dsa/guest/channeld/**"
       - "dsa/guest/hwcomposer/**"
       - "dsa/guest/codec2/**"
+      - "dsa/guest/audio/**"
+      - "dsa/guest/sensors/**"
+      - "dsa/guest/camera/**"
       - "dsa/guest/power/**"
+      - "dsa/guest/gnss/**"
       - "dsa/guest/aidl/**"
       - "dsa/guest/transport/**"
       - "dsa/guest/agent/**"
@@ -23,6 +27,7 @@ on:
       - "dsa/protocol/**"
       - ".github/workflows/test-image.yml"
       - "scripts/tests/image-graphics-workflow.test.sh"
+      - "scripts/tests/image-audio-workflow.test.sh"
   workflow_dispatch:
     inputs:
       keep_disk:
@@ -223,6 +228,49 @@ jobs:
           path: .scratch/build-codec2/dsa-codec2
           if-no-files-found: error
 
+  camera:
+    name: Build the guest camera HAL (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-camera for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/camera/build.sh .scratch .scratch/build-camera
+
+      - name: Verify the binary links only the platform's C libraries
+        run: |
+          target=".scratch/build-camera/dsa-camera"
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so libnativewindow.so" || \
+            test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libnativewindow.so"
+
+      - name: Keep the camera HAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-camera${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/build-camera/dsa-camera
+          if-no-files-found: error
+
   power-hal:
     name: Build the guest power and health HALs (${{ matrix.arch }})
     runs-on: ubuntu-latest
@@ -268,6 +316,131 @@ jobs:
             .scratch/build-power/dsa-health
           if-no-files-found: error
 
+  audio:
+    name: Build the guest audio module (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-audio for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/audio/build.sh .scratch .scratch/build-audio
+
+      - name: Verify the binary links only the platform's C libraries
+        run: |
+          target=".scratch/build-audio/dsa-audio"
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
+
+      - name: Keep the audio module
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-audio${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/build-audio/dsa-audio
+          if-no-files-found: error
+
+  gnss-hal:
+    name: Build the guest GNSS HAL (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-gnss for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/gnss/build.sh .scratch .scratch/build-gnss
+
+      - name: Verify the binary links only the platform's C libraries
+        run: |
+          target=.scratch/build-gnss/dsa-gnss
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "$target needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
+
+      - name: Keep the GNSS HAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-gnss-hal${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/build-gnss/dsa-gnss
+          if-no-files-found: error
+
+  sensors:
+    name: Build the guest sensors HAL (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-sensors for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/sensors/build.sh .scratch .scratch/build-sensors
+
+      - name: Verify the binary links only the platform's C libraries
+        run: |
+          target=".scratch/build-sensors/dsa-sensors"
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
+
+      - name: Keep the sensors HAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-sensors${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/build-sensors/dsa-sensors
+          if-no-files-found: error
+
   agent:
     name: Build the guest agent
     runs-on: ubuntu-latest
@@ -299,7 +472,7 @@ jobs:
 
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }}, ${{ matrix.arch }})
-    needs: [guest-graphics, channeld, hwcomposer, power-hal, codec2, agent]
+    needs: [guest-graphics, channeld, hwcomposer, power-hal, gnss-hal, codec2, audio, sensors, camera, agent]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -406,6 +579,26 @@ jobs:
         run: |
           uv run dsa/graphics/check-guest-driver.py --executable .scratch/codec2/dsa-codec2 .scratch/aosp-inputs/*/*target_files*.zip
 
+      - name: Download the guest sensors HAL
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-sensors${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/sensors
+
+      - name: Check the sensors HAL starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/sensors/dsa-sensors .scratch/aosp-inputs/*/*target_files*.zip
+
+      - name: Download the guest camera HAL
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-camera${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/camera
+
+      - name: Check the camera HAL starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/camera/dsa-camera .scratch/aosp-inputs/*/*target_files*.zip
+
       - name: Download the guest power and health HALs
         uses: actions/download-artifact@v4
         with:
@@ -417,6 +610,26 @@ jobs:
           for hal in dsa-power dsa-health; do
             uv run dsa/graphics/check-guest-driver.py --executable ".scratch/power-hal/$hal" .scratch/aosp-inputs/*/*target_files*.zip
           done
+
+      - name: Download the guest audio module
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-audio${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/audio
+
+      - name: Check the audio module starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/audio/dsa-audio .scratch/aosp-inputs/*/*target_files*.zip
+
+      - name: Download the guest GNSS HAL
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-gnss-hal${{ matrix.arch == 'arm64' && '-arm64' || '' }}
+          path: .scratch/gnss-hal
+
+      - name: Check the GNSS HAL starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/gnss-hal/dsa-gnss .scratch/aosp-inputs/*/*target_files*.zip
 
       - name: Download the guest agent
         uses: actions/download-artifact@v4
@@ -431,7 +644,11 @@ jobs:
           args+=(--channeld .scratch/channeld/dsa-channeld)
           args+=(--hwcomposer .scratch/hwcomposer/dsa-hwcomposer)
           args+=(--codec2 .scratch/codec2/dsa-codec2)
+          args+=(--audio .scratch/audio/dsa-audio)
+          args+=(--sensors .scratch/sensors/dsa-sensors)
+          args+=(--camera .scratch/camera/dsa-camera)
           args+=(--power-hal .scratch/power-hal)
+          args+=(--gnss-hal .scratch/gnss-hal/dsa-gnss)
           args+=(--agent .scratch/agent/DsaAgent.apk)
           args+=(--aapt2 .scratch/build-tools/aapt2)
           uv run dsa/guest/image/make-image.py "${args[@]}"

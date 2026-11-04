@@ -186,6 +186,15 @@ class FakeActions : TaskActions {
         return packageName in launchable
     }
 
+    /** Each app whose settings were opened; null for the list of every app. */
+    val settingsOpened = mutableListOf<String?>()
+    var settingsOpen = true
+
+    override fun openAppSettings(packageName: String?): Boolean {
+        settingsOpened += packageName
+        return settingsOpen
+    }
+
     override fun closeTask(taskId: Int): Boolean {
         closed += taskId
         return taskId in closable
@@ -227,6 +236,15 @@ class FakeActions : TaskActions {
     override fun focusTask(taskId: Int): Boolean {
         focused += taskId
         return focusable
+    }
+
+    /** Each caption inset given: the task and its frame, null for a removal. */
+    val captionInsets = mutableListOf<Pair<Int, TaskBounds?>>()
+    var insetsTaken = true
+
+    override fun setCaptionInset(taskId: Int, frame: TaskBounds?): Boolean {
+        captionInsets += taskId to frame
+        return insetsTaken
     }
 }
 

@@ -116,8 +116,48 @@ message ListTasks {}
 message WatchTasks {}
 
 // Asks for the apps installed in the caller's Android that a launcher lists, as the host's
-// start menu shows them.
-message ListApps {}
+// start menu shows them. With `refresh`, the caller's Android must be running: it reads the
+// apps again, sizes included, and the answer waits for that fresh list.
+message ListApps {
+  bool refresh = 1;
+}
+
+// Opens Android's own settings for an app (its permissions, storage and notifications) in a
+// window of its own. An empty `package_name` opens Android's list of every installed app.
+// Answered with Done once Android has been asked.
+message OpenAppSettings {
+  string package_name = 1;
+}
+
+// Uninstalls an app the user installed in the caller's Android. Android must be running. The
+// answer is UninstallResult.
+message UninstallApp {
+  // An Android package name, such as "com.example.notes".
+  string package_name = 1;
+}
+
+// Whether an app was uninstalled, and if not, why.
+enum UninstallStatus {
+  UNINSTALL_STATUS_UNSPECIFIED = 0;
+  // The app is gone.
+  UNINSTALL_STATUS_SUCCESS = 1;
+  // No app of that package is installed.
+  UNINSTALL_STATUS_NOT_INSTALLED = 2;
+  // The app is part of the Android image; only apps the user installed can be uninstalled.
+  UNINSTALL_STATUS_SYSTEM_APP = 3;
+  // Android refused: the app is a device administrator, or a policy keeps it.
+  UNINSTALL_STATUS_BLOCKED = 4;
+  // Anything else. The message says what.
+  UNINSTALL_STATUS_OTHER = 5;
+}
+
+// The answer to UninstallApp.
+message UninstallResult {
+  string package_name = 1;
+  UninstallStatus status = 2;
+  // Android's own words, for the log and a bug report.
+  string message = 3;
+}
 
 // The user closed a task's window: asks the caller's Android to end the task.
 message CloseTask {
@@ -152,6 +192,13 @@ message ResizeTask {
 message SetTaskDensity {
   int32 task_id = 1;
   uint32 density_dpi = 2;
+}
+
+// A task's window draws its title bar over the top `height` pixels of the task: asks the
+// caller's Android to give the task a top system bar inset of that height. 0 removes it.
+message SetTaskCaption {
+  int32 task_id = 1;
+  uint32 height = 2;
 }
 
 // Turns the connection into a stream of input for the caller's Android: after the answer
@@ -232,6 +279,56 @@ message ClipboardText {
 // Android stops. The client sends nothing more on it. The watch lasts across restarts of the
 // Android.
 message WatchNotifications {}
+
+// Turns the connection into the location of the caller's Android: after the answer (Done),
+// the service sends a LocationWanted at once and each time the Android starts or stops
+// wanting locations. While one is wanted, the client runs the host's location service in the
+// user's session, where the user's privacy settings apply, and sends a LocationFix for each
+// position and a LocationStatus each time access changes. Neither is answered. The
+// connection lasts across restarts of the Android, which wants no location while stopped.
+message WatchLocation {}
+
+// Whether the caller's Android wants locations now, and how often.
+message LocationWanted {
+  bool active = 1;
+  // In milliseconds; 0 lets the client choose.
+  uint32 interval_ms = 2;
+}
+
+// Whether the user's host lets DSA read its location.
+enum LocationAccess {
+  LOCATION_ACCESS_UNSPECIFIED = 0;
+  LOCATION_ACCESS_ALLOWED = 1;
+  // Location is off for DSA, or for the whole computer, in the privacy settings.
+  LOCATION_ACCESS_DENIED = 2;
+  // No location device, or the location service failed.
+  LOCATION_ACCESS_UNAVAILABLE = 3;
+}
+
+// Whether the client can give locations, on a connection that carries the location.
+message LocationStatus {
+  LocationAccess access = 1;
+  string detail = 2;
+}
+
+// One position from the host's location service, on a connection that carries the location.
+// Each `has_` flag says whether the value after it is known.
+message LocationFix {
+  double latitude_degrees = 1;
+  double longitude_degrees = 2;
+  // In meters; 0 when unknown.
+  float horizontal_accuracy_meters = 3;
+  bool has_altitude = 4;
+  double altitude_meters = 5;
+  // In meters; 0 when unknown.
+  float vertical_accuracy_meters = 6;
+  bool has_speed = 7;
+  float speed_meters_per_second = 8;
+  bool has_bearing = 9;
+  float bearing_degrees = 10;
+  // Milliseconds since the Unix epoch (UTC).
+  uint64 unix_time_ms = 11;
+}
 
 // A notification of the caller's Android, on a connection that watches them
 // (WatchNotifications). One with the key of an earlier one replaces it.
@@ -331,6 +428,114 @@ message ReportPrintJob {
   uint32 job_id = 1;
   PrintOutcome outcome = 2;
   string message = 3;
+}
+
+// An app in the caller's Android that runs a foreground service, so it keeps running with no
+// window: music playback, a download, a VPN. One per package.
+message BackgroundApp {
+  string package_name = 1;
+  string app_label = 2;
+  // The app's icon, a PNG image; empty for none.
+  bytes icon_png = 3;
+  // The title and text of the notification the service keeps shown.
+  string title = 4;
+  string text = 5;
+  // The titles of that notification's actions, in its order ("Pause", "Next").
+  repeated string actions = 6;
+}
+
+// The state of a media session's playback.
+enum MediaPlayback {
+  MEDIA_PLAYBACK_UNSPECIFIED = 0;
+  MEDIA_PLAYBACK_STOPPED = 1;
+  MEDIA_PLAYBACK_PLAYING = 2;
+  MEDIA_PLAYBACK_PAUSED = 3;
+}
+
+// An app's active media session in the caller's Android. One per package.
+message MediaSession {
+  string package_name = 1;
+  string app_label = 2;
+  string title = 3;
+  string artist = 4;
+  string album = 5;
+  // The album art, a PNG image; empty for none.
+  bytes art_png = 6;
+  MediaPlayback playback = 7;
+  bool can_play = 8;
+  bool can_pause = 9;
+  bool can_next = 10;
+  bool can_previous = 11;
+}
+
+// Asks for the apps that run in the background in the caller's Android and their media
+// sessions. The answer is BackgroundApps; an Android that is not running has none.
+message ListBackgroundApps {}
+
+// The apps that run in the background, and the active media sessions.
+message BackgroundApps {
+  repeated BackgroundApp apps = 1;
+  repeated MediaSession media = 2;
+}
+
+// Watches the apps that run in the background. The answer is BackgroundApps, and the
+// connection then carries a BackgroundAppEvent for each change. The client sends nothing
+// more on it. When the Android stops, every app and session is removed. The watch lasts
+// across restarts of the Android.
+message WatchBackgroundApps {}
+
+message BackgroundAppRemoved {
+  string package_name = 1;
+}
+
+message MediaSessionRemoved {
+  string package_name = 1;
+}
+
+// A change to the apps that run in the background, on a connection that watches them.
+message BackgroundAppEvent {
+  oneof body {
+    // An app started to run in the background, or its notification changed.
+    BackgroundApp app = 1;
+    BackgroundAppRemoved app_removed = 2;
+    // A session became active, or its metadata or playback changed.
+    MediaSession media = 3;
+    MediaSessionRemoved media_removed = 4;
+  }
+}
+
+// What the user does with an app that runs in the background.
+enum BackgroundAppCommand {
+  BACKGROUND_APP_COMMAND_UNSPECIFIED = 0;
+  // Opens the app's window, as clicking its notification does. Android leaves Doze first.
+  BACKGROUND_APP_COMMAND_OPEN = 1;
+  // Runs the notification's action with the index in `action`.
+  BACKGROUND_APP_COMMAND_ACTION = 2;
+  // Stops the app: Android force-stops it, which ends its services and frees its memory.
+  BACKGROUND_APP_COMMAND_STOP = 3;
+}
+
+// Acts on an app of the caller's Android that runs in the background. Answered with Done.
+message ActOnBackgroundApp {
+  string package_name = 1;
+  BackgroundAppCommand command = 2;
+  int32 action = 3;
+}
+
+// A command for a media session.
+enum MediaCommand {
+  MEDIA_COMMAND_UNSPECIFIED = 0;
+  MEDIA_COMMAND_PLAY = 1;
+  MEDIA_COMMAND_PAUSE = 2;
+  MEDIA_COMMAND_NEXT = 3;
+  MEDIA_COMMAND_PREVIOUS = 4;
+  MEDIA_COMMAND_STOP = 5;
+}
+
+// Runs a command on the package's media session, as a media key does. Answered with Done.
+message ControlMedia {
+  string package_name = 1;
+  MediaCommand command = 2;
 }
 
 // Asks for the widgets the apps in the caller's Android offer. The answer is WidgetProviders.
@@ -649,6 +854,19 @@ message Task {
   // The smallest size Android gives the task, in its display pixels. 0 when unknown.
   uint32 min_width = 9;
   uint32 min_height = 10;
+  // Whether the task's app asked for a light status bar (dark icons) or a dark one, which
+  // the window's caption buttons follow.
+  StatusBarAppearance status_bar_appearance = 11;
+  // The status bar color the app set, as 0xAARRGGBB; 0 when none. Used only while the
+  // appearance is unspecified.
+  fixed32 status_bar_color = 12;
+}
+
+// Whether an app asked for dark status bar icons (a light status bar) or light ones.
+enum StatusBarAppearance {
+  STATUS_BAR_APPEARANCE_UNSPECIFIED = 0;
+  STATUS_BAR_APPEARANCE_LIGHT = 1;
+  STATUS_BAR_APPEARANCE_DARK = 2;
 }
 
 // The task ended.
@@ -663,7 +881,9 @@ message TaskFrames {
 }
 
 // The name and launcher icon of an app the caller's Android has a task of. Sent before the
-// app's first task, and again before the next one once the app has had no task.
+// app's first task, and again before the next one once the app has had no task. In the list
+// of installed apps it also carries the app's version, dates and sizes; for a task they are
+// left empty.
 message AppInfo {
   string package_name = 1;
   // The app's own name, as a launcher shows it.
@@ -671,6 +891,19 @@ message AppInfo {
   // The app's launcher icon, as a square PNG image of at most 256 pixels on a side. Empty
   // when Android gave none.
   bytes icon_png = 3;
+  // The installed version, as the package manager reports it.
+  string version_name = 4;
+  int64 version_code = 5;
+  // When the app was first installed and last updated, in milliseconds since the Unix epoch.
+  uint64 first_install_time_ms = 6;
+  uint64 last_update_time_ms = 7;
+  // True for an app that is part of the Android image, which cannot be uninstalled.
+  bool system_app = 8;
+  // The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+  // agent could not read them.
+  uint64 app_bytes = 9;
+  uint64 data_bytes = 10;
+  uint64 cache_bytes = 11;
 }
 
 // The apps installed in the caller's Android that a launcher lists. The list is kept while
@@ -934,6 +1167,104 @@ message Settings {
   // The loopback port adb connects to while developer mode is on. 58526 unless the user
   // chooses another; 0 in a request means the default.
   uint32 adb_port = 15;
+  // Whether the caller's Android uses an installed ARM translation package. On unless the
+  // user turned it off; a client sends back the value it read. It applies from the next start
+  // of Android, because the ABIs Android installs apps for are fixed at boot.
+  bool arm_translation = 17;
+  // Whether stopping an app that runs in the background skips the question that confirms
+  // it. Off by default: the first stop asks, and the user may tick "do not ask again".
+  bool stop_without_asking = 18;
+}
+
+// What an ARM translation package says of itself, from its arm-translation.json.
+message ArmTranslationPackage {
+  string name = 1;
+  string version = 2;
+  // The translator's native bridge library, a file name in the package's system/lib64.
+  string library = 3;
+  // The ABIs it translates. Only "arm64-v8a" is taken: the guest has no 32-bit zygote.
+  repeated string abis = 4;
+  // The package's licence, as an SPDX expression.
+  string license = 5;
+}
+
+// Installs an ARM translation package for the caller's Android. The service answers at once:
+// Done when it takes a package with this description and size, or an error. After Done the
+// client sends the package's system image, `size` bytes, in ApkChunk frames, and the service
+// answers the same request id once more: ArmTranslation once Android has the image, or an
+// error. The connection then ends. Android must be running; the package is used from its next
+// start.
+message InstallArmTranslation {
+  ArmTranslationPackage package = 1;
+  uint64 size = 2;
+  // The SHA-256 digest of the system image.
+  bytes sha256 = 3;
+}
+
+// Asks where ARM translation stands for the caller. Answered with ArmTranslation.
+message GetArmTranslation {}
+
+// Removes the caller's ARM translation package. Answered with ArmTranslation. Android goes
+// on using a package it has mounted until it restarts.
+message RemoveArmTranslation {}
+
+// Where ARM translation stands for the caller.
+message ArmTranslation {
+  // The installed package; absent when there is none.
+  ArmTranslationPackage package = 1;
+  // The arm_translation setting.
+  bool enabled = 2;
+  // Whether the running Android was asked, and answered: the three fields below hold only
+  // then.
+  bool guest_known = 3;
+  // A package image is on the user's Android disk.
+  bool guest_installed = 4;
+  // The running Android has a package laid over its system, so ARM64 apps install and run.
+  bool guest_active = 5;
+  // The ABIs the running Android installs apps for.
+  string abilist = 6;
+  // What is installed and switched on differs from what the running Android booted with, so
+  // it applies once Android starts again.
+  bool restart_needed = 7;
+}
+
+// Asks for the device identity of the caller's Android.
+message GetDeviceIdentity {}
+
+// Replaces the device identity of the caller's Android with `identity`. Android reads it when
+// it starts, so a change applies from its next start. A value the service does not accept
+// changes nothing and is answered with ERROR_CODE_INVALID_SETTING.
+message SetDeviceIdentity {
+  DeviceIdentity identity = 1;
+}
+
+// The names and build fingerprint Android reports to apps. An empty value is the image's own.
+message DeviceIdentity {
+  string manufacturer = 1;
+  string brand = 2;
+  string model = 3;
+  string device = 4;
+  // The product name.
+  string name = 5;
+  // ro.build.characteristics: comma-separated words such as "tablet".
+  string characteristics = 6;
+  // The whole fingerprint, brand/name/device:release/id/incremental:type/tags. When set it is
+  // the fingerprint, whatever the parts below say.
+  string fingerprint = 7;
+  string fingerprint_release = 8;
+  string fingerprint_id = 9;
+  string fingerprint_incremental = 10;
+  string fingerprint_type = 11;
+  string fingerprint_tags = 12;
+}
+
+// The answer to GetDeviceIdentity and SetDeviceIdentity.
+message DeviceIdentityReport {
+  // What the user chose; an empty value is the default.
+  DeviceIdentity chosen = 1;
+  // Every value as Android reports it from its next start. The fingerprint's release, build ID
+  // and incremental version are empty when the image does not say them.
+  DeviceIdentity effective = 2;
 }
 
 // Turns the connection into the accessibility tree of one of the caller's task windows, for a
@@ -1101,11 +1432,24 @@ message Request {
     WatchAccessibility watch_accessibility = 28;
     WidgetPointer widget_pointer = 35;
     GetPackage get_package = 36;
+    OpenAppSettings open_app_settings = 39;
+    UninstallApp uninstall_app = 38;
+    SetTaskCaption set_task_caption = 45;
     WatchLog watch_log = 70;
     CollectDiagnostics collect_diagnostics = 71;
     StopApp stop_app = 37;
     WatchPrintJobs watch_print_jobs = 120;
     ReportPrintJob report_print_job = 121;
+    WatchLocation watch_location = 200;
+    InstallArmTranslation install_arm_translation = 72;
+    GetArmTranslation get_arm_translation = 73;
+    RemoveArmTranslation remove_arm_translation = 74;
+    GetDeviceIdentity get_device_identity = 80;
+    SetDeviceIdentity set_device_identity = 81;
+    ListBackgroundApps list_background_apps = 41;
+    WatchBackgroundApps watch_background_apps = 42;
+    ActOnBackgroundApp act_on_background_app = 43;
+    ControlMedia control_media = 44;
   }
 }
 
@@ -1126,6 +1470,10 @@ message Response {
     Widget widget = 13;
     Widgets widgets = 14;
     PackageState package_state = 15;
+    ArmTranslation arm_translation = 16;
+    DeviceIdentityReport device_identity = 80;
+    UninstallResult uninstall_result = 17;
+    BackgroundApps background_apps = 18;
   }
 }
 
@@ -1157,5 +1505,9 @@ message Envelope {
     PrintJobOffer print_job_offer = 120;
     PrintJobData print_job_data = 121;
     PrintJobWithdrawn print_job_withdrawn = 122;
+    LocationWanted location_wanted = 200;
+    LocationStatus location_status = 201;
+    LocationFix location_fix = 202;
+    BackgroundAppEvent background_app_event = 21;
   }
 }

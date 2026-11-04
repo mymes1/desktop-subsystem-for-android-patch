@@ -49,4 +49,79 @@ public interface InstalledAppOrBuilder extends
    * @return The iconPng.
    */
   com.google.protobuf.ByteString getIconPng();
+
+  /**
+   * <pre>
+   * The installed version, as the package manager reports it.
+   * </pre>
+   *
+   * <code>string version_name = 4;</code>
+   * @return The versionName.
+   */
+  java.lang.String getVersionName();
+  /**
+   * <pre>
+   * The installed version, as the package manager reports it.
+   * </pre>
+   *
+   * <code>string version_name = 4;</code>
+   * @return The bytes for versionName.
+   */
+  com.google.protobuf.ByteString
+      getVersionNameBytes();
+
+  /**
+   * <code>int64 version_code = 5;</code>
+   * @return The versionCode.
+   */
+  long getVersionCode();
+
+  /**
+   * <pre>
+   * When the app was first installed and last updated, in milliseconds since the Unix epoch.
+   * </pre>
+   *
+   * <code>uint64 first_install_time_ms = 6;</code>
+   * @return The firstInstallTimeMs.
+   */
+  long getFirstInstallTimeMs();
+
+  /**
+   * <code>uint64 last_update_time_ms = 7;</code>
+   * @return The lastUpdateTimeMs.
+   */
+  long getLastUpdateTimeMs();
+
+  /**
+   * <pre>
+   * True for an app that is part of the Android image, which cannot be uninstalled.
+   * </pre>
+   *
+   * <code>bool system_app = 8;</code>
+   * @return The systemApp.
+   */
+  boolean getSystemApp();
+
+  /**
+   * <pre>
+   * The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+   * agent could not read them.
+   * </pre>
+   *
+   * <code>uint64 app_bytes = 9;</code>
+   * @return The appBytes.
+   */
+  long getAppBytes();
+
+  /**
+   * <code>uint64 data_bytes = 10;</code>
+   * @return The dataBytes.
+   */
+  long getDataBytes();
+
+  /**
+   * <code>uint64 cache_bytes = 11;</code>
+   * @return The cacheBytes.
+   */
+  long getCacheBytes();
 }

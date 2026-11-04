@@ -234,12 +234,33 @@ pub struct WindowShown {
     #[prost(bool, tag = "2")]
     pub shown: bool,
 }
+/// Window host to window manager: the task's window draws its title bar over the top
+/// `height` client pixels, where the app's content continues underneath. Sent when the window
+/// opens and whenever the height changes (a move to a monitor of another scale, a change of
+/// the system's caption size). The window manager asks Android to give the task a top inset
+/// of that height.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WindowCaption {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(uint32, tag = "2")]
+    pub height: u32,
+}
+/// Window manager to window host: the caption buttons of the task's window take this tone.
+/// Sent when the window opens and whenever the app's status bar changes tone.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetCaptionTone {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(enumeration = "CaptionTone", tag = "2")]
+    pub tone: i32,
+}
 /// The one message type on the wire. Each frame carries exactly one.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 30"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 30, 31, 32"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -287,6 +308,10 @@ pub mod envelope {
         ImeCursor(super::ImeCursor),
         #[prost(message, tag = "30")]
         WindowShown(super::WindowShown),
+        #[prost(message, tag = "31")]
+        WindowCaption(super::WindowCaption),
+        #[prost(message, tag = "32")]
+        SetCaptionTone(super::SetCaptionTone),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -380,6 +405,38 @@ impl RejectReason {
             "REJECT_REASON_SCHEMA_HASH_MISMATCH" => Some(Self::SchemaHashMismatch),
             "REJECT_REASON_UNEXPECTED_ROLE" => Some(Self::UnexpectedRole),
             "REJECT_REASON_MALFORMED_HELLO" => Some(Self::MalformedHello),
+            _ => None,
+        }
+    }
+}
+/// The tone of a window's caption buttons, so they stay readable over the app's status bar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum CaptionTone {
+    Unspecified = 0,
+    /// Dark glyphs, for a light status bar.
+    DarkGlyphs = 1,
+    /// Light glyphs, for a dark status bar.
+    LightGlyphs = 2,
+}
+impl CaptionTone {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "CAPTION_TONE_UNSPECIFIED",
+            Self::DarkGlyphs => "CAPTION_TONE_DARK_GLYPHS",
+            Self::LightGlyphs => "CAPTION_TONE_LIGHT_GLYPHS",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "CAPTION_TONE_UNSPECIFIED" => Some(Self::Unspecified),
+            "CAPTION_TONE_DARK_GLYPHS" => Some(Self::DarkGlyphs),
+            "CAPTION_TONE_LIGHT_GLYPHS" => Some(Self::LightGlyphs),
             _ => None,
         }
     }

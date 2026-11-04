@@ -13,7 +13,7 @@
 
   The files follow one layout. The machine's folder (DATAFOLDER, %ProgramData%\DSA by
   default): dsa-hostd.json, images\, updates\, settings\, logs\, tmp\. Each user's
-  %LOCALAPPDATA%\DSA: android.vhdx, android.image-version, apps\, notifications\, logs\,
+  %LOCALAPPDATA%\DSA: android.vhdx, android.image-version, pstore.vhd, apps\, notifications\, logs\,
   compositor.json, monitors.txt, start-menu.json, tmp\. The Windows host's paths module (src\paths.rs) is
   the one place that builds them. The settings app (DSA Settings) goes in the program folder's
   settings folder, with a Start menu shortcut.
@@ -28,16 +28,21 @@
   dsa-hostd.json),
   SettingsDir (the published settings app), and,
   when an image is bundled, ImageDir and ImageVersion, plus ImageManifest when the image
-  is one make-image.py made (image.json, initrd.img, disk.vhdx) and ImageKernel when it
-  carries its own bzImage.
+  is one make-image.py made (image.json, initrd.img, disk.vhdx) and ImageKernel, the file
+  name of its own kernel, when it carries one. KernelName is the kernel's file name:
+  bzImage for x64, Image for ARM64, the names each kernel build gives it.
+
+  Arch is the package's platform, x64 or arm64, as passed to `wix build -arch`. An arm64
+  package installs only on ARM64 Windows; the x64 one installs wherever it did before.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
     <Package Name="$(ProductName)"
-             Manufacturer="Thisisthepy"
+             Manufacturer="ThisIsThePy"
              Version="$(Version)"
              UpgradeCode="5c08f90f-6eaa-402b-992b-6069634c45e8"
              Scope="perMachine"
+             InstallerVersion="500"
              Compressed="yes">
         <!-- The new version installs over the old one before the old one is removed, so the
              files both have stay. Removing the old one first would also remove the
@@ -73,6 +78,16 @@
         <Property Id="DATAFOLDER">
             <RegistrySearch Id="InstalledDataFolder" Root="HKLM" Key="SOFTWARE\thisisthepy\DSA" Name="DataFolder" Type="raw" Bitness="always64" />
         </Property>
+
+        <?if $(Arch) = arm64 ?>
+        <!-- The machine's own processor, read from the registry rather than from the
+             process: an emulated process would report what it emulates. -->
+        <Property Id="NATIVEARCH">
+            <RegistrySearch Id="NativeArch" Root="HKLM" Key="SYSTEM\CurrentControlSet\Control\Session Manager\Environment" Name="PROCESSOR_ARCHITECTURE" Type="raw" Bitness="always64" />
+        </Property>
+        <Launch Condition="Installed OR NATIVEARCH = &quot;ARM64&quot;"
+                Message="This is the ARM64 package of Desktop Subsystem for Android, and this PC does not have an ARM64 processor. Install the x64 package instead." />
+        <?endif?>
 
         <Launch Condition="Installed OR VMCOMPUTE"
                 Message="Desktop Subsystem for Android needs the Windows feature Virtual Machine Platform. Turn it on in Settings, System, Optional features, More Windows features (or run: dism /online /enable-feature /featurename:VirtualMachinePlatform /all), restart, and run setup again." />
@@ -254,6 +269,32 @@
                     <PermissionEx Sddl="D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;OW)(A;OICI;GR;;;IU)(A;OICI;GR;;;AU)" />
                 </RegistryKey>
             </Component>
+            <Component Id="GuestCommunicationAudioService" Guid="85d8913c-10f8-40b3-a2a1-0967f1b1e59d">
+                <RegistryKey Root="HKLM"
+                             Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\000015c0-facb-11e6-bd58-64006a7986d3"
+                             ForceCreateOnInstall="yes"
+                             ForceDeleteOnUninstall="yes">
+                    <RegistryValue Name="ElementName"
+                                   Type="string"
+                                   Value="Desktop Subsystem for Android Audio"
+                                   KeyPath="yes" />
+                    <PermissionEx Sddl="D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;OW)(A;OICI;GR;;;IU)(A;OICI;GR;;;AU)" />
+                </RegistryKey>
+            </Component>
+            <!-- The sensor port (5580), where the guest's sensors HAL reads this computer's
+                 sensors from the window manager. -->
+            <Component Id="GuestCommunicationSensorsService" Guid="3f6c2b8e-91d4-4a57-b0e3-7c5d18a9f264">
+                <RegistryKey Root="HKLM"
+                             Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\000015cc-facb-11e6-bd58-64006a7986d3"
+                             ForceCreateOnInstall="yes"
+                             ForceDeleteOnUninstall="yes">
+                    <RegistryValue Name="ElementName"
+                                   Type="string"
+                                   Value="Desktop Subsystem for Android Sensors"
+                                   KeyPath="yes" />
+                    <PermissionEx Sddl="D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;OW)(A;OICI;GR;;;IU)(A;OICI;GR;;;AU)" />
+                </RegistryKey>
+            </Component>
             <Component Id="NoticeFile" Guid="*">
                 <File Id="NoticeFile" Source="$(SourceDir)\NOTICE.txt" KeyPath="yes" />
             </Component>
@@ -325,7 +366,7 @@
         <!-- The kernel: readable by everyone and by the VMs. -->
         <ComponentGroup Id="Kernel" Directory="VMFOLDER">
             <Component Id="Kernel" Guid="*">
-                <File Id="Kernel" Source="$(SourceDir)\bzImage" KeyPath="yes" />
+                <File Id="Kernel" Source="$(SourceDir)\$(KernelName)" KeyPath="yes" />
                 <CreateFolder>
                     <PermissionEx Sddl="D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;BU)(A;OICI;GRGX;;;S-1-5-83-0)" />
                 </CreateFolder>
@@ -346,7 +387,7 @@
             </Component>
             <?ifdef ImageKernel ?>
             <Component Id="FirstImageKernel" Guid="*">
-                <File Id="FirstImageKernel" Source="$(ImageDir)\bzImage" KeyPath="yes" DiskId="2" />
+                <File Id="FirstImageKernel" Source="$(ImageDir)\$(ImageKernel)" KeyPath="yes" DiskId="2" />
             </Component>
             <?endif?>
             <?ifdef ImageNotice ?>

@@ -475,6 +475,119 @@ public  final class TaskUpdated extends
     minHeight_ = 0;
   }
 
+  public static final int STATUS_BAR_APPEARANCE_FIELD_NUMBER = 11;
+  private int statusBarAppearance_;
+  /**
+   * <pre>
+   * What the task's app told the system about its status bar: whether it asked for dark
+   * icons on a light status bar. The host draws its window's caption buttons in the
+   * matching tone over the app's status bar area.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+   * @return The enum numeric value on the wire for statusBarAppearance.
+   */
+  @java.lang.Override
+  public int getStatusBarAppearanceValue() {
+    return statusBarAppearance_;
+  }
+  /**
+   * <pre>
+   * What the task's app told the system about its status bar: whether it asked for dark
+   * icons on a light status bar. The host draws its window's caption buttons in the
+   * matching tone over the app's status bar area.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+   * @return The statusBarAppearance.
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.StatusBarAppearance getStatusBarAppearance() {
+    io.github.thisisthepy.dsa.control.v1.StatusBarAppearance result = io.github.thisisthepy.dsa.control.v1.StatusBarAppearance.forNumber(statusBarAppearance_);
+    return result == null ? io.github.thisisthepy.dsa.control.v1.StatusBarAppearance.UNRECOGNIZED : result;
+  }
+  /**
+   * <pre>
+   * What the task's app told the system about its status bar: whether it asked for dark
+   * icons on a light status bar. The host draws its window's caption buttons in the
+   * matching tone over the app's status bar area.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+   * @param value The enum numeric value on the wire for statusBarAppearance to set.
+   */
+  private void setStatusBarAppearanceValue(int value) {
+      statusBarAppearance_ = value;
+  }
+  /**
+   * <pre>
+   * What the task's app told the system about its status bar: whether it asked for dark
+   * icons on a light status bar. The host draws its window's caption buttons in the
+   * matching tone over the app's status bar area.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+   * @param value The statusBarAppearance to set.
+   */
+  private void setStatusBarAppearance(io.github.thisisthepy.dsa.control.v1.StatusBarAppearance value) {
+    statusBarAppearance_ = value.getNumber();
+    
+  }
+  /**
+   * <pre>
+   * What the task's app told the system about its status bar: whether it asked for dark
+   * icons on a light status bar. The host draws its window's caption buttons in the
+   * matching tone over the app's status bar area.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+   */
+  private void clearStatusBarAppearance() {
+    
+    statusBarAppearance_ = 0;
+  }
+
+  public static final int STATUS_BAR_COLOR_FIELD_NUMBER = 12;
+  private int statusBarColor_;
+  /**
+   * <pre>
+   * The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+   * transparent. Used only while the appearance is unspecified.
+   * </pre>
+   *
+   * <code>fixed32 status_bar_color = 12;</code>
+   * @return The statusBarColor.
+   */
+  @java.lang.Override
+  public int getStatusBarColor() {
+    return statusBarColor_;
+  }
+  /**
+   * <pre>
+   * The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+   * transparent. Used only while the appearance is unspecified.
+   * </pre>
+   *
+   * <code>fixed32 status_bar_color = 12;</code>
+   * @param value The statusBarColor to set.
+   */
+  private void setStatusBarColor(int value) {
+    
+    statusBarColor_ = value;
+  }
+  /**
+   * <pre>
+   * The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+   * transparent. Used only while the appearance is unspecified.
+   * </pre>
+   *
+   * <code>fixed32 status_bar_color = 12;</code>
+   */
+  private void clearStatusBarColor() {
+    
+    statusBarColor_ = 0;
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.TaskUpdated parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1053,6 +1166,125 @@ public  final class TaskUpdated extends
       return this;
     }
 
+    /**
+     * <pre>
+     * What the task's app told the system about its status bar: whether it asked for dark
+     * icons on a light status bar. The host draws its window's caption buttons in the
+     * matching tone over the app's status bar area.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+     * @return The enum numeric value on the wire for statusBarAppearance.
+     */
+    @java.lang.Override
+    public int getStatusBarAppearanceValue() {
+      return instance.getStatusBarAppearanceValue();
+    }
+    /**
+     * <pre>
+     * What the task's app told the system about its status bar: whether it asked for dark
+     * icons on a light status bar. The host draws its window's caption buttons in the
+     * matching tone over the app's status bar area.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+     * @param value The statusBarAppearance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStatusBarAppearanceValue(int value) {
+      copyOnWrite();
+      instance.setStatusBarAppearanceValue(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * What the task's app told the system about its status bar: whether it asked for dark
+     * icons on a light status bar. The host draws its window's caption buttons in the
+     * matching tone over the app's status bar area.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+     * @return The statusBarAppearance.
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.StatusBarAppearance getStatusBarAppearance() {
+      return instance.getStatusBarAppearance();
+    }
+    /**
+     * <pre>
+     * What the task's app told the system about its status bar: whether it asked for dark
+     * icons on a light status bar. The host draws its window's caption buttons in the
+     * matching tone over the app's status bar area.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+     * @param value The enum numeric value on the wire for statusBarAppearance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStatusBarAppearance(io.github.thisisthepy.dsa.control.v1.StatusBarAppearance value) {
+      copyOnWrite();
+      instance.setStatusBarAppearance(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * What the task's app told the system about its status bar: whether it asked for dark
+     * icons on a light status bar. The host draws its window's caption buttons in the
+     * matching tone over the app's status bar area.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStatusBarAppearance() {
+      copyOnWrite();
+      instance.clearStatusBarAppearance();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+     * transparent. Used only while the appearance is unspecified.
+     * </pre>
+     *
+     * <code>fixed32 status_bar_color = 12;</code>
+     * @return The statusBarColor.
+     */
+    @java.lang.Override
+    public int getStatusBarColor() {
+      return instance.getStatusBarColor();
+    }
+    /**
+     * <pre>
+     * The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+     * transparent. Used only while the appearance is unspecified.
+     * </pre>
+     *
+     * <code>fixed32 status_bar_color = 12;</code>
+     * @param value The statusBarColor to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStatusBarColor(int value) {
+      copyOnWrite();
+      instance.setStatusBarColor(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+     * transparent. Used only while the appearance is unspecified.
+     * </pre>
+     *
+     * <code>fixed32 status_bar_color = 12;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStatusBarColor() {
+      copyOnWrite();
+      instance.clearStatusBarColor();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.TaskUpdated)
   }
   @java.lang.Override
@@ -1079,10 +1311,13 @@ public  final class TaskUpdated extends
             "maxHeight_",
             "minWidth_",
             "minHeight_",
+            "statusBarAppearance_",
+            "statusBarColor_",
           };
           java.lang.String info =
-              "\u0000\n\u0000\u0000\u0001\n\n\u0000\u0000\u0000\u0001\u0004\u0002\t\u0003\u0208" +
-              "\u0004\u0208\u0005\u0007\u0006\u000b\u0007\u000b\b\u000b\t\u000b\n\u000b";
+              "\u0000\f\u0000\u0000\u0001\f\f\u0000\u0000\u0000\u0001\u0004\u0002\t\u0003\u0208" +
+              "\u0004\u0208\u0005\u0007\u0006\u000b\u0007\u000b\b\u000b\t\u000b\n\u000b\u000b\f" +
+              "\f\u0006";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

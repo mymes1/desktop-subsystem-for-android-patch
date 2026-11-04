@@ -30,6 +30,14 @@ object Messages {
             update.setMaxWidth(display.width).setMaxHeight(display.height)
         }
         update.setMinWidth(maxOf(0, task.minWidth)).setMinHeight(maxOf(0, task.minHeight))
+        update.setStatusBarAppearance(
+            when (task.statusBar) {
+                StatusBarAppearance.LIGHT -> io.github.thisisthepy.dsa.control.v1.StatusBarAppearance.STATUS_BAR_APPEARANCE_LIGHT
+                StatusBarAppearance.DARK -> io.github.thisisthepy.dsa.control.v1.StatusBarAppearance.STATUS_BAR_APPEARANCE_DARK
+                StatusBarAppearance.UNKNOWN -> io.github.thisisthepy.dsa.control.v1.StatusBarAppearance.STATUS_BAR_APPEARANCE_UNSPECIFIED
+            },
+        )
+        update.setStatusBarColor(task.statusBarColor)
         return Envelope.newBuilder().setTaskUpdated(update).build().toByteArray()
     }
 
@@ -46,6 +54,14 @@ object Messages {
             .setPackageName(app.packageName)
             .setLabel(app.label)
             .setIconPng(ByteString.copyFrom(app.iconPng))
+            .setVersionName(app.versionName)
+            .setVersionCode(app.versionCode)
+            .setFirstInstallTimeMs(maxOf(0L, app.firstInstallTimeMs))
+            .setLastUpdateTimeMs(maxOf(0L, app.lastUpdateTimeMs))
+            .setSystemApp(app.systemApp)
+            .setAppBytes(maxOf(0L, app.appBytes))
+            .setDataBytes(maxOf(0L, app.dataBytes))
+            .setCacheBytes(maxOf(0L, app.cacheBytes))
         return Envelope.newBuilder().setInstalledApp(info).build().toByteArray()
     }
 

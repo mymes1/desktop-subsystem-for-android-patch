@@ -26,11 +26,21 @@ use dsa_protocol::control::{
     WidgetList, WidgetPointer, WidgetProvider, WidgetProviders, WidgetUpdated,
 };
 use dsa_protocol::control::{
-    CollectDiagnostics, DiagnosticsDone, DiagnosticsFile, LogBuffer, LogDump, LogRecord,
-    LogRecords, LogStream, VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen,
-    VideoFlush, VideoFrame, VideoPacket,
+    CameraDevice, CameraFacing, CameraFrame, CameraList, CameraMode, CameraOpen, CameraStill,
 };
-use dsa_protocol::control::{PrintJob, PrintJobCancel, PrintJobChunk, PrintJobResult, PrintOutcome};
+use dsa_protocol::control::{
+    CollectDiagnostics, DiagnosticsDone, DiagnosticsFile, LocationAccess, LocationFix,
+    LocationRequest, LocationStatus, LogBuffer, LogDump, LogRecord, LogRecords, LogStream,
+    VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen, VideoFlush, VideoFrame,
+    VideoPacket,
+};
+use dsa_protocol::control::{
+    PrintJob, PrintJobCancel, PrintJobChunk, PrintJobResult, PrintOutcome,
+};
+use dsa_protocol::control::{
+    SensorActivate, SensorDescription, SensorKind, SensorList, SensorReading, SensorReadings,
+};
+use dsa_protocol::control::{UninstallApp, UninstallResult, UninstallStatus};
 use dsa_protocol::{decode, encode};
 
 /// The key of the notification in the notification cases.
@@ -203,6 +213,52 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
             })),
         ),
         ("video_flush", wrap(Body::VideoFlush(VideoFlush {}))),
+        (
+            "camera_list",
+            wrap(Body::CameraList(CameraList {
+                cameras: vec![CameraDevice {
+                    id: "front".into(),
+                    name: "Integrated Camera".into(),
+                    facing: CameraFacing::Front as i32,
+                    sensor_orientation: 90,
+                    modes: vec![CameraMode {
+                        width: 1280,
+                        height: 720,
+                        max_fps: 30,
+                        min_fps: 15,
+                    }],
+                }],
+            })),
+        ),
+        (
+            "camera_open",
+            wrap(Body::CameraOpen(CameraOpen {
+                id: "front".into(),
+                width: 1280,
+                height: 720,
+                fps: 30,
+            })),
+        ),
+        (
+            "camera_frame",
+            wrap(Body::CameraFrame(CameraFrame {
+                sequence: 7,
+                timestamp_ns: 33_333_333,
+                width: 2,
+                height: 2,
+                stride: 2,
+                nv12: vec![0x10, 0x10, 0x10, 0x10, 0x80, 0x80],
+            })),
+        ),
+        (
+            "camera_still",
+            wrap(Body::CameraStill(CameraStill {
+                request_id: 4,
+                width: 1920,
+                height: 1080,
+                quality: 95,
+            })),
+        ),
         (
             "video_frame",
             wrap(Body::VideoFrame(VideoFrame {
@@ -408,6 +464,36 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
             })),
         ),
         (
+            "location_request_active",
+            wrap(Body::LocationRequest(LocationRequest {
+                active: true,
+                interval_ms: 1000,
+            })),
+        ),
+        (
+            "location_status_denied",
+            wrap(Body::LocationStatus(LocationStatus {
+                access: LocationAccess::Denied as i32,
+                detail: String::new(),
+            })),
+        ),
+        (
+            "location_fix",
+            wrap(Body::LocationFix(LocationFix {
+                latitude_degrees: 37.5,
+                longitude_degrees: 127.0,
+                horizontal_accuracy_meters: 10.0,
+                has_altitude: true,
+                altitude_meters: 50.0,
+                vertical_accuracy_meters: 3.0,
+                has_speed: true,
+                speed_meters_per_second: 2.5,
+                has_bearing: true,
+                bearing_degrees: 90.0,
+                unix_time_ms: 1_700_000_000_000,
+            })),
+        ),
+        (
             "device_idle",
             wrap(Body::DeviceIdle(DeviceIdle { idle: true })),
         ),
@@ -486,6 +572,22 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
             wrap(Body::QueryPackage(QueryPackage {
                 request_id: 7,
                 package_name: "com.example.notes".into(),
+            })),
+        ),
+        (
+            "uninstall_app",
+            wrap(Body::UninstallApp(UninstallApp {
+                request_id: 7,
+                package_name: "com.example.notes".into(),
+            })),
+        ),
+        (
+            "uninstall_result",
+            wrap(Body::UninstallResult(UninstallResult {
+                request_id: 7,
+                package_name: "com.example.notes".into(),
+                status: UninstallStatus::SystemApp as i32,
+                message: "system".into(),
             })),
         ),
         (
@@ -948,6 +1050,37 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
                 job_id: 5,
                 outcome: PrintOutcome::Failed as i32,
                 message: "out of paper".into(),
+            })),
+        ),
+        (
+            "sensor_list",
+            wrap(Body::SensorList(SensorList {
+                sensors: vec![SensorDescription {
+                    kind: SensorKind::Gyroscope as i32,
+                    name: "Gyro".into(),
+                    vendor: String::new(),
+                    max_range: 2.0,
+                    resolution: 0.0,
+                    min_interval_us: 16000,
+                }],
+            })),
+        ),
+        (
+            "sensor_activate",
+            wrap(Body::SensorActivate(SensorActivate {
+                kind: SensorKind::Accelerometer as i32,
+                enabled: true,
+                interval_us: 20000,
+            })),
+        ),
+        (
+            "sensor_readings",
+            wrap(Body::SensorReadings(SensorReadings {
+                readings: vec![SensorReading {
+                    kind: SensorKind::Light as i32,
+                    timestamp_us: 1000,
+                    values: vec![2.5],
+                }],
             })),
         ),
     ])

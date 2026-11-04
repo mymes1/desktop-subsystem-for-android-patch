@@ -483,8 +483,22 @@ impl StartMenuSetup {
     }
 }
 
-/// Keeps the Start menu in step with each list of installed apps that arrives on `installed`,
-/// until it closes. When several lists are waiting, only the latest is acted on.
+/// The settings app of the installation whose window manager is `wm`
+/// (`<install>\settings\DsaSettings.exe`), which Windows' list of installed apps runs to
+/// uninstall an app. It is a windowed program, unlike `dsa.exe`, so no console flashes up.
+pub fn uninstaller_beside(wm: &std::path::Path) -> Option<PathBuf> {
+    wm.parent()
+        .map(|dir| dir.join("settings").join("DsaSettings.exe"))
+}
+
+/// The settings app installed with this window manager.
+pub fn default_uninstaller() -> Option<PathBuf> {
+    uninstaller_beside(&std::env::current_exe().ok()?)
+}
+
+/// Keeps the Start menu, and Windows' list of installed apps, in step with each list of
+/// installed apps that arrives on `installed`, until it closes. When several lists are waiting,
+/// only the latest is acted on.
 pub fn keep(
     installed: Receiver<Vec<AppInfo>>,
     setup: StartMenuSetup,
@@ -492,12 +506,20 @@ pub fn keep(
 ) {
     let _com = ComApartment::enter();
     let mut previous: Option<BTreeSet<String>> = None;
+    let uninstaller = default_uninstaller();
+    let keys = crate::installed_apps::RegistryKeys::current_user();
     while let Ok(mut apps) = installed.recv() {
         while let Ok(newer) = installed.try_recv() {
             apps = newer;
         }
         for problem in setup.sync(&apps, &ShellLinks) {
             note(logger.as_deref(), &format!("Start menu: {problem}"));
+        }
+        if let Some(uninstaller) = &uninstaller {
+            let entries = crate::installed_apps::entries(&apps, &setup.apps_dir, uninstaller);
+            for problem in crate::installed_apps::sync(&entries, &keys) {
+                note(logger.as_deref(), &format!("Installed apps: {problem}"));
+            }
         }
         let now: BTreeSet<String> = apps.iter().map(|app| app.package_name.clone()).collect();
         if let Some(previous) = &previous {

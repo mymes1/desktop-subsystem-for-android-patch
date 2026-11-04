@@ -9,6 +9,6 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Product>Desktop Subsystem for Android</Product>
     <Company>Thisisthepy</Company>
-    <Copyright>Copyright thisisthepy. Licensed under the Apache License 2.0.</Copyright>
+    <Copyright>Copyright ThisIsThePy. Licensed under the Apache License 2.0.</Copyright>
   </PropertyGroup>
 </Project>

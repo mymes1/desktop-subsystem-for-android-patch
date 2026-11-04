@@ -10,7 +10,8 @@
 //! - The host's `LogDump` gets what logd holds now, once, on a connection of its own.
 //! - The host's `CollectDiagnostics` gets the guest's diagnostics: the whole log, pstore, and
 //!   what the agent gathers (which the router diverts here), then `DiagnosticsDone`. Nothing
-//!   is written to the guest's disk.
+//!   is written to the guest's disk. Once the host has them, pstore's records are cleared, so
+//!   the next crash has room and the next collection does not carry them again.
 //!
 //! The bridge reads logd, other files and the log port through [`LogSource`],
 //! [`DiagnosticFiles`] and a [`PortConnector`], so it runs and is tested on any platform.
@@ -67,6 +68,12 @@ pub trait LogSource: Send + Sync {
 /// name in the archive (under `android/`), with its content or why it could not be read.
 pub trait DiagnosticFiles: Send + Sync {
     fn files(&self) -> Vec<(String, Result<Vec<u8>, String>)>;
+
+    /// Called once the host has the files named in `names` (archive names, as [`files`]
+    /// gave them), so a source whose records are taken once, such as pstore's, can clear them.
+    ///
+    /// [`files`]: DiagnosticFiles::files
+    fn delivered(&self, _names: &[String]) {}
 }
 
 /// Opens a connection on the log port, past the handshake.
@@ -596,12 +603,14 @@ fn run_collect(
     if send_file(&mut *connection, request_id, name, &text).is_err() {
         return;
     }
+    let mut sent = Vec::new();
     for (name, content) in files.files() {
         match content {
             Ok(data) => {
                 if send_file(&mut *connection, request_id, &name, &data).is_err() {
                     return;
                 }
+                sent.push(name);
             }
             Err(why) => problems.push(format!("{name}: {why}")),
         }
@@ -637,11 +646,16 @@ fn run_collect(
             }
         },
     }
-    let _ = connection.send(&frame(Body::DiagnosticsDone(DiagnosticsDone {
+    let done = connection.send(&frame(Body::DiagnosticsDone(DiagnosticsDone {
         request_id,
         error: problems.join("; "),
     })));
     connection.close();
+    // Only once the whole archive went out: a collection that broke off keeps the records
+    // for the next one.
+    if done.is_ok() {
+        files.delivered(&sent);
+    }
 }
 
 /// The files of `dir`, each under `prefix` in the archive, for [`DiagnosticFiles`]. A folder

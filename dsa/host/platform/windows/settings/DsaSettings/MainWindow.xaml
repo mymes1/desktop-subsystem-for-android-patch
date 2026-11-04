@@ -50,12 +50,18 @@
                                        Icon="{ui:SymbolIcon Home24}" />
                 <ui:NavigationViewItem Content="{l:Text NavMemory.Content}" TargetPageType="{x:Type pages:MemoryPage}"
                                        Icon="{ui:SymbolIcon DataUsage24}" />
+                <ui:NavigationViewItem Content="{l:Text NavApps.Content}" TargetPageType="{x:Type pages:AppsPage}"
+                                       Icon="{ui:SymbolIcon AppsList24}" />
+                <ui:NavigationViewItem Content="{l:Text NavBackground.Content}" TargetPageType="{x:Type pages:BackgroundPage}"
+                                       Icon="{ui:SymbolIcon Play24}" />
                 <ui:NavigationViewItem Content="{l:Text NavWidgets.Content}" TargetPageType="{x:Type pages:WidgetsPage}"
                                        Icon="{ui:SymbolIcon Apps24}" />
                 <ui:NavigationViewItem Content="{l:Text NavDisplay.Content}" TargetPageType="{x:Type pages:DisplayPage}"
                                        Icon="{ui:SymbolIcon Desktop24}" />
                 <ui:NavigationViewItem Content="{l:Text NavUpdates.Content}" TargetPageType="{x:Type pages:UpdatesPage}"
                                        Icon="{ui:SymbolIcon ArrowSync24}" />
+                <ui:NavigationViewItem Content="{l:Text NavIdentity.Content}" TargetPageType="{x:Type pages:DeviceIdentityPage}"
+                                       Icon="{ui:SymbolIcon Phone24}" />
                 <ui:NavigationViewItem Content="{l:Text NavAdvanced.Content}" TargetPageType="{x:Type pages:AdvancedPage}"
                                        Icon="{ui:SymbolIcon Settings24}" />
                 <ui:NavigationViewItem Content="{l:Text NavLogs.Content}" TargetPageType="{x:Type pages:LogsPage}"

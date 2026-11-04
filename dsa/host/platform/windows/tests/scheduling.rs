@@ -17,11 +17,18 @@ fn fr5_a_process_on_the_touch_path_runs_ahead_of_normal_programs() {
 
 #[test]
 fn fr5_a_thread_on_the_touch_path_runs_at_high_priority() {
+    // The other test raises this process's class while it runs, and a class change moves the
+    // priority Windows reports for a thread. Raise the class first, as the window manager and
+    // the window hosts do, so the result does not depend on which test runs first.
+    raise_this_process().expect("raises");
     std::thread::spawn(|| {
         raise_this_thread();
         // SAFETY: the pseudo handle of this thread.
         let priority = unsafe { GetThreadPriority(GetCurrentThread()) };
-        assert_eq!(priority, THREAD_PRIORITY_HIGHEST);
+        assert!(
+            priority >= THREAD_PRIORITY_HIGHEST,
+            "the thread runs at {priority}, below {THREAD_PRIORITY_HIGHEST}"
+        );
     })
     .join()
     .unwrap();

@@ -1,0 +1,17 @@
+diff --git a/fs/pstore/blk.c b/fs/pstore/blk.c
+--- a/fs/pstore/blk.c
++++ b/fs/pstore/blk.c
+@@ -265,6 +265,13 @@
+ 	 */
+ 	dev_t dev;
+ 
++	/*
++	 * Hyper-V's storage driver and the SCSI disk driver probe asynchronously, so at
++	 * late_initcall the disk named here may not exist yet. Wait for every probe started
++	 * so far, as mounting the root file system does, before looking it up.
++	 */
++	wait_for_device_probe();
++
+ 	if (early_lookup_bdev(initial_devname, &dev)) {
+ 		pr_err("failed to resolve '%s'!\n", initial_devname);
+ 		return initial_devname;

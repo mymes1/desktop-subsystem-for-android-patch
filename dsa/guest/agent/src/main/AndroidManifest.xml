@@ -61,6 +61,8 @@
     <uses-permission android:name="android.permission.READ_LOGS" />
     <!-- Installing the APKs the host sends, without asking the user to confirm each one. -->
     <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
+    <!-- Uninstalling an app the user removes on the host, without asking again in the guest. -->
+    <uses-permission android:name="android.permission.DELETE_PACKAGES" />
 
     <!--
       Making the agent the guest's browser while web links go to the host, and giving the
@@ -82,6 +84,11 @@
       clock stands still or drifts while the host sleeps.
     -->
     <uses-permission android:name="android.permission.SET_TIME" />
+    <!--
+      Stopping an app that runs in the background when the user stops it from the host's
+      notification area or the settings app, as Settings' "Force stop" does.
+    -->
+    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
 
     <application
         android:name=".platform.AgentApplication"

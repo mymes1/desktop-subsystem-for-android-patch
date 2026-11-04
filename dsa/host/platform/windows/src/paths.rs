@@ -14,6 +14,7 @@
 //! %LOCALAPPDATA%\DSA                 each user's (the user, SYSTEM and Administrators)
 //!   android.vhdx                     the user's Android disk, which uninstalling keeps
 //!   android.image-version            the image version that disk holds, kept with it
+//!   pstore.vhd                       the guest kernel's last log, a fixed 4 MiB disk
 //!   apps\<package>\                  each app's own window program
 //!   notifications\                   the icons notifications show
 //!   logs\                            dsa-wm.log, dsa-app-window.log
@@ -162,6 +163,10 @@ impl UserRoot {
     pub fn android_disk(&self) -> PathBuf {
         join(&self.0, &["android.vhdx"])
     }
+    /// The disk the guest kernel keeps its last log on, which uninstalling removes.
+    pub fn pstore_disk(&self) -> PathBuf {
+        pstore_disk_beside(&self.android_disk())
+    }
     /// The image version the Android disk holds, kept beside it and with it.
     pub fn android_disk_version(&self) -> PathBuf {
         join(&self.0, &["android.image-version"])
@@ -213,6 +218,18 @@ impl UserRoot {
     }
 }
 
+/// The pstore disk of the VM whose Android disk is `android_disk`: `pstore.vhd` in the same
+/// folder. For a user root that is [`UserRoot::pstore_disk`]; a VM configured with its disk
+/// elsewhere keeps its pstore disk beside it.
+pub fn pstore_disk_beside(android_disk: &Path) -> PathBuf {
+    // By the text, so a Windows path splits the same on every platform the tests run on.
+    let text = android_disk.to_string_lossy();
+    match text.rfind(['\\', '/']) {
+        Some(end) => join(Path::new(&text[..end]), &["pstore.vhd"]),
+        None => PathBuf::from("pstore.vhd"),
+    }
+}
+
 /// The one place outside the DSA folders where files are made at run time: the user's Start
 /// menu `Programs` folder, for each app's shortcut. `%APPDATA%\Microsoft\Windows\Start
 /// Menu\Programs` for this process's user.
@@ -223,6 +240,17 @@ pub fn start_menu_programs() -> Option<PathBuf> {
             &["Microsoft", "Windows", "Start Menu", "Programs"],
         )
     })
+}
+
+/// The key in a user's registry where Windows' list of installed apps (Settings > Apps >
+/// Installed apps) finds the apps installed for that user. The window manager puts one key
+/// under it for each Android app; nothing else of DSA goes there.
+pub const INSTALLED_APPS_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+
+/// The registry hive of the profile at `profile` (`<profile>\NTUSER.DAT`), which the
+/// uninstaller loads to remove DSA's keys of a user who is not signed in.
+pub fn user_hive_in_profile(profile: &Path) -> PathBuf {
+    join(profile, &["NTUSER.DAT"])
 }
 
 /// The local application data folder of the profile at `profile`, where Windows puts it unless

@@ -97,6 +97,15 @@ pub struct TaskUpdated {
     pub min_width: u32,
     #[prost(uint32, tag = "10")]
     pub min_height: u32,
+    /// What the task's app told the system about its status bar: whether it asked for dark
+    /// icons on a light status bar. The host draws its window's caption buttons in the
+    /// matching tone over the app's status bar area.
+    #[prost(enumeration = "StatusBarAppearance", tag = "11")]
+    pub status_bar_appearance: i32,
+    /// The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+    /// transparent. Used only while the appearance is unspecified.
+    #[prost(fixed32, tag = "12")]
+    pub status_bar_color: u32,
 }
 /// Guest to host, from the agent: the task ended; the host closes its window.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -166,6 +175,19 @@ pub struct SetTaskDensity {
     #[prost(uint32, tag = "2")]
     pub density_dpi: u32,
 }
+/// Host to guest: the task's window draws its title bar over the top `height` pixels of the
+/// task (guest display pixels, which are the window's). The agent gives the task a top system
+/// bar inset of that height (status bars, system bars and caption bar), so the app keeps its
+/// toolbar below the caption buttons and draws its status bar background behind them. The
+/// host sends it when the window opens and whenever the height changes, as on a move to a
+/// monitor of another scale. 0 removes the inset.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetTaskCaption {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(uint32, tag = "2")]
+    pub height: u32,
+}
 /// Guest to host, from the agent: the name and launcher icon of an app the host shows a task
 /// of. The host's window for the app carries them, in the taskbar and the task list. The
 /// agent sends it before the first TaskUpdated of the app's package on each connection, and
@@ -183,10 +205,12 @@ pub struct AppInfo {
     #[prost(bytes = "vec", tag = "3")]
     pub icon_png: ::prost::alloc::vec::Vec<u8>,
 }
-/// Guest to host, from the agent: an app a launcher lists is installed in the guest, or its
-/// name or icon changed. The host shows it in its own start menu. The agent sends it on each
-/// connection for every such app, and again whenever the app is installed again or updated;
-/// the InstalledApps that follows says which apps are still there.
+/// Guest to host, from the agent: an app a launcher lists is installed in the guest, or
+/// something about it changed: its name, icon, version or size. The host shows it in its own
+/// start menu and its list of installed apps. The agent sends it on each connection for every
+/// such app, and again whenever the app is installed again or updated, or the host asks
+/// (RefreshApps) and the app's sizes changed; the InstalledApps that follows says which apps
+/// are still there.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct InstalledApp {
     #[prost(string, tag = "1")]
@@ -198,6 +222,62 @@ pub struct InstalledApp {
     /// when the app has no icon the agent could draw.
     #[prost(bytes = "vec", tag = "3")]
     pub icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// The installed version, as the package manager reports it.
+    #[prost(string, tag = "4")]
+    pub version_name: ::prost::alloc::string::String,
+    #[prost(int64, tag = "5")]
+    pub version_code: i64,
+    /// When the app was first installed and last updated, in milliseconds since the Unix epoch.
+    #[prost(uint64, tag = "6")]
+    pub first_install_time_ms: u64,
+    #[prost(uint64, tag = "7")]
+    pub last_update_time_ms: u64,
+    /// True for an app that is part of the Android image, which cannot be uninstalled.
+    #[prost(bool, tag = "8")]
+    pub system_app: bool,
+    /// The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+    /// agent could not read them.
+    #[prost(uint64, tag = "9")]
+    pub app_bytes: u64,
+    #[prost(uint64, tag = "10")]
+    pub data_bytes: u64,
+    #[prost(uint64, tag = "11")]
+    pub cache_bytes: u64,
+}
+/// Host to guest: read the installed apps again, sizes included, and send the InstalledApp of
+/// each one that changed, then InstalledApps, even when nothing changed, so the host knows its
+/// list is fresh.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RefreshApps {}
+/// Host to guest: open Android's own settings for an app (its permissions, storage and
+/// notifications) as a new task in its own window. An empty `package_name` opens the list of
+/// every installed app instead.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct OpenAppSettings {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
+/// Host to guest: uninstall a user app. The agent does it through the package installer and
+/// answers with UninstallResult of the same `request_id`.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UninstallApp {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+}
+/// Guest to host, from the agent: how an UninstallApp went.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UninstallResult {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "UninstallStatus", tag = "3")]
+    pub status: i32,
+    /// The guest's own words, for the log and a bug report.
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
 }
 /// Guest to host, from the agent: every app a launcher lists, by package, in package order.
 /// It follows the InstalledApp of each app it names that the host has not been told about on
@@ -340,6 +420,21 @@ pub struct PowerState {
     #[prost(bool, tag = "5")]
     pub power_saver: bool,
 }
+/// Guest to host, from the control daemon: how much memory the guest has and how hard it
+/// works to find more. The host grows the VM's memory by hot-adding it when the guest runs
+/// short, and gives it back when the guest no longer needs it. Sent every few seconds while
+/// the guest is short, and at least every 30 seconds otherwise.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GuestMemoryPressure {
+    #[prost(uint64, tag = "1")]
+    pub mem_total_kb: u64,
+    #[prost(uint64, tag = "2")]
+    pub mem_available_kb: u64,
+    /// The share of the last 10 seconds some task waited for memory (PSI "some avg10"), in
+    /// hundredths of a percent.
+    #[prost(uint32, tag = "3")]
+    pub stall_centipercent: u32,
+}
 /// Host to guest: whether the host computer is short of memory. While it is, the guest gives
 /// memory back the way a phone's low memory killer would, cheapest first: the agent ends the
 /// cached app processes (apps the user is not using), and the control daemon then has the
@@ -389,6 +484,65 @@ pub struct PowerHint {
     #[prost(int32, tag = "4")]
     pub duration_ms: i32,
 }
+/// Guest to host, from the guest's GNSS HAL: whether the framework wants locations now
+/// (between its start and stop of the GNSS engine), and how often. The host runs its own
+/// location service only while one is wanted, and sends a LocationFix each time it has a
+/// new position. The HAL sends this again each time it subscribes to the channel, and the
+/// channel daemon each time the host connects, so a host that connects again knows. When the
+/// HAL's process dies, the daemon tells the host that no location is wanted any longer.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LocationRequest {
+    #[prost(bool, tag = "1")]
+    pub active: bool,
+    /// How often the framework wants a location, in milliseconds. 0 lets the host choose.
+    #[prost(uint32, tag = "2")]
+    pub interval_ms: u32,
+}
+/// Host to guest: whether the host can give the guest locations, sent when a location is
+/// wanted and each time it changes while one is. A guest told DENIED or UNAVAILABLE gets no
+/// fix until it is told ALLOWED again.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct LocationStatus {
+    #[prost(enumeration = "LocationAccess", tag = "1")]
+    pub access: i32,
+    /// Why, in words for the guest's log. Empty when there is nothing to add.
+    #[prost(string, tag = "2")]
+    pub detail: ::prost::alloc::string::String,
+}
+/// Host to guest: one position from the host's location service, which the GNSS HAL hands to
+/// the framework as the guest's GNSS location. Each `has_` flag says whether the value after
+/// it is known; a value that is not known is left out of the guest's location.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct LocationFix {
+    #[prost(double, tag = "1")]
+    pub latitude_degrees: f64,
+    #[prost(double, tag = "2")]
+    pub longitude_degrees: f64,
+    /// The radius of 68% confidence around the position, in meters. 0 when unknown.
+    #[prost(float, tag = "3")]
+    pub horizontal_accuracy_meters: f32,
+    #[prost(bool, tag = "4")]
+    pub has_altitude: bool,
+    /// Above the WGS84 ellipsoid, in meters.
+    #[prost(double, tag = "5")]
+    pub altitude_meters: f64,
+    /// In meters; 0 when unknown.
+    #[prost(float, tag = "6")]
+    pub vertical_accuracy_meters: f32,
+    #[prost(bool, tag = "7")]
+    pub has_speed: bool,
+    #[prost(float, tag = "8")]
+    pub speed_meters_per_second: f32,
+    #[prost(bool, tag = "9")]
+    pub has_bearing: bool,
+    /// Degrees east of true north, from 0 up to 360.
+    #[prost(float, tag = "10")]
+    pub bearing_degrees: f32,
+    /// When the host's location service took the position, in milliseconds since the Unix
+    /// epoch (UTC).
+    #[prost(uint64, tag = "11")]
+    pub unix_time_ms: u64,
+}
 /// Guest to host, from the agent: whether the guest's device is in Doze (the device idle
 /// controller's deep idle state). The host takes the device not to be in Doze when the agent
 /// connects; the agent sends this on each change after that.
@@ -424,6 +578,69 @@ pub struct ClipboardSharing {
 pub struct DeveloperMode {
     #[prost(bool, tag = "1")]
     pub on: bool,
+}
+/// Host to guest, to the control daemon: an ARM translation package's system image (erofs)
+/// follows in ArmTranslationChunk messages of the same `transfer_id`, in order. The daemon
+/// writes it to the user's disk beside any package already there, checks its length and
+/// SHA-256 once it has all `size` bytes, and only then puts it in the old one's place. It
+/// answers each chunk with ArmTranslationState. The guest uses the package from its next boot,
+/// when the host says one is installed. One transfer at a time; a new one drops an unfinished
+/// one.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ArmTranslationInstall {
+    #[prost(uint32, tag = "1")]
+    pub transfer_id: u32,
+    #[prost(uint64, tag = "2")]
+    pub size: u64,
+    /// The SHA-256 digest of the whole image.
+    #[prost(bytes = "vec", tag = "3")]
+    pub sha256: ::prost::alloc::vec::Vec<u8>,
+}
+/// Host to guest: part of the image an ArmTranslationInstall announced.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ArmTranslationChunk {
+    #[prost(uint32, tag = "1")]
+    pub transfer_id: u32,
+    /// Where `data` starts in the image.
+    #[prost(uint64, tag = "2")]
+    pub offset: u64,
+    #[prost(bytes = "vec", tag = "3")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+}
+/// Host to guest, to the control daemon: remove the installed ARM translation package. The
+/// guest goes on using a package it has mounted until it restarts. Answered with
+/// ArmTranslationState.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ArmTranslationRemove {}
+/// Host to guest, to the control daemon: asks for ArmTranslationState.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ArmTranslationQuery {}
+/// Guest to host, from the control daemon: where ARM translation stands in the guest. It
+/// answers each of the messages above.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ArmTranslationState {
+    /// The transfer this answers, or 0.
+    #[prost(uint32, tag = "1")]
+    pub transfer_id: u32,
+    /// How many bytes of that transfer the daemon has written.
+    #[prost(uint64, tag = "2")]
+    pub received: u64,
+    /// The transfer is complete and its image checked and in place.
+    #[prost(bool, tag = "3")]
+    pub done: bool,
+    /// Non-empty when the transfer or the removal failed: why, in words a person can act on. A
+    /// failed transfer leaves the package that was there before.
+    #[prost(string, tag = "4")]
+    pub error: ::prost::alloc::string::String,
+    /// A package image is on the user's disk.
+    #[prost(bool, tag = "5")]
+    pub installed: bool,
+    /// This boot runs with a package laid over the system: the bridge library is in place.
+    #[prost(bool, tag = "6")]
+    pub active: bool,
+    /// The ABIs the package manager installs apps for (ro.product.cpu.abilist).
+    #[prost(string, tag = "7")]
+    pub abilist: ::prost::alloc::string::String,
 }
 /// Guest to host, from the agent: a notification an app posted, or a new version of one it
 /// posted before under the same key, which replaces it. Only notifications a person would see
@@ -485,6 +702,93 @@ pub struct NotificationClicked {
 pub struct NotificationDismissed {
     #[prost(string, tag = "1")]
     pub key: ::prost::alloc::string::String,
+}
+/// Guest to host, from the agent: an app runs a foreground service, so it keeps running with
+/// no window. Sent when the service's ongoing notification is posted and each time it
+/// changes; the latest one replaces the earlier ones of the package. The icon is the app's,
+/// a PNG image of at most 96 pixels on a side and 64 KiB; a larger one is left out.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackgroundApp {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    /// The app's name, as the guest shows it.
+    #[prost(string, tag = "2")]
+    pub app_label: ::prost::alloc::string::String,
+    #[prost(bytes = "vec", tag = "3")]
+    pub icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// The ongoing notification's title and text ("Playing", "Downloading 3 files").
+    #[prost(string, tag = "4")]
+    pub title: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub text: ::prost::alloc::string::String,
+    /// The titles of the ongoing notification's actions, in its order ("Pause", "Next"). The
+    /// host names one by its index in BackgroundAppAction. At most 8.
+    #[prost(string, repeated, tag = "6")]
+    pub actions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// Guest to host, from the agent: the package runs no foreground service any more, because the
+/// service ended, the app was stopped, or its process died.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackgroundAppGone {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
+/// Host to guest: the user acted on an app that runs in the background. A package the guest
+/// does not run in the background is answered with BackgroundAppGone, except a stop, which
+/// the agent carries out for any package but its own and the system's.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackgroundAppAction {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "BackgroundAppCommand", tag = "2")]
+    pub command: i32,
+    #[prost(int32, tag = "3")]
+    pub action: i32,
+}
+/// Guest to host, from the agent: an app's active media session, sent when it becomes active
+/// and each time its metadata or playback state changes. One per package: the latest replaces
+/// the earlier one. The art is a PNG image of at most 256 pixels on a side and 256 KiB; a
+/// larger one is left out.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MediaSession {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub app_label: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub title: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub artist: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub album: ::prost::alloc::string::String,
+    #[prost(bytes = "vec", tag = "6")]
+    pub art_png: ::prost::alloc::vec::Vec<u8>,
+    #[prost(enumeration = "MediaPlayback", tag = "7")]
+    pub playback: i32,
+    /// Which commands the session takes now.
+    #[prost(bool, tag = "8")]
+    pub can_play: bool,
+    #[prost(bool, tag = "9")]
+    pub can_pause: bool,
+    #[prost(bool, tag = "10")]
+    pub can_next: bool,
+    #[prost(bool, tag = "11")]
+    pub can_previous: bool,
+}
+/// Guest to host, from the agent: the package has no active media session any more.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MediaSessionGone {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
+/// Host to guest: runs the command on the package's media session, through its transport
+/// controls. A package with no active session is answered with MediaSessionGone.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MediaControl {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "MediaCommand", tag = "2")]
+    pub command: i32,
 }
 /// Host to guest: asks the agent for a GuestMemory report now, instead of at its next
 /// periodic one.
@@ -839,6 +1143,59 @@ pub struct VideoError {
     #[prost(string, tag = "1")]
     pub error: ::prost::alloc::string::String,
 }
+/// One sensor this computer has. `max_range` and `resolution` are in the kind's units;
+/// `min_interval_us` is the shortest time between readings it gives.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SensorDescription {
+    #[prost(enumeration = "SensorKind", tag = "1")]
+    pub kind: i32,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub vendor: ::prost::alloc::string::String,
+    #[prost(float, tag = "4")]
+    pub max_range: f32,
+    #[prost(float, tag = "5")]
+    pub resolution: f32,
+    #[prost(uint32, tag = "6")]
+    pub min_interval_us: u32,
+}
+/// Host to guest, on the sensor port: the sensors this computer has. A sensor it does not
+/// have, or that the host's privacy settings do not let DSA read, is not in the list. Sent once, after
+/// HelloAccepted.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SensorList {
+    #[prost(message, repeated, tag = "1")]
+    pub sensors: ::prost::alloc::vec::Vec<SensorDescription>,
+}
+/// Guest to host, on the sensor port: start the sensor, with a reading about every
+/// `interval_us`, or stop it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SensorActivate {
+    #[prost(enumeration = "SensorKind", tag = "1")]
+    pub kind: i32,
+    #[prost(bool, tag = "2")]
+    pub enabled: bool,
+    #[prost(uint32, tag = "3")]
+    pub interval_us: u32,
+}
+/// One reading. `timestamp_us` is on the host's monotonic clock, so the guest can space the
+/// readings that arrive together; `values` are in the order SensorKind gives.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SensorReading {
+    #[prost(enumeration = "SensorKind", tag = "1")]
+    pub kind: i32,
+    #[prost(uint64, tag = "2")]
+    pub timestamp_us: u64,
+    #[prost(float, repeated, tag = "3")]
+    pub values: ::prost::alloc::vec::Vec<f32>,
+}
+/// Host to guest, on the sensor port: the readings since the last message, oldest first.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SensorReadings {
+    #[prost(message, repeated, tag = "1")]
+    pub readings: ::prost::alloc::vec::Vec<SensorReading>,
+}
 /// Guest to host, from the control daemon: the answer to a ClockProbe, sent as soon as the
 /// probe is read.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1149,6 +1506,86 @@ pub struct AccessibilityActionResult {
     #[prost(string, tag = "4")]
     pub error: ::prost::alloc::string::String,
 }
+/// Guest to host, first after the handshake: the stream's format. The host closes the
+/// connection when it cannot play the format.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AudioOutputOpen {
+    /// Frames per second. The guest uses 48000.
+    #[prost(uint32, tag = "1")]
+    pub sample_rate: u32,
+    /// The guest uses 2 (left, right).
+    #[prost(uint32, tag = "2")]
+    pub channel_count: u32,
+    #[prost(enumeration = "AudioSampleFormat", tag = "3")]
+    pub format: i32,
+    /// How many frames the guest sends at a time, so the host can size its buffer.
+    #[prost(uint32, tag = "4")]
+    pub frames_per_burst: u32,
+    /// Names the stream in the host's log, such as "primary".
+    #[prost(string, tag = "5")]
+    pub name: ::prost::alloc::string::String,
+}
+/// Host to guest: the stream is open, and how much sound the host keeps queued before the
+/// device plays it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AudioOutputReady {
+    /// The frames the host holds back to absorb late deliveries, at the stream's rate.
+    #[prost(uint32, tag = "1")]
+    pub buffered_frames: u32,
+    /// The output device's own latency in frames at the stream's rate, 0 when not known.
+    #[prost(uint32, tag = "2")]
+    pub device_frames: u32,
+}
+/// Sound, in the stream's format. Guest to host on an output stream: sound to play. Host to
+/// guest on an input stream: sound recorded.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AudioPcm {
+    /// The index, counted from the stream's first frame, of the first frame in `data`. A gap
+    /// after the end of the last AudioPcm is silence the guest did not send (its own underrun).
+    #[prost(uint64, tag = "1")]
+    pub position: u64,
+    /// Whole frames in the stream's format.
+    #[prost(bytes = "vec", tag = "2")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+}
+/// Guest to host, first after the handshake on an input stream: the format to record in. The
+/// host opens the default capture device and answers AudioInputOpened. It closes the device
+/// when the connection closes.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AudioInputOpen {
+    /// Frames per second. The guest uses 48000.
+    #[prost(uint32, tag = "1")]
+    pub sample_rate: u32,
+    /// The guest uses 2 (left, right).
+    #[prost(uint32, tag = "2")]
+    pub channel_count: u32,
+    #[prost(enumeration = "AudioSampleFormat", tag = "3")]
+    pub format: i32,
+    /// How many frames the guest reads at a time.
+    #[prost(uint32, tag = "4")]
+    pub frames_per_burst: u32,
+    /// Names the stream in the host's log, such as "primary".
+    #[prost(string, tag = "5")]
+    pub name: ::prost::alloc::string::String,
+}
+/// Host to guest: whether the capture device opened. When it did not (the user turned the
+/// microphone off in the host's privacy settings, or there is no microphone), `error` says
+/// why and the host closes the connection.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AudioInputOpened {
+    /// Empty when the device records.
+    #[prost(string, tag = "1")]
+    pub error: ::prost::alloc::string::String,
+    /// The capture device's own latency in frames at the stream's rate, 0 when not known.
+    #[prost(uint32, tag = "2")]
+    pub device_frames: u32,
+}
+/// Guest to host: a change of the stream's state.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AudioOutputControl {
+    #[prost(enumeration = "AudioOutputCommand", tag = "1")]
+    pub command: i32,
+}
 /// Host to guest, to the channel daemon: what the guest's log stream carries from now on.
 /// While `on`, the daemon reads logd and sends the records that pass on the log port (a
 /// vsock port of its own, so a busy log never delays input or window messages). With `on`
@@ -1317,12 +1754,134 @@ pub struct PrintJobResult {
     #[prost(string, tag = "3")]
     pub message: ::prost::alloc::string::String,
 }
+/// One picture size a camera delivers, and the frame rates it delivers it at.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraMode {
+    #[prost(uint32, tag = "1")]
+    pub width: u32,
+    #[prost(uint32, tag = "2")]
+    pub height: u32,
+    #[prost(uint32, tag = "3")]
+    pub max_fps: u32,
+    #[prost(uint32, tag = "4")]
+    pub min_fps: u32,
+}
+/// One camera of the host computer.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CameraDevice {
+    /// The host's name for it, unchanged while the camera stays plugged in. Opaque to the guest.
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    /// The name the computer gives it, such as "Integrated Camera".
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(enumeration = "CameraFacing", tag = "3")]
+    pub facing: i32,
+    /// The clockwise angle, 0, 90, 180 or 270, a picture must turn to stand upright on the
+    /// screen in its natural orientation.
+    #[prost(uint32, tag = "4")]
+    pub sensor_orientation: u32,
+    #[prost(message, repeated, tag = "5")]
+    pub modes: ::prost::alloc::vec::Vec<CameraMode>,
+}
+/// Host to guest, first on each connection: the cameras an app in the guest may use now. A
+/// camera the user has blocked in the computer's privacy settings is not listed, nor is one
+/// that cannot be opened.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CameraList {
+    #[prost(message, repeated, tag = "1")]
+    pub cameras: ::prost::alloc::vec::Vec<CameraDevice>,
+}
+/// Guest to host: start the camera `id` at about `width` by `height` and `fps` frames a
+/// second. Sent again on the same connection, it changes the size or rate.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraOpen {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub width: u32,
+    #[prost(uint32, tag = "3")]
+    pub height: u32,
+    #[prost(uint32, tag = "4")]
+    pub fps: u32,
+}
+/// Host to guest: the answer to CameraOpen, with the size and rate the pictures come in. When
+/// `ok` is false, `error` says, in words a person can act on, why the camera did not start
+/// (the user has blocked it, another program holds it, it was unplugged).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraOpened {
+    #[prost(bool, tag = "1")]
+    pub ok: bool,
+    #[prost(string, tag = "2")]
+    pub error: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub width: u32,
+    #[prost(uint32, tag = "4")]
+    pub height: u32,
+    #[prost(uint32, tag = "5")]
+    pub fps: u32,
+}
+/// Host to guest: one picture, as 8-bit 4:2:0 with the luma plane then the interleaved
+/// chroma plane (NV12), each row `stride` bytes long, laid out as in VideoFrame.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraFrame {
+    /// Counts the pictures of this connection, from 0.
+    #[prost(uint64, tag = "1")]
+    pub sequence: u64,
+    /// When the camera took it, in nanoseconds on a clock of the host's that only goes forward
+    /// while the camera runs.
+    #[prost(uint64, tag = "2")]
+    pub timestamp_ns: u64,
+    #[prost(uint32, tag = "3")]
+    pub width: u32,
+    #[prost(uint32, tag = "4")]
+    pub height: u32,
+    #[prost(uint32, tag = "5")]
+    pub stride: u32,
+    #[prost(bytes = "vec", tag = "6")]
+    pub nv12: ::prost::alloc::vec::Vec<u8>,
+}
+/// Guest to host: stop the camera and let it go. The connection stays open for a new
+/// CameraOpen.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraStop {}
+/// Guest to host: a still picture of `width` by `height`, encoded as JPEG at `quality` (1 to
+/// 100), made from the newest picture of the running camera.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraStill {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(uint32, tag = "2")]
+    pub width: u32,
+    #[prost(uint32, tag = "3")]
+    pub height: u32,
+    #[prost(uint32, tag = "4")]
+    pub quality: u32,
+}
+/// Host to guest: the answer to CameraStill. `jpeg` is empty and `error` says why when there
+/// is no picture.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraStillTaken {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(bytes = "vec", tag = "2")]
+    pub jpeg: ::prost::alloc::vec::Vec<u8>,
+    #[prost(string, tag = "3")]
+    pub error: ::prost::alloc::string::String,
+}
+/// Host to guest: the running camera failed or went away (unplugged, or blocked by the user);
+/// `error` says how. No more pictures come until a new CameraOpen succeeds.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraError {
+    #[prost(string, tag = "1")]
+    pub error: ::prost::alloc::string::String,
+}
 /// The one message type on the wire. Each frame carries exactly one.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1394,6 +1953,16 @@ pub mod envelope {
         PowerHint(super::PowerHint),
         #[prost(message, tag = "140")]
         DeveloperMode(super::DeveloperMode),
+        #[prost(message, tag = "150")]
+        ArmTranslationInstall(super::ArmTranslationInstall),
+        #[prost(message, tag = "151")]
+        ArmTranslationChunk(super::ArmTranslationChunk),
+        #[prost(message, tag = "152")]
+        ArmTranslationRemove(super::ArmTranslationRemove),
+        #[prost(message, tag = "153")]
+        ArmTranslationQuery(super::ArmTranslationQuery),
+        #[prost(message, tag = "154")]
+        ArmTranslationState(super::ArmTranslationState),
         #[prost(message, tag = "42")]
         DeviceIdle(super::DeviceIdle),
         #[prost(message, tag = "43")]
@@ -1416,6 +1985,14 @@ pub mod envelope {
         QueryPackage(super::QueryPackage),
         #[prost(message, tag = "66")]
         PackageState(super::PackageState),
+        #[prost(message, tag = "67")]
+        UninstallApp(super::UninstallApp),
+        #[prost(message, tag = "68")]
+        UninstallResult(super::UninstallResult),
+        #[prost(message, tag = "69")]
+        RefreshApps(super::RefreshApps),
+        #[prost(message, tag = "30")]
+        OpenAppSettings(super::OpenAppSettings),
         #[prost(message, tag = "50")]
         OpenLink(super::OpenLink),
         #[prost(message, tag = "51")]
@@ -1434,6 +2011,18 @@ pub mod envelope {
         NotificationClicked(super::NotificationClicked),
         #[prost(message, tag = "73")]
         NotificationDismissed(super::NotificationDismissed),
+        #[prost(message, tag = "74")]
+        BackgroundApp(super::BackgroundApp),
+        #[prost(message, tag = "75")]
+        BackgroundAppGone(super::BackgroundAppGone),
+        #[prost(message, tag = "76")]
+        BackgroundAppAction(super::BackgroundAppAction),
+        #[prost(message, tag = "77")]
+        MediaSession(super::MediaSession),
+        #[prost(message, tag = "78")]
+        MediaSessionGone(super::MediaSessionGone),
+        #[prost(message, tag = "79")]
+        MediaControl(super::MediaControl),
         #[prost(message, tag = "90")]
         ListWidgetProviders(super::ListWidgetProviders),
         #[prost(message, tag = "91")]
@@ -1462,6 +2051,18 @@ pub mod envelope {
         AccessibilityAction(super::AccessibilityAction),
         #[prost(message, tag = "83")]
         AccessibilityActionResult(super::AccessibilityActionResult),
+        #[prost(message, tag = "100")]
+        AudioOutputOpen(super::AudioOutputOpen),
+        #[prost(message, tag = "101")]
+        AudioOutputReady(super::AudioOutputReady),
+        #[prost(message, tag = "102")]
+        AudioPcm(super::AudioPcm),
+        #[prost(message, tag = "103")]
+        AudioOutputControl(super::AudioOutputControl),
+        #[prost(message, tag = "104")]
+        AudioInputOpen(super::AudioInputOpen),
+        #[prost(message, tag = "105")]
+        AudioInputOpened(super::AudioInputOpened),
         #[prost(message, tag = "120")]
         VideoCapabilities(super::VideoCapabilities),
         #[prost(message, tag = "121")]
@@ -1500,6 +2101,38 @@ pub mod envelope {
         PrintJobCancel(super::PrintJobCancel),
         #[prost(message, tag = "223")]
         PrintJobResult(super::PrintJobResult),
+        #[prost(message, tag = "141")]
+        GuestMemoryPressure(super::GuestMemoryPressure),
+        #[prost(message, tag = "200")]
+        LocationRequest(super::LocationRequest),
+        #[prost(message, tag = "201")]
+        LocationStatus(super::LocationStatus),
+        #[prost(message, tag = "202")]
+        LocationFix(super::LocationFix),
+        #[prost(message, tag = "240")]
+        SensorList(super::SensorList),
+        #[prost(message, tag = "241")]
+        SensorActivate(super::SensorActivate),
+        #[prost(message, tag = "242")]
+        SensorReadings(super::SensorReadings),
+        #[prost(message, tag = "260")]
+        CameraList(super::CameraList),
+        #[prost(message, tag = "261")]
+        CameraOpen(super::CameraOpen),
+        #[prost(message, tag = "262")]
+        CameraOpened(super::CameraOpened),
+        #[prost(message, tag = "263")]
+        CameraFrame(super::CameraFrame),
+        #[prost(message, tag = "264")]
+        CameraStop(super::CameraStop),
+        #[prost(message, tag = "265")]
+        CameraStill(super::CameraStill),
+        #[prost(message, tag = "266")]
+        CameraStillTaken(super::CameraStillTaken),
+        #[prost(message, tag = "267")]
+        CameraError(super::CameraError),
+        #[prost(message, tag = "155")]
+        SetTaskCaption(super::SetTaskCaption),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1537,9 +2170,18 @@ pub enum Role {
     Unspecified = 0,
     Host = 1,
     Guest = 2,
+    /// The guest's audio HAL, on the audio port. It plays sound and nothing else, so the host
+    /// asks it for no secret, and the control port refuses it.
+    GuestAudio = 3,
     /// The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
     /// host asks it for no secret, and the control port refuses it.
     GuestVideo = 4,
+    /// The guest's sensors HAL, on the sensor port. It reads the host's sensors and nothing
+    /// else, so the host asks it for no secret, and the control port refuses it.
+    GuestSensors = 10,
+    /// The guest's camera provider HAL, on the camera port. It carries camera pictures and
+    /// nothing else, so the host asks it for no secret, and the control port refuses it.
+    GuestCamera = 8,
 }
 impl Role {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -1551,7 +2193,10 @@ impl Role {
             Self::Unspecified => "ROLE_UNSPECIFIED",
             Self::Host => "ROLE_HOST",
             Self::Guest => "ROLE_GUEST",
+            Self::GuestAudio => "ROLE_GUEST_AUDIO",
             Self::GuestVideo => "ROLE_GUEST_VIDEO",
+            Self::GuestSensors => "ROLE_GUEST_SENSORS",
+            Self::GuestCamera => "ROLE_GUEST_CAMERA",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1560,7 +2205,10 @@ impl Role {
             "ROLE_UNSPECIFIED" => Some(Self::Unspecified),
             "ROLE_HOST" => Some(Self::Host),
             "ROLE_GUEST" => Some(Self::Guest),
+            "ROLE_GUEST_AUDIO" => Some(Self::GuestAudio),
             "ROLE_GUEST_VIDEO" => Some(Self::GuestVideo),
+            "ROLE_GUEST_SENSORS" => Some(Self::GuestSensors),
+            "ROLE_GUEST_CAMERA" => Some(Self::GuestCamera),
             _ => None,
         }
     }
@@ -1603,6 +2251,85 @@ impl RejectReason {
             "REJECT_REASON_UNEXPECTED_ROLE" => Some(Self::UnexpectedRole),
             "REJECT_REASON_MALFORMED_HELLO" => Some(Self::MalformedHello),
             "REJECT_REASON_AUTHENTICATION_FAILED" => Some(Self::AuthenticationFailed),
+            _ => None,
+        }
+    }
+}
+/// Whether an app asked for dark status bar icons (a light status bar) or light ones.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum StatusBarAppearance {
+    /// The app did not say, or the agent could not read it.
+    Unspecified = 0,
+    /// Dark icons on a light status bar (WindowInsetsController's
+    /// APPEARANCE_LIGHT_STATUS_BARS).
+    Light = 1,
+    /// Light icons on a dark status bar.
+    Dark = 2,
+}
+impl StatusBarAppearance {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "STATUS_BAR_APPEARANCE_UNSPECIFIED",
+            Self::Light => "STATUS_BAR_APPEARANCE_LIGHT",
+            Self::Dark => "STATUS_BAR_APPEARANCE_DARK",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "STATUS_BAR_APPEARANCE_UNSPECIFIED" => Some(Self::Unspecified),
+            "STATUS_BAR_APPEARANCE_LIGHT" => Some(Self::Light),
+            "STATUS_BAR_APPEARANCE_DARK" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+}
+/// Whether an app was uninstalled, and if not, why. The reasons are stable, so the host can say
+/// in the user's language what went wrong; the message beside them gives the guest's own words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum UninstallStatus {
+    Unspecified = 0,
+    /// The app is gone.
+    Success = 1,
+    /// No app of that package is installed.
+    NotInstalled = 2,
+    /// The app is part of the Android image; only apps the user installed can be uninstalled.
+    SystemApp = 3,
+    /// Android refused: the app is a device administrator, or a policy keeps it.
+    Blocked = 4,
+    /// Anything else. The message says what.
+    Other = 5,
+}
+impl UninstallStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "UNINSTALL_STATUS_UNSPECIFIED",
+            Self::Success => "UNINSTALL_STATUS_SUCCESS",
+            Self::NotInstalled => "UNINSTALL_STATUS_NOT_INSTALLED",
+            Self::SystemApp => "UNINSTALL_STATUS_SYSTEM_APP",
+            Self::Blocked => "UNINSTALL_STATUS_BLOCKED",
+            Self::Other => "UNINSTALL_STATUS_OTHER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "UNINSTALL_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "UNINSTALL_STATUS_SUCCESS" => Some(Self::Success),
+            "UNINSTALL_STATUS_NOT_INSTALLED" => Some(Self::NotInstalled),
+            "UNINSTALL_STATUS_SYSTEM_APP" => Some(Self::SystemApp),
+            "UNINSTALL_STATUS_BLOCKED" => Some(Self::Blocked),
+            "UNINSTALL_STATUS_OTHER" => Some(Self::Other),
             _ => None,
         }
     }
@@ -1762,6 +2489,154 @@ impl PowerHintKind {
         }
     }
 }
+/// Whether the host lets DSA read its location.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum LocationAccess {
+    Unspecified = 0,
+    /// The host's location service runs for DSA.
+    Allowed = 1,
+    /// The user turned location off for DSA (or for the whole computer) in the host's privacy
+    /// settings. No fix comes until they turn it on again.
+    Denied = 2,
+    /// The host has no way to find its location now: no location device, or the service failed.
+    Unavailable = 3,
+}
+impl LocationAccess {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "LOCATION_ACCESS_UNSPECIFIED",
+            Self::Allowed => "LOCATION_ACCESS_ALLOWED",
+            Self::Denied => "LOCATION_ACCESS_DENIED",
+            Self::Unavailable => "LOCATION_ACCESS_UNAVAILABLE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LOCATION_ACCESS_UNSPECIFIED" => Some(Self::Unspecified),
+            "LOCATION_ACCESS_ALLOWED" => Some(Self::Allowed),
+            "LOCATION_ACCESS_DENIED" => Some(Self::Denied),
+            "LOCATION_ACCESS_UNAVAILABLE" => Some(Self::Unavailable),
+            _ => None,
+        }
+    }
+}
+/// What the user did with an app that runs in the background, on the host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum BackgroundAppCommand {
+    Unspecified = 0,
+    /// Opens the app: the agent runs the ongoing notification's content intent, else the app's
+    /// launcher activity.
+    Open = 1,
+    /// Runs the ongoing notification's action with the index in `action`.
+    Action = 2,
+    /// Stops the app: the agent force-stops its package, which ends its services and processes,
+    /// and answers with BackgroundAppGone (and MediaSessionGone when it had a session).
+    Stop = 3,
+}
+impl BackgroundAppCommand {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "BACKGROUND_APP_COMMAND_UNSPECIFIED",
+            Self::Open => "BACKGROUND_APP_COMMAND_OPEN",
+            Self::Action => "BACKGROUND_APP_COMMAND_ACTION",
+            Self::Stop => "BACKGROUND_APP_COMMAND_STOP",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "BACKGROUND_APP_COMMAND_UNSPECIFIED" => Some(Self::Unspecified),
+            "BACKGROUND_APP_COMMAND_OPEN" => Some(Self::Open),
+            "BACKGROUND_APP_COMMAND_ACTION" => Some(Self::Action),
+            "BACKGROUND_APP_COMMAND_STOP" => Some(Self::Stop),
+            _ => None,
+        }
+    }
+}
+/// The state of a media session's playback, as Android's PlaybackState reports it, folded to
+/// what a host's media controls show.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum MediaPlayback {
+    Unspecified = 0,
+    Stopped = 1,
+    Playing = 2,
+    Paused = 3,
+}
+impl MediaPlayback {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MEDIA_PLAYBACK_UNSPECIFIED",
+            Self::Stopped => "MEDIA_PLAYBACK_STOPPED",
+            Self::Playing => "MEDIA_PLAYBACK_PLAYING",
+            Self::Paused => "MEDIA_PLAYBACK_PAUSED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MEDIA_PLAYBACK_UNSPECIFIED" => Some(Self::Unspecified),
+            "MEDIA_PLAYBACK_STOPPED" => Some(Self::Stopped),
+            "MEDIA_PLAYBACK_PLAYING" => Some(Self::Playing),
+            "MEDIA_PLAYBACK_PAUSED" => Some(Self::Paused),
+            _ => None,
+        }
+    }
+}
+/// A command for a media session, as a host's media keys and controls send it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum MediaCommand {
+    Unspecified = 0,
+    Play = 1,
+    Pause = 2,
+    Next = 3,
+    Previous = 4,
+    Stop = 5,
+}
+impl MediaCommand {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MEDIA_COMMAND_UNSPECIFIED",
+            Self::Play => "MEDIA_COMMAND_PLAY",
+            Self::Pause => "MEDIA_COMMAND_PAUSE",
+            Self::Next => "MEDIA_COMMAND_NEXT",
+            Self::Previous => "MEDIA_COMMAND_PREVIOUS",
+            Self::Stop => "MEDIA_COMMAND_STOP",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MEDIA_COMMAND_UNSPECIFIED" => Some(Self::Unspecified),
+            "MEDIA_COMMAND_PLAY" => Some(Self::Play),
+            "MEDIA_COMMAND_PAUSE" => Some(Self::Pause),
+            "MEDIA_COMMAND_NEXT" => Some(Self::Next),
+            "MEDIA_COMMAND_PREVIOUS" => Some(Self::Previous),
+            "MEDIA_COMMAND_STOP" => Some(Self::Stop),
+            _ => None,
+        }
+    }
+}
 /// Whether an APK was installed, and if not, why. The reasons are stable, so the host can say
 /// in the user's language what went wrong; the message beside them gives the guest's own words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -1892,6 +2767,47 @@ impl VideoCodec {
         }
     }
 }
+/// A sensor the host can show to the guest. Values reach the guest in Android's units and on
+/// Android's axes: the host converts them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum SensorKind {
+    Unspecified = 0,
+    /// Acceleration including gravity, in m/s^2: x, y, z.
+    Accelerometer = 1,
+    /// Rate of rotation, in rad/s: x, y, z.
+    Gyroscope = 2,
+    /// The device's orientation as a unit quaternion: x, y, z, w.
+    RotationVector = 3,
+    /// Illuminance, in lux.
+    Light = 4,
+}
+impl SensorKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SENSOR_KIND_UNSPECIFIED",
+            Self::Accelerometer => "SENSOR_KIND_ACCELEROMETER",
+            Self::Gyroscope => "SENSOR_KIND_GYROSCOPE",
+            Self::RotationVector => "SENSOR_KIND_ROTATION_VECTOR",
+            Self::Light => "SENSOR_KIND_LIGHT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SENSOR_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "SENSOR_KIND_ACCELEROMETER" => Some(Self::Accelerometer),
+            "SENSOR_KIND_GYROSCOPE" => Some(Self::Gyroscope),
+            "SENSOR_KIND_ROTATION_VECTOR" => Some(Self::RotationVector),
+            "SENSOR_KIND_LIGHT" => Some(Self::Light),
+            _ => None,
+        }
+    }
+}
 /// What can be done to an accessibility node, as the host asks it and as a node says it
 /// supports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -1943,6 +2859,73 @@ impl NodeAction {
             "NODE_ACTION_FOCUS" => Some(Self::Focus),
             "NODE_ACTION_ACCESSIBILITY_FOCUS" => Some(Self::AccessibilityFocus),
             "NODE_ACTION_SELECT" => Some(Self::Select),
+            _ => None,
+        }
+    }
+}
+/// The sample formats a stream can carry. Little-endian, interleaved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum AudioSampleFormat {
+    Unspecified = 0,
+    S16le = 1,
+}
+impl AudioSampleFormat {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "AUDIO_SAMPLE_FORMAT_UNSPECIFIED",
+            Self::S16le => "AUDIO_SAMPLE_FORMAT_S16LE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "AUDIO_SAMPLE_FORMAT_UNSPECIFIED" => Some(Self::Unspecified),
+            "AUDIO_SAMPLE_FORMAT_S16LE" => Some(Self::S16le),
+            _ => None,
+        }
+    }
+}
+/// What the guest asks of a stream.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum AudioOutputCommand {
+    Unspecified = 0,
+    /// Play what arrives.
+    Start = 1,
+    /// Hold what is queued, and play nothing until the next START.
+    Pause = 2,
+    /// Drop what is queued and not yet played.
+    Flush = 3,
+    /// Drop what is queued and let the device go idle until the next START.
+    Standby = 4,
+}
+impl AudioOutputCommand {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "AUDIO_OUTPUT_COMMAND_UNSPECIFIED",
+            Self::Start => "AUDIO_OUTPUT_COMMAND_START",
+            Self::Pause => "AUDIO_OUTPUT_COMMAND_PAUSE",
+            Self::Flush => "AUDIO_OUTPUT_COMMAND_FLUSH",
+            Self::Standby => "AUDIO_OUTPUT_COMMAND_STANDBY",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "AUDIO_OUTPUT_COMMAND_UNSPECIFIED" => Some(Self::Unspecified),
+            "AUDIO_OUTPUT_COMMAND_START" => Some(Self::Start),
+            "AUDIO_OUTPUT_COMMAND_PAUSE" => Some(Self::Pause),
+            "AUDIO_OUTPUT_COMMAND_FLUSH" => Some(Self::Flush),
+            "AUDIO_OUTPUT_COMMAND_STANDBY" => Some(Self::Standby),
             _ => None,
         }
     }
@@ -2028,6 +3011,42 @@ impl PrintOutcome {
             "PRINT_OUTCOME_PRINTED" => Some(Self::Printed),
             "PRINT_OUTCOME_CANCELED" => Some(Self::Canceled),
             "PRINT_OUTCOME_FAILED" => Some(Self::Failed),
+            _ => None,
+        }
+    }
+}
+/// Where a camera faces, as the host computer's enclosure reports it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum CameraFacing {
+    Unspecified = 0,
+    /// On the side of the screen, facing the user.
+    Front = 1,
+    /// On the back of the screen, facing away from the user.
+    Back = 2,
+    /// A camera the enclosure does not place: a USB camera, or one whose place is unknown.
+    External = 3,
+}
+impl CameraFacing {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "CAMERA_FACING_UNSPECIFIED",
+            Self::Front => "CAMERA_FACING_FRONT",
+            Self::Back => "CAMERA_FACING_BACK",
+            Self::External => "CAMERA_FACING_EXTERNAL",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "CAMERA_FACING_UNSPECIFIED" => Some(Self::Unspecified),
+            "CAMERA_FACING_FRONT" => Some(Self::Front),
+            "CAMERA_FACING_BACK" => Some(Self::Back),
+            "CAMERA_FACING_EXTERNAL" => Some(Self::External),
             _ => None,
         }
     }

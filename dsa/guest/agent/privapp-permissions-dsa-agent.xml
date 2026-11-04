@@ -24,9 +24,11 @@
         <permission name="android.permission.PACKAGE_USAGE_STATS" />
         <permission name="android.permission.READ_LOGS" />
         <permission name="android.permission.INSTALL_PACKAGES" />
+        <permission name="android.permission.DELETE_PACKAGES" />
         <permission name="android.permission.MANAGE_ROLE_HOLDERS" />
         <permission name="android.permission.MANAGE_NOTIFICATION_LISTENERS" />
         <permission name="android.permission.BIND_APPWIDGET" />
         <permission name="android.permission.SET_TIME" />
+        <permission name="android.permission.FORCE_STOP_PACKAGES" />
     </privapp-permissions>
 </permissions>

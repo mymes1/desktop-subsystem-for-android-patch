@@ -54,6 +54,22 @@ pub struct Task {
     /// The smallest size the guest gives the task, in its display pixels; 0 when unknown.
     pub min_width: u32,
     pub min_height: u32,
+    /// Whether the task's app asked for a light status bar (dark icons) or a dark one.
+    pub status_bar: StatusBarAppearance,
+    /// The status bar color the app set, as 0xAARRGGBB; 0 when none.
+    pub status_bar_color: u32,
+}
+
+/// What an app told the system about its status bar's icons.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum StatusBarAppearance {
+    /// The app did not say, or the agent could not read it.
+    #[default]
+    Unspecified,
+    /// Dark icons on a light status bar.
+    Light,
+    /// Light icons on a dark status bar.
+    Dark,
 }
 
 impl Task {
@@ -76,6 +92,29 @@ pub struct AppInfo {
     pub label: String,
     /// The app's launcher icon as a PNG image; empty when the guest gave none.
     pub icon_png: Vec<u8>,
+    /// The installed version, as Android's package manager reports it. Empty for an app that
+    /// only has a task, since a task says nothing of it.
+    pub version_name: String,
+    pub version_code: i64,
+    /// When the app was first installed and last updated, in milliseconds since the Unix
+    /// epoch; 0 when unknown.
+    pub first_install_time_ms: u64,
+    pub last_update_time_ms: u64,
+    /// Whether the app is part of the Android image, which cannot be uninstalled.
+    pub system_app: bool,
+    /// The storage the app takes, in bytes: its code, its data and its cache.
+    pub app_bytes: u64,
+    pub data_bytes: u64,
+    pub cache_bytes: u64,
+}
+
+impl AppInfo {
+    /// The storage the app takes in all, in bytes.
+    pub fn total_bytes(&self) -> u64 {
+        self.app_bytes
+            .saturating_add(self.data_bytes)
+            .saturating_add(self.cache_bytes)
+    }
 }
 
 /// A change to the guest's tasks.
@@ -142,6 +181,9 @@ pub enum TaskRequest {
     },
     /// The task's window is on a monitor of another scale: the task draws at this density.
     SetDensity { task_id: i32, density_dpi: u32 },
+    /// The task's window draws its title bar over the top `height` pixels of the task: the
+    /// task gets a top system bar inset of that height. 0 removes it.
+    SetCaption { task_id: i32, height: u32 },
     /// Whether any task window is shown: open and not minimized. Once none has been shown for
     /// a while the guest's screen goes off and the guest goes into Doze; it wakes as soon as
     /// a window is shown again.
@@ -173,6 +215,9 @@ impl TaskRequest {
                 task_id,
                 density_dpi,
             } => format!("draw task {task_id} at {density_dpi} dpi"),
+            TaskRequest::SetCaption { task_id, height } => {
+                format!("give task {task_id} a title bar inset of {height} pixels")
+            }
             TaskRequest::WindowsShown { shown: true } => "wake for a shown window".into(),
             TaskRequest::WindowsShown { shown: false } => {
                 "let the screen go off with no window shown".into()
@@ -205,6 +250,10 @@ pub fn coalesce(requests: Vec<TaskRequest>) -> Vec<TaskRequest> {
                 (
                     TaskRequest::SetDensity { task_id: a, .. },
                     TaskRequest::SetDensity { task_id: b, .. },
+                ) => a == b,
+                (
+                    TaskRequest::SetCaption { task_id: a, .. },
+                    TaskRequest::SetCaption { task_id: b, .. },
                 ) => a == b,
                 (TaskRequest::WindowsShown { .. }, TaskRequest::WindowsShown { .. }) => true,
                 _ => false,
@@ -428,6 +477,7 @@ impl TaskTable {
                         package_name: package.clone(),
                         label: package.clone(),
                         icon_png: Vec::new(),
+                        ..Default::default()
                     })
             })
             .collect();
@@ -627,6 +677,25 @@ mod tests {
     }
 
     #[test]
+    fn fr22_only_the_latest_caption_height_of_each_task_is_sent() {
+        let caption = |task_id, height| TaskRequest::SetCaption { task_id, height };
+        let requests = vec![
+            caption(1, 31),
+            resize(1, 500),
+            caption(2, 47),
+            caption(1, 62),
+        ];
+        assert_eq!(
+            coalesce(requests),
+            vec![resize(1, 500), caption(2, 47), caption(1, 62)]
+        );
+        assert_eq!(
+            caption(3, 62).describe(),
+            "give task 3 a title bar inset of 62 pixels"
+        );
+    }
+
+    #[test]
     fn fr10_only_the_latest_word_on_shown_windows_is_sent() {
         let hidden = TaskRequest::WindowsShown { shown: false };
         let shown = TaskRequest::WindowsShown { shown: true };
@@ -732,6 +801,7 @@ mod tests {
             package_name: package.into(),
             label: label.into(),
             icon_png: vec![0x89, b'P', b'N', b'G'],
+            ..Default::default()
         }
     }
 

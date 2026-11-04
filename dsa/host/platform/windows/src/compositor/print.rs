@@ -327,8 +327,8 @@ mod windows_print {
     use windows::Storage::StorageFile;
     use windows::Storage::Streams::InMemoryRandomAccessStream;
     use windows::Win32::Graphics::Imaging::{
-        CLSID_WICImagingFactory, GUID_WICPixelFormat32bppBGR, IWICBitmapSource,
-        IWICImagingFactory, IWICPalette, WICBitmapDitherTypeNone, WICBitmapPaletteTypeCustom,
+        CLSID_WICImagingFactory, GUID_WICPixelFormat32bppBGR, IWICBitmapSource, IWICImagingFactory,
+        IWICPalette, WICBitmapDitherTypeNone, WICBitmapPaletteTypeCustom,
         WICDecodeMetadataCacheOnDemand,
     };
     use windows::Win32::System::Com::{CoCreateInstance, IStream, CLSCTX_INPROC_SERVER};
@@ -343,9 +343,8 @@ mod windows_print {
         AbortDoc, EndDoc, EndPage, StartDocW, StartPage, DOCINFOW,
     };
     use windows_sys::Win32::UI::Controls::Dialogs::{
-        PrintDlgExW, PD_NOCURRENTPAGE, PD_NOSELECTION, PD_PAGENUMS, PD_RESULT_PRINT,
-        PD_RETURNDC, PD_USEDEVMODECOPIESANDCOLLATE, PRINTDLGEXW, PRINTPAGERANGE,
-        START_PAGE_GENERAL,
+        PrintDlgExW, PD_NOCURRENTPAGE, PD_NOSELECTION, PD_PAGENUMS, PD_RESULT_PRINT, PD_RETURNDC,
+        PD_USEDEVMODECOPIESANDCOLLATE, PRINTDLGEXW, PRINTPAGERANGE, START_PAGE_GENERAL,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DestroyWindow, GetSystemMetrics, SetForegroundWindow, ShowWindow,
@@ -540,10 +539,8 @@ mod windows_print {
             let mut dialog: PRINTDLGEXW = std::mem::zeroed();
             dialog.lStructSize = std::mem::size_of::<PRINTDLGEXW>() as u32;
             dialog.hwndOwner = owner.0;
-            dialog.Flags = PD_RETURNDC
-                | PD_NOSELECTION
-                | PD_NOCURRENTPAGE
-                | PD_USEDEVMODECOPIESANDCOLLATE;
+            dialog.Flags =
+                PD_RETURNDC | PD_NOSELECTION | PD_NOCURRENTPAGE | PD_USEDEVMODECOPIESANDCOLLATE;
             dialog.nPageRanges = 0;
             dialog.nMaxPageRanges = MAX_RANGES as u32;
             dialog.lpPageRanges = ranges.as_mut_ptr();
@@ -564,7 +561,9 @@ mod windows_print {
             };
             if result != 0 {
                 let code = result as u32;
-                return Err(format!("the print dialog did not open (error 0x{code:08x})"));
+                return Err(format!(
+                    "the print dialog did not open (error 0x{code:08x})"
+                ));
             }
             if dialog.dwResultAction != PD_RESULT_PRINT {
                 return Ok(None);
@@ -610,10 +609,10 @@ mod windows_print {
         // SAFETY: the dialog's device context, valid until `chosen` is dropped.
         let area = unsafe {
             Area {
-                width: GetDeviceCaps(dc, HORZRES),
-                height: GetDeviceCaps(dc, VERTRES),
-                dpi_x: GetDeviceCaps(dc, LOGPIXELSX),
-                dpi_y: GetDeviceCaps(dc, LOGPIXELSY),
+                width: GetDeviceCaps(dc, HORZRES as _),
+                height: GetDeviceCaps(dc, VERTRES as _),
+                dpi_x: GetDeviceCaps(dc, LOGPIXELSX as _),
+                dpi_y: GetDeviceCaps(dc, LOGPIXELSY as _),
             }
         };
         let name = wide(&job.title());

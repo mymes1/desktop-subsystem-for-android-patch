@@ -115,6 +115,12 @@ use crate::accessibility::{
 };
 use crate::adb_bridge::{AdbBridge, BridgeStream, GuestAdb};
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::apps::UninstallOutcome;
+use crate::arm_translation::GuestArmTranslation;
+use crate::background::{
+    self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundHub, BackgroundWatch,
+    MediaCommand, MediaSession,
+};
 use crate::clipboard;
 use crate::clock_trace::ClockTrace;
 use crate::files::{self, FileAction, FileTransfer};
@@ -126,12 +132,15 @@ use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{PointerAction, PointerEvent};
 use crate::keys::KeyEvent;
 use crate::links::{self, LinkGate};
-use crate::memory::{GuestMemory, GuestMemoryReport};
+use crate::location::{LocationEvent, LocationHub, Wanted};
+use crate::memory::{GrowthAction, GuestMemory, GuestMemoryReport, GuestPressure, MemoryGrowth};
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent, RateLimit};
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
-use crate::tasks::{AppInfo, Bounds, Task, TaskEvent, TaskRequest, TaskTable, TaskWatch};
+use crate::tasks::{
+    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskTable, TaskWatch,
+};
 use crate::widgets::{
     self, Placement, Widget, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
 };
@@ -376,6 +385,23 @@ pub trait GuestLauncher: Send + 'static {
     fn thaw(&mut self) -> Result<(), String> {
         Ok(())
     }
+
+    /// The memory the running guest started with and may grow to, in MiB, when the launcher
+    /// can change it while the guest runs; `None` when its memory is fixed.
+    fn memory_range_mb(&self) -> Option<(u64, u64)> {
+        None
+    }
+
+    /// Sets the running guest's memory to `mb` MiB: more is added to it, less is taken back.
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
+        Err(format!("this kind of guest cannot be resized to {mb} MiB"))
+    }
+
+    /// Growing the guest's memory did not work, for the reason given. The launcher starts the
+    /// next guest at a fixed size instead.
+    fn memory_growth_failed(&mut self, why: &str) {
+        let _ = why;
+    }
 }
 
 /// Checks a new control channel connection before the session trusts it.
@@ -524,6 +550,8 @@ enum Command {
     ShareClipboard(bool),
     /// The user did something with a notification on the host.
     Notification(NotificationAction, Sender<Result<(), SessionError>>),
+    /// The user acted on an app that runs in the background, or pressed a media key.
+    Background(BackgroundRequest, Sender<Result<(), SessionError>>),
     /// The user pressed in a widget's window: a guest in Doze wakes, as the press may open
     /// an app.
     WidgetPressed(Sender<()>),
@@ -564,12 +592,19 @@ struct Shared {
     print_watchers: Mutex<Vec<Sender<PrintEvent>>>,
     /// The guest's print jobs on their way, and those a watcher has.
     prints: Mutex<print::Assembler>,
+    /// The apps that run in the background, their media sessions, and who watches them.
+    background: Mutex<BackgroundHub>,
     /// The install under way, by its transfer ID, with who waits for the agent's word on it.
     installs: Mutex<HashMap<u32, Sender<InstallEvent>>>,
     /// The transfer ID of the last install.
     last_install: AtomicU32,
     /// Held for the length of an install, so a second one waits for the first.
     install_turn: Mutex<()>,
+    /// Who waits for the control daemon's word on ARM translation, while one exchange is under
+    /// way.
+    arm_translation: Mutex<Option<Sender<control::ArmTranslationState>>>,
+    /// Held for the length of an exchange about ARM translation, so they go one at a time.
+    arm_translation_turn: Mutex<()>,
     /// The widgets the agent hosts and who is watching them.
     widgets: Mutex<WidgetHub>,
     /// The requests about widgets waiting for the agent's answer, by request ID.
@@ -580,10 +615,18 @@ struct Shared {
     package_queries: Mutex<HashMap<u32, Sender<Option<InstalledPackage>>>>,
     /// The ID of the last question about an installed package.
     last_package_query: AtomicU32,
+    /// The uninstalls waiting for the agent's answer, by request ID.
+    uninstalls: Mutex<HashMap<u32, Sender<UninstallOutcome>>>,
+    /// The ID of the last uninstall.
+    last_uninstall: AtomicU32,
+    /// Who waits for the agent's next list of installed apps.
+    app_refreshes: Mutex<Vec<Sender<()>>>,
     /// Who watches each task's accessibility tree.
     accessibility: Mutex<AccessibilityHub>,
     /// Who hears of the guest's power hints.
     power_hint_watchers: Mutex<Vec<Sender<GuestPower>>>,
+    /// Whether the guest wants the host's location, and who hears of it.
+    location: Mutex<LocationHub>,
     /// Whether the user's developer mode is on, which each agent that connects is told.
     developer_mode: AtomicBool,
     /// Who reads the guest's log, its recent records, and the dumps and diagnostics under way.
@@ -610,6 +653,13 @@ pub enum GuestPower {
     /// The host passed the user's input (a press, a release, a scroll or a key) to the guest.
     /// The host hears of it before Android does, so its boost starts here.
     HostInput,
+}
+
+/// What the user asks of an app that runs in the background.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackgroundRequest {
+    App(String, BackgroundCommand),
+    Media(String, MediaCommand),
 }
 
 /// What the agent answers about widgets.
@@ -743,6 +793,19 @@ impl Shared {
         self.publish_task(event);
     }
 
+    /// Tells whoever waits for a fresh list of installed apps that it arrived.
+    fn apps_refreshed(&self) {
+        let waiting: Vec<Sender<()>> = self
+            .app_refreshes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .drain(..)
+            .collect();
+        for waiter in waiting {
+            let _ = waiter.send(());
+        }
+    }
+
     fn set_sender(&self, sender: Option<Box<dyn FrameSender>>) {
         *self.sender.lock().unwrap_or_else(|e| e.into_inner()) = sender;
     }
@@ -762,6 +825,20 @@ impl Shared {
 
     /// Hands the agent's word on an install to whoever sends that APK. Word on an install
     /// that is not under way is dropped and logged.
+    /// Hands the control daemon's word on ARM translation to whoever waits for it.
+    fn arm_translation_event(&self, state: control::ArmTranslationState) {
+        let waiting = self
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        match waiting.as_ref() {
+            Some(waiting) => {
+                let _ = waiting.send(state);
+            }
+            None => eprintln!("arm translation: dropped the guest's word, which nobody waits for"),
+        }
+    }
+
     fn install_event(&self, transfer_id: u32, event: InstallEvent) {
         let installs = self.installs.lock().unwrap_or_else(|e| e.into_inner());
         match installs.get(&transfer_id) {
@@ -874,6 +951,14 @@ impl Shared {
             .retain(|watcher| watcher.send(PrintEvent::Withdrawn { job_id }).is_ok());
     }
 
+    /// What the guest wants of the host's location now; every watcher hears a change.
+    fn set_location(&self, wanted: Wanted) {
+        self.location
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .set(wanted);
+    }
+
     fn publish_notification(&self, event: NotificationEvent) {
         self.notification_watchers
             .lock()
@@ -932,16 +1017,23 @@ impl Session {
             notification_watchers: Mutex::new(Vec::new()),
             print_watchers: Mutex::new(Vec::new()),
             prints: Mutex::new(print::Assembler::new()),
+            background: Mutex::new(BackgroundHub::default()),
             installs: Mutex::new(HashMap::new()),
             last_install: AtomicU32::new(0),
             install_turn: Mutex::new(()),
+            arm_translation: Mutex::new(None),
+            arm_translation_turn: Mutex::new(()),
             widgets: Mutex::new(WidgetHub::default()),
             widget_requests: Mutex::new(HashMap::new()),
             last_widget_request: AtomicU32::new(0),
             package_queries: Mutex::new(HashMap::new()),
             last_package_query: AtomicU32::new(0),
+            uninstalls: Mutex::new(HashMap::new()),
+            last_uninstall: AtomicU32::new(0),
+            app_refreshes: Mutex::new(Vec::new()),
             accessibility: Mutex::new(AccessibilityHub::default()),
             power_hint_watchers: Mutex::new(Vec::new()),
+            location: Mutex::new(LocationHub::default()),
             developer_mode: AtomicBool::new(false),
             logs: Mutex::new(LogHub::default()),
             boot_secret: Mutex::new(None),
@@ -969,6 +1061,7 @@ impl Session {
             power_pending: false,
             host_memory_low: false,
             host_memory_pending: false,
+            memory_growth: None,
             started_at: Instant::now(),
             boot_completed_at: None,
             agent_connected: false,
@@ -1341,6 +1434,187 @@ impl Session {
         }
     }
 
+    /// Sends an ARM translation package's system image, `size` bytes read from `content` whose
+    /// SHA-256 is `sha256`, to the guest's control daemon, which keeps it on the user's disk
+    /// for the next boot. Returns where translation stands once the image is in place, or why
+    /// it is not. Needs a running guest. The image goes in chunks of [`apk::CHUNK_BYTES`],
+    /// never more than [`apk::CHUNKS_IN_FLIGHT`] ahead of what the daemon says it has written.
+    pub fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<GuestArmTranslation, SessionError> {
+        let _turn = self
+            .shared
+            .arm_translation_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let state = self.state();
+        if !matches!(
+            state,
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) {
+            return Err(SessionError::NotActive(state));
+        }
+        let transfer_id = self
+            .shared
+            .last_install
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+        let (tx, events) = mpsc::channel();
+        *self
+            .shared
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        eprintln!(
+            "arm translation: sending a {size} byte image to Android as transfer {transfer_id}"
+        );
+        let result = self.send_arm_translation(transfer_id, size, sha256, content, &events);
+        *self
+            .shared
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+        match &result {
+            Ok(guest) => eprintln!(
+                "arm translation: the image is in place; this boot's ABIs are {}",
+                guest.abilist
+            ),
+            Err(why) => eprintln!("arm translation: the image did not reach Android: {why}"),
+        }
+        result
+    }
+
+    fn send_arm_translation(
+        &self,
+        transfer_id: u32,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+        events: &Receiver<control::ArmTranslationState>,
+    ) -> Result<GuestArmTranslation, SessionError> {
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::ArmTranslationInstall(
+                control::ArmTranslationInstall {
+                    transfer_id,
+                    size,
+                    sha256: sha256.to_vec(),
+                },
+            )),
+        }))?;
+        let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;
+        let mut sent = 0u64;
+        let mut written = 0u64;
+        let mut waited = Duration::ZERO;
+        loop {
+            while sent < size && sent < written + window {
+                let length = (size - sent).min(apk::CHUNK_BYTES as u64) as usize;
+                let mut data = vec![0u8; length];
+                if let Err(error) = content.read_exact(&mut data) {
+                    return Err(SessionError::InstallRefused(format!(
+                        "the ARM translation image did not arrive whole: {error}"
+                    )));
+                }
+                self.send(dsa_protocol::encode(&control::Envelope {
+                    body: Some(Body::ArmTranslationChunk(control::ArmTranslationChunk {
+                        transfer_id,
+                        offset: sent,
+                        data,
+                    })),
+                }))?;
+                sent += length as u64;
+            }
+            match events.recv_timeout(INSTALL_POLL) {
+                Ok(state) if state.transfer_id == transfer_id => {
+                    if !state.error.is_empty() {
+                        return Err(SessionError::InstallRefused(state.error));
+                    }
+                    if state.done {
+                        return Ok(guest_arm_translation(state));
+                    }
+                    written = written.max(state.received);
+                    waited = Duration::ZERO;
+                }
+                Ok(_) => {}
+                Err(RecvTimeoutError::Timeout) => {
+                    let state = self.state();
+                    if !matches!(
+                        state,
+                        SessionState::Active | SessionState::Dozing | SessionState::Frozen
+                    ) {
+                        return Err(SessionError::NotActive(state));
+                    }
+                    waited += INSTALL_POLL;
+                    if waited >= CHUNK_TIMEOUT {
+                        return Err(SessionError::InstallRefused(format!(
+                            "Android has not answered about the ARM translation image for {} s; \
+                             it may be busy, try again",
+                            CHUNK_TIMEOUT.as_secs()
+                        )));
+                    }
+                }
+                Err(RecvTimeoutError::Disconnected) => return Err(SessionError::Gone),
+            }
+        }
+    }
+
+    /// Asks the guest's control daemon to remove the ARM translation package's image.
+    pub fn remove_arm_translation(&self) -> Result<GuestArmTranslation, SessionError> {
+        let state = self.arm_translation_exchange(Body::ArmTranslationRemove(
+            control::ArmTranslationRemove {},
+        ))?;
+        if state.error.is_empty() {
+            Ok(guest_arm_translation(state))
+        } else {
+            Err(SessionError::InstallRefused(state.error))
+        }
+    }
+
+    /// Asks the guest's control daemon where ARM translation stands. Needs a guest that is
+    /// active or dozing: a frozen one is not thawed for it.
+    pub fn arm_translation(&self) -> Result<GuestArmTranslation, SessionError> {
+        let state = self.state();
+        if !matches!(state, SessionState::Active | SessionState::Dozing) {
+            return Err(SessionError::NotActive(state));
+        }
+        self.arm_translation_exchange(Body::ArmTranslationQuery(control::ArmTranslationQuery {}))
+            .map(guest_arm_translation)
+    }
+
+    /// Sends `body` to the control daemon and waits for its ArmTranslationState.
+    fn arm_translation_exchange(
+        &self,
+        body: Body,
+    ) -> Result<control::ArmTranslationState, SessionError> {
+        let _turn = self
+            .shared
+            .arm_translation_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let (tx, events) = mpsc::channel();
+        *self
+            .shared
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        let sent = self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(body),
+        }));
+        let answer = sent.and_then(|()| {
+            events.recv_timeout(ARM_TRANSLATION_WAIT).map_err(|_| {
+                SessionError::NoAnswer("Android did not say where ARM translation stands".into())
+            })
+        });
+        *self
+            .shared
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+        answer
+    }
+
     /// Tells the agent an install will not be finished, and waits a moment for it to say it
     /// has dropped it, so the next install does not start beside it.
     fn cancel_install(&self, transfer_id: u32, events: &Receiver<InstallEvent>) {
@@ -1504,6 +1778,30 @@ impl Session {
         }))
     }
 
+    /// Whether the guest wants the host's location, from what it wants now on. The watch
+    /// lasts across restarts of the guest, which wants no location while it is stopped.
+    pub fn watch_location(&self) -> Receiver<Wanted> {
+        self.shared
+            .location
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .watch()
+    }
+
+    /// Gives the guest what the host's location service reported, while the guest wants a
+    /// location. What comes after it stopped wanting one is dropped.
+    pub fn host_location(&self, event: LocationEvent) {
+        let wanted = self
+            .shared
+            .location
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .wanted();
+        if wanted.active {
+            send_quietly(&self.shared, &self.commands, event.to_control());
+        }
+    }
+
     /// The guest's notifications from now on: each one posted or changed, and each one gone.
     /// The watch lasts across restarts of the guest.
     pub fn watch_notifications(&self) -> Receiver<NotificationEvent> {
@@ -1523,6 +1821,37 @@ impl Session {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.commands
             .send(Command::Notification(action, reply_tx))
+            .map_err(|_| SessionError::Gone)?;
+        reply_rx.recv().map_err(|_| SessionError::Gone)?
+    }
+
+    /// The apps that run in the background and the active media sessions now, and every
+    /// change to them from now on. The watch lasts across restarts of the guest.
+    pub fn watch_background(&self) -> BackgroundWatch {
+        self.shared
+            .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .watch()
+    }
+
+    /// The apps that run in the background and the active media sessions now.
+    pub fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+        let hub = self
+            .shared
+            .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        (hub.apps(), hub.media())
+    }
+
+    /// Passes what the user did with an app that runs in the background to the guest.
+    /// Opening it wakes a guest in Doze or frozen first; any other command thaws a frozen one
+    /// without turning its screen on. Needs a running guest.
+    pub fn background_action(&self, request: BackgroundRequest) -> Result<(), SessionError> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.commands
+            .send(Command::Background(request, reply_tx))
             .map_err(|_| SessionError::Gone)?;
         reply_rx.recv().map_err(|_| SessionError::Gone)?
     }
@@ -1758,6 +2087,9 @@ impl Session {
                 task_id,
                 density_dpi,
             }),
+            TaskRequest::SetCaption { task_id, height } => {
+                Body::SetTaskCaption(control::SetTaskCaption { task_id, height })
+            }
         };
         self.send(dsa_protocol::encode(&control::Envelope {
             body: Some(body),
@@ -1850,6 +2182,79 @@ impl Session {
             });
         self.shared
             .package_queries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&request_id);
+        result
+    }
+
+    /// Asks the agent to read the installed apps again, sizes included, and waits up to
+    /// `timeout` for the fresh list, which then replaces the one the watchers have. Needs an
+    /// active session.
+    pub fn refresh_apps(&self, timeout: Duration) -> Result<(), SessionError> {
+        let (tx, answer) = mpsc::channel();
+        self.shared
+            .app_refreshes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(tx);
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::RefreshApps(control::RefreshApps {})),
+        }))?;
+        answer.recv_timeout(timeout).map_err(|_| {
+            SessionError::NoAnswer(format!(
+                "Android did not list its apps within {} seconds",
+                timeout.as_secs()
+            ))
+        })
+    }
+
+    /// Opens Android's own settings of `package` (its permissions, storage and
+    /// notifications) as a task in its own window, or the list of every app when it is
+    /// `None`. Needs an active session.
+    pub fn open_app_settings(&self, package: Option<&str>) -> Result<(), SessionError> {
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::OpenAppSettings(control::OpenAppSettings {
+                package_name: package.unwrap_or_default().to_string(),
+            })),
+        }))
+    }
+
+    /// Uninstalls the user app `package`, waiting up to `timeout` for Android to say how it
+    /// went. Needs an active session.
+    pub fn uninstall_app(
+        &self,
+        package: &str,
+        timeout: Duration,
+    ) -> Result<UninstallOutcome, SessionError> {
+        let request_id = self
+            .shared
+            .last_uninstall
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+        let (tx, answer) = mpsc::channel();
+        self.shared
+            .uninstalls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(request_id, tx);
+        let result = self
+            .send(dsa_protocol::encode(&control::Envelope {
+                body: Some(Body::UninstallApp(control::UninstallApp {
+                    request_id,
+                    package_name: package.to_string(),
+                })),
+            }))
+            .and_then(|()| {
+                answer.recv_timeout(timeout).map_err(|_| {
+                    SessionError::NoAnswer(format!(
+                        "Android did not say within {} seconds whether {package} was uninstalled",
+                        timeout.as_secs()
+                    ))
+                })
+            });
+        self.shared
+            .uninstalls
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&request_id);
@@ -2274,6 +2679,18 @@ fn send_quietly(shared: &Shared, commands: &Sender<Command>, body: Body) {
 /// How often an active session checks for requests while it waits on the channel.
 const POLL: Duration = Duration::from_millis(20);
 
+/// How long a question about ARM translation waits for the guest's control daemon.
+const ARM_TRANSLATION_WAIT: Duration = Duration::from_secs(5);
+
+/// What the guest's control daemon says of ARM translation, as the host keeps it.
+fn guest_arm_translation(state: control::ArmTranslationState) -> GuestArmTranslation {
+    GuestArmTranslation {
+        installed: state.installed,
+        active: state.active,
+        abilist: state.abilist,
+    }
+}
+
 /// How often an install looks at the session while it waits for the agent.
 const INSTALL_POLL: Duration = Duration::from_millis(500);
 
@@ -2331,6 +2748,8 @@ struct Worker {
     host_memory_low: bool,
     /// Set when that changed while the guest was frozen, so it is told after the thaw.
     host_memory_pending: bool,
+    /// Grows and shrinks the guest's memory while it runs, when the launcher can.
+    memory_growth: Option<MemoryGrowth>,
     /// When the guest was started.
     started_at: Instant,
     /// When the guest said it had finished booting.
@@ -2400,7 +2819,8 @@ impl Worker {
                         Ok(Command::Stop) => {}
                         Ok(Command::Send(_, reply))
                         | Ok(Command::Freeze(reply))
-                        | Ok(Command::Notification(_, reply)) => {
+                        | Ok(Command::Notification(_, reply))
+                        | Ok(Command::Background(_, reply)) => {
                             let _ = reply.send(Err(SessionError::NotActive(SessionState::Stopped)));
                         }
                         Ok(Command::WindowsShown(shown)) => self.set_shown(shown),
@@ -2428,7 +2848,8 @@ impl Worker {
                         Ok(Command::Start) => {}
                         Ok(Command::Send(_, reply))
                         | Ok(Command::Freeze(reply))
-                        | Ok(Command::Notification(_, reply)) => {
+                        | Ok(Command::Notification(_, reply))
+                        | Ok(Command::Background(_, reply)) => {
                             let _ =
                                 reply.send(Err(SessionError::NotActive(SessionState::Stopping)));
                         }
@@ -2524,6 +2945,10 @@ impl Worker {
             }
             Command::Notification(action, reply) => {
                 let _ = reply.send(self.act_on_notification(action));
+                self.running()
+            }
+            Command::Background(request, reply) => {
+                let _ = reply.send(self.act_on_background(request));
                 self.running()
             }
             Command::WidgetPressed(reply) => {
@@ -2901,6 +3326,107 @@ impl Worker {
         Ok(())
     }
 
+    fn publish_background(&mut self, event: BackgroundEvent) {
+        self.shared
+            .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .apply(event);
+    }
+
+    /// Passes what the user did with an app that runs in the background to the guest.
+    ///
+    /// Opening it is a click: the guest wakes, as for a notification. Any other command
+    /// leaves the screen as it is, since playback and a stop need no screen; a frozen guest
+    /// is thawed for it, because a frozen guest reads nothing. A package the guest does not
+    /// run in the background is ignored, except for a stop, which the guest carries out for
+    /// any app.
+    fn act_on_background(&mut self, request: BackgroundRequest) -> Result<(), SessionError> {
+        let state = self.state();
+        if !matches!(
+            state,
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) || !self.agent_connected
+        {
+            return Err(SessionError::NotActive(state));
+        }
+        let body = match request {
+            BackgroundRequest::App(package_name, command) => {
+                let known = self
+                    .shared
+                    .background
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .has_app(&package_name);
+                let (command, action) = match command {
+                    BackgroundCommand::Open => (control::BackgroundAppCommand::Open, 0),
+                    BackgroundCommand::Action(index) => (
+                        control::BackgroundAppCommand::Action,
+                        i32::try_from(index).unwrap_or(i32::MAX),
+                    ),
+                    BackgroundCommand::Stop => (control::BackgroundAppCommand::Stop, 0),
+                };
+                if !known && command != control::BackgroundAppCommand::Stop {
+                    eprintln!(
+                        "background apps: the host acted on an app that does not run in the                          background; ignored"
+                    );
+                    return Ok(());
+                }
+                if command == control::BackgroundAppCommand::Open {
+                    // The app opens on a screen that is on, as for a notification's click.
+                    self.hidden_since = Instant::now();
+                    self.wake();
+                } else {
+                    self.thaw_for_work();
+                }
+                Body::BackgroundAppAction(control::BackgroundAppAction {
+                    package_name,
+                    command: command as i32,
+                    action,
+                })
+            }
+            BackgroundRequest::Media(package_name, command) => {
+                let known = self
+                    .shared
+                    .background
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .has_media(&package_name);
+                if !known {
+                    eprintln!(
+                        "background apps: a media key for a package with no media session; ignored"
+                    );
+                    return Ok(());
+                }
+                self.thaw_for_work();
+                Body::MediaControl(control::MediaControl {
+                    package_name,
+                    command: command.to_control() as i32,
+                })
+            }
+        };
+        if !self.running() {
+            return Err(SessionError::NotActive(self.state()));
+        }
+        self.send_body(body);
+        Ok(())
+    }
+
+    /// Thaws a frozen guest so it reads what comes next, without turning its screen on: the
+    /// guest stays in Doze, and is frozen again by the usual rules.
+    fn thaw_for_work(&mut self) {
+        if self.state() != SessionState::Frozen {
+            return;
+        }
+        if !self.resume_frozen() {
+            return;
+        }
+        self.dozing_since = Some(Instant::now());
+        self.shared.set(SessionState::Dozing, None);
+        self.send_clock();
+        self.send_dismissals();
+    }
+
     /// Sends the dismissals that waited for the guest to be thawed.
     fn send_dismissals(&mut self) {
         for key in std::mem::take(&mut self.dismissals) {
@@ -3070,26 +3596,8 @@ impl Worker {
     /// Thaws a frozen guest, turns its screen on, and makes the session `Active`. The session
     /// does not wait for the guest to leave Doze: the screen coming on is what ends it.
     fn wake(&mut self) {
-        if self.state() == SessionState::Frozen {
-            if let Err(why) = self.launcher.thaw() {
-                self.stop(StopReason::GuestExited {
-                    why: format!("the frozen guest could not be resumed: {why}"),
-                    diagnostics: None,
-                });
-                return;
-            }
-            if let Some(frozen_at) = self.frozen_at.take() {
-                self.discount_frozen_time(frozen_at.elapsed());
-            }
-            if std::mem::take(&mut self.power_pending) {
-                if let Some(power) = self.power {
-                    self.send_body(Body::PowerState(power.to_control()));
-                }
-            }
-            if std::mem::take(&mut self.host_memory_pending) {
-                let low = self.host_memory_low;
-                self.send_body(Body::HostMemory(control::HostMemory { low }));
-            }
+        if self.state() == SessionState::Frozen && !self.resume_frozen() {
+            return;
         }
         if !self.screen_on {
             self.screen_on = true;
@@ -3104,6 +3612,31 @@ impl Worker {
         // A guest frozen while the host slept has its clock set now.
         self.send_clock();
         self.send_dismissals();
+    }
+
+    /// Resumes a frozen guest and sends it what waited for it. False when it could not be
+    /// resumed, and the session stopped.
+    fn resume_frozen(&mut self) -> bool {
+        if let Err(why) = self.launcher.thaw() {
+            self.stop(StopReason::GuestExited {
+                why: format!("the frozen guest could not be resumed: {why}"),
+                diagnostics: None,
+            });
+            return false;
+        }
+        if let Some(frozen_at) = self.frozen_at.take() {
+            self.discount_frozen_time(frozen_at.elapsed());
+        }
+        if std::mem::take(&mut self.power_pending) {
+            if let Some(power) = self.power {
+                self.send_body(Body::PowerState(power.to_control()));
+            }
+        }
+        if std::mem::take(&mut self.host_memory_pending) {
+            let low = self.host_memory_low;
+            self.send_body(Body::HostMemory(control::HostMemory { low }));
+        }
+        true
     }
 
     /// Moves what the boot timers count from past a freeze of length `frozen`, so a thawed guest
@@ -3210,6 +3743,37 @@ impl Worker {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// The guest's control daemon says how much memory it has: the VM grows when the guest is
+    /// short and gives memory back once it is not (see [`MemoryGrowth`]). A launcher that
+    /// cannot resize stops the growing, and the guest keeps the size it has.
+    fn guest_memory_pressure(&mut self, pressure: GuestPressure) {
+        let Some(growth) = self.memory_growth.as_mut() else {
+            return;
+        };
+        let before = growth.current_mb();
+        match growth.on_pressure(&pressure, Instant::now()) {
+            None => {}
+            Some(GrowthAction::GiveUp(why)) => {
+                eprintln!("memory: Android's memory no longer grows: {why}");
+                self.launcher.memory_growth_failed(&why);
+            }
+            Some(GrowthAction::Resize(mb)) => match self.launcher.set_memory_mb(mb) {
+                Ok(()) => eprintln!(
+                    "memory: Android's memory {} from {before} to {mb} MiB ({} MiB available, \
+                     {:.1}% stalled)",
+                    if mb > before { "grows" } else { "shrinks" },
+                    pressure.mem_available_kb / 1024,
+                    pressure.stall_percent
+                ),
+                Err(why) => {
+                    growth.refused(before);
+                    eprintln!("memory: Android's memory could not be set to {mb} MiB: {why}");
+                    self.launcher.memory_growth_failed(&why);
+                }
+            },
         }
     }
 
@@ -3504,6 +4068,10 @@ impl Worker {
         // The guest renders while it boots, before the agent connects, and the compositor
         // binds its sockets to this ID, so it is known from the moment the guest runs.
         self.shared.set_vm_id(self.launcher.vm_id());
+        self.memory_growth = self.launcher.memory_range_mb().map(|(base, max)| {
+            eprintln!("memory: Android starts with {base} MiB and may grow to {max} MiB");
+            MemoryGrowth::new(base, max)
+        });
         let started = Instant::now();
         self.started_at = started;
         self.next_prerequisite_check = started + PREREQUISITE_POLL;
@@ -3592,7 +4160,10 @@ impl Worker {
     fn handle_starting(&mut self, command: Command) -> bool {
         match command {
             Command::Start => true,
-            Command::Send(_, reply) | Command::Freeze(reply) | Command::Notification(_, reply) => {
+            Command::Send(_, reply)
+            | Command::Freeze(reply)
+            | Command::Notification(_, reply)
+            | Command::Background(_, reply) => {
                 let _ = reply.send(Err(SessionError::NotActive(SessionState::Starting)));
                 true
             }
@@ -3751,6 +4322,11 @@ impl Worker {
             }
             Some(Body::TaskUpdated(update)) => {
                 let bounds = update.bounds.unwrap_or_default();
+                let status_bar = match update.status_bar_appearance() {
+                    control::StatusBarAppearance::Light => StatusBarAppearance::Light,
+                    control::StatusBarAppearance::Dark => StatusBarAppearance::Dark,
+                    control::StatusBarAppearance::Unspecified => StatusBarAppearance::Unspecified,
+                };
                 self.shared.publish_task(TaskEvent::Updated(Task {
                     task_id: update.task_id,
                     bounds: Bounds {
@@ -3767,6 +4343,8 @@ impl Worker {
                     max_height: update.max_height,
                     min_width: update.min_width,
                     min_height: update.min_height,
+                    status_bar,
+                    status_bar_color: update.status_bar_color,
                 }));
             }
             Some(Body::TaskRemoved(removed)) => {
@@ -3785,6 +4363,7 @@ impl Worker {
                     package_name: app.package_name,
                     label: app.label,
                     icon_png: app.icon_png,
+                    ..Default::default()
                 }));
             }
             Some(Body::InstalledApp(app)) => {
@@ -3792,10 +4371,38 @@ impl Worker {
                     package_name: app.package_name,
                     label: app.label,
                     icon_png: app.icon_png,
+                    version_name: app.version_name,
+                    version_code: app.version_code,
+                    first_install_time_ms: app.first_install_time_ms,
+                    last_update_time_ms: app.last_update_time_ms,
+                    system_app: app.system_app,
+                    app_bytes: app.app_bytes,
+                    data_bytes: app.data_bytes,
+                    cache_bytes: app.cache_bytes,
                 });
             }
             Some(Body::InstalledApps(apps)) => {
                 self.shared.publish_installed(&apps.package_names);
+                self.shared.apps_refreshed();
+            }
+            Some(Body::UninstallResult(result)) => {
+                let outcome = UninstallOutcome::from_control(&result);
+                let waiting = self
+                    .shared
+                    .uninstalls
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&result.request_id);
+                match waiting {
+                    Some(waiting) => {
+                        let _ = waiting.send(outcome);
+                    }
+                    None => eprintln!(
+                        "apps: dropped the agent's answer to uninstall request {}, which nobody \
+                         waits for",
+                        result.request_id
+                    ),
+                }
             }
             Some(Body::ImeCursor(cursor)) => {
                 let rect = cursor.cursor.unwrap_or_default();
@@ -3813,6 +4420,9 @@ impl Worker {
                 let memory = GuestMemory::from_control(memory);
                 self.shared.set_guest_memory(Some((memory, Instant::now())));
             }
+            Some(Body::GuestMemoryPressure(pressure)) => {
+                self.guest_memory_pressure(GuestPressure::from_control(&pressure))
+            }
             Some(Body::DeviceIdle(idle)) => self.guest_idle(idle.idle),
             Some(Body::GuestSleepReady(_)) => self.guest_sleep_ready(),
             Some(Body::OpenLink(link)) => self.guest_link(link.url),
@@ -3822,10 +4432,29 @@ impl Worker {
             Some(Body::NotificationRemoved(removed)) => {
                 self.guest_notification_removed(removed.key)
             }
+            Some(Body::BackgroundApp(app)) => match background::checked_app(app) {
+                Ok(app) => self.publish_background(BackgroundEvent::App(app)),
+                Err(why) => eprintln!("background apps: dropped one from the guest: {why}"),
+            },
+            Some(Body::BackgroundAppGone(gone)) => {
+                self.publish_background(BackgroundEvent::AppRemoved {
+                    package_name: gone.package_name,
+                })
+            }
+            Some(Body::MediaSession(session)) => match background::checked_media(session) {
+                Ok(session) => self.publish_background(BackgroundEvent::Media(session)),
+                Err(why) => eprintln!("background apps: dropped a media session: {why}"),
+            },
+            Some(Body::MediaSessionGone(gone)) => {
+                self.publish_background(BackgroundEvent::MediaRemoved {
+                    package_name: gone.package_name,
+                })
+            }
             Some(Body::InstallProgress(progress)) => self.shared.install_event(
                 progress.transfer_id,
                 InstallEvent::Progress(progress.received),
             ),
+            Some(Body::ArmTranslationState(state)) => self.shared.arm_translation_event(state),
             Some(Body::InstallResult(result)) => self.shared.install_event(
                 result.transfer_id,
                 InstallEvent::Done(InstallOutcome::from_control(&result)),
@@ -3901,6 +4530,9 @@ impl Worker {
                 Ok(hint) => self.shared.publish_power(GuestPower::Hint(hint)),
                 Err(why) => eprintln!("power: dropped a hint from the guest: {why}"),
             },
+            Some(Body::LocationRequest(request)) => {
+                self.shared.set_location(Wanted::from_control(&request))
+            }
             Some(Body::ScreenState(_))
             | Some(Body::PowerState(_))
             | Some(Body::HostMemory(_))
@@ -3909,6 +4541,7 @@ impl Worker {
             | Some(Body::LaunchApp(_))
             | Some(Body::ResizeTask(_))
             | Some(Body::SetTaskDensity(_))
+            | Some(Body::SetTaskCaption(_))
             | Some(Body::PointerEvent(_))
             | Some(Body::KeyEvent(_))
             | Some(Body::ImeComposition(_))
@@ -3918,13 +4551,22 @@ impl Worker {
             | Some(Body::FileChunk(_))
             | Some(Body::ClipboardSharing(_))
             | Some(Body::DeveloperMode(_))
+            | Some(Body::ArmTranslationInstall(_))
+            | Some(Body::ArmTranslationChunk(_))
+            | Some(Body::ArmTranslationRemove(_))
+            | Some(Body::ArmTranslationQuery(_))
             | Some(Body::NotificationClicked(_))
             | Some(Body::NotificationDismissed(_))
+            | Some(Body::BackgroundAppAction(_))
+            | Some(Body::MediaControl(_))
             | Some(Body::InstallApk(_))
             | Some(Body::ApkChunk(_))
             | Some(Body::CancelInstall(_))
             | Some(Body::PrintJobResult(_))
             | Some(Body::QueryPackage(_))
+            | Some(Body::UninstallApp(_))
+            | Some(Body::RefreshApps(_))
+            | Some(Body::OpenAppSettings(_))
             | Some(Body::RequestGuestMemory(_))
             | Some(Body::StopApp(_))
             | Some(Body::ListWidgetProviders(_))
@@ -3938,6 +4580,12 @@ impl Worker {
             | Some(Body::LogDump(_))
             | Some(Body::CollectDiagnostics(_))
             | Some(Body::ClockProbe(_))
+            | Some(Body::AudioOutputOpen(_))
+            | Some(Body::AudioOutputReady(_))
+            | Some(Body::AudioPcm(_))
+            | Some(Body::AudioOutputControl(_))
+            | Some(Body::AudioInputOpen(_))
+            | Some(Body::AudioInputOpened(_))
             | Some(Body::VideoCapabilities(_))
             | Some(Body::VideoDecoderOpen(_))
             | Some(Body::VideoDecoderOpened(_))
@@ -3945,8 +4593,29 @@ impl Worker {
             | Some(Body::VideoFrame(_))
             | Some(Body::VideoFlush(_))
             | Some(Body::VideoFlushed(_))
-            | Some(Body::VideoError(_)) => {
+            | Some(Body::VideoError(_))
+            | Some(Body::LocationStatus(_))
+            | Some(Body::LocationFix(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
+            }
+            Some(Body::SensorList(_))
+            | Some(Body::SensorActivate(_))
+            | Some(Body::SensorReadings(_)) => {
+                eprintln!(
+                    "control channel: dropping a sensor message, which belongs on the sensor port"
+                );
+            }
+            Some(Body::CameraList(_))
+            | Some(Body::CameraOpen(_))
+            | Some(Body::CameraOpened(_))
+            | Some(Body::CameraFrame(_))
+            | Some(Body::CameraStop(_))
+            | Some(Body::CameraStill(_))
+            | Some(Body::CameraStillTaken(_))
+            | Some(Body::CameraError(_)) => {
+                eprintln!(
+                    "control channel: dropping a camera message, which belongs on the camera port"
+                );
             }
             Some(Body::LogRecords(_))
             | Some(Body::DiagnosticsFile(_))
@@ -3990,8 +4659,16 @@ impl Worker {
         self.end_print_jobs();
         // So do its notifications.
         self.clear_notifications();
+        // And its background apps and media sessions.
+        self.shared
+            .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         // And the modes and boosts its power HAL asked for.
         self.shared.publish_power(GuestPower::Stopped);
+        // And its wish for the host's location, so the host's location service stops.
+        self.shared.set_location(Wanted::NONE);
         self.shared.set_guest_memory(None);
         // A dump or diagnostics under way gets no more from this guest.
         self.shared

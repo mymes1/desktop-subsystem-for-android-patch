@@ -769,6 +769,22 @@ impl UserAndroid for WithProgramStatus {
     fn links_in_android(&self, on: bool) {
         self.android.links_in_android(on)
     }
+    fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn std::io::Read,
+    ) -> Result<crate::arm_translation::GuestArmTranslation, crate::host_api::InstallError> {
+        self.android.install_arm_translation(size, sha256, content)
+    }
+    fn remove_arm_translation(
+        &self,
+    ) -> Result<crate::arm_translation::GuestArmTranslation, crate::host_api::InstallError> {
+        self.android.remove_arm_translation()
+    }
+    fn arm_translation(&self) -> Option<crate::arm_translation::GuestArmTranslation> {
+        self.android.arm_translation()
+    }
     fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
         self.android.developer_mode(on, port)
     }
@@ -806,6 +822,12 @@ impl UserAndroid for WithProgramStatus {
         &self,
     ) -> Option<std::sync::mpsc::Receiver<crate::notifications::NotificationEvent>> {
         self.android.watch_notifications()
+    }
+    fn watch_location(&self) -> Option<std::sync::mpsc::Receiver<crate::location::Wanted>> {
+        self.android.watch_location()
+    }
+    fn host_location(&self, event: crate::location::LocationEvent) {
+        self.android.host_location(event)
     }
     fn notification_action(
         &self,

@@ -39,6 +39,9 @@ jobs:
       hwcomposer: ${{ steps.find.outputs.hwcomposer }}
       codec2: ${{ steps.find.outputs.codec2 }}
       power: ${{ steps.find.outputs.power }}
+      gnss: ${{ steps.find.outputs.gnss }}
+      sensors: ${{ steps.find.outputs.sensors }}
+      camera: ${{ steps.find.outputs.camera }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,6 +74,9 @@ jobs:
           part 'dsa/(guest/hwcomposer|protocol)/' hwcomposer
           part 'dsa/(guest/codec2|protocol)/' codec2
           part 'dsa/(guest/power|protocol)/' power
+          part 'dsa/(guest/gnss|protocol)/' gnss
+          part 'dsa/(guest/sensors|protocol)/' sensors
+          part 'dsa/(guest/camera|protocol)/' camera
 
   repository:
     name: Check the repository rules
@@ -137,6 +143,21 @@ jobs:
       # host through the loopback partition).
       - name: Run the tests
         run: cargo test --workspace
+
+      # Pictures of the top of a light and a dark app window as the task window draws its
+      # title bar, kept with the run.
+      - name: Draw the title bar pictures
+        if: runner.os == 'Windows'
+        env:
+          DSA_CAPTION_PICTURES: ${{ github.workspace }}/.scratch/caption-pictures
+        run: cargo test -p dsa-host-core --lib fr22_pictures_of_a_light_and_a_dark_app_window
+
+      - name: Keep the title bar pictures
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: caption-pictures
+          path: .scratch/caption-pictures
 
       # Registers dsa-hostd as a real Windows service, reaches it through its named pipe and
       # stops it. The runner's account is an administrator, which this needs.
@@ -269,10 +290,16 @@ jobs:
         run: dsa/protocol/cpp/test.sh
 
   settings-app:
-    name: Test and build the settings app (windows-latest)
+    name: Test and build the settings app (${{ matrix.os }}, ${{ matrix.rid }})
     needs: changes
     if: needs.changes.outputs.settings == 'true'
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, rid: win-x64 }
+          - { os: windows-11-arm, rid: win-arm64 }
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     defaults:
       run:
@@ -292,7 +319,7 @@ jobs:
 
       # The WPF app itself, as the installer publishes it.
       - name: Build the app
-        run: dotnet publish DsaSettings/DsaSettings.csproj -c Release -r win-x64 -o ../../../../target/settings-app
+        run: dotnet publish DsaSettings/DsaSettings.csproj -c Release -r ${{ matrix.rid }} -o ../../../../target/settings-app
 
   hwcomposer:
     name: Test the guest hwcomposer's task rules (ubuntu-latest)
@@ -312,6 +339,22 @@ jobs:
 
       - name: Run the tests
         run: dsa/guest/hwcomposer/test.sh
+
+  audio:
+    name: Test the guest audio module (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The audio port's messages go through the generated protobuf-lite codec, built
+      # against the 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/audio/test.sh
 
   codec2:
     name: Test the guest codec HAL's rules (ubuntu-latest)
@@ -351,13 +394,70 @@ jobs:
       - name: Run the tests
         run: dsa/guest/power/test.sh
 
+  gnss-hal:
+    name: Test the guest GNSS HAL's rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.gnss == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The channel messages go through the generated protobuf-lite codec, built against the
+      # 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/gnss/test.sh
+
+  sensors:
+    name: Test the guest sensors HAL's rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.sensors == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The sensor port's messages go through the generated protobuf-lite codec, built against
+      # the 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/sensors/test.sh
+
+  camera:
+    name: Test the guest camera HAL's rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.camera == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The camera port's messages go through the generated protobuf-lite codec, built
+      # against the 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/camera/test.sh
+
   # One check that always reports: it fails when any job failed or was cancelled, and passes
   # when every job passed or was skipped because its part did not change.
   result:
     name: Report the test result
     if: always()
     needs:
-      [changes, repository, rust, unix-socket, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal]
+      [changes, repository, rust, unix-socket, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

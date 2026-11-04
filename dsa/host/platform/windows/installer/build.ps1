@@ -23,6 +23,14 @@
 # "(test package)", and its service says it is a test package each time it starts. A real
 # package needs -Kernel and -GfxstreamBackend (or the library a local graphics build left).
 #
+# -Arch is the platform the package is for: x64 or arm64. Without it the package is for the
+# machine that builds it. The programs are built for that platform's Rust target
+# (x86_64-pc-windows-msvc or aarch64-pc-windows-msvc) and the settings app for its runtime
+# (win-x64 or win-arm64). The arm64 package installs only on ARM64 Windows; its kernel is the
+# arm64 build's Image rather than bzImage. The setup screens stay x64 in both: they are a
+# .NET Framework 4.7.2 program that the engine starts as its own process, and ARM64 Windows
+# 11 runs it under emulation.
+#
 # -ProgramListUrl names the signed program list the service updates DSA itself from (it
 # needs -ListUrl, and the same -TrustedKey signs both lists). Without it the installed DSA
 # is updated by hand.
@@ -43,9 +51,22 @@ param(
     [string]$PipeSddl,
     [int]$AndroidMajor,
     [string]$GfxstreamBackend,
-    [string]$ReleaseTag
+    [string]$ReleaseTag,
+    [ValidateSet("x64", "arm64")]
+    [string]$Arch
 )
 $ErrorActionPreference = "Stop"
+
+if (-not $Arch) {
+    # The machine's own processor: PROCESSOR_ARCHITEW6432 is set when this PowerShell is
+    # itself emulated.
+    $native = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+    $Arch = if ($native -eq "ARM64") { "arm64" } else { "x64" }
+}
+$rustTarget = if ($Arch -eq "arm64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
+$kernelName = if ($Arch -eq "arm64") { "Image" } else { "bzImage" }
+
+$localGraphics = if ($Arch -eq "arm64") { "build-host-arm64" } else { "build-host" }
 
 $testPackage = [bool]$PlaceholderKernel
 $productName = if ($testPackage) { "Desktop Subsystem for Android (test package)" } else { "Desktop Subsystem for Android" }
@@ -62,20 +83,20 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 $env:DSA_VERSION = $Version
 Push-Location $dsa
 try {
-    cargo build --release -p dsa-host-windows --bin dsa-hostd --bin dsa-wm --bin dsa-app-window -p dsa-cli --bin dsa
-    if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
+    cargo build --release --target $rustTarget -p dsa-host-windows --bin dsa-hostd --bin dsa-wm --bin dsa-app-window -p dsa-cli --bin dsa
+    if ($LASTEXITCODE -ne 0) { throw "cargo build for $rustTarget failed (rustup target add $rustTarget adds the target)" }
 } finally { Pop-Location }
-Copy-Item (Join-Path $dsa "target\release\dsa-hostd.exe") $stage
-Copy-Item (Join-Path $dsa "target\release\dsa-wm.exe") $stage
-Copy-Item (Join-Path $dsa "target\release\dsa-app-window.exe") $stage
-Copy-Item (Join-Path $dsa "target\release\dsa.exe") $stage
+$built = Join-Path $dsa "target\$rustTarget\release"
+foreach ($program in @("dsa-hostd.exe", "dsa-wm.exe", "dsa-app-window.exe", "dsa.exe")) {
+    Copy-Item (Join-Path $built $program) $stage
+}
 
 if ($GfxstreamBackend) {
     Copy-Item $GfxstreamBackend (Join-Path $stage "gfxstream_backend.dll")
 } elseif (Test-Path (Join-Path $stage "gfxstream_backend.dll")) {
     # Already staged.
-} elseif (Test-Path (Join-Path $dsa "..\..\..\.scratch\build-host\dist\bin\gfxstream_backend.dll")) {
-    Copy-Item (Join-Path $dsa "..\..\..\.scratch\build-host\dist\bin\gfxstream_backend.dll") (Join-Path $stage "gfxstream_backend.dll")
+} elseif (Test-Path (Join-Path $dsa "..\..\..\.scratch\$localGraphics\dist\bin\gfxstream_backend.dll")) {
+    Copy-Item (Join-Path $dsa "..\..\..\.scratch\$localGraphics\dist\bin\gfxstream_backend.dll") (Join-Path $stage "gfxstream_backend.dll")
 } elseif ($PlaceholderKernel) {
     Set-Content -Path (Join-Path $stage "gfxstream_backend.dll") -Value "" -NoNewline
 } else {
@@ -98,9 +119,9 @@ $checkNoWsaScript = Join-Path $installer "check-no-wsa.py"
 if ($LASTEXITCODE -ne 0) { throw "WSA binary check failed" }
 
 if ($Kernel) {
-    Copy-Item $Kernel (Join-Path $stage "bzImage")
+    Copy-Item $Kernel (Join-Path $stage $kernelName)
 } elseif ($PlaceholderKernel) {
-    Set-Content -Path (Join-Path $stage "bzImage") -Value "" -NoNewline
+    Set-Content -Path (Join-Path $stage $kernelName) -Value "" -NoNewline
 } else {
     throw "name the guest kernel with -Kernel (or -PlaceholderKernel for an installer test)"
 }
@@ -110,7 +131,7 @@ $imageManifest = $ImageDir -and (Test-Path (Join-Path $ImageDir "image.json"))
 if ($imageManifest) {
     $image = Get-Content -Raw (Join-Path $ImageDir "image.json") | ConvertFrom-Json
     foreach ($name in @($image.files.PSObject.Properties.Name)) {
-        if ($name -notin @("disk.vhdx", "initrd.img", "bzImage", "NOTICE.html.gz", "NOTICE.xml.gz", "NOTICE.txt")) {
+        if ($name -notin @("disk.vhdx", "initrd.img", $kernelName, "NOTICE.html.gz", "NOTICE.xml.gz", "NOTICE.txt")) {
             throw "image.json names $name, which this package does not know how to install"
         }
         if (-not (Test-Path (Join-Path $ImageDir $name))) { throw "$ImageDir has no $name" }
@@ -130,7 +151,7 @@ if ($ImageDir) {
 # own folder) and {data} (this file's folder) when it reads the file. Each user's Android
 # disk is in their own profile, so the file names no data_dir.
 $config = [ordered]@{
-    kernel        = "{program}\vm\bzImage"
+    kernel        = "{program}\vm\$kernelName"
     images_dir    = "{data}\images"
     first_image   = $first
     log_file      = "{data}\logs\dsa-hostd.log"
@@ -160,7 +181,7 @@ if ($LASTEXITCODE -ne 0) { throw "building the setup screens failed" }
 # in the program folder's settings\ folder beside dsa.exe.
 $settingsApp = Join-Path $out "settings-app"
 Remove-Item -Recurse -Force $settingsApp -ErrorAction SilentlyContinue
-dotnet publish (Join-Path $installer "..\settings\DsaSettings\DsaSettings.csproj") -c Release -r win-x64 `
+dotnet publish (Join-Path $installer "..\settings\DsaSettings\DsaSettings.csproj") -c Release -r win-$Arch `
     -p:Version=$Version -o $settingsApp
 if ($LASTEXITCODE -ne 0) { throw "building the settings app failed" }
 if (-not (Test-Path (Join-Path $settingsApp "DsaSettings.exe"))) { throw "the settings app has no DsaSettings.exe" }
@@ -189,11 +210,11 @@ if (-not (Test-Path $utilDll)) {
 
 $msi = Join-Path $out "dsa-$fileTag$Version.msi"
 $setup = Join-Path $out "setup-$fileTag$Version.exe"
-$defines = @("-d", "Version=$Version", "-d", "ProductName=$productName", "-d", "SourceDir=$stage", "-d", "SettingsDir=$settingsApp")
+$defines = @("-d", "Arch=$Arch", "-d", "KernelName=$kernelName", "-d", "Version=$Version", "-d", "ProductName=$productName", "-d", "SourceDir=$stage", "-d", "SettingsDir=$settingsApp")
 if ($ImageDir) { $defines += @("-d", "ImageDir=$ImageDir", "-d", "ImageVersion=$ImageVersion") }
 if ($imageManifest) {
     $defines += @("-d", "ImageManifest=1")
-    if ($image.files.PSObject.Properties.Name -contains "bzImage") { $defines += @("-d", "ImageKernel=1") }
+    if ($image.files.PSObject.Properties.Name -contains $kernelName) { $defines += @("-d", "ImageKernel=$kernelName") }
     foreach ($noticeCandidate in @("NOTICE.html.gz", "NOTICE.xml.gz", "NOTICE.txt")) {
         if (Test-Path (Join-Path $ImageDir $noticeCandidate)) {
             $defines += @("-d", "ImageNotice=$noticeCandidate")
@@ -205,12 +226,12 @@ if ($imageManifest) {
 Push-Location $installer
 try {
     $msiExt = if (Test-Path $utilDll) { @("-ext", $utilDll) } else { @("-ext", "WixToolset.Util.wixext") }
-    wix build -arch x64 @msiExt @defines dsa.wxs -o $msi
+    wix build -arch $Arch @msiExt @defines dsa.wxs -o $msi
     if ($LASTEXITCODE -ne 0) { throw "building the package failed" }
-    $bundleDefines = @("-d", "Version=$Version", "-d", "ProductName=$productName", "-d", "MsiPath=$msi", "-d", "SetupUiDir=$setupUi")
+    $bundleDefines = @("-d", "Arch=$Arch", "-d", "Version=$Version", "-d", "ProductName=$productName", "-d", "MsiPath=$msi", "-d", "SetupUiDir=$setupUi")
     if ($AndroidMajor -gt 0) { $bundleDefines += @("-d", "AndroidMajor=$AndroidMajor") }
     if ($ImageDir) { $bundleDefines += @("-d", "BundledImage=1") }
-    wix build -arch x64 -ext $balDll @bundleDefines bundle.wxs -o $setup
+    wix build -arch $Arch -ext $balDll @bundleDefines bundle.wxs -o $setup
     if ($LASTEXITCODE -ne 0) { throw "building setup.exe failed" }
 } finally { Pop-Location }
 Write-Host "built $msi and $setup"

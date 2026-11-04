@@ -22,6 +22,11 @@ use crate::accessibility::{
     TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstallStatus, InstalledPackage};
+use crate::arm_translation::{GuestArmTranslation, Package};
+use crate::background::{
+    BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundHub, BackgroundWatch,
+    MediaCommand, MediaSession, Playback,
+};
 use crate::files::{FileAction, FileTransfer, MAX_FILE_BYTES};
 use crate::host_api::{
     running_of, stop_every, ClientError, HostApiClient, HostApiService, InstallError,
@@ -32,9 +37,12 @@ use crate::input::{buttons, PointerAction, PointerEvent, PointerTool};
 use crate::keys::{keycode, meta, KeyAction, KeyEvent};
 use crate::notifications::{Notification, NotificationAction, NotificationEvent};
 use crate::print::{PrintEvent, PrintJob, PrintOutcome, PrintSettings};
-use crate::session::SessionState;
+use crate::session::{BackgroundRequest, SessionState};
 use crate::settings::{MemorySettings, Settings, SettingsStore};
-use crate::tasks::{Bounds, Task, TaskEvent, TaskRequest, TaskRequestError, TaskTable, TaskWatch};
+use crate::tasks::{
+    Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskRequestError, TaskTable,
+    TaskWatch,
+};
 use crate::widgets::{
     Placement, Widget, WidgetError, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
 };
@@ -92,6 +100,10 @@ pub struct FakeAndroid {
     /// What became of its print jobs, as the host said, in order.
     pub print_results: Mutex<Vec<(u32, PrintOutcome)>>,
     print_watchers: Mutex<Vec<Sender<PrintEvent>>>,
+    /// The apps that run in the background in it, and who watches them.
+    background: Mutex<BackgroundHub>,
+    /// What the user did with its apps that run in the background, in order.
+    pub background_requests: Mutex<Vec<BackgroundRequest>>,
     /// The APKs it installed or refused, by name, with their whole content, in order.
     pub installs: Mutex<Vec<(String, Vec<u8>)>>,
     /// When each install began and ended, by name, in order: `+name` and `-name`.
@@ -113,6 +125,46 @@ pub struct FakeAndroid {
     accessibility_watchers: Mutex<Vec<(i32, Sender<GuestAccessibility>)>>,
     /// The accessibility actions it was asked for, in order.
     pub accessibility_actions: Mutex<Vec<(i32, ActionRequest)>>,
+    /// The ARM translation image on its disk, if any.
+    pub arm_image: Mutex<Option<Vec<u8>>>,
+    /// Each app whose settings it was asked to open, in order; `None` for the list of apps.
+    pub app_settings: Mutex<Vec<Option<String>>>,
+    /// How many times it was asked to read its apps again.
+    pub app_refreshes: Mutex<u32>,
+}
+
+/// The system app the fake Android lists, which it refuses to uninstall.
+pub const SYSTEM_PACKAGE: &str = "com.android.settings";
+
+/// The apps the fake Android has installed: [`KNOWN_PACKAGE`], a user app, and
+/// [`SYSTEM_PACKAGE`].
+pub fn sample_installed_apps() -> Vec<crate::tasks::AppInfo> {
+    vec![
+        crate::tasks::AppInfo {
+            package_name: SYSTEM_PACKAGE.into(),
+            label: "Settings".into(),
+            icon_png: vec![0x89, b'P', b'N', b'G', 1],
+            version_name: "16".into(),
+            version_code: 36,
+            system_app: true,
+            app_bytes: 40_000_000,
+            ..Default::default()
+        },
+        crate::tasks::AppInfo {
+            package_name: KNOWN_PACKAGE.into(),
+            label: "Notes".into(),
+            icon_png: vec![0x89, b'P', b'N', b'G', 2],
+            version_name: "4.1".into(),
+            version_code: INSTALLED_VERSION,
+            // 2023-11-14T22:13:20Z.
+            first_install_time_ms: 1_700_000_000_000,
+            last_update_time_ms: 1_710_000_000_000,
+            system_app: false,
+            app_bytes: 3_000_000,
+            data_bytes: 20_480,
+            cache_bytes: 1_024,
+        },
+    ]
 }
 
 /// What the fake Android says of an APK: one whose content starts with [`BAD_APK`] is not an APK
@@ -163,6 +215,8 @@ impl FakeAndroid {
             notification_watchers: Mutex::new(Vec::new()),
             print_results: Mutex::new(Vec::new()),
             print_watchers: Mutex::new(Vec::new()),
+            background: Mutex::new(BackgroundHub::default()),
+            background_requests: Mutex::new(Vec::new()),
             installs: Mutex::new(Vec::new()),
             install_steps: Mutex::new(Vec::new()),
             install_time: Mutex::new(Duration::ZERO),
@@ -174,6 +228,9 @@ impl FakeAndroid {
             accessibility_watches: Arc::new(Mutex::new(Vec::new())),
             accessibility_watchers: Mutex::new(Vec::new()),
             accessibility_actions: Mutex::new(Vec::new()),
+            arm_image: Mutex::new(None),
+            app_settings: Mutex::new(Vec::new()),
+            app_refreshes: Mutex::new(0),
         }
     }
 
@@ -203,6 +260,11 @@ impl FakeAndroid {
         } else {
             Err(format!("Android is {}, not running", self.state()))
         }
+    }
+
+    /// Changes its apps that run in the background as its agent would, and tells the watchers.
+    pub fn background_event(&self, event: BackgroundEvent) {
+        self.background.lock().unwrap().apply(event);
     }
 
     /// Changes its notifications as an app in this Android would, and tells the watchers.
@@ -402,6 +464,18 @@ impl UserAndroid for FakeAndroid {
         self.notification_actions.lock().unwrap().push(action);
         Ok(())
     }
+    fn watch_background(&self) -> Option<BackgroundWatch> {
+        Some(self.background.lock().unwrap().watch())
+    }
+    fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+        let hub = self.background.lock().unwrap();
+        (hub.apps(), hub.media())
+    }
+    fn background_action(&self, request: BackgroundRequest) -> Result<(), TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        self.background_requests.lock().unwrap().push(request);
+        Ok(())
+    }
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
         let (tx, events) = mpsc::channel();
         let mut widgets = self.widgets.lock().unwrap();
@@ -475,6 +549,37 @@ impl UserAndroid for FakeAndroid {
         self.widget_pointers.lock().unwrap().push(pointer);
         Ok(())
     }
+    fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn std::io::Read,
+    ) -> Result<GuestArmTranslation, InstallError> {
+        if self.state() != SessionState::Active {
+            return Err(InstallError::NotRunning("Android is not running".into()));
+        }
+        let mut image = vec![0u8; size as usize];
+        content
+            .read_exact(&mut image)
+            .map_err(|e| InstallError::Refused(format!("the image did not arrive whole: {e}")))?;
+        use sha2::Digest;
+        if sha2::Sha256::digest(&image).as_slice() != sha256 {
+            return Err(InstallError::Refused("its SHA-256 differs".into()));
+        }
+        *self.arm_image.lock().unwrap() = Some(image);
+        Ok(self.arm_translation().unwrap_or_default())
+    }
+    fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
+        *self.arm_image.lock().unwrap() = None;
+        Ok(self.arm_translation().unwrap_or_default())
+    }
+    fn arm_translation(&self) -> Option<GuestArmTranslation> {
+        (self.state() == SessionState::Active).then(|| GuestArmTranslation {
+            installed: self.arm_image.lock().unwrap().is_some(),
+            active: false,
+            abilist: "x86_64".into(),
+        })
+    }
     fn install_apk(
         &self,
         name: &str,
@@ -524,6 +629,59 @@ impl UserAndroid for FakeAndroid {
             version_name: "4.1".into(),
             signer_sha256: vec![sha2::Sha256::digest(INSTALLED_SIGNER).to_vec()],
         }))
+    }
+    fn refresh_apps(&self) -> Result<(), TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        *self.app_refreshes.lock().unwrap() += 1;
+        let current = self.tasks.lock().unwrap().0.installed();
+        self.publish(TaskEvent::Installed(
+            current.unwrap_or_else(sample_installed_apps),
+        ));
+        Ok(())
+    }
+    fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        self.app_settings
+            .lock()
+            .unwrap()
+            .push(package.map(str::to_string));
+        Ok(())
+    }
+    fn uninstall_app(
+        &self,
+        package: &str,
+    ) -> Result<crate::apps::UninstallOutcome, TaskRequestError> {
+        use crate::apps::{UninstallOutcome, UninstallStatus};
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        let apps = self
+            .tasks
+            .lock()
+            .unwrap()
+            .0
+            .installed()
+            .unwrap_or_else(sample_installed_apps);
+        let status = match apps.iter().find(|app| app.package_name == package) {
+            None => UninstallStatus::NotInstalled,
+            Some(app) if app.system_app => UninstallStatus::SystemApp,
+            Some(_) => {
+                let left = apps
+                    .iter()
+                    .filter(|app| app.package_name != package)
+                    .cloned()
+                    .collect();
+                self.publish(TaskEvent::Installed(left));
+                UninstallStatus::Uninstalled
+            }
+        };
+        Ok(UninstallOutcome {
+            package_name: package.to_string(),
+            status,
+            message: if status == UninstallStatus::Uninstalled {
+                "Success".into()
+            } else {
+                "DELETE_FAILED_INTERNAL_ERROR".into()
+            },
+        })
     }
     fn freeze(&self) -> Result<(), TaskRequestError> {
         let mut state = self.state.lock().unwrap();
@@ -816,6 +974,10 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::guest_clipboard_reaches_the_client(&mut || $make);
         }
         #[test]
+        fn fr17_the_device_identity_is_the_callers_own_and_refuses_bad_values() {
+            $crate::host_api_conformance::device_identity_is_the_callers_own(&mut || $make);
+        }
+        #[test]
         fn fr13_turning_clipboard_sharing_off_and_on_reaches_the_callers_android() {
             $crate::host_api_conformance::clipboard_setting_reaches_the_caller(&mut || $make);
         }
@@ -860,6 +1022,14 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr20_developer_mode_is_off_by_default_and_reaches_the_callers_android() {
             $crate::host_api_conformance::developer_mode_reaches_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr25_an_arm_translation_package_is_installed_reported_and_removed() {
+            $crate::host_api_conformance::arm_translation_reaches_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr25_an_unusable_arm_translation_package_is_refused() {
+            $crate::host_api_conformance::unusable_arm_translation_is_refused(&mut || $make);
         }
         #[test]
         fn fr20_a_developer_mode_port_that_cannot_open_is_reported() {
@@ -934,6 +1104,22 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::notification_watcher_that_sends_is_disconnected(
                 &mut || $make,
             );
+        }
+        #[test]
+        fn fr24_apps_that_run_in_the_background_reach_a_watcher_and_a_list() {
+            $crate::host_api_conformance::background_apps_reach_a_watcher(&mut || $make);
+        }
+        #[test]
+        fn fr24_open_action_stop_and_media_keys_reach_the_callers_android() {
+            $crate::host_api_conformance::background_actions_reach_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr24_stopping_an_app_of_a_stopped_android_says_it_is_not_running() {
+            $crate::host_api_conformance::background_action_needs_a_running_android(&mut || $make);
+        }
+        #[test]
+        fn nfr5_a_malformed_action_on_a_background_app_is_refused() {
+            $crate::host_api_conformance::malformed_background_action_is_refused(&mut || $make);
         }
         #[test]
         fn fr12_the_gallery_lists_the_widgets_the_callers_android_offers() {
@@ -1139,6 +1325,8 @@ pub fn sample_task(task_id: i32, label: &str) -> Task {
         max_height: 2160,
         min_width: 700,
         min_height: 500,
+        status_bar: StatusBarAppearance::Dark,
+        status_bar_color: 0xFF20_2124,
     }
 }
 
@@ -1933,6 +2121,63 @@ pub fn guest_clipboard_reaches_the_client(make: MakeLocal<'_>) {
     );
 }
 
+pub fn device_identity_is_the_callers_own(make: MakeLocal<'_>) {
+    use crate::device_identity::{
+        DeviceIdentity, DeviceIdentityStore, Field, ImageBuild, MemoryDeviceIdentities,
+    };
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemoryDeviceIdentities::default());
+    let build = ImageBuild {
+        release: "16".into(),
+        id: "BP2A".into(),
+        incremental: "1.dsaab".into(),
+        tags: "release-keys".into(),
+    };
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_device_identities(store.clone(), Arc::new(move |_: &str| Some(build.clone())));
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+
+    let (chosen, effective) = client.device_identity().unwrap();
+    assert!(chosen.is_default());
+    assert_eq!(effective.model, "Desktop Subsystem for Android");
+    assert_eq!(
+        effective.fingerprint,
+        "DSA/dsa_x86_64/dsa_x86_64:16/BP2A/1.dsaab:user/release-keys"
+    );
+
+    let mut wanted = DeviceIdentity::default();
+    wanted.set(Field::Model, "My tablet").unwrap();
+    wanted.set(Field::Brand, "mine").unwrap();
+    let (chosen, effective) = client.set_device_identity(&wanted).unwrap();
+    assert_eq!(chosen, wanted);
+    assert_eq!(effective.model, "My tablet");
+    assert_eq!(
+        effective.fingerprint,
+        "mine/dsa_x86_64/dsa_x86_64:16/BP2A/1.dsaab:user/release-keys"
+    );
+    assert_eq!(store.get(&user).unwrap(), wanted);
+
+    let refused = DeviceIdentity {
+        fingerprint: "not a fingerprint".into(),
+        ..DeviceIdentity::default()
+    };
+    match client.set_device_identity(&refused) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::InvalidSetting),
+        other => panic!("a bad fingerprint was not refused: {other:?}"),
+    }
+    assert_eq!(
+        store.get(&user).unwrap(),
+        wanted,
+        "a refused value changes nothing"
+    );
+
+    let (chosen, _) = client
+        .set_device_identity(&DeviceIdentity::default())
+        .unwrap();
+    assert!(chosen.is_default());
+}
+
 pub fn clipboard_setting_reaches_the_caller(make: MakeLocal<'_>) {
     let (listener, mut connector, user) = make();
     let store = Arc::new(MemorySettings::default());
@@ -2198,6 +2443,119 @@ pub fn developer_mode_reaches_the_caller(make: MakeLocal<'_>) {
     );
 }
 
+fn arm_package() -> Package {
+    Package {
+        name: "Translator".into(),
+        version: "1.0".into(),
+        library: "libtranslator.so".into(),
+        abis: vec!["arm64-v8a".into()],
+        license: "Apache-2.0".into(),
+    }
+}
+
+pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
+    use sha2::Digest;
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    let none = client
+        .arm_translation()
+        .expect("asking where translation stands");
+    assert_eq!(none.package, None);
+    assert!(none.enabled, "on by default");
+    assert!(!none.restart_needed);
+
+    client.start().unwrap();
+    let image: Vec<u8> = (0..300_000u32).map(|i| (i % 251) as u8).collect();
+    let installed = connect(&mut *connector)
+        .install_arm_translation(
+            &arm_package(),
+            image.len() as u64,
+            &sha2::Sha256::digest(&image),
+            &mut image.as_slice(),
+        )
+        .expect("installing the package");
+    assert_eq!(installed.package, Some(arm_package()));
+    let guest = installed
+        .guest
+        .clone()
+        .expect("the running Android answered");
+    assert!(guest.installed);
+    assert!(!guest.active, "a package is used from the next start");
+    assert!(installed.restart_needed);
+    let android = androids.of(&user).unwrap();
+    assert_eq!(
+        android.arm_image.lock().unwrap().as_deref(),
+        Some(&image[..])
+    );
+    assert_eq!(store.arm_translation(&user).unwrap(), Some(arm_package()));
+
+    let removed = client
+        .remove_arm_translation()
+        .expect("removing the package");
+    assert_eq!(removed.package, None);
+    assert!(!removed.restart_needed);
+    assert!(android.arm_image.lock().unwrap().is_none());
+    assert_eq!(store.arm_translation(&user).unwrap(), None);
+}
+
+pub fn unusable_arm_translation_is_refused(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    connect(&mut *connector).start().unwrap();
+    let image = vec![1u8; 64];
+    let thirty_two = [0u8; 32];
+    for package in [
+        Package {
+            abis: vec!["armeabi-v7a".into()],
+            ..arm_package()
+        },
+        Package {
+            library: "../libtranslator.so".into(),
+            ..arm_package()
+        },
+    ] {
+        match connect(&mut *connector).install_arm_translation(
+            &package,
+            image.len() as u64,
+            &thirty_two,
+            &mut image.as_slice(),
+        ) {
+            Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::InstallRefused),
+            other => panic!("expected the package to be refused, got {other:?}"),
+        }
+    }
+    // A transfer that does not arrive intact leaves nothing recorded.
+    match connect(&mut *connector).install_arm_translation(
+        &arm_package(),
+        image.len() as u64,
+        &thirty_two,
+        &mut image.as_slice(),
+    ) {
+        Err(ClientError::Service { code, detail }) => {
+            assert_eq!(code, ErrorCode::InstallRefused);
+            assert!(detail.contains("SHA-256"), "{detail}");
+        }
+        other => panic!("expected the image to be refused, got {other:?}"),
+    }
+    assert_eq!(store.arm_translation(&user).unwrap(), None);
+    assert!(androids
+        .of(&user)
+        .unwrap()
+        .arm_image
+        .lock()
+        .unwrap()
+        .is_none());
+}
+
 pub fn developer_mode_port_refusal_is_reported(make: MakeLocal<'_>) {
     let (listener, mut connector, user) = make();
     let store = Arc::new(MemorySettings::default());
@@ -2454,6 +2812,160 @@ pub fn malformed_file_is_refused(make: MakeLocal<'_>) {
     assert!(androids.of(&user).unwrap().files.lock().unwrap().is_empty());
     assert_eq!(
         connect(&mut *connector).status().unwrap().state,
+        SessionState::Active,
+        "the service goes on"
+    );
+}
+
+fn sample_background_app(title: &str) -> BackgroundApp {
+    BackgroundApp {
+        package_name: "com.example.music".into(),
+        app_label: "Music".into(),
+        icon_png: vec![0x89, b'P', b'N', b'G'],
+        title: title.into(),
+        text: "\u{c544}\u{c774}\u{c720}".into(),
+        actions: vec!["Pause".into(), "Next".into()],
+    }
+}
+
+fn sample_media() -> MediaSession {
+    MediaSession {
+        package_name: "com.example.music".into(),
+        app_label: "Music".into(),
+        title: "Song".into(),
+        artist: "Artist".into(),
+        album: "Album".into(),
+        art_png: vec![0x89, b'P', b'N', b'G'],
+        playback: Playback::Playing,
+        can_play: false,
+        can_pause: true,
+        can_next: true,
+        can_previous: true,
+    }
+}
+
+pub fn background_apps_reach_a_watcher(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let android = androids.of(&user).expect("the caller's Android");
+    let playing = sample_background_app("Playing");
+    android.background_event(BackgroundEvent::App(playing.clone()));
+
+    let mut watch = connect(&mut *connector)
+        .watch_background()
+        .expect("watching the apps that run in the background");
+    assert_eq!(
+        watch.apps,
+        vec![playing.clone()],
+        "starts from the apps now"
+    );
+    assert!(watch.media.is_empty());
+    assert_eq!(watch.next(Duration::from_millis(50)).unwrap(), None);
+
+    let media = sample_media();
+    android.background_event(BackgroundEvent::Media(media.clone()));
+    assert_eq!(
+        watch.next(WAIT).unwrap(),
+        Some(BackgroundEvent::Media(media.clone()))
+    );
+    let paused = sample_background_app("Paused");
+    android.background_event(BackgroundEvent::App(paused.clone()));
+    assert_eq!(
+        watch.next(WAIT).unwrap(),
+        Some(BackgroundEvent::App(paused.clone()))
+    );
+    assert_eq!(
+        connect(&mut *connector).background_apps().unwrap(),
+        (vec![paused], vec![media])
+    );
+    android.background_event(BackgroundEvent::AppRemoved {
+        package_name: playing.package_name.clone(),
+    });
+    assert_eq!(
+        watch.next(WAIT).unwrap(),
+        Some(BackgroundEvent::AppRemoved {
+            package_name: playing.package_name
+        })
+    );
+}
+
+pub fn background_actions_reach_the_caller(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut client = connect(&mut *connector);
+    client.start().unwrap();
+    let package = "com.example.music";
+    client
+        .act_on_background(package, BackgroundCommand::Open)
+        .expect("opened");
+    client
+        .act_on_background(package, BackgroundCommand::Action(1))
+        .expect("action run");
+    client
+        .control_media(package, MediaCommand::Pause)
+        .expect("paused");
+    client
+        .act_on_background(package, BackgroundCommand::Stop)
+        .expect("stopped");
+    assert_eq!(
+        *androids
+            .of(&user)
+            .unwrap()
+            .background_requests
+            .lock()
+            .unwrap(),
+        vec![
+            BackgroundRequest::App(package.into(), BackgroundCommand::Open),
+            BackgroundRequest::App(package.into(), BackgroundCommand::Action(1)),
+            BackgroundRequest::Media(package.into(), MediaCommand::Pause),
+            BackgroundRequest::App(package.into(), BackgroundCommand::Stop),
+        ]
+    );
+}
+
+pub fn background_action_needs_a_running_android(make: MakeLocal<'_>) {
+    let (listener, mut connector, _) = make();
+    let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
+    let mut client = connect(&mut *connector);
+    match client.act_on_background("com.example.music", BackgroundCommand::Stop) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::NotRunning),
+        other => panic!("expected the Android not to be running, got {other:?}"),
+    }
+}
+
+pub fn malformed_background_action_is_refused(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut client = connect(&mut *connector);
+    client.start().unwrap();
+    for package in ["", "../../evil", "a b", "com.example/x"] {
+        match client.act_on_background(package, BackgroundCommand::Stop) {
+            Err(ClientError::Service { code, .. }) => {
+                assert_eq!(code, ErrorCode::UnknownRequest, "{package:?}")
+            }
+            other => panic!("expected {package:?} to be refused, got {other:?}"),
+        }
+    }
+    match client.act_on_background(
+        "com.example.music",
+        BackgroundCommand::Action(crate::background::MAX_ACTIONS as u32),
+    ) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::UnknownRequest),
+        other => panic!("expected an action past the last to be refused, got {other:?}"),
+    }
+    assert!(androids
+        .of(&user)
+        .unwrap()
+        .background_requests
+        .lock()
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        client.status().unwrap().state,
         SessionState::Active,
         "the service goes on"
     );

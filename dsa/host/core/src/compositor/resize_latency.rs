@@ -1,12 +1,11 @@
-//! How long a resized window shows its last frame stretched before a frame of its new size
-//! arrives.
+//! How long a window waits, after a new size was asked for, for a frame of that size.
 //!
-//! Stretching the last frame only covers the wait for the guest to draw at the new size; a
-//! person should not notice it. [`ResizeLatency`] measures the wait for each window: from
-//! the moment its client area took a size to the first frame of exactly that size. A drag
-//! changes the size many times, so each measurement starts at the latest change. A window
-//! that waits longer than [`STUCK`] is reported once, because a stretched frame left on the
-//! screen is a defect, not a delay.
+//! A window takes a size only with a frame of that size, so it keeps its old size for as long
+//! as the app takes to draw; a person should not notice the wait. [`ResizeLatency`] measures
+//! it for each window: from the moment a size was asked for to the first frame of exactly that
+//! size. A drag changes the size many times, so each measurement starts at the latest change.
+//! A window that waits longer than [`STUCK`] is reported once, because a window that does not
+//! follow the user is a defect, not a delay.
 
 use std::fmt;
 use std::time::{Duration, Instant};
@@ -14,7 +13,7 @@ use std::time::{Duration, Instant};
 /// A wait a person may notice. The summary counts the waits at least this long.
 pub const NOTICEABLE: Duration = Duration::from_millis(100);
 
-/// A wait after which the window counts as stuck on a stretched frame.
+/// A wait after which the window counts as stuck at its old size.
 pub const STUCK: Duration = Duration::from_secs(2);
 
 /// How many of the latest waits the summary covers.
@@ -68,8 +67,8 @@ impl ResizeLatency {
         ResizeLatency::default()
     }
 
-    /// The window's client area is now `view`. Until a frame has been shown there is
-    /// nothing to stretch, so nothing is measured.
+    /// The guest is asked for `view`. Until a frame has been shown there is nothing to wait
+    /// with, so nothing is measured.
     pub fn view_changed(&mut self, view: (u32, u32), now: Instant) {
         self.stuck_reported = false;
         if self.frame == (0, 0) || view == self.frame {
@@ -149,7 +148,7 @@ mod tests {
         let start = Instant::now();
         latency.frame_shown((400, 300), start);
         latency.view_changed((640, 480), start);
-        // A frame of another size is still the old picture, stretched.
+        // A frame of another size is not the one waited for.
         assert_eq!(latency.frame_shown((400, 300), start + ms(10)), None);
         assert_eq!(
             latency.frame_shown((640, 480), start + ms(45)),
@@ -175,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn fr4_nothing_is_measured_before_the_first_frame_or_without_a_stretch() {
+    fn fr4_nothing_is_measured_before_the_first_frame_or_without_a_new_size() {
         let mut latency = ResizeLatency::new();
         let start = Instant::now();
         latency.view_changed((640, 480), start);
@@ -186,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn fr4_a_window_left_stretched_is_reported_once() {
+    fn fr4_a_window_left_waiting_is_reported_once() {
         let mut latency = ResizeLatency::new();
         let start = Instant::now();
         latency.frame_shown((400, 300), start);

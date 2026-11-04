@@ -8,7 +8,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.net.Uri
+import android.os.Binder
+import android.provider.Settings
 import android.view.Display
+import android.view.WindowInsets
 import io.github.thisisthepy.dsa.agent.Log
 import io.github.thisisthepy.dsa.agent.requests.ResizeOutcome
 import io.github.thisisthepy.dsa.agent.requests.TaskActions
@@ -23,6 +27,10 @@ class AndroidTaskActions(
     private val log: Log,
 ) : TaskActions {
     private var warnedNoDensity = false
+    private var warnedNoInsets = false
+
+    /** Owns the inset sources the agent gives tasks, which name their owner. */
+    private val insetsOwner = Binder()
     private var warnedNoScreenOverrides = false
 
     /** Whether this framework lacks the calls that hold a task's screen size. */
@@ -41,6 +49,27 @@ class AndroidTaskActions(
             false
         } catch (e: SecurityException) {
             log.warn("the framework refused to start $packageName", e)
+            false
+        }
+    }
+
+    override fun openAppSettings(packageName: String?): Boolean {
+        val intent = if (packageName == null) {
+            Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS)
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
+        freeform(options)
+        return try {
+            context.startActivity(intent, options.toBundle())
+            true
+        } catch (e: ActivityNotFoundException) {
+            log.warn("Settings has no page for ${packageName ?: "the list of apps"}", e)
+            false
+        } catch (e: SecurityException) {
+            log.warn("the framework refused to open the settings of ${packageName ?: "every app"}", e)
             false
         }
     }
@@ -166,14 +195,7 @@ class AndroidTaskActions(
                 val types = arrayOf<Class<*>>(tokenClass) + args.map { Int::class.javaPrimitiveType!! }
                 transactionClass.getMethod(name, *types).invoke(transaction, token, *args.toTypedArray())
             }
-            val controller = Class.forName("android.app.IActivityTaskManager")
-                .getMethod("getWindowOrganizerController")
-                .invoke(ActivityTaskManager.getService())
-                ?: return false
-            Class.forName("android.window.IWindowOrganizerController")
-                .getMethod("applyTransaction", transactionClass)
-                .invoke(controller, transaction)
-            true
+            commit(transactionClass, transaction)
         } catch (e: ReflectiveOperationException) {
             warn(e)
             false
@@ -184,6 +206,101 @@ class AndroidTaskActions(
             warn(e)
             false
         }
+    }
+
+    /**
+     * Applies [transaction] through the window organizer controller, which needs
+     * MANAGE_ACTIVITY_TASKS, not a registered organizer. False when the framework has no
+     * controller.
+     */
+    private fun commit(transactionClass: Class<*>, transaction: Any): Boolean {
+        val controller = Class.forName("android.app.IActivityTaskManager")
+            .getMethod("getWindowOrganizerController")
+            .invoke(ActivityTaskManager.getService())
+            ?: return false
+        Class.forName("android.window.IWindowOrganizerController")
+            .getMethod("applyTransaction", transactionClass)
+            .invoke(controller, transaction)
+        return true
+    }
+
+    /**
+     * Gives the task inset sources of the status bar and the caption bar types covering
+     * [frame], or removes them when [frame] is null, in one window container transaction
+     * (WindowContainerTransaction.addInsetsSource and removeInsetsSource). This is how the
+     * framework's own desktop windowing gives a freeform task the inset of the caption it draws
+     * over the task: the frame is in display pixels, and the task's windows receive the part
+     * that overlaps them. The status bar type is given too because the guest has no status bar
+     * of its own, and apps lay out their top edge by the status bar inset. The sources do not
+     * force their insets to be consumed, so an app drawing edge to edge draws its status bar
+     * background under the band.
+     */
+    override fun setCaptionInset(taskId: Int, frame: TaskBounds?): Boolean = try {
+        val token = taskToken(taskId)
+        if (token == null) {
+            false
+        } else {
+            val tokenClass = Class.forName("android.window.WindowContainerToken")
+            val transactionClass = Class.forName("android.window.WindowContainerTransaction")
+            val transaction = transactionClass.getConstructor().newInstance()
+            val types = listOf(WindowInsets.Type.statusBars(), WindowInsets.Type.captionBar())
+            for ((index, type) in types.withIndex()) {
+                if (frame == null) {
+                    transactionClass.getMethod(
+                        "removeInsetsSource",
+                        tokenClass,
+                        android.os.IBinder::class.java,
+                        Int::class.javaPrimitiveType,
+                        Int::class.javaPrimitiveType,
+                    ).invoke(transaction, token, insetsOwner, index, type)
+                } else {
+                    addInsetsSource(transactionClass, transaction, token, index, type, frame)
+                }
+            }
+            commit(transactionClass, transaction)
+        }
+    } catch (e: ReflectiveOperationException) {
+        warnNoInsets(e)
+        false
+    } catch (e: LinkageError) {
+        warnNoInsets(e)
+        false
+    } catch (e: RuntimeException) {
+        warnNoInsets(e)
+        false
+    }
+
+    /**
+     * WindowContainerTransaction.addInsetsSource in whichever form this framework has: with
+     * bounding rectangles and flags (Android 15 and later), with bounding rectangles, or with
+     * the frame alone. No bounding rectangles and no flags are given.
+     */
+    private fun addInsetsSource(
+        transactionClass: Class<*>,
+        transaction: Any,
+        token: Any,
+        index: Int,
+        type: Int,
+        frame: TaskBounds,
+    ) {
+        val rect = Rect(frame.left, frame.top, frame.right, frame.bottom)
+        val method = transactionClass.methods
+            .filter { it.name == "addInsetsSource" }
+            .maxByOrNull { it.parameterCount }
+            ?: throw NoSuchMethodException("WindowContainerTransaction.addInsetsSource")
+        val args: Array<Any?> = when (method.parameterCount) {
+            7 -> arrayOf(token, insetsOwner, index, type, rect, null, 0)
+            6 -> arrayOf(token, insetsOwner, index, type, rect, null)
+            5 -> arrayOf(token, insetsOwner, index, type, rect)
+            else -> throw NoSuchMethodException("WindowContainerTransaction.addInsetsSource with ${method.parameterCount} parameters")
+        }
+        method.invoke(transaction, *args)
+    }
+
+    private fun warnNoInsets(error: Throwable) {
+        if (warnedNoInsets) return
+        warnedNoInsets = true
+        log.warn("could not give a task an inset through a window container transaction", error)
     }
 
     /** The task's window container token (TaskInfo.token, not in the SDK). */

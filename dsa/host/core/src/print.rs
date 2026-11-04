@@ -158,8 +158,7 @@ impl Assembler {
             guest_id: job.job_id,
             why,
         };
-        if self.incoming.contains_key(&job.job_id)
-            || self.handed.values().any(|g| *g == job.job_id)
+        if self.incoming.contains_key(&job.job_id) || self.handed.values().any(|g| *g == job.job_id)
         {
             return refuse(format!("print job {} is already under way", job.job_id));
         }
@@ -213,7 +212,9 @@ impl Assembler {
         let received = incoming.pdf.len() as u64;
         let fault = if chunk.offset != received {
             let offset = chunk.offset;
-            Some(format!("a piece came at byte {offset} where byte {received} was due"))
+            Some(format!(
+                "a piece came at byte {offset} where byte {received} was due"
+            ))
         } else if received + chunk.data.len() as u64 > incoming.size {
             Some(format!(
                 "the document is longer than the {} bytes it was announced at",
@@ -344,7 +345,10 @@ mod tests {
     #[test]
     fn fr26_a_document_past_the_limit_is_refused_before_it_is_sent() {
         let mut assembler = Assembler::new();
-        assert_eq!(refused(assembler.start(job(1, MAX_PRINT_BYTES + 1))), Some(1));
+        assert_eq!(
+            refused(assembler.start(job(1, MAX_PRINT_BYTES + 1))),
+            Some(1)
+        );
         assert_eq!(refused(assembler.start(job(2, 0))), Some(2));
     }
 

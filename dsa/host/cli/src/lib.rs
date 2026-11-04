@@ -15,11 +15,15 @@
 //! dsa share <file>
 //! dsa tasks
 //! dsa settings [set <name> <value>]
+//! dsa settings device | set device.<field> <value> | reset device[.<field>]
 //! dsa memory
 //! dsa gpus
 //! dsa widgets [list | add <provider> | remove <id> | watch]
+//! dsa apps [list | info <package> | uninstall <package> | settings [<package>]]
+//! dsa background [list | open <package> | stop <package>]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
+//! dsa arm-translation [status | install <folder> | remove]
 //! ```
 //!
 //! It acts on the Android of the user who runs it: the service learns that user from the
@@ -89,6 +93,34 @@
 //! object: `{"event":"widgets","widgets":[...]}` first, then
 //! `{"event":"placed","widget":{...}}` or `{"event":"removed","id":N}`.
 //!
+//! `dsa apps list` (or `dsa apps`) lists the apps installed in Android that a launcher lists,
+//! each with its package, name, version and size; `(system)` marks the apps that are part of
+//! Android. `dsa apps info <package>` describes one: its version, its size (app, data and
+//! cache), when it was installed and updated, and whether it can be uninstalled. Both have
+//! Android read the sizes again first. `dsa apps uninstall <package>` uninstalls an app you
+//! installed; an app that is part of Android stays, and the line on standard error starts with
+//! `not uninstalled (<reason>):` (`not-installed`, `system-app`, `blocked` or `other`), with
+//! exit code 1. Windows' list of installed apps runs it to uninstall an app from there.
+//! `dsa apps settings <package>` opens Android's own settings of the app (its permissions,
+//! storage and notifications) in a window, and `dsa apps settings` Android's list of every app.
+//! Android is started first when it is not running. With `--json`, `list` prints `apps`, each
+//! with `package`, `label`, `version_name`, `version_code`, `first_install_time_ms`,
+//! `last_update_time_ms`, `system_app`, `app_bytes`, `data_bytes`, `cache_bytes`,
+//! `total_bytes` and `icon_png` in base64; `info` prints one such object; `uninstall` prints
+//! `package`, `uninstalled`, `status` and `message`; `settings` prints `opened` with the package,
+//! or null for the list of apps.
+//!
+//! `dsa background list` (or `dsa background`) lists the apps that keep running in Android
+//! with no window because they run a foreground service (music playback, a download, a VPN),
+//! each with the notification the service keeps shown, and the active media sessions. It does
+//! not start Android; one that is not running has none. `dsa background open <package>`
+//! opens the app's window, and `dsa background stop <package>` stops the app (Android
+//! force-stops it, which ends its services and frees its memory). With `--json`, `list`
+//! prints `apps` (each with `package`, `label`, `title`, `text`, `actions` and `icon_png` in
+//! base64) and `media` (each with `package`, `label`, `title`, `artist`, `album` and
+//! `playback`: `playing`, `paused` or `stopped`), and `open` and `stop` print `opened` or
+//! `stopped` with the package.
+//!
 //! `dsa freeze` stops every process of the Android until one of its windows is shown
 //! again. Its notifications, alarms and widgets stop with it.
 //!
@@ -118,11 +150,35 @@
 //! resize (`resize-trace`) to its log, off by default. Those last four are the computer's, so
 //! only an administrator changes them. `developer-mode` (off by default) lets adb reach the
 //! user's Android: while it is on, `adb connect 127.0.0.1:58526` connects, with no prompt to
-//! accept in Android. `adb-port` picks another loopback port than 58526.
+//! accept in Android. `adb-port` picks another loopback port than 58526. `stop-without-asking` (off by default)
+//! is whether stopping an app that runs in the background skips the question that confirms it.
 //! `dsa settings set <name> <value>` changes one;
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
 //! takes, on the host and inside Android. `dsa gpus` lists the GPUs of this machine, for
 //! choosing the render GPU.
+//!
+//! `dsa arm-translation status` (or `dsa arm-translation`) says whether apps built only for
+//! 64-bit ARM (`arm64-v8a`) can be installed and run: which translation package is installed,
+//! whether the `arm-translation` setting is on, and which ABIs the running Android installs apps
+//! for. `dsa arm-translation install <folder>` installs a translation package: a folder holding
+//! `arm-translation.json` and `system.img`, as `dsa/guest/arm-translation/make-package.py`
+//! makes one. Android is started first when it is not running. `dsa arm-translation remove`
+//! removes it. Both apply from the next start of Android, and say so. With `--json` each prints
+//! `package` (`name`, `version`, `library`, `abis`, `license`, or null), `enabled`,
+//! `supported` (a package is installed and on), `android` (`installed`, `active` and `abilist`,
+//! or null while Android is not running) and `restart_needed`. `dsa settings set
+//! arm-translation off` keeps the package but boots Android without it.
+//!
+//! `dsa settings device` shows the device identity Android reports to its apps: what the user
+//! chose, and each value as Android reports it from its next start.
+//! `dsa settings set device.<field> <value>` changes one value: `manufacturer`, `brand`,
+//! `model`, `device`, `name` (the product name), `characteristics` (the form factor, such as
+//! `tablet`), `fingerprint` (the whole string), or one part of the fingerprint
+//! (`fingerprint.release`, `fingerprint.id`, `fingerprint.incremental`, `fingerprint.type`,
+//! `fingerprint.tags`). `dsa settings reset device` puts every value back to the image's own,
+//! and `dsa settings reset device.<field>` one. Android reads them when it starts, so a change
+//! applies from its next start. With `--json` it prints `chosen` and `effective`, each with the
+//! fields above (`fingerprint_release` and so on for the parts).
 //!
 //! `dsa status` says `Active` only once Android has finished booting and its agent is connected.
 //! An Android that runs but has taken too long is `Stalled`, and a line after the state says why
@@ -148,11 +204,15 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::apk::{ApkFile, InstallKind, InstallOutcome, InstalledPackage};
 use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer};
+use dsa_host_core::arm_translation;
+use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
-use dsa_host_core::host_api::{ClientError, HostApiClient, SettingsReport, Status, TaskList};
+use dsa_host_core::host_api::{
+    ArmTranslationStatus, ClientError, HostApiClient, SettingsReport, Status, TaskList,
+};
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::session::SessionState;
-use dsa_host_core::tasks::Task;
+use dsa_host_core::tasks::{AppInfo, Task};
 use dsa_host_core::widgets::{Widget, WidgetEvent, WidgetProvider};
 use dsa_transport::Connector;
 use serde_json::{json, Value};
@@ -160,11 +220,16 @@ use serde_json::{json, Value};
 pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      launch <package> [--wait-first-frame] | tap <package> <x> <y> | stop-app <package> | \
      install <file.apk> [--progress] | apk-info <file.apk> | open <file> | share <file> | \
-     tasks | settings [set <name> <value>] | memory | gpus | \
+     tasks | settings [set <name> <value> | device | reset device[.<field>]] | memory | \
+     gpus | \
      widgets [list | add <provider> | remove <id> | watch] | \
-     logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip>> \
+     apps [list | info <package> | uninstall <package> | settings [<package>]] | \
+     background [list | open <package> | stop <package>] | \
+     logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
+     arm-translation [status | install <folder> | remove]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
+pub mod device;
 pub mod logs;
 
 /// What to ask the service.
@@ -200,10 +265,34 @@ pub enum Command {
     Gpus,
     /// List, place or remove widgets ([`Invocation::widgets`]).
     Widgets,
+    /// List, open or stop the apps that run in the background ([`Invocation::background`]).
+    Background,
     /// Print Android's log ([`Invocation::log_filter`], [`Invocation::dump`]).
     Logcat,
     /// Save the diagnostics archive to [`Invocation::output`].
     LogsCollect,
+    /// Say whether ARM apps can run, and with which translation package.
+    ArmTranslationStatus,
+    /// Install the ARM translation package in the folder [`Invocation::file`].
+    ArmTranslationInstall,
+    /// Remove the ARM translation package.
+    ArmTranslationRemove,
+    /// List, describe or uninstall the installed apps, or open their settings in Android
+    /// ([`Invocation::apps`]).
+    Apps,
+}
+
+/// What `dsa apps` does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppsAction {
+    /// List every app.
+    List,
+    /// Describe one app.
+    Info(String),
+    /// Uninstall one app.
+    Uninstall(String),
+    /// Open Android's settings of one app, or Android's list of every app.
+    Settings(Option<String>),
 }
 
 /// What `dsa widgets` does.
@@ -217,6 +306,17 @@ pub enum WidgetAction {
     Remove(i32),
     /// Print the placed widgets, then each change, until stopped.
     Watch,
+}
+
+/// What `dsa background` does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackgroundAction {
+    /// List the apps that run in the background and the media sessions.
+    List,
+    /// Open this package's window.
+    Open(String),
+    /// Stop this package.
+    Stop(String),
 }
 
 /// A setting `dsa settings set` changes.
@@ -234,6 +334,14 @@ pub enum Change {
     MemoryLimit(u32),
     DeveloperMode(bool),
     AdbPort(u16),
+    ArmTranslation(bool),
+    /// Show the device identity.
+    ShowDevice,
+    /// Change one value of the device identity.
+    Device(dsa_host_core::device_identity::Field, String),
+    /// Put one value of the device identity, or all of them, back to the image's own.
+    ResetDevice(Option<dsa_host_core::device_identity::Field>),
+    StopWithoutAsking(bool),
 }
 
 impl Change {
@@ -243,6 +351,9 @@ impl Change {
             "off" | "false" | "no" | "0" => Ok(false),
             _ => Err(format!("{name} is on or off, not {value:?}")),
         };
+        if let Some(field) = name.strip_prefix("device.") {
+            return device::parse_set(field, value);
+        }
         match name {
             "render-gpu" => Ok(Change::RenderGpu(value.to_string())),
             "freeze" => switch().map(Change::Freeze),
@@ -254,6 +365,8 @@ impl Change {
             "resize-trace" => switch().map(Change::ResizeTrace),
             "memory-limit" => parse_memory_limit(value).map(Change::MemoryLimit),
             "developer-mode" => switch().map(Change::DeveloperMode),
+            "arm-translation" => switch().map(Change::ArmTranslation),
+            "stop-without-asking" => switch().map(Change::StopWithoutAsking),
             "adb-port" => match value.parse::<u16>() {
                 Ok(port) if port > 0 => Ok(Change::AdbPort(port)),
                 _ => Err(format!(
@@ -263,7 +376,8 @@ impl Change {
             _ => Err(format!(
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, image-updates, input-trace, \
-                 resize-trace, memory-limit, developer-mode and adb-port"
+                 resize-trace, memory-limit, developer-mode, adb-port, arm-translation, \
+                 stop-without-asking and device.<field>"
             )),
         }
     }
@@ -354,6 +468,10 @@ pub struct Invocation {
     pub change: Option<Change>,
     /// What to do with widgets, for `dsa widgets`.
     pub widgets: Option<WidgetAction>,
+    /// What to do with the installed apps, for `dsa apps`.
+    pub apps: Option<AppsAction>,
+    /// What to do with the apps that run in the background, for `dsa background`.
+    pub background: Option<BackgroundAction>,
     /// Print the answer as JSON.
     pub json: bool,
     /// Print each step of `dsa install` as it happens.
@@ -390,6 +508,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut file = None;
     let mut change = None;
     let mut widgets = None;
+    let mut apps = None;
+    let mut background = None;
     let mut json = false;
     let mut progress = false;
     let mut buffers: u32 = 0;
@@ -398,14 +518,77 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut output = None;
     let mut wait_first_frame = false;
     let mut coordinates: Vec<u32> = Vec::new();
-    let mut args = args.iter();
+    let mut args = args.iter().peekable();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "logcat" if command.is_none() => command = Some(Command::Logcat),
+            "apps" if command.is_none() => command = Some(Command::Apps),
+            "list" if command == Some(Command::Apps) && apps.is_none() => {
+                apps = Some(AppsAction::List);
+            }
+            action @ ("info" | "uninstall") if command == Some(Command::Apps) && apps.is_none() => {
+                let package = args.next().ok_or_else(|| {
+                    format!(
+                        "dsa apps {action} needs the app's package, such as com.example.notes; \
+                         dsa apps list shows them"
+                    )
+                })?;
+                if !is_package_name(package) {
+                    return Err(format!(
+                        "{package:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                apps = Some(if action == "info" {
+                    AppsAction::Info(package.clone())
+                } else {
+                    AppsAction::Uninstall(package.clone())
+                });
+            }
+            "settings" if command == Some(Command::Apps) && apps.is_none() => {
+                apps = Some(AppsAction::Settings(None));
+            }
+            name if command == Some(Command::Apps)
+                && apps == Some(AppsAction::Settings(None))
+                && !name.starts_with('-') =>
+            {
+                if !is_package_name(name) {
+                    return Err(format!(
+                        "{name:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                apps = Some(AppsAction::Settings(Some(name.to_string())));
+            }
             "logs" if command.is_none() => match args.next().map(String::as_str) {
                 Some("collect") => command = Some(Command::LogsCollect),
                 _ => return Err(format!("dsa logs takes collect -o <file.zip>\n{USAGE}")),
             },
+            "arm-translation" if command.is_none() => {
+                // A bare option such as --json belongs to the default action, status.
+                let action = match args.peek() {
+                    Some(next) if next.starts_with("--") => None,
+                    _ => args.next().map(String::as_str),
+                };
+                command = Some(match action {
+                    None | Some("status") => Command::ArmTranslationStatus,
+                    Some("install") => {
+                        let folder = args.next().ok_or(
+                            "dsa arm-translation install needs the folder of the translation \
+                             package",
+                        )?;
+                        file = Some(std::path::PathBuf::from(folder));
+                        Command::ArmTranslationInstall
+                    }
+                    Some("remove") => Command::ArmTranslationRemove,
+                    Some(other) => {
+                        return Err(format!(
+                            "dsa arm-translation takes status, install <folder> or remove, not \
+                             {other:?}\n{USAGE}"
+                        ))
+                    }
+                });
+            }
             "-d" if command == Some(Command::Logcat) => dump = true,
             "-b" if command == Some(Command::Logcat) => {
                 let names = args
@@ -424,7 +607,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             }
             "status" | "start" | "stop" | "freeze" | "update" | "launch" | "tap" | "stop-app"
             | "install" | "apk-info" | "open" | "share" | "tasks" | "settings" | "memory"
-            | "gpus" | "widgets"
+            | "gpus" | "widgets" | "background"
                 if command.is_none() =>
             {
                 command = Some(match arg.as_str() {
@@ -444,6 +627,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     "memory" => Command::Memory,
                     "gpus" => Command::Gpus,
                     "widgets" => Command::Widgets,
+                    "background" => Command::Background,
                     _ => Command::Stop,
                 });
             }
@@ -455,6 +639,15 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     .next()
                     .ok_or_else(|| format!("dsa settings set {name} needs a value"))?;
                 change = Some(Change::parse(name, value)?);
+            }
+            "reset" if command == Some(Command::Settings) && change.is_none() => {
+                let name = args
+                    .next()
+                    .ok_or("dsa settings reset needs device or device.<field>")?;
+                change = Some(device::parse_reset(name)?);
+            }
+            "device" if command == Some(Command::Settings) && change.is_none() => {
+                change = Some(Change::ShowDevice);
             }
             "list" if command == Some(Command::Widgets) && widgets.is_none() => {
                 widgets = Some(WidgetAction::List);
@@ -485,21 +678,48 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     .ok_or_else(|| format!("a widget's ID is a number above 0, not {id:?}"))?;
                 widgets = Some(WidgetAction::Remove(id));
             }
+            "list" if command == Some(Command::Background) && background.is_none() => {
+                background = Some(BackgroundAction::List);
+            }
+            verb @ ("open" | "stop")
+                if command == Some(Command::Background) && background.is_none() =>
+            {
+                let name = args.next().ok_or_else(|| {
+                    format!(
+                        "dsa background {verb} needs the app's package; dsa background lists \
+                         them"
+                    )
+                })?;
+                if !dsa_host_core::background::valid_package(name) || !is_package_name(name) {
+                    return Err(format!(
+                        "{name:?} is not a package name; name the app by its package, such as \
+                         com.example.music"
+                    ));
+                }
+                background = Some(if verb == "open" {
+                    BackgroundAction::Open(name.clone())
+                } else {
+                    BackgroundAction::Stop(name.clone())
+                });
+            }
             "--json" => json = true,
             "--progress" if command == Some(Command::Install) => progress = true,
             "--wait-first-frame" if command == Some(Command::Launch) => wait_first_frame = true,
-            number if command == Some(Command::Tap)
-                && package.is_some()
-                && coordinates.len() < 2
-                && !number.starts_with('-') =>
+            number
+                if command == Some(Command::Tap)
+                    && package.is_some()
+                    && coordinates.len() < 2
+                    && !number.starts_with('-') =>
             {
                 let value: u32 = number
                     .parse()
                     .map_err(|_| format!("a point is two whole numbers, not {number:?}"))?;
                 coordinates.push(value);
             }
-            name if matches!(command, Some(Command::Launch | Command::Tap | Command::StopApp))
-                && package.is_none()
+            name if matches!(
+                command,
+                Some(Command::Launch | Command::Tap | Command::StopApp)
+            ) && package.is_none()
                 && !name.starts_with('-') =>
             {
                 if !is_package_name(name) {
@@ -539,6 +759,9 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     }
     let command = command.ok_or(USAGE)?;
     let widgets = (command == Command::Widgets).then(|| widgets.unwrap_or(WidgetAction::List));
+    let apps = (command == Command::Apps).then(|| apps.unwrap_or(AppsAction::List));
+    let background =
+        (command == Command::Background).then(|| background.unwrap_or(BackgroundAction::List));
     if command == Command::Install && file.is_none() {
         return Err(format!(
             "dsa install needs the APK file to install\n{USAGE}"
@@ -606,6 +829,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
         file,
         change,
         widgets,
+        apps,
+        background,
         json,
         progress,
         log_filter,
@@ -853,6 +1078,299 @@ pub fn widget_event_line(event: &WidgetEvent, json: bool) -> Option<String> {
     }
 }
 
+/// An installed app as one JSON object. With `icon`, the icon is in it as base64 PNG.
+pub fn app_json(app: &AppInfo, icon: bool) -> Value {
+    let mut value = json!({
+        "package": app.package_name,
+        "label": app.label,
+        "version_name": app.version_name,
+        "version_code": app.version_code,
+        "first_install_time_ms": app.first_install_time_ms,
+        "last_update_time_ms": app.last_update_time_ms,
+        "system_app": app.system_app,
+        "app_bytes": app.app_bytes,
+        "data_bytes": app.data_bytes,
+        "cache_bytes": app.cache_bytes,
+        "total_bytes": app.total_bytes(),
+    });
+    if icon {
+        value["icon_png"] = Value::String(base64(&app.icon_png));
+    }
+    value
+}
+
+/// A size in bytes as people read it: `3.2 MB`.
+pub fn human_size(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut unit = 0;
+    while size >= 1024.0 && unit < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{size:.1} {}", UNITS[unit])
+    }
+}
+
+/// What `dsa apps list` prints: one app a line.
+pub fn describe_apps(apps: &[AppInfo]) -> String {
+    if apps.is_empty() {
+        return "No app is installed in Android.".into();
+    }
+    let mut out = String::from("Installed apps (dsa apps info <package>):");
+    for app in apps {
+        let _ = write!(
+            out,
+            "\n  {}  {}{}  {}{}",
+            app.package_name,
+            app.label,
+            if app.version_name.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", app.version_name)
+            },
+            human_size(app.total_bytes()),
+            if app.system_app { "  (system)" } else { "" }
+        );
+    }
+    out
+}
+
+/// What `dsa apps info` prints.
+pub fn describe_app(app: &AppInfo) -> String {
+    let date = |ms: u64| {
+        if ms == 0 {
+            "unknown".to_string()
+        } else {
+            dsa_host_core::guest_log::utc_time(ms.saturating_mul(1_000_000))
+                .chars()
+                .take(10)
+                .collect()
+        }
+    };
+    [
+        format!("{} ({})", app.label, app.package_name),
+        format!(
+            "Version: {} ({})",
+            if app.version_name.is_empty() {
+                "unknown"
+            } else {
+                &app.version_name
+            },
+            app.version_code
+        ),
+        format!(
+            "Size: {} (app {}, data {}, cache {})",
+            human_size(app.total_bytes()),
+            human_size(app.app_bytes),
+            human_size(app.data_bytes),
+            human_size(app.cache_bytes)
+        ),
+        format!("Installed: {}", date(app.first_install_time_ms)),
+        format!("Updated: {}", date(app.last_update_time_ms)),
+        if app.system_app {
+            "Part of Android: it cannot be uninstalled".to_string()
+        } else {
+            "Installed by you: dsa apps uninstall removes it".to_string()
+        },
+    ]
+    .join("\n")
+}
+
+/// `dsa apps`: makes sure Android runs, then lists or describes its apps with their sizes read
+/// again, uninstalls one, or opens Android's settings of one (and, on Windows, the window
+/// manager that shows them).
+fn apps(
+    invocation: &Invocation,
+    mut client: HostApiClient,
+    connector: &mut dyn Connector,
+) -> Result<String, String> {
+    let action = invocation.apps.clone().unwrap_or(AppsAction::List);
+    #[cfg(windows)]
+    if invocation.endpoint.is_none() && matches!(action, AppsAction::Settings(_)) {
+        ensure_window_manager()?;
+    }
+    client
+        .ensure_running(OPEN_START_TIMEOUT, Duration::from_millis(250), |_| {})
+        .map_err(|e| format!("Android did not start: {e}"))?;
+    drop(client);
+    let mut client = connect(connector, None, false, Duration::from_secs(10))?;
+    match action {
+        AppsAction::List => {
+            let apps = client
+                .refreshed_apps()
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            Ok(if invocation.json {
+                json!({ "apps": apps.iter().map(|app| app_json(app, true)).collect::<Vec<_>>() })
+                    .to_string()
+            } else {
+                describe_apps(&apps)
+            })
+        }
+        AppsAction::Info(package) => {
+            let apps = client
+                .refreshed_apps()
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            let app = apps
+                .iter()
+                .find(|app| app.package_name == package)
+                .ok_or_else(|| {
+                    format!("no app of {package} is installed in Android; dsa apps list shows them")
+                })?;
+            Ok(if invocation.json {
+                app_json(app, true).to_string()
+            } else {
+                describe_app(app)
+            })
+        }
+        AppsAction::Uninstall(package) => {
+            let outcome = client.uninstall_app(&package).map_err(|e| e.to_string())?;
+            if !outcome.uninstalled() {
+                return Err(format!(
+                    "not uninstalled ({}): {}",
+                    outcome.status.code(),
+                    outcome
+                ));
+            }
+            Ok(if invocation.json {
+                json!({
+                    "package": outcome.package_name,
+                    "uninstalled": true,
+                    "status": outcome.status.code(),
+                    "message": outcome.message,
+                })
+                .to_string()
+            } else {
+                format!("Uninstalled {package}")
+            })
+        }
+        AppsAction::Settings(package) => {
+            client
+                .open_app_settings(package.as_deref())
+                .map_err(|e| e.to_string())?;
+            Ok(if invocation.json {
+                json!({ "opened": package }).to_string()
+            } else {
+                match package {
+                    Some(package) => format!("Opening the settings of {package}"),
+                    None => "Opening the list of apps".into(),
+                }
+            })
+        }
+    }
+}
+
+/// `dsa background`: lists the apps that run in the background, or opens or stops one. It
+/// never starts Android: an app runs in the background only in an Android that runs.
+fn background(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
+    match invocation
+        .background
+        .clone()
+        .unwrap_or(BackgroundAction::List)
+    {
+        BackgroundAction::List => {
+            let (apps, media) = client.background_apps().map_err(|e| e.to_string())?;
+            Ok(if invocation.json {
+                json!({
+                    "apps": apps.iter().map(background_app_json).collect::<Vec<_>>(),
+                    "media": media.iter().map(media_json).collect::<Vec<_>>(),
+                })
+                .to_string()
+            } else {
+                describe_background(&apps, &media)
+            })
+        }
+        BackgroundAction::Open(package) => {
+            client
+                .act_on_background(&package, BackgroundCommand::Open)
+                .map_err(|e| e.to_string())?;
+            Ok(if invocation.json {
+                json!({ "opened": package }).to_string()
+            } else {
+                format!("Opening {package}")
+            })
+        }
+        BackgroundAction::Stop(package) => {
+            client
+                .act_on_background(&package, BackgroundCommand::Stop)
+                .map_err(|e| e.to_string())?;
+            Ok(if invocation.json {
+                json!({ "stopped": package }).to_string()
+            } else {
+                format!("Stopped {package}")
+            })
+        }
+    }
+}
+
+/// An app that runs in the background as one JSON object.
+pub fn background_app_json(app: &BackgroundApp) -> Value {
+    json!({
+        "package": app.package_name,
+        "label": app.app_label,
+        "title": app.title,
+        "text": app.text,
+        "actions": app.actions,
+        "icon_png": base64(&app.icon_png),
+    })
+}
+
+/// A media session as one JSON object.
+pub fn media_json(session: &MediaSession) -> Value {
+    json!({
+        "package": session.package_name,
+        "label": session.app_label,
+        "title": session.title,
+        "artist": session.artist,
+        "album": session.album,
+        "playback": match session.playback {
+            Playback::Playing => "playing",
+            Playback::Paused => "paused",
+            Playback::Stopped => "stopped",
+        },
+    })
+}
+
+/// The apps that run in the background, one per line, and the media sessions.
+pub fn describe_background(apps: &[BackgroundApp], media: &[MediaSession]) -> String {
+    if apps.is_empty() && media.is_empty() {
+        return "No app runs in the background.".into();
+    }
+    let mut lines = Vec::new();
+    for app in apps {
+        let name = if app.app_label.is_empty() {
+            &app.package_name
+        } else {
+            &app.app_label
+        };
+        let mut line = format!("{name} ({})", app.package_name);
+        if !app.title.is_empty() {
+            let _ = write!(line, ": {}", app.title);
+        }
+        if !app.text.is_empty() {
+            let _ = write!(line, " - {}", app.text);
+        }
+        lines.push(line);
+    }
+    for session in media {
+        let state = match session.playback {
+            Playback::Playing => "playing",
+            Playback::Paused => "paused",
+            Playback::Stopped => "stopped",
+        };
+        lines.push(format!(
+            "Media of {}: {} {} ({state})",
+            session.package_name, session.title, session.artist
+        ));
+    }
+    lines.join("\n")
+}
+
 /// `status` as one JSON object.
 pub fn status_json(status: &Status) -> Value {
     json!({
@@ -878,6 +1396,8 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "developer_mode": report.settings.developer_mode,
         "adb_port": report.settings.adb_port,
         "adb_address": adb_address(&report.settings),
+        "arm_translation": report.settings.arm_translation,
+        "stop_without_asking": report.settings.stop_without_asking,
         "program_updates_available": report.facts.program_updates_available,
         "image_updates_available": report.facts.image_updates_available,
         "version": report.facts.version,
@@ -944,6 +1464,14 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         } else {
             format!("Developer mode: off (adb port {})", settings.adb_port)
         },
+        format!(
+            "ARM translation: {} (dsa arm-translation status says whether a package is installed)",
+            on_off(settings.arm_translation)
+        ),
+        format!(
+            "Stop background apps without asking: {}",
+            on_off(settings.stop_without_asking)
+        ),
         format!("Service version: {}", facts.version),
     ];
     if let Some(version) = &facts.android_version {
@@ -1053,6 +1581,11 @@ fn describe_gpus(gpus: &Value) -> String {
 
 /// `dsa settings`, and `dsa settings set`.
 fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
+    if let Some(change @ (Change::ShowDevice | Change::Device(..) | Change::ResetDevice(_))) =
+        &invocation.change
+    {
+        return device::run(change, invocation.json, client);
+    }
     let mut report = client.settings().map_err(|e| e.to_string())?;
     if let Some(change) = &invocation.change {
         let mut wanted = report.settings.clone();
@@ -1068,6 +1601,11 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::MemoryLimit(mb) => wanted.memory_limit_mb = *mb,
             Change::DeveloperMode(on) => wanted.developer_mode = *on,
             Change::AdbPort(port) => wanted.adb_port = *port,
+            Change::ArmTranslation(on) => wanted.arm_translation = *on,
+            Change::ShowDevice | Change::Device(..) | Change::ResetDevice(_) => {
+                unreachable!("answered above")
+            }
+            Change::StopWithoutAsking(on) => wanted.stop_without_asking = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
     }
@@ -1309,6 +1847,115 @@ fn install(
             outcome.package_name.as_deref().unwrap_or("the app")
         )
     })
+}
+
+/// `dsa arm-translation install`: checks the package before anything starts, starts Android
+/// when it is not running, and sends the package's image.
+fn install_arm_translation(
+    invocation: &Invocation,
+    mut client: HostApiClient,
+    connector: &mut dyn Connector,
+) -> Result<String, String> {
+    let folder = invocation
+        .file
+        .as_deref()
+        .unwrap_or(std::path::Path::new(""));
+    let opened = arm_translation::open_package(folder)?;
+    let sha256 = arm_translation::file_sha256(&opened.image)?;
+    #[cfg(windows)]
+    if invocation.endpoint.is_none() {
+        ensure_window_manager()?;
+    }
+    client
+        .ensure_running(invocation.timeout, Duration::from_millis(250), |_| {})
+        .map_err(|e| format!("Android did not start: {e}"))?;
+    drop(client);
+    let mut image = std::fs::File::open(&opened.image)
+        .map_err(|e| format!("{} cannot be read: {e}", opened.image.display()))?;
+    let status = connect(connector, None, false, Duration::from_secs(10))?
+        .install_arm_translation(&opened.package, opened.size, &sha256, &mut image)
+        .map_err(|e| format!("the ARM translation package was not installed: {e}"))?;
+    let done = format!(
+        "Installed {} {}",
+        opened.package.name, opened.package.version
+    );
+    Ok(show_arm_translation(invocation, &status, Some(&done)))
+}
+
+/// Where ARM translation stands as one JSON object.
+pub fn arm_translation_json(status: &ArmTranslationStatus) -> Value {
+    json!({
+        "package": status.package.as_ref().map(|package| json!({
+            "name": package.name,
+            "version": package.version,
+            "library": package.library,
+            "abis": package.abis,
+            "license": package.license,
+        })),
+        "enabled": status.enabled,
+        "supported": status.package.is_some() && status.enabled,
+        "android": status.guest.as_ref().map(|guest| json!({
+            "installed": guest.installed,
+            "active": guest.active,
+            "abilist": guest.abilist,
+        })),
+        "restart_needed": status.restart_needed,
+    })
+}
+
+/// Where ARM translation stands, one fact per line, after `done` when an action was taken.
+pub fn describe_arm_translation(status: &ArmTranslationStatus, done: Option<&str>) -> String {
+    let mut lines: Vec<String> = done.map(str::to_string).into_iter().collect();
+    lines.push(match (&status.package, status.enabled) {
+        (None, _) => "ARM apps: not supported (no translation package is installed)".to_string(),
+        (Some(package), true) => format!(
+            "ARM apps: supported by {} {} ({})",
+            package.name,
+            package.version,
+            if package.license.is_empty() {
+                "licence not given"
+            } else {
+                &package.license
+            }
+        ),
+        (Some(package), false) => format!(
+            "ARM apps: not supported ({} {} is installed but turned off; dsa settings set \
+             arm-translation on)",
+            package.name, package.version
+        ),
+    });
+    match &status.guest {
+        Some(guest) => lines.push(format!(
+            "Android installs apps for: {}{}",
+            if guest.abilist.is_empty() {
+                "(not known)"
+            } else {
+                &guest.abilist
+            },
+            if guest.active {
+                " (translation is on in this boot)"
+            } else {
+                ""
+            }
+        )),
+        None => lines.push("Android is not running".to_string()),
+    }
+    if status.restart_needed {
+        lines.push("Restart Android to apply this (dsa stop --wait, then dsa start)".to_string());
+    }
+    lines.join("\n")
+}
+
+fn show_arm_translation(
+    invocation: &Invocation,
+    status: &ArmTranslationStatus,
+    done: Option<&str>,
+) -> String {
+    if invocation.json {
+        arm_translation_json(status).to_string()
+    } else {
+        describe_arm_translation(status, done)
+    }
 }
 
 /// The APK as it is read to be sent, saying how much of it has gone.
@@ -1839,7 +2486,21 @@ pub fn run_with_starter(
             return Ok(format!("Stopping {package} and giving its memory back"));
         }
         Command::Install => return install(invocation, client, connector),
+        Command::ArmTranslationStatus => {
+            let status = client.arm_translation().map_err(|e| e.to_string())?;
+            return Ok(show_arm_translation(invocation, &status, None));
+        }
+        Command::ArmTranslationInstall => {
+            return install_arm_translation(invocation, client, connector);
+        }
+        Command::ArmTranslationRemove => {
+            let status = client.remove_arm_translation().map_err(|e| e.to_string())?;
+            let done = "Removed the ARM translation package";
+            return Ok(show_arm_translation(invocation, &status, Some(done)));
+        }
         Command::Widgets => return widgets(invocation, client, connector),
+        Command::Apps => return apps(invocation, client, connector),
+        Command::Background => return background(invocation, client),
         Command::Open | Command::Share => {
             return open_file(invocation, client, connector);
         }

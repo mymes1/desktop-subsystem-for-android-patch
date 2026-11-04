@@ -21,6 +21,12 @@ public partial class AdvancedPage : Page
     private async void OnClipboardToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetClipboardAsync(ClipboardSwitch.IsChecked == true);
 
+    private async void OnArmTranslationToggled(object sender, RoutedEventArgs e) =>
+        await ViewModel.SetArmTranslationAsync(ArmTranslationSwitch.IsChecked == true);
+
+    private async void OnRemoveArmTranslation(object sender, RoutedEventArgs e) =>
+        await ViewModel.RemoveArmTranslationAsync();
+
     private async void OnDeveloperModeToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetDeveloperModeAsync(DeveloperModeSwitch.IsChecked == true);
 

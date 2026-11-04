@@ -2,7 +2,8 @@
 <!--
   setup.exe: the DSA package behind this project's own setup screens (setup-ui\).
 
-  Build variables (-d): Version, ProductName, MsiPath, SetupUiDir (the built setup-ui\ program), and
+  Build variables (-d): Version, ProductName, MsiPath, SetupUiDir (the built setup-ui\ program),
+  Arch (x64 or arm64, the platform of the package it carries), and
   optionally AndroidMajor (the newest Android the release supports, shown on the first
   screen) and BundledImage (1 when the package carries an Android image).
 
@@ -16,13 +17,21 @@
   Android disk are in their own profile, under %LOCALAPPDATA%\DSA, whatever is chosen. The
   layout of both folders is the one in dsa.wxs.
 -->
+<?if $(Arch) = arm64 ?>
+<!-- NativeMachine is the machine's own processor (0xAA64 is ARM64), not the one setup.exe
+     may be emulating, so the ARM64 setup.exe refuses to run on any other PC. -->
+<?define BundleCondition = "NativeMachine = 43620" ?>
+<?else?>
+<?define BundleCondition = "VersionNT64" ?>
+<?endif?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
     <Bundle Name="$(ProductName)"
-            Manufacturer="Thisisthepy"
+            Manufacturer="ThisIsThePy"
             Version="$(Version)"
             UpgradeCode="706723c3-776c-4ab2-8402-780943fda74c"
-            IconSourceFile="setup-ui\assets\logo.ico">
+            IconSourceFile="setup-ui\assets\logo.ico"
+            Condition="$(BundleCondition)">
         <BootstrapperApplication SourceFile="$(SetupUiDir)\DsaSetup.exe">
             <Payload SourceFile="$(SetupUiDir)\DsaSetup.exe.config" />
             <Payload SourceFile="$(SetupUiDir)\mbanative.dll" />

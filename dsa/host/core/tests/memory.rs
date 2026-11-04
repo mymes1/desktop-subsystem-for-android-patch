@@ -14,6 +14,80 @@ use dsa_host_core::memory::{
     HeldMemory, HostMemory, HostProcessMemory, HostRole, IdleTrim, MemorySnapshot,
 };
 
+fn pressure(total_mb: u64, available_mb: u64, stall: f64) -> memory_pressure::GuestPressure {
+    memory_pressure::GuestPressure {
+        mem_total_kb: total_mb * MIB,
+        mem_available_kb: available_mb * MIB,
+        stall_percent: stall,
+    }
+}
+
+mod memory_pressure {
+    pub use dsa_host_core::memory::GuestPressure;
+}
+
+#[test]
+fn nfr2_the_vm_grows_when_the_guest_runs_short_up_to_its_maximum() {
+    use dsa_host_core::memory::{GrowthAction, MemoryGrowth};
+    let start = Instant::now();
+    let mut growth = MemoryGrowth::new(3072, 6144);
+    // Plenty free: nothing to do.
+    assert_eq!(growth.on_pressure(&pressure(2900, 1500, 0.0), start), None);
+    // Short: grows by half, at least 1 GiB.
+    assert_eq!(
+        growth.on_pressure(&pressure(2900, 300, 0.0), start),
+        Some(GrowthAction::Resize(4608))
+    );
+    // The guest sees it; still short a while later: grows to the maximum and no further.
+    let later = start + Duration::from_secs(6);
+    assert_eq!(
+        growth.on_pressure(&pressure(4400, 400, 20.0), later),
+        Some(GrowthAction::Resize(6144))
+    );
+    let later = later + Duration::from_secs(6);
+    assert_eq!(growth.on_pressure(&pressure(5900, 300, 20.0), later), None);
+    assert_eq!(growth.current_mb(), 6144);
+}
+
+#[test]
+fn nfr2_the_vm_gives_memory_back_once_the_guest_is_calm_but_not_below_its_base() {
+    use dsa_host_core::memory::{GrowthAction, MemoryGrowth};
+    let start = Instant::now();
+    let mut growth = MemoryGrowth::new(3072, 16384);
+    assert_eq!(
+        growth.on_pressure(&pressure(2900, 100, 0.0), start),
+        Some(GrowthAction::Resize(4608))
+    );
+    let t = start + Duration::from_secs(5);
+    assert_eq!(growth.on_pressure(&pressure(4400, 3000, 0.0), t), None);
+    // Calm for 30 seconds: back to what it uses plus headroom, here the base.
+    let t = t + Duration::from_secs(31);
+    assert_eq!(
+        growth.on_pressure(&pressure(4400, 3600, 0.0), t),
+        Some(GrowthAction::Resize(3072))
+    );
+    let t = t + Duration::from_secs(60);
+    assert_eq!(growth.on_pressure(&pressure(2900, 2000, 0.0), t), None);
+}
+
+#[test]
+fn nfr2_growing_stops_when_added_memory_never_reaches_the_guest() {
+    use dsa_host_core::memory::{GrowthAction, MemoryGrowth};
+    let start = Instant::now();
+    let mut growth = MemoryGrowth::new(3072, 16384);
+    assert!(matches!(
+        growth.on_pressure(&pressure(2900, 100, 0.0), start),
+        Some(GrowthAction::Resize(_))
+    ));
+    let t = start + Duration::from_secs(31);
+    assert!(matches!(
+        growth.on_pressure(&pressure(2900, 100, 0.0), t),
+        Some(GrowthAction::GiveUp(_))
+    ));
+    assert!(growth.stopped());
+    assert_eq!(growth.on_pressure(&pressure(2900, 100, 0.0), t), None);
+}
+
 #[test]
 fn nfr2_the_vm_is_sized_to_the_host_less_what_the_host_keeps() {
     use dsa_host_core::memory::{automatic_vm_memory_mb, vm_memory_mb};

@@ -4,9 +4,20 @@ use std::path::PathBuf;
 
 use dsa_host_windows::guid::Guid;
 use dsa_host_windows::vm::{
-    fine_grained_memory_supported, hosting_process_name_suffix_supported,
+    fine_grained_memory_supported, hosting_process_name_suffix_supported, memory_resize_request,
     runtime_id_from_properties, AndroidVmConfig, GuestArch, HOSTING_PROCESS_NAME_SUFFIX,
 };
+
+#[test]
+fn nfr2_the_memory_resize_request_names_the_vm_memory_size() {
+    let request: Value = serde_json::from_str(&memory_resize_request(4609)).unwrap();
+    assert_eq!(
+        request["ResourcePath"],
+        "VirtualMachine/ComputeTopology/Memory/SizeInMB"
+    );
+    assert_eq!(request["RequestType"], "Update");
+    assert_eq!(request["Settings"], 4608);
+}
 use serde_json::Value;
 
 const USER_SID: &str = "S-1-5-21-1004336348-1177238915-682003330-1001";
@@ -21,6 +32,7 @@ fn config() -> AndroidVmConfig {
         processors: 4,
         system_image: Some(PathBuf::from(r"C:\Program Files\DSA\vm\system.vhdx")),
         data_disk: PathBuf::from(r"C:\Users\me\AppData\Local\DSA\data.vhdx"),
+        pstore_disk: Some(PathBuf::from(r"C:\Users\me\AppData\Local\DSA\pstore.vhd")),
         socket_sids: vec![USER_SID.into()],
         page_reporting_order: 5,
         console_pipe: Some(r"\\.\pipe\dsa-console-dsa-android-S-1-5-21-1".into()),
@@ -112,15 +124,8 @@ fn fr27_an_arm64_kernel_gets_no_x86_parameters() {
     for x86 in ["uart8250", "ttyS0", "memmap=", "ramoops.mem_address"] {
         assert!(!options.contains(x86), "{x86} in {options}");
     }
-    // The ramoops region is reserved by name and split as on x86_64.
-    assert!(
-        options.contains(
-            "reserve_mem=1M:4096:dsa_ramoops ramoops.mem_name=dsa_ramoops \
-             ramoops.record_size=0x20000 ramoops.console_size=0x40000 \
-             ramoops.pmsg_size=0x40000 ramoops.ecc=1"
-        ),
-        "{options}"
-    );
+    // The last log lives on the pstore disk on both architectures, so no RAM is reserved.
+    assert!(!options.contains("ramoops"), "{options}");
     let x86 = config().full_kernel_cmdline_for(GuestArch::X86_64);
     for arm in ["pl011", "ttyAMA0", "reserve_mem="] {
         assert!(!x86.contains(arm), "{arm} in {x86}");
@@ -157,13 +162,15 @@ fn fr27_an_arm64_vm_without_an_initrd_names_none() {
 #[test]
 fn fr27_an_arm64_initrd_outside_the_kernels_folder_is_refused() {
     // The firmware reads only the boot folder, so it could not load the initrd.
-    let error = config()
+    let mut outside = config();
+    outside.initrd = Some(PathBuf::from(r"C:\ProgramData\DSA\initrd.img"));
+    let error = outside
         .to_hcs_document_for(GuestArch::Arm64)
         .unwrap_err()
         .to_string();
     assert!(error.contains("kernel's folder"), "{error}");
     // x86_64 boots the files from wherever they are.
-    document(&config());
+    document(&outside);
 }
 
 #[test]
@@ -184,11 +191,6 @@ fn fr2_the_vm_boots_its_kernel_directly_with_the_android_command_line() {
         "{cmdline}"
     );
     assert!(!cmdline.contains("hvc0"), "{cmdline}");
-    // The guest kernel's ramoops region, reserved before the kernel uses any memory.
-    assert!(
-        cmdline.contains("memmap=1M$0x10000000 ramoops.mem_address=0x10000000"),
-        "{cmdline}"
-    );
     assert!(cmdline.ends_with("androidboot.hardware=dsa"), "{cmdline}");
     assert_eq!(doc["SchemaVersion"]["Major"], 2);
     assert_eq!(doc["ShouldTerminateOnLastHandleClosed"], true);
@@ -256,6 +258,59 @@ fn fr2_the_system_image_is_read_only_and_the_data_disk_writable_and_sparse() {
     );
     assert_eq!(disks["1"]["ReadOnly"], false);
     assert_eq!(disks["1"]["AlwaysAllowSparseFiles"], true);
+}
+
+#[test]
+fn fr21_the_pstore_disk_is_attached_writable_after_the_other_disks() {
+    let doc = document(&config());
+    let disks = &doc["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"];
+    assert_eq!(
+        disks["2"]["Path"],
+        r"C:\Users\me\AppData\Local\DSA\pstore.vhd"
+    );
+    assert_eq!(disks["2"]["ReadOnly"], false);
+    assert_eq!(disks["2"]["Type"], "VirtualDisk");
+
+    let mut one_disk = config();
+    one_disk.system_image = None;
+    let doc = document(&one_disk);
+    let disks = &doc["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"];
+    assert_eq!(
+        disks["0"]["Path"],
+        r"C:\Users\me\AppData\Local\DSA\data.vhdx"
+    );
+    assert_eq!(
+        disks["1"]["Path"],
+        r"C:\Users\me\AppData\Local\DSA\pstore.vhd"
+    );
+}
+
+#[test]
+fn fr21_the_kernel_keeps_its_last_log_on_the_pstore_disk_not_in_ram() {
+    let doc = document(&config());
+    let cmdline = doc["VirtualMachine"]["Chipset"]["LinuxKernelDirect"]["KernelCmdLine"]
+        .as_str()
+        .unwrap();
+    assert!(
+        cmdline.contains(&format!(
+            "pstore_blk.blkdev=PARTUUID={}",
+            dsa_host_windows::pstore_disk::PARTITION_UUID
+        )),
+        "{cmdline}"
+    );
+    assert!(cmdline.contains("pstore_blk.best_effort=y"), "{cmdline}");
+    // A panic ends the VM, so a RAM region would keep nothing and only cost memory.
+    assert!(!cmdline.contains("ramoops"), "{cmdline}");
+    assert!(!cmdline.contains("memmap="), "{cmdline}");
+
+    let mut without = config();
+    without.pstore_disk = None;
+    let doc = document(&without);
+    let cmdline = doc["VirtualMachine"]["Chipset"]["LinuxKernelDirect"]["KernelCmdLine"]
+        .as_str()
+        .unwrap();
+    assert!(!cmdline.contains("pstore_blk"), "{cmdline}");
+    assert!(doc["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"]["2"].is_null());
 }
 
 #[test]

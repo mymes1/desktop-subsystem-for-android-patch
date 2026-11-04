@@ -88,6 +88,7 @@ that builds their paths. The settings app and the installer follow the same layo
 | Each user (`%LOCALAPPDATA%\DSA`) | |
 |---|---|
 | `android.vhdx`, `android.image-version` | the user's Android disk and the image it holds |
+| `pstore.vhd` | a fixed 4 MiB disk where the guest kernel keeps its last log across a crash; uninstalling removes it |
 | `apps\<package>\` | each app's window program |
 | `notifications\` | the icons notifications show |
 | `logs\` | `dsa-wm.log`, `dsa-app-window.log` |
@@ -98,8 +99,8 @@ that builds their paths. The settings app and the installer follow the same layo
 
 Outside them DSA writes only the Start menu shortcuts, its key `HKLM\SOFTWARE\thisisthepy\DSA`,
 the `Run` value that starts `dsa-wm`, the `.apk` association and context menu entries, the
-Hyper-V socket service registrations, and in each user's classes the notification protocol
-and each app's AppUserModelID.
+Hyper-V socket service registrations, in each user's classes the notification protocol
+and each app's AppUserModelID, and each app's entry in the user's list of installed apps.
 
 - No program uses the system's or the user's temporary folder. The service clears what
   earlier runs left in the machine's `tmp` when it starts.
@@ -203,6 +204,16 @@ after two minutes. `"keep_window_manager": false` turns this off.
   `dsa-wm.exe --notification <uri>`: that passes the click to the service and ends, and the
   app opens in Android, which leaves Doze first. Dismissing a toast dismisses the
   notification in Android too, unless the app keeps it.
+- It shows each app that keeps running in Android with no window, because it runs a
+  foreground service, as an icon in the notification area: the app's icon, with the
+  service's notification as its tooltip. Each icon has a GUID made from the app's package,
+  so Windows remembers per app whether it shows on the taskbar. A click opens the app; the
+  right click menu has Open, the notification's actions and Stop, which asks first (with
+  "Do not ask again", the `stop-without-asking` setting) and then has Android force-stop
+  the app. The icon goes when the service ends. An app's media session gets Windows' media
+  controls (SystemMediaTransportControls) through a hidden window that carries the app's
+  AppUserModelID, so the media keys and the media flyout reach it. The service's ongoing
+  notification is never a toast.
 - It shows the widgets the user placed on the desktop, each in a borderless layered window
   of its own. The window is a tool window owned by the shell's desktop window (`Progman`),
   so it is neither in the taskbar nor in Alt+Tab, stays when the user shows the desktop, and
@@ -238,12 +249,15 @@ after two minutes. `"keep_window_manager": false` turns this off.
   the same size to the eye. Density is set per task, so windows on monitors of different
   scales are each sharp.
 - Resizing a window asks Android to give its task the window's new client size. During a
-  live resize only the latest size is sent, not every size the edge passed through. The
-  window shows its last frame stretched over the new size until a frame of that size
-  arrives, then shows that frame 1:1. A window cannot grow past what Android's display
-  can hold, because a larger window could only show its frames stretched. That display is
-  chosen when Android starts: a square as long as the longest monitor, from 1920 to 3840
-  pixels on a side, so a window fills any monitor in either orientation. The service cannot
+  live resize only the latest size is sent, and the next one waits until the app has drawn
+  the last (at most 150 ms), so an app slower than the drag always works on the latest
+  size. The window changes size only together with a frame of that size: it keeps the size
+  of the frame it shows until the app has drawn a new one, then takes that frame's size and
+  shows the frame in the same composition commit. It follows the mouse as fast as the app
+  draws, and a frame is never stretched, cropped or shown with a margin. The size a drag
+  ends at is reached exactly. A window cannot grow past what Android's display can hold.
+  That display is chosen when Android starts: a square as long as the longest monitor,
+  from 1920 to 3840 pixels on a side, so a window fills any monitor in either orientation. The service cannot
   see the user's monitors from session 0, so the window manager and the app windows record
   them in `%LOCALAPPDATA%\DSA\monitors.txt`. A monitor longer than the display, or one
   attached after Android started, caps its windows at the display's size, and a maximised
@@ -260,10 +274,22 @@ after two minutes. `"keep_window_manager": false` turns this off.
   manager turns them into the task's size and density and sends those to the service.
   It tells the window the task's size, which pointer input is measured in, and the largest
   size the window may have.
+- A task window has no title bar above the app. Its client area reaches the window's top
+  edge, the app draws there, and the window draws only its caption buttons (minimize,
+  maximize or restore, close) over the app's top right corner. The band as high as a
+  standard caption at the window's DPI belongs to Windows: dragging it moves the window, a
+  double click maximizes it, a right click or Alt+Space opens the system menu, resting on
+  the maximize button shows the Windows 11 snap layouts, and the top edge resizes the window.
+  The window reports the band's height, and Android gives the task a top status bar and
+  caption bar inset of that height, so the app's toolbar sits below the buttons and its
+  status bar color runs behind them. The glyphs are dark over a light status bar and light
+  over a dark one, as the app tells Android; close turns red under the pointer. Under a high
+  contrast theme the buttons take the theme's colors. The title and icon are not drawn in
+  the window; the taskbar, Alt+Tab and the system menu show them.
 - Each window measures how long it waits for a frame of its new size after a resize, and
   the log gets a summary (median, 95th percentile, longest, and how many took 100 ms or
   more) every 20 resizes and when the window closes. A window still waiting after 2
-  seconds is logged as showing a stretched frame.
+  seconds is logged as keeping its size.
 - Mouse, touch and pen input in a window goes to its task. A point in the window becomes
   the same point of the task in Android's pixels, whatever the window's size and the
   monitor's scale, and a point inside the window always lands inside the task. The right
@@ -354,6 +380,26 @@ menu, so Windows search finds it by name and opens it, even while Android is sto
   menu folder (`dsa-hostd remove-user-data`). A Start menu moved elsewhere by folder
   redirection keeps its shortcuts, because the uninstaller cannot read another user's
   redirection.
+
+### Installed apps in Windows Settings
+
+Each app also shows in Windows Settings under Apps > Installed apps (and in Programs and
+Features), as it did with WSA, so it can be found and uninstalled there.
+
+- Together with the Start menu, the window manager writes one key for each app,
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Thisisthepy.DSA.<package>`, with
+  `DisplayName`, `DisplayIcon` (the app's window program), `DisplayVersion`, `Publisher`,
+  `InstallDate`, `EstimatedSize`, `NoModify`, `NoRepair` and `UninstallString`, which runs
+  `settings\DsaSettings.exe --uninstall-app <package>`. Windows has already asked the user, so
+  that opens a small window, laid out like the APK install window, that shows the app's icon,
+  name and version with the progress, runs `dsa apps uninstall <package>` hidden at once, and
+  shows the result: it closes itself after a success and says why otherwise. The settings app
+  is a windowed program, so no console window flashes up as it would if Windows ran `dsa`
+  itself.
+- Keys whose names start with `Thisisthepy.DSA.` are DSA's; no other key is ever changed or
+  removed. A key of an app no longer installed goes.
+- Uninstalling DSA removes them in every profile (`dsa-hostd remove-user-data`), loading the
+  user's `NTUSER.DAT` when the user is not signed in.
 
 ### Choosing the render GPU
 

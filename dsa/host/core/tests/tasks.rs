@@ -261,6 +261,7 @@ fn installed_app(package: &str, label: &str) -> AppInfo {
         package_name: package.into(),
         label: label.into(),
         icon_png: vec![0x89, b'P', b'N', b'G', label.len() as u8],
+        ..Default::default()
     }
 }
 
@@ -271,6 +272,7 @@ fn describe(agent: &mut Box<dyn Connection>, app: &AppInfo) {
             package_name: app.package_name.clone(),
             label: app.label.clone(),
             icon_png: app.icon_png.clone(),
+            ..Default::default()
         }),
     );
 }
@@ -363,6 +365,7 @@ fn fr3_an_apps_name_and_icon_reach_a_watching_client_before_its_task() {
         package_name: "com.example.app1".into(),
         label: "Clock".into(),
         icon_png: icon,
+        ..Default::default()
     };
     assert_eq!(
         stream.next(WAIT).unwrap(),

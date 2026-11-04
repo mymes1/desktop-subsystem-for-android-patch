@@ -38,6 +38,7 @@ mod daemon {
     use std::sync::Arc;
     use std::thread;
 
+    use dsa_guest_channeld::arm_translation::{self, ArmTranslation, BootFacts};
     use dsa_guest_channeld::logbridge::{
         files_in, DiagnosticFiles, LogBridge, LogPackets, LogSource, PortConnector,
     };
@@ -82,9 +83,36 @@ mod daemon {
     /// crashed, and Android's last log lines.
     struct Pstore;
 
+    const PSTORE: &str = "/sys/fs/pstore";
+
     impl DiagnosticFiles for Pstore {
         fn files(&self) -> Vec<(String, Result<Vec<u8>, String>)> {
-            files_in(std::path::Path::new("/sys/fs/pstore"), "android/pstore")
+            files_in(std::path::Path::new(PSTORE), "android/pstore")
+        }
+
+        /// Unlinking a pstore file erases its record from the pstore disk. Android's init
+        /// leaves the folder to system, this daemon's user, without write access (0550), so
+        /// the daemon gives itself that first.
+        fn delivered(&self, names: &[String]) {
+            use std::os::unix::fs::PermissionsExt;
+            if names.is_empty() {
+                return;
+            }
+            let dir = std::path::Path::new(PSTORE);
+            let writable = std::fs::Permissions::from_mode(0o750);
+            if let Err(why) = std::fs::set_permissions(dir, writable) {
+                eprintln!("dsa-channeld: {PSTORE} cannot be cleared: {why}");
+                return;
+            }
+            for name in names {
+                let Some(file) = name.strip_prefix("android/pstore/") else {
+                    continue;
+                };
+                let path = std::path::Path::new(PSTORE).join(file);
+                if let Err(why) = std::fs::remove_file(&path) {
+                    eprintln!("dsa-channeld: {} was not cleared: {why}", path.display());
+                }
+            }
         }
     }
 
@@ -224,6 +252,33 @@ mod daemon {
         }
     }
 
+    /// Reads a system property through bionic; empty when it is unset.
+    #[cfg(target_os = "android")]
+    fn read_property(name: &str) -> String {
+        use std::ffi::{c_char, c_int, CStr, CString};
+        extern "C" {
+            fn __system_property_get(name: *const c_char, value: *mut c_char) -> c_int;
+        }
+        /// bionic's `PROP_VALUE_MAX`.
+        const VALUE_MAX: usize = 92;
+        let Ok(name) = CString::new(name) else {
+            return String::new();
+        };
+        let mut value = [0 as c_char; VALUE_MAX];
+        // SAFETY: a NUL-terminated name and a buffer of the size bionic writes at most.
+        unsafe { __system_property_get(name.as_ptr(), value.as_mut_ptr()) };
+        // SAFETY: bionic leaves a NUL-terminated string there, empty if the property is unset.
+        unsafe { CStr::from_ptr(value.as_ptr()) }
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    /// A Linux system other than Android has no system properties.
+    #[cfg(not(target_os = "android"))]
+    fn read_property(_name: &str) -> String {
+        String::new()
+    }
+
     /// Off Android there is no adbd to switch.
     #[cfg(not(target_os = "android"))]
     fn switch_adb(_on: bool) {}
@@ -292,6 +347,24 @@ mod daemon {
     #[cfg(not(target_os = "android"))]
     fn reclaim_idle_memory(_router: Arc<Router>) {}
 
+    /// Tells the host how much memory the guest has, so it can add memory before the guest
+    /// runs out and take it back once the guest no longer needs it.
+    fn report_memory_pressure(router: Arc<Router>) {
+        use dsa_guest_channeld::pressure::{PressureReporter, Sample, SAMPLE_INTERVAL};
+        let mut reporter = PressureReporter::default();
+        loop {
+            thread::sleep(SAMPLE_INTERVAL);
+            let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") else {
+                continue;
+            };
+            let psi = std::fs::read_to_string("/proc/pressure/memory").unwrap_or_default();
+            let sample = Sample::parse(&meminfo, &psi);
+            if reporter.due(&sample, std::time::Instant::now()) {
+                router.to_host(sample.frame());
+            }
+        }
+    }
+
     pub fn run() -> i32 {
         let options = match options() {
             Ok(options) => options,
@@ -332,7 +405,14 @@ mod daemon {
         // The guest's clients (the agent and the hwcomposer) reach the daemon over binder.
         // Frames they send go to the host through `to_host`; the host's frames go to them.
         let (to_host, from_guest) = mpsc::channel::<Vec<u8>>();
-        let router = Arc::new(Router::new(to_host, check_agent).on_developer_mode(switch_adb));
+        let router = Arc::new(
+            Router::new(to_host, check_agent)
+                .on_developer_mode(switch_adb)
+                .on_arm_translation(Arc::new(ArmTranslation::new(
+                    arm_translation::DIR,
+                    BootFacts::of_system(|| read_property("ro.product.cpu.abilist")),
+                ))),
+        );
         let (to_guest, from_host) = mpsc::channel::<Vec<u8>>();
         // The guest's log goes on a port of its own, past the same handshake as the control
         // channel, and only while the host asks for it.
@@ -376,6 +456,10 @@ mod daemon {
         {
             let router = Arc::clone(&router);
             thread::spawn(move || reclaim_idle_memory(router));
+        }
+        {
+            let router = Arc::clone(&router);
+            thread::spawn(move || report_memory_pressure(router));
         }
         {
             let router = Arc::clone(&router);

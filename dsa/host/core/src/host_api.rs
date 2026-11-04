@@ -66,21 +66,31 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::apps::{self, UninstallOutcome};
+use crate::arm_translation::{self, GuestArmTranslation, Package};
+use crate::background::{
+    self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundWatch, MediaCommand,
+    MediaSession, Playback,
+};
+use crate::device_identity::{DeviceIdentity, DeviceIdentityStore, ImageBuild};
 use crate::diagnostics::HostFile;
 use crate::files::{self, FileAction, FileTransfer};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
 use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{InputEvent, PointerEvent};
 use crate::keys::KeyEvent;
+use crate::location::{Fix, LocationEvent, Wanted};
 use crate::memory::{
     snapshot_from_wire, snapshot_to_wire, GuestMemoryReport, HostMemory, MemorySnapshot,
 };
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent};
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
-use crate::session::{Session, SessionError, SessionState};
+use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
 use crate::settings::{Settings, SettingsStore};
-use crate::tasks::{AppInfo, Bounds, Task, TaskEvent, TaskRequest, TaskRequestError, TaskWatch};
+use crate::tasks::{
+    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskRequestError, TaskWatch,
+};
 use crate::widgets::{
     self, MemoryWidgetPlacements, Placement, Widget, WidgetError, WidgetEvent, WidgetFrame,
     WidgetPlacements, WidgetProvider, WidgetSize,
@@ -210,6 +220,31 @@ pub trait UserAndroid: Send + Sync {
             "this Android does not print on the host".into(),
         ))
     }
+    /// Whether this Android wants the host's location, from what it wants now on. `None`
+    /// when it takes no location from the host.
+    fn watch_location(&self) -> Option<Receiver<Wanted>> {
+        None
+    }
+    /// What the host's location service reported, for this Android while it wants a location.
+    fn host_location(&self, event: LocationEvent) {
+        let _ = event;
+    }
+    /// The apps that run in the background in this Android and every change to them.
+    /// `None` when it does not report them.
+    fn watch_background(&self) -> Option<BackgroundWatch> {
+        None
+    }
+    /// The apps that run in the background in this Android now, and its media sessions.
+    fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+        (Vec::new(), Vec::new())
+    }
+    /// Passes what the user did with an app that runs in the background to this Android.
+    fn background_action(&self, request: BackgroundRequest) -> Result<(), TaskRequestError> {
+        let _ = request;
+        Err(TaskRequestError::Failed(
+            "this Android does not report the apps that run in the background".into(),
+        ))
+    }
     /// The widgets this Android hosts now and every change to them. `None` when it hosts none.
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
         None
@@ -272,12 +307,59 @@ pub trait UserAndroid: Send + Sync {
             "this Android does not install APKs".into(),
         ))
     }
+    /// Sends an ARM translation package's system image, `size` bytes read from `content` whose
+    /// SHA-256 is `sha256`, to this Android's disk, and returns where translation stands once
+    /// the image is in place. The package is used from Android's next start.
+    fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<GuestArmTranslation, InstallError> {
+        let _ = (size, sha256, content);
+        Err(InstallError::Refused(
+            "this Android cannot take an ARM translation package".into(),
+        ))
+    }
+    /// Removes the ARM translation package's image from this Android's disk.
+    fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
+        Err(InstallError::Refused(
+            "this Android cannot take an ARM translation package".into(),
+        ))
+    }
+    /// Where ARM translation stands in this Android while it runs; `None` when it is not
+    /// running or does not say.
+    fn arm_translation(&self) -> Option<GuestArmTranslation> {
+        None
+    }
     /// What this Android has installed of `package`, if anything: its version and signing
     /// certificates.
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
         let _ = package;
         Err(TaskRequestError::Failed(
             "this Android cannot say which apps it has installed".into(),
+        ))
+    }
+    /// Asks this Android to read its installed apps again, sizes included, and waits for the
+    /// fresh list, which the watch of its tasks then carries.
+    fn refresh_apps(&self) -> Result<(), TaskRequestError> {
+        Err(TaskRequestError::Failed(
+            "this Android cannot list its apps again".into(),
+        ))
+    }
+    /// Opens Android's own settings of `package` in a window of its own, or the list of every
+    /// app when it is `None`.
+    fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
+        let _ = package;
+        Err(TaskRequestError::Failed(
+            "this Android cannot open its app settings".into(),
+        ))
+    }
+    /// Uninstalls the user app `package` and says how it went.
+    fn uninstall_app(&self, package: &str) -> Result<UninstallOutcome, TaskRequestError> {
+        let _ = package;
+        Err(TaskRequestError::Failed(
+            "this Android cannot uninstall apps".into(),
         ))
     }
     /// Watches a task's accessibility tree; Android reads it while any watch of the task
@@ -331,6 +413,18 @@ pub enum InstallError {
     NotRunning(String),
     /// The APK was not taken, or did not arrive whole; the detail says why.
     Refused(String),
+}
+
+/// Why an ARM translation package's image did not reach the session's Android, as the local
+/// API reports it.
+fn arm_install_error(error: SessionError) -> InstallError {
+    match error {
+        SessionError::NotActive(state) => {
+            InstallError::NotRunning(format!("Android is {state}; start it and try again"))
+        }
+        SessionError::InstallRefused(why) => InstallError::Refused(why),
+        other => InstallError::Refused(format!("Android could not be reached: {other}")),
+    }
 }
 
 impl UserAndroid for Session {
@@ -407,6 +501,12 @@ impl UserAndroid for Session {
     fn watch_clipboard(&self) -> Option<Receiver<String>> {
         Some(Session::watch_clipboard(self))
     }
+    fn watch_location(&self) -> Option<Receiver<Wanted>> {
+        Some(Session::watch_location(self))
+    }
+    fn host_location(&self, event: LocationEvent) {
+        Session::host_location(self, event)
+    }
     fn links_in_android(&self, on: bool) {
         Session::links_in_android(self, on)
     }
@@ -433,6 +533,15 @@ impl UserAndroid for Session {
     }
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
         Some(Session::watch_widgets(self))
+    }
+    fn watch_background(&self) -> Option<BackgroundWatch> {
+        Some(Session::watch_background(self))
+    }
+    fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+        Session::background_apps(self)
+    }
+    fn background_action(&self, request: BackgroundRequest) -> Result<(), TaskRequestError> {
+        Session::background_action(self, request).map_err(request_error)
     }
     fn widgets(&self) -> Vec<(i32, WidgetProvider)> {
         Session::widgets(self)
@@ -468,6 +577,29 @@ impl UserAndroid for Session {
     }
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
         Session::package_state(self, package, PACKAGE_QUERY_WAIT).map_err(request_error)
+    }
+    fn install_arm_translation(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<GuestArmTranslation, InstallError> {
+        Session::install_arm_translation(self, size, sha256, content).map_err(arm_install_error)
+    }
+    fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
+        Session::remove_arm_translation(self).map_err(arm_install_error)
+    }
+    fn arm_translation(&self) -> Option<GuestArmTranslation> {
+        Session::arm_translation(self).ok()
+    }
+    fn refresh_apps(&self) -> Result<(), TaskRequestError> {
+        Session::refresh_apps(self, apps::REFRESH_WAIT).map_err(request_error)
+    }
+    fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
+        Session::open_app_settings(self, package).map_err(request_error)
+    }
+    fn uninstall_app(&self, package: &str) -> Result<UninstallOutcome, TaskRequestError> {
+        Session::uninstall_app(self, package, apps::UNINSTALL_WAIT).map_err(request_error)
     }
     fn watch_accessibility(&self, task_id: i32) -> Option<AccessibilityWatch> {
         Some(Session::watch_accessibility(self, task_id))
@@ -642,10 +774,21 @@ fn task_to_wire(task: Task) -> types::Task {
         max_height: task.max_height,
         min_width: task.min_width,
         min_height: task.min_height,
+        status_bar_appearance: match task.status_bar {
+            StatusBarAppearance::Unspecified => types::StatusBarAppearance::Unspecified,
+            StatusBarAppearance::Light => types::StatusBarAppearance::Light,
+            StatusBarAppearance::Dark => types::StatusBarAppearance::Dark,
+        } as i32,
+        status_bar_color: task.status_bar_color,
     }
 }
 
 fn task_from_wire(task: types::Task) -> Task {
+    let status_bar = match task.status_bar_appearance() {
+        types::StatusBarAppearance::Unspecified => StatusBarAppearance::Unspecified,
+        types::StatusBarAppearance::Light => StatusBarAppearance::Light,
+        types::StatusBarAppearance::Dark => StatusBarAppearance::Dark,
+    };
     let bounds = task.bounds.unwrap_or_default();
     Task {
         task_id: task.task_id,
@@ -663,6 +806,8 @@ fn task_from_wire(task: types::Task) -> Task {
         max_height: task.max_height,
         min_width: task.min_width,
         min_height: task.min_height,
+        status_bar,
+        status_bar_color: task.status_bar_color,
     }
 }
 
@@ -671,6 +816,14 @@ fn app_to_wire(app: AppInfo) -> types::AppInfo {
         package_name: app.package_name,
         label: app.label,
         icon_png: app.icon_png,
+        version_name: app.version_name,
+        version_code: app.version_code,
+        first_install_time_ms: app.first_install_time_ms,
+        last_update_time_ms: app.last_update_time_ms,
+        system_app: app.system_app,
+        app_bytes: app.app_bytes,
+        data_bytes: app.data_bytes,
+        cache_bytes: app.cache_bytes,
     }
 }
 
@@ -679,6 +832,14 @@ fn app_from_wire(app: types::AppInfo) -> AppInfo {
         package_name: app.package_name,
         label: app.label,
         icon_png: app.icon_png,
+        version_name: app.version_name,
+        version_code: app.version_code,
+        first_install_time_ms: app.first_install_time_ms,
+        last_update_time_ms: app.last_update_time_ms,
+        system_app: app.system_app,
+        app_bytes: app.app_bytes,
+        data_bytes: app.data_bytes,
+        cache_bytes: app.cache_bytes,
     }
 }
 
@@ -869,6 +1030,67 @@ pub struct SettingsReport {
     pub settings: Settings,
     pub facts: ServiceFacts,
 }
+
+/// Where ARM translation stands for a user.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArmTranslationStatus {
+    /// The package the user installed, if any.
+    pub package: Option<Package>,
+    /// The user's `arm-translation` setting.
+    pub enabled: bool,
+    /// What the user's running Android says; `None` when it is not running.
+    pub guest: Option<GuestArmTranslation>,
+    /// What is installed and switched on applies only once Android starts again.
+    pub restart_needed: bool,
+}
+
+impl ArmTranslationStatus {
+    fn to_wire(&self) -> types::ArmTranslation {
+        let guest = self.guest.clone().unwrap_or_default();
+        types::ArmTranslation {
+            package: self.package.as_ref().map(package_to_wire),
+            enabled: self.enabled,
+            guest_known: self.guest.is_some(),
+            guest_installed: guest.installed,
+            guest_active: guest.active,
+            abilist: guest.abilist,
+            restart_needed: self.restart_needed,
+        }
+    }
+
+    fn from_wire(status: types::ArmTranslation) -> ArmTranslationStatus {
+        ArmTranslationStatus {
+            package: status.package.map(package_from_wire),
+            enabled: status.enabled,
+            guest: status.guest_known.then_some(GuestArmTranslation {
+                installed: status.guest_installed,
+                active: status.guest_active,
+                abilist: status.abilist,
+            }),
+            restart_needed: status.restart_needed,
+        }
+    }
+}
+
+fn package_to_wire(package: &Package) -> types::ArmTranslationPackage {
+    types::ArmTranslationPackage {
+        name: package.name.clone(),
+        version: package.version.clone(),
+        library: package.library.clone(),
+        abis: package.abis.clone(),
+        license: package.license.clone(),
+    }
+}
+
+fn package_from_wire(package: types::ArmTranslationPackage) -> Package {
+    Package {
+        name: package.name,
+        version: package.version,
+        library: package.library,
+        abis: package.abis,
+        license: package.license,
+    }
+}
 /// How long the service waits for the fresh memory report it asks Android for.
 const MEMORY_WAIT: Duration = Duration::from_secs(3);
 
@@ -890,7 +1112,12 @@ pub struct HostApiService {
     placements: Arc<dyn WidgetPlacements>,
     /// The host's logs that go in a user's diagnostics, by user.
     host_logs: Option<HostLogs>,
+    /// Where each user's device identity is kept, and what the image's build says.
+    identities: Option<(Arc<dyn DeviceIdentityStore>, ImageBuildSource)>,
 }
+
+/// Says what the build of the image a user's Android starts from is, by user.
+pub type ImageBuildSource = Arc<dyn Fn(&str) -> Option<ImageBuild> + Send + Sync>;
 
 /// Names the host's log files that go in a user's diagnostics archive: the service's own and
 /// those of the processes in that user's session, never another user's.
@@ -913,7 +1140,19 @@ impl HostApiService {
             memory_wait: MEMORY_WAIT,
             placements: Arc::new(MemoryWidgetPlacements::default()),
             host_logs: None,
+            identities: None,
         }
+    }
+
+    /// Keeps each user's device identity in `store`; `build` says what the image's own build
+    /// is, for the values the user did not choose.
+    pub fn with_device_identities(
+        mut self,
+        store: Arc<dyn DeviceIdentityStore>,
+        build: ImageBuildSource,
+    ) -> HostApiService {
+        self.identities = Some((store, build));
+        self
     }
 
     /// Puts the host log files `host_logs` names for a user in that user's diagnostics.
@@ -1088,11 +1327,25 @@ impl HostApiService {
             if let Some(request::Body::WatchPrintJobs(_)) = request.body {
                 return self.watch_print_jobs(connection, &peer, request.id);
             }
+            if let Some(request::Body::WatchLocation(_)) = request.body {
+                return self.watch_location(connection, &peer, request.id);
+            }
             if let Some(request::Body::WatchWidgets(_)) = request.body {
                 return self.watch_widgets(connection, &peer, request.id);
             }
+            if let Some(request::Body::WatchBackgroundApps(_)) = request.body {
+                return self.watch_background(connection, &peer, request.id);
+            }
             if let Some(request::Body::InstallApk(install)) = &request.body {
                 return self.install_apk(connection, &peer, request.id, install.clone());
+            }
+            if let Some(request::Body::InstallArmTranslation(install)) = &request.body {
+                return self.install_arm_translation(
+                    connection,
+                    &peer,
+                    request.id,
+                    install.clone(),
+                );
             }
             if let Some(request::Body::WatchLinks(_)) = request.body {
                 return self.watch_links(connection, &peer, request.id);
@@ -1652,6 +1905,102 @@ impl HostApiService {
         }
     }
 
+    /// Answers a WatchLocation request, then tells the client each time its Android starts or
+    /// stops wanting the location, and passes the positions and statuses the client sends to
+    /// its Android, until the client goes away. A position that is not on Earth is dropped,
+    /// and so is a frame that cannot be read; anything else the client sends closes the
+    /// connection.
+    fn watch_location(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let watched = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => match android.watch_location() {
+                Some(watch) => Ok((android, watch)),
+                None => Err(error(
+                    ErrorCode::Unavailable,
+                    "this Android takes no location from the host".into(),
+                )),
+            },
+        };
+        let (android, watch) = match watched {
+            Ok(watched) => watched,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::Done(types::Done {})),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_err() {
+            return;
+        }
+        loop {
+            loop {
+                match watch.try_recv() {
+                    Ok(wanted) => {
+                        let frame = Body::LocationWanted(wanted.to_host_api());
+                        if send(&mut *connection, frame).is_err() {
+                            return;
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        connection.close();
+                        return;
+                    }
+                }
+            }
+            let frame = match connection.recv(Some(CLIPBOARD_POLL)) {
+                Ok(frame) => frame,
+                Err(TransportError::Timeout) => continue,
+                Err(_) => return,
+            };
+            match decode(&frame) {
+                Ok(Envelope {
+                    body: Some(Body::LocationFix(fix)),
+                }) => match Fix::from_host_api(&fix) {
+                    Ok(fix) => android.host_location(LocationEvent::Fix(fix)),
+                    Err(why) => eprintln!(
+                        "local API: dropped a location from a client of {}: {why}",
+                        peer.user
+                    ),
+                },
+                Ok(Envelope {
+                    body: Some(Body::LocationStatus(status)),
+                }) => match LocationEvent::from_host_api_status(&status) {
+                    Ok(event) => android.host_location(event),
+                    Err(why) => eprintln!(
+                        "local API: dropped a location status from a client of {}: {why}",
+                        peer.user
+                    ),
+                },
+                Ok(_) => {
+                    eprintln!(
+                        "local API: a client of {} sent something other than a location on a \
+                         connection that carries the location; closing its connection",
+                        peer.user
+                    );
+                    connection.close();
+                    return;
+                }
+                Err(error) => {
+                    eprintln!(
+                        "local API: a client of {} sent an unreadable frame on a connection \
+                         that carries the location ({error}); dropping it",
+                        peer.user
+                    );
+                }
+            }
+        }
+    }
+
     /// Answers a WatchNotifications request, then passes the notifications of the client's
     /// Android to it until the client goes away. The client sends nothing more: anything it
     /// sends closes the connection, except a frame that cannot be read, which is dropped.
@@ -2024,6 +2373,36 @@ impl HostApiService {
         }
     }
 
+    fn open_app_settings(&self, peer: &Peer, package: &str) -> response::Body {
+        if !package.is_empty() && !apk::valid_package_name(package) {
+            return not_a_package(package);
+        }
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.open_app_settings(Some(package).filter(|p| !p.is_empty())) {
+            Ok(()) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    fn uninstall_app(&self, peer: &Peer, package: &str) -> response::Body {
+        if !apk::valid_package_name(package) {
+            return not_a_package(package);
+        }
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.uninstall_app(package) {
+            Ok(outcome) => response::Body::UninstallResult(outcome.to_wire()),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
     fn package_state(&self, peer: &Peer, package: &str) -> response::Body {
         if !apk::valid_package_name(package) {
             return error(
@@ -2249,6 +2628,172 @@ impl HostApiService {
         }
     }
 
+    /// The apps that run in the background in the caller's Android and its media sessions.
+    /// An Android that is not running has none.
+    fn list_background(&self, peer: &Peer) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        let (apps, media) = android.background_apps();
+        response::Body::BackgroundApps(background_to_wire(apps, media))
+    }
+
+    /// Answers a WatchBackgroundApps request with the apps there are now, then passes every
+    /// change until the client goes away. The client sends nothing more: anything it sends
+    /// closes the connection, except a frame that cannot be read, which is dropped.
+    fn watch_background(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let watched = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => android.watch_background().ok_or_else(|| {
+                error(
+                    ErrorCode::Unavailable,
+                    "this Android does not report the apps that run in the background".into(),
+                )
+            }),
+        };
+        let watch = match watched {
+            Ok(watch) => watch,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::BackgroundApps(background_to_wire(
+                watch.apps,
+                watch.media,
+            ))),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_err() {
+            return;
+        }
+        loop {
+            loop {
+                match watch.events.try_recv() {
+                    Ok(event) => {
+                        if send(&mut *connection, background_event_to_wire(event)).is_err() {
+                            return;
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        connection.close();
+                        return;
+                    }
+                }
+            }
+            let frame = match connection.recv(Some(CLIPBOARD_POLL)) {
+                Ok(frame) => frame,
+                Err(TransportError::Timeout) => continue,
+                Err(_) => return,
+            };
+            match decode(&frame) {
+                Ok(_) => {
+                    eprintln!(
+                        "local API: a client of {} sent something on a connection that watches \
+                         the apps that run in the background; closing its connection",
+                        peer.user
+                    );
+                    connection.close();
+                    return;
+                }
+                Err(error) => {
+                    eprintln!(
+                        "local API: a client of {} sent an unreadable frame on a connection \
+                         that watches the apps that run in the background ({error}); dropping it",
+                        peer.user
+                    );
+                }
+            }
+        }
+    }
+
+    /// Passes what the user did with an app that runs in the background to the caller's
+    /// Android.
+    fn act_on_background(&self, peer: &Peer, act: types::ActOnBackgroundApp) -> response::Body {
+        if !background::valid_package(&act.package_name) {
+            return error(
+                ErrorCode::UnknownRequest,
+                "the package name is not an Android package name".into(),
+            );
+        }
+        let command = match types::BackgroundAppCommand::try_from(act.command) {
+            Ok(types::BackgroundAppCommand::Open) => BackgroundCommand::Open,
+            Ok(types::BackgroundAppCommand::Action) => match u32::try_from(act.action) {
+                Ok(index) if (index as usize) < background::MAX_ACTIONS => {
+                    BackgroundCommand::Action(index)
+                }
+                _ => {
+                    return error(
+                        ErrorCode::UnknownRequest,
+                        format!(
+                            "a notification has at most {} actions; there is no action {}",
+                            background::MAX_ACTIONS,
+                            act.action
+                        ),
+                    )
+                }
+            },
+            Ok(types::BackgroundAppCommand::Stop) => BackgroundCommand::Stop,
+            _ => {
+                return error(
+                    ErrorCode::UnknownRequest,
+                    "an app that runs in the background can be opened, sent one of its \
+                     notification's actions, or stopped"
+                        .into(),
+                )
+            }
+        };
+        self.background_request(peer, BackgroundRequest::App(act.package_name, command))
+    }
+
+    /// Runs a media key's command on a media session of the caller's Android.
+    fn control_media(&self, peer: &Peer, control: types::ControlMedia) -> response::Body {
+        if !background::valid_package(&control.package_name) {
+            return error(
+                ErrorCode::UnknownRequest,
+                "the package name is not an Android package name".into(),
+            );
+        }
+        let command = match types::MediaCommand::try_from(control.command) {
+            Ok(types::MediaCommand::Play) => MediaCommand::Play,
+            Ok(types::MediaCommand::Pause) => MediaCommand::Pause,
+            Ok(types::MediaCommand::Next) => MediaCommand::Next,
+            Ok(types::MediaCommand::Previous) => MediaCommand::Previous,
+            Ok(types::MediaCommand::Stop) => MediaCommand::Stop,
+            _ => {
+                return error(
+                    ErrorCode::UnknownRequest,
+                    "a media command is play, pause, next, previous or stop".into(),
+                )
+            }
+        };
+        self.background_request(
+            peer,
+            BackgroundRequest::Media(control.package_name, command),
+        )
+    }
+
+    fn background_request(&self, peer: &Peer, request: BackgroundRequest) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.background_action(request) {
+            Ok(()) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
     /// Answers an InstallApk request: refuses an APK that is too large or not named as one,
     /// else streams the ApkChunk frames that follow to the caller's Android and answers again
     /// with how the install ended. The connection ends with the install.
@@ -2330,6 +2875,10 @@ impl HostApiService {
             Some(request::Body::UpdateProgram(_)) => self.update_program(peer),
             Some(request::Body::GetSettings(_)) => self.get_settings(peer),
             Some(request::Body::SetSettings(set)) => self.set_settings(peer, set),
+            Some(request::Body::GetDeviceIdentity(_)) => self.device_identity(peer, None),
+            Some(request::Body::SetDeviceIdentity(set)) => {
+                self.device_identity(peer, Some(set.identity.unwrap_or_default()))
+            }
             Some(request::Body::GetMemory(_)) => match self.androids.android(&peer.user) {
                 Err(why) => error(ErrorCode::Unavailable, why),
                 Ok(android) => {
@@ -2352,14 +2901,26 @@ impl HostApiService {
                         .unwrap_or_default(),
                 )),
             },
-            Some(request::Body::ListApps(_)) => match self.androids.android(&peer.user) {
+            Some(request::Body::ListApps(list)) => match self.androids.android(&peer.user) {
                 Err(why) => error(ErrorCode::Unavailable, why),
-                Ok(android) => response::Body::InstalledApps(installed_to_wire(
-                    android
-                        .watch_tasks()
-                        .and_then(|watch| installed_of(watch.current)),
-                )),
+                Ok(android) => match list.refresh.then(|| android.refresh_apps()) {
+                    Some(Err(TaskRequestError::NotRunning(why))) => {
+                        error(ErrorCode::NotRunning, why)
+                    }
+                    Some(Err(TaskRequestError::Failed(why))) => error(ErrorCode::Unavailable, why),
+                    Some(Ok(())) | None => response::Body::InstalledApps(installed_to_wire(
+                        android
+                            .watch_tasks()
+                            .and_then(|watch| installed_of(watch.current)),
+                    )),
+                },
             },
+            Some(request::Body::OpenAppSettings(open)) => {
+                self.open_app_settings(peer, &open.package_name)
+            }
+            Some(request::Body::UninstallApp(uninstall)) => {
+                self.uninstall_app(peer, &uninstall.package_name)
+            }
             Some(request::Body::CloseTask(close)) => self.request(
                 peer,
                 TaskRequest::Close {
@@ -2399,12 +2960,24 @@ impl HostApiService {
                     density_dpi: density.density_dpi,
                 },
             ),
+            Some(request::Body::SetTaskCaption(caption)) => self.request(
+                peer,
+                TaskRequest::SetCaption {
+                    task_id: caption.task_id,
+                    height: caption.height,
+                },
+            ),
             Some(request::Body::SetWindowsShown(shown)) => {
                 self.request(peer, TaskRequest::WindowsShown { shown: shown.shown })
             }
             Some(request::Body::ActOnNotification(act)) => self.act_on_notification(peer, act),
             Some(request::Body::ReportPrintJob(report)) => self.report_print_job(peer, report),
+            Some(request::Body::ListBackgroundApps(_)) => self.list_background(peer),
+            Some(request::Body::ActOnBackgroundApp(act)) => self.act_on_background(peer, act),
+            Some(request::Body::ControlMedia(control)) => self.control_media(peer, control),
             Some(request::Body::ListWidgetProviders(_)) => self.widget_providers(peer),
+            Some(request::Body::GetArmTranslation(_)) => self.get_arm_translation(peer),
+            Some(request::Body::RemoveArmTranslation(_)) => self.remove_arm_translation(peer),
             Some(request::Body::GetPackage(get)) => self.package_state(peer, &get.package_name),
             Some(request::Body::AddWidget(add)) => self.add_widget(peer, add),
             Some(request::Body::RemoveWidget(remove)) => self.remove_widget(peer, remove.widget_id),
@@ -2434,25 +3007,37 @@ impl HostApiService {
                         | request::Body::GetVmId(_)
                         | request::Body::ListTasks(_)
                         | request::Body::ListApps(_)
+                        | request::Body::OpenAppSettings(_)
+                        | request::Body::UninstallApp(_)
                         | request::Body::WatchTasks(_)
                         | request::Body::CloseTask(_)
                         | request::Body::LaunchApp(_)
                         | request::Body::ResizeTask(_)
                         | request::Body::SetTaskDensity(_)
+                        | request::Body::SetTaskCaption(_)
                         | request::Body::SetWindowsShown(_)
                         | request::Body::FreezeSession(_)
                         | request::Body::GetSettings(_)
                         | request::Body::SetSettings(_)
+                        | request::Body::GetDeviceIdentity(_)
+                        | request::Body::SetDeviceIdentity(_)
                         | request::Body::GetMemory(_)
                         | request::Body::StreamInput(_)
                         | request::Body::WatchClipboard(_)
                         | request::Body::InstallApk(_)
+                        | request::Body::InstallArmTranslation(_)
+                        | request::Body::GetArmTranslation(_)
+                        | request::Body::RemoveArmTranslation(_)
                         | request::Body::WatchLinks(_)
                         | request::Body::OpenFile(_)
                         | request::Body::WatchNotifications(_)
                         | request::Body::ActOnNotification(_)
                         | request::Body::WatchPrintJobs(_)
                         | request::Body::ReportPrintJob(_)
+                        | request::Body::ListBackgroundApps(_)
+                        | request::Body::WatchBackgroundApps(_)
+                        | request::Body::ActOnBackgroundApp(_)
+                        | request::Body::ControlMedia(_)
                         | request::Body::ListWidgetProviders(_)
                         | request::Body::GetPackage(_)
                         | request::Body::AddWidget(_)
@@ -2464,7 +3049,8 @@ impl HostApiService {
                         | request::Body::WatchAccessibility(_)
                         | request::Body::WatchLog(_)
                         | request::Body::CollectDiagnostics(_)
-                        | request::Body::StopApp(_) => unreachable!("answered above"),
+                        | request::Body::StopApp(_)
+                        | request::Body::WatchLocation(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -2573,6 +3159,197 @@ impl HostApiService {
 }
 
 impl HostApiService {
+    /// Where ARM translation stands for `peer`: the package they installed, their setting,
+    /// and what their running Android says.
+    fn arm_translation_status(
+        &self,
+        peer: &Peer,
+        store: &dyn SettingsStore,
+        guest: Option<GuestArmTranslation>,
+    ) -> Result<ArmTranslationStatus, String> {
+        let package = store.arm_translation(&peer.user)?;
+        let enabled = store.get(&peer.user)?.arm_translation;
+        let guest = guest.or_else(|| {
+            self.androids
+                .android(&peer.user)
+                .ok()
+                .and_then(|android| android.arm_translation())
+        });
+        Ok(ArmTranslationStatus {
+            restart_needed: arm_translation::restart_needed(
+                package.as_ref(),
+                enabled,
+                guest.as_ref(),
+            ),
+            package,
+            enabled,
+            guest,
+        })
+    }
+
+    fn get_arm_translation(&self, peer: &Peer) -> response::Body {
+        let Some((store, _)) = &self.settings else {
+            return Self::no_settings();
+        };
+        match self.arm_translation_status(peer, &**store, None) {
+            Ok(status) => response::Body::ArmTranslation(status.to_wire()),
+            Err(why) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    /// Removes the caller's ARM translation package: from their Android's disk when it runs,
+    /// and from their settings, so no later boot uses it.
+    fn remove_arm_translation(&self, peer: &Peer) -> response::Body {
+        let Some((store, _)) = &self.settings else {
+            return Self::no_settings();
+        };
+        let mut guest = None;
+        if let Ok(android) = self.androids.android(&peer.user) {
+            if matches!(
+                android.state(),
+                SessionState::Active | SessionState::Dozing | SessionState::Frozen
+            ) {
+                match android.remove_arm_translation() {
+                    Ok(state) => guest = Some(state),
+                    Err(InstallError::NotRunning(why)) => return error(ErrorCode::NotRunning, why),
+                    Err(InstallError::Refused(why)) => return error(ErrorCode::Unavailable, why),
+                }
+            }
+        }
+        if let Err(why) = store.set_arm_translation(&peer.user, None) {
+            return error(ErrorCode::Unavailable, why);
+        }
+        eprintln!("arm translation: {} removed their package", peer.user);
+        match self.arm_translation_status(peer, &**store, guest) {
+            Ok(status) => response::Body::ArmTranslation(status.to_wire()),
+            Err(why) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    /// Answers an InstallArmTranslation request: refuses a package whose description is not
+    /// usable, else streams the image the client sends after Done to the caller's Android, and
+    /// once it is there records the package with the caller's settings and answers again with
+    /// where translation stands. The connection ends with the install.
+    fn install_arm_translation(
+        &self,
+        mut connection: Box<dyn Connection>,
+        peer: &Peer,
+        id: u64,
+        install: types::InstallArmTranslation,
+    ) {
+        let answer = |connection: &mut dyn Connection, body: response::Body| {
+            let _ = send(
+                connection,
+                Body::Response(Response {
+                    id,
+                    body: Some(body),
+                }),
+            );
+        };
+        let refuse = |mut connection: Box<dyn Connection>, body: response::Body| {
+            answer(&mut *connection, body);
+            connection.close();
+        };
+        let Some((store, _)) = &self.settings else {
+            return refuse(connection, Self::no_settings());
+        };
+        let package = install
+            .package
+            .map(package_from_wire)
+            .ok_or_else(|| "the request does not describe the package".to_string())
+            .and_then(|package| package.check().map(|()| package))
+            .and_then(|package| {
+                if install.size == 0 || install.size > arm_translation::MAX_IMAGE_BYTES {
+                    Err(format!(
+                        "the package's image is {} bytes; it must have from 1 byte to {} MiB",
+                        install.size,
+                        arm_translation::MAX_IMAGE_BYTES >> 20
+                    ))
+                } else if install.sha256.len() != 32 {
+                    Err("the request does not carry the image's SHA-256".to_string())
+                } else {
+                    Ok(package)
+                }
+            });
+        let package = match package {
+            Ok(package) => package,
+            Err(why) => {
+                eprintln!(
+                    "arm translation: refused a package from {}: {why}",
+                    peer.user
+                );
+                return refuse(connection, error(ErrorCode::InstallRefused, why));
+            }
+        };
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return refuse(connection, error(ErrorCode::Unavailable, why)),
+        };
+        let state = android.state();
+        if !matches!(
+            state,
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) {
+            let why = format!("Android is {state}; start it and install the package again");
+            return refuse(connection, error(ErrorCode::NotRunning, why));
+        }
+        answer(&mut *connection, response::Body::Done(types::Done {}));
+        eprintln!(
+            "arm translation: {} is installing {} {} ({} bytes)",
+            peer.user, package.name, package.version, install.size
+        );
+        let mut content = ApkChunks {
+            connection: &mut *connection,
+            user: &peer.user,
+            left: install.size,
+            piece: Vec::new(),
+            at: 0,
+        };
+        let installed =
+            android.install_arm_translation(install.size, &install.sha256, &mut content);
+        let body = match installed {
+            Ok(guest) => match store.set_arm_translation(&peer.user, Some(&package)) {
+                Ok(()) => match self.arm_translation_status(peer, &**store, Some(guest)) {
+                    Ok(status) => response::Body::ArmTranslation(status.to_wire()),
+                    Err(why) => error(ErrorCode::Unavailable, why),
+                },
+                Err(why) => error(ErrorCode::Unavailable, why),
+            },
+            Err(InstallError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(InstallError::Refused(why)) => error(ErrorCode::InstallRefused, why),
+        };
+        answer(&mut *connection, body);
+        connection.close();
+    }
+
+    /// The caller's device identity, after replacing it with `wanted` when there is one.
+    fn device_identity(
+        &self,
+        peer: &Peer,
+        wanted: Option<types::DeviceIdentity>,
+    ) -> response::Body {
+        let Some((store, build)) = &self.identities else {
+            return Self::no_settings();
+        };
+        let chosen = match wanted {
+            Some(wanted) => {
+                match store.set(&peer.user, &crate::device_identity::from_wire(wanted)) {
+                    Ok(chosen) => chosen,
+                    Err(why) => return error(ErrorCode::InvalidSetting, why),
+                }
+            }
+            None => match store.get(&peer.user) {
+                Ok(chosen) => chosen,
+                Err(why) => return error(ErrorCode::Unavailable, why),
+            },
+        };
+        let effective = chosen.effective(build(&peer.user).as_ref());
+        response::Body::DeviceIdentity(types::DeviceIdentityReport {
+            chosen: Some(crate::device_identity::to_wire(&chosen)),
+            effective: Some(crate::device_identity::to_wire(&effective)),
+        })
+    }
+
     fn no_settings() -> response::Body {
         error(
             ErrorCode::Unavailable,
@@ -2606,6 +3383,7 @@ impl HostApiService {
             render_gpu: wanted.render_gpu,
             freeze: wanted.freeze,
             clipboard: wanted.clipboard,
+            stop_without_asking: wanted.stop_without_asking,
             links_in_android: wanted.links_in_android,
             memory_limit_mb: wanted.memory_limit_mb,
             program_updates: wanted.program_updates,
@@ -2613,6 +3391,7 @@ impl HostApiService {
             input_trace: wanted.input_trace,
             resize_trace: wanted.resize_trace,
             developer_mode: wanted.developer_mode,
+            arm_translation: wanted.arm_translation,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -2707,6 +3486,18 @@ fn on_off(value: bool) -> &'static str {
     }
 }
 
+fn identity_report(body: response::Body) -> Result<(DeviceIdentity, DeviceIdentity), ClientError> {
+    match body {
+        response::Body::DeviceIdentity(report) => Ok((
+            crate::device_identity::from_wire(report.chosen.unwrap_or_default()),
+            crate::device_identity::from_wire(report.effective.unwrap_or_default()),
+        )),
+        _ => Err(ClientError::Malformed(
+            "expected the device identity".into(),
+        )),
+    }
+}
+
 fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Settings {
     types::Settings {
         render_gpu: settings.render_gpu.clone(),
@@ -2716,10 +3507,12 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         program_updates: settings.program_updates,
         image_updates: settings.image_updates,
         clipboard: settings.clipboard,
+        stop_without_asking: settings.stop_without_asking,
         input_trace: settings.input_trace,
         resize_trace: settings.resize_trace,
         developer_mode: settings.developer_mode,
         adb_port: settings.adb_port.into(),
+        arm_translation: settings.arm_translation,
         program_updates_available: facts.program_updates_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
@@ -2736,6 +3529,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             memory_limit_mb: settings.memory_limit_mb,
             freeze: settings.freeze,
             clipboard: settings.clipboard,
+            stop_without_asking: settings.stop_without_asking,
             program_updates: settings.program_updates,
             image_updates: settings.image_updates,
             input_trace: settings.input_trace,
@@ -2744,6 +3538,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             adb_port: crate::settings::normalise_adb_port(
                 u16::try_from(settings.adb_port).unwrap_or(0),
             ),
+            arm_translation: settings.arm_translation,
         },
         facts: ServiceFacts {
             version: settings.version,
@@ -2760,6 +3555,16 @@ fn error(code: ErrorCode, detail: String) -> response::Body {
         code: code as i32,
         detail,
     })
+}
+
+fn not_a_package(package: &str) -> response::Body {
+    error(
+        ErrorCode::UnknownRequest,
+        format!(
+            "{:?} is not a package name, such as com.example.notes",
+            package.chars().take(80).collect::<String>()
+        ),
+    )
 }
 
 fn status(android: &dyn UserAndroid) -> response::Body {
@@ -2953,6 +3758,25 @@ impl HostApiClient {
         }
     }
 
+    /// The device identity the caller chose, and every value as Android reports it from its
+    /// next start.
+    pub fn device_identity(&mut self) -> Result<(DeviceIdentity, DeviceIdentity), ClientError> {
+        let body = request::Body::GetDeviceIdentity(types::GetDeviceIdentity {});
+        identity_report(self.exchange(body, self.timeout)?)
+    }
+
+    /// Replaces the caller's device identity with `identity`, and returns it as
+    /// [`device_identity`](Self::device_identity) does.
+    pub fn set_device_identity(
+        &mut self,
+        identity: &DeviceIdentity,
+    ) -> Result<(DeviceIdentity, DeviceIdentity), ClientError> {
+        let body = request::Body::SetDeviceIdentity(types::SetDeviceIdentity {
+            identity: Some(crate::device_identity::to_wire(identity)),
+        });
+        identity_report(self.exchange(body, self.timeout)?)
+    }
+
     /// Replaces the settings of the caller's DSA, and returns them as the service now keeps
     /// them.
     pub fn set_settings(&mut self, settings: &Settings) -> Result<SettingsReport, ClientError> {
@@ -2965,13 +3789,133 @@ impl HostApiClient {
         }
     }
 
+    /// Where ARM translation stands for the caller.
+    pub fn arm_translation(&mut self) -> Result<ArmTranslationStatus, ClientError> {
+        let body = request::Body::GetArmTranslation(types::GetArmTranslation {});
+        match self.exchange(body, self.timeout)? {
+            response::Body::ArmTranslation(status) => Ok(ArmTranslationStatus::from_wire(status)),
+            _ => Err(ClientError::Malformed(
+                "expected where ARM translation stands".into(),
+            )),
+        }
+    }
+
+    /// Removes the caller's ARM translation package; Android goes without it from its next
+    /// start.
+    pub fn remove_arm_translation(&mut self) -> Result<ArmTranslationStatus, ClientError> {
+        let body = request::Body::RemoveArmTranslation(types::RemoveArmTranslation {});
+        match self.exchange(body, INSTALL_ANSWER_WAIT)? {
+            response::Body::ArmTranslation(status) => Ok(ArmTranslationStatus::from_wire(status)),
+            _ => Err(ClientError::Malformed(
+                "expected where ARM translation stands".into(),
+            )),
+        }
+    }
+
+    /// Installs the ARM translation package `package` for the caller: its system image,
+    /// `size` bytes read from `content` whose SHA-256 is `sha256`, goes to the caller's
+    /// Android, which uses it from its next start. The connection ends with the install, so
+    /// the client is used up.
+    pub fn install_arm_translation(
+        mut self,
+        package: &Package,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<ArmTranslationStatus, ClientError> {
+        let id = self.next_id;
+        let body = request::Body::InstallArmTranslation(types::InstallArmTranslation {
+            package: Some(package_to_wire(package)),
+            size,
+            sha256: sha256.to_vec(),
+        });
+        match self.exchange(body, self.timeout)? {
+            response::Body::Done(_) => {}
+            _ => {
+                return Err(ClientError::Malformed(
+                    "expected the answer that the package is taken".into(),
+                ))
+            }
+        }
+        let mut left = size;
+        let mut piece = vec![0u8; apk::LOCAL_CHUNK_BYTES];
+        while left > 0 {
+            let length = left.min(piece.len() as u64) as usize;
+            if let Err(error) = content.read_exact(&mut piece[..length]) {
+                self.connection.close();
+                return Err(ClientError::Service {
+                    code: ErrorCode::InstallRefused,
+                    detail: format!("the package's image could not be read: {error}"),
+                });
+            }
+            // A service that has answered already closes the connection; its answer is still
+            // there to read.
+            let chunk = Body::ApkChunk(types::ApkChunk {
+                data: piece[..length].to_vec(),
+            });
+            if send(&mut *self.connection, chunk).is_err() {
+                break;
+            }
+            left -= length as u64;
+        }
+        match self.answer(id, INSTALL_ANSWER_WAIT)? {
+            response::Body::ArmTranslation(status) => Ok(ArmTranslationStatus::from_wire(status)),
+            _ => Err(ClientError::Malformed(
+                "expected where ARM translation stands".into(),
+            )),
+        }
+    }
+
     /// The apps installed in the caller's Android that a launcher lists, in package order;
     /// `None` until it has said which since the service started.
     pub fn installed_apps(&mut self) -> Result<Option<Vec<AppInfo>>, ClientError> {
-        match self.exchange(request::Body::ListApps(types::ListApps {}), self.timeout)? {
+        self.list_apps(false)
+    }
+
+    /// The apps installed in the caller's Android, as [`HostApiClient::installed_apps`], after
+    /// Android has read them again, so their sizes are current. Needs the Android to be running.
+    pub fn refreshed_apps(&mut self) -> Result<Option<Vec<AppInfo>>, ClientError> {
+        self.list_apps(true)
+    }
+
+    fn list_apps(&mut self, refresh: bool) -> Result<Option<Vec<AppInfo>>, ClientError> {
+        let timeout = if refresh {
+            self.timeout
+                .max(apps::REFRESH_WAIT + Duration::from_secs(5))
+        } else {
+            self.timeout
+        };
+        match self.exchange(
+            request::Body::ListApps(types::ListApps { refresh }),
+            timeout,
+        )? {
             response::Body::InstalledApps(installed) => Ok(installed_from_wire(installed)),
             _ => Err(ClientError::Malformed(
                 "expected the list of installed apps".into(),
+            )),
+        }
+    }
+
+    /// Opens Android's own settings of `package` in a window of its own, or Android's list of
+    /// every app when it is `None`.
+    pub fn open_app_settings(&mut self, package: Option<&str>) -> Result<(), ClientError> {
+        self.done(request::Body::OpenAppSettings(types::OpenAppSettings {
+            package_name: package.unwrap_or_default().to_string(),
+        }))
+    }
+
+    /// Uninstalls the user app `package` from the caller's Android and says how it went.
+    pub fn uninstall_app(&mut self, package: &str) -> Result<UninstallOutcome, ClientError> {
+        match self.exchange(
+            request::Body::UninstallApp(types::UninstallApp {
+                package_name: package.to_string(),
+            }),
+            self.timeout
+                .max(apps::UNINSTALL_WAIT + Duration::from_secs(5)),
+        )? {
+            response::Body::UninstallResult(result) => Ok(UninstallOutcome::from_wire(result)),
+            _ => Err(ClientError::Malformed(
+                "expected how the uninstall went".into(),
             )),
         }
     }
@@ -3078,6 +4022,15 @@ impl HostApiClient {
         }))
     }
 
+    /// Asks the caller's Android to give a task a top inset of `height` pixels, which its
+    /// window's title bar covers.
+    pub fn set_task_caption(&mut self, task_id: i32, height: u32) -> Result<(), ClientError> {
+        self.done(request::Body::SetTaskCaption(types::SetTaskCaption {
+            task_id,
+            height,
+        }))
+    }
+
     /// Carries out `request` against the caller's Android.
     pub fn request(&mut self, request: &TaskRequest) -> Result<(), ClientError> {
         match request {
@@ -3093,6 +4046,7 @@ impl HostApiClient {
                 task_id,
                 density_dpi,
             } => self.set_task_density(*task_id, *density_dpi),
+            TaskRequest::SetCaption { task_id, height } => self.set_task_caption(*task_id, *height),
             TaskRequest::WindowsShown { shown } => self.set_windows_shown(*shown),
             TaskRequest::StopApp { package_name } => self.stop_app(package_name),
         }
@@ -3178,6 +4132,23 @@ impl HostApiClient {
             }),
             _ => Err(ClientError::Malformed(
                 "expected the answer that the clipboard is carried".into(),
+            )),
+        }
+    }
+
+    /// Carries the location between the host and the caller's Android: the client hears when
+    /// the Android wants it and sends what the host's location service reports. The
+    /// connection carries nothing else from here on, so the client is used up.
+    pub fn watch_location(mut self) -> Result<LocationStream, ClientError> {
+        match self.exchange(
+            request::Body::WatchLocation(types::WatchLocation {}),
+            self.timeout,
+        )? {
+            response::Body::Done(_) => Ok(LocationStream {
+                connection: self.connection,
+            }),
+            _ => Err(ClientError::Malformed(
+                "expected the answer that the location is carried".into(),
             )),
         }
     }
@@ -3364,6 +4335,21 @@ impl HostApiClient {
         }
     }
 
+    /// The apps that run in the background in the caller's Android, and its media sessions.
+    pub fn background_apps(
+        &mut self,
+    ) -> Result<(Vec<BackgroundApp>, Vec<MediaSession>), ClientError> {
+        match self.exchange(
+            request::Body::ListBackgroundApps(types::ListBackgroundApps {}),
+            self.timeout,
+        )? {
+            response::Body::BackgroundApps(list) => Ok(background_from_wire(list)),
+            _ => Err(ClientError::Malformed(
+                "expected the apps that run in the background".into(),
+            )),
+        }
+    }
+
     /// Tells the caller's Android what became of one of its print jobs.
     pub fn report_print_job(
         &mut self,
@@ -3379,6 +4365,70 @@ impl HostApiClient {
             job_id,
             outcome: outcome as i32,
             message,
+        }))
+    }
+
+    /// Watches the apps that run in the background in the caller's Android. The connection
+    /// carries nothing else from here on, so the client is used up.
+    pub fn watch_background(mut self) -> Result<BackgroundStream, ClientError> {
+        match self.exchange(
+            request::Body::WatchBackgroundApps(types::WatchBackgroundApps {}),
+            self.timeout,
+        )? {
+            response::Body::BackgroundApps(list) => {
+                let (apps, media) = background_from_wire(list);
+                Ok(BackgroundStream {
+                    apps,
+                    media,
+                    connection: self.connection,
+                })
+            }
+            _ => Err(ClientError::Malformed(
+                "expected the apps that run in the background".into(),
+            )),
+        }
+    }
+
+    /// Passes what the user did with an app that runs in the background to the caller's
+    /// Android.
+    pub fn act_on_background(
+        &mut self,
+        package: &str,
+        command: BackgroundCommand,
+    ) -> Result<(), ClientError> {
+        let (kind, action) = match command {
+            BackgroundCommand::Open => (types::BackgroundAppCommand::Open, 0),
+            BackgroundCommand::Action(index) => (
+                types::BackgroundAppCommand::Action,
+                i32::try_from(index).unwrap_or(i32::MAX),
+            ),
+            BackgroundCommand::Stop => (types::BackgroundAppCommand::Stop, 0),
+        };
+        self.done(request::Body::ActOnBackgroundApp(
+            types::ActOnBackgroundApp {
+                package_name: package.to_string(),
+                command: kind as i32,
+                action,
+            },
+        ))
+    }
+
+    /// Runs a media key's command on the package's media session.
+    pub fn control_media(
+        &mut self,
+        package: &str,
+        command: MediaCommand,
+    ) -> Result<(), ClientError> {
+        let command = match command {
+            MediaCommand::Play => types::MediaCommand::Play,
+            MediaCommand::Pause => types::MediaCommand::Pause,
+            MediaCommand::Next => types::MediaCommand::Next,
+            MediaCommand::Previous => types::MediaCommand::Previous,
+            MediaCommand::Stop => types::MediaCommand::Stop,
+        };
+        self.done(request::Body::ControlMedia(types::ControlMedia {
+            package_name: package.to_string(),
+            command: command as i32,
         }))
     }
 
@@ -3723,6 +4773,39 @@ impl ClipboardStream {
     }
 }
 
+/// A connection that carries the location between the host and the caller's Android, from
+/// [`HostApiClient::watch_location`].
+pub struct LocationStream {
+    connection: Box<dyn Connection>,
+}
+
+impl LocationStream {
+    /// The Android's next word on whether it wants the location, waiting at most `timeout`.
+    /// `Ok(None)` means none came in time; an error means the connection has ended.
+    pub fn next(&mut self, timeout: Duration) -> Result<Option<Wanted>, ClientError> {
+        let frame = match self.connection.recv(Some(timeout)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => return Ok(None),
+            Err(error) => return Err(ClientError::Transport(error)),
+        };
+        match decode(&frame) {
+            Ok(Envelope {
+                body: Some(Body::LocationWanted(wanted)),
+            }) => Ok(Some(Wanted::from_host_api(&wanted))),
+            Ok(_) => Err(ClientError::Malformed(
+                "expected whether the location is wanted".into(),
+            )),
+            Err(error) => Err(ClientError::Malformed(error.to_string())),
+        }
+    }
+
+    /// Sends what the host's location service reported. Nothing is awaited. An error means
+    /// the connection has ended, and a new one is needed.
+    pub fn send(&mut self, event: &LocationEvent) -> Result<(), ClientError> {
+        send(&mut *self.connection, event.to_host_api()).map_err(ClientError::Transport)
+    }
+}
+
 /// A task's accessibility tree, from [`HostApiClient::watch_accessibility`].
 pub struct AccessibilityStream {
     connection: Box<dyn Connection>,
@@ -3786,6 +4869,53 @@ impl LinkStream {
                 body: Some(Body::OpenLink(link)),
             }) => Ok(Some(link.url)),
             Ok(_) => Err(ClientError::Malformed("expected a link".into())),
+            Err(error) => Err(ClientError::Malformed(error.to_string())),
+        }
+    }
+}
+
+/// A connection that watches the apps that run in the background in the caller's Android,
+/// from [`HostApiClient::watch_background`], with the apps and sessions there were when it
+/// started.
+pub struct BackgroundStream {
+    pub apps: Vec<BackgroundApp>,
+    pub media: Vec<MediaSession>,
+    connection: Box<dyn Connection>,
+}
+
+impl BackgroundStream {
+    /// The next change, waiting at most `timeout`. `Ok(None)` means none came in time; an
+    /// error means the connection has ended, and a new watch is needed.
+    pub fn next(&mut self, timeout: Duration) -> Result<Option<BackgroundEvent>, ClientError> {
+        use types::background_app_event::Body as Event;
+        let frame = match self.connection.recv(Some(timeout)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => return Ok(None),
+            Err(error) => return Err(ClientError::Transport(error)),
+        };
+        match decode(&frame) {
+            Ok(Envelope {
+                body: Some(Body::BackgroundAppEvent(types::BackgroundAppEvent { body })),
+            }) => match body {
+                Some(Event::App(app)) => {
+                    Ok(Some(BackgroundEvent::App(background_app_from_wire(app))))
+                }
+                Some(Event::AppRemoved(removed)) => Ok(Some(BackgroundEvent::AppRemoved {
+                    package_name: removed.package_name,
+                })),
+                Some(Event::Media(session)) => {
+                    Ok(Some(BackgroundEvent::Media(media_from_wire(session))))
+                }
+                Some(Event::MediaRemoved(removed)) => Ok(Some(BackgroundEvent::MediaRemoved {
+                    package_name: removed.package_name,
+                })),
+                None => Err(ClientError::Malformed(
+                    "an empty change to the apps that run in the background".into(),
+                )),
+            },
+            Ok(_) => Err(ClientError::Malformed(
+                "expected a change to the apps that run in the background".into(),
+            )),
             Err(error) => Err(ClientError::Malformed(error.to_string())),
         }
     }
@@ -4088,6 +5218,102 @@ impl PrintStream {
             }
         }
     }
+}
+
+fn background_app_to_wire(app: BackgroundApp) -> types::BackgroundApp {
+    types::BackgroundApp {
+        package_name: app.package_name,
+        app_label: app.app_label,
+        icon_png: app.icon_png,
+        title: app.title,
+        text: app.text,
+        actions: app.actions,
+    }
+}
+
+fn media_to_wire(session: MediaSession) -> types::MediaSession {
+    let playback = match session.playback {
+        Playback::Stopped => types::MediaPlayback::Stopped,
+        Playback::Playing => types::MediaPlayback::Playing,
+        Playback::Paused => types::MediaPlayback::Paused,
+    };
+    types::MediaSession {
+        package_name: session.package_name,
+        app_label: session.app_label,
+        title: session.title,
+        artist: session.artist,
+        album: session.album,
+        art_png: session.art_png,
+        playback: playback as i32,
+        can_play: session.can_play,
+        can_pause: session.can_pause,
+        can_next: session.can_next,
+        can_previous: session.can_previous,
+    }
+}
+
+fn background_to_wire(apps: Vec<BackgroundApp>, media: Vec<MediaSession>) -> types::BackgroundApps {
+    types::BackgroundApps {
+        apps: apps.into_iter().map(background_app_to_wire).collect(),
+        media: media.into_iter().map(media_to_wire).collect(),
+    }
+}
+
+fn background_event_to_wire(event: BackgroundEvent) -> Body {
+    use types::background_app_event::Body as Event;
+    let body = match event {
+        BackgroundEvent::App(app) => Event::App(background_app_to_wire(app)),
+        BackgroundEvent::AppRemoved { package_name } => {
+            Event::AppRemoved(types::BackgroundAppRemoved { package_name })
+        }
+        BackgroundEvent::Media(session) => Event::Media(media_to_wire(session)),
+        BackgroundEvent::MediaRemoved { package_name } => {
+            Event::MediaRemoved(types::MediaSessionRemoved { package_name })
+        }
+    };
+    Body::BackgroundAppEvent(types::BackgroundAppEvent { body: Some(body) })
+}
+
+fn background_app_from_wire(app: types::BackgroundApp) -> BackgroundApp {
+    BackgroundApp {
+        package_name: app.package_name,
+        app_label: app.app_label,
+        icon_png: app.icon_png,
+        title: app.title,
+        text: app.text,
+        actions: app.actions,
+    }
+}
+
+fn media_from_wire(session: types::MediaSession) -> MediaSession {
+    let playback = match types::MediaPlayback::try_from(session.playback) {
+        Ok(types::MediaPlayback::Playing) => Playback::Playing,
+        Ok(types::MediaPlayback::Paused) => Playback::Paused,
+        _ => Playback::Stopped,
+    };
+    MediaSession {
+        package_name: session.package_name,
+        app_label: session.app_label,
+        title: session.title,
+        artist: session.artist,
+        album: session.album,
+        art_png: session.art_png,
+        playback,
+        can_play: session.can_play,
+        can_pause: session.can_pause,
+        can_next: session.can_next,
+        can_previous: session.can_previous,
+    }
+}
+
+fn background_from_wire(list: types::BackgroundApps) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+    (
+        list.apps
+            .into_iter()
+            .map(background_app_from_wire)
+            .collect(),
+        list.media.into_iter().map(media_from_wire).collect(),
+    )
 }
 
 fn notification_to_wire(event: NotificationEvent) -> Body {

@@ -123,6 +123,41 @@ std::map<std::string, v1::Envelope> Cases() {
   }
   cases["video_flush"].mutable_video_flush();
   {
+    v1::CameraDevice* camera = cases["camera_list"].mutable_camera_list()->add_cameras();
+    camera->set_id("front");
+    camera->set_name("Integrated Camera");
+    camera->set_facing(v1::CAMERA_FACING_FRONT);
+    camera->set_sensor_orientation(90);
+    v1::CameraMode* mode = camera->add_modes();
+    mode->set_width(1280);
+    mode->set_height(720);
+    mode->set_max_fps(30);
+    mode->set_min_fps(15);
+  }
+  {
+    v1::CameraOpen* open = cases["camera_open"].mutable_camera_open();
+    open->set_id("front");
+    open->set_width(1280);
+    open->set_height(720);
+    open->set_fps(30);
+  }
+  {
+    v1::CameraFrame* frame = cases["camera_frame"].mutable_camera_frame();
+    frame->set_sequence(7);
+    frame->set_timestamp_ns(33333333);
+    frame->set_width(2);
+    frame->set_height(2);
+    frame->set_stride(2);
+    frame->set_nv12(std::string("\x10\x10\x10\x10\x80\x80", 6));
+  }
+  {
+    v1::CameraStill* still = cases["camera_still"].mutable_camera_still();
+    still->set_request_id(4);
+    still->set_width(1920);
+    still->set_height(1080);
+    still->set_quality(95);
+  }
+  {
     v1::VideoFrame* frame = cases["video_frame"].mutable_video_frame();
     frame->set_frame_index(3);
     frame->set_timestamp_us(100000);
@@ -259,6 +294,26 @@ std::map<std::string, v1::Envelope> Cases() {
     hint->set_id(0);
     hint->set_duration_ms(80);
   }
+  {
+    v1::LocationRequest* request = cases["location_request_active"].mutable_location_request();
+    request->set_active(true);
+    request->set_interval_ms(1000);
+  }
+  cases["location_status_denied"].mutable_location_status()->set_access(v1::LOCATION_ACCESS_DENIED);
+  {
+    v1::LocationFix* fix = cases["location_fix"].mutable_location_fix();
+    fix->set_latitude_degrees(37.5);
+    fix->set_longitude_degrees(127.0);
+    fix->set_horizontal_accuracy_meters(10.0f);
+    fix->set_has_altitude(true);
+    fix->set_altitude_meters(50.0);
+    fix->set_vertical_accuracy_meters(3.0f);
+    fix->set_has_speed(true);
+    fix->set_speed_meters_per_second(2.5f);
+    fix->set_has_bearing(true);
+    fix->set_bearing_degrees(90.0f);
+    fix->set_unix_time_ms(1700000000000ULL);
+  }
   cases["device_idle"].mutable_device_idle()->set_idle(true);
   cases["clipboard_text"].mutable_clipboard_text()->set_text("hello \xec\x95\x88\xeb\x85\x95");
   cases["clipboard_sharing_off"].mutable_clipboard_sharing()->set_on(false);
@@ -302,6 +357,18 @@ std::map<std::string, v1::Envelope> Cases() {
     v1::QueryPackage* query = cases["query_package"].mutable_query_package();
     query->set_request_id(7);
     query->set_package_name("com.example.notes");
+  }
+  {
+    v1::UninstallApp* uninstall = cases["uninstall_app"].mutable_uninstall_app();
+    uninstall->set_request_id(7);
+    uninstall->set_package_name("com.example.notes");
+  }
+  {
+    v1::UninstallResult* result = cases["uninstall_result"].mutable_uninstall_result();
+    result->set_request_id(7);
+    result->set_package_name("com.example.notes");
+    result->set_status(v1::UNINSTALL_STATUS_SYSTEM_APP);
+    result->set_message("system");
   }
   {
     v1::PackageState* state = cases["package_state_installed"].mutable_package_state();
@@ -549,6 +616,25 @@ std::map<std::string, v1::Envelope> Cases() {
     result->set_job_id(5);
     result->set_outcome(v1::PRINT_OUTCOME_FAILED);
     result->set_message("out of paper");
+  }
+  {
+    v1::SensorDescription* gyro = cases["sensor_list"].mutable_sensor_list()->add_sensors();
+    gyro->set_kind(v1::SENSOR_KIND_GYROSCOPE);
+    gyro->set_name("Gyro");
+    gyro->set_max_range(2.0f);
+    gyro->set_min_interval_us(16000);
+  }
+  {
+    v1::SensorActivate* activate = cases["sensor_activate"].mutable_sensor_activate();
+    activate->set_kind(v1::SENSOR_KIND_ACCELEROMETER);
+    activate->set_enabled(true);
+    activate->set_interval_us(20000);
+  }
+  {
+    v1::SensorReading* reading = cases["sensor_readings"].mutable_sensor_readings()->add_readings();
+    reading->set_kind(v1::SENSOR_KIND_LIGHT);
+    reading->set_timestamp_us(1000);
+    reading->add_values(2.5f);
   }
   {
     const std::string provider = "com.example.clock/.ClockWidget";

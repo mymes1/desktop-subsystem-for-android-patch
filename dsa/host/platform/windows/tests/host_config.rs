@@ -282,6 +282,21 @@ fn fr14_the_vm_boots_the_image_folder_it_is_given() {
 }
 
 #[test]
+fn fr27_an_arm64_image_boots_its_own_kernel_named_image() {
+    let config = HostConfig::parse(UPDATING).unwrap();
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("arm64-image-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Image"), b"arm64 kernel").unwrap();
+    assert_eq!(
+        config.image_files(Some(&dir)).kernel,
+        dir.join("Image"),
+        "an arm64 image's kernel is named Image"
+    );
+}
+
+#[test]
 fn fr14_an_untrusted_key_or_a_missing_first_image_is_reported() {
     let bad_key = UPDATING.replace("17cb79fb", "zzcb79fb");
     let error = HostConfig::parse(&bad_key).unwrap_err().to_string();
@@ -329,12 +344,17 @@ fn fr14_an_image_made_from_aosp_boots_from_one_disk_made_from_its_template() {
     vm.kernel_cmdline = files.kernel_cmdline;
     let document = vm.to_hcs_document_for(GuestArch::X86_64).unwrap();
     let attachments = &document["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"];
+    // The user's disk, then the pstore disk every user VM keeps beside it.
     assert_eq!(
         attachments.as_object().unwrap().len(),
-        1,
-        "only the user's disk"
+        2,
+        "only the user's disk and its pstore disk"
     );
     assert_eq!(attachments["0"]["ReadOnly"], false);
+    assert_eq!(
+        attachments["1"]["Path"].as_str().map(PathBuf::from),
+        user.config.pstore_disk
+    );
     let kernel = &document["VirtualMachine"]["Chipset"]["LinuxKernelDirect"];
     assert!(kernel["KernelCmdLine"]
         .as_str()
@@ -542,13 +562,18 @@ fn fr14_an_image_with_two_disks_attaches_system_image_and_data_disk() {
     vm.kernel_cmdline = files.kernel_cmdline;
     let document = vm.to_hcs_document_for(GuestArch::X86_64).unwrap();
     let attachments = &document["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"];
+    // The system and data disks, then the pstore disk every user VM keeps.
     assert_eq!(
         attachments.as_object().unwrap().len(),
-        2,
-        "both system and data disks"
+        3,
+        "both system and data disks, and the pstore disk"
     );
     assert_eq!(attachments["0"]["ReadOnly"], true);
     assert_eq!(attachments["1"]["ReadOnly"], false);
+    assert_eq!(
+        attachments["2"]["Path"].as_str().map(PathBuf::from),
+        user.config.pstore_disk
+    );
     let kernel = &document["VirtualMachine"]["Chipset"]["LinuxKernelDirect"];
     assert!(kernel["KernelCmdLine"]
         .as_str()

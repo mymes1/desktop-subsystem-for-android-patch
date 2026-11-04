@@ -1,0 +1,15 @@
+; Desktop Subsystem for Android (DSA)
+; ARM app translation (dsa-arm-translation.rc). When the host says a translation package is
+; installed, init mounts the package's erofs image from /data/vendor/dsa/arm-translation
+; through a loop device, labelled as system libraries, and lays it over /system's lib64, bin
+; and etc with overlayfs. It then registers the package's binfmt_misc handlers.
+(allow init vendor_data_file (file (read open getattr)))
+(allow init loop_control_device (chr_file (read write open ioctl getattr)))
+(allow init loop_device (blk_file (read open ioctl getattr)))
+(allow init tmpfs (dir (mounton)))
+(allow init system_file (dir (mounton)))
+(allow init system_lib_file (dir (mounton)))
+(allow init labeledfs (filesystem (mount relabelfrom)))
+(allow init system_lib_file (filesystem (relabelto associate)))
+(allow system_lib_file labeledfs (filesystem (associate)))
+(allow init binfmt_miscfs (file (write open getattr)))

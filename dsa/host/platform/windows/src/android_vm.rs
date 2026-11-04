@@ -6,13 +6,15 @@
 //!
 //! Each boot's secret reaches the guest as a bootconfig appended to a copy of the image's
 //! initrd. The copy exists only while the VM starts: the VM has read it by the time it runs,
-//! and it is deleted then.
+//! and it is deleted then. The user's device identity, when they changed it, travels in the
+//! same copy, as a property file in an archive between the image's initrd and the bootconfig.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use dsa_host_core::bootconfig;
+use dsa_host_core::device_identity::{append_overlay, ramdisk_overlay};
 use dsa_host_core::session::{GuestLauncher, GuestStall};
 use dsa_protocol::auth::{bootconfig_entry, BootSecret};
 
@@ -62,13 +64,33 @@ pub struct AndroidVmLauncher {
     data_disk: Option<PathBuf>,
     /// What Android's log has shown during this boot, which the console no longer carries.
     log_signs: Arc<Mutex<ConsoleSigns>>,
+    /// How far the running VM may grow, in MiB, as the configuration source last set it;
+    /// `None` keeps it at the size it started with.
+    memory_max: MemoryMax,
+    /// The size the running VM started with, in MiB.
+    memory_base: Option<u64>,
+    /// More bootconfig for each boot, beside the secret.
+    bootconfig: Option<BootconfigSource>,
+    /// The properties each boot hands Android in its initrd, if any.
+    boot_properties: Option<BootProperties>,
 }
+
+/// Supplies more bootconfig lines (`key = "value"`) for each boot. See
+/// [`AndroidVmLauncher::with_bootconfig`].
+pub type BootconfigSource = Box<dyn FnMut() -> String + Send>;
+
+/// See [`AndroidVmLauncher::with_boot_properties`].
+pub type BootProperties = Box<dyn FnMut(&AndroidVmConfig) -> Option<String> + Send>;
 
 /// See [`AndroidVmLauncher::with_prerequisite`].
 pub type Prerequisite = Box<dyn FnMut() -> Option<String> + Send>;
 
+/// Where the configuration source says how far the next VM may grow, in MiB. See
+/// [`AndroidVmLauncher::with_memory_max`].
+pub type MemoryMax = Arc<Mutex<Option<u64>>>;
+
 /// A file that is removed when this is dropped.
-struct TransientFile(PathBuf);
+pub struct TransientFile(pub PathBuf);
 
 impl Drop for TransientFile {
     fn drop(&mut self) {
@@ -76,21 +98,28 @@ impl Drop for TransientFile {
     }
 }
 
-/// Writes `initrd` with `secret` appended as bootconfig to `path`, readable only by the
-/// account the host runs as until the VM is let in.
-fn write_boot_initrd(
+/// Writes `initrd`, then `properties` as Android's ramdisk property file when there are any,
+/// with `secret` and `more` appended as bootconfig, to `path`, readable only by the account
+/// the host runs as until the VM is let in.
+pub fn write_boot_initrd(
     initrd: &Path,
+    properties: Option<&str>,
     secret: &BootSecret,
+    more: &str,
     path: &Path,
 ) -> Result<TransientFile, String> {
-    let image = std::fs::read(initrd)
+    let mut image = std::fs::read(initrd)
         .map_err(|e| format!("could not read the initrd {}: {e}", initrd.display()))?;
+    if let Some(properties) = properties {
+        image = append_overlay(&image, &ramdisk_overlay(properties));
+    }
     if let Some(folder) = path.parent() {
         std::fs::create_dir_all(folder)
             .map_err(|e| format!("could not create {}: {e}", folder.display()))?;
     }
     let file = TransientFile(path.to_path_buf());
-    std::fs::write(path, bootconfig::append(&image, &bootconfig_entry(secret)))
+    let text = format!("{}{more}", bootconfig_entry(secret));
+    std::fs::write(path, bootconfig::append(&image, &text))
         .map_err(|e| format!("could not write the boot's initrd {}: {e}", path.display()))?;
     Ok(file)
 }
@@ -140,7 +169,9 @@ impl BootFiles {
 pub fn prepare_boot(
     arch: GuestArch,
     config: &mut AndroidVmConfig,
+    properties: Option<&str>,
     secret: &BootSecret,
+    more: &str,
     boot_dir: &Path,
     unique: &str,
 ) -> Result<BootFiles, String> {
@@ -176,7 +207,7 @@ pub fn prepare_boot(
     } else {
         boot_dir.join(format!("{unique}.initrd"))
     };
-    let written = write_boot_initrd(&initrd, secret, &initrd_path)?;
+    let written = write_boot_initrd(&initrd, properties, secret, more, &initrd_path)?;
     config.initrd = Some(initrd_path);
     Ok(BootFiles {
         initrd: written,
@@ -206,7 +237,34 @@ impl AndroidVmLauncher {
             prerequisite: None,
             data_disk: None,
             log_signs: Arc::new(Mutex::new(ConsoleSigns::default())),
+            memory_max: MemoryMax::default(),
+            memory_base: None,
+            bootconfig: None,
+            boot_properties: None,
         }
+    }
+
+    /// Lets the running VM grow to the size in `max`, which the configuration source sets
+    /// before each start: it starts at its configured memory and memory is hot-added while the
+    /// guest is short of it.
+    pub fn with_memory_max(mut self, max: MemoryMax) -> AndroidVmLauncher {
+        self.memory_max = max;
+        self
+    }
+
+    /// Asks `source` at each start for more bootconfig lines, beside the boot's secret: what
+    /// the guest is to know before its init reads any property, such as whether to use an
+    /// installed ARM translation package.
+    pub fn with_bootconfig(mut self, source: BootconfigSource) -> AndroidVmLauncher {
+        self.bootconfig = Some(source);
+        self
+    }
+
+    /// Asks `properties` at every start for the property file to hand Android in the boot's
+    /// initrd: the user's device identity, which Android reads once while it boots.
+    pub fn with_boot_properties(mut self, properties: BootProperties) -> AndroidVmLauncher {
+        self.boot_properties = Some(properties);
+        self
     }
 
     /// Reads the signs of a late boot from `signs` as well as from the console: whoever reads
@@ -319,10 +377,21 @@ impl GuestLauncher for AndroidVmLauncher {
         self.data_disk = Some(config.data_disk.clone());
         // Removed on every way out of this function: by then the VM has read them or will
         // never run.
+        let more = self
+            .bootconfig
+            .as_mut()
+            .map(|source| source())
+            .unwrap_or_default();
+        let properties = self
+            .boot_properties
+            .as_mut()
+            .and_then(|properties| properties(&config));
         let boot = prepare_boot(
             GuestArch::HOST,
             &mut config,
+            properties.as_deref(),
             secret,
+            &more,
             &self.boot_dir,
             &crate::paths::unique_name(&self.id, ""),
         )?;
@@ -335,6 +404,14 @@ impl GuestLauncher for AndroidVmLauncher {
         }
         config.fine_grained_memory =
             windows_build().is_some_and(|(build, ubr)| fine_grained_memory_supported(build, ubr));
+        // The guest kernel's last log of the boot before is on this disk; one that is missing
+        // or damaged is made again, empty, and Android starts either way.
+        if let Some(pstore) = &config.pstore_disk {
+            if let Err(why) = crate::pstore_disk::ensure(pstore) {
+                eprintln!("{why}; Android starts without its last log");
+                config.pstore_disk = None;
+            }
+        }
         let document = config
             .to_hcs_document()
             .map_err(|e| e.to_string())?
@@ -345,6 +422,7 @@ impl GuestLauncher for AndroidVmLauncher {
         // user, SYSTEM and administrators, so the VM is let in to that one file first.
         let mut access = vec![config.data_disk.clone()];
         access.extend(boot.vm_access());
+        access.extend(config.pstore_disk.iter().cloned());
         for path in &access {
             grant_vm_access(&self.id, path).map_err(|e| {
                 format!(
@@ -363,6 +441,7 @@ impl GuestLauncher for AndroidVmLauncher {
             .map_err(|e| format!("the Android VM started but its ID could not be read: {e}"))?;
         *self.vm_id.lock().unwrap_or_else(|e| e.into_inner()) = Some(vm_id);
         self.system = Some(system);
+        self.memory_base = Some(u64::from(config.memory_mb));
         Ok(())
     }
 
@@ -388,6 +467,7 @@ impl GuestLauncher for AndroidVmLauncher {
             }
         }
         self.system = None;
+        self.memory_base = None;
         *self.vm_id.lock().unwrap_or_else(|e| e.into_inner()) = None;
         // The VM is gone, so its end of the console pipe closes and the rest is read.
         self.end_console(CONSOLE_DRAIN);
@@ -449,6 +529,33 @@ impl GuestLauncher for AndroidVmLauncher {
         system
             .resume(CALL_TIMEOUT)
             .map_err(|e| format!("the Android VM could not be resumed: {e}"))
+    }
+
+    fn memory_range_mb(&self) -> Option<(u64, u64)> {
+        self.system.as_ref()?;
+        let base = self.memory_base?;
+        let max = (*self.memory_max.lock().unwrap_or_else(|e| e.into_inner()))?;
+        (max > base).then_some((base, max))
+    }
+
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
+        let system = self
+            .system
+            .as_ref()
+            .ok_or("the Android VM is not running")?;
+        system
+            .modify(&crate::vm::memory_resize_request(mb), CALL_TIMEOUT)
+            .map_err(|e| format!("the Android VM's memory could not be set to {mb} MiB: {e}"))
+    }
+
+    fn memory_growth_failed(&mut self, why: &str) {
+        // The guest keeps the memory it started with. Whether to start it larger instead is
+        // a decision about idle memory, so it is reported rather than made here.
+        eprintln!(
+            "memory: the Android VM cannot grow on this computer ({why}); it keeps the {} MiB \
+             it started with",
+            self.memory_base.unwrap_or_default()
+        );
     }
 }
 

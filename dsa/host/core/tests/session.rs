@@ -6,19 +6,22 @@ use std::thread;
 use std::time::Duration;
 
 use dsa_host_core::apk::{self, InstallStatus};
+use dsa_host_core::apps::UninstallStatus;
+use dsa_host_core::background::{BackgroundCommand, BackgroundEvent, MediaCommand, Playback};
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::ime::{ImeCursor, ImeEvent};
 use dsa_host_core::input::{buttons, PointerAction, PointerEvent, PointerTool};
 use dsa_host_core::keys::{keycode, meta, KeyAction, KeyEvent};
+use dsa_host_core::location::{Fix, LocationEvent, Wanted};
 use dsa_host_core::notifications::{Notification, NotificationAction, NotificationEvent};
 use dsa_host_core::power::{PowerHub, PowerState};
 use dsa_host_core::power_hints::{mode, PowerHint};
 use dsa_host_core::print::{PrintEvent, PrintJob, PrintOutcome};
 use dsa_host_core::session::{
-    BootProblem, GuestLauncher, GuestPower, GuestStall, Session, SessionConfig, SessionError,
-    SessionEvent, SessionState, StopReason,
+    BackgroundRequest, BootProblem, GuestLauncher, GuestPower, GuestStall, Session, SessionConfig,
+    SessionError, SessionEvent, SessionState, StopReason,
 };
-use dsa_host_core::tasks::{Bounds, Task, TaskEvent, TaskRequest};
+use dsa_host_core::tasks::{Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest};
 use dsa_host_core::widgets::{self, Placement, Widget, WidgetEvent, WidgetSize};
 use dsa_protocol::auth::BootSecret;
 use dsa_protocol::control::{envelope::Body, Envelope, RejectReason, Role};
@@ -57,6 +60,9 @@ struct Guest {
     cannot_freeze: Option<String>,
     /// What the guest cannot run without and is missing now.
     missing: Option<String>,
+    /// The memory range the launcher offers, and each size the session set.
+    memory_range: Option<(u64, u64)>,
+    memory_sizes: Vec<u64>,
     /// What the launcher tells about a guest that is late.
     stall: Option<String>,
 }
@@ -133,6 +139,15 @@ impl GuestLauncher for FakeLauncher {
 
     fn prerequisite(&mut self) -> Option<String> {
         self.0.lock().unwrap().missing.clone()
+    }
+
+    fn memory_range_mb(&self) -> Option<(u64, u64)> {
+        self.0.lock().unwrap().memory_range
+    }
+
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
+        self.0.lock().unwrap().memory_sizes.push(mb);
+        Ok(())
     }
 
     fn explain_stall(&mut self, _stall: GuestStall) -> Option<String> {
@@ -531,6 +546,65 @@ fn pr4_the_guests_power_hints_reach_the_host_and_end_when_the_guest_stops() {
     session.stop();
     assert!(session.wait_for(SessionState::Stopped, WAIT));
     assert_eq!(hints.recv_timeout(WAIT), Ok(GuestPower::Stopped));
+}
+
+/// A position in Seoul with every value known.
+fn seoul() -> Fix {
+    Fix {
+        latitude_degrees: 37.5,
+        longitude_degrees: 127.0,
+        horizontal_accuracy_meters: Some(10.0),
+        altitude_meters: Some(50.0),
+        vertical_accuracy_meters: Some(3.0),
+        speed_meters_per_second: Some(2.5),
+        bearing_degrees: Some(90.0),
+        unix_time_ms: 1_700_000_000_000,
+    }
+}
+
+/// The next location message for the guest, past any other.
+fn next_location(agent: &mut Box<dyn Connection>) -> Body {
+    loop {
+        let body = next_body(agent);
+        if matches!(body, Body::LocationFix(_) | Body::LocationStatus(_)) {
+            return body;
+        }
+    }
+}
+
+#[test]
+fn fr26_the_guests_location_request_reaches_the_host_and_its_fixes_reach_the_guest() {
+    let (session, mut daemon, _launcher) = lifecycle_session(None);
+    let wanted = session.watch_location();
+    assert_eq!(wanted.recv_timeout(WAIT), Ok(Wanted::NONE));
+    // A position from before the guest wants one is dropped.
+    let equator = Fix {
+        latitude_degrees: 0.0,
+        ..seoul()
+    };
+    session.host_location(LocationEvent::Fix(equator));
+
+    send_body(
+        &mut daemon,
+        Body::LocationRequest(dsa_protocol::control::LocationRequest {
+            active: true,
+            interval_ms: 2000,
+        }),
+    );
+    assert_eq!(
+        wanted.recv_timeout(WAIT),
+        Ok(Wanted::every(Duration::from_secs(2)))
+    );
+    session.host_location(LocationEvent::Fix(seoul()));
+    assert_eq!(
+        next_location(&mut daemon),
+        Body::LocationFix(seoul().to_control())
+    );
+
+    // A guest that stops wants no location any longer.
+    session.stop();
+    assert!(session.wait_for(SessionState::Stopped, WAIT));
+    assert_eq!(wanted.recv_timeout(WAIT), Ok(Wanted::NONE));
 }
 
 #[test]
@@ -1026,6 +1100,8 @@ fn task_updated(task_id: i32, label: &str) -> Body {
         max_height: 1080,
         min_width: 700,
         min_height: 500,
+        status_bar_appearance: dsa_protocol::control::StatusBarAppearance::Light as i32,
+        status_bar_color: 0xFFFA_FAFA,
     })
 }
 
@@ -1046,6 +1122,8 @@ fn clock(task_id: i32, label: &str) -> Task {
         max_height: 1080,
         min_width: 700,
         min_height: 500,
+        status_bar: StatusBarAppearance::Light,
+        status_bar_color: 0xFFFA_FAFA,
     }
 }
 
@@ -1056,6 +1134,27 @@ fn active_session() -> (Session, Box<dyn Connection>, FakeLauncher) {
     let agent = connect_agent(&mut connector, &launcher);
     assert!(session.wait_for(SessionState::Active, WAIT));
     (session, agent, launcher)
+}
+
+#[test]
+fn nfr2_the_guest_memory_grows_when_its_daemon_says_it_is_short() {
+    let launcher = FakeLauncher::default();
+    launcher.0.lock().unwrap().memory_range = Some((3072, 16384));
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    send_body(
+        &mut agent,
+        Body::GuestMemoryPressure(dsa_protocol::control::GuestMemoryPressure {
+            mem_total_kb: 2900 * 1024,
+            mem_available_kb: 200 * 1024,
+            stall_centipercent: 0,
+        }),
+    );
+    wait_until("the memory is grown", || {
+        launcher.0.lock().unwrap().memory_sizes == vec![4608]
+    });
 }
 
 #[test]
@@ -1150,6 +1249,27 @@ fn fr3_closing_a_task_and_launching_an_app_reach_the_guest() {
         Some(Body::LaunchApp(dsa_protocol::control::LaunchApp {
             package_name: "com.example.clock".into()
         }))
+    );
+}
+
+#[test]
+fn fr22_a_windows_caption_height_reaches_the_guest() {
+    let (session, mut agent, _launcher) = active_session();
+    session
+        .request(TaskRequest::SetCaption {
+            task_id: 7,
+            height: 62,
+        })
+        .expect("the caption height is sent");
+    let sent = dsa_protocol::decode(&agent.recv(Some(WAIT)).unwrap()).unwrap();
+    assert_eq!(
+        sent.body,
+        Some(Body::SetTaskCaption(
+            dsa_protocol::control::SetTaskCaption {
+                task_id: 7,
+                height: 62
+            }
+        ))
     );
 }
 
@@ -2882,6 +3002,7 @@ fn fr11_an_installed_app_reaches_the_start_menu_through_the_installed_apps_repor
             package_name: "com.example.notes".into(),
             label: "Notes".into(),
             icon_png: vec![0x89, b'P', b'N', b'G'],
+            ..Default::default()
         }),
     );
     send_body(
@@ -2951,6 +3072,125 @@ fn fr11_the_install_window_learns_the_installed_version_and_signer_from_the_agen
         }),
     );
     assert_eq!(asking.join().unwrap().expect("an answer"), None);
+}
+
+#[test]
+fn fr23_installed_apps_carry_their_version_dates_sizes_and_kind() {
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_tasks();
+    send_body(
+        &mut agent,
+        Body::InstalledApp(dsa_protocol::control::InstalledApp {
+            package_name: "com.example.notes".into(),
+            label: "Notes".into(),
+            icon_png: vec![0x89, b'P', b'N', b'G'],
+            version_name: "4.1".into(),
+            version_code: 41,
+            first_install_time_ms: 1_700_000_000_000,
+            last_update_time_ms: 1_710_000_000_000,
+            system_app: false,
+            app_bytes: 3_000_000,
+            data_bytes: 20_000,
+            cache_bytes: 1_000,
+        }),
+    );
+    send_body(
+        &mut agent,
+        Body::InstalledApps(dsa_protocol::control::InstalledApps {
+            package_names: vec!["com.example.notes".into()],
+        }),
+    );
+    loop {
+        if let TaskEvent::Installed(apps) = watch.events.recv_timeout(WAIT).expect("the apps") {
+            let notes = &apps[0];
+            assert_eq!(notes.version_name, "4.1");
+            assert_eq!(notes.version_code, 41);
+            assert_eq!(notes.first_install_time_ms, 1_700_000_000_000);
+            assert_eq!(notes.last_update_time_ms, 1_710_000_000_000);
+            assert!(!notes.system_app);
+            assert_eq!(notes.total_bytes(), 3_021_000);
+            break;
+        }
+    }
+}
+
+#[test]
+fn fr23_a_refresh_waits_for_the_agents_fresh_list() {
+    let (session, mut agent, _launcher) = active_session();
+    let session = Arc::new(session);
+    let refreshing = {
+        let session = Arc::clone(&session);
+        thread::spawn(move || session.refresh_apps(WAIT))
+    };
+    loop {
+        if let Body::RefreshApps(_) = next_body(&mut agent) {
+            break;
+        }
+    }
+    send_body(
+        &mut agent,
+        Body::InstalledApps(dsa_protocol::control::InstalledApps {
+            package_names: vec![],
+        }),
+    );
+    refreshing.join().unwrap().expect("the fresh list");
+}
+
+#[test]
+fn fr23_app_info_and_manage_apps_ask_android_for_its_settings() {
+    let (session, mut agent, _launcher) = active_session();
+    session
+        .open_app_settings(Some("com.example.notes"))
+        .expect("asked");
+    session.open_app_settings(None).expect("asked");
+    let mut opened = Vec::new();
+    while opened.len() < 2 {
+        if let Body::OpenAppSettings(open) = next_body(&mut agent) {
+            opened.push(open.package_name);
+        }
+    }
+    assert_eq!(opened, vec!["com.example.notes".to_string(), String::new()]);
+}
+
+#[test]
+fn fr23_an_uninstall_carries_androids_answer() {
+    let (session, mut agent, _launcher) = active_session();
+    let session = Arc::new(session);
+    for (package, status, expected) in [
+        (
+            "com.example.notes",
+            dsa_protocol::control::UninstallStatus::Success,
+            UninstallStatus::Uninstalled,
+        ),
+        (
+            "com.android.settings",
+            dsa_protocol::control::UninstallStatus::SystemApp,
+            UninstallStatus::SystemApp,
+        ),
+    ] {
+        let uninstalling = {
+            let session = Arc::clone(&session);
+            thread::spawn(move || session.uninstall_app(package, WAIT))
+        };
+        let request_id = loop {
+            if let Body::UninstallApp(request) = next_body(&mut agent) {
+                assert_eq!(request.package_name, package);
+                break request.request_id;
+            }
+        };
+        send_body(
+            &mut agent,
+            Body::UninstallResult(dsa_protocol::control::UninstallResult {
+                request_id,
+                package_name: package.into(),
+                status: status as i32,
+                message: "from Android".into(),
+            }),
+        );
+        let outcome = uninstalling.join().unwrap().expect("an answer");
+        assert_eq!(outcome.status, expected);
+        assert_eq!(outcome.package_name, package);
+    }
 }
 
 #[test]
@@ -3563,6 +3803,196 @@ fn nfr5_malformed_widget_messages_are_dropped_and_the_session_stays_active() {
     assert_eq!(session.widgets().len(), 1);
 }
 
+fn music_app(title: &str) -> Body {
+    Body::BackgroundApp(dsa_protocol::control::BackgroundApp {
+        package_name: MUSIC.into(),
+        app_label: "Music".into(),
+        icon_png: vec![0x89, b'P', b'N', b'G'],
+        title: title.into(),
+        text: "Artist".into(),
+        actions: vec!["Pause".into(), "Next".into()],
+    })
+}
+
+fn music_session() -> Body {
+    Body::MediaSession(dsa_protocol::control::MediaSession {
+        package_name: MUSIC.into(),
+        app_label: "Music".into(),
+        title: "Song".into(),
+        artist: "Artist".into(),
+        playback: dsa_protocol::control::MediaPlayback::Playing as i32,
+        can_pause: true,
+        can_next: true,
+        ..Default::default()
+    })
+}
+
+const MUSIC: &str = "com.example.music";
+
+#[test]
+fn fr24_an_app_that_runs_in_the_background_reaches_the_watcher_and_goes_when_its_service_ends() {
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_background();
+    assert!(watch.apps.is_empty());
+    send_body(&mut agent, music_app("Playing"));
+    match watch.events.recv_timeout(WAIT).unwrap() {
+        BackgroundEvent::App(app) => {
+            assert_eq!(app.package_name, MUSIC);
+            assert_eq!(app.title, "Playing");
+            assert_eq!(app.actions, vec!["Pause".to_string(), "Next".to_string()]);
+        }
+        other => panic!("expected the app, got {other:?}"),
+    }
+    send_body(&mut agent, music_session());
+    match watch.events.recv_timeout(WAIT).unwrap() {
+        BackgroundEvent::Media(media) => {
+            assert_eq!(media.title, "Song");
+            assert_eq!(media.playback, Playback::Playing);
+        }
+        other => panic!("expected the media session, got {other:?}"),
+    }
+    assert_eq!(session.background_apps().0.len(), 1);
+    send_body(
+        &mut agent,
+        Body::BackgroundAppGone(dsa_protocol::control::BackgroundAppGone {
+            package_name: MUSIC.into(),
+        }),
+    );
+    assert_eq!(
+        watch.events.recv_timeout(WAIT).unwrap(),
+        BackgroundEvent::AppRemoved {
+            package_name: MUSIC.into()
+        }
+    );
+    // A malformed package name is dropped, and the session goes on.
+    send_body(
+        &mut agent,
+        Body::BackgroundApp(dsa_protocol::control::BackgroundApp {
+            package_name: "../evil".into(),
+            ..Default::default()
+        }),
+    );
+    if let Ok(event) = watch.events.recv_timeout(Duration::from_millis(300)) {
+        panic!("the watcher heard of {event:?}");
+    }
+    assert_eq!(session.state(), SessionState::Active);
+}
+
+#[test]
+fn fr24_the_background_apps_of_a_guest_that_stops_are_removed() {
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_background();
+    send_body(&mut agent, music_app("Playing"));
+    send_body(&mut agent, music_session());
+    watch.events.recv_timeout(WAIT).unwrap();
+    watch.events.recv_timeout(WAIT).unwrap();
+    session.stop();
+    assert!(session.wait_for(SessionState::Stopped, WAIT));
+    let mut removed = vec![
+        watch.events.recv_timeout(WAIT).unwrap(),
+        watch.events.recv_timeout(WAIT).unwrap(),
+    ];
+    removed.sort_by_key(|event| format!("{event:?}"));
+    assert_eq!(
+        removed,
+        vec![
+            BackgroundEvent::AppRemoved {
+                package_name: MUSIC.into()
+            },
+            BackgroundEvent::MediaRemoved {
+                package_name: MUSIC.into()
+            },
+        ]
+    );
+    assert_eq!(session.background_apps(), (Vec::new(), Vec::new()));
+}
+
+#[test]
+fn fr24_stop_and_an_action_reach_the_guest() {
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_background();
+    send_body(&mut agent, music_app("Playing"));
+    watch.events.recv_timeout(WAIT).unwrap();
+    session
+        .background_action(BackgroundRequest::App(
+            MUSIC.into(),
+            BackgroundCommand::Action(1),
+        ))
+        .expect("taken");
+    assert_eq!(
+        next_body(&mut agent),
+        Body::BackgroundAppAction(dsa_protocol::control::BackgroundAppAction {
+            package_name: MUSIC.into(),
+            command: dsa_protocol::control::BackgroundAppCommand::Action as i32,
+            action: 1,
+        })
+    );
+    // A stop goes for any app, known or not.
+    session
+        .background_action(BackgroundRequest::App(
+            "com.example.other".into(),
+            BackgroundCommand::Stop,
+        ))
+        .expect("taken");
+    assert_eq!(
+        next_body(&mut agent),
+        Body::BackgroundAppAction(dsa_protocol::control::BackgroundAppAction {
+            package_name: "com.example.other".into(),
+            command: dsa_protocol::control::BackgroundAppCommand::Stop as i32,
+            action: 0,
+        })
+    );
+    // Anything else for an app that does not run in the background is ignored.
+    session
+        .background_action(BackgroundRequest::App(
+            "com.example.other".into(),
+            BackgroundCommand::Open,
+        ))
+        .expect("ignored");
+    nothing_for_the_guest(&mut agent);
+}
+
+#[test]
+fn fr24_a_media_key_for_a_frozen_guest_thaws_it_without_turning_the_screen_on() {
+    let (session, mut agent, launcher) = lifecycle_session(None);
+    let watch = session.watch_background();
+    send_body(&mut agent, music_session());
+    watch.events.recv_timeout(WAIT).unwrap();
+    session.freeze().expect("frozen");
+    assert_eq!(next_body(&mut agent), screen(false));
+    session
+        .background_action(BackgroundRequest::Media(MUSIC.into(), MediaCommand::Pause))
+        .expect("taken while frozen");
+    assert_eq!(launcher.0.lock().unwrap().thaws, 1);
+    loop {
+        match next_body(&mut agent) {
+            Body::MediaControl(control) => {
+                assert_eq!(control.package_name, MUSIC);
+                assert_eq!(
+                    control.command,
+                    dsa_protocol::control::MediaCommand::Pause as i32
+                );
+                break;
+            }
+            Body::ScreenState(state) => panic!("the screen changed: {state:?}"),
+            // What waited for the thaw (the clock, power) may come first.
+            _ => {}
+        }
+    }
+    assert_eq!(session.state(), SessionState::Dozing);
+}
+
+#[test]
+fn fr24_acting_on_a_background_app_of_a_stopped_guest_says_it_is_not_running() {
+    let (session, _connector) = session_with(FakeLauncher::default(), WAIT);
+    assert_eq!(
+        session.background_action(BackgroundRequest::App(
+            MUSIC.into(),
+            BackgroundCommand::Stop
+        )),
+        Err(SessionError::NotActive(SessionState::Stopped))
+    );
+}
 fn developer_mode(on: bool) -> Body {
     Body::DeveloperMode(dsa_protocol::control::DeveloperMode { on })
 }

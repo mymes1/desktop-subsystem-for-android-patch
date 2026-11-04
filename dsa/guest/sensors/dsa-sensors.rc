@@ -1,0 +1,6 @@
+# The guest's sensors HAL. It shows the host computer's accelerometer, gyroscope,
+# orientation and light sensors to Android, reading them from the host's sensor port.
+service vendor.dsa-sensors /vendor/bin/hw/dsa-sensors
+    class hal
+    user system
+    group system

@@ -28,6 +28,9 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::device_identity::{
+    DeviceIdentity, DeviceIdentityStore, FileDeviceIdentities, ImageBuild,
+};
 use dsa_host_core::diagnostics::HostFile;
 use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
 use dsa_host_core::guest_log::{LogFilter, LogWatch, DEFAULT_BUFFERS, WARN};
@@ -179,17 +182,22 @@ pub fn host_logs_of(config: &HostConfig, sid: &str) -> Vec<HostFile> {
     files
 }
 
-/// How much memory a user's VM may grow to: the configuration's `memory_mb` when it names
-/// one, else the computer's memory less what Windows keeps, or the user's own limit.
+/// How much memory a user's VM starts with and may grow to: the configuration's `memory_mb`,
+/// fixed, when it names one; else a small start that grows to the computer's memory less what
+/// Windows keeps, or to the user's own limit.
 struct MemorySizing {
     fixed_mb: Option<u32>,
     store: Arc<dyn SettingsStore>,
     user: String,
+    max: crate::android_vm::MemoryMax,
 }
 
 impl MemorySizing {
+    /// The size the VM starts with; also sets how far it may grow.
     fn memory_mb(&self) -> u32 {
+        let mut max = self.max.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(fixed) = self.fixed_mb {
+            *max = None;
             return fixed;
         }
         let limit = self
@@ -197,17 +205,19 @@ impl MemorySizing {
             .get(&self.user)
             .map(|settings| settings.memory_limit_mb)
             .unwrap_or(0);
-        let sized = crate::host_config::host_sized_memory_mb(limit);
+        let start = crate::host_config::host_sized_memory_mb(limit);
+        *max = crate::host_config::growth_max_mb(limit);
         eprintln!(
-            "memory: {}'s Android may grow to {sized} MiB ({})",
+            "memory: {}'s Android starts with {start} MiB and may grow to {} ({})",
             self.user,
+            max.map_or("its start".to_string(), |mb| format!("{mb} MiB")),
             if limit > 0 {
                 format!("their limit {limit} MiB")
             } else {
                 "automatic".to_string()
             }
         );
-        sized
+        start
     }
 }
 
@@ -250,10 +260,12 @@ pub fn create_user_android(
     let traced = Arc::clone(&trace_on);
     // The VM's memory is sized at each start, so a changed limit, or memory added to the
     // computer, takes effect the next time Android starts.
+    let memory_max = crate::android_vm::MemoryMax::default();
     let sizing = MemorySizing {
         fixed_mb: config.memory_mb,
         store: settings_store(config),
         user: sid.to_string(),
+        max: memory_max.clone(),
     };
     let launcher = match updates {
         None => {
@@ -305,7 +317,32 @@ pub fn create_user_android(
         }
     }
     .with_console_log(console_log)
-    .with_boot_dir(config.machine_root().tmp());
+    .with_memory_max(memory_max)
+    .with_boot_dir(config.machine_root().tmp())
+    .with_bootconfig({
+        // An installed ARM translation package is used only while the user's setting is on,
+        // and only from a boot that is told so.
+        let store = settings_store(config);
+        let user = sid.to_string();
+        Box::new(move || arm_translation_bootconfig(&*store, &user))
+    })
+    .with_boot_properties({
+        // The user's device identity, which Android reads once while it boots.
+        let identities = FileDeviceIdentities::new(config.settings_dir());
+        let (owner, build) = (sid.to_string(), build.to_string());
+        Box::new(move |vm: &AndroidVmConfig| {
+            let identity = identities.get(&owner).unwrap_or_else(|why| {
+                eprintln!("{build}: {why}; Android starts with the image's device identity");
+                DeviceIdentity::default()
+            });
+            let image = vm
+                .initrd
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .and_then(ImageBuild::from_image_dir);
+            identity.boot_properties(image.as_ref())
+        })
+    });
     let launcher = if config.keep_window_manager {
         let mut keeper = WindowManagerKeeper::new(UserWindowManager::new(sid));
         launcher.with_prerequisite(Box::new(move || keeper.check(Instant::now())))
@@ -580,8 +617,44 @@ fn take_old_trace_markers(config: &HostConfig, store: &dyn SettingsStore, build:
     }
 }
 
+/// The build of the image a user's Android starts from next, from its `image.json`.
+fn current_image_build(config: &HostConfig, images: Option<&ImageStore>) -> Option<ImageBuild> {
+    let files = match images {
+        Some(images) => {
+            let current = images.state().ok()?.current;
+            config.image_files(Some(&images.image_dir(&current.version)))
+        }
+        None => config.image_files(None),
+    };
+    ImageBuild::from_image_dir(files.initrd?.parent()?)
+}
+
 /// The settings in the service's own folder. A user who has never saved settings starts
 /// from the render GPU in their own `compositor.json`, if they chose one there.
+/// The bootconfig that tells `user`'s next boot to use their ARM translation package, or
+/// nothing.
+fn arm_translation_bootconfig(store: &dyn SettingsStore, user: &str) -> String {
+    let package = store.arm_translation(user).unwrap_or_else(|why| {
+        eprintln!("arm translation: {user}'s package is not known ({why}); booting without it");
+        None
+    });
+    let enabled = store.get(user).map(|s| s.arm_translation).unwrap_or(true);
+    let text = dsa_host_core::arm_translation::bootconfig(package.as_ref(), enabled);
+    if let Some(package) = &package {
+        eprintln!(
+            "arm translation: {user} has {} {}; this boot {}",
+            package.name,
+            package.version,
+            if text.is_empty() {
+                "goes without it (turned off)"
+            } else {
+                "uses it"
+            }
+        );
+    }
+    text.to_string()
+}
+
 fn settings_store(config: &HostConfig) -> Arc<dyn SettingsStore> {
     let dir = config.settings_dir();
     Arc::new(
@@ -718,6 +791,7 @@ where
             None
         }
     };
+    let identity_images = updates.as_ref().map(|updates| Arc::clone(&updates.store));
     let factory_config = config.clone();
     let factory_build = build.to_string();
     let factory_status = program.as_ref().map(|_| Arc::clone(&program_status));
@@ -785,7 +859,14 @@ where
         .with_host_logs({
             let config = config.clone();
             Arc::new(move |sid: &str| host_logs_of(&config, sid))
-        });
+        })
+        .with_device_identities(
+            Arc::new(FileDeviceIdentities::new(config.settings_dir())),
+            {
+                let config = config.clone();
+                Arc::new(move |_: &str| current_image_build(&config, identity_images.as_deref()))
+            },
+        );
     {
         let androids = androids.clone();
         let (worker_build, stop) = (build.to_string(), Arc::clone(&stop));

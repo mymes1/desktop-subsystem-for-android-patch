@@ -24,7 +24,12 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   task the host was told about. `ResizeTask` gives a task its host window's client size,
   holding the app's configuration while the user drags the window's edge, and
   `SetTaskDensity` the density of the window's monitor (see below); both are refused
-  for a task the host was not told about.
+  for a task the host was not told about. `SetTaskCaption` gives a task a top status bar and
+  caption bar inset as high as the title bar its host window draws over it, through a window
+  container transaction's inset sources, given again whenever the task's top edge moves.
+- **Status bar tone.** Each `TaskUpdated` carries what the task's app told the system about
+  its status bar (light or dark icons, and its color), read from the task description, so
+  the host draws its caption buttons in a tone that stays readable over it.
 - **Density and size limits in reports.** Each `TaskUpdated` also carries the density the
   task's app draws at and the display's size, which is the largest a task can be.
 - **Pointer input.** The host sends the mouse, touch and pen input of each task's window
@@ -62,6 +67,19 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   it. The agent allows its own listener at start (`MANAGE_NOTIFICATION_LISTENERS`). The
   listener is called over binder in the agent's persistent process, so notifications still
   arrive while the device is in Doze.
+- **Apps that run in the background.** An app that runs a foreground service (music, a
+  download, a VPN) keeps running with no window. The agent reads each service's ongoing
+  notification and tells the host which packages run one (`BackgroundApp`: the app's name
+  and icon, the notification's title, text and action titles; one per package, from its
+  latest service), and when a package runs none any more (`BackgroundAppGone`). The host
+  shows each in its notification area. What the user does there comes back as
+  `BackgroundAppAction`: open runs the notification's content intent, an action sends that
+  action's intent, and stop force-stops the package (`ActivityManager.forceStopPackage`,
+  with `FORCE_STOP_PACKAGES`), never the agent or the system. The agent also reads the
+  active media sessions through `MediaSessionManager`, which a notification listener may,
+  and sends each (`MediaSession`: title, artist, album, art of at most 256 pixels, playback
+  state and the commands it takes) until it ends (`MediaSessionGone`); a host media key
+  (`MediaControl`) goes to the session's transport controls.
 - **Widgets.** The agent is the guest's widget host (`AppWidgetHost`, host ID `0x0D5A`).
   It lists the installed widgets for the host's gallery (`WidgetProviders`, in parts under
   256 KiB, with previews of at most 160 pixels and 48 KiB), and places one the host asks for
@@ -211,8 +229,20 @@ every package in one list (`InstalledApps`). Each app goes in a frame of its own
 carries every icon. It does so when the channel connects, and again whenever the package
 manager says a package was added, replaced, changed or removed, the language changed, or the
 user's storage was unlocked (before that, only the apps that run that early are listed).
-Only an app whose name or icon changed is described again; an app missing from the list has
-been removed. The agent's own package is never listed.
+Only an app whose name, icon, version or size changed is described again; an app missing from
+the list has been removed. The agent's own package is never listed.
+
+Each `InstalledApp` also carries the app's version, when it was first installed and last
+updated, whether it is part of the Android image, and its size (code, data and cache, from
+`StorageStatsManager`). The host's `RefreshApps` makes the agent read them again and send the
+list even when nothing changed, because the host waits for it.
+
+The host can uninstall an app (`UninstallApp`). The agent refuses an app that is part of the
+image, itself, and a package that is not installed, each with its reason, and uninstalls any
+other through `PackageInstaller`; `DELETE_PACKAGES` lets it go ahead without asking again in
+the guest. It answers with `UninstallResult`. `OpenAppSettings` opens Settings' page of an app
+(`ACTION_APPLICATION_DETAILS_SETTINGS`), or its list of apps when no package is named, as a
+task in its own window.
 
 ## Pointer input
 
@@ -419,6 +449,7 @@ A platform app may use framework interfaces the SDK does not publish. The agent 
 | `IWindowManager.get/setWindowingMode` | The display's windowing mode (reflection) |
 | `ActivityOptions.setLaunchWindowingMode` | A freeform window for a launched app (reflection) |
 | `ServiceManager.checkService` | The control daemon's service (reflection) |
+| `ActivityManager.forceStopPackage` | Stopping an app the user stops on the host (reflection) |
 | `Binder.markVintfStability` | Marking the listener the daemon calls as a stable interface (reflection) |
 | `InputManager.injectInputEvent`, `MotionEvent.setActionButton`, `InputEvent.setDisplayId` | Injecting the host's pointer and key input (reflection) |
 | `IActivityTaskManager.setFocusedTask` | Giving a task the input focus before its keys |
@@ -461,6 +492,7 @@ The release APK, `build/outputs/apk/release/dsa-agent-release-unsigned.apk`, is 
 | `src/main/kotlin/.../agent/power/` | The screen, Doze and the battery, as the host asks |
 | `src/main/kotlin/.../agent/clipboard/` | The clipboard shared with the host |
 | `src/main/kotlin/.../agent/notifications/` | The notifications shown on the host |
+| `src/main/kotlin/.../agent/background/` | The apps that run in the background, their media sessions, and stopping them |
 | `src/main/kotlin/.../agent/widgets/` | The widgets placed on the host's desktop |
 | `src/main/kotlin/.../agent/install/` | Installing the APKs the host sends |
 | `src/main/kotlin/.../agent/platform/` | The framework side: the application, task source, actions, windowing, input injection, the input method, binder channel, power controls |

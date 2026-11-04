@@ -57,6 +57,14 @@ class AndroidKernelConfigTests(unittest.TestCase):
         ]:
             self.assertIn(option, config)
 
+    def test_fr25_an_arm_translation_package_can_be_mounted_and_run(self):
+        # init mounts the package's erofs image through a loop device, lays it over /system
+        # with overlayfs, and registers its translator for ARM64 executables in binfmt_misc.
+        config = CONFIG.read_text()
+        for option in ["CONFIG_EROFS_FS=y", "CONFIG_BLK_DEV_LOOP=y", "CONFIG_OVERLAY_FS=y",
+                       "CONFIG_BINFMT_MISC=y"]:
+            self.assertIn(option, config)
+
     def test_fr1_binder_device_nodes_are_created_for_android_init(self):
         config = CONFIG.read_text()
         self.assertIn('CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"', config)
@@ -114,22 +122,44 @@ class AndroidKernelConfigTests(unittest.TestCase):
         ]:
             self.assertIn(option, config)
 
-    def test_fr21_the_kernel_keeps_its_last_log_in_pstore_ramoops(self):
+    def test_fr21_the_kernel_keeps_its_last_log_in_pstore_on_a_disk(self):
+        # A panic ends the VM, so a RAM backend keeps nothing; pstore/blk writes to the small
+        # disk the host attaches, found by its GPT partition UUID.
         config = CONFIG.read_text()
         for option in [
             "CONFIG_PSTORE=y",
             "CONFIG_PSTORE_CONSOLE=y",
             "CONFIG_PSTORE_PMSG=y",
-            "CONFIG_PSTORE_RAM=y",
+            "CONFIG_PSTORE_BLK=y",
+            "CONFIG_EFI_PARTITION=y",
+            "# CONFIG_PSTORE_RAM is not set",
         ]:
             self.assertIn(option, config)
+        self.assertNotIn("CONFIG_PSTORE_RAM=y", config)
 
+    def test_fr21_pstore_blk_waits_for_its_disk(self):
+        # Hyper-V disks probe asynchronously; without the wait pstore/blk looks for its disk
+        # before it exists and never registers.
+        patch = (PATCHES / "pstore-blk-wait-for-disk.patch").read_text()
+        self.assertIn("fs/pstore/blk.c", patch)
+        self.assertIn("+\twait_for_device_probe();", patch)
     def test_fr1_vmbus_root_device_is_platform_device_patch(self):
         patch = (PATCHES / "vmbus-platform-device.patch").read_text()
         self.assertIn("drivers/hv/vmbus_drv.c", patch)
         self.assertIn("vmbus_root_device = &pdev->dev;", patch)
         self.assertIn('device_rename(&pdev->dev, "vmbus")', patch)
         self.assertIn("device_move(&pdev->dev, &platform_bus, DPM_ORDER_NONE)", patch)
+
+    def test_fr1_command_line_partitions_find_the_disk_by_its_gpt_guid(self):
+        # Hyper-V names disks sda, sdb, ... in probe order, which changes when the host
+        # attaches another disk. The image names the system disk by the GUID in its GPT.
+        patch = (PATCHES / "cmdline-partition-uuid.patch").read_text()
+        self.assertIn("block/partitions/cmdline.c", patch)
+        self.assertIn("+\tchar name[UUID_STRING_LEN + 1];", patch)
+        self.assertIn('+\tif (!memcmp(header, "EFI PART", 8))', patch)
+        self.assertIn('"%pUl", header + 56', patch)
+        self.assertIn("+\t\t\tparts = cmdline_parts_find(bdev_parts, guid);", patch)
+        self.assertIn("queue_logical_block_size(state->disk->queue) >> 9", patch)
 
     def test_fr10_wakeup_sources_live_where_android_labels_them(self):
         # Android's suspend service reads every wakeup source's statistics. The platform

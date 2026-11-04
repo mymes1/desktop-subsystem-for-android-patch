@@ -9,8 +9,10 @@ trace script is missing, when the agent is missing or not signed with the platfo
 Settings still has the preferences or code that crash it without Bluetooth, when a system
 app users open is not compiled for the guest's boot image and its own dex, when the files
 do not match image.json, when the kernel or a DSA guest binary is built for another
-architecture than the image's, or when the ramdisk lacks the directories and links
-Android's first stage init needs.
+architecture than the image's, when the ramdisk lacks the directories and links Android's
+first stage init needs, or when the kernel command line, a mount table or an init script
+names a disk by its kernel name (/dev/block/sda), which follows the order the disks were
+probed in.
 
 The signatures are read from the apps themselves. sign_target_files_apks copies
 META/apkcerts.txt over unchanged, so that file still names AOSP's keys after signing.
@@ -76,6 +78,14 @@ for name, expected in manifest["files"].items():
 
 with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     names = z.namelist()
+    # Mount tables, init scripts and shell scripts find disks by partition name or UUID; a
+    # kernel disk name (sda) points at whichever disk Hyper-V's SCSI controller probed first.
+    for name in names:
+        base = name.rsplit("/", 1)[-1]
+        if base.startswith("fstab.") or base.endswith((".rc", ".sh", ".prop")):
+            for reference in sorted(set(make_image.kernel_disk_names(z.read(name).decode(errors="replace")))):
+                problems.append(f"{name} names a disk by its probe order ({reference}), "
+                                "which changes when the host attaches another disk")
     for app in ["Launcher3QuickStep", "SystemUI", "LatinIME", "CuttlefishService"]:
         if any(f"/{app}/" in n and n.endswith(".apk") for n in names):
             problems.append(f"{app} is still in the image")
@@ -221,6 +231,13 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names and "dsa_channeld" not in z.read(
             "SYSTEM/etc/selinux/plat_sepolicy.cil").decode():
         problems.append("plat_sepolicy.cil has no dsa_channeld domain, so init cannot start the daemon")
+    # The guest kernel's last log stays on the small pstore disk until the daemon unlinks the
+    # records the host has collected; without that the disk fills and keeps old crashes.
+    if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names and not re.search(
+            r"\(allow\s+dsa_channeld\s+pstorefs\s+\(\s*file\s+\([^)]*\bunlink\b",
+            z.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()):
+        problems.append("the SELinux policy does not let dsa_channeld clear pstore records the host "
+                        "has collected")
     if "META/file_contexts.bin" in names and b"dsa_channeld_exec" not in z.read("META/file_contexts.bin"):
         problems.append("META/file_contexts.bin does not label dsa-channeld, so the vendor image leaves it "
                         "vendor_file and init refuses to start it")
@@ -272,6 +289,29 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "SYSTEM/etc/init/dsa-trace.rc" not in names:
         problems.append("SYSTEM/etc/init/dsa-trace.rc is missing, so the input trace has no main thread timing")
 
+    # ARM app translation: an installed package is mounted and its properties imported only
+    # when the host says so at boot; without one, nothing in the image may turn a bridge on.
+    for needed in ["SYSTEM/etc/init/dsa-arm-translation.rc", "SYSTEM/etc/dsa/arm-translation-on.prop",
+                   "SYSTEM/etc/dsa/arm-translation-off.prop"]:
+        if needed not in names:
+            problems.append(f"{needed} is missing, so an installed ARM translation package is never used")
+    if "PRODUCT/etc/build.prop" in names:
+        product_lines = z.read("PRODUCT/etc/build.prop").decode(errors="replace").splitlines()
+        wanted_import = "import /system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop"
+        if not product_lines or product_lines[-1].strip() != wanted_import:
+            problems.append("PRODUCT/etc/build.prop does not end with the ARM translation import, so an "
+                            "installed package's ABIs never reach the package manager")
+    if "SYSTEM/etc/init/dsa-arm-translation.rc" in names:
+        rc = z.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(errors="replace")
+        if "on post-fs-data && property:ro.boot.dsa.arm_translation=on" not in rc:
+            problems.append("dsa-arm-translation.rc mounts the ARM translation package without waiting "
+                            "for the host to say one is installed")
+    for name in sorted(n for n in names if n.endswith("build.prop") or n.endswith("prop.default")):
+        for line in z.read(name).decode(errors="replace").splitlines():
+            if line.startswith("ro.dalvik.vm.native.bridge=") and line not in (
+                    "ro.dalvik.vm.native.bridge=", "ro.dalvik.vm.native.bridge=0"):
+                problems.append(f"{name} sets {line}, so a native bridge is on with no package installed")
+
     # DSA's composer, which sends the host each task's frames: with Cuttlefish's in its place,
     # no task window ever gets one.
     if "VENDOR/bin/hw/dsa-hwcomposer" not in names:
@@ -307,6 +347,23 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if f"VENDOR/apex/{apex}.apex" in names:
             problems.append(f"{apex} is still in the image and would serve its HAL too")
 
+    # DSA's GNSS HAL: without it the guest's location is Cuttlefish's made-up one, not the
+    # host's.
+    if "VENDOR/bin/hw/dsa-gnss" not in names:
+        problems.append("VENDOR/bin/hw/dsa-gnss is missing from the image")
+    if "VENDOR/etc/init/dsa-gnss.rc" not in names:
+        problems.append("VENDOR/etc/init/dsa-gnss.rc is missing, so init never starts dsa-gnss")
+    gnss_manifest = "VENDOR/etc/vintf/manifest/dsa-gnss.xml"
+    if gnss_manifest not in names:
+        problems.append(f"{gnss_manifest} is missing, so the GNSS HAL is not declared")
+    elif "<fqname>IGnss/default</fqname>" not in z.read(gnss_manifest).decode():
+        problems.append("dsa-gnss.xml does not declare IGnss/default")
+    if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-gnss" not in z.read("META/file_contexts.bin"):
+        problems.append("META/file_contexts.bin does not label dsa-gnss, so init refuses to start it")
+    for apex in ["com.google.cf.gnss", "com.android.hardware.gnss"]:
+        if f"VENDOR/apex/{apex}.apex" in names:
+            problems.append(f"{apex} is still in the image and would serve the GNSS HAL too")
+
     # DSA's codec HAL: without it every video decodes on the guest's processors.
     if "VENDOR/bin/hw/dsa-codec2" not in names:
         problems.append("VENDOR/bin/hw/dsa-codec2 is missing from the image")
@@ -321,6 +378,41 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         problems.append("VENDOR/etc/media_codecs_c2.xml is missing, so the framework lists none of the host's decoders")
     if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-codec2" not in z.read("META/file_contexts.bin"):
         problems.append("META/file_contexts.bin does not label dsa-codec2, so init refuses to start it")
+
+    # DSA's sensors HAL: without it apps see none of the host's sensors, or Cuttlefish's
+    # made-up ones.
+    if "VENDOR/bin/hw/dsa-sensors" not in names:
+        problems.append("VENDOR/bin/hw/dsa-sensors is missing from the image")
+    if "VENDOR/etc/init/dsa-sensors.rc" not in names:
+        problems.append("VENDOR/etc/init/dsa-sensors.rc is missing, so init never starts the sensors HAL")
+    sensors_manifest = "VENDOR/etc/vintf/manifest/dsa-sensors.xml"
+    if sensors_manifest not in names:
+        problems.append(f"{sensors_manifest} is missing, so the sensors HAL is not declared")
+    elif "<fqname>ISensors/default</fqname>" not in z.read(sensors_manifest).decode():
+        problems.append("dsa-sensors.xml does not declare ISensors/default")
+    if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-sensors" not in z.read("META/file_contexts.bin"):
+        problems.append("META/file_contexts.bin does not label dsa-sensors, so init refuses to start it")
+    for apex in ["com.android.hardware.sensors", "com.google.cf.sensors"]:
+        if f"VENDOR/apex/{apex}.apex" in names:
+            problems.append(f"{apex} is still in the image and would serve its sensors HAL too")
+    for name in sorted(names):
+        if (name.startswith("VENDOR/etc/vintf/manifest/") and name != sensors_manifest
+                and b"<name>android.hardware.sensors</name>" in z.read(name)):
+            problems.append(f"{name} declares a second sensors HAL, which fails the VINTF check")
+    # DSA's camera HAL: without it apps see Cuttlefish's emulated cameras, or none.
+    if "VENDOR/bin/hw/dsa-camera" not in names:
+        problems.append("VENDOR/bin/hw/dsa-camera is missing from the image")
+    if "VENDOR/etc/init/dsa-camera.rc" not in names:
+        problems.append("VENDOR/etc/init/dsa-camera.rc is missing, so init never starts the camera HAL")
+    camera_manifest = "VENDOR/etc/vintf/manifest/dsa-camera.xml"
+    if camera_manifest not in names:
+        problems.append(f"{camera_manifest} is missing, so the camera HAL is not declared")
+    elif "<fqname>ICameraProvider/internal/0</fqname>" not in z.read(camera_manifest).decode():
+        problems.append("dsa-camera.xml does not declare ICameraProvider/internal/0")
+    if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-camera" not in z.read("META/file_contexts.bin"):
+        problems.append("META/file_contexts.bin does not label dsa-camera, so init refuses to start it")
+    if "VENDOR/apex/com.google.emulated.camera.provider.hal.apex" in names:
+        problems.append("com.google.emulated.camera.provider.hal is still in the image and would serve fake cameras")
 
     if "VENDOR/etc/selinux/vendor_file_contexts" in names:
         vendor_fc = z.read("VENDOR/etc/selinux/vendor_file_contexts").decode()
@@ -358,6 +450,36 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "ro.vulkan.apex=" not in vendor_props.splitlines():
         problems.append("VENDOR/build.prop does not claim ro.vulkan.apex empty, so the Vulkan APEX sets it")
 
+    # DSA's device identity, in every partition, and nothing left of Cuttlefish's.
+    identity_files = sorted(n for n in names if n.endswith("build.prop") or n.endswith("prop.default"))
+    for name in identity_files:
+        for line in z.read(name).decode(errors="replace").splitlines():
+            if "=" not in line or line.startswith("#"):
+                continue
+            key, value = line.split("=", 1)
+            m = make_image.PRODUCT_KEY.match(key)
+            if m and value != make_image.IDENTITY[m.group(2)]:
+                problems.append(f"{name} sets {line}, not DSA's {m.group(2)}")
+            if make_image.FINGERPRINT_KEY.match(key):
+                if not value.startswith("DSA/dsa_x86_64/dsa_x86_64:") or ":user/" not in value:
+                    problems.append(f"{name} sets {line}, not DSA's user build fingerprint")
+            if key == "ro.build.characteristics" and value != make_image.CHARACTERISTICS:
+                problems.append(f"{name} sets {line}, not {make_image.CHARACTERISTICS}")
+            if (m or make_image.FINGERPRINT_KEY.match(key) or key.startswith("ro.build.")) and any(
+                    old in value for old in ("Cuttlefish", "vsoc_", "aosp_cf_", "userdebug")):
+                problems.append(f"{name} still names Cuttlefish's build in {line}")
+    product_props = z.read(make_image.PRODUCT_PROP_FILE).decode() if make_image.PRODUCT_PROP_FILE in names else ""
+    if f"ro.build.characteristics={make_image.CHARACTERISTICS}" not in product_props.splitlines():
+        problems.append(f"{make_image.PRODUCT_PROP_FILE} does not set ro.build.characteristics={make_image.CHARACTERISTICS}")
+    for key in make_image.IDENTITY_IMPORTS:
+        if f"import {make_image.RAMDISK_PROP} {key}" not in product_props.splitlines():
+            problems.append(f"{make_image.PRODUCT_PROP_FILE} does not import {key} from the identity the boot carries")
+    print(f"device identity checked in {len(identity_files)} property files")
+
+identity = manifest.get("identity") or {}
+if not all(identity.get(k) for k in ("release", "id", "incremental", "tags")):
+    problems.append(f"image.json does not name the build's release, ID, incremental version and tags: {identity}")
+
 disks_to_check = [d for d in ["system.vhdx", "data.vhdx"] if (image / d).exists()]
 if not disks_to_check and (image / "disk.vhdx").exists():
     disks_to_check = ["disk.vhdx"]
@@ -378,8 +500,12 @@ if "system.vhdx" in disks_to_check:
 else:
     if "androidboot.boot_part_uuid=" not in manifest["kernel_cmdline"]:
         problems.append("the kernel command line does not name the disk")
-if "blkdevparts=sda:" not in manifest["kernel_cmdline"]:
-    problems.append("the kernel command line does not restore Hyper-V GPT partition names")
+if f"blkdevparts={make_image.SYSTEM_DISK_GUID}:" not in manifest["kernel_cmdline"]:
+    problems.append("the kernel command line does not restore Hyper-V GPT partition names on the "
+                    f"system disk by its GUID {make_image.SYSTEM_DISK_GUID}")
+for reference in make_image.kernel_disk_names(manifest["kernel_cmdline"]):
+    problems.append(f"the kernel command line names a disk by its probe order ({reference}), "
+                    "which changes when the host attaches another disk")
 if "androidboot.selinux=permissive" in manifest["kernel_cmdline"]:
     problems.append("the kernel command line sets SELinux to permissive")
 for boot_arg in [
@@ -398,9 +524,12 @@ for boot_arg in ["androidboot.dsa.display_width=", "androidboot.dsa.display_heig
 for boot_arg in ["androidboot.hardware.hwcomposer.mode=", "androidboot.vendor.apex.com.android.hardware.graphics.composer="]:
     if boot_arg in manifest["kernel_cmdline"]:
         problems.append(f"the kernel command line still sets {boot_arg} for Cuttlefish's composer")
+if "androidboot.vendor.apex.com.google.emulated.camera.provider.hal=" in manifest["kernel_cmdline"]:
+    problems.append("the kernel command line still selects Cuttlefish's emulated cameras")
 
-def ramdisk_entries(data):
-    """Name to mode of every entry in a ramdisk of gzip'd newc cpio archives."""
+def ramdisk_entries(data, texts=None):
+    """Name to mode of every entry in a ramdisk of gzip'd newc cpio archives. With `texts`,
+    also fills it with the contents of the mount tables and init scripts."""
     entries = {}
     archive = gzip.decompress(data)  # every gzip member, one after another
     at = 0
@@ -418,6 +547,9 @@ def ramdisk_entries(data):
         name_size = int(header[94:102], 16)
         name = archive[at + 110:at + 110 + name_size - 1].decode()
         at = (at + 110 + name_size + 3) & ~3
+        base = name.rsplit("/", 1)[-1]
+        if texts is not None and stat.S_ISREG(mode) and (base.startswith("fstab.") or base.endswith((".rc", ".sh"))):
+            texts[name.lstrip("./")] = archive[at:at + size].decode(errors="replace")
         at = (at + size + 3) & ~3
         if name == "TRAILER!!!":
             continue  # the next archive follows
@@ -425,7 +557,12 @@ def ramdisk_entries(data):
     return entries
 
 
-entries = ramdisk_entries((image / "initrd.img").read_bytes())
+ramdisk_texts = {}
+entries = ramdisk_entries((image / "initrd.img").read_bytes(), ramdisk_texts)
+for name, text in sorted(ramdisk_texts.items()):
+    for reference in sorted(set(make_image.kernel_disk_names(text))):
+        problems.append(f"initrd.img's {name} names a disk by its probe order ({reference}), "
+                        "which changes when the host attaches another disk")
 # First stage init mounts onto these and fails without them.
 mount_points = ["dev", "proc", "sys", "mnt", "debug_ramdisk", "second_stage_resources", "metadata"]
 missing = [d for d in mount_points if not stat.S_ISDIR(entries.get(d, 0))]

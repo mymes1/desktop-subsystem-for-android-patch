@@ -619,11 +619,18 @@ fn fr3_dsa_launch_and_dsa_tasks_are_parsed() {
 
 #[test]
 fn nfr4_dsa_launch_can_wait_for_the_first_frame() {
-    let launch = parse(&args("launch com.android.settings --wait-first-frame --json")).unwrap();
+    let launch = parse(&args(
+        "launch com.android.settings --wait-first-frame --json",
+    ))
+    .unwrap();
     assert_eq!(launch.command, Cmd::Launch);
     assert!(launch.wait_first_frame);
     assert!(launch.json);
-    assert!(!parse(&args("launch com.android.settings")).unwrap().wait_first_frame);
+    assert!(
+        !parse(&args("launch com.android.settings"))
+            .unwrap()
+            .wait_first_frame
+    );
     assert!(
         parse(&args("status --wait-first-frame")).is_err(),
         "only a launch has a first frame"
@@ -916,6 +923,92 @@ fn fr20_developer_mode_is_off_by_default_and_dsa_turns_it_on_with_the_adb_addres
 }
 
 #[test]
+fn fr25_dsa_arm_translation_commands_are_parsed() {
+    use dsa_cli::Change;
+    assert_eq!(
+        parse(&args("arm-translation")).unwrap().command,
+        Cmd::ArmTranslationStatus
+    );
+    assert_eq!(
+        parse(&args("arm-translation status --json"))
+            .unwrap()
+            .command,
+        Cmd::ArmTranslationStatus
+    );
+    let install = parse(&args("arm-translation install C:\\packages\\digitalis")).unwrap();
+    assert_eq!(install.command, Cmd::ArmTranslationInstall);
+    assert_eq!(
+        install.file.as_deref(),
+        Some(std::path::Path::new("C:\\packages\\digitalis"))
+    );
+    assert_eq!(
+        parse(&args("arm-translation remove")).unwrap().command,
+        Cmd::ArmTranslationRemove
+    );
+    assert!(parse(&args("arm-translation install")).is_err());
+    assert!(parse(&args("arm-translation enable")).is_err());
+    assert_eq!(
+        parse(&args("settings set arm-translation off"))
+            .unwrap()
+            .change,
+        Some(Change::ArmTranslation(false))
+    );
+}
+
+#[test]
+fn fr25_dsa_installs_reports_and_removes_an_arm_translation_package() {
+    let folder = std::env::temp_dir().join(format!("dsa-cli-arm-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("arm-translation.json"),
+        r#"{"name": "Translator", "version": "1.0", "library": "libtranslator.so",
+            "abis": ["arm64-v8a"], "license": "Apache-2.0"}"#,
+    )
+    .unwrap();
+    let mut image = vec![0u8; 8192];
+    image[1024..1028].copy_from_slice(&0xE0F5_E1E2u32.to_le_bytes());
+    std::fs::write(folder.join("system.img"), &image).unwrap();
+
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let none = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert!(none["package"].is_null());
+    assert_eq!(none["supported"], false);
+    assert_eq!(none["enabled"], true);
+
+    let installed = dsa(
+        &endpoint,
+        &format!("arm-translation install {} --json", folder.display()),
+    );
+    let installed = json_of(&installed);
+    assert_eq!(installed["package"]["name"], "Translator");
+    assert_eq!(installed["supported"], true);
+    assert_eq!(installed["android"]["installed"], true);
+    assert_eq!(installed["restart_needed"], true);
+    let text = stdout(&dsa(&endpoint, "arm-translation status"));
+    assert!(
+        text.contains("ARM apps: supported by Translator 1.0 (Apache-2.0)"),
+        "{text}"
+    );
+    assert!(text.contains("Restart Android"), "{text}");
+
+    let removed = json_of(&dsa(&endpoint, "arm-translation remove --json"));
+    assert!(removed["package"].is_null());
+    assert_eq!(removed["android"]["installed"], false);
+
+    // A folder that is not a package is refused before Android is asked for anything.
+    std::fs::write(folder.join("system.img"), vec![0u8; 8192]).unwrap();
+    let refused = dsa(
+        &endpoint,
+        &format!("arm-translation install {}", folder.display()),
+    );
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains("erofs"), "{}", stderr(&refused));
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
 fn fr17_dsa_status_json_reports_the_state_and_the_last_reason() {
     let ((listener, _, _), endpoint) = local_pair();
     let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
@@ -1077,8 +1170,12 @@ fn nfr1_dsa_memory_says_what_it_knows_of_the_host_and_android() {
 
 /// A file in a folder of this test run, holding `content`.
 fn apk_file(name: &str, content: &[u8]) -> std::path::PathBuf {
+    // A folder of its own for each file: tests run at once and two may use the same name
+    // (broken.apk) with different contents.
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let call = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-        .join(format!("apks-{}", std::process::id()));
+        .join(format!("apks-{}-{call}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join(name);
     std::fs::write(&path, content).unwrap();
@@ -1572,4 +1669,332 @@ fn fr12_dsa_widgets_says_why_a_widget_was_not_placed() {
     );
     let output = dsa(&endpoint, "widgets remove 77");
     assert_eq!(output.status.code(), Some(1));
+}
+
+fn identity_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> RunningService {
+    use dsa_host_core::device_identity::{ImageBuild, MemoryDeviceIdentities};
+    use dsa_host_core::host_api::HostApiService;
+    let build = ImageBuild {
+        release: "16".into(),
+        id: "BP2A".into(),
+        incremental: "1.dsaab".into(),
+        tags: "release-keys".into(),
+    };
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_device_identities(
+            Arc::new(MemoryDeviceIdentities::default()),
+            Arc::new(move |_: &str| Some(build.clone())),
+        );
+    RunningService::start_service(listener, service)
+}
+
+fn dsa_words(endpoint: &str, words: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_dsa"))
+        .args(words)
+        .args([endpoint_flag(), endpoint])
+        .output()
+        .expect("running dsa")
+}
+
+#[test]
+fn fr17_dsa_settings_device_fields_are_parsed() {
+    use dsa_cli::Change;
+    use dsa_host_core::device_identity::Field;
+    let words = ["settings", "set", "device.model", "My tablet"].map(String::from);
+    assert_eq!(
+        parse(&words).unwrap().change,
+        Some(Change::Device(Field::Model, "My tablet".into()))
+    );
+    assert_eq!(
+        parse(&args("settings set device.fingerprint.type userdebug"))
+            .unwrap()
+            .change,
+        Some(Change::Device(Field::FingerprintType, "userdebug".into()))
+    );
+    assert_eq!(
+        parse(&args("settings reset device")).unwrap().change,
+        Some(Change::ResetDevice(None))
+    );
+    assert_eq!(
+        parse(&args("settings reset device.brand")).unwrap().change,
+        Some(Change::ResetDevice(Some(Field::Brand)))
+    );
+    assert_eq!(
+        parse(&args("settings device --json")).unwrap().change,
+        Some(Change::ShowDevice)
+    );
+    assert!(parse(&args("settings set device.serial X")).is_err());
+    assert!(parse(&args("settings set device.brand two/parts")).is_err());
+    assert!(parse(&args("settings reset gpu")).is_err());
+}
+
+#[test]
+fn fr17_dsa_changes_and_resets_the_device_identity_through_the_service() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = identity_service(listener);
+    let shown = json_of(&dsa(&endpoint, "settings device --json"));
+    assert_eq!(shown["effective"]["model"], "Desktop Subsystem for Android");
+    assert_eq!(shown["effective"]["manufacturer"], "thisisthepy");
+    assert_eq!(shown["chosen"]["model"], "");
+
+    let changed = json_of(&dsa_words(
+        &endpoint,
+        &["settings", "set", "device.model", "My tablet", "--json"],
+    ));
+    assert_eq!(changed["chosen"]["model"], "My tablet");
+    assert_eq!(changed["effective"]["model"], "My tablet");
+    let changed = json_of(&dsa(&endpoint, "settings set device.brand mine --json"));
+    assert_eq!(
+        changed["effective"]["model"], "My tablet",
+        "one change keeps the others"
+    );
+    assert_eq!(
+        changed["effective"]["fingerprint"],
+        "mine/dsa_x86_64/dsa_x86_64:16/BP2A/1.dsaab:user/release-keys"
+    );
+
+    let refused = dsa(&endpoint, "settings set device.fingerprint not-one");
+    assert_eq!(refused.status.code(), Some(2), "refused before it is sent");
+    assert!(
+        stderr(&refused).contains("fingerprint"),
+        "{}",
+        stderr(&refused)
+    );
+
+    let reset = json_of(&dsa(&endpoint, "settings reset device.brand --json"));
+    assert_eq!(reset["effective"]["brand"], "DSA");
+    assert_eq!(reset["chosen"]["model"], "My tablet");
+    let reset = json_of(&dsa(&endpoint, "settings reset device --json"));
+    assert_eq!(reset["effective"]["model"], "Desktop Subsystem for Android");
+
+    let text = dsa(&endpoint, "settings device");
+    assert!(text.status.success(), "{}", stderr(&text));
+    assert!(stdout(&text).contains("model: Desktop Subsystem for Android"));
+    assert!(stdout(&text).contains("next start"));
+}
+
+#[test]
+fn fr23_dsa_apps_is_parsed() {
+    use dsa_cli::AppsAction;
+    assert_eq!(parse(&args("apps")).unwrap().apps, Some(AppsAction::List));
+    assert_eq!(
+        parse(&args("apps list --json")).unwrap().apps,
+        Some(AppsAction::List)
+    );
+    assert_eq!(
+        parse(&args("apps info com.example.notes")).unwrap().apps,
+        Some(AppsAction::Info("com.example.notes".into()))
+    );
+    assert_eq!(
+        parse(&args("apps uninstall com.example.notes"))
+            .unwrap()
+            .apps,
+        Some(AppsAction::Uninstall("com.example.notes".into()))
+    );
+    assert_eq!(
+        parse(&args("apps settings")).unwrap().apps,
+        Some(AppsAction::Settings(None))
+    );
+    assert_eq!(
+        parse(&args("apps settings com.example.notes"))
+            .unwrap()
+            .apps,
+        Some(AppsAction::Settings(Some("com.example.notes".into())))
+    );
+    assert_eq!(parse(&args("apps")).unwrap().command, Cmd::Apps);
+    assert!(parse(&args("apps uninstall"))
+        .unwrap_err()
+        .contains("needs the app's package"));
+    assert!(parse(&args("apps uninstall ../evil"))
+        .unwrap_err()
+        .contains("not a package name"));
+}
+
+#[test]
+fn fr23_dsa_apps_list_and_info_show_each_app_with_its_details() {
+    use dsa_host_core::host_api_conformance::{KNOWN_PACKAGE, SYSTEM_PACKAGE};
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+
+    let list = dsa(&endpoint, "apps list");
+    assert!(list.status.success(), "{}", stderr(&list));
+    let text = stdout(&list);
+    assert!(
+        text.contains("com.example.notes  Notes 4.1  2.9 MB"),
+        "{text}"
+    );
+    assert!(text.contains("com.android.settings  Settings 16"), "{text}");
+    assert!(text.contains("(system)"), "{text}");
+    let android = androids.of(&user).unwrap();
+    assert_eq!(
+        android.state(),
+        SessionState::Active,
+        "Android was started first"
+    );
+    assert!(
+        *android.app_refreshes.lock().unwrap() >= 1,
+        "sizes were read again"
+    );
+
+    let json = json_of(&dsa(&endpoint, "apps list --json"));
+    let apps = json["apps"].as_array().unwrap();
+    assert_eq!(apps.len(), 2);
+    let notes = apps
+        .iter()
+        .find(|app| app["package"] == KNOWN_PACKAGE)
+        .unwrap();
+    assert_eq!(notes["label"], "Notes");
+    assert_eq!(notes["version_name"], "4.1");
+    assert_eq!(notes["version_code"], 41);
+    assert_eq!(notes["first_install_time_ms"], 1_700_000_000_000u64);
+    assert_eq!(notes["system_app"], false);
+    assert_eq!(notes["total_bytes"], 3_021_504);
+    assert_eq!(notes["icon_png"], "iVBORwI=");
+    let settings = apps
+        .iter()
+        .find(|app| app["package"] == SYSTEM_PACKAGE)
+        .unwrap();
+    assert_eq!(settings["system_app"], true);
+
+    let info = dsa(&endpoint, "apps info com.example.notes");
+    assert!(info.status.success(), "{}", stderr(&info));
+    let text = stdout(&info);
+    assert!(text.starts_with("Notes (com.example.notes)"), "{text}");
+    assert!(text.contains("Version: 4.1 (41)"), "{text}");
+    assert!(text.contains("Installed: 2023-11-14"), "{text}");
+    let missing = dsa(&endpoint, "apps info com.example.missing");
+    assert_eq!(missing.status.code(), Some(1));
+    assert!(stderr(&missing).contains("no app of com.example.missing"));
+}
+
+#[test]
+fn fr23_dsa_apps_uninstall_removes_a_user_app_and_refuses_a_system_app() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
+
+    let removed = dsa(&endpoint, "apps uninstall com.example.notes");
+    assert!(removed.status.success(), "{}", stderr(&removed));
+    assert_eq!(stdout(&removed), "Uninstalled com.example.notes");
+    let json = json_of(&dsa(&endpoint, "apps list --json"));
+    assert_eq!(json["apps"].as_array().unwrap().len(), 1, "the app is gone");
+
+    let system = dsa(&endpoint, "apps uninstall com.android.settings");
+    assert_eq!(system.status.code(), Some(1));
+    assert!(
+        stderr(&system).contains("not uninstalled (system-app)"),
+        "{}",
+        stderr(&system)
+    );
+    let gone = dsa(&endpoint, "apps uninstall com.example.notes");
+    assert!(
+        stderr(&gone).contains("not uninstalled (not-installed)"),
+        "{}",
+        stderr(&gone)
+    );
+}
+
+#[test]
+fn fr23_dsa_apps_settings_opens_androids_app_page_or_its_list_of_apps() {
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+
+    let one = dsa(&endpoint, "apps settings com.example.notes");
+    assert!(one.status.success(), "{}", stderr(&one));
+    assert_eq!(stdout(&one), "Opening the settings of com.example.notes");
+    let all = dsa(&endpoint, "apps settings");
+    assert!(all.status.success(), "{}", stderr(&all));
+    assert_eq!(
+        *androids.of(&user).unwrap().app_settings.lock().unwrap(),
+        vec![Some("com.example.notes".to_string()), None]
+    );
+}
+
+#[test]
+fn fr24_dsa_background_is_parsed() {
+    use dsa_cli::BackgroundAction;
+    assert_eq!(
+        parse(&args("background")).unwrap().background,
+        Some(BackgroundAction::List)
+    );
+    assert_eq!(
+        parse(&args("background list --json")).unwrap().background,
+        Some(BackgroundAction::List)
+    );
+    assert_eq!(
+        parse(&args("background stop com.example.music"))
+            .unwrap()
+            .background,
+        Some(BackgroundAction::Stop("com.example.music".into()))
+    );
+    assert_eq!(
+        parse(&args("background open com.example.music"))
+            .unwrap()
+            .background,
+        Some(BackgroundAction::Open("com.example.music".into()))
+    );
+    assert!(parse(&args("background stop")).is_err());
+    assert!(parse(&args("background stop ../music")).is_err());
+    assert_eq!(parse(&args("status")).unwrap().background, None);
+    assert!(parse(&args("settings set stop-without-asking on")).is_ok());
+    assert!(parse(&args("settings set stop-without-asking maybe")).is_err());
+}
+
+#[test]
+fn fr24_dsa_background_lists_and_stops_the_apps_that_run_in_the_background() {
+    use dsa_host_core::background::{BackgroundApp, BackgroundCommand, BackgroundEvent};
+    use dsa_host_core::host_api::UserAndroids;
+    use dsa_host_core::session::BackgroundRequest;
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+
+    let json = json_of(&dsa(&endpoint, "background --json"));
+    assert_eq!(json["apps"].as_array().unwrap().len(), 0);
+    let output = dsa(&endpoint, "background");
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "No app runs in the background.");
+
+    let _ = androids.android(&user).unwrap();
+    let android = androids.of(&user).unwrap();
+    android.background_event(BackgroundEvent::App(BackgroundApp {
+        package_name: "com.example.music".into(),
+        app_label: "Music".into(),
+        icon_png: vec![0x89, b'P', b'N', b'G'],
+        title: "Playing".into(),
+        text: "Song".into(),
+        actions: vec!["Pause".into()],
+    }));
+    let json = json_of(&dsa(&endpoint, "background list --json"));
+    assert_eq!(json["apps"][0]["package"], "com.example.music");
+    assert_eq!(json["apps"][0]["label"], "Music");
+    assert_eq!(json["apps"][0]["title"], "Playing");
+    assert_eq!(json["apps"][0]["actions"][0], "Pause");
+    assert_eq!(json["apps"][0]["icon_png"], "iVBORw==");
+
+    let output = dsa(&endpoint, "start --wait --timeout 5");
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json = json_of(&dsa(&endpoint, "background stop com.example.music --json"));
+    assert_eq!(json["stopped"], "com.example.music");
+    assert_eq!(
+        *android.background_requests.lock().unwrap(),
+        vec![BackgroundRequest::App(
+            "com.example.music".into(),
+            BackgroundCommand::Stop
+        )]
+    );
+}
+
+#[test]
+fn fr24_stopping_without_asking_is_a_setting_off_by_default() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["stop_without_asking"], false);
+    let changed = json_of(&dsa(
+        &endpoint,
+        "settings set stop-without-asking on --json",
+    ));
+    assert_eq!(changed["stop_without_asking"], true);
 }

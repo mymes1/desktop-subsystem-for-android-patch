@@ -5,17 +5,21 @@
 //! to a [`GraphicsRenderer`]. [`task_windows`] decides which window each task has and
 //! which window each display's frames go to, [`window_hosts`] which app window host
 //! shows each window, [`window_sizing`] how a window's size and scale reach its task,
-//! [`resize_sync`] says how long a dragged window waits for a frame of its new size,
+//! [`frame_follow`] keeps a window at the size of the frame it shows, [`resize_pacing`]
+//! sends a drag's sizes no faster than the app draws them,
 //! [`resize_latency`] measures how long a resized window waits for a frame of its new
 //! size, [`frame_buffers`] keeps a window's buffers at one size while it is resized,
 //! [`shown_windows`] says whether any window is shown, which lets the guest sleep, and
 //! [`visible_change`] when a press first visibly changes a window;
+//! [`caption`] lays out and draws the title bar a window draws over its app;
 //! the platform only carries it out.
 
+pub mod caption;
 pub mod frame_buffers;
+pub mod frame_follow;
 pub mod present_watch;
 pub mod resize_latency;
-pub mod resize_sync;
+pub mod resize_pacing;
 pub mod shown_windows;
 pub mod task_windows;
 pub mod visible_change;

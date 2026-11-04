@@ -11,6 +11,8 @@ import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsCollector
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsSource
 import io.github.thisisthepy.dsa.agent.input.EditorConnection
 import io.github.thisisthepy.dsa.agent.install.ApkInstaller
+import io.github.thisisthepy.dsa.agent.install.AppUninstaller
+import io.github.thisisthepy.dsa.agent.install.PackageUninstallerPort
 import io.github.thisisthepy.dsa.agent.install.PackageInfoPort
 import io.github.thisisthepy.dsa.agent.install.PackageInstallerPort
 import io.github.thisisthepy.dsa.agent.install.PackageQueries
@@ -34,6 +36,9 @@ import io.github.thisisthepy.dsa.agent.memory.AppProcesses
 import io.github.thisisthepy.dsa.agent.memory.ClosedApps
 import io.github.thisisthepy.dsa.agent.memory.MemoryReporter
 import io.github.thisisthepy.dsa.agent.memory.MemorySource
+import io.github.thisisthepy.dsa.agent.background.AppStopper
+import io.github.thisisthepy.dsa.agent.background.BackgroundApps
+import io.github.thisisthepy.dsa.agent.background.MediaSource
 import io.github.thisisthepy.dsa.agent.notifications.NotificationForwarder
 import io.github.thisisthepy.dsa.agent.notifications.NotificationSource
 import io.github.thisisthepy.dsa.agent.print.HostPrinter
@@ -54,6 +59,7 @@ import io.github.thisisthepy.dsa.agent.widgets.WidgetManager
 import io.github.thisisthepy.dsa.agent.widgets.WidgetPlatform
 import io.github.thisisthepy.dsa.agent.widgets.WidgetStore
 import io.github.thisisthepy.dsa.agent.windowing.FreeformSetup
+import io.github.thisisthepy.dsa.agent.windowing.CaptionInsets
 import io.github.thisisthepy.dsa.agent.windowing.TaskArranger
 import io.github.thisisthepy.dsa.agent.windowing.WindowingControl
 import io.github.thisisthepy.dsa.control.v1.AgentConnected
@@ -85,7 +91,9 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * that can open them ([FileReceiver]). APKs the host sends are installed through the guest's
  * package installer ([ApkInstaller]), and the host is told how each install went. The guest's
  * notifications go to the host's notification centre, and a click or a dismissal there comes
- * back to them ([NotificationForwarder]). While a host accessibility client watches a task, the
+ * back to them ([NotificationForwarder]). Apps that keep running with no window, because they
+ * run a foreground service, are shown in the host's notification area, and their media sessions
+ * reach the host's media keys ([BackgroundApps]). While a host accessibility client watches a task, the
  * agent's accessibility service is on and the task's accessibility tree goes to the host
  * ([AccessibilityExport]); otherwise the service is off. The widgets the user placed on the
  * host's desktop are hosted and drawn here, and their images go to the host ([WidgetManager]).
@@ -120,8 +128,11 @@ class Agent(
     fileOpener: FileOpener = FileOpener.NONE,
     clipboard: GuestClipboard = GuestClipboard.NONE,
     notifications: NotificationSource = NotificationSource.NONE,
+    media: MediaSource = MediaSource.NONE,
+    stopper: AppStopper = AppStopper.NONE,
     packageInstaller: PackageInstallerPort = PackageInstallerPort.NONE,
     packages: PackageInfoPort = PackageInfoPort.NONE,
+    packageUninstaller: PackageUninstallerPort = PackageUninstallerPort.NONE,
     widgets: WidgetPlatform = WidgetPlatform.NONE,
     appProcesses: AppProcesses = AppProcesses.NONE,
     widgetStore: WidgetStore = WidgetStore.memory(),
@@ -178,12 +189,22 @@ class Agent(
     }
     private val clipboardSync = ClipboardSync(clipboard, { frame -> channel.send(frame) }, log, isConnected = { channel.connected })
     private val diagnosticsCollector = DiagnosticsCollector(diagnostics, { frame -> channel.send(frame) }, log, diagnosticsRunner)
+    private val backgroundApps = BackgroundApps(
+        ownPackage,
+        notifications,
+        media,
+        stopper,
+        { frame -> channel.send(frame) },
+        log,
+        isConnected = { channel.connected },
+    )
     private val notificationForwarder = NotificationForwarder(
         ownPackage,
         notifications,
         { frame -> channel.send(frame) },
         log,
         isConnected = { channel.connected },
+        also = backgroundApps,
     )
     private val apkInstaller = ApkInstaller(
         packageInstaller,
@@ -198,7 +219,15 @@ class Agent(
         isConnected = { channel.connected },
         post = { work -> scheduler.post(work) },
     )
-    private val packageQueries =PackageQueries(packages, { frame -> channel.send(frame) }, log)
+    private val packageQueries = PackageQueries(packages, { frame -> channel.send(frame) }, log)
+    private val appUninstaller = AppUninstaller(
+        ownPackage,
+        packageUninstaller,
+        { frame -> channel.send(frame) },
+        log,
+        post = { work -> scheduler.post(work) },
+        onUninstalled = { requestAppsRefresh() },
+    )
     private val widgetManager = WidgetManager(
         widgets,
         widgetStore,
@@ -217,6 +246,7 @@ class Agent(
     )
     private val freeform = FreeformSetup(windowing, scheduler, log)
     private val arranger = TaskArranger(actions, windowing::displaySize, log)
+    private val captions = CaptionInsets(actions, log)
     private val installed = InstalledAppReporter(ownPackage) { frame -> channel.send(frame) }
     private val links = Links(browserRole, guestBrowser, { frame -> channel.send(frame) }, log)
     private val files = FileReceiver(fileStore, fileOpener, { frame -> channel.send(frame) }, log)
@@ -230,6 +260,7 @@ class Agent(
     )
     private var refreshPending = false
     private var appsPending = false
+    private var appsForced = false
     private var checkPending = false
 
     fun start() {
@@ -251,6 +282,7 @@ class Agent(
             lifecycle.start { work -> scheduler.post(work) }
             clipboardSync.start { work -> scheduler.post(work) }
             notificationForwarder.start { work -> scheduler.post(work) }
+            backgroundApps.start { work -> scheduler.post(work) }
             widgetManager.start(later = { work -> scheduler.postDelayed(RETRY_MILLIS, work) }) { work ->
                 scheduler.post(work)
             }
@@ -269,17 +301,23 @@ class Agent(
         }
     }
 
-    private fun requestAppsRefresh() {
+    private fun requestAppsRefresh(force: Boolean = false) {
+        if (force) appsForced = true
         if (appsPending) return
         appsPending = true
         scheduler.post {
             appsPending = false
-            refreshApps()
+            val forced = appsForced
+            appsForced = false
+            refreshApps(forced)
         }
     }
 
-    /** Tells the host which apps a launcher lists, when that changed. */
-    private fun refreshApps() {
+    /**
+     * Tells the host which apps a launcher lists, when that changed; when [force]d, sends the
+     * list even when nothing changed, since the host waits for it.
+     */
+    private fun refreshApps(force: Boolean) {
         if (!channel.connected) return
         val apps = try {
             launcherApps.list()
@@ -287,7 +325,7 @@ class Agent(
             log.warn("reading the installed apps failed", e)
             return
         } ?: return
-        installed.update(apps)
+        installed.update(apps, force)
     }
 
     private fun listen() {
@@ -316,6 +354,7 @@ class Agent(
         lifecycle.connected()
         clipboardSync.connected()
         notificationForwarder.connected()
+        backgroundApps.connected()
         widgetManager.connected()
         apkInstaller.connected()
         printer.connected()
@@ -343,6 +382,9 @@ class Agent(
         when (result) {
             is RequestResult.Launched -> log.info("launched ${result.packageName}")
             is RequestResult.LaunchFailed -> log.warn("could not launch ${result.packageName}: ${result.reason}")
+            is RequestResult.SettingsOpened -> log.info("opened the settings of ${result.packageName ?: "every app"}")
+            is RequestResult.SettingsFailed ->
+                log.warn("could not open the settings of ${result.packageName ?: "every app"}: ${result.reason}")
             is RequestResult.Closed -> log.info("ended task ${result.taskId}")
             is RequestResult.CloseRefused -> log.warn("did not end task ${result.taskId}: ${result.reason}")
             is RequestResult.Resize -> {
@@ -352,6 +394,10 @@ class Agent(
             is RequestResult.Density -> {
                 log.info("task ${result.taskId} draws at ${result.densityDpi} dpi")
                 arranger.setDensity(result.taskId, result.densityDpi)
+            }
+            is RequestResult.Caption -> {
+                log.info("task ${result.taskId} is under a title bar ${result.height} pixels high")
+                captions.setHeight(result.taskId, result.height, reporter.reportedBounds(result.taskId))
             }
             is RequestResult.SizeRefused -> log.warn("did not resize task ${result.taskId}: ${result.reason}")
             is RequestResult.Malformed -> log.warn("dropped a frame: ${result.reason}")
@@ -390,10 +436,13 @@ class Agent(
         }
         if (clipboardSync.handle(envelope)) return true
         if (notificationForwarder.handle(envelope)) return true
+        if (backgroundApps.handle(envelope)) return true
         if (apkInstaller.handle(envelope)) return true
         if (packageQueries.handle(envelope)) return true
         if (printer.handle(envelope)) return true
+        if (appUninstaller.handle(envelope)) return true
         when (envelope.bodyCase) {
+            Envelope.BodyCase.REFRESH_APPS -> requestAppsRefresh(force = true)
             Envelope.BodyCase.KEY_EVENT -> try {
                 keys.handle(envelope.keyEvent)
             } catch (e: Exception) {
@@ -529,6 +578,7 @@ class Agent(
         )
         val reported = reporter.reported
         val told = reported.mapNotNull { taskId -> reporter.reportedBounds(taskId)?.let { taskId to it } }.toMap()
+        captions.update(told)
         if (told != taskBounds) {
             taskBounds = told
             inputScheduler.post { pointer.retainTasks(reported) }

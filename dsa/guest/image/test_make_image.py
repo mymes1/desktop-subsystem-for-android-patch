@@ -24,8 +24,14 @@ SPEC.loader.exec_module(make_image)
 
 
 class ImageLayoutTests(unittest.TestCase):
+    def test_fr21_channeld_may_clear_the_pstore_records_the_host_collected(self):
+        # init leaves /sys/fs/pstore read only to system; the daemon makes it writable to
+        # itself and unlinks each collected record, which erases it from the pstore disk.
+        cil = (Path(__file__).parent / "sepolicy" / "channeld.cil").read_text()
+        self.assertRegex(cil, r"\(allow dsa_channeld pstorefs \(dir \([^)]*\bsetattr\b[^)]*\bremove_name\b")
+        self.assertRegex(cil, r"\(allow dsa_channeld pstorefs \(file \([^)]*\bunlink\b")
     def test_fr1_selects_vendor_apexes_without_the_cuttlefish_launcher(self):
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)")
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         self.assertIn("androidboot.boot_devices=vmbus", cmdline)
         self.assertNotIn("androidboot.boot_part_uuid", cmdline)
         self.assertIn(
@@ -59,9 +65,90 @@ class ImageLayoutTests(unittest.TestCase):
         }
         self.assertEqual(
             make_image.command_line_partitions(layout, {"misc": make_image.MISC_UUID}),
-            "blkdevparts=sda:1048576@1048576(misc:811d3bbb-a7ff-437a-857f-f54af996b190),1048576@69206016(vbmeta_a),"
-            "1610612736@104857600(super)",
+            f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1048576@1048576(misc:811d3bbb-a7ff-437a-857f-f54af996b190),"
+            "1048576@69206016(vbmeta_a),1610612736@104857600(super)",
         )
+
+    def test_fr1_the_system_disk_is_named_by_its_gpt_guid_not_its_probe_order(self):
+        # Hyper-V's SCSI controller probes disks in an order that changes when the host
+        # attaches another (the pstore disk), so sda is not always the system disk.
+        cmdline = make_image.command_line_partitions({"super": (1 << 20, 1 << 30)})
+        self.assertTrue(cmdline.startswith(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:"))
+        self.assertEqual(make_image.kernel_disk_names(cmdline), [])
+        self.assertRegex(make_image.SYSTEM_DISK_GUID,
+                         r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+        self.assertNotIn(make_image.SYSTEM_DISK_GUID, (make_image.SUPER_UUID, make_image.MISC_UUID))
+
+    def test_fr1_the_system_disk_gpt_carries_the_guid_the_command_line_names(self):
+        calls = []
+        rows = [
+            f"   {n}   {2048 * n}   {2048 * n + 2047}   1.0 MiB   8300  {name}"
+            for n, (name, _) in enumerate(make_image.SYSTEM_SMALL_PARTITIONS + [("super", 0)], start=1)
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            images = root / "images"
+            images.mkdir()
+            (images / "super.img").write_bytes(bytes(4096))
+
+            def fake_run(*args, **kwargs):
+                calls.append([str(a) for a in args])
+
+            def fake_subprocess_run(cmd, *args, **kwargs):
+                return subprocess.CompletedProcess(cmd, 0, stdout="\n".join(rows), stderr="")
+
+            with patch.object(make_image, "run", side_effect=fake_run), \
+                 patch.object(make_image, "make_raw_disk", side_effect=lambda path, size: path.write_bytes(b"")), \
+                 patch.object(make_image, "materialize_backup_gpt"), \
+                 patch.object(make_image, "verified_boot_partitions", return_value=[]), \
+                 patch.object(make_image.subprocess, "run", side_effect=fake_subprocess_run):
+                cmdline = make_image.system_disk(images, root, root, root / "system.vhdx")
+        sgdisk = next(c for c in calls if "--clear" in c)
+        self.assertIn(f"--disk-guid={make_image.SYSTEM_DISK_GUID}", sgdisk)
+        self.assertTrue(cmdline.startswith(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:"))
+
+    def test_fr1_kernel_disk_names_are_found_and_stable_identities_are_not(self):
+        found = make_image.kernel_disk_names(
+            "/dev/block/sda1 /x ext4 defaults wait root=/dev/sdb2 blkdevparts=sdc:1@0(misc) /dev/vda")
+        self.assertEqual(found, ["/dev/block/sda1", "/dev/sdb2", "blkdevparts=sdc:", "/dev/vda"])
+        self.assertEqual(make_image.kernel_disk_names(
+            "/dev/block/by-name/userdata /dev/block/by-uuid/x /dev/block/zram0 /dev/block/dm-0 /sdcard "
+            f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)"), [])
+
+    def test_fr1_no_mount_table_or_init_script_names_a_disk_by_probe_order(self):
+        here = Path(SPEC.origin).parent
+        for path in [here / "fstab.dsa", *sorted(here.glob("*.rc"))]:
+            self.assertEqual(make_image.kernel_disk_names(path.read_text()), [], path.name)
+        cmdline = make_image.kernel_cmdline(make_image.command_line_partitions({"super": (1 << 20, 1 << 30)}))
+        self.assertEqual(make_image.kernel_disk_names(cmdline), [])
+
+    def test_fr1_check_image_rejects_a_disk_named_by_probe_order(self):
+        check_script = Path(__file__).with_name("check-image.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            img_dir = root / "image"
+            img_dir.mkdir()
+            keys_dir = root / "keys"
+            keys_dir.mkdir()
+            (keys_dir / "test.x509.pem").write_text("-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n")
+            manifest = {"files": {}, "kernel_cmdline": "console=ttyS0 blkdevparts=sda:1048576@1048576(misc)"}
+            (img_dir / "image.json").write_text(json.dumps(manifest))
+            (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
+                archive.writestr("SYSTEM/build.prop", "ro.debuggable=0\n")
+                archive.writestr("META/apkcerts.txt", "")
+                archive.writestr("VENDOR/etc/fstab.dsa", "/dev/block/sdb3 /data ext4 defaults wait\n")
+                archive.writestr("VENDOR/etc/init/disk.rc", "on fs\n    write /dev/block/sdc 0\n")
+            proc = subprocess.run(
+                [sys.executable, str(check_script), str(img_dir), str(keys_dir)],
+                capture_output=True,
+                text=True,
+            )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("the kernel command line names a disk by its probe order (blkdevparts=sda:)", proc.stdout)
+        self.assertIn("system disk by its GUID", proc.stdout)
+        self.assertIn("VENDOR/etc/fstab.dsa names a disk by its probe order (/dev/block/sdb3)", proc.stdout)
+        self.assertIn("VENDOR/etc/init/disk.rc names a disk by its probe order (/dev/block/sdc)", proc.stdout)
 
     def test_fr1_verified_hash_partition_needs_a_first_stage_entry(self):
         found = [("chain", "vbmeta_system"), ("chain", "boot"), ("chain", "init_boot"), ("hash", "vendor_boot")]
@@ -344,7 +431,7 @@ class ImageLayoutTests(unittest.TestCase):
 
 
     def test_pr3_kernel_cmdline_selects_guest_graphics_stack(self):
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)")
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         self.assertIn("androidboot.hardware.gltransport=hvsocket", cmdline)
         self.assertIn("androidboot.hardware.egl=angle", cmdline)
         self.assertIn("androidboot.hardware.vulkan=ranchu", cmdline)
@@ -360,14 +447,14 @@ class ImageLayoutTests(unittest.TestCase):
     def test_pr3_composer_starts_without_a_display_device(self):
         # Cuttlefish's composer otherwise looks for a virtio-gpu DRM card or a goldfish
         # display, finds neither under Hyper-V, and surfaceflinger aborts.
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)")
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         self.assertIn("androidboot.hardware.hwcomposer.mode=noop", cmdline)
         self.assertIn("androidboot.hardware.hwcomposer.display_finder_mode=noop", cmdline)
 
     def test_fr1_lights_hal_listens_on_an_unprivileged_vsock_port(self):
         # Without a port the Cuttlefish lights HAL binds vsock port 0, which needs
         # CAP_NET_BIND_SERVICE, and aborts; system_server waits for it and never boots.
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)")
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         port = int(cmdline.split("androidboot.vsock_lights_port=", 1)[1].split()[0])
         self.assertGreaterEqual(port, 1024)
         self.assertNotIn(port, {5000, 5566, 5567})
@@ -1029,6 +1116,70 @@ class ImageLayoutTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 make_image.modify(source, root / "modified.zip", power_hal=root)
 
+    def test_fr26_dsa_gnss_hal_replaces_cuttlefishs(self):
+        # The guest's location is the host's: Cuttlefish's GNSS HAL goes, as an APEX or as
+        # plain files, so nothing else claims IGnss/default.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            gnss = root / "dsa-gnss"
+            gnss.write_bytes(b"\x7fELF gnss")
+            channeld = root / "dsa-channeld"
+            channeld.write_bytes(b"\x7fELF channeld")
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("VENDOR/apex/com.google.cf.gnss.apex", b"apex")
+                archive.writestr("VENDOR/bin/hw/android.hardware.gnss-service.example", b"\x7fELF example")
+                archive.writestr("VENDOR/etc/init/android.hardware.gnss-service.example.rc", "service gnss\n")
+                archive.writestr("VENDOR/etc/vintf/manifest/android.hardware.gnss-service.example.xml", "<manifest/>")
+                archive.writestr("VENDOR/bin/hw/android.hardware.sensors-service.example", b"\x7fELF sensors")
+                archive.writestr(
+                    "META/apexkeys.txt",
+                    'name="com.google.cf.gnss.apex" public_key="a"\n'
+                    'name="com.android.hardware.gatekeeper.nonsecure.apex" public_key="c"\n',
+                )
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, channeld=channeld, gnss_hal=gnss)
+
+            with zipfile.ZipFile(modified) as archive:
+                names = archive.namelist()
+                self.assertNotIn("VENDOR/apex/com.google.cf.gnss.apex", names)
+                self.assertNotIn("VENDOR/bin/hw/android.hardware.gnss-service.example", names)
+                self.assertNotIn("VENDOR/etc/init/android.hardware.gnss-service.example.rc", names)
+                self.assertNotIn("VENDOR/etc/vintf/manifest/android.hardware.gnss-service.example.xml", names)
+                self.assertIn("VENDOR/bin/hw/android.hardware.sensors-service.example", names)
+                apexkeys = archive.read("META/apexkeys.txt").decode()
+                self.assertNotIn("cf.gnss", apexkeys)
+                self.assertIn("gatekeeper", apexkeys)
+                self.assertEqual(archive.read("VENDOR/bin/hw/dsa-gnss"), b"\x7fELF gnss")
+                self.assertIn("service vendor.dsa-gnss /vendor/bin/hw/dsa-gnss",
+                              archive.read("VENDOR/etc/init/dsa-gnss.rc").decode())
+                manifest = archive.read("VENDOR/etc/vintf/manifest/dsa-gnss.xml").decode()
+                self.assertIn("<name>android.hardware.gnss</name>", manifest)
+                self.assertIn("<version>4</version>", manifest)
+                self.assertIn("<fqname>IGnss/default</fqname>", manifest)
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+                self.assertIn("vendor/bin/hw/dsa-gnss 0 2000 755 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/init/dsa-gnss.rc 0 0 644 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/vintf/manifest/dsa-gnss.xml 0 0 644 capabilities=0x0", fs_config)
+                contexts = archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode()
+                self.assertIn("/vendor/bin/hw/dsa-gnss u:object_r:hal_gnss_default_exec:s0", contexts)
+                policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertIn("(allow hal_gnss_server dsa_channel_service (service_manager (find)))", policy)
+                self.assertIn("(allow dsa_channeld hal_gnss_server (binder (call transfer)))", policy)
+
+    def test_fr26_the_gnss_hal_needs_the_channel_daemon(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            with self.assertRaises(ValueError):
+                make_image.modify(source, root / "modified.zip", gnss_hal=root / "dsa-gnss")
+
     def test_pr4_the_codec_hal_is_installed_with_its_decoders_and_policy(self):
         # The host decodes the guest's video on its GPU: the image carries the codec HAL, the
         # list of its decoders, its service's label, and keeps codec buffers out of pools.
@@ -1070,8 +1221,197 @@ class ImageLayoutTests(unittest.TestCase):
                               archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
                 self.assertIn("debug.stagefright.c2-poolmask=262144", archive.read("VENDOR/build.prop").decode())
 
+    def test_fr26_the_sensors_hal_replaces_cuttlefishs_with_its_policy(self):
+        # The guest reads the host's sensors: the image carries DSA's sensors HAL, labelled
+        # in the sensors domain with leave to reach the host over vsock, and no other.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            sensors = root / "dsa-sensors"
+            sensors.write_bytes(b"\x7fELF sensors")
+            other = ('<manifest version="1.0" type="device"><hal format="aidl">'
+                     "<name>android.hardware.sensors</name><fqname>ISensors/default</fqname>"
+                     "</hal></manifest>")
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+                archive.writestr("VENDOR/apex/com.android.hardware.sensors.apex", b"apex")
+                archive.writestr("VENDOR/apex/com.google.cf.sensors.apex", b"apex")
+                archive.writestr("VENDOR/etc/vintf/manifest/sensors-default.xml", other)
+                archive.writestr("VENDOR/etc/vintf/manifest/other.xml", "<manifest/>")
+                archive.writestr("META/apexkeys.txt",
+                                 'name="com.google.cf.sensors.apex" public_key="k"\n'
+                                 'name="com.android.adbd.apex" public_key="k"\n')
+
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, sensors=sensors)
+
+            with zipfile.ZipFile(modified) as archive:
+                names = set(archive.namelist())
+                self.assertEqual(archive.read("VENDOR/bin/hw/dsa-sensors"), b"\x7fELF sensors")
+                self.assertIn("service vendor.dsa-sensors /vendor/bin/hw/dsa-sensors",
+                              archive.read("VENDOR/etc/init/dsa-sensors.rc").decode())
+                manifest = archive.read("VENDOR/etc/vintf/manifest/dsa-sensors.xml").decode()
+                self.assertIn("<name>android.hardware.sensors</name>", manifest)
+                self.assertIn("<version>2</version>", manifest)
+                self.assertIn("<fqname>ISensors/default</fqname>", manifest)
+                # Cuttlefish's sensors HAL goes, in an APEX or declared beside it.
+                self.assertNotIn("VENDOR/apex/com.android.hardware.sensors.apex", names)
+                self.assertNotIn("VENDOR/apex/com.google.cf.sensors.apex", names)
+                self.assertNotIn("VENDOR/etc/vintf/manifest/sensors-default.xml", names)
+                self.assertIn("VENDOR/etc/vintf/manifest/other.xml", names)
+                apexkeys = archive.read("META/apexkeys.txt").decode()
+                self.assertNotIn("com.google.cf.sensors", apexkeys)
+                self.assertIn("com.android.adbd", apexkeys)
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+                self.assertIn("vendor/bin/hw/dsa-sensors 0 2000 755 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/init/dsa-sensors.rc 0 0 644 capabilities=0x0", fs_config)
+                self.assertIn("/vendor/bin/hw/dsa-sensors u:object_r:hal_sensors_default_exec:s0",
+                              archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode())
+                self.assertIn("(allow hal_sensors_server self (vsock_socket",
+                              archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
+
+    def test_fr26_without_the_sensors_hal_cuttlefishs_stays(self):
+        self.assertNotIn("com.google.cf.sensors", make_image.removed_apexes())
+        self.assertFalse(make_image.removed("VENDOR/apex/com.google.cf.sensors.apex"))
+        self.assertTrue(make_image.removed("VENDOR/apex/com.google.cf.sensors.apex", sensors=True))
+
     def test_pr4_without_the_codec_hal_codec_buffers_stay_pooled(self):
         self.assertNotIn("debug.stagefright.c2-poolmask", make_image.edit_props("ro.debuggable=1\n"))
+
+    def _audio_source(self, root):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n(typeattribute hal_audio_server)\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+            archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr("META/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr(
+                "VENDOR/etc/audio_policy_configuration.xml",
+                '<audioPolicyConfiguration version="7.0" xmlns:xi="http://www.w3.org/2001/XInclude">\n'
+                "    <modules>\n"
+                "        <!-- Primary Audio HAL -->\n"
+                '        <xi:include href="primary_audio_policy_configuration.xml"/>\n'
+                '        <xi:include href="r_submix_audio_policy_configuration.xml"/>\n'
+                "    </modules>\n"
+                "</audioPolicyConfiguration>\n",
+            )
+        return source
+
+    def test_pr4_the_dsa_audio_module_serves_the_primary_output(self):
+        # The image's audio service makes a module for each one its policy file lists, and
+        # makes the primary one (IModule/default) play nowhere on Hyper-V. With dsa-audio, the
+        # primary module leaves that file, so the service keeps the remote submix and
+        # Bluetooth modules and dsa-audio alone registers IModule/default.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self._audio_source(root)
+            audio = root / "dsa-audio"
+            audio.write_bytes(b"\x7fELF audio")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, audio=audio)
+
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(archive.read("VENDOR/bin/hw/dsa-audio"), b"\x7fELF audio")
+                rc = archive.read("VENDOR/etc/init/dsa-audio.rc").decode()
+                self.assertIn("service vendor.dsa-audio /vendor/bin/hw/dsa-audio", rc)
+                self.assertIn("user audioserver", rc)
+                self.assertIn("onrestart restart audioserver", rc)
+                policy = archive.read("VENDOR/etc/audio_policy_configuration.xml").decode()
+                self.assertNotIn("primary_audio_policy_configuration.xml", policy)
+                self.assertIn("r_submix_audio_policy_configuration.xml", policy)
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+                self.assertIn("vendor/bin/hw/dsa-audio 0 2000 755 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/init/dsa-audio.rc 0 0 644 capabilities=0x0", fs_config)
+                for contexts in ["VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"]:
+                    self.assertIn(
+                        "/vendor/bin/hw/dsa-audio u:object_r:hal_audio_default_exec:s0",
+                        archive.read(contexts).decode(),
+                    )
+                plat = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertIn("(allow hal_audio_server self (vsock_socket", plat)
+
+    def test_pr4_without_dsa_audio_the_image_keeps_its_primary_module(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self._audio_source(root)
+            modified = root / "modified.zip"
+            make_image.modify(source, modified)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertNotIn("VENDOR/bin/hw/dsa-audio", archive.namelist())
+                policy = archive.read("VENDOR/etc/audio_policy_configuration.xml").decode()
+                self.assertIn("primary_audio_policy_configuration.xml", policy)
+                plat = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertNotIn("(allow hal_audio_server self (vsock_socket", plat)
+
+    def test_fr26_the_camera_hal_replaces_the_emulated_cameras(self):
+        # The host's cameras are Android's: the image carries the camera provider HAL, its
+        # label, its service's label, its policy and the camera features, and drops
+        # Cuttlefish's emulated cameras.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            camera = root / "dsa-camera"
+            camera.write_bytes(b"\x7fELF camera")
+            emulated = "VENDOR/apex/com.google.emulated.camera.provider.hal.apex"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_service_contexts", "")
+                archive.writestr("META/apexkeys.txt",
+                                 'name="com.google.emulated.camera.provider.hal.apex" public_key="k"\n')
+                archive.writestr(emulated, b"apex")
+
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, camera=camera)
+
+            with zipfile.ZipFile(modified) as archive:
+                names = archive.namelist()
+                self.assertNotIn(emulated, names)
+                self.assertNotIn(b"emulated.camera", archive.read("META/apexkeys.txt"))
+                self.assertEqual(archive.read("VENDOR/bin/hw/dsa-camera"), b"\x7fELF camera")
+                self.assertIn("service vendor.dsa-camera /vendor/bin/hw/dsa-camera",
+                              archive.read("VENDOR/etc/init/dsa-camera.rc").decode())
+                manifest = archive.read("VENDOR/etc/vintf/manifest/dsa-camera.xml").decode()
+                self.assertIn("<name>android.hardware.camera.provider</name>", manifest)
+                self.assertIn("<fqname>ICameraProvider/internal/0</fqname>", manifest)
+                features = archive.read("VENDOR/etc/permissions/dsa-camera-features.xml").decode()
+                for feature in ["android.hardware.camera.any", "android.hardware.camera.front",
+                                "android.hardware.camera.external"]:
+                    self.assertIn(f'name="{feature}"', features)
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+                self.assertIn("vendor/bin/hw/dsa-camera 0 2000 755 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/permissions/dsa-camera-features.xml 0 0 644 capabilities=0x0", fs_config)
+                self.assertIn("/vendor/bin/hw/dsa-camera u:object_r:hal_camera_default_exec:s0",
+                              archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode())
+                self.assertIn(
+                    "android.hardware.camera.provider.ICameraProvider/internal/0 u:object_r:hal_camera_service:s0",
+                    archive.read("VENDOR/etc/selinux/vendor_service_contexts").decode())
+                self.assertIn("(allow hal_camera_server self (vsock_socket",
+                              archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
+
+    def test_fr26_without_the_camera_hal_the_emulated_cameras_stay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            emulated = "VENDOR/apex/com.google.emulated.camera.provider.hal.apex"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr(emulated, b"apex")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertIn(emulated, archive.namelist())
+                self.assertNotIn("VENDOR/bin/hw/dsa-camera", archive.namelist())
+
+    def test_fr26_the_kernel_command_line_selects_no_emulated_camera_with_the_camera_hal(self):
+        selection = "androidboot.vendor.apex.com.google.emulated.camera.provider.hal="
+        self.assertIn(selection, make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)"))
+        self.assertNotIn(selection, make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)", camera=True))
+        self.assertNotIn(selection, make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)", hwcomposer=True,
+                                                              camera=True))
 
     def test_fr3_without_the_dsa_hwcomposer_the_cuttlefish_composer_stays(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1087,7 +1427,7 @@ class ImageLayoutTests(unittest.TestCase):
                 self.assertNotIn("VENDOR/bin/hw/dsa-hwcomposer", archive.namelist())
 
     def test_fr3_the_kernel_command_line_sets_up_the_dsa_hwcomposer(self):
-        cmdline = make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)", hwcomposer=True)
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)", hwcomposer=True)
         # Cuttlefish's composer, and the settings it alone reads, are gone.
         self.assertNotIn("hwcomposer.mode=noop", cmdline)
         self.assertNotIn("display_finder_mode", cmdline)
@@ -1222,6 +1562,8 @@ class ImageLayoutTests(unittest.TestCase):
             self.assertIn("vendor_service_contexts does not label", proc.stdout)
             # Without the agent the host never learns of a task, so no window opens.
             self.assertIn("SYSTEM_EXT/priv-app/DsaAgent/DsaAgent.apk is missing", proc.stdout)
+            # Without the GNSS HAL the guest never gets the host's location.
+            self.assertIn("VENDOR/bin/hw/dsa-gnss is missing", proc.stdout)
 
     def test_fr3_check_image_rejects_an_agent_not_signed_with_the_platform_key(self):
         check_script = Path(__file__).with_name("check-image.py")
@@ -1259,6 +1601,10 @@ class ImageLayoutTests(unittest.TestCase):
             self.assertIn("VENDOR/bin/hw/dsa-health is missing", proc.stdout)
             # Without the codec HAL every video decodes on the guest's processors.
             self.assertIn("VENDOR/bin/hw/dsa-codec2 is missing", proc.stdout)
+            # Without the sensors HAL apps see none of the host's sensors.
+            self.assertIn("VENDOR/bin/hw/dsa-sensors is missing", proc.stdout)
+            # Without the camera HAL apps never see the host's cameras.
+            self.assertIn("VENDOR/bin/hw/dsa-camera is missing", proc.stdout)
             self.assertIn("androidboot.dsa.display_width", proc.stdout)
 
     def test_fr3_check_image_rejects_the_wifi_trace_setup(self):
@@ -2118,14 +2464,14 @@ class BootLogTests(unittest.TestCase):
         self.assertIn("ro.build.version.incremental=15581820.dsa0123456789ab", props)
         self.assertIn("ro.system.build.version.incremental=15581820.dsa0123456789ab", props)
         self.assertIn("ro.system.build.fingerprint="
-                      "generic/aosp_cf/vsoc:16/BP4A/15581820.dsa0123456789ab:userdebug/test-keys", props)
+                      "DSA/dsa_x86_64/dsa_x86_64:16/BP4A/15581820.dsa0123456789ab:user/test-keys", props)
         self.assertIn("ro.build.id=BP4A", props)
 
     def test_fr14_vendor_fingerprint_carries_the_same_tag(self):
         vendor = ("ro.vendor.build.fingerprint=generic/aosp_cf/vsoc:16/BP4A/15581820:userdebug/test-keys\n"
                   "ro.vendor.build.version.incremental=15581820\n")
         props = make_image.edit_props(vendor, vendor=True, build_tag="dsaab").splitlines()
-        self.assertIn("ro.vendor.build.fingerprint=generic/aosp_cf/vsoc:16/BP4A/15581820.dsaab:userdebug/test-keys", props)
+        self.assertIn("ro.vendor.build.fingerprint=DSA/dsa_x86_64/dsa_x86_64:16/BP4A/15581820.dsaab:user/test-keys", props)
         self.assertIn("ro.vendor.build.version.incremental=15581820.dsaab", props)
 
     def test_fr14_the_build_tag_follows_the_image_content(self):
@@ -2157,7 +2503,7 @@ class BootLogTests(unittest.TestCase):
     def test_fr1_kernel_does_not_audit_every_syscall(self):
         # audit=1 made the kernel audit each iptables change and BPF program load, with
         # syscall records, and overflow its queue for auditd before logd started.
-        self.assertNotIn("audit=1", make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)").split())
+        self.assertNotIn("audit=1", make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)").split())
 
     def test_fr1_unused_devtmpfs_nodes_are_not_logged_as_denials(self):
         policy = make_image.KERNEL_POLICY.read_text()
@@ -2210,6 +2556,85 @@ class DeveloperModeTests(unittest.TestCase):
                 props = archive.read("SYSTEM/build.prop").decode()
                 self.assertNotIn("persist.adb.tcp.port", props)
                 self.assertIn("service.adb.listen_addrs=vsock:5555", props)
+
+
+class DeviceIdentityTests(unittest.TestCase):
+    """The image reports DSA's device identity, and takes the one a user chose at boot."""
+
+    CUTTLEFISH = (
+        "ro.product.system.brand=Android\n"
+        "ro.product.system.model=mainline\n"
+        "ro.product.vendor.manufacturer=Google\n"
+        "ro.product.vendor.model=Cuttlefish x86_64 phone 64-bit only\n"
+        "ro.product.vendor.device=vsoc_x86_64_only\n"
+        "ro.product.vendor.name=aosp_cf_x86_64_only_phone\n"
+        "ro.product.board=cutf\n"
+        "ro.product.first_api_level=36\n"
+        "ro.build.product=vsoc_x86_64_only\n"
+        "ro.build.flavor=aosp_cf_x86_64_only_phone-userdebug\n"
+        "ro.build.description=aosp_cf_x86_64_only_phone-userdebug 16 BP4A 15581820 test-keys\n"
+        "ro.build.display.id=aosp_cf_x86_64_only_phone-userdebug 16 BP4A 15581820\n"
+        "ro.build.characteristics=default\n"
+        "ro.build.fingerprint=generic/aosp_cf_x86_64_only_phone/vsoc_x86_64_only:16/BP4A/15581820:userdebug/test-keys\n"
+    )
+
+    def props(self, text):
+        return dict(line.split("=", 1) for line in text.splitlines()
+                    if "=" in line and not line.startswith(("#", "import ")))
+
+    def test_fr17_every_identity_property_is_dsas(self):
+        props = self.props(make_image.edit_props(self.CUTTLEFISH))
+        self.assertEqual(props["ro.product.system.brand"], "DSA")
+        self.assertEqual(props["ro.product.system.model"], "Desktop Subsystem for Android")
+        self.assertEqual(props["ro.product.vendor.manufacturer"], "thisisthepy")
+        self.assertEqual(props["ro.product.vendor.device"], "dsa_x86_64")
+        self.assertEqual(props["ro.product.vendor.name"], "dsa_x86_64")
+        self.assertEqual(props["ro.build.product"], "dsa_x86_64")
+        self.assertEqual(props["ro.build.flavor"], "dsa_x86_64-user")
+        self.assertEqual(props["ro.build.description"], "dsa_x86_64-user 16 BP4A 15581820 test-keys")
+        self.assertEqual(props["ro.build.display.id"], "BP4A")
+        self.assertEqual(props["ro.build.characteristics"], "tablet")
+        self.assertEqual(props["ro.build.fingerprint"],
+                         "DSA/dsa_x86_64/dsa_x86_64:16/BP4A/15581820:user/test-keys")
+        # What is not identity stays.
+        self.assertEqual(props["ro.product.board"], "cutf")
+        self.assertEqual(props["ro.product.first_api_level"], "36")
+        for value in props.values():
+            for old in ("Cuttlefish", "vsoc_", "aosp_cf_", "userdebug"):
+                self.assertNotIn(old, value)
+
+    def test_fr17_dlkm_and_ramdisk_props_get_the_identity_and_the_tag(self):
+        text = ("ro.product.bootimage.model=Cuttlefish x86_64 phone 64-bit only\n"
+                "ro.bootimage.build.fingerprint=generic/aosp_cf/vsoc:16/BP4A/1:userdebug/test-keys\n")
+        props = self.props(make_image.edit_identity(text, build_tag="dsaab"))
+        self.assertEqual(props["ro.product.bootimage.model"], "Desktop Subsystem for Android")
+        self.assertEqual(props["ro.bootimage.build.fingerprint"],
+                         "DSA/dsa_x86_64/dsa_x86_64:16/BP4A/1.dsaab:user/test-keys")
+        self.assertIn("VENDOR_DLKM/etc/build.prop", make_image.IDENTITY_PROP_FILES)
+        self.assertIn("INIT_BOOT/RAMDISK/system/etc/ramdisk/build.prop", make_image.IDENTITY_PROP_FILES)
+        self.assertIn("BOOT/RAMDISK/system/etc/ramdisk/build.prop", make_image.IDENTITY_PROP_FILES)
+
+    def test_fr17_the_product_props_import_the_identity_the_boot_carries(self):
+        text = make_image.edit_props("ro.product.product.brand=Android\n", product=True)
+        lines = text.splitlines()
+        imports = [line for line in lines if line.startswith("import ")]
+        prop = "/second_stage_resources/system/etc/ramdisk/build.prop"
+        for key in ["ro.product.*", "ro.build.characteristics", "ro.build.fingerprint",
+                    "ro.system.build.fingerprint", "ro.vendor.build.fingerprint"]:
+            self.assertIn(f"import {prop} {key}", imports)
+        # The imports come last, so they win over every value read before them.
+        self.assertTrue(all(line.startswith(("import ", "#")) for line in lines[-len(imports):]))
+        self.assertIn("ro.build.characteristics=tablet", lines)
+        self.assertEqual(make_image.PRODUCT_PROP_FILE, "PRODUCT/etc/build.prop")
+        self.assertIn(make_image.PRODUCT_PROP_FILE, make_image.PROP_FILES)
+        self.assertNotIn("import ", make_image.edit_props("ro.product.system.brand=Android\n"))
+
+    def test_fr17_image_json_names_the_build_the_host_composes_fingerprints_from(self):
+        system = ("ro.build.version.release_or_codename=16\nro.build.id=BP4A\n"
+                  "ro.build.version.incremental=15581820.dsaab\nro.build.tags=release-keys\n")
+        self.assertEqual(make_image.image_identity(system),
+                         {"release": "16", "id": "BP4A", "incremental": "15581820.dsaab",
+                          "tags": "release-keys"})
 
 
 BOOTCLASSPATH = ("/apex/com.android.art/javalib/core-oj.jar:/system/framework/framework.jar:"
@@ -2582,6 +3007,101 @@ class Arm64GuestTests(unittest.TestCase):
         release = (workflows / "release-image.yml").read_text()
         self.assertIn("name: kernel-arm64", release)
         self.assertIn("images-arm64.json", release)
+
+
+class ArmTranslationImageTests(unittest.TestCase):
+    """The image's half of ARM app translation: nothing is on unless the host says a package is."""
+
+    def _modify(self, root):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+            archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 2000 755 capabilities=0x0\n")
+            archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\nro.dalvik.vm.native.bridge=0\n")
+        modified = root / "modified.zip"
+        make_image.modify(source, modified)
+        return zipfile.ZipFile(modified)
+
+    def test_fr25_the_product_props_import_the_bridge_only_when_the_host_turns_it_on(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            product = archive.read("PRODUCT/etc/build.prop").decode().splitlines()
+            self.assertEqual(
+                product[-1],
+                "import /system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop",
+            )
+            self.assertEqual(product.count(product[-1]), 1)
+            on = archive.read("SYSTEM/etc/dsa/arm-translation-on.prop").decode().splitlines()
+            for prop in [
+                "ro.dalvik.vm.native.bridge=libdsa_native_bridge.so",
+                "ro.dalvik.vm.isa.arm64=x86_64",
+                "ro.enable.native.bridge.exec=1",
+                "ro.product.cpu.abilist=x86_64,arm64-v8a",
+                "ro.product.cpu.abilist64=x86_64,arm64-v8a",
+            ]:
+                self.assertIn(prop, on)
+            self.assertFalse(any("armeabi" in line for line in on), "the guest has no 32-bit zygote")
+            off = archive.read("SYSTEM/etc/dsa/arm-translation-off.prop").decode().splitlines()
+            self.assertEqual([line for line in off if line and not line.startswith("#")], [])
+            config = archive.read("META/filesystem_config.txt").decode()
+            for rule in make_image.ARM_TRANSLATION_FS_CONFIG:
+                self.assertIn(rule, config)
+
+    def test_fr25_the_package_is_mounted_over_system_only_when_the_host_turns_it_on(self):
+        rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
+        trigger = "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n"
+        before, after = rc.split(trigger, 1)
+        section, rest = after.split("\n\n", 1)
+        self.assertIn("mount erofs loop@/data/vendor/dsa/arm-translation/system.img /mnt/dsa-arm-translation ro",
+                      section)
+        for directory in ["lib64", "bin", "etc"]:
+            self.assertIn(
+                f"mount overlay overlay /system/{directory} ro nodev nosuid "
+                f"lowerdir=/mnt/dsa-arm-translation/system/{directory}:/system/{directory}",
+                section,
+            )
+        self.assertIn("/proc/sys/fs/binfmt_misc/register", section)
+        # Every mount waits for the host's word.
+        self.assertNotIn("mount ", before)
+        self.assertNotIn("mount ", rest)
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertEqual(archive.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(), rc)
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertIn("(allow init system_lib_file (dir (mounton)))", policy)
+            self.assertIn("(allow init binfmt_miscfs (file (write open getattr)))", policy)
+
+    def test_fr25_check_image_rejects_an_image_that_turns_a_bridge_on_by_itself(self):
+        check_script = Path(__file__).with_name("check-image.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            img_dir = root / "image"
+            img_dir.mkdir()
+            keys_dir = root / "keys"
+            keys_dir.mkdir()
+            (img_dir / "image.json").write_text(json.dumps({"files": {}, "kernel_cmdline": ""}))
+            (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            outputs = []
+            for complete in [False, True]:
+                with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
+                    archive.writestr("META/apkcerts.txt", "")
+                    bridge = "0" if complete else "libhoudini.so"
+                    archive.writestr("SYSTEM/build.prop", f"ro.debuggable=0\nro.dalvik.vm.native.bridge={bridge}\n")
+                    if complete:
+                        archive.writestr("SYSTEM/etc/init/dsa-arm-translation.rc",
+                                         "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n")
+                        archive.writestr("SYSTEM/etc/dsa/arm-translation-on.prop", "")
+                        archive.writestr("SYSTEM/etc/dsa/arm-translation-off.prop", "")
+                        archive.writestr("PRODUCT/etc/build.prop", make_image.add_arm_translation_import(""))
+                    else:
+                        archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\n")
+                outputs.append(subprocess.run(
+                    [sys.executable, str(check_script), str(img_dir), str(keys_dir)],
+                    capture_output=True, text=True,
+                ).stdout)
+        for problem in ["dsa-arm-translation.rc is missing", "does not end with the ARM translation import",
+                        "sets ro.dalvik.vm.native.bridge=libhoudini.so"]:
+            self.assertIn(problem, outputs[0])
+            self.assertNotIn(problem, outputs[1])
 
 
 if __name__ == "__main__":

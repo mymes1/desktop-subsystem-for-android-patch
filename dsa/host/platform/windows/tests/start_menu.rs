@@ -63,6 +63,7 @@ fn app(package: &str, label: &str) -> AppInfo {
         package_name: package.into(),
         label: label.into(),
         icon_png: png(),
+        ..Default::default()
     }
 }
 
