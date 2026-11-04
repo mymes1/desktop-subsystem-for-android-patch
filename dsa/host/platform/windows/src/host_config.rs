@@ -570,7 +570,7 @@ impl HostConfig {
     /// An image made from the published AOSP builds carries `image.json`, `initrd.img` and
     /// `disk.vhdx`, the template of a user's Android disk; its kernel command line comes from
     /// `image.json`. An older image carries `system.vhdx`, attached beside the user's disk.
-    /// The image's own `bzImage` wins over `kernel` either way.
+    /// The image's own kernel (`bzImage`, or `Image` for arm64) wins over `kernel` either way.
     pub fn image_files(&self, image_dir: Option<&std::path::Path>) -> ImageFiles {
         let dir = image_dir.map(std::path::Path::to_path_buf).or_else(|| {
             match (&self.system_image, &self.images_dir, &self.first_image) {
@@ -587,12 +587,13 @@ impl HostConfig {
                 disk_template: None,
             };
         };
-        let own_kernel = dir.join("bzImage");
-        let kernel = if own_kernel.exists() {
-            own_kernel
-        } else {
-            self.kernel.clone()
-        };
+        // An x86_64 image names its kernel bzImage; an arm64 one, Image, the name the
+        // arm64 kernel build gives it.
+        let kernel = ["bzImage", "Image"]
+            .iter()
+            .map(|name| dir.join(name))
+            .find(|own| own.exists())
+            .unwrap_or_else(|| self.kernel.clone());
         let manifest = std::fs::read_to_string(dir.join("image.json"))
             .ok()
             .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
