@@ -101,6 +101,9 @@ public  final class Envelope extends
     DIAGNOSTICS_FILE(134),
     DIAGNOSTICS_DONE(135),
     STOP_APP(136),
+    SENSOR_LIST(240),
+    SENSOR_ACTIVATE(241),
+    SENSOR_READINGS(242),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -197,6 +200,9 @@ public  final class Envelope extends
         case 134: return DIAGNOSTICS_FILE;
         case 135: return DIAGNOSTICS_DONE;
         case 136: return STOP_APP;
+        case 240: return SENSOR_LIST;
+        case 241: return SENSOR_ACTIVATE;
+        case 242: return SENSOR_READINGS;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -4268,6 +4274,156 @@ public  final class Envelope extends
     }
   }
 
+  public static final int SENSOR_LIST_FIELD_NUMBER = 240;
+  /**
+   * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+   */
+  @java.lang.Override
+  public boolean hasSensorList() {
+    return bodyCase_ == 240;
+  }
+  /**
+   * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SensorList getSensorList() {
+    if (bodyCase_ == 240) {
+       return (io.github.thisisthepy.dsa.control.v1.SensorList) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SensorList.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+   */
+  private void setSensorList(io.github.thisisthepy.dsa.control.v1.SensorList value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 240;
+  }
+  /**
+   * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+   */
+  private void mergeSensorList(io.github.thisisthepy.dsa.control.v1.SensorList value) {
+    value.getClass();
+  if (bodyCase_ == 240 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SensorList.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SensorList.newBuilder((io.github.thisisthepy.dsa.control.v1.SensorList) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 240;
+  }
+  /**
+   * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+   */
+  private void clearSensorList() {
+    if (bodyCase_ == 240) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SENSOR_ACTIVATE_FIELD_NUMBER = 241;
+  /**
+   * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+   */
+  @java.lang.Override
+  public boolean hasSensorActivate() {
+    return bodyCase_ == 241;
+  }
+  /**
+   * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SensorActivate getSensorActivate() {
+    if (bodyCase_ == 241) {
+       return (io.github.thisisthepy.dsa.control.v1.SensorActivate) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SensorActivate.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+   */
+  private void setSensorActivate(io.github.thisisthepy.dsa.control.v1.SensorActivate value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 241;
+  }
+  /**
+   * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+   */
+  private void mergeSensorActivate(io.github.thisisthepy.dsa.control.v1.SensorActivate value) {
+    value.getClass();
+  if (bodyCase_ == 241 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SensorActivate.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SensorActivate.newBuilder((io.github.thisisthepy.dsa.control.v1.SensorActivate) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 241;
+  }
+  /**
+   * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+   */
+  private void clearSensorActivate() {
+    if (bodyCase_ == 241) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SENSOR_READINGS_FIELD_NUMBER = 242;
+  /**
+   * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+   */
+  @java.lang.Override
+  public boolean hasSensorReadings() {
+    return bodyCase_ == 242;
+  }
+  /**
+   * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SensorReadings getSensorReadings() {
+    if (bodyCase_ == 242) {
+       return (io.github.thisisthepy.dsa.control.v1.SensorReadings) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SensorReadings.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+   */
+  private void setSensorReadings(io.github.thisisthepy.dsa.control.v1.SensorReadings value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 242;
+  }
+  /**
+   * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+   */
+  private void mergeSensorReadings(io.github.thisisthepy.dsa.control.v1.SensorReadings value) {
+    value.getClass();
+  if (bodyCase_ == 242 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SensorReadings.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SensorReadings.newBuilder((io.github.thisisthepy.dsa.control.v1.SensorReadings) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 242;
+  }
+  /**
+   * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+   */
+  private void clearSensorReadings() {
+    if (bodyCase_ == 242) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -8267,6 +8423,150 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+     */
+    @java.lang.Override
+    public boolean hasSensorList() {
+      return instance.hasSensorList();
+    }
+    /**
+     * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SensorList getSensorList() {
+      return instance.getSensorList();
+    }
+    /**
+     * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+     */
+    public Builder setSensorList(io.github.thisisthepy.dsa.control.v1.SensorList value) {
+      copyOnWrite();
+      instance.setSensorList(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+     */
+    public Builder setSensorList(
+        io.github.thisisthepy.dsa.control.v1.SensorList.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSensorList(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+     */
+    public Builder mergeSensorList(io.github.thisisthepy.dsa.control.v1.SensorList value) {
+      copyOnWrite();
+      instance.mergeSensorList(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+     */
+    public Builder clearSensorList() {
+      copyOnWrite();
+      instance.clearSensorList();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+     */
+    @java.lang.Override
+    public boolean hasSensorActivate() {
+      return instance.hasSensorActivate();
+    }
+    /**
+     * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SensorActivate getSensorActivate() {
+      return instance.getSensorActivate();
+    }
+    /**
+     * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+     */
+    public Builder setSensorActivate(io.github.thisisthepy.dsa.control.v1.SensorActivate value) {
+      copyOnWrite();
+      instance.setSensorActivate(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+     */
+    public Builder setSensorActivate(
+        io.github.thisisthepy.dsa.control.v1.SensorActivate.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSensorActivate(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+     */
+    public Builder mergeSensorActivate(io.github.thisisthepy.dsa.control.v1.SensorActivate value) {
+      copyOnWrite();
+      instance.mergeSensorActivate(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+     */
+    public Builder clearSensorActivate() {
+      copyOnWrite();
+      instance.clearSensorActivate();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+     */
+    @java.lang.Override
+    public boolean hasSensorReadings() {
+      return instance.hasSensorReadings();
+    }
+    /**
+     * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SensorReadings getSensorReadings() {
+      return instance.getSensorReadings();
+    }
+    /**
+     * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+     */
+    public Builder setSensorReadings(io.github.thisisthepy.dsa.control.v1.SensorReadings value) {
+      copyOnWrite();
+      instance.setSensorReadings(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+     */
+    public Builder setSensorReadings(
+        io.github.thisisthepy.dsa.control.v1.SensorReadings.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSensorReadings(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+     */
+    public Builder mergeSensorReadings(io.github.thisisthepy.dsa.control.v1.SensorReadings value) {
+      copyOnWrite();
+      instance.mergeSensorReadings(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+     */
+    public Builder clearSensorReadings() {
+      copyOnWrite();
+      instance.clearSensorReadings();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -8366,9 +8666,12 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.DiagnosticsDone.class,
             io.github.thisisthepy.dsa.control.v1.StopApp.class,
             io.github.thisisthepy.dsa.control.v1.DeveloperMode.class,
+            io.github.thisisthepy.dsa.control.v1.SensorList.class,
+            io.github.thisisthepy.dsa.control.v1.SensorActivate.class,
+            io.github.thisisthepy.dsa.control.v1.SensorReadings.class,
           };
           java.lang.String info =
-              "\u0000Q\u0001\u0000\u0001\u008cQ\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
+              "\u0000T\u0001\u0000\u0001\u00f2T\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
               "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
               "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
               "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
@@ -8378,7 +8681,8 @@ public  final class Envelope extends
               "P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000" +
               "`<\u0000a<\u0000b<\u0000c<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
               "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
-              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000";
+              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

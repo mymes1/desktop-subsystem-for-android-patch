@@ -249,6 +249,21 @@ extern ResizeWidgetDefaultTypeInternal _ResizeWidget_default_instance_;
 class ScreenState;
 struct ScreenStateDefaultTypeInternal;
 extern ScreenStateDefaultTypeInternal _ScreenState_default_instance_;
+class SensorActivate;
+struct SensorActivateDefaultTypeInternal;
+extern SensorActivateDefaultTypeInternal _SensorActivate_default_instance_;
+class SensorDescription;
+struct SensorDescriptionDefaultTypeInternal;
+extern SensorDescriptionDefaultTypeInternal _SensorDescription_default_instance_;
+class SensorList;
+struct SensorListDefaultTypeInternal;
+extern SensorListDefaultTypeInternal _SensorList_default_instance_;
+class SensorReading;
+struct SensorReadingDefaultTypeInternal;
+extern SensorReadingDefaultTypeInternal _SensorReading_default_instance_;
+class SensorReadings;
+struct SensorReadingsDefaultTypeInternal;
+extern SensorReadingsDefaultTypeInternal _SensorReadings_default_instance_;
 class SetTaskDensity;
 struct SetTaskDensityDefaultTypeInternal;
 extern SetTaskDensityDefaultTypeInternal _SetTaskDensity_default_instance_;
@@ -384,6 +399,11 @@ template<> ::dsa::control::v1::RequestGuestMemory* Arena::CreateMaybeMessage<::d
 template<> ::dsa::control::v1::ResizeTask* Arena::CreateMaybeMessage<::dsa::control::v1::ResizeTask>(Arena*);
 template<> ::dsa::control::v1::ResizeWidget* Arena::CreateMaybeMessage<::dsa::control::v1::ResizeWidget>(Arena*);
 template<> ::dsa::control::v1::ScreenState* Arena::CreateMaybeMessage<::dsa::control::v1::ScreenState>(Arena*);
+template<> ::dsa::control::v1::SensorActivate* Arena::CreateMaybeMessage<::dsa::control::v1::SensorActivate>(Arena*);
+template<> ::dsa::control::v1::SensorDescription* Arena::CreateMaybeMessage<::dsa::control::v1::SensorDescription>(Arena*);
+template<> ::dsa::control::v1::SensorList* Arena::CreateMaybeMessage<::dsa::control::v1::SensorList>(Arena*);
+template<> ::dsa::control::v1::SensorReading* Arena::CreateMaybeMessage<::dsa::control::v1::SensorReading>(Arena*);
+template<> ::dsa::control::v1::SensorReadings* Arena::CreateMaybeMessage<::dsa::control::v1::SensorReadings>(Arena*);
 template<> ::dsa::control::v1::SetTaskDensity* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskDensity>(Arena*);
 template<> ::dsa::control::v1::StopApp* Arena::CreateMaybeMessage<::dsa::control::v1::StopApp>(Arena*);
 template<> ::dsa::control::v1::TaskFrames* Arena::CreateMaybeMessage<::dsa::control::v1::TaskFrames>(Arena*);
@@ -436,12 +456,13 @@ enum Role : int {
   ROLE_HOST = 1,
   ROLE_GUEST = 2,
   ROLE_GUEST_VIDEO = 4,
+  ROLE_GUEST_SENSORS = 10,
   Role_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
   Role_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
 };
 bool Role_IsValid(int value);
 constexpr Role Role_MIN = ROLE_UNSPECIFIED;
-constexpr Role Role_MAX = ROLE_GUEST_VIDEO;
+constexpr Role Role_MAX = ROLE_GUEST_SENSORS;
 constexpr int Role_ARRAYSIZE = Role_MAX + 1;
 
 const std::string& Role_Name(Role value);
@@ -648,6 +669,30 @@ inline const std::string& VideoCodec_Name(T enum_t_value) {
 }
 bool VideoCodec_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, VideoCodec* value);
+enum SensorKind : int {
+  SENSOR_KIND_UNSPECIFIED = 0,
+  SENSOR_KIND_ACCELEROMETER = 1,
+  SENSOR_KIND_GYROSCOPE = 2,
+  SENSOR_KIND_ROTATION_VECTOR = 3,
+  SENSOR_KIND_LIGHT = 4,
+  SensorKind_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  SensorKind_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool SensorKind_IsValid(int value);
+constexpr SensorKind SensorKind_MIN = SENSOR_KIND_UNSPECIFIED;
+constexpr SensorKind SensorKind_MAX = SENSOR_KIND_LIGHT;
+constexpr int SensorKind_ARRAYSIZE = SensorKind_MAX + 1;
+
+const std::string& SensorKind_Name(SensorKind value);
+template<typename T>
+inline const std::string& SensorKind_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, SensorKind>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function SensorKind_Name.");
+  return SensorKind_Name(static_cast<SensorKind>(enum_t_value));
+}
+bool SensorKind_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, SensorKind* value);
 enum NodeAction : int {
   NODE_ACTION_UNSPECIFIED = 0,
   NODE_ACTION_CLICK = 1,
@@ -10467,6 +10512,796 @@ class VideoError final :
 };
 // -------------------------------------------------------------------
 
+class SensorDescription final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SensorDescription) */ {
+ public:
+  inline SensorDescription() : SensorDescription(nullptr) {}
+  ~SensorDescription() override;
+  explicit PROTOBUF_CONSTEXPR SensorDescription(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SensorDescription(const SensorDescription& from);
+  SensorDescription(SensorDescription&& from) noexcept
+    : SensorDescription() {
+    *this = ::std::move(from);
+  }
+
+  inline SensorDescription& operator=(const SensorDescription& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SensorDescription& operator=(SensorDescription&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SensorDescription& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SensorDescription* internal_default_instance() {
+    return reinterpret_cast<const SensorDescription*>(
+               &_SensorDescription_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    63;
+
+  friend void swap(SensorDescription& a, SensorDescription& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SensorDescription* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SensorDescription* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SensorDescription* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SensorDescription>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SensorDescription& from);
+  void MergeFrom(const SensorDescription& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SensorDescription* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SensorDescription";
+  }
+  protected:
+  explicit SensorDescription(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kNameFieldNumber = 2,
+    kVendorFieldNumber = 3,
+    kKindFieldNumber = 1,
+    kMaxRangeFieldNumber = 4,
+    kResolutionFieldNumber = 5,
+    kMinIntervalUsFieldNumber = 6,
+  };
+  // string name = 2;
+  void clear_name();
+  const std::string& name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* name);
+  private:
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
+  std::string* _internal_mutable_name();
+  public:
+
+  // string vendor = 3;
+  void clear_vendor();
+  const std::string& vendor() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_vendor(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_vendor();
+  PROTOBUF_NODISCARD std::string* release_vendor();
+  void set_allocated_vendor(std::string* vendor);
+  private:
+  const std::string& _internal_vendor() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_vendor(const std::string& value);
+  std::string* _internal_mutable_vendor();
+  public:
+
+  // .dsa.control.v1.SensorKind kind = 1;
+  void clear_kind();
+  ::dsa::control::v1::SensorKind kind() const;
+  void set_kind(::dsa::control::v1::SensorKind value);
+  private:
+  ::dsa::control::v1::SensorKind _internal_kind() const;
+  void _internal_set_kind(::dsa::control::v1::SensorKind value);
+  public:
+
+  // float max_range = 4;
+  void clear_max_range();
+  float max_range() const;
+  void set_max_range(float value);
+  private:
+  float _internal_max_range() const;
+  void _internal_set_max_range(float value);
+  public:
+
+  // float resolution = 5;
+  void clear_resolution();
+  float resolution() const;
+  void set_resolution(float value);
+  private:
+  float _internal_resolution() const;
+  void _internal_set_resolution(float value);
+  public:
+
+  // uint32 min_interval_us = 6;
+  void clear_min_interval_us();
+  uint32_t min_interval_us() const;
+  void set_min_interval_us(uint32_t value);
+  private:
+  uint32_t _internal_min_interval_us() const;
+  void _internal_set_min_interval_us(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SensorDescription)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr vendor_;
+    int kind_;
+    float max_range_;
+    float resolution_;
+    uint32_t min_interval_us_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SensorList final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SensorList) */ {
+ public:
+  inline SensorList() : SensorList(nullptr) {}
+  ~SensorList() override;
+  explicit PROTOBUF_CONSTEXPR SensorList(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SensorList(const SensorList& from);
+  SensorList(SensorList&& from) noexcept
+    : SensorList() {
+    *this = ::std::move(from);
+  }
+
+  inline SensorList& operator=(const SensorList& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SensorList& operator=(SensorList&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SensorList& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SensorList* internal_default_instance() {
+    return reinterpret_cast<const SensorList*>(
+               &_SensorList_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    64;
+
+  friend void swap(SensorList& a, SensorList& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SensorList* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SensorList* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SensorList* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SensorList>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SensorList& from);
+  void MergeFrom(const SensorList& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SensorList* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SensorList";
+  }
+  protected:
+  explicit SensorList(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kSensorsFieldNumber = 1,
+  };
+  // repeated .dsa.control.v1.SensorDescription sensors = 1;
+  int sensors_size() const;
+  private:
+  int _internal_sensors_size() const;
+  public:
+  void clear_sensors();
+  ::dsa::control::v1::SensorDescription* mutable_sensors(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorDescription >*
+      mutable_sensors();
+  private:
+  const ::dsa::control::v1::SensorDescription& _internal_sensors(int index) const;
+  ::dsa::control::v1::SensorDescription* _internal_add_sensors();
+  public:
+  const ::dsa::control::v1::SensorDescription& sensors(int index) const;
+  ::dsa::control::v1::SensorDescription* add_sensors();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorDescription >&
+      sensors() const;
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SensorList)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorDescription > sensors_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SensorActivate final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SensorActivate) */ {
+ public:
+  inline SensorActivate() : SensorActivate(nullptr) {}
+  ~SensorActivate() override;
+  explicit PROTOBUF_CONSTEXPR SensorActivate(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SensorActivate(const SensorActivate& from);
+  SensorActivate(SensorActivate&& from) noexcept
+    : SensorActivate() {
+    *this = ::std::move(from);
+  }
+
+  inline SensorActivate& operator=(const SensorActivate& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SensorActivate& operator=(SensorActivate&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SensorActivate& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SensorActivate* internal_default_instance() {
+    return reinterpret_cast<const SensorActivate*>(
+               &_SensorActivate_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    65;
+
+  friend void swap(SensorActivate& a, SensorActivate& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SensorActivate* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SensorActivate* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SensorActivate* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SensorActivate>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SensorActivate& from);
+  void MergeFrom(const SensorActivate& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SensorActivate* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SensorActivate";
+  }
+  protected:
+  explicit SensorActivate(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kKindFieldNumber = 1,
+    kEnabledFieldNumber = 2,
+    kIntervalUsFieldNumber = 3,
+  };
+  // .dsa.control.v1.SensorKind kind = 1;
+  void clear_kind();
+  ::dsa::control::v1::SensorKind kind() const;
+  void set_kind(::dsa::control::v1::SensorKind value);
+  private:
+  ::dsa::control::v1::SensorKind _internal_kind() const;
+  void _internal_set_kind(::dsa::control::v1::SensorKind value);
+  public:
+
+  // bool enabled = 2;
+  void clear_enabled();
+  bool enabled() const;
+  void set_enabled(bool value);
+  private:
+  bool _internal_enabled() const;
+  void _internal_set_enabled(bool value);
+  public:
+
+  // uint32 interval_us = 3;
+  void clear_interval_us();
+  uint32_t interval_us() const;
+  void set_interval_us(uint32_t value);
+  private:
+  uint32_t _internal_interval_us() const;
+  void _internal_set_interval_us(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SensorActivate)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    int kind_;
+    bool enabled_;
+    uint32_t interval_us_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SensorReading final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SensorReading) */ {
+ public:
+  inline SensorReading() : SensorReading(nullptr) {}
+  ~SensorReading() override;
+  explicit PROTOBUF_CONSTEXPR SensorReading(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SensorReading(const SensorReading& from);
+  SensorReading(SensorReading&& from) noexcept
+    : SensorReading() {
+    *this = ::std::move(from);
+  }
+
+  inline SensorReading& operator=(const SensorReading& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SensorReading& operator=(SensorReading&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SensorReading& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SensorReading* internal_default_instance() {
+    return reinterpret_cast<const SensorReading*>(
+               &_SensorReading_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    66;
+
+  friend void swap(SensorReading& a, SensorReading& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SensorReading* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SensorReading* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SensorReading* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SensorReading>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SensorReading& from);
+  void MergeFrom(const SensorReading& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SensorReading* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SensorReading";
+  }
+  protected:
+  explicit SensorReading(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kValuesFieldNumber = 3,
+    kTimestampUsFieldNumber = 2,
+    kKindFieldNumber = 1,
+  };
+  // repeated float values = 3;
+  int values_size() const;
+  private:
+  int _internal_values_size() const;
+  public:
+  void clear_values();
+  private:
+  float _internal_values(int index) const;
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >&
+      _internal_values() const;
+  void _internal_add_values(float value);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >*
+      _internal_mutable_values();
+  public:
+  float values(int index) const;
+  void set_values(int index, float value);
+  void add_values(float value);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >&
+      values() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >*
+      mutable_values();
+
+  // uint64 timestamp_us = 2;
+  void clear_timestamp_us();
+  uint64_t timestamp_us() const;
+  void set_timestamp_us(uint64_t value);
+  private:
+  uint64_t _internal_timestamp_us() const;
+  void _internal_set_timestamp_us(uint64_t value);
+  public:
+
+  // .dsa.control.v1.SensorKind kind = 1;
+  void clear_kind();
+  ::dsa::control::v1::SensorKind kind() const;
+  void set_kind(::dsa::control::v1::SensorKind value);
+  private:
+  ::dsa::control::v1::SensorKind _internal_kind() const;
+  void _internal_set_kind(::dsa::control::v1::SensorKind value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SensorReading)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedField< float > values_;
+    uint64_t timestamp_us_;
+    int kind_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class SensorReadings final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SensorReadings) */ {
+ public:
+  inline SensorReadings() : SensorReadings(nullptr) {}
+  ~SensorReadings() override;
+  explicit PROTOBUF_CONSTEXPR SensorReadings(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SensorReadings(const SensorReadings& from);
+  SensorReadings(SensorReadings&& from) noexcept
+    : SensorReadings() {
+    *this = ::std::move(from);
+  }
+
+  inline SensorReadings& operator=(const SensorReadings& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SensorReadings& operator=(SensorReadings&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SensorReadings& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SensorReadings* internal_default_instance() {
+    return reinterpret_cast<const SensorReadings*>(
+               &_SensorReadings_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    67;
+
+  friend void swap(SensorReadings& a, SensorReadings& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SensorReadings* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SensorReadings* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SensorReadings* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SensorReadings>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SensorReadings& from);
+  void MergeFrom(const SensorReadings& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SensorReadings* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SensorReadings";
+  }
+  protected:
+  explicit SensorReadings(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kReadingsFieldNumber = 1,
+  };
+  // repeated .dsa.control.v1.SensorReading readings = 1;
+  int readings_size() const;
+  private:
+  int _internal_readings_size() const;
+  public:
+  void clear_readings();
+  ::dsa::control::v1::SensorReading* mutable_readings(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorReading >*
+      mutable_readings();
+  private:
+  const ::dsa::control::v1::SensorReading& _internal_readings(int index) const;
+  ::dsa::control::v1::SensorReading* _internal_add_readings();
+  public:
+  const ::dsa::control::v1::SensorReading& readings(int index) const;
+  ::dsa::control::v1::SensorReading* add_readings();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorReading >&
+      readings() const;
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SensorReadings)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorReading > readings_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ClockAnswer final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ClockAnswer) */ {
  public:
@@ -10506,7 +11341,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    63;
+    68;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -10647,7 +11482,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    64;
+    69;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -10777,7 +11612,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    65;
+    70;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -11064,7 +11899,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    66;
+    71;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -11225,7 +12060,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    67;
+    72;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -11371,7 +12206,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    68;
+    73;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -11528,7 +12363,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    69;
+    74;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -11678,7 +12513,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    70;
+    75;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -11822,7 +12657,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    71;
+    76;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -11952,7 +12787,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    72;
+    77;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -12137,7 +12972,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    78;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -12305,7 +13140,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    79;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -12479,7 +13314,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    80;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -12620,7 +13455,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    81;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -12772,7 +13607,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    82;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -13215,7 +14050,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    83;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -13448,7 +14283,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    84;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -13638,7 +14473,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    85;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -13806,7 +14641,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    86;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -13969,7 +14804,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    87;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -14121,7 +14956,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    88;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -14349,7 +15184,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    89;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -14526,7 +15361,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    90;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -14656,7 +15491,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    91;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -14829,7 +15664,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    92;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -15052,6 +15887,9 @@ class Envelope final :
     kDiagnosticsFile = 134,
     kDiagnosticsDone = 135,
     kStopApp = 136,
+    kSensorList = 240,
+    kSensorActivate = 241,
+    kSensorReadings = 242,
     BODY_NOT_SET = 0,
   };
 
@@ -15060,7 +15898,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    93;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -15205,6 +16043,9 @@ class Envelope final :
     kDiagnosticsFileFieldNumber = 134,
     kDiagnosticsDoneFieldNumber = 135,
     kStopAppFieldNumber = 136,
+    kSensorListFieldNumber = 240,
+    kSensorActivateFieldNumber = 241,
+    kSensorReadingsFieldNumber = 242,
   };
   // .dsa.control.v1.Hello hello = 1;
   bool has_hello() const;
@@ -16664,6 +17505,60 @@ class Envelope final :
       ::dsa::control::v1::StopApp* stop_app);
   ::dsa::control::v1::StopApp* unsafe_arena_release_stop_app();
 
+  // .dsa.control.v1.SensorList sensor_list = 240;
+  bool has_sensor_list() const;
+  private:
+  bool _internal_has_sensor_list() const;
+  public:
+  void clear_sensor_list();
+  const ::dsa::control::v1::SensorList& sensor_list() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SensorList* release_sensor_list();
+  ::dsa::control::v1::SensorList* mutable_sensor_list();
+  void set_allocated_sensor_list(::dsa::control::v1::SensorList* sensor_list);
+  private:
+  const ::dsa::control::v1::SensorList& _internal_sensor_list() const;
+  ::dsa::control::v1::SensorList* _internal_mutable_sensor_list();
+  public:
+  void unsafe_arena_set_allocated_sensor_list(
+      ::dsa::control::v1::SensorList* sensor_list);
+  ::dsa::control::v1::SensorList* unsafe_arena_release_sensor_list();
+
+  // .dsa.control.v1.SensorActivate sensor_activate = 241;
+  bool has_sensor_activate() const;
+  private:
+  bool _internal_has_sensor_activate() const;
+  public:
+  void clear_sensor_activate();
+  const ::dsa::control::v1::SensorActivate& sensor_activate() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SensorActivate* release_sensor_activate();
+  ::dsa::control::v1::SensorActivate* mutable_sensor_activate();
+  void set_allocated_sensor_activate(::dsa::control::v1::SensorActivate* sensor_activate);
+  private:
+  const ::dsa::control::v1::SensorActivate& _internal_sensor_activate() const;
+  ::dsa::control::v1::SensorActivate* _internal_mutable_sensor_activate();
+  public:
+  void unsafe_arena_set_allocated_sensor_activate(
+      ::dsa::control::v1::SensorActivate* sensor_activate);
+  ::dsa::control::v1::SensorActivate* unsafe_arena_release_sensor_activate();
+
+  // .dsa.control.v1.SensorReadings sensor_readings = 242;
+  bool has_sensor_readings() const;
+  private:
+  bool _internal_has_sensor_readings() const;
+  public:
+  void clear_sensor_readings();
+  const ::dsa::control::v1::SensorReadings& sensor_readings() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SensorReadings* release_sensor_readings();
+  ::dsa::control::v1::SensorReadings* mutable_sensor_readings();
+  void set_allocated_sensor_readings(::dsa::control::v1::SensorReadings* sensor_readings);
+  private:
+  const ::dsa::control::v1::SensorReadings& _internal_sensor_readings() const;
+  ::dsa::control::v1::SensorReadings* _internal_mutable_sensor_readings();
+  public:
+  void unsafe_arena_set_allocated_sensor_readings(
+      ::dsa::control::v1::SensorReadings* sensor_readings);
+  ::dsa::control::v1::SensorReadings* unsafe_arena_release_sensor_readings();
+
   void clear_body();
   BodyCase body_case() const;
   // @@protoc_insertion_point(class_scope:dsa.control.v1.Envelope)
@@ -16750,6 +17645,9 @@ class Envelope final :
   void set_has_diagnostics_file();
   void set_has_diagnostics_done();
   void set_has_stop_app();
+  void set_has_sensor_list();
+  void set_has_sensor_activate();
+  void set_has_sensor_readings();
 
   inline bool has_body() const;
   inline void clear_has_body();
@@ -16842,6 +17740,9 @@ class Envelope final :
       ::dsa::control::v1::DiagnosticsFile* diagnostics_file_;
       ::dsa::control::v1::DiagnosticsDone* diagnostics_done_;
       ::dsa::control::v1::StopApp* stop_app_;
+      ::dsa::control::v1::SensorList* sensor_list_;
+      ::dsa::control::v1::SensorActivate* sensor_activate_;
+      ::dsa::control::v1::SensorReadings* sensor_readings_;
     } body_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     uint32_t _oneof_case_[1];
@@ -22397,6 +23298,433 @@ inline void VideoError::set_allocated_error(std::string* error) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.VideoError.error)
+}
+
+// -------------------------------------------------------------------
+
+// SensorDescription
+
+// .dsa.control.v1.SensorKind kind = 1;
+inline void SensorDescription::clear_kind() {
+  _impl_.kind_ = 0;
+}
+inline ::dsa::control::v1::SensorKind SensorDescription::_internal_kind() const {
+  return static_cast< ::dsa::control::v1::SensorKind >(_impl_.kind_);
+}
+inline ::dsa::control::v1::SensorKind SensorDescription::kind() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorDescription.kind)
+  return _internal_kind();
+}
+inline void SensorDescription::_internal_set_kind(::dsa::control::v1::SensorKind value) {
+  
+  _impl_.kind_ = value;
+}
+inline void SensorDescription::set_kind(::dsa::control::v1::SensorKind value) {
+  _internal_set_kind(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorDescription.kind)
+}
+
+// string name = 2;
+inline void SensorDescription::clear_name() {
+  _impl_.name_.ClearToEmpty();
+}
+inline const std::string& SensorDescription::name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorDescription.name)
+  return _internal_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SensorDescription::set_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorDescription.name)
+}
+inline std::string* SensorDescription::mutable_name() {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SensorDescription.name)
+  return _s;
+}
+inline const std::string& SensorDescription::_internal_name() const {
+  return _impl_.name_.Get();
+}
+inline void SensorDescription::_internal_set_name(const std::string& value) {
+  
+  _impl_.name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SensorDescription::_internal_mutable_name() {
+  
+  return _impl_.name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SensorDescription::release_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SensorDescription.name)
+  return _impl_.name_.Release();
+}
+inline void SensorDescription::set_allocated_name(std::string* name) {
+  if (name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SensorDescription.name)
+}
+
+// string vendor = 3;
+inline void SensorDescription::clear_vendor() {
+  _impl_.vendor_.ClearToEmpty();
+}
+inline const std::string& SensorDescription::vendor() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorDescription.vendor)
+  return _internal_vendor();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SensorDescription::set_vendor(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.vendor_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorDescription.vendor)
+}
+inline std::string* SensorDescription::mutable_vendor() {
+  std::string* _s = _internal_mutable_vendor();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SensorDescription.vendor)
+  return _s;
+}
+inline const std::string& SensorDescription::_internal_vendor() const {
+  return _impl_.vendor_.Get();
+}
+inline void SensorDescription::_internal_set_vendor(const std::string& value) {
+  
+  _impl_.vendor_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SensorDescription::_internal_mutable_vendor() {
+  
+  return _impl_.vendor_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SensorDescription::release_vendor() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SensorDescription.vendor)
+  return _impl_.vendor_.Release();
+}
+inline void SensorDescription::set_allocated_vendor(std::string* vendor) {
+  if (vendor != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.vendor_.SetAllocated(vendor, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.vendor_.IsDefault()) {
+    _impl_.vendor_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SensorDescription.vendor)
+}
+
+// float max_range = 4;
+inline void SensorDescription::clear_max_range() {
+  _impl_.max_range_ = 0;
+}
+inline float SensorDescription::_internal_max_range() const {
+  return _impl_.max_range_;
+}
+inline float SensorDescription::max_range() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorDescription.max_range)
+  return _internal_max_range();
+}
+inline void SensorDescription::_internal_set_max_range(float value) {
+  
+  _impl_.max_range_ = value;
+}
+inline void SensorDescription::set_max_range(float value) {
+  _internal_set_max_range(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorDescription.max_range)
+}
+
+// float resolution = 5;
+inline void SensorDescription::clear_resolution() {
+  _impl_.resolution_ = 0;
+}
+inline float SensorDescription::_internal_resolution() const {
+  return _impl_.resolution_;
+}
+inline float SensorDescription::resolution() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorDescription.resolution)
+  return _internal_resolution();
+}
+inline void SensorDescription::_internal_set_resolution(float value) {
+  
+  _impl_.resolution_ = value;
+}
+inline void SensorDescription::set_resolution(float value) {
+  _internal_set_resolution(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorDescription.resolution)
+}
+
+// uint32 min_interval_us = 6;
+inline void SensorDescription::clear_min_interval_us() {
+  _impl_.min_interval_us_ = 0u;
+}
+inline uint32_t SensorDescription::_internal_min_interval_us() const {
+  return _impl_.min_interval_us_;
+}
+inline uint32_t SensorDescription::min_interval_us() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorDescription.min_interval_us)
+  return _internal_min_interval_us();
+}
+inline void SensorDescription::_internal_set_min_interval_us(uint32_t value) {
+  
+  _impl_.min_interval_us_ = value;
+}
+inline void SensorDescription::set_min_interval_us(uint32_t value) {
+  _internal_set_min_interval_us(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorDescription.min_interval_us)
+}
+
+// -------------------------------------------------------------------
+
+// SensorList
+
+// repeated .dsa.control.v1.SensorDescription sensors = 1;
+inline int SensorList::_internal_sensors_size() const {
+  return _impl_.sensors_.size();
+}
+inline int SensorList::sensors_size() const {
+  return _internal_sensors_size();
+}
+inline void SensorList::clear_sensors() {
+  _impl_.sensors_.Clear();
+}
+inline ::dsa::control::v1::SensorDescription* SensorList::mutable_sensors(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SensorList.sensors)
+  return _impl_.sensors_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorDescription >*
+SensorList::mutable_sensors() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.SensorList.sensors)
+  return &_impl_.sensors_;
+}
+inline const ::dsa::control::v1::SensorDescription& SensorList::_internal_sensors(int index) const {
+  return _impl_.sensors_.Get(index);
+}
+inline const ::dsa::control::v1::SensorDescription& SensorList::sensors(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorList.sensors)
+  return _internal_sensors(index);
+}
+inline ::dsa::control::v1::SensorDescription* SensorList::_internal_add_sensors() {
+  return _impl_.sensors_.Add();
+}
+inline ::dsa::control::v1::SensorDescription* SensorList::add_sensors() {
+  ::dsa::control::v1::SensorDescription* _add = _internal_add_sensors();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SensorList.sensors)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorDescription >&
+SensorList::sensors() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.SensorList.sensors)
+  return _impl_.sensors_;
+}
+
+// -------------------------------------------------------------------
+
+// SensorActivate
+
+// .dsa.control.v1.SensorKind kind = 1;
+inline void SensorActivate::clear_kind() {
+  _impl_.kind_ = 0;
+}
+inline ::dsa::control::v1::SensorKind SensorActivate::_internal_kind() const {
+  return static_cast< ::dsa::control::v1::SensorKind >(_impl_.kind_);
+}
+inline ::dsa::control::v1::SensorKind SensorActivate::kind() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorActivate.kind)
+  return _internal_kind();
+}
+inline void SensorActivate::_internal_set_kind(::dsa::control::v1::SensorKind value) {
+  
+  _impl_.kind_ = value;
+}
+inline void SensorActivate::set_kind(::dsa::control::v1::SensorKind value) {
+  _internal_set_kind(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorActivate.kind)
+}
+
+// bool enabled = 2;
+inline void SensorActivate::clear_enabled() {
+  _impl_.enabled_ = false;
+}
+inline bool SensorActivate::_internal_enabled() const {
+  return _impl_.enabled_;
+}
+inline bool SensorActivate::enabled() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorActivate.enabled)
+  return _internal_enabled();
+}
+inline void SensorActivate::_internal_set_enabled(bool value) {
+  
+  _impl_.enabled_ = value;
+}
+inline void SensorActivate::set_enabled(bool value) {
+  _internal_set_enabled(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorActivate.enabled)
+}
+
+// uint32 interval_us = 3;
+inline void SensorActivate::clear_interval_us() {
+  _impl_.interval_us_ = 0u;
+}
+inline uint32_t SensorActivate::_internal_interval_us() const {
+  return _impl_.interval_us_;
+}
+inline uint32_t SensorActivate::interval_us() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorActivate.interval_us)
+  return _internal_interval_us();
+}
+inline void SensorActivate::_internal_set_interval_us(uint32_t value) {
+  
+  _impl_.interval_us_ = value;
+}
+inline void SensorActivate::set_interval_us(uint32_t value) {
+  _internal_set_interval_us(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorActivate.interval_us)
+}
+
+// -------------------------------------------------------------------
+
+// SensorReading
+
+// .dsa.control.v1.SensorKind kind = 1;
+inline void SensorReading::clear_kind() {
+  _impl_.kind_ = 0;
+}
+inline ::dsa::control::v1::SensorKind SensorReading::_internal_kind() const {
+  return static_cast< ::dsa::control::v1::SensorKind >(_impl_.kind_);
+}
+inline ::dsa::control::v1::SensorKind SensorReading::kind() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorReading.kind)
+  return _internal_kind();
+}
+inline void SensorReading::_internal_set_kind(::dsa::control::v1::SensorKind value) {
+  
+  _impl_.kind_ = value;
+}
+inline void SensorReading::set_kind(::dsa::control::v1::SensorKind value) {
+  _internal_set_kind(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorReading.kind)
+}
+
+// uint64 timestamp_us = 2;
+inline void SensorReading::clear_timestamp_us() {
+  _impl_.timestamp_us_ = uint64_t{0u};
+}
+inline uint64_t SensorReading::_internal_timestamp_us() const {
+  return _impl_.timestamp_us_;
+}
+inline uint64_t SensorReading::timestamp_us() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorReading.timestamp_us)
+  return _internal_timestamp_us();
+}
+inline void SensorReading::_internal_set_timestamp_us(uint64_t value) {
+  
+  _impl_.timestamp_us_ = value;
+}
+inline void SensorReading::set_timestamp_us(uint64_t value) {
+  _internal_set_timestamp_us(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorReading.timestamp_us)
+}
+
+// repeated float values = 3;
+inline int SensorReading::_internal_values_size() const {
+  return _impl_.values_.size();
+}
+inline int SensorReading::values_size() const {
+  return _internal_values_size();
+}
+inline void SensorReading::clear_values() {
+  _impl_.values_.Clear();
+}
+inline float SensorReading::_internal_values(int index) const {
+  return _impl_.values_.Get(index);
+}
+inline float SensorReading::values(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorReading.values)
+  return _internal_values(index);
+}
+inline void SensorReading::set_values(int index, float value) {
+  _impl_.values_.Set(index, value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SensorReading.values)
+}
+inline void SensorReading::_internal_add_values(float value) {
+  _impl_.values_.Add(value);
+}
+inline void SensorReading::add_values(float value) {
+  _internal_add_values(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SensorReading.values)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >&
+SensorReading::_internal_values() const {
+  return _impl_.values_;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >&
+SensorReading::values() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.SensorReading.values)
+  return _internal_values();
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >*
+SensorReading::_internal_mutable_values() {
+  return &_impl_.values_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedField< float >*
+SensorReading::mutable_values() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.SensorReading.values)
+  return _internal_mutable_values();
+}
+
+// -------------------------------------------------------------------
+
+// SensorReadings
+
+// repeated .dsa.control.v1.SensorReading readings = 1;
+inline int SensorReadings::_internal_readings_size() const {
+  return _impl_.readings_.size();
+}
+inline int SensorReadings::readings_size() const {
+  return _internal_readings_size();
+}
+inline void SensorReadings::clear_readings() {
+  _impl_.readings_.Clear();
+}
+inline ::dsa::control::v1::SensorReading* SensorReadings::mutable_readings(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SensorReadings.readings)
+  return _impl_.readings_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorReading >*
+SensorReadings::mutable_readings() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.SensorReadings.readings)
+  return &_impl_.readings_;
+}
+inline const ::dsa::control::v1::SensorReading& SensorReadings::_internal_readings(int index) const {
+  return _impl_.readings_.Get(index);
+}
+inline const ::dsa::control::v1::SensorReading& SensorReadings::readings(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SensorReadings.readings)
+  return _internal_readings(index);
+}
+inline ::dsa::control::v1::SensorReading* SensorReadings::_internal_add_readings() {
+  return _impl_.readings_.Add();
+}
+inline ::dsa::control::v1::SensorReading* SensorReadings::add_readings() {
+  ::dsa::control::v1::SensorReading* _add = _internal_add_readings();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SensorReadings.readings)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::SensorReading >&
+SensorReadings::readings() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.SensorReadings.readings)
+  return _impl_.readings_;
 }
 
 // -------------------------------------------------------------------
@@ -31858,6 +33186,228 @@ inline ::dsa::control::v1::StopApp* Envelope::mutable_stop_app() {
   return _msg;
 }
 
+// .dsa.control.v1.SensorList sensor_list = 240;
+inline bool Envelope::_internal_has_sensor_list() const {
+  return body_case() == kSensorList;
+}
+inline bool Envelope::has_sensor_list() const {
+  return _internal_has_sensor_list();
+}
+inline void Envelope::set_has_sensor_list() {
+  _impl_._oneof_case_[0] = kSensorList;
+}
+inline void Envelope::clear_sensor_list() {
+  if (_internal_has_sensor_list()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.sensor_list_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SensorList* Envelope::release_sensor_list() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.sensor_list)
+  if (_internal_has_sensor_list()) {
+    clear_has_body();
+    ::dsa::control::v1::SensorList* temp = _impl_.body_.sensor_list_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.sensor_list_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SensorList& Envelope::_internal_sensor_list() const {
+  return _internal_has_sensor_list()
+      ? *_impl_.body_.sensor_list_
+      : reinterpret_cast< ::dsa::control::v1::SensorList&>(::dsa::control::v1::_SensorList_default_instance_);
+}
+inline const ::dsa::control::v1::SensorList& Envelope::sensor_list() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.sensor_list)
+  return _internal_sensor_list();
+}
+inline ::dsa::control::v1::SensorList* Envelope::unsafe_arena_release_sensor_list() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.sensor_list)
+  if (_internal_has_sensor_list()) {
+    clear_has_body();
+    ::dsa::control::v1::SensorList* temp = _impl_.body_.sensor_list_;
+    _impl_.body_.sensor_list_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_sensor_list(::dsa::control::v1::SensorList* sensor_list) {
+  clear_body();
+  if (sensor_list) {
+    set_has_sensor_list();
+    _impl_.body_.sensor_list_ = sensor_list;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.sensor_list)
+}
+inline ::dsa::control::v1::SensorList* Envelope::_internal_mutable_sensor_list() {
+  if (!_internal_has_sensor_list()) {
+    clear_body();
+    set_has_sensor_list();
+    _impl_.body_.sensor_list_ = CreateMaybeMessage< ::dsa::control::v1::SensorList >(GetArenaForAllocation());
+  }
+  return _impl_.body_.sensor_list_;
+}
+inline ::dsa::control::v1::SensorList* Envelope::mutable_sensor_list() {
+  ::dsa::control::v1::SensorList* _msg = _internal_mutable_sensor_list();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.sensor_list)
+  return _msg;
+}
+
+// .dsa.control.v1.SensorActivate sensor_activate = 241;
+inline bool Envelope::_internal_has_sensor_activate() const {
+  return body_case() == kSensorActivate;
+}
+inline bool Envelope::has_sensor_activate() const {
+  return _internal_has_sensor_activate();
+}
+inline void Envelope::set_has_sensor_activate() {
+  _impl_._oneof_case_[0] = kSensorActivate;
+}
+inline void Envelope::clear_sensor_activate() {
+  if (_internal_has_sensor_activate()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.sensor_activate_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SensorActivate* Envelope::release_sensor_activate() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.sensor_activate)
+  if (_internal_has_sensor_activate()) {
+    clear_has_body();
+    ::dsa::control::v1::SensorActivate* temp = _impl_.body_.sensor_activate_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.sensor_activate_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SensorActivate& Envelope::_internal_sensor_activate() const {
+  return _internal_has_sensor_activate()
+      ? *_impl_.body_.sensor_activate_
+      : reinterpret_cast< ::dsa::control::v1::SensorActivate&>(::dsa::control::v1::_SensorActivate_default_instance_);
+}
+inline const ::dsa::control::v1::SensorActivate& Envelope::sensor_activate() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.sensor_activate)
+  return _internal_sensor_activate();
+}
+inline ::dsa::control::v1::SensorActivate* Envelope::unsafe_arena_release_sensor_activate() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.sensor_activate)
+  if (_internal_has_sensor_activate()) {
+    clear_has_body();
+    ::dsa::control::v1::SensorActivate* temp = _impl_.body_.sensor_activate_;
+    _impl_.body_.sensor_activate_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_sensor_activate(::dsa::control::v1::SensorActivate* sensor_activate) {
+  clear_body();
+  if (sensor_activate) {
+    set_has_sensor_activate();
+    _impl_.body_.sensor_activate_ = sensor_activate;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.sensor_activate)
+}
+inline ::dsa::control::v1::SensorActivate* Envelope::_internal_mutable_sensor_activate() {
+  if (!_internal_has_sensor_activate()) {
+    clear_body();
+    set_has_sensor_activate();
+    _impl_.body_.sensor_activate_ = CreateMaybeMessage< ::dsa::control::v1::SensorActivate >(GetArenaForAllocation());
+  }
+  return _impl_.body_.sensor_activate_;
+}
+inline ::dsa::control::v1::SensorActivate* Envelope::mutable_sensor_activate() {
+  ::dsa::control::v1::SensorActivate* _msg = _internal_mutable_sensor_activate();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.sensor_activate)
+  return _msg;
+}
+
+// .dsa.control.v1.SensorReadings sensor_readings = 242;
+inline bool Envelope::_internal_has_sensor_readings() const {
+  return body_case() == kSensorReadings;
+}
+inline bool Envelope::has_sensor_readings() const {
+  return _internal_has_sensor_readings();
+}
+inline void Envelope::set_has_sensor_readings() {
+  _impl_._oneof_case_[0] = kSensorReadings;
+}
+inline void Envelope::clear_sensor_readings() {
+  if (_internal_has_sensor_readings()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.sensor_readings_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SensorReadings* Envelope::release_sensor_readings() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.sensor_readings)
+  if (_internal_has_sensor_readings()) {
+    clear_has_body();
+    ::dsa::control::v1::SensorReadings* temp = _impl_.body_.sensor_readings_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.sensor_readings_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SensorReadings& Envelope::_internal_sensor_readings() const {
+  return _internal_has_sensor_readings()
+      ? *_impl_.body_.sensor_readings_
+      : reinterpret_cast< ::dsa::control::v1::SensorReadings&>(::dsa::control::v1::_SensorReadings_default_instance_);
+}
+inline const ::dsa::control::v1::SensorReadings& Envelope::sensor_readings() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.sensor_readings)
+  return _internal_sensor_readings();
+}
+inline ::dsa::control::v1::SensorReadings* Envelope::unsafe_arena_release_sensor_readings() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.sensor_readings)
+  if (_internal_has_sensor_readings()) {
+    clear_has_body();
+    ::dsa::control::v1::SensorReadings* temp = _impl_.body_.sensor_readings_;
+    _impl_.body_.sensor_readings_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_sensor_readings(::dsa::control::v1::SensorReadings* sensor_readings) {
+  clear_body();
+  if (sensor_readings) {
+    set_has_sensor_readings();
+    _impl_.body_.sensor_readings_ = sensor_readings;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.sensor_readings)
+}
+inline ::dsa::control::v1::SensorReadings* Envelope::_internal_mutable_sensor_readings() {
+  if (!_internal_has_sensor_readings()) {
+    clear_body();
+    set_has_sensor_readings();
+    _impl_.body_.sensor_readings_ = CreateMaybeMessage< ::dsa::control::v1::SensorReadings >(GetArenaForAllocation());
+  }
+  return _impl_.body_.sensor_readings_;
+}
+inline ::dsa::control::v1::SensorReadings* Envelope::mutable_sensor_readings() {
+  ::dsa::control::v1::SensorReadings* _msg = _internal_mutable_sensor_readings();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.sensor_readings)
+  return _msg;
+}
+
 inline bool Envelope::has_body() const {
   return body_case() != BODY_NOT_SET;
 }
@@ -31870,6 +33420,16 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
@@ -32065,6 +33625,7 @@ template <> struct is_proto_enum< ::dsa::control::v1::PowerHintKind> : ::std::tr
 template <> struct is_proto_enum< ::dsa::control::v1::InstallStatus> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::FileAction> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::VideoCodec> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::SensorKind> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::NodeAction> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::LogBuffer> : ::std::true_type {};
 

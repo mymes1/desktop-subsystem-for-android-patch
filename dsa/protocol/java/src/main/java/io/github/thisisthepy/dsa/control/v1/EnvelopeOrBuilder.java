@@ -898,5 +898,38 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.StopApp getStopApp();
 
+  /**
+   * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+   * @return Whether the sensorList field is set.
+   */
+  boolean hasSensorList();
+  /**
+   * <code>.dsa.control.v1.SensorList sensor_list = 240;</code>
+   * @return The sensorList.
+   */
+  io.github.thisisthepy.dsa.control.v1.SensorList getSensorList();
+
+  /**
+   * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+   * @return Whether the sensorActivate field is set.
+   */
+  boolean hasSensorActivate();
+  /**
+   * <code>.dsa.control.v1.SensorActivate sensor_activate = 241;</code>
+   * @return The sensorActivate.
+   */
+  io.github.thisisthepy.dsa.control.v1.SensorActivate getSensorActivate();
+
+  /**
+   * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+   * @return Whether the sensorReadings field is set.
+   */
+  boolean hasSensorReadings();
+  /**
+   * <code>.dsa.control.v1.SensorReadings sensor_readings = 242;</code>
+   * @return The sensorReadings.
+   */
+  io.github.thisisthepy.dsa.control.v1.SensorReadings getSensorReadings();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

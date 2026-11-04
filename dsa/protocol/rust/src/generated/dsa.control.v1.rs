@@ -839,6 +839,59 @@ pub struct VideoError {
     #[prost(string, tag = "1")]
     pub error: ::prost::alloc::string::String,
 }
+/// One sensor this computer has. `max_range` and `resolution` are in the kind's units;
+/// `min_interval_us` is the shortest time between readings it gives.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SensorDescription {
+    #[prost(enumeration = "SensorKind", tag = "1")]
+    pub kind: i32,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub vendor: ::prost::alloc::string::String,
+    #[prost(float, tag = "4")]
+    pub max_range: f32,
+    #[prost(float, tag = "5")]
+    pub resolution: f32,
+    #[prost(uint32, tag = "6")]
+    pub min_interval_us: u32,
+}
+/// Host to guest, on the sensor port: the sensors this computer has. A sensor it does not
+/// have, or that the host's privacy settings do not let DSA read, is not in the list. Sent once, after
+/// HelloAccepted.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SensorList {
+    #[prost(message, repeated, tag = "1")]
+    pub sensors: ::prost::alloc::vec::Vec<SensorDescription>,
+}
+/// Guest to host, on the sensor port: start the sensor, with a reading about every
+/// `interval_us`, or stop it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SensorActivate {
+    #[prost(enumeration = "SensorKind", tag = "1")]
+    pub kind: i32,
+    #[prost(bool, tag = "2")]
+    pub enabled: bool,
+    #[prost(uint32, tag = "3")]
+    pub interval_us: u32,
+}
+/// One reading. `timestamp_us` is on the host's monotonic clock, so the guest can space the
+/// readings that arrive together; `values` are in the order SensorKind gives.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SensorReading {
+    #[prost(enumeration = "SensorKind", tag = "1")]
+    pub kind: i32,
+    #[prost(uint64, tag = "2")]
+    pub timestamp_us: u64,
+    #[prost(float, repeated, tag = "3")]
+    pub values: ::prost::alloc::vec::Vec<f32>,
+}
+/// Host to guest, on the sensor port: the readings since the last message, oldest first.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SensorReadings {
+    #[prost(message, repeated, tag = "1")]
+    pub readings: ::prost::alloc::vec::Vec<SensorReading>,
+}
 /// Guest to host, from the control daemon: the answer to a ClockProbe, sent as soon as the
 /// probe is read.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1256,7 +1309,7 @@ pub struct DiagnosticsDone {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 240, 241, 242"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1426,6 +1479,12 @@ pub mod envelope {
         DiagnosticsDone(super::DiagnosticsDone),
         #[prost(message, tag = "136")]
         StopApp(super::StopApp),
+        #[prost(message, tag = "240")]
+        SensorList(super::SensorList),
+        #[prost(message, tag = "241")]
+        SensorActivate(super::SensorActivate),
+        #[prost(message, tag = "242")]
+        SensorReadings(super::SensorReadings),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1466,6 +1525,9 @@ pub enum Role {
     /// The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
     /// host asks it for no secret, and the control port refuses it.
     GuestVideo = 4,
+    /// The guest's sensors HAL, on the sensor port. It reads the host's sensors and nothing
+    /// else, so the host asks it for no secret, and the control port refuses it.
+    GuestSensors = 10,
 }
 impl Role {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -1478,6 +1540,7 @@ impl Role {
             Self::Host => "ROLE_HOST",
             Self::Guest => "ROLE_GUEST",
             Self::GuestVideo => "ROLE_GUEST_VIDEO",
+            Self::GuestSensors => "ROLE_GUEST_SENSORS",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1487,6 +1550,7 @@ impl Role {
             "ROLE_HOST" => Some(Self::Host),
             "ROLE_GUEST" => Some(Self::Guest),
             "ROLE_GUEST_VIDEO" => Some(Self::GuestVideo),
+            "ROLE_GUEST_SENSORS" => Some(Self::GuestSensors),
             _ => None,
         }
     }
@@ -1814,6 +1878,47 @@ impl VideoCodec {
             "VIDEO_CODEC_HEVC" => Some(Self::Hevc),
             "VIDEO_CODEC_VP9" => Some(Self::Vp9),
             "VIDEO_CODEC_AV1" => Some(Self::Av1),
+            _ => None,
+        }
+    }
+}
+/// A sensor the host can show to the guest. Values reach the guest in Android's units and on
+/// Android's axes: the host converts them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum SensorKind {
+    Unspecified = 0,
+    /// Acceleration including gravity, in m/s^2: x, y, z.
+    Accelerometer = 1,
+    /// Rate of rotation, in rad/s: x, y, z.
+    Gyroscope = 2,
+    /// The device's orientation as a unit quaternion: x, y, z, w.
+    RotationVector = 3,
+    /// Illuminance, in lux.
+    Light = 4,
+}
+impl SensorKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SENSOR_KIND_UNSPECIFIED",
+            Self::Accelerometer => "SENSOR_KIND_ACCELEROMETER",
+            Self::Gyroscope => "SENSOR_KIND_GYROSCOPE",
+            Self::RotationVector => "SENSOR_KIND_ROTATION_VECTOR",
+            Self::Light => "SENSOR_KIND_LIGHT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SENSOR_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "SENSOR_KIND_ACCELEROMETER" => Some(Self::Accelerometer),
+            "SENSOR_KIND_GYROSCOPE" => Some(Self::Gyroscope),
+            "SENSOR_KIND_ROTATION_VECTOR" => Some(Self::RotationVector),
+            "SENSOR_KIND_LIGHT" => Some(Self::Light),
             _ => None,
         }
     }
