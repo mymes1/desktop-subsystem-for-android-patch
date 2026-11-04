@@ -257,6 +257,18 @@ after two minutes. `"keep_window_manager": false` turns this off.
   manager turns them into the task's size and density and sends those to the service.
   It tells the window the task's size, which pointer input is measured in, and the largest
   size the window may have.
+- A task window has no title bar above the app. Its client area reaches the window's top
+  edge, the app draws there, and the window draws only its caption buttons (minimize,
+  maximize or restore, close) over the app's top right corner. The band as high as a
+  standard caption at the window's DPI belongs to Windows: dragging it moves the window, a
+  double click maximizes it, a right click or Alt+Space opens the system menu, resting on
+  the maximize button shows the Windows 11 snap layouts, and the top edge resizes the window.
+  The window reports the band's height, and Android gives the task a top status bar and
+  caption bar inset of that height, so the app's toolbar sits below the buttons and its
+  status bar color runs behind them. The glyphs are dark over a light status bar and light
+  over a dark one, as the app tells Android; close turns red under the pointer. Under a high
+  contrast theme the buttons take the theme's colors. The title and icon are not drawn in
+  the window; the taskbar, Alt+Tab and the system menu show them.
 - Each window measures how long it waits for a frame of its new size after a resize, and
   the log gets a summary (median, 95th percentile, longest, and how many took 100 ms or
   more) every 20 resizes and when the window closes. A window still waiting after 2

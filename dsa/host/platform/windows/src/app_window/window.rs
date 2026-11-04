@@ -54,7 +54,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WINDOW_STYLE, WM_ACTIVATE, WM_APP, WM_CLOSE, WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_ERASEBKGND,
     WM_EXITSIZEMOVE, WM_GETMINMAXINFO, WM_GETOBJECT, WM_NCCREATE, WM_NCDESTROY, WM_PAINT,
     WM_SETTINGCHANGE, WM_SIZE, WM_SYSCOLORCHANGE, WM_THEMECHANGED, WM_TIMER, WM_WINDOWPOSCHANGED,
-    WM_WINDOWPOSCHANGING, WNDCLASSEXW, WS_EX_APPWINDOW, WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
+    WM_WINDOWPOSCHANGING, WNDCLASSEXW, WS_EX_APPWINDOW, WS_EX_NOREDIRECTIONBITMAP,
+    WS_OVERLAPPEDWINDOW,
 };
 
 use crate::compositor::log::{note, CompositorLogger};
@@ -668,10 +669,7 @@ unsafe extern "system" fn task_window_proc(
 /// borders are added.
 unsafe fn outer_size(client: (u32, u32), dpi: u32) -> (i32, i32) {
     let (left, top, right, bottom) = task_frame(TASK_STYLE, TASK_EX_STYLE, dpi, false);
-    (
-        client.0 as i32 + left + right,
-        client.1 as i32 + top + bottom,
-    )
+    (client.0 as i32 + left + right, client.1 as i32 + top + bottom)
 }
 
 /// The work area of the monitor nearest `rect`, when the monitor says.

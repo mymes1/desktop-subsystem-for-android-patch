@@ -570,6 +570,118 @@ mod tests {
         assert!(i[3] < a[3] / 2, "{i:?} against {a:?}");
     }
 
+    /// The top of a window `width` pixels wide whose app draws a status bar of `bar` (opaque
+    /// 0xRRGGBB) under the title bar and a toolbar of `toolbar` below it, with the caption
+    /// buttons drawn over it as the window draws them: what a light and a dark app window look
+    /// like at the top. Rows of BGRA, `height` rows.
+    fn window_top(
+        width: u32,
+        dpi: u32,
+        tone: CaptionTone,
+        state: &CaptionState,
+        bar: u32,
+        toolbar: u32,
+    ) -> (Vec<u8>, u32) {
+        let caption = scaled(31, dpi);
+        let height = caption + scaled(56, dpi);
+        let layout = CaptionLayout::new(width, caption, dpi, scaled(8, dpi));
+        let buttons = paint_buttons(&layout, dpi, &CaptionPalette::of(tone), state);
+        let strip = 3 * layout.button_width;
+        let left = layout.buttons_left();
+        let mut image = Vec::with_capacity((width * height * 4) as usize);
+        for y in 0..height {
+            for x in 0..width {
+                let rgb = if y < caption { bar } else { toolbar };
+                let below = [rgb as u8, (rgb >> 8) as u8, (rgb >> 16) as u8, 255];
+                let column = x as i32 - left;
+                let pixel = if y < caption && column >= 0 && (column as u32) < strip {
+                    let at = ((y * strip + column as u32) * 4) as usize;
+                    let top = &buttons[at..at + 4];
+                    let keep = 255 - u32::from(top[3]);
+                    let mut mixed = [255u8; 4];
+                    for (channel, value) in mixed.iter_mut().take(3).enumerate() {
+                        let blended =
+                            u32::from(top[channel]) + u32::from(below[channel]) * keep / 255;
+                        *value = blended.min(255) as u8;
+                    }
+                    mixed
+                } else {
+                    below
+                };
+                image.extend_from_slice(&pixel);
+            }
+        }
+        (image, height)
+    }
+
+    /// A 32-bit BMP file of rows of BGRA, top row first.
+    fn bmp(width: u32, height: u32, pixels: &[u8]) -> Vec<u8> {
+        let size = 54 + pixels.len() as u32;
+        let mut file = Vec::with_capacity(size as usize);
+        file.extend_from_slice(b"BM");
+        file.extend_from_slice(&size.to_le_bytes());
+        file.extend_from_slice(&0u32.to_le_bytes());
+        file.extend_from_slice(&54u32.to_le_bytes());
+        file.extend_from_slice(&40u32.to_le_bytes());
+        file.extend_from_slice(&(width as i32).to_le_bytes());
+        // A negative height: the rows run from the top.
+        file.extend_from_slice(&(-(height as i32)).to_le_bytes());
+        file.extend_from_slice(&1u16.to_le_bytes());
+        file.extend_from_slice(&32u16.to_le_bytes());
+        file.extend_from_slice(&[0u8; 24]);
+        file.extend_from_slice(pixels);
+        file
+    }
+
+    /// Writes pictures of the top of a light and a dark app window, at 100% and 200%, at rest
+    /// and with the pointer over close, into the folder `DSA_CAPTION_PICTURES` names. CI keeps
+    /// them with the run; without the variable the pictures are only checked.
+    #[test]
+    fn fr22_pictures_of_a_light_and_a_dark_app_window() {
+        let folder = std::env::var_os("DSA_CAPTION_PICTURES").map(std::path::PathBuf::from);
+        let at_rest = CaptionState {
+            active: true,
+            ..CaptionState::default()
+        };
+        let close_hovered = CaptionState {
+            hovered: Some(CaptionButton::Close),
+            ..at_rest
+        };
+        let apps = [
+            // A light app: white status bar, Material light toolbar; dark glyphs.
+            ("light", StatusBarAppearance::Light, 0xFF_FFFF, 0xF3_EDF7),
+            // A dark app: near-black status bar and toolbar; light glyphs.
+            ("dark", StatusBarAppearance::Dark, 0x14_1218, 0x21_1F26),
+        ];
+        for (name, appearance, bar, toolbar) in apps {
+            let tone = caption_tone(appearance, 0);
+            for dpi in [96, 192] {
+                for (state_name, state) in [("rest", at_rest), ("close-hover", close_hovered)] {
+                    let width = scaled(480, dpi);
+                    let (image, height) = window_top(width, dpi, tone, &state, bar, toolbar);
+                    // The glyphs stand out from the bar: the middle of the minimize glyph
+                    // differs from the bar by more than half the range.
+                    let layout = CaptionLayout::new(width, scaled(31, dpi), dpi, 0);
+                    let (left, _, button, caption) = layout.button_rect(CaptionButton::Minimize);
+                    let x = left as u32 + button / 2;
+                    let at = (((caption / 2) * width + x) * 4) as usize;
+                    let shown = u32::from(image[at]);
+                    assert!(
+                        shown.abs_diff(bar & 0xff) > 128,
+                        "{name} at {dpi}: glyph {shown} on bar {}",
+                        bar & 0xff
+                    );
+                    if let Some(folder) = &folder {
+                        std::fs::create_dir_all(folder).unwrap();
+                        let percent = dpi * 100 / 96;
+                        let path = folder.join(format!("{name}-app-{percent}-{state_name}.bmp"));
+                        std::fs::write(path, bmp(width, height, &image)).unwrap();
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn fr22_the_glyphs_scale_with_the_window() {
         // At 200% the minimize stroke is two pixels thick and twenty long.

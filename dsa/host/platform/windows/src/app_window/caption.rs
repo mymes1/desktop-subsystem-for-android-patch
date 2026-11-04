@@ -58,7 +58,7 @@ use crate::compositor::present::WindowPresenter;
 /// The borders Windows gives a window of `style` at `dpi`: how far its frame reaches past
 /// its client area on the left, at the top (the caption with the top border), on the right
 /// and at the bottom.
-pub unsafe fn standard_frame(
+pub fn standard_frame(
     style: WINDOW_STYLE,
     ex_style: WINDOW_EX_STYLE,
     dpi: u32,
@@ -69,20 +69,21 @@ pub unsafe fn standard_frame(
         right: 0,
         bottom: 0,
     };
-    AdjustWindowRectExForDpi(&mut rect, style, 0, ex_style, dpi);
+    // SAFETY: the rectangle is a local the call only writes.
+    unsafe { AdjustWindowRectExForDpi(&mut rect, style, 0, ex_style, dpi) };
     (-rect.left, -rect.top, rect.right, rect.bottom)
 }
 
 /// The height of the title bar at `dpi`: the caption and the top border of a standard
 /// window, which is where a standard window's client area starts.
-pub unsafe fn title_bar_height(style: WINDOW_STYLE, ex_style: WINDOW_EX_STYLE, dpi: u32) -> u32 {
+pub fn title_bar_height(style: WINDOW_STYLE, ex_style: WINDOW_EX_STYLE, dpi: u32) -> u32 {
     standard_frame(style, ex_style, dpi).1.max(0) as u32
 }
 
 /// The frame of a task window, whose client area reaches its top edge: the standard
 /// window's borders without its caption. A maximized window keeps its top border too, which
 /// Windows places off the screen, as it does the other three.
-pub unsafe fn task_frame(
+pub fn task_frame(
     style: WINDOW_STYLE,
     ex_style: WINDOW_EX_STYLE,
     dpi: u32,
@@ -191,6 +192,10 @@ impl CaptionWindow {
     }
 
     /// Where the title bar and its buttons are in `hwnd` now.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
     pub unsafe fn layout(&self, hwnd: HWND) -> CaptionLayout {
         let dpi = GetDpiForWindow(hwnd).max(96);
         let mut client: RECT = std::mem::zeroed();
@@ -211,6 +216,10 @@ impl CaptionWindow {
 
     /// Lets DWM draw the window's shadow and border around a client area that reaches the
     /// window's top edge. Called once the window exists.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
     pub unsafe fn extend_frame(&self, hwnd: HWND) {
         let margins = MARGINS {
             cxLeftWidth: 0,
@@ -223,6 +232,10 @@ impl CaptionWindow {
     }
 
     /// The buttons take `tone`, and the window's frame the matching dark or light mode.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
     pub unsafe fn set_tone(
         &self,
         hwnd: HWND,
@@ -246,6 +259,10 @@ impl CaptionWindow {
     }
 
     /// Reports the title bar's height when it differs from the one last reported.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
     pub unsafe fn report_height(&self, hwnd: HWND, report: &dyn Fn(FromHost)) {
         let height = title_bar_height(self.style, self.ex_style, GetDpiForWindow(hwnd).max(96));
         if self.reported.replace(height) != height {
@@ -257,6 +274,10 @@ impl CaptionWindow {
     }
 
     /// Draws the buttons as they are now, unless that is what was drawn last.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
     pub unsafe fn paint(&self, hwnd: HWND, presenter: Option<&WindowPresenter>) {
         let Some(presenter) = presenter else {
             return;
@@ -289,12 +310,20 @@ impl CaptionWindow {
 
     /// Draws the buttons again even if nothing this window knows of changed, as after a
     /// change of theme.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
     pub unsafe fn repaint(&self, hwnd: HWND, presenter: Option<&WindowPresenter>) {
         self.drawn.set(None);
         self.paint(hwnd, presenter);
     }
 
     /// The window became the active one, or stopped being it.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
     pub unsafe fn activated(&self, hwnd: HWND, active: bool, presenter: Option<&WindowPresenter>) {
         self.active.set(active);
         self.paint(hwnd, presenter);
@@ -306,6 +335,11 @@ impl CaptionWindow {
 
     /// Handles the window's non-client messages: its frame, its hit test and its buttons.
     /// `None` leaves the message to the window's other handlers.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread, and `wparam` and
+    /// `lparam` are what Windows sent with `message`.
     pub unsafe fn handle(
         &self,
         hwnd: HWND,
@@ -435,23 +469,19 @@ mod tests {
 
     #[test]
     fn fr22_the_title_bar_is_as_high_as_a_standard_windows_caption_at_every_scale() {
-        // SAFETY: AdjustWindowRectExForDpi only computes.
-        unsafe {
-            for dpi in [96, 144, 192] {
-                let height = title_bar_height(WS_OVERLAPPEDWINDOW, 0, dpi);
-                let (_, top, _, bottom) = standard_frame(WS_OVERLAPPEDWINDOW, 0, dpi);
-                assert_eq!(height as i32, top);
-                // A caption is taller than a border, and grows with the scale.
-                assert!(top > bottom, "at {dpi}: caption {top}, border {bottom}");
-                assert!(
-                    height >= 20 * dpi / 96,
-                    "at {dpi} the title bar is {height} pixels"
-                );
-                let (_, task_top, _, task_bottom) =
-                    task_frame(WS_OVERLAPPEDWINDOW, 0, dpi, false);
-                assert_eq!((task_top, task_bottom), (0, bottom));
-                assert_eq!(task_frame(WS_OVERLAPPEDWINDOW, 0, dpi, true).1, bottom);
-            }
+        for dpi in [96, 144, 192] {
+            let height = title_bar_height(WS_OVERLAPPEDWINDOW, 0, dpi);
+            let (_, top, _, bottom) = standard_frame(WS_OVERLAPPEDWINDOW, 0, dpi);
+            assert_eq!(height as i32, top);
+            // A caption is taller than a border, and grows with the scale.
+            assert!(top > bottom, "at {dpi}: caption {top}, border {bottom}");
+            assert!(
+                height >= 20 * dpi / 96,
+                "at {dpi} the title bar is {height} pixels"
+            );
+            let (_, task_top, _, task_bottom) = task_frame(WS_OVERLAPPEDWINDOW, 0, dpi, false);
+            assert_eq!((task_top, task_bottom), (0, bottom));
+            assert_eq!(task_frame(WS_OVERLAPPEDWINDOW, 0, dpi, true).1, bottom);
         }
     }
 }

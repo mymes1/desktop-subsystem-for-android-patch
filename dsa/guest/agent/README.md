@@ -24,7 +24,12 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   task the host was told about. `ResizeTask` gives a task its host window's client size,
   holding the app's configuration while the user drags the window's edge, and
   `SetTaskDensity` the density of the window's monitor (see below); both are refused
-  for a task the host was not told about.
+  for a task the host was not told about. `SetTaskCaption` gives a task a top status bar and
+  caption bar inset as high as the title bar its host window draws over it, through a window
+  container transaction's inset sources, given again whenever the task's top edge moves.
+- **Status bar tone.** Each `TaskUpdated` carries what the task's app told the system about
+  its status bar (light or dark icons, and its color), read from the task description, so
+  the host draws its caption buttons in a tone that stays readable over it.
 - **Density and size limits in reports.** Each `TaskUpdated` also carries the density the
   task's app draws at and the display's size, which is the largest a task can be.
 - **Pointer input.** The host sends the mouse, touch and pen input of each task's window
