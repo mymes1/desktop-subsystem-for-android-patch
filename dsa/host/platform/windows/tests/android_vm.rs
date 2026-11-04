@@ -71,7 +71,10 @@ fn fr17_the_boot_initrd_carries_a_changed_device_identity_before_the_bootconfig(
     )
     .unwrap();
     let data = std::fs::read(&with).unwrap();
-    assert!(data.starts_with(b"ramdisk\x00070701"), "padded to four bytes");
+    assert!(
+        data.starts_with(b"ramdisk\x00070701"),
+        "padded to four bytes"
+    );
     let at = |needle: &[u8]| data.windows(needle.len()).position(|w| w == needle);
     let props = at(b"ro.product.model=My tablet\n").expect("the identity is in the initrd");
     let config = at(b"#BOOTCONFIG\n").expect("the bootconfig still ends it");
