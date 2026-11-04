@@ -691,8 +691,13 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
 unsafe fn keep_to_frame(hwnd: HWND, data: &WindowData, pos: &mut WINDOWPOS) {
     let dpi = GetDpiForWindow(hwnd).max(96);
     // A maximized window has a top border too, so its client area for the same outer size is
-    // smaller.
-    let maximized = IsZoomed(hwnd) != 0;
+    // smaller. Windows may propose the maximized size before the window counts as maximized,
+    // so a proposal of exactly that size counts too.
+    let maximized = IsZoomed(hwnd) != 0
+        || data
+            .max_client
+            .get()
+            .is_some_and(|max| (pos.cx, pos.cy) == outer_size(max, dpi, true));
     let (frame_width, frame_height) = outer_size((0, 0), dpi, maximized);
     let proposed = (
         (pos.cx - frame_width).max(0) as u32,
@@ -701,8 +706,15 @@ unsafe fn keep_to_frame(hwnd: HWND, data: &WindowData, pos: &mut WINDOWPOS) {
     if proposed.0 == 0 || proposed.1 == 0 {
         return;
     }
+    // A position change that keeps the window's outer size (a frame or style change, such as
+    // the switch to maximized) proposes nothing new: only the client area it implies is kept
+    // to the frame below, and the guest is not asked for it.
+    let mut current: RECT = std::mem::zeroed();
+    GetWindowRect(hwnd, &mut current);
+    let same_outer =
+        (pos.cx, pos.cy) == (current.right - current.left, current.bottom - current.top);
     // Not the size of a frame the window takes: the guest drew that one already.
-    if data.reporting.get() && !data.following.get() {
+    if data.reporting.get() && !data.following.get() && !same_outer {
         (data.report)(FromHost::Resized {
             task_id: data.task_id,
             width: proposed.0,
