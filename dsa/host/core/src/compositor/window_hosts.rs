@@ -89,7 +89,10 @@ pub enum ToHost {
         cursor: crate::ime::ImeCursor,
     },
     /// The tone of the window's caption buttons, which follows the app's status bar.
-    CaptionTone { task_id: i32, tone: CaptionTone },
+    CaptionTone {
+        task_id: i32,
+        tone: CaptionTone,
+    },
 }
 
 impl ToHost {

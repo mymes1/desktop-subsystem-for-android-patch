@@ -75,8 +75,7 @@ use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
 use crate::session::{Session, SessionError, SessionState};
 use crate::settings::{Settings, SettingsStore};
 use crate::tasks::{
-    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskRequestError,
-    TaskWatch,
+    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskRequestError, TaskWatch,
 };
 use crate::widgets::{
     self, MemoryWidgetPlacements, Placement, Widget, WidgetError, WidgetEvent, WidgetFrame,
@@ -2890,9 +2889,7 @@ impl HostApiClient {
                 task_id,
                 density_dpi,
             } => self.set_task_density(*task_id, *density_dpi),
-            TaskRequest::SetCaption { task_id, height } => {
-                self.set_task_caption(*task_id, *height)
-            }
+            TaskRequest::SetCaption { task_id, height } => self.set_task_caption(*task_id, *height),
             TaskRequest::WindowsShown { shown } => self.set_windows_shown(*shown),
         }
     }

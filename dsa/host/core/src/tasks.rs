@@ -649,7 +649,12 @@ mod tests {
     #[test]
     fn fr22_only_the_latest_caption_height_of_each_task_is_sent() {
         let caption = |task_id, height| TaskRequest::SetCaption { task_id, height };
-        let requests = vec![caption(1, 31), resize(1, 500), caption(2, 47), caption(1, 62)];
+        let requests = vec![
+            caption(1, 31),
+            resize(1, 500),
+            caption(2, 47),
+            caption(1, 62),
+        ];
         assert_eq!(
             coalesce(requests),
             vec![resize(1, 500), caption(2, 47), caption(1, 62)]

@@ -631,7 +631,10 @@ mod tests {
             }]
         );
         windows.user_closed(1);
-        assert!(windows.window_caption(1, 31).is_empty(), "the window closed");
+        assert!(
+            windows.window_caption(1, 31).is_empty(),
+            "the window closed"
+        );
     }
 
     #[test]

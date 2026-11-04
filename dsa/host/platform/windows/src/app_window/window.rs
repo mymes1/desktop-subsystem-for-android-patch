@@ -379,9 +379,9 @@ unsafe extern "system" fn task_window_proc(
     if let Some(data) = window_data(hwnd) {
         // The title bar first: what lies in it is the window's, never the app's.
         let presenter = data.presenter.borrow().clone();
-        if let Some(result) = data
-            .caption
-            .handle(hwnd, message, wparam, lparam, presenter.as_deref())
+        if let Some(result) =
+            data.caption
+                .handle(hwnd, message, wparam, lparam, presenter.as_deref())
         {
             return result;
         }
@@ -593,7 +593,8 @@ unsafe extern "system" fn task_window_proc(
             // The caption's size, high contrast and the system colors may have changed.
             if let Some(data) = window_data(hwnd) {
                 data.caption.report_height(hwnd, &*data.report);
-                data.caption.repaint(hwnd, data.presenter.borrow().as_deref());
+                data.caption
+                    .repaint(hwnd, data.presenter.borrow().as_deref());
             }
             DefWindowProcW(hwnd, message, wparam, lparam)
         }
@@ -669,7 +670,10 @@ unsafe extern "system" fn task_window_proc(
 /// borders are added.
 unsafe fn outer_size(client: (u32, u32), dpi: u32) -> (i32, i32) {
     let (left, top, right, bottom) = task_frame(TASK_STYLE, TASK_EX_STYLE, dpi, false);
-    (client.0 as i32 + left + right, client.1 as i32 + top + bottom)
+    (
+        client.0 as i32 + left + right,
+        client.1 as i32 + top + bottom,
+    )
 }
 
 /// The work area of the monitor nearest `rect`, when the monitor says.

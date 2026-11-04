@@ -344,10 +344,16 @@ fn glyph_segments(
             let offset = (2.0 * scale).round();
             let mut segments = rect(cx - half, cy - half + offset, cx + half - offset, cy + half);
             segments.extend([
-                ((cx - half + offset, cy - half + offset), (cx - half + offset, cy - half)),
+                (
+                    (cx - half + offset, cy - half + offset),
+                    (cx - half + offset, cy - half),
+                ),
                 ((cx - half + offset, cy - half), (cx + half, cy - half)),
                 ((cx + half, cy - half), (cx + half, cy + half - offset)),
-                ((cx + half, cy + half - offset), (cx + half - offset, cy + half - offset)),
+                (
+                    (cx + half, cy + half - offset),
+                    (cx + half - offset, cy + half - offset),
+                ),
             ]);
             segments
         }
@@ -430,8 +436,14 @@ mod tests {
         let layout = at_100();
         assert_eq!(layout.button_width, 46);
         assert_eq!(layout.button_rect(CaptionButton::Close), (754, 0, 46, 31));
-        assert_eq!(layout.button_rect(CaptionButton::Maximize), (708, 0, 46, 31));
-        assert_eq!(layout.button_rect(CaptionButton::Minimize), (662, 0, 46, 31));
+        assert_eq!(
+            layout.button_rect(CaptionButton::Maximize),
+            (708, 0, 46, 31)
+        );
+        assert_eq!(
+            layout.button_rect(CaptionButton::Minimize),
+            (662, 0, 46, 31)
+        );
         assert_eq!(CaptionLayout::new(800, 62, 192, 16).button_width, 92);
         assert_eq!(CaptionLayout::new(800, 47, 144, 12).button_width, 69);
     }
@@ -441,7 +453,11 @@ mod tests {
         let layout = at_100();
         assert_eq!(layout.hit(400, 20), CaptionHit::Caption);
         assert_eq!(layout.hit(0, 30), CaptionHit::Caption);
-        assert_eq!(layout.hit(400, 31), CaptionHit::Client, "the first row below");
+        assert_eq!(
+            layout.hit(400, 31),
+            CaptionHit::Client,
+            "the first row below"
+        );
         assert_eq!(layout.hit(799, 500), CaptionHit::Client);
         assert_eq!(
             layout.hit(760, 20),
@@ -466,7 +482,11 @@ mod tests {
         assert_eq!(layout.hit(400, 8), CaptionHit::Caption);
         assert_eq!(layout.hit(3, 2), CaptionHit::TopLeft);
         assert_eq!(layout.hit(790, 2), CaptionHit::TopRight);
-        assert_eq!(layout.hit(770, 2), CaptionHit::Top, "above the close button");
+        assert_eq!(
+            layout.hit(770, 2),
+            CaptionHit::Top,
+            "above the close button"
+        );
         let maximized = CaptionLayout::new(800, 31, 96, 0);
         assert_eq!(
             maximized.hit(799, 0),
@@ -498,7 +518,10 @@ mod tests {
             active: true,
             ..CaptionState::default()
         };
-        for (tone, value) in [(CaptionTone::DarkGlyphs, 0), (CaptionTone::LightGlyphs, 255)] {
+        for (tone, value) in [
+            (CaptionTone::DarkGlyphs, 0),
+            (CaptionTone::LightGlyphs, 255),
+        ] {
             let image = paint_buttons(&layout, 96, &CaptionPalette::of(tone), &state);
             assert_eq!(image.len(), (138 * 31 * 4) as usize);
             // A corner of a button is clear, so the app shows through.
@@ -546,8 +569,18 @@ mod tests {
             pressed: Some(CaptionButton::Minimize),
             ..hovered
         };
-        let a = pixel(&paint_buttons(&layout, 96, &palette, &hovered), &layout, 2, 2);
-        let b = pixel(&paint_buttons(&layout, 96, &palette, &pressed), &layout, 2, 2);
+        let a = pixel(
+            &paint_buttons(&layout, 96, &palette, &hovered),
+            &layout,
+            2,
+            2,
+        );
+        let b = pixel(
+            &paint_buttons(&layout, 96, &palette, &pressed),
+            &layout,
+            2,
+            2,
+        );
         assert_eq!(a[3], 0x0F);
         assert_eq!(b[3], 0x0A);
     }
@@ -560,7 +593,12 @@ mod tests {
             active: true,
             ..CaptionState::default()
         };
-        let a = pixel(&paint_buttons(&layout, 96, &palette, &active), &layout, 23, 15);
+        let a = pixel(
+            &paint_buttons(&layout, 96, &palette, &active),
+            &layout,
+            23,
+            15,
+        );
         let i = pixel(
             &paint_buttons(&layout, 96, &palette, &CaptionState::default()),
             &layout,

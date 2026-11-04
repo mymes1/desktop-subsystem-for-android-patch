@@ -3547,6 +3547,11 @@ impl Worker {
             }
             Some(Body::TaskUpdated(update)) => {
                 let bounds = update.bounds.unwrap_or_default();
+                let status_bar = match update.status_bar_appearance() {
+                    control::StatusBarAppearance::Light => StatusBarAppearance::Light,
+                    control::StatusBarAppearance::Dark => StatusBarAppearance::Dark,
+                    control::StatusBarAppearance::Unspecified => StatusBarAppearance::Unspecified,
+                };
                 self.shared.publish_task(TaskEvent::Updated(Task {
                     task_id: update.task_id,
                     bounds: Bounds {
@@ -3563,13 +3568,7 @@ impl Worker {
                     max_height: update.max_height,
                     min_width: update.min_width,
                     min_height: update.min_height,
-                    status_bar: match update.status_bar_appearance() {
-                        control::StatusBarAppearance::Light => StatusBarAppearance::Light,
-                        control::StatusBarAppearance::Dark => StatusBarAppearance::Dark,
-                        control::StatusBarAppearance::Unspecified => {
-                            StatusBarAppearance::Unspecified
-                        }
-                    },
+                    status_bar,
                     status_bar_color: update.status_bar_color,
                 }));
             }
