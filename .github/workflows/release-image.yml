@@ -4,7 +4,8 @@
 # the release "images": images.json and images.json.sig for x86_64 hosts, and
 # images-arm64.json and images-arm64.json.sig for ARM64 hosts, whose image is 64-bit only. With an installer version it
 # also publishes the installer as the release v<version>, and the signed program list the
-# service updates DSA itself from (program.json and program.json.sig, in "images" too).
+# service updates DSA itself from (program.json and program.json.sig, in "images" too),
+# and the ARM64 installer beside it with its own program list (program-arm64.json).
 #
 # It runs only by hand. It needs these repository secrets:
 #   DSA_ANDROID_KEYS_1, _2    the Android key set from dsa/guest/image/make-keys.sh, split
@@ -797,3 +798,136 @@ jobs:
         run: |
           gh release upload images program.json program.json.sig --clobber
           if ($LASTEXITCODE -ne 0) { throw "publishing the program list failed" }
+
+  # The ARM64 installer, built natively on an ARM64 runner after the x64 one has made the
+  # release v<version>: its setup.exe joins that release, its hash joins SHA256SUMS.txt, and
+  # its own signed program list (program-arm64.json) lets ARM64 services update to it. It
+  # reads the arm64 image list (images-arm64.json), so an ARM64 PC is only offered arm64
+  # images. The kernel is the arm64 build's Image: from this run's kernel-arm64 artifact
+  # when the images were rebuilt, otherwise from the newest published arm64 image.
+  installer-arm64:
+    name: Build and publish the ARM64 installer (windows-11-arm)
+    if: ${{ !cancelled() && needs.installer.result == 'success' }}
+    needs: [kernel, list, published, installer]
+    runs-on: windows-11-arm
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLIC_KEY: ${{ needs.list.outputs.public_key || needs.published.outputs.public_key }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust for ARM64 Windows
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install WiX 5
+        run: dotnet tool install --global wix --version 5.0.2
+
+      - name: Build the release tool
+        run: |
+          Push-Location dsa
+          cargo build -q --release -p dsa-host-core --bin dsa-release
+          if ($LASTEXITCODE -ne 0) { throw "building dsa-release failed" }
+          Pop-Location
+
+      - name: Take the arm64 kernel
+        run: |
+          $dir = (New-Item -ItemType Directory -Force .scratch\kernel-arm64).FullName
+          if ('${{ needs.list.result }}' -eq 'success') {
+            gh run download ${{ github.run_id }} --repo ${{ github.repository }} --name kernel-arm64 --dir $dir
+            if ($LASTEXITCODE -ne 0) { throw "this run has no kernel-arm64 artifact" }
+          } else {
+            gh release download images --repo ${{ github.repository }} --pattern 'images-arm64.json*' --dir $dir
+            if ($LASTEXITCODE -ne 0) { throw "there is no published arm64 image list" }
+            & dsa\target\release\dsa-release.exe verify $env:PUBLIC_KEY "$dir\images-arm64.json"
+            if ($LASTEXITCODE -ne 0) { throw "the published arm64 image list does not verify" }
+            $list = Get-Content -Raw "$dir\images-arm64.json" | ConvertFrom-Json
+            $newest = $list.images | Sort-Object android_major, build | Select-Object -Last 1
+            $kernel = $newest.files | Where-Object name -eq 'Image'
+            if (-not $kernel) { throw "the newest published arm64 image has no Image" }
+            Invoke-WebRequest -Uri $kernel.url -OutFile "$dir\Image"
+            if ((Get-FileHash "$dir\Image").Hash -ne $kernel.sha256.ToUpperInvariant()) { throw "the arm64 kernel does not match the signed list" }
+          }
+          $image = Get-ChildItem -Recurse -File $dir -Filter Image | Select-Object -First 1
+          if (-not $image -or $image.Length -eq 0) { throw "no arm64 kernel named Image" }
+          "KERNEL=$($image.FullName)" >> $env:GITHUB_ENV
+
+      - name: Take the ARM64 graphics library from the newest graphics build
+        run: |
+          $run = gh run list --repo ${{ github.repository }} --workflow test-graphics.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId'
+          if (-not $run) { throw "no graphics build has succeeded" }
+          gh run download $run --repo ${{ github.repository }} --name host-gfxstream-windows-arm64 --dir .scratch\host-gfxstream
+          if ($LASTEXITCODE -ne 0) { throw "downloading host-gfxstream-windows-arm64 from run $run failed" }
+          $dll = Get-ChildItem -Recurse -File .scratch\host-gfxstream -Filter gfxstream_backend.dll | Select-Object -First 1
+          if (-not $dll -or $dll.Length -eq 0) { throw "run $run has no usable ARM64 gfxstream_backend.dll" }
+          "GFXSTREAM_DLL=$($dll.FullName)" >> $env:GITHUB_ENV
+
+      - name: Build the ARM64 package and setup.exe
+        run: >
+          dsa/host/platform/windows/installer/build.ps1 -Version ${{ inputs.installer_version }} -Arch arm64
+          -Kernel $env:KERNEL -GfxstreamBackend $env:GFXSTREAM_DLL
+          -ListUrl https://github.com/${{ github.repository }}/releases/download/images/images-arm64.json
+          -TrustedKey $env:PUBLIC_KEY
+          -AndroidMajor ${{ needs.list.outputs.newest_major || needs.published.outputs.newest_major }}
+          -ProgramListUrl https://github.com/${{ github.repository }}/releases/download/images/program-arm64.json
+
+      - name: Add the ARM64 installer to the release
+        run: |
+          $version = '${{ inputs.installer_version }}'
+          $asset = "DSA-v$version-win-arm64-setup.exe"
+          $out = (New-Item -ItemType Directory -Force dsa\target\release-assets).FullName
+          Copy-Item "dsa/target/installer/setup-$version.exe" (Join-Path $out $asset)
+          $hash = (Get-FileHash (Join-Path $out $asset) -Algorithm SHA256).Hash.ToLowerInvariant()
+          gh release download "v$version" --repo ${{ github.repository }} --pattern SHA256SUMS.txt --dir $out --clobber
+          if ($LASTEXITCODE -ne 0) { throw "the release v$version has no SHA256SUMS.txt" }
+          Add-Content -NoNewline -Encoding ascii (Join-Path $out SHA256SUMS.txt) "$hash  $asset`n"
+          gh release upload "v$version" (Join-Path $out $asset) (Join-Path $out SHA256SUMS.txt) --repo ${{ github.repository }} --clobber
+          if ($LASTEXITCODE -ne 0) { throw "adding the ARM64 installer to v$version failed" }
+          $notes = gh release view "v$version" --repo ${{ github.repository }} --json body --jq .body
+          $notes = $notes -replace '(?m)^- Needs 64-bit Windows', "- On an ARM64 PC (such as Snapdragon), download **$asset** instead (SHA-256 ``$hash``). Its Android runs arm64-v8a apps only.`n- Needs 64-bit Windows"
+          gh release edit "v$version" --repo ${{ github.repository }} --notes $notes
+          if ($LASTEXITCODE -ne 0) { throw "updating the release notes failed" }
+
+      # The ARM64 services update from this list, which names the ARM64 setup file.
+      - name: Write, sign, check and publish the ARM64 program list
+        env:
+          SIGNING_KEY: ${{ secrets.DSA_RELEASE_SIGNING_KEY }}
+        run: |
+          if (-not $env:SIGNING_KEY) { throw "The DSA_RELEASE_SIGNING_KEY secret is not set; see the top of this workflow." }
+          $version = '${{ inputs.installer_version }}'
+          $asset = "DSA-v$version-win-arm64-setup.exe"
+          $url = "https://github.com/${{ github.repository }}/releases/download/v$version/$asset"
+          $tool = "dsa\target\release\dsa-release.exe"
+          $list = & $tool program $version $url "dsa\target\release-assets\$asset"
+          if ($LASTEXITCODE -ne 0) { throw "writing the ARM64 program list failed" }
+          ($list -join "`n") + "`n" | Set-Content -NoNewline -Encoding utf8NoBOM program-arm64.json
+          $key = Join-Path $env:RUNNER_TEMP "release.key"
+          Set-Content -NoNewline -Encoding ascii -Path $key -Value $env:SIGNING_KEY
+          try {
+            & $tool sign $key program-arm64.json
+            if ($LASTEXITCODE -ne 0) { throw "signing the ARM64 program list failed" }
+            $public = & $tool public-key $key
+          } finally { Remove-Item -Force $key }
+          if ($public -ne $env:PUBLIC_KEY) { throw "the key that signed the program list is not the one the installer trusts" }
+          & $tool verify-program $public program-arm64.json
+          if ($LASTEXITCODE -ne 0) { throw "the ARM64 program list does not verify" }
+          gh release upload images program-arm64.json program-arm64.json.sig --repo ${{ github.repository }} --clobber
+          if ($LASTEXITCODE -ne 0) { throw "publishing the ARM64 program list failed" }
