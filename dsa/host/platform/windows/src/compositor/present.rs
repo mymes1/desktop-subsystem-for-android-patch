@@ -491,7 +491,8 @@ impl WindowPresenter {
         if state.closed {
             return;
         }
-        if state.follow.view_taken(view) {
+        let took_frame = state.follow.view_taken(view);
+        if took_frame {
             let started = Instant::now();
             // SAFETY: plain COM calls on objects this presenter owns, and the immediate context
             // under its lock.
@@ -505,6 +506,17 @@ impl WindowPresenter {
         self.claim_released.notify_all();
         if committed {
             self.wait_for_commit();
+        }
+        if took_frame {
+            // The window's new size and its frame were handed over on this call stack, inside
+            // the SetWindowPos that changed the size. Waiting here until the desktop has
+            // composed them keeps the next step of the drag from queueing a newer size before
+            // this one is on the screen, which could show an older frame in a newer rectangle.
+            // SAFETY: a plain call with no arguments; it fails harmlessly when the desktop
+            // does not compose.
+            unsafe {
+                let _ = windows_sys::Win32::Graphics::Dwm::DwmFlush();
+            }
         }
     }
 
