@@ -27,6 +27,10 @@ build), so they can be recorded as they are. -Json prints the same as one JSON o
                  breakdown). The sum is compared with the near-term 400 MiB target.
   -Part close    Opens the first -Package, closes its window, and reads the VM's working set
                  every second for 30 seconds: how much went back to the host, and how fast.
+  -Part grow     Reads the service log's "memory:" lines and the guest's total memory while
+                 each -Package is opened in turn, then closed: whether the VM grew when the
+                 guest ran short and shrank back once it was calm. Needs an elevated prompt
+                 to read the service log.
   -Part all      memory, cpu, window and return, in that order (the default).
 
 .EXAMPLE
@@ -35,7 +39,7 @@ pwsh -File measure.ps1 -Part window -Package com.android.settings -Cold
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('all', 'memory', 'cpu', 'window', 'return', 'open', 'close')]
+    [ValidateSet('all', 'memory', 'cpu', 'window', 'return', 'open', 'close', 'grow')]
     [string]$Part = 'all',
     [string]$Dsa = 'dsa',
     [string[]]$Package = @('com.android.settings'),
@@ -366,9 +370,49 @@ function Measure-CloseApp {
     }
 }
 
+# The service's "memory:" log lines written since $Since.
+function Get-MemoryLogLines([datetime]$Since) {
+    $log = Join-Path $env:ProgramData 'DSA\logs\dsa-hostd.log'
+    try {
+        Get-Content $log -ErrorAction Stop | Where-Object { $_ -match 'memory: ' } | Where-Object {
+            $stamp = $null
+            if ($_ -match '^(\S+)') { [datetime]::TryParse($Matches[1], [ref]$stamp) | Out-Null }
+            -not $stamp -or $stamp -ge $Since
+        }
+    } catch { @("the service log could not be read: $_") }
+}
+
+function Measure-Growth {
+    if ((Get-State) -eq 'Stopped') { Invoke-Dsa start --wait | Out-Null }
+    $since = Get-Date
+    $samples = @()
+    $sample = {
+        param($Step)
+        $memory = Get-DsaJson memory
+        $vm = @($memory.host) | Where-Object { $_.role -eq 'vm' } | Select-Object -First 1
+        [ordered]@{
+            step = $Step
+            guest_total_mib = if ($memory.guest) { ConvertTo-Mib $memory.guest.mem_total_kb } else { $null }
+            guest_available_mib = if ($memory.guest) { ConvertTo-Mib $memory.guest.mem_available_kb } else { $null }
+            vm_working_set_mib = if ($vm) { ConvertTo-Mib $vm.working_set_kb } else { $null }
+        }
+    }
+    $samples += & $sample 'start'
+    foreach ($name in $Package) {
+        Invoke-Dsa launch $name | Out-Null
+        Start-Sleep -Seconds 20
+        $samples += & $sample "opened $name"
+    }
+    foreach ($process in Get-AppWindowProcesses) { $null = $process.CloseMainWindow() }
+    Start-Sleep -Seconds 90
+    $samples += & $sample 'closed all, 90 s later'
+    [ordered]@{ samples = $samples; log = @(Get-MemoryLogLines $since) }
+}
+
 $report = [ordered]@{ environment = Get-Environment }
 if ($Part -eq 'open') { $report['open_app'] = Measure-OpenApp }
 if ($Part -eq 'close') { $report['close_app'] = Measure-CloseApp }
+if ($Part -eq 'grow') { $report['grow'] = Measure-Growth }
 if ($Part -in 'all', 'memory') { $report['idle_memory'] = Measure-IdleMemory }
 if ($Part -in 'all', 'cpu') { $report['idle_cpu'] = Measure-IdleCpu }
 if ($Part -in 'all', 'window') { $report['window_show'] = Measure-Windows }
