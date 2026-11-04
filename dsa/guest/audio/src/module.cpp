@@ -3,7 +3,9 @@
 
 #include "module.h"
 
+#include <aidl/android/media/audio/common/AudioOutputFlags.h>
 #include <android/binder_ibinder.h>
+#include <android/binder_ibinder_platform.h>
 #include <sched.h>
 
 #include <algorithm>
