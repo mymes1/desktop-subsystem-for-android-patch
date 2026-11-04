@@ -137,6 +137,19 @@ pub struct AndroidVmConfig {
 /// page reporting's order must be at least this, which its least value, 5, is.
 const FAULT_CLUSTER_SHIFT: u32 = 4;
 
+/// The HCS modify request that sets a running VM's memory to `mb` MiB, rounded down to the
+/// 2 MiB granularity. Memory above the size the VM started with is hot-added and onlined by
+/// the guest's Hyper-V balloon driver; a smaller size is taken back by ballooning.
+pub fn memory_resize_request(mb: u64) -> String {
+    let mb = mb - mb % u64::from(MEMORY_GRANULARITY_MB);
+    json!({
+        "ResourcePath": "VirtualMachine/ComputeTopology/Memory/SizeInMB",
+        "RequestType": "Update",
+        "Settings": mb,
+    })
+    .to_string()
+}
+
 /// Whether this Windows build can back a VM with small pages and short fault clusters: those
 /// with the fix for the deadlock such a VM can hit when it is torn down. These are the same
 /// builds and revisions WSL checks before it sets the same fields.

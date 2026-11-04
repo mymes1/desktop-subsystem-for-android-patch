@@ -223,6 +223,11 @@ impl Router {
         }
     }
 
+    /// Sends a frame of the daemon's own to the host.
+    pub fn to_host(&self, frame: Vec<u8>) {
+        let _ = self.to_host.send(frame);
+    }
+
     /// How many times an app's last task has ended so far.
     pub fn apps_closed(&self) -> u64 {
         *self.apps_closed.0.lock().unwrap_or_else(|e| e.into_inner())

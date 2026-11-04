@@ -62,10 +62,19 @@ pub struct AndroidVmLauncher {
     data_disk: Option<PathBuf>,
     /// What Android's log has shown during this boot, which the console no longer carries.
     log_signs: Arc<Mutex<ConsoleSigns>>,
+    /// How far the running VM may grow, in MiB, as the configuration source last set it;
+    /// `None` keeps it at the size it started with.
+    memory_max: MemoryMax,
+    /// The size the running VM started with, in MiB.
+    memory_base: Option<u64>,
 }
 
 /// See [`AndroidVmLauncher::with_prerequisite`].
 pub type Prerequisite = Box<dyn FnMut() -> Option<String> + Send>;
+
+/// Where the configuration source says how far the next VM may grow, in MiB. See
+/// [`AndroidVmLauncher::with_memory_max`].
+pub type MemoryMax = Arc<Mutex<Option<u64>>>;
 
 /// A file that is removed when this is dropped.
 struct TransientFile(PathBuf);
@@ -206,7 +215,17 @@ impl AndroidVmLauncher {
             prerequisite: None,
             data_disk: None,
             log_signs: Arc::new(Mutex::new(ConsoleSigns::default())),
+            memory_max: MemoryMax::default(),
+            memory_base: None,
         }
+    }
+
+    /// Lets the running VM grow to the size in `max`, which the configuration source sets
+    /// before each start: it starts at its configured memory and memory is hot-added while the
+    /// guest is short of it.
+    pub fn with_memory_max(mut self, max: MemoryMax) -> AndroidVmLauncher {
+        self.memory_max = max;
+        self
     }
 
     /// Reads the signs of a late boot from `signs` as well as from the console: whoever reads
@@ -372,6 +391,7 @@ impl GuestLauncher for AndroidVmLauncher {
             .map_err(|e| format!("the Android VM started but its ID could not be read: {e}"))?;
         *self.vm_id.lock().unwrap_or_else(|e| e.into_inner()) = Some(vm_id);
         self.system = Some(system);
+        self.memory_base = Some(u64::from(config.memory_mb));
         Ok(())
     }
 
@@ -397,6 +417,7 @@ impl GuestLauncher for AndroidVmLauncher {
             }
         }
         self.system = None;
+        self.memory_base = None;
         *self.vm_id.lock().unwrap_or_else(|e| e.into_inner()) = None;
         // The VM is gone, so its end of the console pipe closes and the rest is read.
         self.end_console(CONSOLE_DRAIN);
@@ -458,6 +479,33 @@ impl GuestLauncher for AndroidVmLauncher {
         system
             .resume(CALL_TIMEOUT)
             .map_err(|e| format!("the Android VM could not be resumed: {e}"))
+    }
+
+    fn memory_range_mb(&self) -> Option<(u64, u64)> {
+        self.system.as_ref()?;
+        let base = self.memory_base?;
+        let max = (*self.memory_max.lock().unwrap_or_else(|e| e.into_inner()))?;
+        (max > base).then_some((base, max))
+    }
+
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
+        let system = self
+            .system
+            .as_ref()
+            .ok_or("the Android VM is not running")?;
+        system
+            .modify(&crate::vm::memory_resize_request(mb), CALL_TIMEOUT)
+            .map_err(|e| format!("the Android VM's memory could not be set to {mb} MiB: {e}"))
+    }
+
+    fn memory_growth_failed(&mut self, why: &str) {
+        // The guest keeps the memory it started with. Whether to start it larger instead is
+        // a decision about idle memory, so it is reported rather than made here.
+        eprintln!(
+            "memory: the Android VM cannot grow on this computer ({why}); it keeps the {} MiB \
+             it started with",
+            self.memory_base.unwrap_or_default()
+        );
     }
 }
 

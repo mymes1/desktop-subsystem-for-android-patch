@@ -319,6 +319,24 @@ mod daemon {
     #[cfg(not(target_os = "android"))]
     fn reclaim_idle_memory(_router: Arc<Router>) {}
 
+    /// Tells the host how much memory the guest has, so it can add memory before the guest
+    /// runs out and take it back once the guest no longer needs it.
+    fn report_memory_pressure(router: Arc<Router>) {
+        use dsa_guest_channeld::pressure::{PressureReporter, Sample, SAMPLE_INTERVAL};
+        let mut reporter = PressureReporter::default();
+        loop {
+            thread::sleep(SAMPLE_INTERVAL);
+            let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") else {
+                continue;
+            };
+            let psi = std::fs::read_to_string("/proc/pressure/memory").unwrap_or_default();
+            let sample = Sample::parse(&meminfo, &psi);
+            if reporter.due(&sample, std::time::Instant::now()) {
+                router.to_host(sample.frame());
+            }
+        }
+    }
+
     pub fn run() -> i32 {
         let options = match options() {
             Ok(options) => options,
@@ -403,6 +421,10 @@ mod daemon {
         {
             let router = Arc::clone(&router);
             thread::spawn(move || reclaim_idle_memory(router));
+        }
+        {
+            let router = Arc::clone(&router);
+            thread::spawn(move || report_memory_pressure(router));
         }
         {
             let router = Arc::clone(&router);

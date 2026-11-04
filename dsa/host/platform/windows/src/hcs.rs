@@ -87,6 +87,8 @@ type CreateComputeSystem = unsafe extern "system" fn(
     *mut HCS_SYSTEM,
 ) -> HRESULT;
 type SystemOperation = unsafe extern "system" fn(HCS_SYSTEM, HCS_OPERATION, PCWSTR) -> HRESULT;
+type ModifyComputeSystem =
+    unsafe extern "system" fn(HCS_SYSTEM, HCS_OPERATION, PCWSTR, *mut c_void) -> HRESULT;
 type CloseComputeSystem = unsafe extern "system" fn(HCS_SYSTEM);
 type GrantVmAccess = unsafe extern "system" fn(PCWSTR, PCWSTR) -> HRESULT;
 type SetComputeSystemCallback = unsafe extern "system" fn(
@@ -108,6 +110,7 @@ struct Api {
     pause_compute_system: SystemOperation,
     resume_compute_system: SystemOperation,
     get_compute_system_properties: SystemOperation,
+    modify_compute_system: ModifyComputeSystem,
     close_compute_system: CloseComputeSystem,
     set_compute_system_callback: SetComputeSystemCallback,
     grant_vm_access: GrantVmAccess,
@@ -167,6 +170,7 @@ fn load() -> Result<Api, HcsError> {
         pause_compute_system: function!("HcsPauseComputeSystem", SystemOperation),
         resume_compute_system: function!("HcsResumeComputeSystem", SystemOperation),
         get_compute_system_properties: function!("HcsGetComputeSystemProperties", SystemOperation),
+        modify_compute_system: function!("HcsModifyComputeSystem", ModifyComputeSystem),
         close_compute_system: function!("HcsCloseComputeSystem", CloseComputeSystem),
         set_compute_system_callback: function!(
             "HcsSetComputeSystemCallback",
@@ -357,6 +361,19 @@ impl ComputeSystem {
             None,
             timeout,
         )
+        .map(drop)
+    }
+
+    /// Changes a running VM's settings with an HCS modify request (a JSON document naming
+    /// a `ResourcePath`, a `RequestType` and the `Settings`).
+    pub fn modify(&self, request: &str, timeout: Duration) -> Result<(), HcsError> {
+        let request_w = wide(request);
+        let function = self.api.modify_compute_system;
+        run_operation(self.api, "HcsModifyComputeSystem", timeout, |operation| {
+            // SAFETY: a live handle, a live operation, a NUL-terminated string and no
+            // identity token.
+            unsafe { function(self.handle, operation, request_w.as_ptr(), std::ptr::null_mut()) }
+        })
         .map(drop)
     }
 

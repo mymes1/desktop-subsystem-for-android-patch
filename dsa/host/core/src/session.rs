@@ -126,7 +126,7 @@ use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{PointerAction, PointerEvent};
 use crate::keys::KeyEvent;
 use crate::links::{self, LinkGate};
-use crate::memory::{GuestMemory, GuestMemoryReport};
+use crate::memory::{GrowthAction, GuestMemory, GuestMemoryReport, GuestPressure, MemoryGrowth};
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent, RateLimit};
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
@@ -375,6 +375,23 @@ pub trait GuestLauncher: Send + 'static {
     /// Lets a frozen guest's processes run again.
     fn thaw(&mut self) -> Result<(), String> {
         Ok(())
+    }
+
+    /// The memory the running guest started with and may grow to, in MiB, when the launcher
+    /// can change it while the guest runs; `None` when its memory is fixed.
+    fn memory_range_mb(&self) -> Option<(u64, u64)> {
+        None
+    }
+
+    /// Sets the running guest's memory to `mb` MiB: more is added to it, less is taken back.
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
+        Err(format!("this kind of guest cannot be resized to {mb} MiB"))
+    }
+
+    /// Growing the guest's memory did not work, for the reason given. The launcher starts the
+    /// next guest at a fixed size instead.
+    fn memory_growth_failed(&mut self, why: &str) {
+        let _ = why;
     }
 }
 
@@ -969,6 +986,7 @@ impl Session {
             power_pending: false,
             host_memory_low: false,
             host_memory_pending: false,
+            memory_growth: None,
             started_at: Instant::now(),
             boot_completed_at: None,
             agent_connected: false,
@@ -2331,6 +2349,8 @@ struct Worker {
     host_memory_low: bool,
     /// Set when that changed while the guest was frozen, so it is told after the thaw.
     host_memory_pending: bool,
+    /// Grows and shrinks the guest's memory while it runs, when the launcher can.
+    memory_growth: Option<MemoryGrowth>,
     /// When the guest was started.
     started_at: Instant,
     /// When the guest said it had finished booting.
@@ -3213,6 +3233,37 @@ impl Worker {
         }
     }
 
+    /// The guest's control daemon says how much memory it has: the VM grows when the guest is
+    /// short and gives memory back once it is not (see [`MemoryGrowth`]). A launcher that
+    /// cannot resize stops the growing, and the guest keeps the size it has.
+    fn guest_memory_pressure(&mut self, pressure: GuestPressure) {
+        let Some(growth) = self.memory_growth.as_mut() else {
+            return;
+        };
+        let before = growth.current_mb();
+        match growth.on_pressure(&pressure, Instant::now()) {
+            None => {}
+            Some(GrowthAction::GiveUp(why)) => {
+                eprintln!("memory: Android's memory no longer grows: {why}");
+                self.launcher.memory_growth_failed(&why);
+            }
+            Some(GrowthAction::Resize(mb)) => match self.launcher.set_memory_mb(mb) {
+                Ok(()) => eprintln!(
+                    "memory: Android's memory {} from {before} to {mb} MiB ({} MiB available, \
+                     {:.1}% stalled)",
+                    if mb > before { "grows" } else { "shrinks" },
+                    pressure.mem_available_kb / 1024,
+                    pressure.stall_percent
+                ),
+                Err(why) => {
+                    growth.refused(before);
+                    eprintln!("memory: Android's memory could not be set to {mb} MiB: {why}");
+                    self.launcher.memory_growth_failed(&why);
+                }
+            },
+        }
+    }
+
     /// The agent says whether the guest is in Doze. The session becomes `Dozing` once the
     /// guest is in Doze with its screen off. The guest leaves deep idle for short maintenance
     /// windows while it dozes; the session stays `Dozing` through them, and leaves it only
@@ -3504,6 +3555,10 @@ impl Worker {
         // The guest renders while it boots, before the agent connects, and the compositor
         // binds its sockets to this ID, so it is known from the moment the guest runs.
         self.shared.set_vm_id(self.launcher.vm_id());
+        self.memory_growth = self.launcher.memory_range_mb().map(|(base, max)| {
+            eprintln!("memory: Android starts with {base} MiB and may grow to {max} MiB");
+            MemoryGrowth::new(base, max)
+        });
         let started = Instant::now();
         self.started_at = started;
         self.next_prerequisite_check = started + PREREQUISITE_POLL;
@@ -3812,6 +3867,9 @@ impl Worker {
             Some(Body::GuestMemory(memory)) => {
                 let memory = GuestMemory::from_control(memory);
                 self.shared.set_guest_memory(Some((memory, Instant::now())));
+            }
+            Some(Body::GuestMemoryPressure(pressure)) => {
+                self.guest_memory_pressure(GuestPressure::from_control(&pressure))
             }
             Some(Body::DeviceIdle(idle)) => self.guest_idle(idle.idle),
             Some(Body::GuestSleepReady(_)) => self.guest_sleep_ready(),
