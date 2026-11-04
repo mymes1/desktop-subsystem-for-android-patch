@@ -5,7 +5,8 @@ package io.github.thisisthepy.dsa.control.v1;
 
 /**
  * <pre>
- * Guest to host: sound to play.
+ * Sound, in the stream's format. Guest to host on an output stream: sound to play. Host to
+ * guest on an input stream: sound recorded.
  * </pre>
  *
  * Protobuf type {@code dsa.control.v1.AudioPcm}
@@ -181,7 +182,8 @@ public  final class AudioPcm extends
 
   /**
    * <pre>
-   * Guest to host: sound to play.
+   * Sound, in the stream's format. Guest to host on an output stream: sound to play. Host to
+   * guest on an input stream: sound recorded.
    * </pre>
    *
    * Protobuf type {@code dsa.control.v1.AudioPcm}

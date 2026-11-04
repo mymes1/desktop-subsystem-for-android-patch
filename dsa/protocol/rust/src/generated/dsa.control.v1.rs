@@ -1176,7 +1176,8 @@ pub struct AudioOutputReady {
     #[prost(uint32, tag = "2")]
     pub device_frames: u32,
 }
-/// Guest to host: sound to play.
+/// Sound, in the stream's format. Guest to host on an output stream: sound to play. Host to
+/// guest on an input stream: sound recorded.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct AudioPcm {
     /// The index, counted from the stream's first frame, of the first frame in `data`. A gap
@@ -1186,6 +1187,38 @@ pub struct AudioPcm {
     /// Whole frames in the stream's format.
     #[prost(bytes = "vec", tag = "2")]
     pub data: ::prost::alloc::vec::Vec<u8>,
+}
+/// Guest to host, first after the handshake on an input stream: the format to record in. The
+/// host opens the default capture device and answers AudioInputOpened. It closes the device
+/// when the connection closes.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AudioInputOpen {
+    /// Frames per second. The guest uses 48000.
+    #[prost(uint32, tag = "1")]
+    pub sample_rate: u32,
+    /// The guest uses 2 (left, right).
+    #[prost(uint32, tag = "2")]
+    pub channel_count: u32,
+    #[prost(enumeration = "AudioSampleFormat", tag = "3")]
+    pub format: i32,
+    /// How many frames the guest reads at a time.
+    #[prost(uint32, tag = "4")]
+    pub frames_per_burst: u32,
+    /// Names the stream in the host's log, such as "primary".
+    #[prost(string, tag = "5")]
+    pub name: ::prost::alloc::string::String,
+}
+/// Host to guest: whether the capture device opened. When it did not (the user turned the
+/// microphone off in the host's privacy settings, or there is no microphone), `error` says
+/// why and the host closes the connection.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AudioInputOpened {
+    /// Empty when the device records.
+    #[prost(string, tag = "1")]
+    pub error: ::prost::alloc::string::String,
+    /// The capture device's own latency in frames at the stream's rate, 0 when not known.
+    #[prost(uint32, tag = "2")]
+    pub device_frames: u32,
 }
 /// Guest to host: a change of the stream's state.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1300,7 +1333,7 @@ pub struct DiagnosticsDone {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1448,6 +1481,10 @@ pub mod envelope {
         AudioPcm(super::AudioPcm),
         #[prost(message, tag = "103")]
         AudioOutputControl(super::AudioOutputControl),
+        #[prost(message, tag = "104")]
+        AudioInputOpen(super::AudioInputOpen),
+        #[prost(message, tag = "105")]
+        AudioInputOpened(super::AudioInputOpened),
         #[prost(message, tag = "120")]
         VideoCapabilities(super::VideoCapabilities),
         #[prost(message, tag = "121")]

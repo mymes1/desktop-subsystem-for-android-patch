@@ -1309,6 +1309,37 @@ struct AudioPcmDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 AudioPcmDefaultTypeInternal _AudioPcm_default_instance_;
+PROTOBUF_CONSTEXPR AudioInputOpen::AudioInputOpen(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.sample_rate_)*/0u
+  , /*decltype(_impl_.channel_count_)*/0u
+  , /*decltype(_impl_.format_)*/0
+  , /*decltype(_impl_.frames_per_burst_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct AudioInputOpenDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR AudioInputOpenDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~AudioInputOpenDefaultTypeInternal() {}
+  union {
+    AudioInputOpen _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 AudioInputOpenDefaultTypeInternal _AudioInputOpen_default_instance_;
+PROTOBUF_CONSTEXPR AudioInputOpened::AudioInputOpened(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.error_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.device_frames_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct AudioInputOpenedDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR AudioInputOpenedDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~AudioInputOpenedDefaultTypeInternal() {}
+  union {
+    AudioInputOpened _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 AudioInputOpenedDefaultTypeInternal _AudioInputOpened_default_instance_;
 PROTOBUF_CONSTEXPR AudioOutputControl::AudioOutputControl(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.command_)*/0
@@ -24395,6 +24426,554 @@ std::string AudioPcm::GetTypeName() const {
 
 // ===================================================================
 
+class AudioInputOpen::_Internal {
+ public:
+};
+
+AudioInputOpen::AudioInputOpen(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.AudioInputOpen)
+}
+AudioInputOpen::AudioInputOpen(const AudioInputOpen& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  AudioInputOpen* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , decltype(_impl_.sample_rate_){}
+    , decltype(_impl_.channel_count_){}
+    , decltype(_impl_.format_){}
+    , decltype(_impl_.frames_per_burst_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_name().empty()) {
+    _this->_impl_.name_.Set(from._internal_name(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.sample_rate_, &from._impl_.sample_rate_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.frames_per_burst_) -
+    reinterpret_cast<char*>(&_impl_.sample_rate_)) + sizeof(_impl_.frames_per_burst_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.AudioInputOpen)
+}
+
+inline void AudioInputOpen::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , decltype(_impl_.sample_rate_){0u}
+    , decltype(_impl_.channel_count_){0u}
+    , decltype(_impl_.format_){0}
+    , decltype(_impl_.frames_per_burst_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+AudioInputOpen::~AudioInputOpen() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.AudioInputOpen)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void AudioInputOpen::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.name_.Destroy();
+}
+
+void AudioInputOpen::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void AudioInputOpen::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.AudioInputOpen)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.name_.ClearToEmpty();
+  ::memset(&_impl_.sample_rate_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.frames_per_burst_) -
+      reinterpret_cast<char*>(&_impl_.sample_rate_)) + sizeof(_impl_.frames_per_burst_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* AudioInputOpen::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 sample_rate = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.sample_rate_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 channel_count = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.channel_count_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.AudioSampleFormat format = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_format(static_cast<::dsa::control::v1::AudioSampleFormat>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 frames_per_burst = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.frames_per_burst_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string name = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          auto str = _internal_mutable_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* AudioInputOpen::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.AudioInputOpen)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 sample_rate = 1;
+  if (this->_internal_sample_rate() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_sample_rate(), target);
+  }
+
+  // uint32 channel_count = 2;
+  if (this->_internal_channel_count() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_channel_count(), target);
+  }
+
+  // .dsa.control.v1.AudioSampleFormat format = 3;
+  if (this->_internal_format() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      3, this->_internal_format(), target);
+  }
+
+  // uint32 frames_per_burst = 4;
+  if (this->_internal_frames_per_burst() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(4, this->_internal_frames_per_burst(), target);
+  }
+
+  // string name = 5;
+  if (!this->_internal_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.AudioInputOpen.name");
+    target = stream->WriteStringMaybeAliased(
+        5, this->_internal_name(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.AudioInputOpen)
+  return target;
+}
+
+size_t AudioInputOpen::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.AudioInputOpen)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string name = 5;
+  if (!this->_internal_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_name());
+  }
+
+  // uint32 sample_rate = 1;
+  if (this->_internal_sample_rate() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_sample_rate());
+  }
+
+  // uint32 channel_count = 2;
+  if (this->_internal_channel_count() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_channel_count());
+  }
+
+  // .dsa.control.v1.AudioSampleFormat format = 3;
+  if (this->_internal_format() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_format());
+  }
+
+  // uint32 frames_per_burst = 4;
+  if (this->_internal_frames_per_burst() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_frames_per_burst());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void AudioInputOpen::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const AudioInputOpen*>(
+      &from));
+}
+
+void AudioInputOpen::MergeFrom(const AudioInputOpen& from) {
+  AudioInputOpen* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.AudioInputOpen)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_name().empty()) {
+    _this->_internal_set_name(from._internal_name());
+  }
+  if (from._internal_sample_rate() != 0) {
+    _this->_internal_set_sample_rate(from._internal_sample_rate());
+  }
+  if (from._internal_channel_count() != 0) {
+    _this->_internal_set_channel_count(from._internal_channel_count());
+  }
+  if (from._internal_format() != 0) {
+    _this->_internal_set_format(from._internal_format());
+  }
+  if (from._internal_frames_per_burst() != 0) {
+    _this->_internal_set_frames_per_burst(from._internal_frames_per_burst());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void AudioInputOpen::CopyFrom(const AudioInputOpen& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.AudioInputOpen)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool AudioInputOpen::IsInitialized() const {
+  return true;
+}
+
+void AudioInputOpen::InternalSwap(AudioInputOpen* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.name_, lhs_arena,
+      &other->_impl_.name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AudioInputOpen, _impl_.frames_per_burst_)
+      + sizeof(AudioInputOpen::_impl_.frames_per_burst_)
+      - PROTOBUF_FIELD_OFFSET(AudioInputOpen, _impl_.sample_rate_)>(
+          reinterpret_cast<char*>(&_impl_.sample_rate_),
+          reinterpret_cast<char*>(&other->_impl_.sample_rate_));
+}
+
+std::string AudioInputOpen::GetTypeName() const {
+  return "dsa.control.v1.AudioInputOpen";
+}
+
+
+// ===================================================================
+
+class AudioInputOpened::_Internal {
+ public:
+};
+
+AudioInputOpened::AudioInputOpened(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.AudioInputOpened)
+}
+AudioInputOpened::AudioInputOpened(const AudioInputOpened& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  AudioInputOpened* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.error_){}
+    , decltype(_impl_.device_frames_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_error().empty()) {
+    _this->_impl_.error_.Set(from._internal_error(), 
+      _this->GetArenaForAllocation());
+  }
+  _this->_impl_.device_frames_ = from._impl_.device_frames_;
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.AudioInputOpened)
+}
+
+inline void AudioInputOpened::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.error_){}
+    , decltype(_impl_.device_frames_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+AudioInputOpened::~AudioInputOpened() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.AudioInputOpened)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void AudioInputOpened::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.error_.Destroy();
+}
+
+void AudioInputOpened::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void AudioInputOpened::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.AudioInputOpened)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.error_.ClearToEmpty();
+  _impl_.device_frames_ = 0u;
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* AudioInputOpened::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string error = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_error();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 device_frames = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.device_frames_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* AudioInputOpened::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.AudioInputOpened)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string error = 1;
+  if (!this->_internal_error().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_error().data(), static_cast<int>(this->_internal_error().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.AudioInputOpened.error");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_error(), target);
+  }
+
+  // uint32 device_frames = 2;
+  if (this->_internal_device_frames() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_device_frames(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.AudioInputOpened)
+  return target;
+}
+
+size_t AudioInputOpened::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.AudioInputOpened)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string error = 1;
+  if (!this->_internal_error().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_error());
+  }
+
+  // uint32 device_frames = 2;
+  if (this->_internal_device_frames() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_device_frames());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void AudioInputOpened::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const AudioInputOpened*>(
+      &from));
+}
+
+void AudioInputOpened::MergeFrom(const AudioInputOpened& from) {
+  AudioInputOpened* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.AudioInputOpened)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_error().empty()) {
+    _this->_internal_set_error(from._internal_error());
+  }
+  if (from._internal_device_frames() != 0) {
+    _this->_internal_set_device_frames(from._internal_device_frames());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void AudioInputOpened::CopyFrom(const AudioInputOpened& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.AudioInputOpened)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool AudioInputOpened::IsInitialized() const {
+  return true;
+}
+
+void AudioInputOpened::InternalSwap(AudioInputOpened* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.error_, lhs_arena,
+      &other->_impl_.error_, rhs_arena
+  );
+  swap(_impl_.device_frames_, other->_impl_.device_frames_);
+}
+
+std::string AudioInputOpened::GetTypeName() const {
+  return "dsa.control.v1.AudioInputOpened";
+}
+
+
+// ===================================================================
+
 class AudioOutputControl::_Internal {
  public:
 };
@@ -26607,6 +27186,8 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::AudioOutputReady& audio_output_ready(const Envelope* msg);
   static const ::dsa::control::v1::AudioPcm& audio_pcm(const Envelope* msg);
   static const ::dsa::control::v1::AudioOutputControl& audio_output_control(const Envelope* msg);
+  static const ::dsa::control::v1::AudioInputOpen& audio_input_open(const Envelope* msg);
+  static const ::dsa::control::v1::AudioInputOpened& audio_input_opened(const Envelope* msg);
   static const ::dsa::control::v1::VideoCapabilities& video_capabilities(const Envelope* msg);
   static const ::dsa::control::v1::VideoDecoderOpen& video_decoder_open(const Envelope* msg);
   static const ::dsa::control::v1::VideoDecoderOpened& video_decoder_opened(const Envelope* msg);
@@ -26903,6 +27484,14 @@ Envelope::_Internal::audio_pcm(const Envelope* msg) {
 const ::dsa::control::v1::AudioOutputControl&
 Envelope::_Internal::audio_output_control(const Envelope* msg) {
   return *msg->_impl_.body_.audio_output_control_;
+}
+const ::dsa::control::v1::AudioInputOpen&
+Envelope::_Internal::audio_input_open(const Envelope* msg) {
+  return *msg->_impl_.body_.audio_input_open_;
+}
+const ::dsa::control::v1::AudioInputOpened&
+Envelope::_Internal::audio_input_opened(const Envelope* msg) {
+  return *msg->_impl_.body_.audio_input_opened_;
 }
 const ::dsa::control::v1::VideoCapabilities&
 Envelope::_Internal::video_capabilities(const Envelope* msg) {
@@ -28014,6 +28603,36 @@ void Envelope::set_allocated_audio_output_control(::dsa::control::v1::AudioOutpu
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.audio_output_control)
 }
+void Envelope::set_allocated_audio_input_open(::dsa::control::v1::AudioInputOpen* audio_input_open) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (audio_input_open) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(audio_input_open);
+    if (message_arena != submessage_arena) {
+      audio_input_open = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, audio_input_open, submessage_arena);
+    }
+    set_has_audio_input_open();
+    _impl_.body_.audio_input_open_ = audio_input_open;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.audio_input_open)
+}
+void Envelope::set_allocated_audio_input_opened(::dsa::control::v1::AudioInputOpened* audio_input_opened) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (audio_input_opened) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(audio_input_opened);
+    if (message_arena != submessage_arena) {
+      audio_input_opened = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, audio_input_opened, submessage_arena);
+    }
+    set_has_audio_input_opened();
+    _impl_.body_.audio_input_opened_ = audio_input_opened;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.audio_input_opened)
+}
 void Envelope::set_allocated_video_capabilities(::dsa::control::v1::VideoCapabilities* video_capabilities) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
   clear_body();
@@ -28606,6 +29225,16 @@ Envelope::Envelope(const Envelope& from)
           from._internal_audio_output_control());
       break;
     }
+    case kAudioInputOpen: {
+      _this->_internal_mutable_audio_input_open()->::dsa::control::v1::AudioInputOpen::MergeFrom(
+          from._internal_audio_input_open());
+      break;
+    }
+    case kAudioInputOpened: {
+      _this->_internal_mutable_audio_input_opened()->::dsa::control::v1::AudioInputOpened::MergeFrom(
+          from._internal_audio_input_opened());
+      break;
+    }
     case kVideoCapabilities: {
       _this->_internal_mutable_video_capabilities()->::dsa::control::v1::VideoCapabilities::MergeFrom(
           from._internal_video_capabilities());
@@ -29140,6 +29769,18 @@ void Envelope::clear_body() {
     case kAudioOutputControl: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.audio_output_control_;
+      }
+      break;
+    }
+    case kAudioInputOpen: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.audio_input_open_;
+      }
+      break;
+    }
+    case kAudioInputOpened: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.audio_input_opened_;
       }
       break;
     }
@@ -29801,6 +30442,22 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.AudioInputOpen audio_input_open = 104;
+      case 104:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
+          ptr = ctx->ParseMessage(_internal_mutable_audio_input_open(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.AudioInputOpened audio_input_opened = 105;
+      case 105:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
+          ptr = ctx->ParseMessage(_internal_mutable_audio_input_opened(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       // .dsa.control.v1.PowerHint power_hint = 110;
       case 110:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 114)) {
@@ -30442,6 +31099,20 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::audio_output_control(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.AudioInputOpen audio_input_open = 104;
+  if (_internal_has_audio_input_open()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(104, _Internal::audio_input_open(this),
+        _Internal::audio_input_open(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.AudioInputOpened audio_input_opened = 105;
+  if (_internal_has_audio_input_opened()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(105, _Internal::audio_input_opened(this),
+        _Internal::audio_input_opened(this).GetCachedSize(), target, stream);
+  }
+
   // .dsa.control.v1.PowerHint power_hint = 110;
   if (_internal_has_power_hint()) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -31068,6 +31739,20 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.audio_output_control_);
       break;
     }
+    // .dsa.control.v1.AudioInputOpen audio_input_open = 104;
+    case kAudioInputOpen: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.audio_input_open_);
+      break;
+    }
+    // .dsa.control.v1.AudioInputOpened audio_input_opened = 105;
+    case kAudioInputOpened: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.audio_input_opened_);
+      break;
+    }
     // .dsa.control.v1.VideoCapabilities video_capabilities = 120;
     case kVideoCapabilities: {
       total_size += 2 +
@@ -31549,6 +32234,16 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_audio_output_control());
       break;
     }
+    case kAudioInputOpen: {
+      _this->_internal_mutable_audio_input_open()->::dsa::control::v1::AudioInputOpen::MergeFrom(
+          from._internal_audio_input_open());
+      break;
+    }
+    case kAudioInputOpened: {
+      _this->_internal_mutable_audio_input_opened()->::dsa::control::v1::AudioInputOpened::MergeFrom(
+          from._internal_audio_input_opened());
+      break;
+    }
     case kVideoCapabilities: {
       _this->_internal_mutable_video_capabilities()->::dsa::control::v1::VideoCapabilities::MergeFrom(
           from._internal_video_capabilities());
@@ -31994,6 +32689,14 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::AudioOutputReady >(Arena* arena) 
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::AudioPcm*
 Arena::CreateMaybeMessage< ::dsa::control::v1::AudioPcm >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::AudioPcm >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::AudioInputOpen*
+Arena::CreateMaybeMessage< ::dsa::control::v1::AudioInputOpen >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::AudioInputOpen >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::AudioInputOpened*
+Arena::CreateMaybeMessage< ::dsa::control::v1::AudioInputOpened >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::AudioInputOpened >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::AudioOutputControl*
 Arena::CreateMaybeMessage< ::dsa::control::v1::AudioOutputControl >(Arena* arena) {
