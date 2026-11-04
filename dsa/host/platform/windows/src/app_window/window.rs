@@ -524,7 +524,7 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
             // Never smaller than Android gives this task, which its app may declare: the guest
             // would keep the task larger than the window, and no frame could show 1:1.
             let min = min_client_size(dpi, max, data.min_client.get());
-            let (width, height) = outer_size(min, dpi, false);
+            let (width, height) = outer_size(min, dpi, IsZoomed(hwnd) != 0);
             info.ptMinTrackSize = POINT {
                 x: width.max(info.ptMinTrackSize.x),
                 y: height.max(info.ptMinTrackSize.y),
@@ -825,7 +825,12 @@ unsafe fn apply_size(hwnd: HWND, size: (u32, u32)) -> (u32, u32) {
     // The task's size is in the guest's pixels, which are the window's pixels.
     let dpi = GetDpiForWindow(hwnd).max(96);
     let client = fit_within(size, usable_client_area(hwnd, dpi));
-    let (outer_width, outer_height) = outer_size(client, dpi, IsZoomed(hwnd) != 0);
+    // A maximized window keeps the maximized size: resizing it would shrink it inside its
+    // maximized frame, and the guest would be asked for a size nobody chose.
+    if IsZoomed(hwnd) != 0 {
+        return client;
+    }
+    let (outer_width, outer_height) = outer_size(client, dpi, false);
     SetWindowPos(
         hwnd,
         std::ptr::null_mut(),
