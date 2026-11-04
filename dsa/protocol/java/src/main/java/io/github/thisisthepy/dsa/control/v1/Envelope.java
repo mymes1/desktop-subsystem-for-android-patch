@@ -51,6 +51,7 @@ public  final class Envelope extends
     SCREEN_STATE(40),
     POWER_STATE(41),
     POWER_HINT(110),
+    DEVELOPER_MODE(140),
     DEVICE_IDLE(42),
     HOST_MEMORY(43),
     HOST_SLEEP(44),
@@ -62,10 +63,6 @@ public  final class Envelope extends
     INSTALL_RESULT(64),
     QUERY_PACKAGE(65),
     PACKAGE_STATE(66),
-    UNINSTALL_APP(67),
-    UNINSTALL_RESULT(68),
-    REFRESH_APPS(69),
-    OPEN_APP_SETTINGS(30),
     OPEN_LINK(50),
     LINK_HANDLING(51),
     OPEN_FILE(52),
@@ -149,6 +146,7 @@ public  final class Envelope extends
         case 40: return SCREEN_STATE;
         case 41: return POWER_STATE;
         case 110: return POWER_HINT;
+        case 140: return DEVELOPER_MODE;
         case 42: return DEVICE_IDLE;
         case 43: return HOST_MEMORY;
         case 44: return HOST_SLEEP;
@@ -160,10 +158,6 @@ public  final class Envelope extends
         case 64: return INSTALL_RESULT;
         case 65: return QUERY_PACKAGE;
         case 66: return PACKAGE_STATE;
-        case 67: return UNINSTALL_APP;
-        case 68: return UNINSTALL_RESULT;
-        case 69: return REFRESH_APPS;
-        case 30: return OPEN_APP_SETTINGS;
         case 50: return OPEN_LINK;
         case 51: return LINK_HANDLING;
         case 52: return OPEN_FILE;
@@ -1772,6 +1766,56 @@ public  final class Envelope extends
     }
   }
 
+  public static final int DEVELOPER_MODE_FIELD_NUMBER = 140;
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  @java.lang.Override
+  public boolean hasDeveloperMode() {
+    return bodyCase_ == 140;
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DeveloperMode getDeveloperMode() {
+    if (bodyCase_ == 140) {
+       return (io.github.thisisthepy.dsa.control.v1.DeveloperMode) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DeveloperMode.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  private void setDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 140;
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  private void mergeDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+    value.getClass();
+  if (bodyCase_ == 140 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DeveloperMode.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DeveloperMode.newBuilder((io.github.thisisthepy.dsa.control.v1.DeveloperMode) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 140;
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  private void clearDeveloperMode() {
+    if (bodyCase_ == 140) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static final int DEVICE_IDLE_FIELD_NUMBER = 42;
   /**
    * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>
@@ -2317,206 +2361,6 @@ public  final class Envelope extends
    */
   private void clearPackageState() {
     if (bodyCase_ == 66) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int UNINSTALL_APP_FIELD_NUMBER = 67;
-  /**
-   * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-   */
-  @java.lang.Override
-  public boolean hasUninstallApp() {
-    return bodyCase_ == 67;
-  }
-  /**
-   * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.UninstallApp getUninstallApp() {
-    if (bodyCase_ == 67) {
-       return (io.github.thisisthepy.dsa.control.v1.UninstallApp) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.UninstallApp.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-   */
-  private void setUninstallApp(io.github.thisisthepy.dsa.control.v1.UninstallApp value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 67;
-  }
-  /**
-   * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-   */
-  private void mergeUninstallApp(io.github.thisisthepy.dsa.control.v1.UninstallApp value) {
-    value.getClass();
-  if (bodyCase_ == 67 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.UninstallApp.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.UninstallApp.newBuilder((io.github.thisisthepy.dsa.control.v1.UninstallApp) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 67;
-  }
-  /**
-   * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-   */
-  private void clearUninstallApp() {
-    if (bodyCase_ == 67) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int UNINSTALL_RESULT_FIELD_NUMBER = 68;
-  /**
-   * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-   */
-  @java.lang.Override
-  public boolean hasUninstallResult() {
-    return bodyCase_ == 68;
-  }
-  /**
-   * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.UninstallResult getUninstallResult() {
-    if (bodyCase_ == 68) {
-       return (io.github.thisisthepy.dsa.control.v1.UninstallResult) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.UninstallResult.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-   */
-  private void setUninstallResult(io.github.thisisthepy.dsa.control.v1.UninstallResult value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 68;
-  }
-  /**
-   * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-   */
-  private void mergeUninstallResult(io.github.thisisthepy.dsa.control.v1.UninstallResult value) {
-    value.getClass();
-  if (bodyCase_ == 68 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.UninstallResult.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.UninstallResult.newBuilder((io.github.thisisthepy.dsa.control.v1.UninstallResult) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 68;
-  }
-  /**
-   * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-   */
-  private void clearUninstallResult() {
-    if (bodyCase_ == 68) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int REFRESH_APPS_FIELD_NUMBER = 69;
-  /**
-   * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-   */
-  @java.lang.Override
-  public boolean hasRefreshApps() {
-    return bodyCase_ == 69;
-  }
-  /**
-   * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.RefreshApps getRefreshApps() {
-    if (bodyCase_ == 69) {
-       return (io.github.thisisthepy.dsa.control.v1.RefreshApps) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.RefreshApps.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-   */
-  private void setRefreshApps(io.github.thisisthepy.dsa.control.v1.RefreshApps value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 69;
-  }
-  /**
-   * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-   */
-  private void mergeRefreshApps(io.github.thisisthepy.dsa.control.v1.RefreshApps value) {
-    value.getClass();
-  if (bodyCase_ == 69 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.RefreshApps.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.RefreshApps.newBuilder((io.github.thisisthepy.dsa.control.v1.RefreshApps) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 69;
-  }
-  /**
-   * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-   */
-  private void clearRefreshApps() {
-    if (bodyCase_ == 69) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int OPEN_APP_SETTINGS_FIELD_NUMBER = 30;
-  /**
-   * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-   */
-  @java.lang.Override
-  public boolean hasOpenAppSettings() {
-    return bodyCase_ == 30;
-  }
-  /**
-   * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.OpenAppSettings getOpenAppSettings() {
-    if (bodyCase_ == 30) {
-       return (io.github.thisisthepy.dsa.control.v1.OpenAppSettings) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.OpenAppSettings.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-   */
-  private void setOpenAppSettings(io.github.thisisthepy.dsa.control.v1.OpenAppSettings value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 30;
-  }
-  /**
-   * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-   */
-  private void mergeOpenAppSettings(io.github.thisisthepy.dsa.control.v1.OpenAppSettings value) {
-    value.getClass();
-  if (bodyCase_ == 30 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.OpenAppSettings.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.OpenAppSettings.newBuilder((io.github.thisisthepy.dsa.control.v1.OpenAppSettings) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 30;
-  }
-  /**
-   * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-   */
-  private void clearOpenAppSettings() {
-    if (bodyCase_ == 30) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -5972,6 +5816,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    @java.lang.Override
+    public boolean hasDeveloperMode() {
+      return instance.hasDeveloperMode();
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DeveloperMode getDeveloperMode() {
+      return instance.getDeveloperMode();
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder setDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+      copyOnWrite();
+      instance.setDeveloperMode(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder setDeveloperMode(
+        io.github.thisisthepy.dsa.control.v1.DeveloperMode.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDeveloperMode(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder mergeDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+      copyOnWrite();
+      instance.mergeDeveloperMode(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder clearDeveloperMode() {
+      copyOnWrite();
+      instance.clearDeveloperMode();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>
      */
     @java.lang.Override
@@ -6496,198 +6388,6 @@ public  final class Envelope extends
     public Builder clearPackageState() {
       copyOnWrite();
       instance.clearPackageState();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-     */
-    @java.lang.Override
-    public boolean hasUninstallApp() {
-      return instance.hasUninstallApp();
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.UninstallApp getUninstallApp() {
-      return instance.getUninstallApp();
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-     */
-    public Builder setUninstallApp(io.github.thisisthepy.dsa.control.v1.UninstallApp value) {
-      copyOnWrite();
-      instance.setUninstallApp(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-     */
-    public Builder setUninstallApp(
-        io.github.thisisthepy.dsa.control.v1.UninstallApp.Builder builderForValue) {
-      copyOnWrite();
-      instance.setUninstallApp(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-     */
-    public Builder mergeUninstallApp(io.github.thisisthepy.dsa.control.v1.UninstallApp value) {
-      copyOnWrite();
-      instance.mergeUninstallApp(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallApp uninstall_app = 67;</code>
-     */
-    public Builder clearUninstallApp() {
-      copyOnWrite();
-      instance.clearUninstallApp();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-     */
-    @java.lang.Override
-    public boolean hasUninstallResult() {
-      return instance.hasUninstallResult();
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.UninstallResult getUninstallResult() {
-      return instance.getUninstallResult();
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-     */
-    public Builder setUninstallResult(io.github.thisisthepy.dsa.control.v1.UninstallResult value) {
-      copyOnWrite();
-      instance.setUninstallResult(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-     */
-    public Builder setUninstallResult(
-        io.github.thisisthepy.dsa.control.v1.UninstallResult.Builder builderForValue) {
-      copyOnWrite();
-      instance.setUninstallResult(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-     */
-    public Builder mergeUninstallResult(io.github.thisisthepy.dsa.control.v1.UninstallResult value) {
-      copyOnWrite();
-      instance.mergeUninstallResult(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.UninstallResult uninstall_result = 68;</code>
-     */
-    public Builder clearUninstallResult() {
-      copyOnWrite();
-      instance.clearUninstallResult();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-     */
-    @java.lang.Override
-    public boolean hasRefreshApps() {
-      return instance.hasRefreshApps();
-    }
-    /**
-     * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.RefreshApps getRefreshApps() {
-      return instance.getRefreshApps();
-    }
-    /**
-     * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-     */
-    public Builder setRefreshApps(io.github.thisisthepy.dsa.control.v1.RefreshApps value) {
-      copyOnWrite();
-      instance.setRefreshApps(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-     */
-    public Builder setRefreshApps(
-        io.github.thisisthepy.dsa.control.v1.RefreshApps.Builder builderForValue) {
-      copyOnWrite();
-      instance.setRefreshApps(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-     */
-    public Builder mergeRefreshApps(io.github.thisisthepy.dsa.control.v1.RefreshApps value) {
-      copyOnWrite();
-      instance.mergeRefreshApps(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.RefreshApps refresh_apps = 69;</code>
-     */
-    public Builder clearRefreshApps() {
-      copyOnWrite();
-      instance.clearRefreshApps();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-     */
-    @java.lang.Override
-    public boolean hasOpenAppSettings() {
-      return instance.hasOpenAppSettings();
-    }
-    /**
-     * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.OpenAppSettings getOpenAppSettings() {
-      return instance.getOpenAppSettings();
-    }
-    /**
-     * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-     */
-    public Builder setOpenAppSettings(io.github.thisisthepy.dsa.control.v1.OpenAppSettings value) {
-      copyOnWrite();
-      instance.setOpenAppSettings(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-     */
-    public Builder setOpenAppSettings(
-        io.github.thisisthepy.dsa.control.v1.OpenAppSettings.Builder builderForValue) {
-      copyOnWrite();
-      instance.setOpenAppSettings(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-     */
-    public Builder mergeOpenAppSettings(io.github.thisisthepy.dsa.control.v1.OpenAppSettings value) {
-      copyOnWrite();
-      instance.mergeOpenAppSettings(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.OpenAppSettings open_app_settings = 30;</code>
-     */
-    public Builder clearOpenAppSettings() {
-      copyOnWrite();
-      instance.clearOpenAppSettings();
       return this;
     }
 
@@ -8513,7 +8213,6 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.ClipboardSharing.class,
             io.github.thisisthepy.dsa.control.v1.ClockProbe.class,
             io.github.thisisthepy.dsa.control.v1.ClockAnswer.class,
-            io.github.thisisthepy.dsa.control.v1.OpenAppSettings.class,
             io.github.thisisthepy.dsa.control.v1.ScreenState.class,
             io.github.thisisthepy.dsa.control.v1.PowerState.class,
             io.github.thisisthepy.dsa.control.v1.DeviceIdle.class,
@@ -8532,9 +8231,6 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.InstallResult.class,
             io.github.thisisthepy.dsa.control.v1.QueryPackage.class,
             io.github.thisisthepy.dsa.control.v1.PackageState.class,
-            io.github.thisisthepy.dsa.control.v1.UninstallApp.class,
-            io.github.thisisthepy.dsa.control.v1.UninstallResult.class,
-            io.github.thisisthepy.dsa.control.v1.RefreshApps.class,
             io.github.thisisthepy.dsa.control.v1.GuestNotification.class,
             io.github.thisisthepy.dsa.control.v1.NotificationRemoved.class,
             io.github.thisisthepy.dsa.control.v1.NotificationClicked.class,
@@ -8568,19 +8264,20 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.CollectDiagnostics.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsFile.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsDone.class,
+            io.github.thisisthepy.dsa.control.v1.DeveloperMode.class,
           };
           java.lang.String info =
-              "\u0000S\u0001\u0000\u0001\u0087S\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
+              "\u0000P\u0001\u0000\u0001\u008cP\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
               "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
               "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
               "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
-              "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001d<\u0000\u001e<\u0000(<" +
-              "\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u00004<\u00005<\u00006<" +
-              "\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<" +
-              "\u0000F<\u0000G<\u0000H<\u0000I<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<" +
-              "\u0000\\<\u0000]<\u0000^<\u0000_<\u0000`<\u0000a<\u0000b<\u0000c<\u0000n<\u0000x" +
-              "<\u0000y<\u0000z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083" +
-              "<\u0000\u0084<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000";
+              "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001d<\u0000(<\u0000)<\u0000" +
+              "*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u00004<\u00005<\u00006<\u0000<<\u0000" +
+              "=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000F<\u0000G<\u0000H<\u0000I<\u0000" +
+              "P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000" +
+              "`<\u0000a<\u0000b<\u0000c<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
+              "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
+              "<\u0000\u0087<\u0000\u008c<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

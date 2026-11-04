@@ -79,6 +79,7 @@ pub mod https;
 pub mod hvsocket;
 #[cfg(windows)]
 pub mod installed_apps;
+pub mod installer_actions;
 pub mod monitors;
 pub mod paths;
 #[cfg(windows)]
