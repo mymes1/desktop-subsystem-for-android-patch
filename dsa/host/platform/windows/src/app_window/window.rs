@@ -509,11 +509,13 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
             // Never larger than Android can draw: a larger window could only show the
             // task's frames with an empty margin. Maximising takes this size too.
             if let Some(max) = max {
-                let (width, height) = outer_size(max, dpi);
+                let (width, height) = outer_size(max, dpi, false);
                 info.ptMaxTrackSize = POINT {
                     x: width.min(info.ptMaxTrackSize.x),
                     y: height.min(info.ptMaxTrackSize.y),
                 };
+                // A maximized window keeps a top border off the screen as well.
+                let (width, height) = outer_size(max, dpi, true);
                 info.ptMaxSize = POINT {
                     x: width.min(info.ptMaxSize.x),
                     y: height.min(info.ptMaxSize.y),
@@ -521,7 +523,8 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
             }
             // Never smaller than Android gives this task, which its app may declare: the guest
             // would keep the task larger than the window, and no frame could show 1:1.
-            let (width, height) = outer_size(min_client_size(dpi, max, data.min_client.get()), dpi);
+            let min = min_client_size(dpi, max, data.min_client.get());
+            let (width, height) = outer_size(min, dpi, false);
             info.ptMinTrackSize = POINT {
                 x: width.max(info.ptMinTrackSize.x),
                 y: height.max(info.ptMinTrackSize.y),
@@ -587,7 +590,7 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
                 suggested.bottom - suggested.top,
             );
             if let Some(max) = data.and_then(|data| data.max_client.get()) {
-                let (max_width, max_height) = outer_size(max, dpi.max(96));
+                let (max_width, max_height) = outer_size(max, dpi.max(96), IsZoomed(hwnd) != 0);
                 width = width.min(max_width);
                 height = height.min(max_height);
             }
@@ -687,7 +690,10 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
 /// move stay where they are.
 unsafe fn keep_to_frame(hwnd: HWND, data: &WindowData, pos: &mut WINDOWPOS) {
     let dpi = GetDpiForWindow(hwnd).max(96);
-    let (frame_width, frame_height) = outer_size((0, 0), dpi);
+    // A maximized window has a top border too, so its client area for the same outer size is
+    // smaller.
+    let maximized = IsZoomed(hwnd) != 0;
+    let (frame_width, frame_height) = outer_size((0, 0), dpi, maximized);
     let proposed = (
         (pos.cx - frame_width).max(0) as u32,
         (pos.cy - frame_height).max(0) as u32,
@@ -712,7 +718,7 @@ unsafe fn keep_to_frame(hwnd: HWND, data: &WindowData, pos: &mut WINDOWPOS) {
     if size == proposed {
         return;
     }
-    let (width, height) = outer_size(size, dpi);
+    let (width, height) = outer_size(size, dpi, maximized);
     if pos.flags & SWP_NOMOVE == 0 {
         let mut current: RECT = std::mem::zeroed();
         GetWindowRect(hwnd, &mut current);
@@ -739,7 +745,7 @@ unsafe fn take_kept_frame(hwnd: HWND, data: &WindowData) {
     let Some(size) = presenter.kept_size() else {
         return;
     };
-    let (width, height) = outer_size(size, GetDpiForWindow(hwnd).max(96));
+    let (width, height) = outer_size(size, GetDpiForWindow(hwnd).max(96), IsZoomed(hwnd) != 0);
     let mut current: RECT = std::mem::zeroed();
     GetWindowRect(hwnd, &mut current);
     let (left_edge, top_edge) = data.drag_edges.get();
@@ -768,9 +774,9 @@ unsafe fn take_kept_frame(hwnd: HWND, data: &WindowData) {
 
 /// The outer size of a window whose client area is `client` pixels at `dpi`. The client
 /// area reaches the window's top edge, under the title bar, so only the side and bottom
-/// borders are added.
-unsafe fn outer_size(client: (u32, u32), dpi: u32) -> (i32, i32) {
-    let (left, top, right, bottom) = task_frame(TASK_STYLE, TASK_EX_STYLE, dpi, false);
+/// borders are added, and a top border as well when the window is `maximized`.
+unsafe fn outer_size(client: (u32, u32), dpi: u32, maximized: bool) -> (i32, i32) {
+    let (left, top, right, bottom) = task_frame(TASK_STYLE, TASK_EX_STYLE, dpi, maximized);
     (
         client.0 as i32 + left + right,
         client.1 as i32 + top + bottom,
@@ -793,7 +799,7 @@ unsafe fn usable_client_area(hwnd: HWND, dpi: u32) -> (u32, u32) {
     if GetMonitorInfoW(monitor, &mut info) == 0 {
         return (u32::MAX, u32::MAX);
     }
-    let (frame_width, frame_height) = outer_size((0, 0), dpi);
+    let (frame_width, frame_height) = outer_size((0, 0), dpi, false);
     let work = info.rcWork;
     (
         (work.right - work.left - frame_width).max(1) as u32,
@@ -807,7 +813,7 @@ unsafe fn apply_size(hwnd: HWND, size: (u32, u32)) -> (u32, u32) {
     // The task's size is in the guest's pixels, which are the window's pixels.
     let dpi = GetDpiForWindow(hwnd).max(96);
     let client = fit_within(size, usable_client_area(hwnd, dpi));
-    let (outer_width, outer_height) = outer_size(client, dpi);
+    let (outer_width, outer_height) = outer_size(client, dpi, IsZoomed(hwnd) != 0);
     SetWindowPos(
         hwnd,
         std::ptr::null_mut(),
