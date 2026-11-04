@@ -110,6 +110,34 @@ std::map<std::string, v1::Envelope> Cases() {
   }
   cases["task_removed"].mutable_task_removed()->set_task_id(42);
   {
+    v1::VideoCodecSupport* support = cases["video_capabilities"].mutable_video_capabilities()->add_codecs();
+    support->set_codec(v1::VIDEO_CODEC_H264);
+    support->set_max_width(4096);
+    support->set_max_height(2304);
+  }
+  {
+    v1::VideoDecoderOpen* open = cases["video_decoder_open"].mutable_video_decoder_open();
+    open->set_codec(v1::VIDEO_CODEC_H264);
+    open->set_width(1280);
+    open->set_height(720);
+  }
+  cases["video_flush"].mutable_video_flush();
+  {
+    v1::VideoFrame* frame = cases["video_frame"].mutable_video_frame();
+    frame->set_frame_index(3);
+    frame->set_timestamp_us(100000);
+    frame->set_width(2);
+    frame->set_height(2);
+    frame->set_stride(2);
+    frame->set_nv12(std::string("\x10\x10\x10\x10\x80\x80", 6));
+  }
+  {
+    v1::VideoPacket* packet = cases["video_packet"].mutable_video_packet();
+    packet->set_frame_index(3);
+    packet->set_timestamp_us(100000);
+    packet->set_data(std::string("\x00\x00\x00\x01\x65", 5));
+  }
+  {
     v1::TaskFrames* frames = cases["task_frames"].mutable_task_frames();
     frames->set_task_id(42);
     frames->set_display_id(3);
@@ -219,6 +247,18 @@ std::map<std::string, v1::Envelope> Cases() {
     power->set_charging(false);
     power->set_power_saver(true);
   }
+  {
+    v1::PowerHint* hint = cases["power_hint_launch_mode"].mutable_power_hint();
+    hint->set_kind(v1::POWER_HINT_KIND_MODE);
+    hint->set_id(5);
+    hint->set_enabled(true);
+  }
+  {
+    v1::PowerHint* hint = cases["power_hint_interaction_boost"].mutable_power_hint();
+    hint->set_kind(v1::POWER_HINT_KIND_BOOST);
+    hint->set_id(0);
+    hint->set_duration_ms(80);
+  }
   cases["device_idle"].mutable_device_idle()->set_idle(true);
   cases["clipboard_text"].mutable_clipboard_text()->set_text("hello \xec\x95\x88\xeb\x85\x95");
   cases["clipboard_sharing_off"].mutable_clipboard_sharing()->set_on(false);
@@ -257,6 +297,19 @@ std::map<std::string, v1::Envelope> Cases() {
     v1::InstallProgress* progress = cases["install_progress"].mutable_install_progress();
     progress->set_transfer_id(3);
     progress->set_received(131072);
+  }
+  {
+    v1::QueryPackage* query = cases["query_package"].mutable_query_package();
+    query->set_request_id(7);
+    query->set_package_name("com.example.notes");
+  }
+  {
+    v1::PackageState* state = cases["package_state_installed"].mutable_package_state();
+    state->set_request_id(7);
+    state->set_installed(true);
+    state->set_version_code(42);
+    state->set_version_name("1.2");
+    state->add_signer_sha256(Bytes(0x00, 32));
   }
   {
     v1::InstallResult* result = cases["install_result_success"].mutable_install_result();

@@ -50,12 +50,16 @@ public  final class Envelope extends
     CLOCK_ANSWER(29),
     SCREEN_STATE(40),
     POWER_STATE(41),
+    POWER_HINT(110),
     DEVICE_IDLE(42),
+    HOST_MEMORY(43),
     INSTALL_APK(60),
     APK_CHUNK(61),
     CANCEL_INSTALL(62),
     INSTALL_PROGRESS(63),
     INSTALL_RESULT(64),
+    QUERY_PACKAGE(65),
+    PACKAGE_STATE(66),
     OPEN_LINK(50),
     LINK_HANDLING(51),
     OPEN_FILE(52),
@@ -79,10 +83,14 @@ public  final class Envelope extends
     ACCESSIBILITY_TREE(81),
     ACCESSIBILITY_ACTION(82),
     ACCESSIBILITY_ACTION_RESULT(83),
-    AUDIO_OUTPUT_OPEN(100),
-    AUDIO_OUTPUT_READY(101),
-    AUDIO_PCM(102),
-    AUDIO_OUTPUT_CONTROL(103),
+    VIDEO_CAPABILITIES(120),
+    VIDEO_DECODER_OPEN(121),
+    VIDEO_DECODER_OPENED(122),
+    VIDEO_PACKET(123),
+    VIDEO_FRAME(124),
+    VIDEO_FLUSH(125),
+    VIDEO_FLUSHED(126),
+    VIDEO_ERROR(127),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -128,12 +136,16 @@ public  final class Envelope extends
         case 29: return CLOCK_ANSWER;
         case 40: return SCREEN_STATE;
         case 41: return POWER_STATE;
+        case 110: return POWER_HINT;
         case 42: return DEVICE_IDLE;
+        case 43: return HOST_MEMORY;
         case 60: return INSTALL_APK;
         case 61: return APK_CHUNK;
         case 62: return CANCEL_INSTALL;
         case 63: return INSTALL_PROGRESS;
         case 64: return INSTALL_RESULT;
+        case 65: return QUERY_PACKAGE;
+        case 66: return PACKAGE_STATE;
         case 50: return OPEN_LINK;
         case 51: return LINK_HANDLING;
         case 52: return OPEN_FILE;
@@ -157,10 +169,14 @@ public  final class Envelope extends
         case 81: return ACCESSIBILITY_TREE;
         case 82: return ACCESSIBILITY_ACTION;
         case 83: return ACCESSIBILITY_ACTION_RESULT;
-        case 100: return AUDIO_OUTPUT_OPEN;
-        case 101: return AUDIO_OUTPUT_READY;
-        case 102: return AUDIO_PCM;
-        case 103: return AUDIO_OUTPUT_CONTROL;
+        case 120: return VIDEO_CAPABILITIES;
+        case 121: return VIDEO_DECODER_OPEN;
+        case 122: return VIDEO_DECODER_OPENED;
+        case 123: return VIDEO_PACKET;
+        case 124: return VIDEO_FRAME;
+        case 125: return VIDEO_FLUSH;
+        case 126: return VIDEO_FLUSHED;
+        case 127: return VIDEO_ERROR;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -1682,6 +1698,56 @@ public  final class Envelope extends
     }
   }
 
+  public static final int POWER_HINT_FIELD_NUMBER = 110;
+  /**
+   * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+   */
+  @java.lang.Override
+  public boolean hasPowerHint() {
+    return bodyCase_ == 110;
+  }
+  /**
+   * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.PowerHint getPowerHint() {
+    if (bodyCase_ == 110) {
+       return (io.github.thisisthepy.dsa.control.v1.PowerHint) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.PowerHint.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+   */
+  private void setPowerHint(io.github.thisisthepy.dsa.control.v1.PowerHint value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 110;
+  }
+  /**
+   * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+   */
+  private void mergePowerHint(io.github.thisisthepy.dsa.control.v1.PowerHint value) {
+    value.getClass();
+  if (bodyCase_ == 110 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.PowerHint.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.PowerHint.newBuilder((io.github.thisisthepy.dsa.control.v1.PowerHint) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 110;
+  }
+  /**
+   * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+   */
+  private void clearPowerHint() {
+    if (bodyCase_ == 110) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static final int DEVICE_IDLE_FIELD_NUMBER = 42;
   /**
    * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>
@@ -1727,6 +1793,56 @@ public  final class Envelope extends
    */
   private void clearDeviceIdle() {
     if (bodyCase_ == 42) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int HOST_MEMORY_FIELD_NUMBER = 43;
+  /**
+   * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+   */
+  @java.lang.Override
+  public boolean hasHostMemory() {
+    return bodyCase_ == 43;
+  }
+  /**
+   * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.HostMemory getHostMemory() {
+    if (bodyCase_ == 43) {
+       return (io.github.thisisthepy.dsa.control.v1.HostMemory) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.HostMemory.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+   */
+  private void setHostMemory(io.github.thisisthepy.dsa.control.v1.HostMemory value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 43;
+  }
+  /**
+   * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+   */
+  private void mergeHostMemory(io.github.thisisthepy.dsa.control.v1.HostMemory value) {
+    value.getClass();
+  if (bodyCase_ == 43 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.HostMemory.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.HostMemory.newBuilder((io.github.thisisthepy.dsa.control.v1.HostMemory) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 43;
+  }
+  /**
+   * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+   */
+  private void clearHostMemory() {
+    if (bodyCase_ == 43) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -1977,6 +2093,106 @@ public  final class Envelope extends
    */
   private void clearInstallResult() {
     if (bodyCase_ == 64) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int QUERY_PACKAGE_FIELD_NUMBER = 65;
+  /**
+   * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+   */
+  @java.lang.Override
+  public boolean hasQueryPackage() {
+    return bodyCase_ == 65;
+  }
+  /**
+   * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.QueryPackage getQueryPackage() {
+    if (bodyCase_ == 65) {
+       return (io.github.thisisthepy.dsa.control.v1.QueryPackage) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.QueryPackage.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+   */
+  private void setQueryPackage(io.github.thisisthepy.dsa.control.v1.QueryPackage value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 65;
+  }
+  /**
+   * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+   */
+  private void mergeQueryPackage(io.github.thisisthepy.dsa.control.v1.QueryPackage value) {
+    value.getClass();
+  if (bodyCase_ == 65 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.QueryPackage.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.QueryPackage.newBuilder((io.github.thisisthepy.dsa.control.v1.QueryPackage) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 65;
+  }
+  /**
+   * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+   */
+  private void clearQueryPackage() {
+    if (bodyCase_ == 65) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PACKAGE_STATE_FIELD_NUMBER = 66;
+  /**
+   * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+   */
+  @java.lang.Override
+  public boolean hasPackageState() {
+    return bodyCase_ == 66;
+  }
+  /**
+   * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.PackageState getPackageState() {
+    if (bodyCase_ == 66) {
+       return (io.github.thisisthepy.dsa.control.v1.PackageState) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.PackageState.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+   */
+  private void setPackageState(io.github.thisisthepy.dsa.control.v1.PackageState value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 66;
+  }
+  /**
+   * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+   */
+  private void mergePackageState(io.github.thisisthepy.dsa.control.v1.PackageState value) {
+    value.getClass();
+  if (bodyCase_ == 66 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.PackageState.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.PackageState.newBuilder((io.github.thisisthepy.dsa.control.v1.PackageState) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 66;
+  }
+  /**
+   * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+   */
+  private void clearPackageState() {
+    if (bodyCase_ == 66) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -3132,201 +3348,401 @@ public  final class Envelope extends
     }
   }
 
-  public static final int AUDIO_OUTPUT_OPEN_FIELD_NUMBER = 100;
+  public static final int VIDEO_CAPABILITIES_FIELD_NUMBER = 120;
   /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+   * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
    */
   @java.lang.Override
-  public boolean hasAudioOutputOpen() {
-    return bodyCase_ == 100;
+  public boolean hasVideoCapabilities() {
+    return bodyCase_ == 120;
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+   * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
    */
   @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.AudioOutputOpen getAudioOutputOpen() {
-    if (bodyCase_ == 100) {
-       return (io.github.thisisthepy.dsa.control.v1.AudioOutputOpen) body_;
+  public io.github.thisisthepy.dsa.control.v1.VideoCapabilities getVideoCapabilities() {
+    if (bodyCase_ == 120) {
+       return (io.github.thisisthepy.dsa.control.v1.VideoCapabilities) body_;
     }
-    return io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.getDefaultInstance();
+    return io.github.thisisthepy.dsa.control.v1.VideoCapabilities.getDefaultInstance();
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+   * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
    */
-  private void setAudioOutputOpen(io.github.thisisthepy.dsa.control.v1.AudioOutputOpen value) {
+  private void setVideoCapabilities(io.github.thisisthepy.dsa.control.v1.VideoCapabilities value) {
     value.getClass();
   body_ = value;
-    bodyCase_ = 100;
+    bodyCase_ = 120;
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+   * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
    */
-  private void mergeAudioOutputOpen(io.github.thisisthepy.dsa.control.v1.AudioOutputOpen value) {
+  private void mergeVideoCapabilities(io.github.thisisthepy.dsa.control.v1.VideoCapabilities value) {
     value.getClass();
-  if (bodyCase_ == 100 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.newBuilder((io.github.thisisthepy.dsa.control.v1.AudioOutputOpen) body_)
+  if (bodyCase_ == 120 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.VideoCapabilities.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.VideoCapabilities.newBuilder((io.github.thisisthepy.dsa.control.v1.VideoCapabilities) body_)
           .mergeFrom(value).buildPartial();
     } else {
       body_ = value;
     }
-    bodyCase_ = 100;
+    bodyCase_ = 120;
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+   * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
    */
-  private void clearAudioOutputOpen() {
-    if (bodyCase_ == 100) {
+  private void clearVideoCapabilities() {
+    if (bodyCase_ == 120) {
       bodyCase_ = 0;
       body_ = null;
     }
   }
 
-  public static final int AUDIO_OUTPUT_READY_FIELD_NUMBER = 101;
+  public static final int VIDEO_DECODER_OPEN_FIELD_NUMBER = 121;
   /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
    */
   @java.lang.Override
-  public boolean hasAudioOutputReady() {
-    return bodyCase_ == 101;
+  public boolean hasVideoDecoderOpen() {
+    return bodyCase_ == 121;
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
    */
   @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.AudioOutputReady getAudioOutputReady() {
-    if (bodyCase_ == 101) {
-       return (io.github.thisisthepy.dsa.control.v1.AudioOutputReady) body_;
+  public io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen getVideoDecoderOpen() {
+    if (bodyCase_ == 121) {
+       return (io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen) body_;
     }
-    return io.github.thisisthepy.dsa.control.v1.AudioOutputReady.getDefaultInstance();
+    return io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen.getDefaultInstance();
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
    */
-  private void setAudioOutputReady(io.github.thisisthepy.dsa.control.v1.AudioOutputReady value) {
+  private void setVideoDecoderOpen(io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen value) {
     value.getClass();
   body_ = value;
-    bodyCase_ = 101;
+    bodyCase_ = 121;
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
    */
-  private void mergeAudioOutputReady(io.github.thisisthepy.dsa.control.v1.AudioOutputReady value) {
+  private void mergeVideoDecoderOpen(io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen value) {
     value.getClass();
-  if (bodyCase_ == 101 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.AudioOutputReady.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.AudioOutputReady.newBuilder((io.github.thisisthepy.dsa.control.v1.AudioOutputReady) body_)
+  if (bodyCase_ == 121 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen.newBuilder((io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen) body_)
           .mergeFrom(value).buildPartial();
     } else {
       body_ = value;
     }
-    bodyCase_ = 101;
+    bodyCase_ = 121;
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
    */
-  private void clearAudioOutputReady() {
-    if (bodyCase_ == 101) {
+  private void clearVideoDecoderOpen() {
+    if (bodyCase_ == 121) {
       bodyCase_ = 0;
       body_ = null;
     }
   }
 
-  public static final int AUDIO_PCM_FIELD_NUMBER = 102;
+  public static final int VIDEO_DECODER_OPENED_FIELD_NUMBER = 122;
   /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
    */
   @java.lang.Override
-  public boolean hasAudioPcm() {
-    return bodyCase_ == 102;
+  public boolean hasVideoDecoderOpened() {
+    return bodyCase_ == 122;
   }
   /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
    */
   @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.AudioPcm getAudioPcm() {
-    if (bodyCase_ == 102) {
-       return (io.github.thisisthepy.dsa.control.v1.AudioPcm) body_;
+  public io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened getVideoDecoderOpened() {
+    if (bodyCase_ == 122) {
+       return (io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened) body_;
     }
-    return io.github.thisisthepy.dsa.control.v1.AudioPcm.getDefaultInstance();
+    return io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened.getDefaultInstance();
   }
   /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
    */
-  private void setAudioPcm(io.github.thisisthepy.dsa.control.v1.AudioPcm value) {
+  private void setVideoDecoderOpened(io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened value) {
     value.getClass();
   body_ = value;
-    bodyCase_ = 102;
+    bodyCase_ = 122;
   }
   /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
    */
-  private void mergeAudioPcm(io.github.thisisthepy.dsa.control.v1.AudioPcm value) {
+  private void mergeVideoDecoderOpened(io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened value) {
     value.getClass();
-  if (bodyCase_ == 102 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.AudioPcm.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.AudioPcm.newBuilder((io.github.thisisthepy.dsa.control.v1.AudioPcm) body_)
+  if (bodyCase_ == 122 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened.newBuilder((io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened) body_)
           .mergeFrom(value).buildPartial();
     } else {
       body_ = value;
     }
-    bodyCase_ = 102;
+    bodyCase_ = 122;
   }
   /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+   * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
    */
-  private void clearAudioPcm() {
-    if (bodyCase_ == 102) {
+  private void clearVideoDecoderOpened() {
+    if (bodyCase_ == 122) {
       bodyCase_ = 0;
       body_ = null;
     }
   }
 
-  public static final int AUDIO_OUTPUT_CONTROL_FIELD_NUMBER = 103;
+  public static final int VIDEO_PACKET_FIELD_NUMBER = 123;
   /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+   * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
    */
   @java.lang.Override
-  public boolean hasAudioOutputControl() {
-    return bodyCase_ == 103;
+  public boolean hasVideoPacket() {
+    return bodyCase_ == 123;
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+   * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
    */
   @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.AudioOutputControl getAudioOutputControl() {
-    if (bodyCase_ == 103) {
-       return (io.github.thisisthepy.dsa.control.v1.AudioOutputControl) body_;
+  public io.github.thisisthepy.dsa.control.v1.VideoPacket getVideoPacket() {
+    if (bodyCase_ == 123) {
+       return (io.github.thisisthepy.dsa.control.v1.VideoPacket) body_;
     }
-    return io.github.thisisthepy.dsa.control.v1.AudioOutputControl.getDefaultInstance();
+    return io.github.thisisthepy.dsa.control.v1.VideoPacket.getDefaultInstance();
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+   * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
    */
-  private void setAudioOutputControl(io.github.thisisthepy.dsa.control.v1.AudioOutputControl value) {
+  private void setVideoPacket(io.github.thisisthepy.dsa.control.v1.VideoPacket value) {
     value.getClass();
   body_ = value;
-    bodyCase_ = 103;
+    bodyCase_ = 123;
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+   * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
    */
-  private void mergeAudioOutputControl(io.github.thisisthepy.dsa.control.v1.AudioOutputControl value) {
+  private void mergeVideoPacket(io.github.thisisthepy.dsa.control.v1.VideoPacket value) {
     value.getClass();
-  if (bodyCase_ == 103 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.AudioOutputControl.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.AudioOutputControl.newBuilder((io.github.thisisthepy.dsa.control.v1.AudioOutputControl) body_)
+  if (bodyCase_ == 123 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.VideoPacket.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.VideoPacket.newBuilder((io.github.thisisthepy.dsa.control.v1.VideoPacket) body_)
           .mergeFrom(value).buildPartial();
     } else {
       body_ = value;
     }
-    bodyCase_ = 103;
+    bodyCase_ = 123;
   }
   /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+   * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
    */
-  private void clearAudioOutputControl() {
-    if (bodyCase_ == 103) {
+  private void clearVideoPacket() {
+    if (bodyCase_ == 123) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int VIDEO_FRAME_FIELD_NUMBER = 124;
+  /**
+   * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+   */
+  @java.lang.Override
+  public boolean hasVideoFrame() {
+    return bodyCase_ == 124;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.VideoFrame getVideoFrame() {
+    if (bodyCase_ == 124) {
+       return (io.github.thisisthepy.dsa.control.v1.VideoFrame) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.VideoFrame.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+   */
+  private void setVideoFrame(io.github.thisisthepy.dsa.control.v1.VideoFrame value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 124;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+   */
+  private void mergeVideoFrame(io.github.thisisthepy.dsa.control.v1.VideoFrame value) {
+    value.getClass();
+  if (bodyCase_ == 124 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.VideoFrame.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.VideoFrame.newBuilder((io.github.thisisthepy.dsa.control.v1.VideoFrame) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 124;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+   */
+  private void clearVideoFrame() {
+    if (bodyCase_ == 124) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int VIDEO_FLUSH_FIELD_NUMBER = 125;
+  /**
+   * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+   */
+  @java.lang.Override
+  public boolean hasVideoFlush() {
+    return bodyCase_ == 125;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.VideoFlush getVideoFlush() {
+    if (bodyCase_ == 125) {
+       return (io.github.thisisthepy.dsa.control.v1.VideoFlush) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.VideoFlush.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+   */
+  private void setVideoFlush(io.github.thisisthepy.dsa.control.v1.VideoFlush value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 125;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+   */
+  private void mergeVideoFlush(io.github.thisisthepy.dsa.control.v1.VideoFlush value) {
+    value.getClass();
+  if (bodyCase_ == 125 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.VideoFlush.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.VideoFlush.newBuilder((io.github.thisisthepy.dsa.control.v1.VideoFlush) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 125;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+   */
+  private void clearVideoFlush() {
+    if (bodyCase_ == 125) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int VIDEO_FLUSHED_FIELD_NUMBER = 126;
+  /**
+   * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+   */
+  @java.lang.Override
+  public boolean hasVideoFlushed() {
+    return bodyCase_ == 126;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.VideoFlushed getVideoFlushed() {
+    if (bodyCase_ == 126) {
+       return (io.github.thisisthepy.dsa.control.v1.VideoFlushed) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.VideoFlushed.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+   */
+  private void setVideoFlushed(io.github.thisisthepy.dsa.control.v1.VideoFlushed value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 126;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+   */
+  private void mergeVideoFlushed(io.github.thisisthepy.dsa.control.v1.VideoFlushed value) {
+    value.getClass();
+  if (bodyCase_ == 126 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.VideoFlushed.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.VideoFlushed.newBuilder((io.github.thisisthepy.dsa.control.v1.VideoFlushed) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 126;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+   */
+  private void clearVideoFlushed() {
+    if (bodyCase_ == 126) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int VIDEO_ERROR_FIELD_NUMBER = 127;
+  /**
+   * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+   */
+  @java.lang.Override
+  public boolean hasVideoError() {
+    return bodyCase_ == 127;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.VideoError getVideoError() {
+    if (bodyCase_ == 127) {
+       return (io.github.thisisthepy.dsa.control.v1.VideoError) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.VideoError.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+   */
+  private void setVideoError(io.github.thisisthepy.dsa.control.v1.VideoError value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 127;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+   */
+  private void mergeVideoError(io.github.thisisthepy.dsa.control.v1.VideoError value) {
+    value.getClass();
+  if (bodyCase_ == 127 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.VideoError.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.VideoError.newBuilder((io.github.thisisthepy.dsa.control.v1.VideoError) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 127;
+  }
+  /**
+   * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+   */
+  private void clearVideoError() {
+    if (bodyCase_ == 127) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -4884,6 +5300,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+     */
+    @java.lang.Override
+    public boolean hasPowerHint() {
+      return instance.hasPowerHint();
+    }
+    /**
+     * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.PowerHint getPowerHint() {
+      return instance.getPowerHint();
+    }
+    /**
+     * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+     */
+    public Builder setPowerHint(io.github.thisisthepy.dsa.control.v1.PowerHint value) {
+      copyOnWrite();
+      instance.setPowerHint(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+     */
+    public Builder setPowerHint(
+        io.github.thisisthepy.dsa.control.v1.PowerHint.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPowerHint(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+     */
+    public Builder mergePowerHint(io.github.thisisthepy.dsa.control.v1.PowerHint value) {
+      copyOnWrite();
+      instance.mergePowerHint(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+     */
+    public Builder clearPowerHint() {
+      copyOnWrite();
+      instance.clearPowerHint();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>
      */
     @java.lang.Override
@@ -4928,6 +5392,54 @@ public  final class Envelope extends
     public Builder clearDeviceIdle() {
       copyOnWrite();
       instance.clearDeviceIdle();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+     */
+    @java.lang.Override
+    public boolean hasHostMemory() {
+      return instance.hasHostMemory();
+    }
+    /**
+     * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.HostMemory getHostMemory() {
+      return instance.getHostMemory();
+    }
+    /**
+     * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+     */
+    public Builder setHostMemory(io.github.thisisthepy.dsa.control.v1.HostMemory value) {
+      copyOnWrite();
+      instance.setHostMemory(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+     */
+    public Builder setHostMemory(
+        io.github.thisisthepy.dsa.control.v1.HostMemory.Builder builderForValue) {
+      copyOnWrite();
+      instance.setHostMemory(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+     */
+    public Builder mergeHostMemory(io.github.thisisthepy.dsa.control.v1.HostMemory value) {
+      copyOnWrite();
+      instance.mergeHostMemory(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+     */
+    public Builder clearHostMemory() {
+      copyOnWrite();
+      instance.clearHostMemory();
       return this;
     }
 
@@ -5168,6 +5680,102 @@ public  final class Envelope extends
     public Builder clearInstallResult() {
       copyOnWrite();
       instance.clearInstallResult();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+     */
+    @java.lang.Override
+    public boolean hasQueryPackage() {
+      return instance.hasQueryPackage();
+    }
+    /**
+     * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.QueryPackage getQueryPackage() {
+      return instance.getQueryPackage();
+    }
+    /**
+     * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+     */
+    public Builder setQueryPackage(io.github.thisisthepy.dsa.control.v1.QueryPackage value) {
+      copyOnWrite();
+      instance.setQueryPackage(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+     */
+    public Builder setQueryPackage(
+        io.github.thisisthepy.dsa.control.v1.QueryPackage.Builder builderForValue) {
+      copyOnWrite();
+      instance.setQueryPackage(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+     */
+    public Builder mergeQueryPackage(io.github.thisisthepy.dsa.control.v1.QueryPackage value) {
+      copyOnWrite();
+      instance.mergeQueryPackage(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+     */
+    public Builder clearQueryPackage() {
+      copyOnWrite();
+      instance.clearQueryPackage();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+     */
+    @java.lang.Override
+    public boolean hasPackageState() {
+      return instance.hasPackageState();
+    }
+    /**
+     * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.PackageState getPackageState() {
+      return instance.getPackageState();
+    }
+    /**
+     * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+     */
+    public Builder setPackageState(io.github.thisisthepy.dsa.control.v1.PackageState value) {
+      copyOnWrite();
+      instance.setPackageState(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+     */
+    public Builder setPackageState(
+        io.github.thisisthepy.dsa.control.v1.PackageState.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPackageState(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+     */
+    public Builder mergePackageState(io.github.thisisthepy.dsa.control.v1.PackageState value) {
+      copyOnWrite();
+      instance.mergePackageState(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+     */
+    public Builder clearPackageState() {
+      copyOnWrite();
+      instance.clearPackageState();
       return this;
     }
 
@@ -6276,194 +6884,386 @@ public  final class Envelope extends
     }
 
     /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+     * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
      */
     @java.lang.Override
-    public boolean hasAudioOutputOpen() {
-      return instance.hasAudioOutputOpen();
+    public boolean hasVideoCapabilities() {
+      return instance.hasVideoCapabilities();
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+     * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
      */
     @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.AudioOutputOpen getAudioOutputOpen() {
-      return instance.getAudioOutputOpen();
+    public io.github.thisisthepy.dsa.control.v1.VideoCapabilities getVideoCapabilities() {
+      return instance.getVideoCapabilities();
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+     * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
      */
-    public Builder setAudioOutputOpen(io.github.thisisthepy.dsa.control.v1.AudioOutputOpen value) {
+    public Builder setVideoCapabilities(io.github.thisisthepy.dsa.control.v1.VideoCapabilities value) {
       copyOnWrite();
-      instance.setAudioOutputOpen(value);
+      instance.setVideoCapabilities(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+     * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
      */
-    public Builder setAudioOutputOpen(
-        io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.Builder builderForValue) {
+    public Builder setVideoCapabilities(
+        io.github.thisisthepy.dsa.control.v1.VideoCapabilities.Builder builderForValue) {
       copyOnWrite();
-      instance.setAudioOutputOpen(builderForValue.build());
+      instance.setVideoCapabilities(builderForValue.build());
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+     * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
      */
-    public Builder mergeAudioOutputOpen(io.github.thisisthepy.dsa.control.v1.AudioOutputOpen value) {
+    public Builder mergeVideoCapabilities(io.github.thisisthepy.dsa.control.v1.VideoCapabilities value) {
       copyOnWrite();
-      instance.mergeAudioOutputOpen(value);
+      instance.mergeVideoCapabilities(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
+     * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
      */
-    public Builder clearAudioOutputOpen() {
+    public Builder clearVideoCapabilities() {
       copyOnWrite();
-      instance.clearAudioOutputOpen();
+      instance.clearVideoCapabilities();
       return this;
     }
 
     /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
      */
     @java.lang.Override
-    public boolean hasAudioOutputReady() {
-      return instance.hasAudioOutputReady();
+    public boolean hasVideoDecoderOpen() {
+      return instance.hasVideoDecoderOpen();
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
      */
     @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.AudioOutputReady getAudioOutputReady() {
-      return instance.getAudioOutputReady();
+    public io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen getVideoDecoderOpen() {
+      return instance.getVideoDecoderOpen();
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
      */
-    public Builder setAudioOutputReady(io.github.thisisthepy.dsa.control.v1.AudioOutputReady value) {
+    public Builder setVideoDecoderOpen(io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen value) {
       copyOnWrite();
-      instance.setAudioOutputReady(value);
+      instance.setVideoDecoderOpen(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
      */
-    public Builder setAudioOutputReady(
-        io.github.thisisthepy.dsa.control.v1.AudioOutputReady.Builder builderForValue) {
+    public Builder setVideoDecoderOpen(
+        io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen.Builder builderForValue) {
       copyOnWrite();
-      instance.setAudioOutputReady(builderForValue.build());
+      instance.setVideoDecoderOpen(builderForValue.build());
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
      */
-    public Builder mergeAudioOutputReady(io.github.thisisthepy.dsa.control.v1.AudioOutputReady value) {
+    public Builder mergeVideoDecoderOpen(io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen value) {
       copyOnWrite();
-      instance.mergeAudioOutputReady(value);
+      instance.mergeVideoDecoderOpen(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
      */
-    public Builder clearAudioOutputReady() {
+    public Builder clearVideoDecoderOpen() {
       copyOnWrite();
-      instance.clearAudioOutputReady();
+      instance.clearVideoDecoderOpen();
       return this;
     }
 
     /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
      */
     @java.lang.Override
-    public boolean hasAudioPcm() {
-      return instance.hasAudioPcm();
+    public boolean hasVideoDecoderOpened() {
+      return instance.hasVideoDecoderOpened();
     }
     /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
      */
     @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.AudioPcm getAudioPcm() {
-      return instance.getAudioPcm();
+    public io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened getVideoDecoderOpened() {
+      return instance.getVideoDecoderOpened();
     }
     /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
      */
-    public Builder setAudioPcm(io.github.thisisthepy.dsa.control.v1.AudioPcm value) {
+    public Builder setVideoDecoderOpened(io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened value) {
       copyOnWrite();
-      instance.setAudioPcm(value);
+      instance.setVideoDecoderOpened(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
      */
-    public Builder setAudioPcm(
-        io.github.thisisthepy.dsa.control.v1.AudioPcm.Builder builderForValue) {
+    public Builder setVideoDecoderOpened(
+        io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened.Builder builderForValue) {
       copyOnWrite();
-      instance.setAudioPcm(builderForValue.build());
+      instance.setVideoDecoderOpened(builderForValue.build());
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
      */
-    public Builder mergeAudioPcm(io.github.thisisthepy.dsa.control.v1.AudioPcm value) {
+    public Builder mergeVideoDecoderOpened(io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened value) {
       copyOnWrite();
-      instance.mergeAudioPcm(value);
+      instance.mergeVideoDecoderOpened(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
+     * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
      */
-    public Builder clearAudioPcm() {
+    public Builder clearVideoDecoderOpened() {
       copyOnWrite();
-      instance.clearAudioPcm();
+      instance.clearVideoDecoderOpened();
       return this;
     }
 
     /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+     * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
      */
     @java.lang.Override
-    public boolean hasAudioOutputControl() {
-      return instance.hasAudioOutputControl();
+    public boolean hasVideoPacket() {
+      return instance.hasVideoPacket();
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+     * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
      */
     @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.AudioOutputControl getAudioOutputControl() {
-      return instance.getAudioOutputControl();
+    public io.github.thisisthepy.dsa.control.v1.VideoPacket getVideoPacket() {
+      return instance.getVideoPacket();
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+     * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
      */
-    public Builder setAudioOutputControl(io.github.thisisthepy.dsa.control.v1.AudioOutputControl value) {
+    public Builder setVideoPacket(io.github.thisisthepy.dsa.control.v1.VideoPacket value) {
       copyOnWrite();
-      instance.setAudioOutputControl(value);
+      instance.setVideoPacket(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+     * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
      */
-    public Builder setAudioOutputControl(
-        io.github.thisisthepy.dsa.control.v1.AudioOutputControl.Builder builderForValue) {
+    public Builder setVideoPacket(
+        io.github.thisisthepy.dsa.control.v1.VideoPacket.Builder builderForValue) {
       copyOnWrite();
-      instance.setAudioOutputControl(builderForValue.build());
+      instance.setVideoPacket(builderForValue.build());
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+     * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
      */
-    public Builder mergeAudioOutputControl(io.github.thisisthepy.dsa.control.v1.AudioOutputControl value) {
+    public Builder mergeVideoPacket(io.github.thisisthepy.dsa.control.v1.VideoPacket value) {
       copyOnWrite();
-      instance.mergeAudioOutputControl(value);
+      instance.mergeVideoPacket(value);
       return this;
     }
     /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
+     * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
      */
-    public Builder clearAudioOutputControl() {
+    public Builder clearVideoPacket() {
       copyOnWrite();
-      instance.clearAudioOutputControl();
+      instance.clearVideoPacket();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+     */
+    @java.lang.Override
+    public boolean hasVideoFrame() {
+      return instance.hasVideoFrame();
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.VideoFrame getVideoFrame() {
+      return instance.getVideoFrame();
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+     */
+    public Builder setVideoFrame(io.github.thisisthepy.dsa.control.v1.VideoFrame value) {
+      copyOnWrite();
+      instance.setVideoFrame(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+     */
+    public Builder setVideoFrame(
+        io.github.thisisthepy.dsa.control.v1.VideoFrame.Builder builderForValue) {
+      copyOnWrite();
+      instance.setVideoFrame(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+     */
+    public Builder mergeVideoFrame(io.github.thisisthepy.dsa.control.v1.VideoFrame value) {
+      copyOnWrite();
+      instance.mergeVideoFrame(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+     */
+    public Builder clearVideoFrame() {
+      copyOnWrite();
+      instance.clearVideoFrame();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+     */
+    @java.lang.Override
+    public boolean hasVideoFlush() {
+      return instance.hasVideoFlush();
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.VideoFlush getVideoFlush() {
+      return instance.getVideoFlush();
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+     */
+    public Builder setVideoFlush(io.github.thisisthepy.dsa.control.v1.VideoFlush value) {
+      copyOnWrite();
+      instance.setVideoFlush(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+     */
+    public Builder setVideoFlush(
+        io.github.thisisthepy.dsa.control.v1.VideoFlush.Builder builderForValue) {
+      copyOnWrite();
+      instance.setVideoFlush(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+     */
+    public Builder mergeVideoFlush(io.github.thisisthepy.dsa.control.v1.VideoFlush value) {
+      copyOnWrite();
+      instance.mergeVideoFlush(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+     */
+    public Builder clearVideoFlush() {
+      copyOnWrite();
+      instance.clearVideoFlush();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+     */
+    @java.lang.Override
+    public boolean hasVideoFlushed() {
+      return instance.hasVideoFlushed();
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.VideoFlushed getVideoFlushed() {
+      return instance.getVideoFlushed();
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+     */
+    public Builder setVideoFlushed(io.github.thisisthepy.dsa.control.v1.VideoFlushed value) {
+      copyOnWrite();
+      instance.setVideoFlushed(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+     */
+    public Builder setVideoFlushed(
+        io.github.thisisthepy.dsa.control.v1.VideoFlushed.Builder builderForValue) {
+      copyOnWrite();
+      instance.setVideoFlushed(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+     */
+    public Builder mergeVideoFlushed(io.github.thisisthepy.dsa.control.v1.VideoFlushed value) {
+      copyOnWrite();
+      instance.mergeVideoFlushed(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+     */
+    public Builder clearVideoFlushed() {
+      copyOnWrite();
+      instance.clearVideoFlushed();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+     */
+    @java.lang.Override
+    public boolean hasVideoError() {
+      return instance.hasVideoError();
+    }
+    /**
+     * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.VideoError getVideoError() {
+      return instance.getVideoError();
+    }
+    /**
+     * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+     */
+    public Builder setVideoError(io.github.thisisthepy.dsa.control.v1.VideoError value) {
+      copyOnWrite();
+      instance.setVideoError(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+     */
+    public Builder setVideoError(
+        io.github.thisisthepy.dsa.control.v1.VideoError.Builder builderForValue) {
+      copyOnWrite();
+      instance.setVideoError(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+     */
+    public Builder mergeVideoError(io.github.thisisthepy.dsa.control.v1.VideoError value) {
+      copyOnWrite();
+      instance.mergeVideoError(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+     */
+    public Builder clearVideoError() {
+      copyOnWrite();
+      instance.clearVideoError();
       return this;
     }
 
@@ -6516,6 +7316,7 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.ScreenState.class,
             io.github.thisisthepy.dsa.control.v1.PowerState.class,
             io.github.thisisthepy.dsa.control.v1.DeviceIdle.class,
+            io.github.thisisthepy.dsa.control.v1.HostMemory.class,
             io.github.thisisthepy.dsa.control.v1.OpenLink.class,
             io.github.thisisthepy.dsa.control.v1.LinkHandling.class,
             io.github.thisisthepy.dsa.control.v1.OpenFile.class,
@@ -6526,6 +7327,8 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.CancelInstall.class,
             io.github.thisisthepy.dsa.control.v1.InstallProgress.class,
             io.github.thisisthepy.dsa.control.v1.InstallResult.class,
+            io.github.thisisthepy.dsa.control.v1.QueryPackage.class,
+            io.github.thisisthepy.dsa.control.v1.PackageState.class,
             io.github.thisisthepy.dsa.control.v1.GuestNotification.class,
             io.github.thisisthepy.dsa.control.v1.NotificationRemoved.class,
             io.github.thisisthepy.dsa.control.v1.NotificationClicked.class,
@@ -6544,21 +7347,26 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.ResizeWidget.class,
             io.github.thisisthepy.dsa.control.v1.WidgetFrame.class,
             io.github.thisisthepy.dsa.control.v1.WidgetPointer.class,
-            io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.class,
-            io.github.thisisthepy.dsa.control.v1.AudioOutputReady.class,
-            io.github.thisisthepy.dsa.control.v1.AudioPcm.class,
-            io.github.thisisthepy.dsa.control.v1.AudioOutputControl.class,
+            io.github.thisisthepy.dsa.control.v1.PowerHint.class,
+            io.github.thisisthepy.dsa.control.v1.VideoCapabilities.class,
+            io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen.class,
+            io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened.class,
+            io.github.thisisthepy.dsa.control.v1.VideoPacket.class,
+            io.github.thisisthepy.dsa.control.v1.VideoFrame.class,
+            io.github.thisisthepy.dsa.control.v1.VideoFlush.class,
+            io.github.thisisthepy.dsa.control.v1.VideoFlushed.class,
+            io.github.thisisthepy.dsa.control.v1.VideoError.class,
           };
           java.lang.String info =
-              "\u0000?\u0001\u0000\u0001g?\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003<\u0000" +
+              "\u0000G\u0001\u0000\u0001G\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003<\u0000" +
               "\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<\u0000\u000b" +
               "<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012<\u0000\u0013" +
               "<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000\u0019<\u0000" +
-              "\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001d<\u0000(<\u0000)<\u0000*<\u00002<\u0000" +
-              "3<\u00004<\u00005<\u00006<\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000F<\u0000" +
-              "G<\u0000H<\u0000I<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000" +
-              "]<\u0000^<\u0000_<\u0000`<\u0000a<\u0000b<\u0000c<\u0000d<\u0000e<\u0000f<\u0000" +
-              "g<\u0000";
+              "\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001d<\u0000(<\u0000)<\u0000*<\u0000+<\u0000" +
+              "2<\u00003<\u00004<\u00005<\u00006<\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000" +
+              "A<\u0000B<\u0000F<\u0000G<\u0000H<\u0000I<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000" +
+              "Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000`<\u0000a<\u0000b<\u0000c<\u0000" +
+              "n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

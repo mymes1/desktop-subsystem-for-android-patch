@@ -333,6 +333,35 @@ pub struct PowerState {
     #[prost(bool, tag = "5")]
     pub power_saver: bool,
 }
+/// Host to guest: whether the host computer is short of memory. While it is, the guest gives
+/// memory back the way a phone's low memory killer would, cheapest first: the agent ends the
+/// cached app processes (apps the user is not using), and the control daemon then has the
+/// guest drop its clean caches, so free page reporting returns the pages to the host. Sent
+/// when it changes, and once after the agent connects while the host is short.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct HostMemory {
+    #[prost(bool, tag = "1")]
+    pub low: bool,
+}
+/// Guest to host, from the guest's power HAL: the framework turned a power mode on or off, or
+/// asked for a boost. The host runs the guest's processors faster or more frugally to match.
+/// The HAL sends every mode that is on each time it subscribes to the channel, and the
+/// channel daemon each time the host connects, so a host that connects again learns them.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PowerHint {
+    #[prost(enumeration = "PowerHintKind", tag = "1")]
+    pub kind: i32,
+    /// The mode or the boost, by its value in android.hardware.power's Mode or Boost.
+    #[prost(int32, tag = "2")]
+    pub id: i32,
+    /// A mode: whether it is now on.
+    #[prost(bool, tag = "3")]
+    pub enabled: bool,
+    /// A boost: how long it lasts, in milliseconds. 0 asks for the host's usual length; a
+    /// negative value ends the boost now.
+    #[prost(int32, tag = "4")]
+    pub duration_ms: i32,
+}
 /// Guest to host, from the agent: whether the guest's device is in Doze (the device idle
 /// controller's deep idle state). The host takes the device not to be in Doze when the agent
 /// connects; the agent sends this on each change after that.
@@ -526,6 +555,36 @@ pub struct ApkChunk {
     #[prost(bytes = "vec", tag = "3")]
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
+/// Host to guest: asks whether a package is installed, and at which version and with which
+/// signing certificates, so the host can tell a new install from an update, a downgrade or an
+/// APK signed with another key before it sends the APK. The agent answers with PackageState of
+/// the same `request_id`.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct QueryPackage {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+}
+/// Guest to host, from the agent: the answer to QueryPackage.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct PackageState {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// False when the package is not installed for the guest's user; the fields below are then
+    /// empty.
+    #[prost(bool, tag = "2")]
+    pub installed: bool,
+    /// The installed version, as PackageInfo.getLongVersionCode says.
+    #[prost(int64, tag = "3")]
+    pub version_code: i64,
+    #[prost(string, tag = "4")]
+    pub version_name: ::prost::alloc::string::String,
+    /// The SHA-256 digest of each certificate the installed package is signed with now, in
+    /// the order the package manager lists them.
+    #[prost(bytes = "vec", repeated, tag = "5")]
+    pub signer_sha256: ::prost::alloc::vec::Vec<::prost::alloc::vec::Vec<u8>>,
+}
 /// Guest to host, from the agent: an app in the guest opened a web link, which the host opens
 /// in the user's default browser. Only http and https links are sent; the host checks the link
 /// again and drops anything else, so an app in the guest can never make the host run a
@@ -629,6 +688,96 @@ pub struct ClockProbe {
     /// process shares.
     #[prost(uint64, tag = "1")]
     pub host_sent_ns: u64,
+}
+/// One format the host decodes, and the largest picture it decodes in it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct VideoCodecSupport {
+    #[prost(enumeration = "VideoCodec", tag = "1")]
+    pub codec: i32,
+    #[prost(uint32, tag = "2")]
+    pub max_width: u32,
+    #[prost(uint32, tag = "3")]
+    pub max_height: u32,
+}
+/// Host to guest, first on each connection: the formats the host's hardware decodes. A
+/// format not listed is not decoded on the host.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VideoCapabilities {
+    #[prost(message, repeated, tag = "1")]
+    pub codecs: ::prost::alloc::vec::Vec<VideoCodecSupport>,
+}
+/// Guest to host: open a decoder for `codec`. `width` and `height` are the stream's coded
+/// size as the app gave it, or 0 when it is not known yet; the bitstream has the last word.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct VideoDecoderOpen {
+    #[prost(enumeration = "VideoCodec", tag = "1")]
+    pub codec: i32,
+    #[prost(uint32, tag = "2")]
+    pub width: u32,
+    #[prost(uint32, tag = "3")]
+    pub height: u32,
+}
+/// Host to guest: the answer to VideoDecoderOpen. When `ok` is false, `error` says, in words
+/// a person can act on, why there is no decoder, and the host closes the connection.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct VideoDecoderOpened {
+    #[prost(bool, tag = "1")]
+    pub ok: bool,
+    #[prost(string, tag = "2")]
+    pub error: ::prost::alloc::string::String,
+}
+/// Guest to host: one access unit of the stream, in decode order. `frame_index` is the
+/// guest's, and comes back on the picture it becomes.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct VideoPacket {
+    #[prost(uint64, tag = "1")]
+    pub frame_index: u64,
+    #[prost(int64, tag = "2")]
+    pub timestamp_us: i64,
+    #[prost(bytes = "vec", tag = "3")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+    /// Codec configuration (parameter sets) rather than a picture.
+    #[prost(bool, tag = "4")]
+    pub codec_config: bool,
+    /// The last packet: the host outputs every picture still held, then a VideoFrame with
+    /// `end_of_stream` set.
+    #[prost(bool, tag = "5")]
+    pub end_of_stream: bool,
+}
+/// Host to guest: one decoded picture, in presentation order, as 8-bit 4:2:0 with the luma
+/// plane then the interleaved chroma plane (NV12), each row `stride` bytes long. `width` and
+/// `height` are the visible size; the planes are `stride` by `height` and `stride` by
+/// `height / 2` (rounded up) bytes. A frame with `end_of_stream` set carries no picture.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct VideoFrame {
+    #[prost(uint64, tag = "1")]
+    pub frame_index: u64,
+    #[prost(int64, tag = "2")]
+    pub timestamp_us: i64,
+    #[prost(uint32, tag = "3")]
+    pub width: u32,
+    #[prost(uint32, tag = "4")]
+    pub height: u32,
+    #[prost(uint32, tag = "5")]
+    pub stride: u32,
+    #[prost(bytes = "vec", tag = "6")]
+    pub nv12: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bool, tag = "7")]
+    pub end_of_stream: bool,
+}
+/// Guest to host: drop every packet and picture held, as for a seek. The host answers with
+/// VideoFlushed once nothing from before is left to send.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct VideoFlush {}
+/// Host to guest: the answer to VideoFlush.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct VideoFlushed {}
+/// Host to guest: the decoder failed; `error` says how. The connection stays open, and the
+/// next packet after a key frame may decode again.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct VideoError {
+    #[prost(string, tag = "1")]
+    pub error: ::prost::alloc::string::String,
 }
 /// Guest to host, from the control daemon: the answer to a ClockProbe, sent as soon as the
 /// probe is read.
@@ -937,59 +1086,12 @@ pub struct AccessibilityActionResult {
     #[prost(string, tag = "4")]
     pub error: ::prost::alloc::string::String,
 }
-/// Guest to host, first after the handshake: the stream's format. The host closes the
-/// connection when it cannot play the format.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AudioOutputOpen {
-    /// Frames per second. The guest uses 48000.
-    #[prost(uint32, tag = "1")]
-    pub sample_rate: u32,
-    /// The guest uses 2 (left, right).
-    #[prost(uint32, tag = "2")]
-    pub channel_count: u32,
-    #[prost(enumeration = "AudioSampleFormat", tag = "3")]
-    pub format: i32,
-    /// How many frames the guest sends at a time, so the host can size its buffer.
-    #[prost(uint32, tag = "4")]
-    pub frames_per_burst: u32,
-    /// Names the stream in the host's log, such as "primary".
-    #[prost(string, tag = "5")]
-    pub name: ::prost::alloc::string::String,
-}
-/// Host to guest: the stream is open, and how much sound the host keeps queued before the
-/// device plays it.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AudioOutputReady {
-    /// The frames the host holds back to absorb late deliveries, at the stream's rate.
-    #[prost(uint32, tag = "1")]
-    pub buffered_frames: u32,
-    /// The output device's own latency in frames at the stream's rate, 0 when not known.
-    #[prost(uint32, tag = "2")]
-    pub device_frames: u32,
-}
-/// Guest to host: sound to play.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AudioPcm {
-    /// The index, counted from the stream's first frame, of the first frame in `data`. A gap
-    /// after the end of the last AudioPcm is silence the guest did not send (its own underrun).
-    #[prost(uint64, tag = "1")]
-    pub position: u64,
-    /// Whole frames in the stream's format.
-    #[prost(bytes = "vec", tag = "2")]
-    pub data: ::prost::alloc::vec::Vec<u8>,
-}
-/// Guest to host: a change of the stream's state.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct AudioOutputControl {
-    #[prost(enumeration = "AudioOutputCommand", tag = "1")]
-    pub command: i32,
-}
 /// The one message type on the wire. Each frame carries exactly one.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 42, 60, 61, 62, 63, 64, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 42, 43, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1057,8 +1159,12 @@ pub mod envelope {
         ScreenState(super::ScreenState),
         #[prost(message, tag = "41")]
         PowerState(super::PowerState),
+        #[prost(message, tag = "110")]
+        PowerHint(super::PowerHint),
         #[prost(message, tag = "42")]
         DeviceIdle(super::DeviceIdle),
+        #[prost(message, tag = "43")]
+        HostMemory(super::HostMemory),
         #[prost(message, tag = "60")]
         InstallApk(super::InstallApk),
         #[prost(message, tag = "61")]
@@ -1069,6 +1175,10 @@ pub mod envelope {
         InstallProgress(super::InstallProgress),
         #[prost(message, tag = "64")]
         InstallResult(super::InstallResult),
+        #[prost(message, tag = "65")]
+        QueryPackage(super::QueryPackage),
+        #[prost(message, tag = "66")]
+        PackageState(super::PackageState),
         #[prost(message, tag = "50")]
         OpenLink(super::OpenLink),
         #[prost(message, tag = "51")]
@@ -1115,14 +1225,22 @@ pub mod envelope {
         AccessibilityAction(super::AccessibilityAction),
         #[prost(message, tag = "83")]
         AccessibilityActionResult(super::AccessibilityActionResult),
-        #[prost(message, tag = "100")]
-        AudioOutputOpen(super::AudioOutputOpen),
-        #[prost(message, tag = "101")]
-        AudioOutputReady(super::AudioOutputReady),
-        #[prost(message, tag = "102")]
-        AudioPcm(super::AudioPcm),
-        #[prost(message, tag = "103")]
-        AudioOutputControl(super::AudioOutputControl),
+        #[prost(message, tag = "120")]
+        VideoCapabilities(super::VideoCapabilities),
+        #[prost(message, tag = "121")]
+        VideoDecoderOpen(super::VideoDecoderOpen),
+        #[prost(message, tag = "122")]
+        VideoDecoderOpened(super::VideoDecoderOpened),
+        #[prost(message, tag = "123")]
+        VideoPacket(super::VideoPacket),
+        #[prost(message, tag = "124")]
+        VideoFrame(super::VideoFrame),
+        #[prost(message, tag = "125")]
+        VideoFlush(super::VideoFlush),
+        #[prost(message, tag = "126")]
+        VideoFlushed(super::VideoFlushed),
+        #[prost(message, tag = "127")]
+        VideoError(super::VideoError),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1160,9 +1278,9 @@ pub enum Role {
     Unspecified = 0,
     Host = 1,
     Guest = 2,
-    /// The guest's audio HAL, on the audio port. It plays sound and nothing else, so the host
-    /// asks it for no secret, and the control port refuses it.
-    GuestAudio = 3,
+    /// The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
+    /// host asks it for no secret, and the control port refuses it.
+    GuestVideo = 4,
 }
 impl Role {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -1174,7 +1292,7 @@ impl Role {
             Self::Unspecified => "ROLE_UNSPECIFIED",
             Self::Host => "ROLE_HOST",
             Self::Guest => "ROLE_GUEST",
-            Self::GuestAudio => "ROLE_GUEST_AUDIO",
+            Self::GuestVideo => "ROLE_GUEST_VIDEO",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1183,7 +1301,7 @@ impl Role {
             "ROLE_UNSPECIFIED" => Some(Self::Unspecified),
             "ROLE_HOST" => Some(Self::Host),
             "ROLE_GUEST" => Some(Self::Guest),
-            "ROLE_GUEST_AUDIO" => Some(Self::GuestAudio),
+            "ROLE_GUEST_VIDEO" => Some(Self::GuestVideo),
             _ => None,
         }
     }
@@ -1353,6 +1471,38 @@ impl KeyAction {
         }
     }
 }
+/// What a PowerHint is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum PowerHintKind {
+    Unspecified = 0,
+    /// A power mode, which stays on until the guest turns it off.
+    Mode = 1,
+    /// A boost, which lasts for a while and then ends by itself.
+    Boost = 2,
+}
+impl PowerHintKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "POWER_HINT_KIND_UNSPECIFIED",
+            Self::Mode => "POWER_HINT_KIND_MODE",
+            Self::Boost => "POWER_HINT_KIND_BOOST",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "POWER_HINT_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "POWER_HINT_KIND_MODE" => Some(Self::Mode),
+            "POWER_HINT_KIND_BOOST" => Some(Self::Boost),
+            _ => None,
+        }
+    }
+}
 /// Whether an APK was installed, and if not, why. The reasons are stable, so the host can say
 /// in the user's language what went wrong; the message beside them gives the guest's own words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -1443,6 +1593,46 @@ impl FileAction {
         }
     }
 }
+/// A video coding format.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum VideoCodec {
+    Unspecified = 0,
+    /// H.264 (AVC), Annex B byte stream.
+    H264 = 1,
+    /// H.265 (HEVC), Annex B byte stream.
+    Hevc = 2,
+    /// VP9, one frame (or superframe) per packet.
+    Vp9 = 3,
+    /// AV1, one temporal unit per packet, low overhead bitstream format.
+    Av1 = 4,
+}
+impl VideoCodec {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "VIDEO_CODEC_UNSPECIFIED",
+            Self::H264 => "VIDEO_CODEC_H264",
+            Self::Hevc => "VIDEO_CODEC_HEVC",
+            Self::Vp9 => "VIDEO_CODEC_VP9",
+            Self::Av1 => "VIDEO_CODEC_AV1",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "VIDEO_CODEC_UNSPECIFIED" => Some(Self::Unspecified),
+            "VIDEO_CODEC_H264" => Some(Self::H264),
+            "VIDEO_CODEC_HEVC" => Some(Self::Hevc),
+            "VIDEO_CODEC_VP9" => Some(Self::Vp9),
+            "VIDEO_CODEC_AV1" => Some(Self::Av1),
+            _ => None,
+        }
+    }
+}
 /// What can be done to an accessibility node, as the host asks it and as a node says it
 /// supports.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -1494,73 +1684,6 @@ impl NodeAction {
             "NODE_ACTION_FOCUS" => Some(Self::Focus),
             "NODE_ACTION_ACCESSIBILITY_FOCUS" => Some(Self::AccessibilityFocus),
             "NODE_ACTION_SELECT" => Some(Self::Select),
-            _ => None,
-        }
-    }
-}
-/// The sample formats a stream can carry. Little-endian, interleaved.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum AudioSampleFormat {
-    Unspecified = 0,
-    S16le = 1,
-}
-impl AudioSampleFormat {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "AUDIO_SAMPLE_FORMAT_UNSPECIFIED",
-            Self::S16le => "AUDIO_SAMPLE_FORMAT_S16LE",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "AUDIO_SAMPLE_FORMAT_UNSPECIFIED" => Some(Self::Unspecified),
-            "AUDIO_SAMPLE_FORMAT_S16LE" => Some(Self::S16le),
-            _ => None,
-        }
-    }
-}
-/// What the guest asks of a stream.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum AudioOutputCommand {
-    Unspecified = 0,
-    /// Play what arrives.
-    Start = 1,
-    /// Hold what is queued, and play nothing until the next START.
-    Pause = 2,
-    /// Drop what is queued and not yet played.
-    Flush = 3,
-    /// Drop what is queued and let the device go idle until the next START.
-    Standby = 4,
-}
-impl AudioOutputCommand {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "AUDIO_OUTPUT_COMMAND_UNSPECIFIED",
-            Self::Start => "AUDIO_OUTPUT_COMMAND_START",
-            Self::Pause => "AUDIO_OUTPUT_COMMAND_PAUSE",
-            Self::Flush => "AUDIO_OUTPUT_COMMAND_FLUSH",
-            Self::Standby => "AUDIO_OUTPUT_COMMAND_STANDBY",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "AUDIO_OUTPUT_COMMAND_UNSPECIFIED" => Some(Self::Unspecified),
-            "AUDIO_OUTPUT_COMMAND_START" => Some(Self::Start),
-            "AUDIO_OUTPUT_COMMAND_PAUSE" => Some(Self::Pause),
-            "AUDIO_OUTPUT_COMMAND_FLUSH" => Some(Self::Flush),
-            "AUDIO_OUTPUT_COMMAND_STANDBY" => Some(Self::Standby),
             _ => None,
         }
     }

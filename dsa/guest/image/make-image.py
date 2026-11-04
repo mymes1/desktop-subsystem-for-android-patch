@@ -42,6 +42,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+import zlib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -123,6 +124,35 @@ SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH = {
         "com.android.settings.sound.MediaOutputPreferenceController",
         "com.android.settings.notification.RemoteVolumeGroupController",
     ],
+    # The hearing devices entry. Its controller asks the null LocalBluetoothManager for its
+    # profile manager in its constructor, and the page behind it lists and pairs Bluetooth
+    # hearing aids.
+    "res/xml/accessibility_settings.xml": [
+        "com.android.settings.accessibility.AccessibilityHearingAidPreferenceController",
+    ],
+}
+
+# Settings code that dereferences the missing Bluetooth adapter where no preference can be
+# taken out instead, edited in the dex files of Settings.apk. Each edit keeps the size of the
+# method, so nothing else in the dex file moves.
+#
+# BluetoothUtils.isAudioSharingSupported (SettingsLib) calls isLeAudioBroadcastSourceSupported
+# on BluetoothAdapter.getDefaultAdapter(), which is null here. The connected devices screen
+# asks it in its fragment's onAttach, and so do the audio sharing and media device controllers
+# on it, so the screen took the Settings process down each time it opened. LE audio sharing is
+# a Bluetooth feature, so "not supported" is the true answer: the method returns false.
+#
+# AccessibilitySettings.onAttach hands the fragment manager to the hearing aid controller.
+# That controller cannot be made without Bluetooth (above), so the fragment's lookup returns
+# null and the call threw. The call is skipped; nothing else uses its result.
+#
+# Bluetooth comes back as a host HAL, and these edits go with it.
+SETTINGS_CODE_WITHOUT_BLUETOOTH = {
+    "Lcom/android/settingslib/bluetooth/BluetoothUtils;->isAudioSharingSupported": ("return false", None),
+    "Lcom/android/settings/accessibility/AccessibilitySettings;->onAttach": (
+        "skip call",
+        "Lcom/android/settings/accessibility/AccessibilityHearingAidPreferenceController;->setFragmentManager",
+    ),
 }
 
 # Cuttlefish's logger writes to a virtio console Hyper-V does not have, so it exits as soon as
@@ -378,20 +408,21 @@ def command_line_partitions(partitions, uuids=None):
     return "blkdevparts=sda:" + ",".join(entries)
 
 
-def removed_apexes(hwcomposer=False):
+def removed_apexes(hwcomposer=False, power=False):
     """The vendor APEXes the guest must not have; Cuttlefish's composers too when DSA's
-    composer replaces them."""
-    return REMOVED_APEXES + (CUTTLEFISH_COMPOSER_APEXES if hwcomposer else [])
+    composer replaces them, and its power and health HALs when DSA's replace them."""
+    return (REMOVED_APEXES + (CUTTLEFISH_COMPOSER_APEXES if hwcomposer else [])
+            + (CUTTLEFISH_POWER_APEXES if power else []))
 
 
-def removed(name, hwcomposer=False):
+def removed(name, hwcomposer=False, power=False):
     """Whether a target_files member belongs to an app, a HAL or a service the guest must not have."""
     return (
         name in REMOVED_INIT_SCRIPTS
         or any(f"/{app}/" in name for app in REMOVED_APPS)
         or any(
             name in (f"VENDOR/apex/{apex}.apex", f"VENDOR/apex/{apex}.capex")
-            for apex in removed_apexes(hwcomposer)
+            for apex in removed_apexes(hwcomposer, power)
         )
     )
 
@@ -520,11 +551,158 @@ def remove_xml_elements(axml, attribute, values):
     return result[:4] + struct.pack("<I", len(result)) + result[8:], removed_values
 
 
+def _uleb128(data, at):
+    value = shift = 0
+    while True:
+        byte = data[at]
+        at += 1
+        value |= (byte & 0x7F) << shift
+        shift += 7
+        if byte < 0x80:
+            return value, at
+
+
+# Width in 16-bit code units of each Dalvik opcode (the payload pseudo-instructions are
+# handled where they are met).
+DEX_INSTRUCTION_UNITS = [1] * 256
+for _ops, _units in [
+    ((0x02, 0x05, 0x08, 0x13, 0x15, 0x16, 0x19, 0x1A, 0x1C, 0x1F, 0x20, 0x22, 0x23, 0x29, 0xFE, 0xFF), 2),
+    ((0x03, 0x06, 0x09, 0x14, 0x17, 0x1B, 0x24, 0x25, 0x26, 0x2A, 0x2B, 0x2C, 0xFC, 0xFD), 3),
+    ((0x18,), 5),
+    ((0xFA, 0xFB), 4),
+    (tuple(range(0x2D, 0x3E)) + tuple(range(0x44, 0x6E)) + tuple(range(0x90, 0xB0)) + tuple(range(0xD0, 0xE3)), 2),
+    (tuple(range(0x6E, 0x73)) + tuple(range(0x74, 0x79)), 3),
+]:
+    for _op in _ops:
+        DEX_INSTRUCTION_UNITS[_op] = _units
+DEX_INVOKES = set(range(0x6E, 0x73)) | set(range(0x74, 0x79))
+DEX_MOVE_RESULTS = {0x0A, 0x0B, 0x0C}
+
+
+def dex_methods(dex):
+    """{"Lclass;->name": [(code_off, shorty)]} for each method a dex file defines with code,
+    and the "Lclass;->name" of each method it refers to, by method index."""
+    if dex[:4] != b"dex\n":
+        raise ValueError("not a dex file")
+    (string_count, string_off, type_count, type_off, proto_count, proto_off, _, _,
+     method_count, method_off, class_count, class_off) = struct.unpack_from("<12I", dex, 56)
+
+    def string(index):
+        _, at = _uleb128(dex, struct.unpack_from("<I", dex, string_off + 4 * index)[0])
+        return dex[at:dex.index(0, at)].decode("utf-8", "replace")
+
+    types = [string(struct.unpack_from("<I", dex, type_off + 4 * i)[0]) for i in range(type_count)]
+    shorties = [string(struct.unpack_from("<I", dex, proto_off + 12 * i)[0]) for i in range(proto_count)]
+    refs, method_shorty = [], []
+    for i in range(method_count):
+        class_index, proto_index, name_index = struct.unpack_from("<HHI", dex, method_off + 8 * i)
+        refs.append(f"{types[class_index]}->{string(name_index)}")
+        method_shorty.append(shorties[proto_index])
+    defined = {}
+    for i in range(class_count):
+        data_off = struct.unpack_from("<I", dex, class_off + 32 * i + 24)[0]
+        if not data_off:
+            continue
+        counts = []
+        at = data_off
+        for _ in range(4):
+            count, at = _uleb128(dex, at)
+            counts.append(count)
+        for _ in range(2 * (counts[0] + counts[1])):
+            _, at = _uleb128(dex, at)
+        for group in (counts[2], counts[3]):
+            index = 0
+            for _ in range(group):
+                delta, at = _uleb128(dex, at)
+                index += delta
+                _, at = _uleb128(dex, at)
+                code_off, at = _uleb128(dex, at)
+                if code_off:
+                    defined.setdefault(refs[index], []).append((code_off, method_shorty[index]))
+    return defined, refs
+
+
+def dex_instructions(dex, code_off):
+    """(offset, opcode) of each instruction in a code item, skipping switch and array data."""
+    count = struct.unpack_from("<I", dex, code_off + 12)[0]
+    start = code_off + 16
+    unit = 0
+    while unit < count:
+        at = start + 2 * unit
+        first = struct.unpack_from("<H", dex, at)[0]
+        if first == 0x0100:
+            unit += 4 + 2 * struct.unpack_from("<H", dex, at + 2)[0]
+        elif first == 0x0200:
+            unit += 2 + 4 * struct.unpack_from("<H", dex, at + 2)[0]
+        elif first == 0x0300:
+            width, size = struct.unpack_from("<HI", dex, at + 2)
+            unit += 4 + (width * size + 1) // 2
+        else:
+            yield at, first & 0xFF
+            unit += DEX_INSTRUCTION_UNITS[first & 0xFF]
+
+
+def edit_dex(dex, edits):
+    """Applies {"Lclass;->method": edit} to a dex file. An edit is ("return false", None),
+    which makes a method that returns a boolean return false at once, or ("skip call",
+    "Lclass;->method"), which turns each call to that method, whose result is not used, into
+    no-ops. Returns the new file and the methods it changed; a method already edited, or not
+    in this file, is not changed."""
+    defined, refs = dex_methods(dex)
+    out = bytearray(dex)
+    changed = []
+    for method, (kind, target) in edits.items():
+        for code_off, shorty in defined.get(method, []):
+            registers, = struct.unpack_from("<H", dex, code_off)
+            insns = code_off + 16
+            if kind == "return false":
+                if shorty[0] != "Z" or registers < 1:
+                    raise ValueError(f"{method} does not return a boolean")
+                # const/4 v0, 0; return v0, over whole instructions, the rest of which become
+                # no-ops so the verifier still reads valid code. What follows is never reached.
+                if bytes(out[insns:insns + 4]) == b"\x12\x00\x0f\x00":
+                    continue
+                end = insns
+                # A move-result left behind without its call would not verify, so it goes too.
+                for at, op in dex_instructions(dex, code_off):
+                    if end - insns >= 4 and op not in DEX_MOVE_RESULTS:
+                        break
+                    end = at + 2 * DEX_INSTRUCTION_UNITS[op]
+                if end - insns < 4:
+                    raise ValueError(f"{method} is too short to return false")
+                out[insns:end] = b"\x12\x00\x0f\x00" + bytes(end - insns - 4)
+                changed.append(method)
+            elif kind == "skip call":
+                instructions = list(dex_instructions(dex, code_off))
+                for (at, op), following in zip(instructions, instructions[1:] + [(None, None)]):
+                    if op not in DEX_INVOKES or refs[struct.unpack_from("<H", dex, at + 2)[0]] != target:
+                        continue
+                    if following[1] in DEX_MOVE_RESULTS:
+                        raise ValueError(f"{method} uses the result of {target}")
+                    out[at:at + 2 * DEX_INSTRUCTION_UNITS[op]] = bytes(2 * DEX_INSTRUCTION_UNITS[op])
+                    changed.append(method)
+            else:
+                raise ValueError(f"unknown dex edit {kind}")
+    if changed:
+        out[12:32] = hashlib.sha1(bytes(out[32:])).digest()
+        out[8:12] = struct.pack("<I", zlib.adler32(bytes(out[12:])))
+    return bytes(out), changed
+
+
 def edit_settings_apk(data, name):
-    """Settings.apk without the preferences whose controllers need the Bluetooth service."""
+    """Settings.apk without the preferences, and the code, that need the Bluetooth service."""
     replacements = {}
     with zipfile.ZipFile(io.BytesIO(data)) as apk:
         files = set(apk.namelist())
+        for dex in sorted(f for f in files if re.fullmatch(r"classes\d*\.dex", f)):
+            content = apk.read(dex)
+            if content[:4] != b"dex\n":
+                continue
+            edited, changed = edit_dex(content, SETTINGS_CODE_WITHOUT_BLUETOOTH)
+            for method in changed:
+                print(f"editing {method} in {name}:{dex}", flush=True)
+            if changed:
+                replacements[dex] = edited
         for xml, controllers in SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH.items():
             if xml not in files:
                 continue
@@ -544,8 +722,9 @@ def edit_settings_apk(data, name):
     return out.getvalue()
 
 
-def edit_props(text):
-    props_to_apply = {**USER_PROPS, **GRAPHICS_PROPS, **MEMORY_PROPS, **LOADER_PROPS, **FRP_PROPS}
+def edit_props(text, codec2=False):
+    props_to_apply = {**USER_PROPS, **GRAPHICS_PROPS, **MEMORY_PROPS, **LOADER_PROPS, **FRP_PROPS,
+                      **(CODEC2_PROPS if codec2 else {})}
     out = []
     for line in text.splitlines():
         key = line.split("=", 1)[0]
@@ -618,6 +797,32 @@ HWCOMPOSER_MANIFEST = "VENDOR/etc/vintf/manifest/dsa-hwcomposer.xml"
 # The vendor policy's composer domain: init starts the binary in it, and it may serve the
 # composer HAL, reach the host renderer over vsock and call dsa-channeld.
 HWCOMPOSER_CONTEXT = "/vendor/bin/hw/dsa-hwcomposer u:object_r:hal_graphics_composer_default_exec:s0"
+CUTTLEFISH_COMPOSER_APEXES = [
+    "com.android.hardware.graphics.composer.ranchu",
+    "com.android.hardware.graphics.composer.drm_hwcomposer",
+]
+# DSA's power and health HALs (dsa/guest/power), which take the guest's power hints to the host
+# and give the guest the host's battery, and the Cuttlefish APEXes whose HALs they replace.
+# Cuttlefish's power APEX also holds its power statistics HAL, a mock the framework does not
+# need. Each runs in the vendor policy's own domain for its HAL; power.cil lets both reach
+# dsa-channeld.
+POWER_DIR = REPO / "dsa/guest/power"
+POWER_FILES = {
+    "VENDOR/bin/hw/dsa-power": None,
+    "VENDOR/bin/hw/dsa-health": None,
+    "VENDOR/etc/init/dsa-power.rc": POWER_DIR / "dsa-power.rc",
+    "VENDOR/etc/init/dsa-health.rc": POWER_DIR / "dsa-health.rc",
+    "VENDOR/etc/vintf/manifest/dsa-power.xml": POWER_DIR / "dsa-power.xml",
+    "VENDOR/etc/vintf/manifest/dsa-health.xml": POWER_DIR / "dsa-health.xml",
+}
+POWER_CONTEXTS = [
+    (r"/vendor/bin/hw/dsa-power", "/vendor/bin/hw/dsa-power u:object_r:hal_power_default_exec:s0"),
+    (r"/vendor/bin/hw/dsa-health", "/vendor/bin/hw/dsa-health u:object_r:hal_health_default_exec:s0"),
+]
+CUTTLEFISH_POWER_APEXES = [
+    "com.android.hardware.power",
+    "com.google.cf.health",
+]
 # DSA's primary audio module (dsa/guest/audio), which plays the guest's sound on the host's
 # default output device. It runs in the audio HAL's domain and serves IModule/default, which
 # the image's audio APEX already declares. That APEX's service makes a module for each one
@@ -639,10 +844,25 @@ def without_primary_audio_module(text):
     return PRIMARY_AUDIO_INCLUDE.sub("", text)
 
 
-CUTTLEFISH_COMPOSER_APEXES = [
-    "com.android.hardware.graphics.composer.ranchu",
-    "com.android.hardware.graphics.composer.drm_hwcomposer",
-]
+# DSA's Codec 2.0 HAL (dsa/guest/codec2), whose video decoders decode on the host's GPU. It
+# runs in the vendor codec domain (mediacodec); codec2.cil lets it reach the host's video port
+# and map the buffers it writes pictures into. Its decoders are listed in
+# media_codecs_c2.xml, which the framework reads after the vendor's media_codecs.xml.
+CODEC2_DIR = REPO / "dsa/guest/codec2"
+CODEC2_FILES = {
+    "VENDOR/bin/hw/dsa-codec2": None,
+    "VENDOR/etc/init/dsa-codec2.rc": CODEC2_DIR / "dsa-codec2.rc",
+    "VENDOR/etc/vintf/manifest/dsa-codec2.xml": CODEC2_DIR / "dsa-codec2.xml",
+    "VENDOR/etc/media_codecs_c2.xml": CODEC2_DIR / "media_codecs_c2.xml",
+}
+CODEC2_CONTEXT = "/vendor/bin/hw/dsa-codec2 u:object_r:mediacodec_exec:s0"
+CODEC2_INSTANCE = "android.hardware.media.c2.IComponentStore/default"
+CODEC2_SERVICE_CONTEXT = f"{CODEC2_INSTANCE} u:object_r:hal_codec2_service:s0"
+# The framework's codec buffers come from plain allocations, passed as handles, instead of
+# buffer pools: the guest's codec HAL takes its input as handles. Only the output to a
+# surface keeps its pool (BUFFERQUEUE, 1 << 18), which reaches the HAL as the surface's
+# allocator. The guest's software decoders take handles as well.
+CODEC2_PROPS = {"debug.stagefright.c2-poolmask": str(1 << 18)}
 # The freeform display every task window lives on, as the hwcomposer reads it from
 # ro.boot.dsa.*. The host shows windows, not this display, so its size bounds a window's.
 # These are defaults: the host replaces the width and height from the user's monitors.
@@ -725,7 +945,7 @@ AGENT_FS_CONFIG = [
 CONSOLE_UEVENTD_LINE = "/dev/ttyS0 0660 system logd"
 
 
-def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, audio=False):
+def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power=False, codec2=False,
     """Adds same_process_hal_file contexts for guest graphics libraries if not present, and
     opens the DRM cards to every graphics client.
 
@@ -748,6 +968,10 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, audio
         entries.append((r"/vendor/bin/dsa-channeld", CHANNELD_CONTEXT))
     if hwcomposer:
         entries.append((r"/vendor/bin/hw/dsa-hwcomposer", HWCOMPOSER_CONTEXT))
+    if power:
+        entries += POWER_CONTEXTS
+    if codec2:
+        entries.append((r"/vendor/bin/hw/dsa-codec2", CODEC2_CONTEXT))
     if audio:
         entries.append((r"/vendor/bin/hw/dsa-audio", AUDIO_CONTEXT))
     # Usually there already, as /(vendor|system/vendor)/overlay(/.*)?.
@@ -758,11 +982,14 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, audio
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def update_vendor_service_contexts(text):
-    """Labels the daemon's binder service in vendor_service_contexts if it is not yet."""
+def update_vendor_service_contexts(text, codec2=False, channeld=True):
+    """Labels the daemon's binder service in vendor_service_contexts if it is not yet, and the
+    codec HAL's when `codec2` is set."""
     lines = text.splitlines()
-    if not any(line.split()[:1] == [CHANNEL_INSTANCE] for line in lines):
+    if channeld and not any(line.split()[:1] == [CHANNEL_INSTANCE] for line in lines):
         lines.append(CHANNEL_SERVICE_CONTEXT)
+    if codec2 and not any(line.split()[:1] == [CODEC2_INSTANCE] for line in lines):
+        lines.append(CODEC2_SERVICE_CONTEXT)
     return "\n".join(lines) + "\n"
 
 
@@ -814,7 +1041,8 @@ def add_filesystem_config(fs_config_text, rules):
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=False, audio=False):
+def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=False, power=False,
+                                    codec2=False, audio=False):
     """Adds filesystem configuration entries for the files DSA adds to vendor if not present."""
     lines = fs_config_text.splitlines()
     entries = [
@@ -843,6 +1071,10 @@ def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=F
             ("vendor/etc/vintf/manifest/dsa-hwcomposer.xml",
              "vendor/etc/vintf/manifest/dsa-hwcomposer.xml 0 0 644 capabilities=0x0"),
         ]
+    for name in (list(POWER_FILES) if power else []) + (list(CODEC2_FILES) if codec2 else []):
+        path = name.lower()
+        mode = "0 2000 755" if "/bin/" in path else "0 0 644"
+        entries.append((path, f"{path} {mode} capabilities=0x0"))
     if audio:
         entries += [
             ("vendor/bin/hw/dsa-audio", "vendor/bin/hw/dsa-audio 0 2000 755 capabilities=0x0"),
@@ -860,10 +1092,11 @@ GFXSTREAM_ALLOWED_PERMS = {
 }
 SEPOLICY_FRAGMENT = HERE / "sepolicy/graphics-vsock.cil"
 CHANNELD_POLICY = HERE / "sepolicy/channeld.cil"
+POWER_POLICY = HERE / "sepolicy/power.cil"
+CODEC2_POLICY = HERE / "sepolicy/codec2.cil"
 AGENT_POLICY = HERE / "sepolicy/agent.cil"
 MEMORY_POLICY = HERE / "sepolicy/memory.cil"
 AUDIO_POLICY = HERE / "sepolicy/audio.cil"
-
 
 
 def narrow_vsock_neverallows(text):
@@ -994,13 +1227,15 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 
 
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
-           agent=None, hwcomposer=None, framework_overlay=None, audio=None):
+           agent=None, hwcomposer=None, framework_overlay=None, power_hal=None,
+           codec2=None, audio=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
-    composer in place of Cuttlefish's when `hwcomposer` names one, and the framework
-    overlay when `framework_overlay` names its APK, and DSA's primary audio module when `audio`
-    names one."""
+    composer in place of Cuttlefish's when `hwcomposer` names one, the framework overlay
+    when `framework_overlay` names its APK, and DSA's power and health HALs in place of
+    Cuttlefish's when `power_hal` names the folder that holds dsa-power and dsa-health, and
+    DSA's codec HAL, whose video decoders decode on the host's GPU, when `codec2` names it."""
     fstab = (HERE / "fstab.dsa").read_bytes()
     console_logcat = (HERE / "console-logcat.rc").read_bytes()
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
@@ -1010,6 +1245,23 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     hwcomposer_payload = Path(hwcomposer).read_bytes() if hwcomposer else None
     overlay_payload = Path(framework_overlay).read_bytes() if framework_overlay else None
     has_hwcomposer = hwcomposer_payload is not None
+    power_payloads = None
+    if power_hal is not None:
+        if channeld is None:
+            raise ValueError("the power and health HALs reach the host through dsa-channeld; "
+                             "give --channeld too")
+        power_payloads = {
+            name: (Path(power_hal) / Path(name).name).read_bytes() if source is None else source.read_bytes()
+            for name, source in POWER_FILES.items()
+        }
+    has_power = power_payloads is not None
+    codec2_payloads = None
+    if codec2 is not None:
+        codec2_payloads = {
+            name: Path(codec2).read_bytes() if source is None else source.read_bytes()
+            for name, source in CODEC2_FILES.items()
+        }
+    has_codec2 = codec2_payloads is not None
     audio_payload = Path(audio).read_bytes() if audio else None
     has_audio = audio_payload is not None
     replaced_graphics_payload = False
@@ -1042,12 +1294,18 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             if channeld_payload is not None:
                 # Its rules name the domain they declare, so they go in whole.
                 plat_patched += "\n" + CHANNELD_POLICY.read_text()
-            if agent_payload is not None:
-                # What the agent needs to put the guest into Doze and set its battery.
-                plat_patched += "\n" + AGENT_POLICY.read_text()
+            if has_power:
+                # The power and health HALs reach the daemon.
+                plat_patched += "\n" + POWER_POLICY.read_text()
+            if has_codec2:
+                # The codec HAL reaches the host's video port.
+                plat_patched += "\n" + CODEC2_POLICY.read_text()
             if has_audio:
                 # The audio module's socket to the host.
                 plat_patched += "\n" + AUDIO_POLICY.read_text()
+            if agent_payload is not None:
+                # What the agent needs to put the guest into Doze and set its battery.
+                plat_patched += "\n" + AGENT_POLICY.read_text()
             new_plat_bytes = plat_patched.encode()
             cil_map["SYSTEM/etc/selinux/plat_sepolicy.cil"] = new_plat_bytes
 
@@ -1078,13 +1336,14 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         for name in PARTITION_FILE_CONTEXTS:
             text = zin.read(name).decode() if name in names else ""
             if name == "VENDOR/etc/selinux/vendor_file_contexts":
-                text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer, has_audio)
+                text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer,
+                                                   has_power, codec2=has_codec2, audio=has_audio)
             file_contexts.append(text if text.endswith("\n") or not text else text + "\n")
         compiled_file_contexts = compile_file_contexts(otatools, "".join(file_contexts))
 
         for info in zin.infolist():
             name = info.filename
-            if removed(name, has_hwcomposer):
+            if removed(name, has_hwcomposer, has_power):
                 if name.endswith((".apk", ".apex", ".capex")):
                     print(f"removing {name}", flush=True)
                 continue
@@ -1117,7 +1376,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             else:
                 data = zin.read(name)
                 if name in PROP_FILES:
-                    data = edit_props(data.decode()).encode()
+                    data = edit_props(data.decode(), codec2=has_codec2).encode()
                 elif name == WIFI_RC:
                     data = edit_wifi_rc(data.decode()).encode()
                 elif name.endswith(SETTINGS_APK):
@@ -1127,7 +1386,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 elif name == "META/apexkeys.txt":
                     data = b"".join(
                         line + b"\n" for line in data.splitlines()
-                        if not any(f'name="{a}.apex"' in line.decode() for a in removed_apexes(has_hwcomposer))
+                        if not any(f'name="{a}.apex"' in line.decode() for a in removed_apexes(has_hwcomposer, has_power))
                     )
                 elif name == "META/apkcerts.txt":
                     data = b"".join(
@@ -1155,7 +1414,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                             text += f"{prefix}fstab.dsa 0 0 644 capabilities=0x0\n"
                     if name == "META/vendor_filesystem_config.txt":
                         text = update_vendor_filesystem_config(text, channeld_payload is not None, has_hwcomposer,
-                                                               has_audio)
+                                                               has_power, codec2=has_codec2, audio=has_audio)
                         if overlay_payload is not None:
                             text = add_filesystem_config(text, FRAMEWORK_OVERLAY_FS_CONFIG)
                     data = text.encode()
@@ -1163,9 +1422,11 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = data.rstrip(b"\n") + b"\n" + CONSOLE_UEVENTD_LINE.encode() + b"\n"
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
-                                                       has_hwcomposer, has_audio).encode()
-                elif name == VENDOR_SERVICE_CONTEXTS and channeld_payload is not None:
-                    data = update_vendor_service_contexts(data.decode()).encode()
+                                                       has_hwcomposer, has_power, codec2=has_codec2,
+                                                       audio=has_audio).encode()
+                elif name == VENDOR_SERVICE_CONTEXTS and (channeld_payload is not None or has_codec2):
+                    data = update_vendor_service_contexts(
+                        data.decode(), codec2=has_codec2, channeld=channeld_payload is not None).encode()
                 elif has_audio and AUDIO_POLICY_CONFIG.match(name):
                     data = without_primary_audio_module(data.decode()).encode()
                 elif name == VENDOR_PROPERTY_CONTEXTS:
@@ -1184,15 +1445,22 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(HWCOMPOSER_BINARY, hwcomposer_payload)
             zout.writestr(HWCOMPOSER_RC, (HWCOMPOSER_DIR / "dsa-hwcomposer.rc").read_bytes())
             zout.writestr(HWCOMPOSER_MANIFEST, (HWCOMPOSER_DIR / "dsa-hwcomposer.xml").read_bytes())
-        if has_audio:
-            zout.writestr(AUDIO_BINARY, audio_payload)
-            zout.writestr(AUDIO_RC, (AUDIO_DIR / "dsa-audio.rc").read_bytes())
+        if has_power:
+            for name, payload in power_payloads.items():
+                zout.writestr(name, payload)
         if channeld_payload is not None:
             zout.writestr(CHANNELD_BINARY, channeld_payload)
             zout.writestr(CHANNELD_RC, (HERE / "dsa-channeld.rc").read_bytes())
             zout.writestr(CHANNEL_MANIFEST, (HERE / "dsa-channel-manifest.xml").read_bytes())
-            if VENDOR_SERVICE_CONTEXTS not in names:
-                zout.writestr(VENDOR_SERVICE_CONTEXTS, update_vendor_service_contexts(""))
+        if has_codec2:
+            for name, payload in codec2_payloads.items():
+                zout.writestr(name, payload)
+        if has_audio:
+            zout.writestr(AUDIO_BINARY, audio_payload)
+            zout.writestr(AUDIO_RC, (AUDIO_DIR / "dsa-audio.rc").read_bytes())
+        if (channeld_payload is not None or has_codec2) and VENDOR_SERVICE_CONTEXTS not in names:
+            zout.writestr(VENDOR_SERVICE_CONTEXTS, update_vendor_service_contexts(
+                "", codec2=has_codec2, channeld=channeld_payload is not None))
         if overlay_payload is not None:
             zout.writestr(FRAMEWORK_OVERLAY_APK, overlay_payload)
         if agent_payload is not None:
@@ -1204,7 +1472,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if "VENDOR/etc/selinux/vendor_file_contexts" not in names:
             zout.writestr(
                 "VENDOR/etc/selinux/vendor_file_contexts",
-                update_vendor_file_contexts("", channeld_payload is not None, has_hwcomposer, has_audio).encode(),
+                update_vendor_file_contexts("", channeld_payload is not None, has_hwcomposer, has_power,
+                                            codec2=has_codec2, audio=has_audio).encode(),
             )
     if graphics_payload is not None and not replaced_graphics_payload:
         dest.unlink(missing_ok=True)
@@ -1447,9 +1716,16 @@ def main():
     parser.add_argument("--hwcomposer", type=Path,
                         help="DSA's composer HAL (dsa-hwcomposer) built for the guest; it replaces "
                              "Cuttlefish's, and sends the host each task's frames")
+    parser.add_argument("--codec2", type=Path,
+                        help="DSA's codec HAL (dsa-codec2) built for the guest; its video decoders "
+                             "decode on the host's GPU")
     parser.add_argument("--audio", type=Path,
                         help="DSA's primary audio module (dsa-audio) built for the guest; it plays the "
                              "guest's sound on the host's default output device")
+    parser.add_argument("--power-hal", type=Path,
+                        help="a folder holding DSA's power and health HALs (dsa-power, dsa-health) built "
+                             "for the guest; they replace Cuttlefish's, take the guest's power hints to "
+                             "the host and give the guest the host's battery")
     parser.add_argument("--agent", type=Path,
                         help="the guest agent's APK (DsaAgent), unsigned or signed with any key; "
                         "the image signs it with the platform key")
@@ -1504,8 +1780,9 @@ def main():
 
     modified = work / "modified.zip"
     modify(target_files, modified, graphics_library=graphics_library, vulkan_driver=vulkan_driver,
-           otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer, audio=args.audio,
-           framework_overlay=framework_overlay)
+           otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
+           framework_overlay=framework_overlay, power_hal=args.power_hal,
+           codec2=args.codec2, audio=args.audio)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path

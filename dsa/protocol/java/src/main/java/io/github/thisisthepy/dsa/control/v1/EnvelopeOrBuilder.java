@@ -338,6 +338,17 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.PowerState getPowerState();
 
   /**
+   * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+   * @return Whether the powerHint field is set.
+   */
+  boolean hasPowerHint();
+  /**
+   * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
+   * @return The powerHint.
+   */
+  io.github.thisisthepy.dsa.control.v1.PowerHint getPowerHint();
+
+  /**
    * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>
    * @return Whether the deviceIdle field is set.
    */
@@ -347,6 +358,17 @@ public interface EnvelopeOrBuilder extends
    * @return The deviceIdle.
    */
   io.github.thisisthepy.dsa.control.v1.DeviceIdle getDeviceIdle();
+
+  /**
+   * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+   * @return Whether the hostMemory field is set.
+   */
+  boolean hasHostMemory();
+  /**
+   * <code>.dsa.control.v1.HostMemory host_memory = 43;</code>
+   * @return The hostMemory.
+   */
+  io.github.thisisthepy.dsa.control.v1.HostMemory getHostMemory();
 
   /**
    * <code>.dsa.control.v1.InstallApk install_apk = 60;</code>
@@ -402,6 +424,28 @@ public interface EnvelopeOrBuilder extends
    * @return The installResult.
    */
   io.github.thisisthepy.dsa.control.v1.InstallResult getInstallResult();
+
+  /**
+   * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+   * @return Whether the queryPackage field is set.
+   */
+  boolean hasQueryPackage();
+  /**
+   * <code>.dsa.control.v1.QueryPackage query_package = 65;</code>
+   * @return The queryPackage.
+   */
+  io.github.thisisthepy.dsa.control.v1.QueryPackage getQueryPackage();
+
+  /**
+   * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+   * @return Whether the packageState field is set.
+   */
+  boolean hasPackageState();
+  /**
+   * <code>.dsa.control.v1.PackageState package_state = 66;</code>
+   * @return The packageState.
+   */
+  io.github.thisisthepy.dsa.control.v1.PackageState getPackageState();
 
   /**
    * <code>.dsa.control.v1.OpenLink open_link = 50;</code>
@@ -657,48 +701,92 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.AccessibilityActionResult getAccessibilityActionResult();
 
   /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-   * @return Whether the audioOutputOpen field is set.
+   * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
+   * @return Whether the videoCapabilities field is set.
    */
-  boolean hasAudioOutputOpen();
+  boolean hasVideoCapabilities();
   /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-   * @return The audioOutputOpen.
+   * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
+   * @return The videoCapabilities.
    */
-  io.github.thisisthepy.dsa.control.v1.AudioOutputOpen getAudioOutputOpen();
+  io.github.thisisthepy.dsa.control.v1.VideoCapabilities getVideoCapabilities();
 
   /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-   * @return Whether the audioOutputReady field is set.
+   * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
+   * @return Whether the videoDecoderOpen field is set.
    */
-  boolean hasAudioOutputReady();
+  boolean hasVideoDecoderOpen();
   /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-   * @return The audioOutputReady.
+   * <code>.dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;</code>
+   * @return The videoDecoderOpen.
    */
-  io.github.thisisthepy.dsa.control.v1.AudioOutputReady getAudioOutputReady();
+  io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen getVideoDecoderOpen();
 
   /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-   * @return Whether the audioPcm field is set.
+   * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
+   * @return Whether the videoDecoderOpened field is set.
    */
-  boolean hasAudioPcm();
+  boolean hasVideoDecoderOpened();
   /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-   * @return The audioPcm.
+   * <code>.dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;</code>
+   * @return The videoDecoderOpened.
    */
-  io.github.thisisthepy.dsa.control.v1.AudioPcm getAudioPcm();
+  io.github.thisisthepy.dsa.control.v1.VideoDecoderOpened getVideoDecoderOpened();
 
   /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-   * @return Whether the audioOutputControl field is set.
+   * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
+   * @return Whether the videoPacket field is set.
    */
-  boolean hasAudioOutputControl();
+  boolean hasVideoPacket();
   /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-   * @return The audioOutputControl.
+   * <code>.dsa.control.v1.VideoPacket video_packet = 123;</code>
+   * @return The videoPacket.
    */
-  io.github.thisisthepy.dsa.control.v1.AudioOutputControl getAudioOutputControl();
+  io.github.thisisthepy.dsa.control.v1.VideoPacket getVideoPacket();
+
+  /**
+   * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+   * @return Whether the videoFrame field is set.
+   */
+  boolean hasVideoFrame();
+  /**
+   * <code>.dsa.control.v1.VideoFrame video_frame = 124;</code>
+   * @return The videoFrame.
+   */
+  io.github.thisisthepy.dsa.control.v1.VideoFrame getVideoFrame();
+
+  /**
+   * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+   * @return Whether the videoFlush field is set.
+   */
+  boolean hasVideoFlush();
+  /**
+   * <code>.dsa.control.v1.VideoFlush video_flush = 125;</code>
+   * @return The videoFlush.
+   */
+  io.github.thisisthepy.dsa.control.v1.VideoFlush getVideoFlush();
+
+  /**
+   * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+   * @return Whether the videoFlushed field is set.
+   */
+  boolean hasVideoFlushed();
+  /**
+   * <code>.dsa.control.v1.VideoFlushed video_flushed = 126;</code>
+   * @return The videoFlushed.
+   */
+  io.github.thisisthepy.dsa.control.v1.VideoFlushed getVideoFlushed();
+
+  /**
+   * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+   * @return Whether the videoError field is set.
+   */
+  boolean hasVideoError();
+  /**
+   * <code>.dsa.control.v1.VideoError video_error = 127;</code>
+   * @return The videoError.
+   */
+  io.github.thisisthepy.dsa.control.v1.VideoError getVideoError();
 
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

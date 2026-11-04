@@ -14,7 +14,9 @@ on:
       - "dsa/kernel/**"
       - "dsa/guest/channeld/**"
       - "dsa/guest/hwcomposer/**"
+      - "dsa/guest/codec2/**"
       - "dsa/guest/audio/**"
+      - "dsa/guest/power/**"
       - "dsa/guest/aidl/**"
       - "dsa/guest/transport/**"
       - "dsa/guest/agent/**"
@@ -153,6 +155,76 @@ jobs:
           path: .scratch/build-hwcomposer/dsa-hwcomposer
           if-no-files-found: error
 
+  codec2:
+    name: Build the guest codec HAL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-codec2 for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/codec2/build.sh .scratch .scratch/build-codec2
+
+      - name: Verify the binary links only the platform's C libraries
+        run: |
+          target=".scratch/build-codec2/dsa-codec2"
+          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so libnativewindow.so" || \
+            test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libnativewindow.so"
+
+      - name: Keep the codec HAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-codec2
+          path: .scratch/build-codec2/dsa-codec2
+          if-no-files-found: error
+
+  power-hal:
+    name: Build the guest power and health HALs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-power and dsa-health for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/power/build.sh .scratch .scratch/build-power
+
+      - name: Verify the binaries link only the platform's C libraries
+        run: |
+          for target in .scratch/build-power/dsa-power .scratch/build-power/dsa-health; do
+            readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+            needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+            echo "$target needs: $needed"
+            test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
+          done
+
+      - name: Keep the power and health HALs
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-power-hal
+          path: |
+            .scratch/build-power/dsa-power
+            .scratch/build-power/dsa-health
+          if-no-files-found: error
+
   audio:
     name: Build the guest audio module
     runs-on: ubuntu-latest
@@ -178,7 +250,6 @@ jobs:
           needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
           echo "needs: $needed"
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
-
       - name: Keep the audio module
         uses: actions/upload-artifact@v4
         with:
@@ -186,8 +257,7 @@ jobs:
           path: .scratch/build-audio/dsa-audio
           if-no-files-found: error
 
-  agent:
-    name: Build the guest agent
+  agent:    name: Build the guest agent
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -216,7 +286,7 @@ jobs:
 
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }})
-    needs: [guest-graphics, channeld, hwcomposer, audio, agent]
+    needs: [guest-graphics, channeld, hwcomposer, power-hal, codec2, audio, agent]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -310,6 +380,28 @@ jobs:
         run: |
           uv run dsa/graphics/check-guest-driver.py --executable .scratch/hwcomposer/dsa-hwcomposer .scratch/aosp-inputs/*/*target_files*.zip
 
+      - name: Download the guest codec HAL
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-codec2
+          path: .scratch/codec2
+
+      - name: Check the codec HAL starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/codec2/dsa-codec2 .scratch/aosp-inputs/*/*target_files*.zip
+
+      - name: Download the guest power and health HALs
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-power-hal
+          path: .scratch/power-hal
+
+      - name: Check the power and health HALs start on the image
+        run: |
+          for hal in dsa-power dsa-health; do
+            uv run dsa/graphics/check-guest-driver.py --executable ".scratch/power-hal/$hal" .scratch/aosp-inputs/*/*target_files*.zip
+          done
+
       - name: Download the guest audio module
         uses: actions/download-artifact@v4
         with:
@@ -332,7 +424,9 @@ jobs:
           args+=(--graphics-dir .scratch/guest-graphics --graphics-library .scratch/guest-graphics/libOpenglSystemCommon.so)
           args+=(--channeld .scratch/channeld/dsa-channeld)
           args+=(--hwcomposer .scratch/hwcomposer/dsa-hwcomposer)
+          args+=(--codec2 .scratch/codec2/dsa-codec2)
           args+=(--audio .scratch/audio/dsa-audio)
+          args+=(--power-hal .scratch/power-hal)
           args+=(--agent .scratch/agent/DsaAgent.apk)
           args+=(--aapt2 .scratch/build-tools/aapt2)
           uv run dsa/guest/image/make-image.py "${args[@]}"

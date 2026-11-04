@@ -102,6 +102,37 @@ public final class VectorsTest {
         cases.put("task_removed", Envelope.newBuilder()
                 .setTaskRemoved(TaskRemoved.newBuilder().setTaskId(42))
                 .build());
+        cases.put("video_capabilities", Envelope.newBuilder()
+                .setVideoCapabilities(VideoCapabilities.newBuilder()
+                        .addCodecs(VideoCodecSupport.newBuilder()
+                                .setCodec(VideoCodec.VIDEO_CODEC_H264)
+                                .setMaxWidth(4096)
+                                .setMaxHeight(2304)))
+                .build());
+        cases.put("video_decoder_open", Envelope.newBuilder()
+                .setVideoDecoderOpen(VideoDecoderOpen.newBuilder()
+                        .setCodec(VideoCodec.VIDEO_CODEC_H264)
+                        .setWidth(1280)
+                        .setHeight(720))
+                .build());
+        cases.put("video_flush", Envelope.newBuilder()
+                .setVideoFlush(VideoFlush.newBuilder())
+                .build());
+        cases.put("video_frame", Envelope.newBuilder()
+                .setVideoFrame(VideoFrame.newBuilder()
+                        .setFrameIndex(3)
+                        .setTimestampUs(100000)
+                        .setWidth(2)
+                        .setHeight(2)
+                        .setStride(2)
+                        .setNv12(ByteString.copyFrom(new byte[] {0x10, 0x10, 0x10, 0x10, (byte) 0x80, (byte) 0x80})))
+                .build());
+        cases.put("video_packet", Envelope.newBuilder()
+                .setVideoPacket(VideoPacket.newBuilder()
+                        .setFrameIndex(3)
+                        .setTimestampUs(100000)
+                        .setData(ByteString.copyFrom(new byte[] {0, 0, 0, 1, 0x65})))
+                .build());
         cases.put("task_frames", Envelope.newBuilder()
                 .setTaskFrames(TaskFrames.newBuilder().setTaskId(42).setDisplayId(3))
                 .build());
@@ -222,6 +253,18 @@ public final class VectorsTest {
                         .setCharging(false)
                         .setPowerSaver(true))
                 .build());
+        cases.put("power_hint_launch_mode", Envelope.newBuilder()
+                .setPowerHint(PowerHint.newBuilder()
+                        .setKind(PowerHintKind.POWER_HINT_KIND_MODE)
+                        .setId(5)
+                        .setEnabled(true))
+                .build());
+        cases.put("power_hint_interaction_boost", Envelope.newBuilder()
+                .setPowerHint(PowerHint.newBuilder()
+                        .setKind(PowerHintKind.POWER_HINT_KIND_BOOST)
+                        .setId(0)
+                        .setDurationMs(80))
+                .build());
         cases.put("device_idle", Envelope.newBuilder()
                 .setDeviceIdle(DeviceIdle.newBuilder().setIdle(true))
                 .build());
@@ -270,6 +313,14 @@ public final class VectorsTest {
                 .build());
         cases.put("install_progress", Envelope.newBuilder()
                 .setInstallProgress(InstallProgress.newBuilder().setTransferId(3).setReceived(131072))
+                .build());
+        cases.put("query_package", Envelope.newBuilder()
+                .setQueryPackage(QueryPackage.newBuilder().setRequestId(7).setPackageName("com.example.notes"))
+                .build());
+        cases.put("package_state_installed", Envelope.newBuilder()
+                .setPackageState(PackageState.newBuilder().setRequestId(7).setInstalled(true)
+                        .setVersionCode(42).setVersionName("1.2")
+                        .addSignerSha256(ByteString.copyFrom(bytes(0x00, 32))))
                 .build());
         cases.put("install_result_success", Envelope.newBuilder()
                 .setInstallResult(InstallResult.newBuilder().setTransferId(3)

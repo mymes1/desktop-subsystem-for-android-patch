@@ -72,18 +72,6 @@ extern ApkChunkDefaultTypeInternal _ApkChunk_default_instance_;
 class AppInfo;
 struct AppInfoDefaultTypeInternal;
 extern AppInfoDefaultTypeInternal _AppInfo_default_instance_;
-class AudioOutputControl;
-struct AudioOutputControlDefaultTypeInternal;
-extern AudioOutputControlDefaultTypeInternal _AudioOutputControl_default_instance_;
-class AudioOutputOpen;
-struct AudioOutputOpenDefaultTypeInternal;
-extern AudioOutputOpenDefaultTypeInternal _AudioOutputOpen_default_instance_;
-class AudioOutputReady;
-struct AudioOutputReadyDefaultTypeInternal;
-extern AudioOutputReadyDefaultTypeInternal _AudioOutputReady_default_instance_;
-class AudioPcm;
-struct AudioPcmDefaultTypeInternal;
-extern AudioPcmDefaultTypeInternal _AudioPcm_default_instance_;
 class AuthChallenge;
 struct AuthChallengeDefaultTypeInternal;
 extern AuthChallengeDefaultTypeInternal _AuthChallenge_default_instance_;
@@ -138,6 +126,9 @@ extern HelloAcceptedDefaultTypeInternal _HelloAccepted_default_instance_;
 class HelloRejected;
 struct HelloRejectedDefaultTypeInternal;
 extern HelloRejectedDefaultTypeInternal _HelloRejected_default_instance_;
+class HostMemory;
+struct HostMemoryDefaultTypeInternal;
+extern HostMemoryDefaultTypeInternal _HostMemory_default_instance_;
 class ImeCommit;
 struct ImeCommitDefaultTypeInternal;
 extern ImeCommitDefaultTypeInternal _ImeCommit_default_instance_;
@@ -192,15 +183,24 @@ extern OpenFileDefaultTypeInternal _OpenFile_default_instance_;
 class OpenLink;
 struct OpenLinkDefaultTypeInternal;
 extern OpenLinkDefaultTypeInternal _OpenLink_default_instance_;
+class PackageState;
+struct PackageStateDefaultTypeInternal;
+extern PackageStateDefaultTypeInternal _PackageState_default_instance_;
 class PointerEvent;
 struct PointerEventDefaultTypeInternal;
 extern PointerEventDefaultTypeInternal _PointerEvent_default_instance_;
+class PowerHint;
+struct PowerHintDefaultTypeInternal;
+extern PowerHintDefaultTypeInternal _PowerHint_default_instance_;
 class PowerState;
 struct PowerStateDefaultTypeInternal;
 extern PowerStateDefaultTypeInternal _PowerState_default_instance_;
 class ProcessMemory;
 struct ProcessMemoryDefaultTypeInternal;
 extern ProcessMemoryDefaultTypeInternal _ProcessMemory_default_instance_;
+class QueryPackage;
+struct QueryPackageDefaultTypeInternal;
+extern QueryPackageDefaultTypeInternal _QueryPackage_default_instance_;
 class Rect;
 struct RectDefaultTypeInternal;
 extern RectDefaultTypeInternal _Rect_default_instance_;
@@ -231,6 +231,33 @@ extern TaskRemovedDefaultTypeInternal _TaskRemoved_default_instance_;
 class TaskUpdated;
 struct TaskUpdatedDefaultTypeInternal;
 extern TaskUpdatedDefaultTypeInternal _TaskUpdated_default_instance_;
+class VideoCapabilities;
+struct VideoCapabilitiesDefaultTypeInternal;
+extern VideoCapabilitiesDefaultTypeInternal _VideoCapabilities_default_instance_;
+class VideoCodecSupport;
+struct VideoCodecSupportDefaultTypeInternal;
+extern VideoCodecSupportDefaultTypeInternal _VideoCodecSupport_default_instance_;
+class VideoDecoderOpen;
+struct VideoDecoderOpenDefaultTypeInternal;
+extern VideoDecoderOpenDefaultTypeInternal _VideoDecoderOpen_default_instance_;
+class VideoDecoderOpened;
+struct VideoDecoderOpenedDefaultTypeInternal;
+extern VideoDecoderOpenedDefaultTypeInternal _VideoDecoderOpened_default_instance_;
+class VideoError;
+struct VideoErrorDefaultTypeInternal;
+extern VideoErrorDefaultTypeInternal _VideoError_default_instance_;
+class VideoFlush;
+struct VideoFlushDefaultTypeInternal;
+extern VideoFlushDefaultTypeInternal _VideoFlush_default_instance_;
+class VideoFlushed;
+struct VideoFlushedDefaultTypeInternal;
+extern VideoFlushedDefaultTypeInternal _VideoFlushed_default_instance_;
+class VideoFrame;
+struct VideoFrameDefaultTypeInternal;
+extern VideoFrameDefaultTypeInternal _VideoFrame_default_instance_;
+class VideoPacket;
+struct VideoPacketDefaultTypeInternal;
+extern VideoPacketDefaultTypeInternal _VideoPacket_default_instance_;
 class WidgetAdded;
 struct WidgetAddedDefaultTypeInternal;
 extern WidgetAddedDefaultTypeInternal _WidgetAdded_default_instance_;
@@ -265,10 +292,6 @@ template<> ::dsa::control::v1::AddWidget* Arena::CreateMaybeMessage<::dsa::contr
 template<> ::dsa::control::v1::AgentConnected* Arena::CreateMaybeMessage<::dsa::control::v1::AgentConnected>(Arena*);
 template<> ::dsa::control::v1::ApkChunk* Arena::CreateMaybeMessage<::dsa::control::v1::ApkChunk>(Arena*);
 template<> ::dsa::control::v1::AppInfo* Arena::CreateMaybeMessage<::dsa::control::v1::AppInfo>(Arena*);
-template<> ::dsa::control::v1::AudioOutputControl* Arena::CreateMaybeMessage<::dsa::control::v1::AudioOutputControl>(Arena*);
-template<> ::dsa::control::v1::AudioOutputOpen* Arena::CreateMaybeMessage<::dsa::control::v1::AudioOutputOpen>(Arena*);
-template<> ::dsa::control::v1::AudioOutputReady* Arena::CreateMaybeMessage<::dsa::control::v1::AudioOutputReady>(Arena*);
-template<> ::dsa::control::v1::AudioPcm* Arena::CreateMaybeMessage<::dsa::control::v1::AudioPcm>(Arena*);
 template<> ::dsa::control::v1::AuthChallenge* Arena::CreateMaybeMessage<::dsa::control::v1::AuthChallenge>(Arena*);
 template<> ::dsa::control::v1::AuthProof* Arena::CreateMaybeMessage<::dsa::control::v1::AuthProof>(Arena*);
 template<> ::dsa::control::v1::CancelInstall* Arena::CreateMaybeMessage<::dsa::control::v1::CancelInstall>(Arena*);
@@ -287,6 +310,7 @@ template<> ::dsa::control::v1::GuestNotification* Arena::CreateMaybeMessage<::ds
 template<> ::dsa::control::v1::Hello* Arena::CreateMaybeMessage<::dsa::control::v1::Hello>(Arena*);
 template<> ::dsa::control::v1::HelloAccepted* Arena::CreateMaybeMessage<::dsa::control::v1::HelloAccepted>(Arena*);
 template<> ::dsa::control::v1::HelloRejected* Arena::CreateMaybeMessage<::dsa::control::v1::HelloRejected>(Arena*);
+template<> ::dsa::control::v1::HostMemory* Arena::CreateMaybeMessage<::dsa::control::v1::HostMemory>(Arena*);
 template<> ::dsa::control::v1::ImeCommit* Arena::CreateMaybeMessage<::dsa::control::v1::ImeCommit>(Arena*);
 template<> ::dsa::control::v1::ImeComposition* Arena::CreateMaybeMessage<::dsa::control::v1::ImeComposition>(Arena*);
 template<> ::dsa::control::v1::ImeCursor* Arena::CreateMaybeMessage<::dsa::control::v1::ImeCursor>(Arena*);
@@ -305,9 +329,12 @@ template<> ::dsa::control::v1::NotificationDismissed* Arena::CreateMaybeMessage<
 template<> ::dsa::control::v1::NotificationRemoved* Arena::CreateMaybeMessage<::dsa::control::v1::NotificationRemoved>(Arena*);
 template<> ::dsa::control::v1::OpenFile* Arena::CreateMaybeMessage<::dsa::control::v1::OpenFile>(Arena*);
 template<> ::dsa::control::v1::OpenLink* Arena::CreateMaybeMessage<::dsa::control::v1::OpenLink>(Arena*);
+template<> ::dsa::control::v1::PackageState* Arena::CreateMaybeMessage<::dsa::control::v1::PackageState>(Arena*);
 template<> ::dsa::control::v1::PointerEvent* Arena::CreateMaybeMessage<::dsa::control::v1::PointerEvent>(Arena*);
+template<> ::dsa::control::v1::PowerHint* Arena::CreateMaybeMessage<::dsa::control::v1::PowerHint>(Arena*);
 template<> ::dsa::control::v1::PowerState* Arena::CreateMaybeMessage<::dsa::control::v1::PowerState>(Arena*);
 template<> ::dsa::control::v1::ProcessMemory* Arena::CreateMaybeMessage<::dsa::control::v1::ProcessMemory>(Arena*);
+template<> ::dsa::control::v1::QueryPackage* Arena::CreateMaybeMessage<::dsa::control::v1::QueryPackage>(Arena*);
 template<> ::dsa::control::v1::Rect* Arena::CreateMaybeMessage<::dsa::control::v1::Rect>(Arena*);
 template<> ::dsa::control::v1::RemoveWidget* Arena::CreateMaybeMessage<::dsa::control::v1::RemoveWidget>(Arena*);
 template<> ::dsa::control::v1::RequestGuestMemory* Arena::CreateMaybeMessage<::dsa::control::v1::RequestGuestMemory>(Arena*);
@@ -318,6 +345,15 @@ template<> ::dsa::control::v1::SetTaskDensity* Arena::CreateMaybeMessage<::dsa::
 template<> ::dsa::control::v1::TaskFrames* Arena::CreateMaybeMessage<::dsa::control::v1::TaskFrames>(Arena*);
 template<> ::dsa::control::v1::TaskRemoved* Arena::CreateMaybeMessage<::dsa::control::v1::TaskRemoved>(Arena*);
 template<> ::dsa::control::v1::TaskUpdated* Arena::CreateMaybeMessage<::dsa::control::v1::TaskUpdated>(Arena*);
+template<> ::dsa::control::v1::VideoCapabilities* Arena::CreateMaybeMessage<::dsa::control::v1::VideoCapabilities>(Arena*);
+template<> ::dsa::control::v1::VideoCodecSupport* Arena::CreateMaybeMessage<::dsa::control::v1::VideoCodecSupport>(Arena*);
+template<> ::dsa::control::v1::VideoDecoderOpen* Arena::CreateMaybeMessage<::dsa::control::v1::VideoDecoderOpen>(Arena*);
+template<> ::dsa::control::v1::VideoDecoderOpened* Arena::CreateMaybeMessage<::dsa::control::v1::VideoDecoderOpened>(Arena*);
+template<> ::dsa::control::v1::VideoError* Arena::CreateMaybeMessage<::dsa::control::v1::VideoError>(Arena*);
+template<> ::dsa::control::v1::VideoFlush* Arena::CreateMaybeMessage<::dsa::control::v1::VideoFlush>(Arena*);
+template<> ::dsa::control::v1::VideoFlushed* Arena::CreateMaybeMessage<::dsa::control::v1::VideoFlushed>(Arena*);
+template<> ::dsa::control::v1::VideoFrame* Arena::CreateMaybeMessage<::dsa::control::v1::VideoFrame>(Arena*);
+template<> ::dsa::control::v1::VideoPacket* Arena::CreateMaybeMessage<::dsa::control::v1::VideoPacket>(Arena*);
 template<> ::dsa::control::v1::WidgetAdded* Arena::CreateMaybeMessage<::dsa::control::v1::WidgetAdded>(Arena*);
 template<> ::dsa::control::v1::WidgetFrame* Arena::CreateMaybeMessage<::dsa::control::v1::WidgetFrame>(Arena*);
 template<> ::dsa::control::v1::WidgetList* Arena::CreateMaybeMessage<::dsa::control::v1::WidgetList>(Arena*);
@@ -355,13 +391,13 @@ enum Role : int {
   ROLE_UNSPECIFIED = 0,
   ROLE_HOST = 1,
   ROLE_GUEST = 2,
-  ROLE_GUEST_AUDIO = 3,
+  ROLE_GUEST_VIDEO = 4,
   Role_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
   Role_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
 };
 bool Role_IsValid(int value);
 constexpr Role Role_MIN = ROLE_UNSPECIFIED;
-constexpr Role Role_MAX = ROLE_GUEST_AUDIO;
+constexpr Role Role_MAX = ROLE_GUEST_VIDEO;
 constexpr int Role_ARRAYSIZE = Role_MAX + 1;
 
 const std::string& Role_Name(Role value);
@@ -472,6 +508,28 @@ inline const std::string& KeyAction_Name(T enum_t_value) {
 }
 bool KeyAction_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, KeyAction* value);
+enum PowerHintKind : int {
+  POWER_HINT_KIND_UNSPECIFIED = 0,
+  POWER_HINT_KIND_MODE = 1,
+  POWER_HINT_KIND_BOOST = 2,
+  PowerHintKind_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  PowerHintKind_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool PowerHintKind_IsValid(int value);
+constexpr PowerHintKind PowerHintKind_MIN = POWER_HINT_KIND_UNSPECIFIED;
+constexpr PowerHintKind PowerHintKind_MAX = POWER_HINT_KIND_BOOST;
+constexpr int PowerHintKind_ARRAYSIZE = PowerHintKind_MAX + 1;
+
+const std::string& PowerHintKind_Name(PowerHintKind value);
+template<typename T>
+inline const std::string& PowerHintKind_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, PowerHintKind>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function PowerHintKind_Name.");
+  return PowerHintKind_Name(static_cast<PowerHintKind>(enum_t_value));
+}
+bool PowerHintKind_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, PowerHintKind* value);
 enum InstallStatus : int {
   INSTALL_STATUS_UNSPECIFIED = 0,
   INSTALL_STATUS_SUCCESS = 1,
@@ -522,6 +580,30 @@ inline const std::string& FileAction_Name(T enum_t_value) {
 }
 bool FileAction_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, FileAction* value);
+enum VideoCodec : int {
+  VIDEO_CODEC_UNSPECIFIED = 0,
+  VIDEO_CODEC_H264 = 1,
+  VIDEO_CODEC_HEVC = 2,
+  VIDEO_CODEC_VP9 = 3,
+  VIDEO_CODEC_AV1 = 4,
+  VideoCodec_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  VideoCodec_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool VideoCodec_IsValid(int value);
+constexpr VideoCodec VideoCodec_MIN = VIDEO_CODEC_UNSPECIFIED;
+constexpr VideoCodec VideoCodec_MAX = VIDEO_CODEC_AV1;
+constexpr int VideoCodec_ARRAYSIZE = VideoCodec_MAX + 1;
+
+const std::string& VideoCodec_Name(VideoCodec value);
+template<typename T>
+inline const std::string& VideoCodec_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, VideoCodec>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function VideoCodec_Name.");
+  return VideoCodec_Name(static_cast<VideoCodec>(enum_t_value));
+}
+bool VideoCodec_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, VideoCodec* value);
 enum NodeAction : int {
   NODE_ACTION_UNSPECIFIED = 0,
   NODE_ACTION_CLICK = 1,
@@ -550,51 +632,6 @@ inline const std::string& NodeAction_Name(T enum_t_value) {
 }
 bool NodeAction_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, NodeAction* value);
-enum AudioSampleFormat : int {
-  AUDIO_SAMPLE_FORMAT_UNSPECIFIED = 0,
-  AUDIO_SAMPLE_FORMAT_S16LE = 1,
-  AudioSampleFormat_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
-  AudioSampleFormat_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
-};
-bool AudioSampleFormat_IsValid(int value);
-constexpr AudioSampleFormat AudioSampleFormat_MIN = AUDIO_SAMPLE_FORMAT_UNSPECIFIED;
-constexpr AudioSampleFormat AudioSampleFormat_MAX = AUDIO_SAMPLE_FORMAT_S16LE;
-constexpr int AudioSampleFormat_ARRAYSIZE = AudioSampleFormat_MAX + 1;
-
-const std::string& AudioSampleFormat_Name(AudioSampleFormat value);
-template<typename T>
-inline const std::string& AudioSampleFormat_Name(T enum_t_value) {
-  static_assert(::std::is_same<T, AudioSampleFormat>::value ||
-    ::std::is_integral<T>::value,
-    "Incorrect type passed to function AudioSampleFormat_Name.");
-  return AudioSampleFormat_Name(static_cast<AudioSampleFormat>(enum_t_value));
-}
-bool AudioSampleFormat_Parse(
-    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, AudioSampleFormat* value);
-enum AudioOutputCommand : int {
-  AUDIO_OUTPUT_COMMAND_UNSPECIFIED = 0,
-  AUDIO_OUTPUT_COMMAND_START = 1,
-  AUDIO_OUTPUT_COMMAND_PAUSE = 2,
-  AUDIO_OUTPUT_COMMAND_FLUSH = 3,
-  AUDIO_OUTPUT_COMMAND_STANDBY = 4,
-  AudioOutputCommand_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
-  AudioOutputCommand_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
-};
-bool AudioOutputCommand_IsValid(int value);
-constexpr AudioOutputCommand AudioOutputCommand_MIN = AUDIO_OUTPUT_COMMAND_UNSPECIFIED;
-constexpr AudioOutputCommand AudioOutputCommand_MAX = AUDIO_OUTPUT_COMMAND_STANDBY;
-constexpr int AudioOutputCommand_ARRAYSIZE = AudioOutputCommand_MAX + 1;
-
-const std::string& AudioOutputCommand_Name(AudioOutputCommand value);
-template<typename T>
-inline const std::string& AudioOutputCommand_Name(T enum_t_value) {
-  static_assert(::std::is_same<T, AudioOutputCommand>::value ||
-    ::std::is_integral<T>::value,
-    "Incorrect type passed to function AudioOutputCommand_Name.");
-  return AudioOutputCommand_Name(static_cast<AudioOutputCommand>(enum_t_value));
-}
-bool AudioOutputCommand_Parse(
-    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, AudioOutputCommand* value);
 // ===================================================================
 
 class Hello final :
@@ -4257,6 +4294,299 @@ class PowerState final :
 };
 // -------------------------------------------------------------------
 
+class HostMemory final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.HostMemory) */ {
+ public:
+  inline HostMemory() : HostMemory(nullptr) {}
+  ~HostMemory() override;
+  explicit PROTOBUF_CONSTEXPR HostMemory(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  HostMemory(const HostMemory& from);
+  HostMemory(HostMemory&& from) noexcept
+    : HostMemory() {
+    *this = ::std::move(from);
+  }
+
+  inline HostMemory& operator=(const HostMemory& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline HostMemory& operator=(HostMemory&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const HostMemory& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const HostMemory* internal_default_instance() {
+    return reinterpret_cast<const HostMemory*>(
+               &_HostMemory_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    23;
+
+  friend void swap(HostMemory& a, HostMemory& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(HostMemory* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(HostMemory* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  HostMemory* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<HostMemory>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const HostMemory& from);
+  void MergeFrom(const HostMemory& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(HostMemory* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.HostMemory";
+  }
+  protected:
+  explicit HostMemory(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kLowFieldNumber = 1,
+  };
+  // bool low = 1;
+  void clear_low();
+  bool low() const;
+  void set_low(bool value);
+  private:
+  bool _internal_low() const;
+  void _internal_set_low(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.HostMemory)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    bool low_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class PowerHint final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.PowerHint) */ {
+ public:
+  inline PowerHint() : PowerHint(nullptr) {}
+  ~PowerHint() override;
+  explicit PROTOBUF_CONSTEXPR PowerHint(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  PowerHint(const PowerHint& from);
+  PowerHint(PowerHint&& from) noexcept
+    : PowerHint() {
+    *this = ::std::move(from);
+  }
+
+  inline PowerHint& operator=(const PowerHint& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PowerHint& operator=(PowerHint&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const PowerHint& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const PowerHint* internal_default_instance() {
+    return reinterpret_cast<const PowerHint*>(
+               &_PowerHint_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    24;
+
+  friend void swap(PowerHint& a, PowerHint& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(PowerHint* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PowerHint* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  PowerHint* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<PowerHint>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const PowerHint& from);
+  void MergeFrom(const PowerHint& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(PowerHint* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.PowerHint";
+  }
+  protected:
+  explicit PowerHint(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kKindFieldNumber = 1,
+    kIdFieldNumber = 2,
+    kEnabledFieldNumber = 3,
+    kDurationMsFieldNumber = 4,
+  };
+  // .dsa.control.v1.PowerHintKind kind = 1;
+  void clear_kind();
+  ::dsa::control::v1::PowerHintKind kind() const;
+  void set_kind(::dsa::control::v1::PowerHintKind value);
+  private:
+  ::dsa::control::v1::PowerHintKind _internal_kind() const;
+  void _internal_set_kind(::dsa::control::v1::PowerHintKind value);
+  public:
+
+  // int32 id = 2;
+  void clear_id();
+  int32_t id() const;
+  void set_id(int32_t value);
+  private:
+  int32_t _internal_id() const;
+  void _internal_set_id(int32_t value);
+  public:
+
+  // bool enabled = 3;
+  void clear_enabled();
+  bool enabled() const;
+  void set_enabled(bool value);
+  private:
+  bool _internal_enabled() const;
+  void _internal_set_enabled(bool value);
+  public:
+
+  // int32 duration_ms = 4;
+  void clear_duration_ms();
+  int32_t duration_ms() const;
+  void set_duration_ms(int32_t value);
+  private:
+  int32_t _internal_duration_ms() const;
+  void _internal_set_duration_ms(int32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.PowerHint)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    int kind_;
+    int32_t id_;
+    bool enabled_;
+    int32_t duration_ms_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class DeviceIdle final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DeviceIdle) */ {
  public:
@@ -4296,7 +4626,7 @@ class DeviceIdle final :
                &_DeviceIdle_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    23;
+    25;
 
   friend void swap(DeviceIdle& a, DeviceIdle& b) {
     a.Swap(&b);
@@ -4426,7 +4756,7 @@ class ClipboardText final :
                &_ClipboardText_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    24;
+    26;
 
   friend void swap(ClipboardText& a, ClipboardText& b) {
     a.Swap(&b);
@@ -4561,7 +4891,7 @@ class ClipboardSharing final :
                &_ClipboardSharing_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    25;
+    27;
 
   friend void swap(ClipboardSharing& a, ClipboardSharing& b) {
     a.Swap(&b);
@@ -4691,7 +5021,7 @@ class GuestNotification final :
                &_GuestNotification_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    26;
+    28;
 
   friend void swap(GuestNotification& a, GuestNotification& b) {
     a.Swap(&b);
@@ -4950,7 +5280,7 @@ class NotificationRemoved final :
                &_NotificationRemoved_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    27;
+    29;
 
   friend void swap(NotificationRemoved& a, NotificationRemoved& b) {
     a.Swap(&b);
@@ -5085,7 +5415,7 @@ class NotificationClicked final :
                &_NotificationClicked_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    28;
+    30;
 
   friend void swap(NotificationClicked& a, NotificationClicked& b) {
     a.Swap(&b);
@@ -5220,7 +5550,7 @@ class NotificationDismissed final :
                &_NotificationDismissed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    29;
+    31;
 
   friend void swap(NotificationDismissed& a, NotificationDismissed& b) {
     a.Swap(&b);
@@ -5355,7 +5685,7 @@ class RequestGuestMemory final :
                &_RequestGuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    30;
+    32;
 
   friend void swap(RequestGuestMemory& a, RequestGuestMemory& b) {
     a.Swap(&b);
@@ -5472,7 +5802,7 @@ class ProcessMemory final :
                &_ProcessMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    31;
+    33;
 
   friend void swap(ProcessMemory& a, ProcessMemory& b) {
     a.Swap(&b);
@@ -5640,7 +5970,7 @@ class GuestMemory final :
                &_GuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    32;
+    34;
 
   friend void swap(GuestMemory& a, GuestMemory& b) {
     a.Swap(&b);
@@ -5922,7 +6252,7 @@ class AgentConnected final :
                &_AgentConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    33;
+    35;
 
   friend void swap(AgentConnected& a, AgentConnected& b) {
     a.Swap(&b);
@@ -6039,7 +6369,7 @@ class GuestBoot final :
                &_GuestBoot_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    34;
+    36;
 
   friend void swap(GuestBoot& a, GuestBoot& b) {
     a.Swap(&b);
@@ -6180,7 +6510,7 @@ class InstallApk final :
                &_InstallApk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    35;
+    37;
 
   friend void swap(InstallApk& a, InstallApk& b) {
     a.Swap(&b);
@@ -6337,7 +6667,7 @@ class ApkChunk final :
                &_ApkChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    36;
+    38;
 
   friend void swap(ApkChunk& a, ApkChunk& b) {
     a.Swap(&b);
@@ -6455,6 +6785,346 @@ class ApkChunk final :
 };
 // -------------------------------------------------------------------
 
+class QueryPackage final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.QueryPackage) */ {
+ public:
+  inline QueryPackage() : QueryPackage(nullptr) {}
+  ~QueryPackage() override;
+  explicit PROTOBUF_CONSTEXPR QueryPackage(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  QueryPackage(const QueryPackage& from);
+  QueryPackage(QueryPackage&& from) noexcept
+    : QueryPackage() {
+    *this = ::std::move(from);
+  }
+
+  inline QueryPackage& operator=(const QueryPackage& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline QueryPackage& operator=(QueryPackage&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const QueryPackage& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const QueryPackage* internal_default_instance() {
+    return reinterpret_cast<const QueryPackage*>(
+               &_QueryPackage_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    39;
+
+  friend void swap(QueryPackage& a, QueryPackage& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(QueryPackage* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(QueryPackage* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  QueryPackage* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<QueryPackage>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const QueryPackage& from);
+  void MergeFrom(const QueryPackage& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(QueryPackage* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.QueryPackage";
+  }
+  protected:
+  explicit QueryPackage(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kPackageNameFieldNumber = 2,
+    kRequestIdFieldNumber = 1,
+  };
+  // string package_name = 2;
+  void clear_package_name();
+  const std::string& package_name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_package_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_package_name();
+  PROTOBUF_NODISCARD std::string* release_package_name();
+  void set_allocated_package_name(std::string* package_name);
+  private:
+  const std::string& _internal_package_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package_name(const std::string& value);
+  std::string* _internal_mutable_package_name();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.QueryPackage)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
+    uint32_t request_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class PackageState final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.PackageState) */ {
+ public:
+  inline PackageState() : PackageState(nullptr) {}
+  ~PackageState() override;
+  explicit PROTOBUF_CONSTEXPR PackageState(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  PackageState(const PackageState& from);
+  PackageState(PackageState&& from) noexcept
+    : PackageState() {
+    *this = ::std::move(from);
+  }
+
+  inline PackageState& operator=(const PackageState& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline PackageState& operator=(PackageState&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const PackageState& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const PackageState* internal_default_instance() {
+    return reinterpret_cast<const PackageState*>(
+               &_PackageState_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    40;
+
+  friend void swap(PackageState& a, PackageState& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(PackageState* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(PackageState* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  PackageState* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<PackageState>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const PackageState& from);
+  void MergeFrom(const PackageState& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(PackageState* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.PackageState";
+  }
+  protected:
+  explicit PackageState(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kSignerSha256FieldNumber = 5,
+    kVersionNameFieldNumber = 4,
+    kRequestIdFieldNumber = 1,
+    kInstalledFieldNumber = 2,
+    kVersionCodeFieldNumber = 3,
+  };
+  // repeated bytes signer_sha256 = 5;
+  int signer_sha256_size() const;
+  private:
+  int _internal_signer_sha256_size() const;
+  public:
+  void clear_signer_sha256();
+  const std::string& signer_sha256(int index) const;
+  std::string* mutable_signer_sha256(int index);
+  void set_signer_sha256(int index, const std::string& value);
+  void set_signer_sha256(int index, std::string&& value);
+  void set_signer_sha256(int index, const char* value);
+  void set_signer_sha256(int index, const void* value, size_t size);
+  std::string* add_signer_sha256();
+  void add_signer_sha256(const std::string& value);
+  void add_signer_sha256(std::string&& value);
+  void add_signer_sha256(const char* value);
+  void add_signer_sha256(const void* value, size_t size);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& signer_sha256() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_signer_sha256();
+  private:
+  const std::string& _internal_signer_sha256(int index) const;
+  std::string* _internal_add_signer_sha256();
+  public:
+
+  // string version_name = 4;
+  void clear_version_name();
+  const std::string& version_name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_version_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_version_name();
+  PROTOBUF_NODISCARD std::string* release_version_name();
+  void set_allocated_version_name(std::string* version_name);
+  private:
+  const std::string& _internal_version_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_version_name(const std::string& value);
+  std::string* _internal_mutable_version_name();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // bool installed = 2;
+  void clear_installed();
+  bool installed() const;
+  void set_installed(bool value);
+  private:
+  bool _internal_installed() const;
+  void _internal_set_installed(bool value);
+  public:
+
+  // int64 version_code = 3;
+  void clear_version_code();
+  int64_t version_code() const;
+  void set_version_code(int64_t value);
+  private:
+  int64_t _internal_version_code() const;
+  void _internal_set_version_code(int64_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.PackageState)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> signer_sha256_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr version_name_;
+    uint32_t request_id_;
+    bool installed_;
+    int64_t version_code_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class OpenLink final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.OpenLink) */ {
  public:
@@ -6494,7 +7164,7 @@ class OpenLink final :
                &_OpenLink_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    37;
+    41;
 
   friend void swap(OpenLink& a, OpenLink& b) {
     a.Swap(&b);
@@ -6629,7 +7299,7 @@ class LinkHandling final :
                &_LinkHandling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    38;
+    42;
 
   friend void swap(LinkHandling& a, LinkHandling& b) {
     a.Swap(&b);
@@ -6759,7 +7429,7 @@ class OpenFile final :
                &_OpenFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    39;
+    43;
 
   friend void swap(OpenFile& a, OpenFile& b) {
     a.Swap(&b);
@@ -6927,7 +7597,7 @@ class FileChunk final :
                &_FileChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    40;
+    44;
 
   friend void swap(FileChunk& a, FileChunk& b) {
     a.Swap(&b);
@@ -7084,7 +7754,7 @@ class CancelInstall final :
                &_CancelInstall_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    41;
+    45;
 
   friend void swap(CancelInstall& a, CancelInstall& b) {
     a.Swap(&b);
@@ -7214,7 +7884,7 @@ class InstallProgress final :
                &_InstallProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    42;
+    46;
 
   friend void swap(InstallProgress& a, InstallProgress& b) {
     a.Swap(&b);
@@ -7355,7 +8025,7 @@ class InstallResult final :
                &_InstallResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    43;
+    47;
 
   friend void swap(InstallResult& a, InstallResult& b) {
     a.Swap(&b);
@@ -7528,7 +8198,7 @@ class FileProgress final :
                &_FileProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    44;
+    48;
 
   friend void swap(FileProgress& a, FileProgress& b) {
     a.Swap(&b);
@@ -7685,7 +8355,7 @@ class ClockProbe final :
                &_ClockProbe_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    45;
+    49;
 
   friend void swap(ClockProbe& a, ClockProbe& b) {
     a.Swap(&b);
@@ -7776,6 +8446,1344 @@ class ClockProbe final :
 };
 // -------------------------------------------------------------------
 
+class VideoCodecSupport final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.VideoCodecSupport) */ {
+ public:
+  inline VideoCodecSupport() : VideoCodecSupport(nullptr) {}
+  ~VideoCodecSupport() override;
+  explicit PROTOBUF_CONSTEXPR VideoCodecSupport(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  VideoCodecSupport(const VideoCodecSupport& from);
+  VideoCodecSupport(VideoCodecSupport&& from) noexcept
+    : VideoCodecSupport() {
+    *this = ::std::move(from);
+  }
+
+  inline VideoCodecSupport& operator=(const VideoCodecSupport& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline VideoCodecSupport& operator=(VideoCodecSupport&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const VideoCodecSupport& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const VideoCodecSupport* internal_default_instance() {
+    return reinterpret_cast<const VideoCodecSupport*>(
+               &_VideoCodecSupport_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    50;
+
+  friend void swap(VideoCodecSupport& a, VideoCodecSupport& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(VideoCodecSupport* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(VideoCodecSupport* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  VideoCodecSupport* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<VideoCodecSupport>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const VideoCodecSupport& from);
+  void MergeFrom(const VideoCodecSupport& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(VideoCodecSupport* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.VideoCodecSupport";
+  }
+  protected:
+  explicit VideoCodecSupport(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kCodecFieldNumber = 1,
+    kMaxWidthFieldNumber = 2,
+    kMaxHeightFieldNumber = 3,
+  };
+  // .dsa.control.v1.VideoCodec codec = 1;
+  void clear_codec();
+  ::dsa::control::v1::VideoCodec codec() const;
+  void set_codec(::dsa::control::v1::VideoCodec value);
+  private:
+  ::dsa::control::v1::VideoCodec _internal_codec() const;
+  void _internal_set_codec(::dsa::control::v1::VideoCodec value);
+  public:
+
+  // uint32 max_width = 2;
+  void clear_max_width();
+  uint32_t max_width() const;
+  void set_max_width(uint32_t value);
+  private:
+  uint32_t _internal_max_width() const;
+  void _internal_set_max_width(uint32_t value);
+  public:
+
+  // uint32 max_height = 3;
+  void clear_max_height();
+  uint32_t max_height() const;
+  void set_max_height(uint32_t value);
+  private:
+  uint32_t _internal_max_height() const;
+  void _internal_set_max_height(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.VideoCodecSupport)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    int codec_;
+    uint32_t max_width_;
+    uint32_t max_height_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class VideoCapabilities final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.VideoCapabilities) */ {
+ public:
+  inline VideoCapabilities() : VideoCapabilities(nullptr) {}
+  ~VideoCapabilities() override;
+  explicit PROTOBUF_CONSTEXPR VideoCapabilities(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  VideoCapabilities(const VideoCapabilities& from);
+  VideoCapabilities(VideoCapabilities&& from) noexcept
+    : VideoCapabilities() {
+    *this = ::std::move(from);
+  }
+
+  inline VideoCapabilities& operator=(const VideoCapabilities& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline VideoCapabilities& operator=(VideoCapabilities&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const VideoCapabilities& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const VideoCapabilities* internal_default_instance() {
+    return reinterpret_cast<const VideoCapabilities*>(
+               &_VideoCapabilities_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    51;
+
+  friend void swap(VideoCapabilities& a, VideoCapabilities& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(VideoCapabilities* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(VideoCapabilities* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  VideoCapabilities* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<VideoCapabilities>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const VideoCapabilities& from);
+  void MergeFrom(const VideoCapabilities& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(VideoCapabilities* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.VideoCapabilities";
+  }
+  protected:
+  explicit VideoCapabilities(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kCodecsFieldNumber = 1,
+  };
+  // repeated .dsa.control.v1.VideoCodecSupport codecs = 1;
+  int codecs_size() const;
+  private:
+  int _internal_codecs_size() const;
+  public:
+  void clear_codecs();
+  ::dsa::control::v1::VideoCodecSupport* mutable_codecs(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::VideoCodecSupport >*
+      mutable_codecs();
+  private:
+  const ::dsa::control::v1::VideoCodecSupport& _internal_codecs(int index) const;
+  ::dsa::control::v1::VideoCodecSupport* _internal_add_codecs();
+  public:
+  const ::dsa::control::v1::VideoCodecSupport& codecs(int index) const;
+  ::dsa::control::v1::VideoCodecSupport* add_codecs();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::VideoCodecSupport >&
+      codecs() const;
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.VideoCapabilities)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::VideoCodecSupport > codecs_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class VideoDecoderOpen final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.VideoDecoderOpen) */ {
+ public:
+  inline VideoDecoderOpen() : VideoDecoderOpen(nullptr) {}
+  ~VideoDecoderOpen() override;
+  explicit PROTOBUF_CONSTEXPR VideoDecoderOpen(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  VideoDecoderOpen(const VideoDecoderOpen& from);
+  VideoDecoderOpen(VideoDecoderOpen&& from) noexcept
+    : VideoDecoderOpen() {
+    *this = ::std::move(from);
+  }
+
+  inline VideoDecoderOpen& operator=(const VideoDecoderOpen& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline VideoDecoderOpen& operator=(VideoDecoderOpen&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const VideoDecoderOpen& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const VideoDecoderOpen* internal_default_instance() {
+    return reinterpret_cast<const VideoDecoderOpen*>(
+               &_VideoDecoderOpen_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    52;
+
+  friend void swap(VideoDecoderOpen& a, VideoDecoderOpen& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(VideoDecoderOpen* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(VideoDecoderOpen* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  VideoDecoderOpen* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<VideoDecoderOpen>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const VideoDecoderOpen& from);
+  void MergeFrom(const VideoDecoderOpen& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(VideoDecoderOpen* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.VideoDecoderOpen";
+  }
+  protected:
+  explicit VideoDecoderOpen(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kCodecFieldNumber = 1,
+    kWidthFieldNumber = 2,
+    kHeightFieldNumber = 3,
+  };
+  // .dsa.control.v1.VideoCodec codec = 1;
+  void clear_codec();
+  ::dsa::control::v1::VideoCodec codec() const;
+  void set_codec(::dsa::control::v1::VideoCodec value);
+  private:
+  ::dsa::control::v1::VideoCodec _internal_codec() const;
+  void _internal_set_codec(::dsa::control::v1::VideoCodec value);
+  public:
+
+  // uint32 width = 2;
+  void clear_width();
+  uint32_t width() const;
+  void set_width(uint32_t value);
+  private:
+  uint32_t _internal_width() const;
+  void _internal_set_width(uint32_t value);
+  public:
+
+  // uint32 height = 3;
+  void clear_height();
+  uint32_t height() const;
+  void set_height(uint32_t value);
+  private:
+  uint32_t _internal_height() const;
+  void _internal_set_height(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.VideoDecoderOpen)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    int codec_;
+    uint32_t width_;
+    uint32_t height_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class VideoDecoderOpened final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.VideoDecoderOpened) */ {
+ public:
+  inline VideoDecoderOpened() : VideoDecoderOpened(nullptr) {}
+  ~VideoDecoderOpened() override;
+  explicit PROTOBUF_CONSTEXPR VideoDecoderOpened(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  VideoDecoderOpened(const VideoDecoderOpened& from);
+  VideoDecoderOpened(VideoDecoderOpened&& from) noexcept
+    : VideoDecoderOpened() {
+    *this = ::std::move(from);
+  }
+
+  inline VideoDecoderOpened& operator=(const VideoDecoderOpened& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline VideoDecoderOpened& operator=(VideoDecoderOpened&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const VideoDecoderOpened& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const VideoDecoderOpened* internal_default_instance() {
+    return reinterpret_cast<const VideoDecoderOpened*>(
+               &_VideoDecoderOpened_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    53;
+
+  friend void swap(VideoDecoderOpened& a, VideoDecoderOpened& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(VideoDecoderOpened* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(VideoDecoderOpened* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  VideoDecoderOpened* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<VideoDecoderOpened>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const VideoDecoderOpened& from);
+  void MergeFrom(const VideoDecoderOpened& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(VideoDecoderOpened* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.VideoDecoderOpened";
+  }
+  protected:
+  explicit VideoDecoderOpened(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kErrorFieldNumber = 2,
+    kOkFieldNumber = 1,
+  };
+  // string error = 2;
+  void clear_error();
+  const std::string& error() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_error(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_error();
+  PROTOBUF_NODISCARD std::string* release_error();
+  void set_allocated_error(std::string* error);
+  private:
+  const std::string& _internal_error() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_error(const std::string& value);
+  std::string* _internal_mutable_error();
+  public:
+
+  // bool ok = 1;
+  void clear_ok();
+  bool ok() const;
+  void set_ok(bool value);
+  private:
+  bool _internal_ok() const;
+  void _internal_set_ok(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.VideoDecoderOpened)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
+    bool ok_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class VideoPacket final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.VideoPacket) */ {
+ public:
+  inline VideoPacket() : VideoPacket(nullptr) {}
+  ~VideoPacket() override;
+  explicit PROTOBUF_CONSTEXPR VideoPacket(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  VideoPacket(const VideoPacket& from);
+  VideoPacket(VideoPacket&& from) noexcept
+    : VideoPacket() {
+    *this = ::std::move(from);
+  }
+
+  inline VideoPacket& operator=(const VideoPacket& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline VideoPacket& operator=(VideoPacket&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const VideoPacket& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const VideoPacket* internal_default_instance() {
+    return reinterpret_cast<const VideoPacket*>(
+               &_VideoPacket_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    54;
+
+  friend void swap(VideoPacket& a, VideoPacket& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(VideoPacket* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(VideoPacket* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  VideoPacket* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<VideoPacket>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const VideoPacket& from);
+  void MergeFrom(const VideoPacket& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(VideoPacket* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.VideoPacket";
+  }
+  protected:
+  explicit VideoPacket(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kDataFieldNumber = 3,
+    kFrameIndexFieldNumber = 1,
+    kTimestampUsFieldNumber = 2,
+    kCodecConfigFieldNumber = 4,
+    kEndOfStreamFieldNumber = 5,
+  };
+  // bytes data = 3;
+  void clear_data();
+  const std::string& data() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_data(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_data();
+  PROTOBUF_NODISCARD std::string* release_data();
+  void set_allocated_data(std::string* data);
+  private:
+  const std::string& _internal_data() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_data(const std::string& value);
+  std::string* _internal_mutable_data();
+  public:
+
+  // uint64 frame_index = 1;
+  void clear_frame_index();
+  uint64_t frame_index() const;
+  void set_frame_index(uint64_t value);
+  private:
+  uint64_t _internal_frame_index() const;
+  void _internal_set_frame_index(uint64_t value);
+  public:
+
+  // int64 timestamp_us = 2;
+  void clear_timestamp_us();
+  int64_t timestamp_us() const;
+  void set_timestamp_us(int64_t value);
+  private:
+  int64_t _internal_timestamp_us() const;
+  void _internal_set_timestamp_us(int64_t value);
+  public:
+
+  // bool codec_config = 4;
+  void clear_codec_config();
+  bool codec_config() const;
+  void set_codec_config(bool value);
+  private:
+  bool _internal_codec_config() const;
+  void _internal_set_codec_config(bool value);
+  public:
+
+  // bool end_of_stream = 5;
+  void clear_end_of_stream();
+  bool end_of_stream() const;
+  void set_end_of_stream(bool value);
+  private:
+  bool _internal_end_of_stream() const;
+  void _internal_set_end_of_stream(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.VideoPacket)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr data_;
+    uint64_t frame_index_;
+    int64_t timestamp_us_;
+    bool codec_config_;
+    bool end_of_stream_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class VideoFrame final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.VideoFrame) */ {
+ public:
+  inline VideoFrame() : VideoFrame(nullptr) {}
+  ~VideoFrame() override;
+  explicit PROTOBUF_CONSTEXPR VideoFrame(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  VideoFrame(const VideoFrame& from);
+  VideoFrame(VideoFrame&& from) noexcept
+    : VideoFrame() {
+    *this = ::std::move(from);
+  }
+
+  inline VideoFrame& operator=(const VideoFrame& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline VideoFrame& operator=(VideoFrame&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const VideoFrame& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const VideoFrame* internal_default_instance() {
+    return reinterpret_cast<const VideoFrame*>(
+               &_VideoFrame_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    55;
+
+  friend void swap(VideoFrame& a, VideoFrame& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(VideoFrame* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(VideoFrame* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  VideoFrame* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<VideoFrame>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const VideoFrame& from);
+  void MergeFrom(const VideoFrame& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(VideoFrame* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.VideoFrame";
+  }
+  protected:
+  explicit VideoFrame(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kNv12FieldNumber = 6,
+    kFrameIndexFieldNumber = 1,
+    kTimestampUsFieldNumber = 2,
+    kWidthFieldNumber = 3,
+    kHeightFieldNumber = 4,
+    kStrideFieldNumber = 5,
+    kEndOfStreamFieldNumber = 7,
+  };
+  // bytes nv12 = 6;
+  void clear_nv12();
+  const std::string& nv12() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_nv12(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_nv12();
+  PROTOBUF_NODISCARD std::string* release_nv12();
+  void set_allocated_nv12(std::string* nv12);
+  private:
+  const std::string& _internal_nv12() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_nv12(const std::string& value);
+  std::string* _internal_mutable_nv12();
+  public:
+
+  // uint64 frame_index = 1;
+  void clear_frame_index();
+  uint64_t frame_index() const;
+  void set_frame_index(uint64_t value);
+  private:
+  uint64_t _internal_frame_index() const;
+  void _internal_set_frame_index(uint64_t value);
+  public:
+
+  // int64 timestamp_us = 2;
+  void clear_timestamp_us();
+  int64_t timestamp_us() const;
+  void set_timestamp_us(int64_t value);
+  private:
+  int64_t _internal_timestamp_us() const;
+  void _internal_set_timestamp_us(int64_t value);
+  public:
+
+  // uint32 width = 3;
+  void clear_width();
+  uint32_t width() const;
+  void set_width(uint32_t value);
+  private:
+  uint32_t _internal_width() const;
+  void _internal_set_width(uint32_t value);
+  public:
+
+  // uint32 height = 4;
+  void clear_height();
+  uint32_t height() const;
+  void set_height(uint32_t value);
+  private:
+  uint32_t _internal_height() const;
+  void _internal_set_height(uint32_t value);
+  public:
+
+  // uint32 stride = 5;
+  void clear_stride();
+  uint32_t stride() const;
+  void set_stride(uint32_t value);
+  private:
+  uint32_t _internal_stride() const;
+  void _internal_set_stride(uint32_t value);
+  public:
+
+  // bool end_of_stream = 7;
+  void clear_end_of_stream();
+  bool end_of_stream() const;
+  void set_end_of_stream(bool value);
+  private:
+  bool _internal_end_of_stream() const;
+  void _internal_set_end_of_stream(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.VideoFrame)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr nv12_;
+    uint64_t frame_index_;
+    int64_t timestamp_us_;
+    uint32_t width_;
+    uint32_t height_;
+    uint32_t stride_;
+    bool end_of_stream_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class VideoFlush final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.VideoFlush) */ {
+ public:
+  inline VideoFlush() : VideoFlush(nullptr) {}
+  ~VideoFlush() override;
+  explicit PROTOBUF_CONSTEXPR VideoFlush(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  VideoFlush(const VideoFlush& from);
+  VideoFlush(VideoFlush&& from) noexcept
+    : VideoFlush() {
+    *this = ::std::move(from);
+  }
+
+  inline VideoFlush& operator=(const VideoFlush& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline VideoFlush& operator=(VideoFlush&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const VideoFlush& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const VideoFlush* internal_default_instance() {
+    return reinterpret_cast<const VideoFlush*>(
+               &_VideoFlush_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    56;
+
+  friend void swap(VideoFlush& a, VideoFlush& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(VideoFlush* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(VideoFlush* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  VideoFlush* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<VideoFlush>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const VideoFlush& from);
+  void MergeFrom(const VideoFlush& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(VideoFlush* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.VideoFlush";
+  }
+  protected:
+  explicit VideoFlush(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.VideoFlush)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class VideoFlushed final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.VideoFlushed) */ {
+ public:
+  inline VideoFlushed() : VideoFlushed(nullptr) {}
+  ~VideoFlushed() override;
+  explicit PROTOBUF_CONSTEXPR VideoFlushed(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  VideoFlushed(const VideoFlushed& from);
+  VideoFlushed(VideoFlushed&& from) noexcept
+    : VideoFlushed() {
+    *this = ::std::move(from);
+  }
+
+  inline VideoFlushed& operator=(const VideoFlushed& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline VideoFlushed& operator=(VideoFlushed&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const VideoFlushed& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const VideoFlushed* internal_default_instance() {
+    return reinterpret_cast<const VideoFlushed*>(
+               &_VideoFlushed_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    57;
+
+  friend void swap(VideoFlushed& a, VideoFlushed& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(VideoFlushed* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(VideoFlushed* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  VideoFlushed* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<VideoFlushed>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const VideoFlushed& from);
+  void MergeFrom(const VideoFlushed& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(VideoFlushed* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.VideoFlushed";
+  }
+  protected:
+  explicit VideoFlushed(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.VideoFlushed)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class VideoError final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.VideoError) */ {
+ public:
+  inline VideoError() : VideoError(nullptr) {}
+  ~VideoError() override;
+  explicit PROTOBUF_CONSTEXPR VideoError(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  VideoError(const VideoError& from);
+  VideoError(VideoError&& from) noexcept
+    : VideoError() {
+    *this = ::std::move(from);
+  }
+
+  inline VideoError& operator=(const VideoError& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline VideoError& operator=(VideoError&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const VideoError& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const VideoError* internal_default_instance() {
+    return reinterpret_cast<const VideoError*>(
+               &_VideoError_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    58;
+
+  friend void swap(VideoError& a, VideoError& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(VideoError* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(VideoError* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  VideoError* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<VideoError>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const VideoError& from);
+  void MergeFrom(const VideoError& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(VideoError* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.VideoError";
+  }
+  protected:
+  explicit VideoError(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kErrorFieldNumber = 1,
+  };
+  // string error = 1;
+  void clear_error();
+  const std::string& error() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_error(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_error();
+  PROTOBUF_NODISCARD std::string* release_error();
+  void set_allocated_error(std::string* error);
+  private:
+  const std::string& _internal_error() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_error(const std::string& value);
+  std::string* _internal_mutable_error();
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.VideoError)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ClockAnswer final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ClockAnswer) */ {
  public:
@@ -7815,7 +9823,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    46;
+    59;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -7956,7 +9964,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    47;
+    60;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -8086,7 +10094,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    48;
+    61;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -8357,7 +10365,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    49;
+    62;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -8518,7 +10526,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    50;
+    63;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -8664,7 +10672,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    51;
+    64;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -8821,7 +10829,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    52;
+    65;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -8971,7 +10979,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    53;
+    66;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -9115,7 +11123,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    54;
+    67;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -9245,7 +11253,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    55;
+    68;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -9430,7 +11438,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    56;
+    69;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -9598,7 +11606,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    57;
+    70;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -9772,7 +11780,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    58;
+    71;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -9913,7 +11921,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    59;
+    72;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -10065,7 +12073,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    60;
+    73;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -10508,7 +12516,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    61;
+    74;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -10741,7 +12749,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    62;
+    75;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -10931,7 +12939,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    63;
+    76;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -11060,602 +13068,6 @@ class AccessibilityActionResult final :
 };
 // -------------------------------------------------------------------
 
-class AudioOutputOpen final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AudioOutputOpen) */ {
- public:
-  inline AudioOutputOpen() : AudioOutputOpen(nullptr) {}
-  ~AudioOutputOpen() override;
-  explicit PROTOBUF_CONSTEXPR AudioOutputOpen(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  AudioOutputOpen(const AudioOutputOpen& from);
-  AudioOutputOpen(AudioOutputOpen&& from) noexcept
-    : AudioOutputOpen() {
-    *this = ::std::move(from);
-  }
-
-  inline AudioOutputOpen& operator=(const AudioOutputOpen& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline AudioOutputOpen& operator=(AudioOutputOpen&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const AudioOutputOpen& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const AudioOutputOpen* internal_default_instance() {
-    return reinterpret_cast<const AudioOutputOpen*>(
-               &_AudioOutputOpen_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    64;
-
-  friend void swap(AudioOutputOpen& a, AudioOutputOpen& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(AudioOutputOpen* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(AudioOutputOpen* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  AudioOutputOpen* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<AudioOutputOpen>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const AudioOutputOpen& from);
-  void MergeFrom(const AudioOutputOpen& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(AudioOutputOpen* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.AudioOutputOpen";
-  }
-  protected:
-  explicit AudioOutputOpen(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kNameFieldNumber = 5,
-    kSampleRateFieldNumber = 1,
-    kChannelCountFieldNumber = 2,
-    kFormatFieldNumber = 3,
-    kFramesPerBurstFieldNumber = 4,
-  };
-  // string name = 5;
-  void clear_name();
-  const std::string& name() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_name(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_name();
-  PROTOBUF_NODISCARD std::string* release_name();
-  void set_allocated_name(std::string* name);
-  private:
-  const std::string& _internal_name() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
-  std::string* _internal_mutable_name();
-  public:
-
-  // uint32 sample_rate = 1;
-  void clear_sample_rate();
-  uint32_t sample_rate() const;
-  void set_sample_rate(uint32_t value);
-  private:
-  uint32_t _internal_sample_rate() const;
-  void _internal_set_sample_rate(uint32_t value);
-  public:
-
-  // uint32 channel_count = 2;
-  void clear_channel_count();
-  uint32_t channel_count() const;
-  void set_channel_count(uint32_t value);
-  private:
-  uint32_t _internal_channel_count() const;
-  void _internal_set_channel_count(uint32_t value);
-  public:
-
-  // .dsa.control.v1.AudioSampleFormat format = 3;
-  void clear_format();
-  ::dsa::control::v1::AudioSampleFormat format() const;
-  void set_format(::dsa::control::v1::AudioSampleFormat value);
-  private:
-  ::dsa::control::v1::AudioSampleFormat _internal_format() const;
-  void _internal_set_format(::dsa::control::v1::AudioSampleFormat value);
-  public:
-
-  // uint32 frames_per_burst = 4;
-  void clear_frames_per_burst();
-  uint32_t frames_per_burst() const;
-  void set_frames_per_burst(uint32_t value);
-  private:
-  uint32_t _internal_frames_per_burst() const;
-  void _internal_set_frames_per_burst(uint32_t value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.AudioOutputOpen)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
-    uint32_t sample_rate_;
-    uint32_t channel_count_;
-    int format_;
-    uint32_t frames_per_burst_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class AudioOutputReady final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AudioOutputReady) */ {
- public:
-  inline AudioOutputReady() : AudioOutputReady(nullptr) {}
-  ~AudioOutputReady() override;
-  explicit PROTOBUF_CONSTEXPR AudioOutputReady(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  AudioOutputReady(const AudioOutputReady& from);
-  AudioOutputReady(AudioOutputReady&& from) noexcept
-    : AudioOutputReady() {
-    *this = ::std::move(from);
-  }
-
-  inline AudioOutputReady& operator=(const AudioOutputReady& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline AudioOutputReady& operator=(AudioOutputReady&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const AudioOutputReady& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const AudioOutputReady* internal_default_instance() {
-    return reinterpret_cast<const AudioOutputReady*>(
-               &_AudioOutputReady_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    65;
-
-  friend void swap(AudioOutputReady& a, AudioOutputReady& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(AudioOutputReady* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(AudioOutputReady* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  AudioOutputReady* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<AudioOutputReady>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const AudioOutputReady& from);
-  void MergeFrom(const AudioOutputReady& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(AudioOutputReady* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.AudioOutputReady";
-  }
-  protected:
-  explicit AudioOutputReady(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kBufferedFramesFieldNumber = 1,
-    kDeviceFramesFieldNumber = 2,
-  };
-  // uint32 buffered_frames = 1;
-  void clear_buffered_frames();
-  uint32_t buffered_frames() const;
-  void set_buffered_frames(uint32_t value);
-  private:
-  uint32_t _internal_buffered_frames() const;
-  void _internal_set_buffered_frames(uint32_t value);
-  public:
-
-  // uint32 device_frames = 2;
-  void clear_device_frames();
-  uint32_t device_frames() const;
-  void set_device_frames(uint32_t value);
-  private:
-  uint32_t _internal_device_frames() const;
-  void _internal_set_device_frames(uint32_t value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.AudioOutputReady)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    uint32_t buffered_frames_;
-    uint32_t device_frames_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class AudioPcm final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AudioPcm) */ {
- public:
-  inline AudioPcm() : AudioPcm(nullptr) {}
-  ~AudioPcm() override;
-  explicit PROTOBUF_CONSTEXPR AudioPcm(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  AudioPcm(const AudioPcm& from);
-  AudioPcm(AudioPcm&& from) noexcept
-    : AudioPcm() {
-    *this = ::std::move(from);
-  }
-
-  inline AudioPcm& operator=(const AudioPcm& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline AudioPcm& operator=(AudioPcm&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const AudioPcm& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const AudioPcm* internal_default_instance() {
-    return reinterpret_cast<const AudioPcm*>(
-               &_AudioPcm_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    66;
-
-  friend void swap(AudioPcm& a, AudioPcm& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(AudioPcm* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(AudioPcm* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  AudioPcm* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<AudioPcm>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const AudioPcm& from);
-  void MergeFrom(const AudioPcm& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(AudioPcm* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.AudioPcm";
-  }
-  protected:
-  explicit AudioPcm(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kDataFieldNumber = 2,
-    kPositionFieldNumber = 1,
-  };
-  // bytes data = 2;
-  void clear_data();
-  const std::string& data() const;
-  template <typename ArgT0 = const std::string&, typename... ArgT>
-  void set_data(ArgT0&& arg0, ArgT... args);
-  std::string* mutable_data();
-  PROTOBUF_NODISCARD std::string* release_data();
-  void set_allocated_data(std::string* data);
-  private:
-  const std::string& _internal_data() const;
-  inline PROTOBUF_ALWAYS_INLINE void _internal_set_data(const std::string& value);
-  std::string* _internal_mutable_data();
-  public:
-
-  // uint64 position = 1;
-  void clear_position();
-  uint64_t position() const;
-  void set_position(uint64_t value);
-  private:
-  uint64_t _internal_position() const;
-  void _internal_set_position(uint64_t value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.AudioPcm)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr data_;
-    uint64_t position_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
-class AudioOutputControl final :
-    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AudioOutputControl) */ {
- public:
-  inline AudioOutputControl() : AudioOutputControl(nullptr) {}
-  ~AudioOutputControl() override;
-  explicit PROTOBUF_CONSTEXPR AudioOutputControl(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
-
-  AudioOutputControl(const AudioOutputControl& from);
-  AudioOutputControl(AudioOutputControl&& from) noexcept
-    : AudioOutputControl() {
-    *this = ::std::move(from);
-  }
-
-  inline AudioOutputControl& operator=(const AudioOutputControl& from) {
-    CopyFrom(from);
-    return *this;
-  }
-  inline AudioOutputControl& operator=(AudioOutputControl&& from) noexcept {
-    if (this == &from) return *this;
-    if (GetOwningArena() == from.GetOwningArena()
-  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
-        && GetOwningArena() != nullptr
-  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
-    ) {
-      InternalSwap(&from);
-    } else {
-      CopyFrom(from);
-    }
-    return *this;
-  }
-
-  static const AudioOutputControl& default_instance() {
-    return *internal_default_instance();
-  }
-  static inline const AudioOutputControl* internal_default_instance() {
-    return reinterpret_cast<const AudioOutputControl*>(
-               &_AudioOutputControl_default_instance_);
-  }
-  static constexpr int kIndexInFileMessages =
-    67;
-
-  friend void swap(AudioOutputControl& a, AudioOutputControl& b) {
-    a.Swap(&b);
-  }
-  inline void Swap(AudioOutputControl* other) {
-    if (other == this) return;
-  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() != nullptr &&
-        GetOwningArena() == other->GetOwningArena()) {
-   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
-    if (GetOwningArena() == other->GetOwningArena()) {
-  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
-      InternalSwap(other);
-    } else {
-      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
-    }
-  }
-  void UnsafeArenaSwap(AudioOutputControl* other) {
-    if (other == this) return;
-    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
-    InternalSwap(other);
-  }
-
-  // implements Message ----------------------------------------------
-
-  AudioOutputControl* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
-    return CreateMaybeMessage<AudioOutputControl>(arena);
-  }
-  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
-  void CopyFrom(const AudioOutputControl& from);
-  void MergeFrom(const AudioOutputControl& from);
-  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
-  bool IsInitialized() const final;
-
-  size_t ByteSizeLong() const final;
-  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
-  uint8_t* _InternalSerialize(
-      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
-  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
-
-  private:
-  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
-  void SharedDtor();
-  void SetCachedSize(int size) const;
-  void InternalSwap(AudioOutputControl* other);
-
-  private:
-  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
-  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
-    return "dsa.control.v1.AudioOutputControl";
-  }
-  protected:
-  explicit AudioOutputControl(::PROTOBUF_NAMESPACE_ID::Arena* arena,
-                       bool is_message_owned = false);
-  public:
-
-  std::string GetTypeName() const final;
-
-  // nested types ----------------------------------------------------
-
-  // accessors -------------------------------------------------------
-
-  enum : int {
-    kCommandFieldNumber = 1,
-  };
-  // .dsa.control.v1.AudioOutputCommand command = 1;
-  void clear_command();
-  ::dsa::control::v1::AudioOutputCommand command() const;
-  void set_command(::dsa::control::v1::AudioOutputCommand value);
-  private:
-  ::dsa::control::v1::AudioOutputCommand _internal_command() const;
-  void _internal_set_command(::dsa::control::v1::AudioOutputCommand value);
-  public:
-
-  // @@protoc_insertion_point(class_scope:dsa.control.v1.AudioOutputControl)
- private:
-  class _Internal;
-
-  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
-  typedef void InternalArenaConstructable_;
-  typedef void DestructorSkippable_;
-  struct Impl_ {
-    int command_;
-    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  };
-  union { Impl_ _impl_; };
-  friend struct ::TableStruct_control_2eproto;
-};
-// -------------------------------------------------------------------
-
 class Envelope final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.Envelope) */ {
  public:
@@ -11721,12 +13133,16 @@ class Envelope final :
     kClockAnswer = 29,
     kScreenState = 40,
     kPowerState = 41,
+    kPowerHint = 110,
     kDeviceIdle = 42,
+    kHostMemory = 43,
     kInstallApk = 60,
     kApkChunk = 61,
     kCancelInstall = 62,
     kInstallProgress = 63,
     kInstallResult = 64,
+    kQueryPackage = 65,
+    kPackageState = 66,
     kOpenLink = 50,
     kLinkHandling = 51,
     kOpenFile = 52,
@@ -11750,10 +13166,14 @@ class Envelope final :
     kAccessibilityTree = 81,
     kAccessibilityAction = 82,
     kAccessibilityActionResult = 83,
-    kAudioOutputOpen = 100,
-    kAudioOutputReady = 101,
-    kAudioPcm = 102,
-    kAudioOutputControl = 103,
+    kVideoCapabilities = 120,
+    kVideoDecoderOpen = 121,
+    kVideoDecoderOpened = 122,
+    kVideoPacket = 123,
+    kVideoFrame = 124,
+    kVideoFlush = 125,
+    kVideoFlushed = 126,
+    kVideoError = 127,
     BODY_NOT_SET = 0,
   };
 
@@ -11762,7 +13182,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    68;
+    77;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -11856,12 +13276,16 @@ class Envelope final :
     kClockAnswerFieldNumber = 29,
     kScreenStateFieldNumber = 40,
     kPowerStateFieldNumber = 41,
+    kPowerHintFieldNumber = 110,
     kDeviceIdleFieldNumber = 42,
+    kHostMemoryFieldNumber = 43,
     kInstallApkFieldNumber = 60,
     kApkChunkFieldNumber = 61,
     kCancelInstallFieldNumber = 62,
     kInstallProgressFieldNumber = 63,
     kInstallResultFieldNumber = 64,
+    kQueryPackageFieldNumber = 65,
+    kPackageStateFieldNumber = 66,
     kOpenLinkFieldNumber = 50,
     kLinkHandlingFieldNumber = 51,
     kOpenFileFieldNumber = 52,
@@ -11885,10 +13309,14 @@ class Envelope final :
     kAccessibilityTreeFieldNumber = 81,
     kAccessibilityActionFieldNumber = 82,
     kAccessibilityActionResultFieldNumber = 83,
-    kAudioOutputOpenFieldNumber = 100,
-    kAudioOutputReadyFieldNumber = 101,
-    kAudioPcmFieldNumber = 102,
-    kAudioOutputControlFieldNumber = 103,
+    kVideoCapabilitiesFieldNumber = 120,
+    kVideoDecoderOpenFieldNumber = 121,
+    kVideoDecoderOpenedFieldNumber = 122,
+    kVideoPacketFieldNumber = 123,
+    kVideoFrameFieldNumber = 124,
+    kVideoFlushFieldNumber = 125,
+    kVideoFlushedFieldNumber = 126,
+    kVideoErrorFieldNumber = 127,
   };
   // .dsa.control.v1.Hello hello = 1;
   bool has_hello() const;
@@ -12430,6 +13858,24 @@ class Envelope final :
       ::dsa::control::v1::PowerState* power_state);
   ::dsa::control::v1::PowerState* unsafe_arena_release_power_state();
 
+  // .dsa.control.v1.PowerHint power_hint = 110;
+  bool has_power_hint() const;
+  private:
+  bool _internal_has_power_hint() const;
+  public:
+  void clear_power_hint();
+  const ::dsa::control::v1::PowerHint& power_hint() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::PowerHint* release_power_hint();
+  ::dsa::control::v1::PowerHint* mutable_power_hint();
+  void set_allocated_power_hint(::dsa::control::v1::PowerHint* power_hint);
+  private:
+  const ::dsa::control::v1::PowerHint& _internal_power_hint() const;
+  ::dsa::control::v1::PowerHint* _internal_mutable_power_hint();
+  public:
+  void unsafe_arena_set_allocated_power_hint(
+      ::dsa::control::v1::PowerHint* power_hint);
+  ::dsa::control::v1::PowerHint* unsafe_arena_release_power_hint();
+
   // .dsa.control.v1.DeviceIdle device_idle = 42;
   bool has_device_idle() const;
   private:
@@ -12447,6 +13893,24 @@ class Envelope final :
   void unsafe_arena_set_allocated_device_idle(
       ::dsa::control::v1::DeviceIdle* device_idle);
   ::dsa::control::v1::DeviceIdle* unsafe_arena_release_device_idle();
+
+  // .dsa.control.v1.HostMemory host_memory = 43;
+  bool has_host_memory() const;
+  private:
+  bool _internal_has_host_memory() const;
+  public:
+  void clear_host_memory();
+  const ::dsa::control::v1::HostMemory& host_memory() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::HostMemory* release_host_memory();
+  ::dsa::control::v1::HostMemory* mutable_host_memory();
+  void set_allocated_host_memory(::dsa::control::v1::HostMemory* host_memory);
+  private:
+  const ::dsa::control::v1::HostMemory& _internal_host_memory() const;
+  ::dsa::control::v1::HostMemory* _internal_mutable_host_memory();
+  public:
+  void unsafe_arena_set_allocated_host_memory(
+      ::dsa::control::v1::HostMemory* host_memory);
+  ::dsa::control::v1::HostMemory* unsafe_arena_release_host_memory();
 
   // .dsa.control.v1.InstallApk install_apk = 60;
   bool has_install_apk() const;
@@ -12537,6 +14001,42 @@ class Envelope final :
   void unsafe_arena_set_allocated_install_result(
       ::dsa::control::v1::InstallResult* install_result);
   ::dsa::control::v1::InstallResult* unsafe_arena_release_install_result();
+
+  // .dsa.control.v1.QueryPackage query_package = 65;
+  bool has_query_package() const;
+  private:
+  bool _internal_has_query_package() const;
+  public:
+  void clear_query_package();
+  const ::dsa::control::v1::QueryPackage& query_package() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::QueryPackage* release_query_package();
+  ::dsa::control::v1::QueryPackage* mutable_query_package();
+  void set_allocated_query_package(::dsa::control::v1::QueryPackage* query_package);
+  private:
+  const ::dsa::control::v1::QueryPackage& _internal_query_package() const;
+  ::dsa::control::v1::QueryPackage* _internal_mutable_query_package();
+  public:
+  void unsafe_arena_set_allocated_query_package(
+      ::dsa::control::v1::QueryPackage* query_package);
+  ::dsa::control::v1::QueryPackage* unsafe_arena_release_query_package();
+
+  // .dsa.control.v1.PackageState package_state = 66;
+  bool has_package_state() const;
+  private:
+  bool _internal_has_package_state() const;
+  public:
+  void clear_package_state();
+  const ::dsa::control::v1::PackageState& package_state() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::PackageState* release_package_state();
+  ::dsa::control::v1::PackageState* mutable_package_state();
+  void set_allocated_package_state(::dsa::control::v1::PackageState* package_state);
+  private:
+  const ::dsa::control::v1::PackageState& _internal_package_state() const;
+  ::dsa::control::v1::PackageState* _internal_mutable_package_state();
+  public:
+  void unsafe_arena_set_allocated_package_state(
+      ::dsa::control::v1::PackageState* package_state);
+  ::dsa::control::v1::PackageState* unsafe_arena_release_package_state();
 
   // .dsa.control.v1.OpenLink open_link = 50;
   bool has_open_link() const;
@@ -12952,77 +14452,149 @@ class Envelope final :
       ::dsa::control::v1::AccessibilityActionResult* accessibility_action_result);
   ::dsa::control::v1::AccessibilityActionResult* unsafe_arena_release_accessibility_action_result();
 
-  // .dsa.control.v1.AudioOutputOpen audio_output_open = 100;
-  bool has_audio_output_open() const;
+  // .dsa.control.v1.VideoCapabilities video_capabilities = 120;
+  bool has_video_capabilities() const;
   private:
-  bool _internal_has_audio_output_open() const;
+  bool _internal_has_video_capabilities() const;
   public:
-  void clear_audio_output_open();
-  const ::dsa::control::v1::AudioOutputOpen& audio_output_open() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::AudioOutputOpen* release_audio_output_open();
-  ::dsa::control::v1::AudioOutputOpen* mutable_audio_output_open();
-  void set_allocated_audio_output_open(::dsa::control::v1::AudioOutputOpen* audio_output_open);
+  void clear_video_capabilities();
+  const ::dsa::control::v1::VideoCapabilities& video_capabilities() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::VideoCapabilities* release_video_capabilities();
+  ::dsa::control::v1::VideoCapabilities* mutable_video_capabilities();
+  void set_allocated_video_capabilities(::dsa::control::v1::VideoCapabilities* video_capabilities);
   private:
-  const ::dsa::control::v1::AudioOutputOpen& _internal_audio_output_open() const;
-  ::dsa::control::v1::AudioOutputOpen* _internal_mutable_audio_output_open();
+  const ::dsa::control::v1::VideoCapabilities& _internal_video_capabilities() const;
+  ::dsa::control::v1::VideoCapabilities* _internal_mutable_video_capabilities();
   public:
-  void unsafe_arena_set_allocated_audio_output_open(
-      ::dsa::control::v1::AudioOutputOpen* audio_output_open);
-  ::dsa::control::v1::AudioOutputOpen* unsafe_arena_release_audio_output_open();
+  void unsafe_arena_set_allocated_video_capabilities(
+      ::dsa::control::v1::VideoCapabilities* video_capabilities);
+  ::dsa::control::v1::VideoCapabilities* unsafe_arena_release_video_capabilities();
 
-  // .dsa.control.v1.AudioOutputReady audio_output_ready = 101;
-  bool has_audio_output_ready() const;
+  // .dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;
+  bool has_video_decoder_open() const;
   private:
-  bool _internal_has_audio_output_ready() const;
+  bool _internal_has_video_decoder_open() const;
   public:
-  void clear_audio_output_ready();
-  const ::dsa::control::v1::AudioOutputReady& audio_output_ready() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::AudioOutputReady* release_audio_output_ready();
-  ::dsa::control::v1::AudioOutputReady* mutable_audio_output_ready();
-  void set_allocated_audio_output_ready(::dsa::control::v1::AudioOutputReady* audio_output_ready);
+  void clear_video_decoder_open();
+  const ::dsa::control::v1::VideoDecoderOpen& video_decoder_open() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::VideoDecoderOpen* release_video_decoder_open();
+  ::dsa::control::v1::VideoDecoderOpen* mutable_video_decoder_open();
+  void set_allocated_video_decoder_open(::dsa::control::v1::VideoDecoderOpen* video_decoder_open);
   private:
-  const ::dsa::control::v1::AudioOutputReady& _internal_audio_output_ready() const;
-  ::dsa::control::v1::AudioOutputReady* _internal_mutable_audio_output_ready();
+  const ::dsa::control::v1::VideoDecoderOpen& _internal_video_decoder_open() const;
+  ::dsa::control::v1::VideoDecoderOpen* _internal_mutable_video_decoder_open();
   public:
-  void unsafe_arena_set_allocated_audio_output_ready(
-      ::dsa::control::v1::AudioOutputReady* audio_output_ready);
-  ::dsa::control::v1::AudioOutputReady* unsafe_arena_release_audio_output_ready();
+  void unsafe_arena_set_allocated_video_decoder_open(
+      ::dsa::control::v1::VideoDecoderOpen* video_decoder_open);
+  ::dsa::control::v1::VideoDecoderOpen* unsafe_arena_release_video_decoder_open();
 
-  // .dsa.control.v1.AudioPcm audio_pcm = 102;
-  bool has_audio_pcm() const;
+  // .dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;
+  bool has_video_decoder_opened() const;
   private:
-  bool _internal_has_audio_pcm() const;
+  bool _internal_has_video_decoder_opened() const;
   public:
-  void clear_audio_pcm();
-  const ::dsa::control::v1::AudioPcm& audio_pcm() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::AudioPcm* release_audio_pcm();
-  ::dsa::control::v1::AudioPcm* mutable_audio_pcm();
-  void set_allocated_audio_pcm(::dsa::control::v1::AudioPcm* audio_pcm);
+  void clear_video_decoder_opened();
+  const ::dsa::control::v1::VideoDecoderOpened& video_decoder_opened() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::VideoDecoderOpened* release_video_decoder_opened();
+  ::dsa::control::v1::VideoDecoderOpened* mutable_video_decoder_opened();
+  void set_allocated_video_decoder_opened(::dsa::control::v1::VideoDecoderOpened* video_decoder_opened);
   private:
-  const ::dsa::control::v1::AudioPcm& _internal_audio_pcm() const;
-  ::dsa::control::v1::AudioPcm* _internal_mutable_audio_pcm();
+  const ::dsa::control::v1::VideoDecoderOpened& _internal_video_decoder_opened() const;
+  ::dsa::control::v1::VideoDecoderOpened* _internal_mutable_video_decoder_opened();
   public:
-  void unsafe_arena_set_allocated_audio_pcm(
-      ::dsa::control::v1::AudioPcm* audio_pcm);
-  ::dsa::control::v1::AudioPcm* unsafe_arena_release_audio_pcm();
+  void unsafe_arena_set_allocated_video_decoder_opened(
+      ::dsa::control::v1::VideoDecoderOpened* video_decoder_opened);
+  ::dsa::control::v1::VideoDecoderOpened* unsafe_arena_release_video_decoder_opened();
 
-  // .dsa.control.v1.AudioOutputControl audio_output_control = 103;
-  bool has_audio_output_control() const;
+  // .dsa.control.v1.VideoPacket video_packet = 123;
+  bool has_video_packet() const;
   private:
-  bool _internal_has_audio_output_control() const;
+  bool _internal_has_video_packet() const;
   public:
-  void clear_audio_output_control();
-  const ::dsa::control::v1::AudioOutputControl& audio_output_control() const;
-  PROTOBUF_NODISCARD ::dsa::control::v1::AudioOutputControl* release_audio_output_control();
-  ::dsa::control::v1::AudioOutputControl* mutable_audio_output_control();
-  void set_allocated_audio_output_control(::dsa::control::v1::AudioOutputControl* audio_output_control);
+  void clear_video_packet();
+  const ::dsa::control::v1::VideoPacket& video_packet() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::VideoPacket* release_video_packet();
+  ::dsa::control::v1::VideoPacket* mutable_video_packet();
+  void set_allocated_video_packet(::dsa::control::v1::VideoPacket* video_packet);
   private:
-  const ::dsa::control::v1::AudioOutputControl& _internal_audio_output_control() const;
-  ::dsa::control::v1::AudioOutputControl* _internal_mutable_audio_output_control();
+  const ::dsa::control::v1::VideoPacket& _internal_video_packet() const;
+  ::dsa::control::v1::VideoPacket* _internal_mutable_video_packet();
   public:
-  void unsafe_arena_set_allocated_audio_output_control(
-      ::dsa::control::v1::AudioOutputControl* audio_output_control);
-  ::dsa::control::v1::AudioOutputControl* unsafe_arena_release_audio_output_control();
+  void unsafe_arena_set_allocated_video_packet(
+      ::dsa::control::v1::VideoPacket* video_packet);
+  ::dsa::control::v1::VideoPacket* unsafe_arena_release_video_packet();
+
+  // .dsa.control.v1.VideoFrame video_frame = 124;
+  bool has_video_frame() const;
+  private:
+  bool _internal_has_video_frame() const;
+  public:
+  void clear_video_frame();
+  const ::dsa::control::v1::VideoFrame& video_frame() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::VideoFrame* release_video_frame();
+  ::dsa::control::v1::VideoFrame* mutable_video_frame();
+  void set_allocated_video_frame(::dsa::control::v1::VideoFrame* video_frame);
+  private:
+  const ::dsa::control::v1::VideoFrame& _internal_video_frame() const;
+  ::dsa::control::v1::VideoFrame* _internal_mutable_video_frame();
+  public:
+  void unsafe_arena_set_allocated_video_frame(
+      ::dsa::control::v1::VideoFrame* video_frame);
+  ::dsa::control::v1::VideoFrame* unsafe_arena_release_video_frame();
+
+  // .dsa.control.v1.VideoFlush video_flush = 125;
+  bool has_video_flush() const;
+  private:
+  bool _internal_has_video_flush() const;
+  public:
+  void clear_video_flush();
+  const ::dsa::control::v1::VideoFlush& video_flush() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::VideoFlush* release_video_flush();
+  ::dsa::control::v1::VideoFlush* mutable_video_flush();
+  void set_allocated_video_flush(::dsa::control::v1::VideoFlush* video_flush);
+  private:
+  const ::dsa::control::v1::VideoFlush& _internal_video_flush() const;
+  ::dsa::control::v1::VideoFlush* _internal_mutable_video_flush();
+  public:
+  void unsafe_arena_set_allocated_video_flush(
+      ::dsa::control::v1::VideoFlush* video_flush);
+  ::dsa::control::v1::VideoFlush* unsafe_arena_release_video_flush();
+
+  // .dsa.control.v1.VideoFlushed video_flushed = 126;
+  bool has_video_flushed() const;
+  private:
+  bool _internal_has_video_flushed() const;
+  public:
+  void clear_video_flushed();
+  const ::dsa::control::v1::VideoFlushed& video_flushed() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::VideoFlushed* release_video_flushed();
+  ::dsa::control::v1::VideoFlushed* mutable_video_flushed();
+  void set_allocated_video_flushed(::dsa::control::v1::VideoFlushed* video_flushed);
+  private:
+  const ::dsa::control::v1::VideoFlushed& _internal_video_flushed() const;
+  ::dsa::control::v1::VideoFlushed* _internal_mutable_video_flushed();
+  public:
+  void unsafe_arena_set_allocated_video_flushed(
+      ::dsa::control::v1::VideoFlushed* video_flushed);
+  ::dsa::control::v1::VideoFlushed* unsafe_arena_release_video_flushed();
+
+  // .dsa.control.v1.VideoError video_error = 127;
+  bool has_video_error() const;
+  private:
+  bool _internal_has_video_error() const;
+  public:
+  void clear_video_error();
+  const ::dsa::control::v1::VideoError& video_error() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::VideoError* release_video_error();
+  ::dsa::control::v1::VideoError* mutable_video_error();
+  void set_allocated_video_error(::dsa::control::v1::VideoError* video_error);
+  private:
+  const ::dsa::control::v1::VideoError& _internal_video_error() const;
+  ::dsa::control::v1::VideoError* _internal_mutable_video_error();
+  public:
+  void unsafe_arena_set_allocated_video_error(
+      ::dsa::control::v1::VideoError* video_error);
+  ::dsa::control::v1::VideoError* unsafe_arena_release_video_error();
 
   void clear_body();
   BodyCase body_case() const;
@@ -13059,12 +14631,16 @@ class Envelope final :
   void set_has_clock_answer();
   void set_has_screen_state();
   void set_has_power_state();
+  void set_has_power_hint();
   void set_has_device_idle();
+  void set_has_host_memory();
   void set_has_install_apk();
   void set_has_apk_chunk();
   void set_has_cancel_install();
   void set_has_install_progress();
   void set_has_install_result();
+  void set_has_query_package();
+  void set_has_package_state();
   void set_has_open_link();
   void set_has_link_handling();
   void set_has_open_file();
@@ -13088,10 +14664,14 @@ class Envelope final :
   void set_has_accessibility_tree();
   void set_has_accessibility_action();
   void set_has_accessibility_action_result();
-  void set_has_audio_output_open();
-  void set_has_audio_output_ready();
-  void set_has_audio_pcm();
-  void set_has_audio_output_control();
+  void set_has_video_capabilities();
+  void set_has_video_decoder_open();
+  void set_has_video_decoder_opened();
+  void set_has_video_packet();
+  void set_has_video_frame();
+  void set_has_video_flush();
+  void set_has_video_flushed();
+  void set_has_video_error();
 
   inline bool has_body() const;
   inline void clear_has_body();
@@ -13133,12 +14713,16 @@ class Envelope final :
       ::dsa::control::v1::ClockAnswer* clock_answer_;
       ::dsa::control::v1::ScreenState* screen_state_;
       ::dsa::control::v1::PowerState* power_state_;
+      ::dsa::control::v1::PowerHint* power_hint_;
       ::dsa::control::v1::DeviceIdle* device_idle_;
+      ::dsa::control::v1::HostMemory* host_memory_;
       ::dsa::control::v1::InstallApk* install_apk_;
       ::dsa::control::v1::ApkChunk* apk_chunk_;
       ::dsa::control::v1::CancelInstall* cancel_install_;
       ::dsa::control::v1::InstallProgress* install_progress_;
       ::dsa::control::v1::InstallResult* install_result_;
+      ::dsa::control::v1::QueryPackage* query_package_;
+      ::dsa::control::v1::PackageState* package_state_;
       ::dsa::control::v1::OpenLink* open_link_;
       ::dsa::control::v1::LinkHandling* link_handling_;
       ::dsa::control::v1::OpenFile* open_file_;
@@ -13162,10 +14746,14 @@ class Envelope final :
       ::dsa::control::v1::AccessibilityTree* accessibility_tree_;
       ::dsa::control::v1::AccessibilityAction* accessibility_action_;
       ::dsa::control::v1::AccessibilityActionResult* accessibility_action_result_;
-      ::dsa::control::v1::AudioOutputOpen* audio_output_open_;
-      ::dsa::control::v1::AudioOutputReady* audio_output_ready_;
-      ::dsa::control::v1::AudioPcm* audio_pcm_;
-      ::dsa::control::v1::AudioOutputControl* audio_output_control_;
+      ::dsa::control::v1::VideoCapabilities* video_capabilities_;
+      ::dsa::control::v1::VideoDecoderOpen* video_decoder_open_;
+      ::dsa::control::v1::VideoDecoderOpened* video_decoder_opened_;
+      ::dsa::control::v1::VideoPacket* video_packet_;
+      ::dsa::control::v1::VideoFrame* video_frame_;
+      ::dsa::control::v1::VideoFlush* video_flush_;
+      ::dsa::control::v1::VideoFlushed* video_flushed_;
+      ::dsa::control::v1::VideoError* video_error_;
     } body_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     uint32_t _oneof_case_[1];
@@ -15530,6 +17118,114 @@ inline void PowerState::set_power_saver(bool value) {
 
 // -------------------------------------------------------------------
 
+// HostMemory
+
+// bool low = 1;
+inline void HostMemory::clear_low() {
+  _impl_.low_ = false;
+}
+inline bool HostMemory::_internal_low() const {
+  return _impl_.low_;
+}
+inline bool HostMemory::low() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.HostMemory.low)
+  return _internal_low();
+}
+inline void HostMemory::_internal_set_low(bool value) {
+  
+  _impl_.low_ = value;
+}
+inline void HostMemory::set_low(bool value) {
+  _internal_set_low(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.HostMemory.low)
+}
+
+// -------------------------------------------------------------------
+
+// PowerHint
+
+// .dsa.control.v1.PowerHintKind kind = 1;
+inline void PowerHint::clear_kind() {
+  _impl_.kind_ = 0;
+}
+inline ::dsa::control::v1::PowerHintKind PowerHint::_internal_kind() const {
+  return static_cast< ::dsa::control::v1::PowerHintKind >(_impl_.kind_);
+}
+inline ::dsa::control::v1::PowerHintKind PowerHint::kind() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PowerHint.kind)
+  return _internal_kind();
+}
+inline void PowerHint::_internal_set_kind(::dsa::control::v1::PowerHintKind value) {
+  
+  _impl_.kind_ = value;
+}
+inline void PowerHint::set_kind(::dsa::control::v1::PowerHintKind value) {
+  _internal_set_kind(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PowerHint.kind)
+}
+
+// int32 id = 2;
+inline void PowerHint::clear_id() {
+  _impl_.id_ = 0;
+}
+inline int32_t PowerHint::_internal_id() const {
+  return _impl_.id_;
+}
+inline int32_t PowerHint::id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PowerHint.id)
+  return _internal_id();
+}
+inline void PowerHint::_internal_set_id(int32_t value) {
+  
+  _impl_.id_ = value;
+}
+inline void PowerHint::set_id(int32_t value) {
+  _internal_set_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PowerHint.id)
+}
+
+// bool enabled = 3;
+inline void PowerHint::clear_enabled() {
+  _impl_.enabled_ = false;
+}
+inline bool PowerHint::_internal_enabled() const {
+  return _impl_.enabled_;
+}
+inline bool PowerHint::enabled() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PowerHint.enabled)
+  return _internal_enabled();
+}
+inline void PowerHint::_internal_set_enabled(bool value) {
+  
+  _impl_.enabled_ = value;
+}
+inline void PowerHint::set_enabled(bool value) {
+  _internal_set_enabled(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PowerHint.enabled)
+}
+
+// int32 duration_ms = 4;
+inline void PowerHint::clear_duration_ms() {
+  _impl_.duration_ms_ = 0;
+}
+inline int32_t PowerHint::_internal_duration_ms() const {
+  return _impl_.duration_ms_;
+}
+inline int32_t PowerHint::duration_ms() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PowerHint.duration_ms)
+  return _internal_duration_ms();
+}
+inline void PowerHint::_internal_set_duration_ms(int32_t value) {
+  
+  _impl_.duration_ms_ = value;
+}
+inline void PowerHint::set_duration_ms(int32_t value) {
+  _internal_set_duration_ms(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PowerHint.duration_ms)
+}
+
+// -------------------------------------------------------------------
+
 // DeviceIdle
 
 // bool idle = 1;
@@ -16836,6 +18532,269 @@ inline void ApkChunk::set_allocated_data(std::string* data) {
 
 // -------------------------------------------------------------------
 
+// QueryPackage
+
+// uint32 request_id = 1;
+inline void QueryPackage::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t QueryPackage::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t QueryPackage::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.QueryPackage.request_id)
+  return _internal_request_id();
+}
+inline void QueryPackage::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void QueryPackage::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.QueryPackage.request_id)
+}
+
+// string package_name = 2;
+inline void QueryPackage::clear_package_name() {
+  _impl_.package_name_.ClearToEmpty();
+}
+inline const std::string& QueryPackage::package_name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.QueryPackage.package_name)
+  return _internal_package_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void QueryPackage::set_package_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.package_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.QueryPackage.package_name)
+}
+inline std::string* QueryPackage::mutable_package_name() {
+  std::string* _s = _internal_mutable_package_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.QueryPackage.package_name)
+  return _s;
+}
+inline const std::string& QueryPackage::_internal_package_name() const {
+  return _impl_.package_name_.Get();
+}
+inline void QueryPackage::_internal_set_package_name(const std::string& value) {
+  
+  _impl_.package_name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* QueryPackage::_internal_mutable_package_name() {
+  
+  return _impl_.package_name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* QueryPackage::release_package_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.QueryPackage.package_name)
+  return _impl_.package_name_.Release();
+}
+inline void QueryPackage::set_allocated_package_name(std::string* package_name) {
+  if (package_name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.package_name_.SetAllocated(package_name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.package_name_.IsDefault()) {
+    _impl_.package_name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.QueryPackage.package_name)
+}
+
+// -------------------------------------------------------------------
+
+// PackageState
+
+// uint32 request_id = 1;
+inline void PackageState::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t PackageState::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t PackageState::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PackageState.request_id)
+  return _internal_request_id();
+}
+inline void PackageState::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void PackageState::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PackageState.request_id)
+}
+
+// bool installed = 2;
+inline void PackageState::clear_installed() {
+  _impl_.installed_ = false;
+}
+inline bool PackageState::_internal_installed() const {
+  return _impl_.installed_;
+}
+inline bool PackageState::installed() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PackageState.installed)
+  return _internal_installed();
+}
+inline void PackageState::_internal_set_installed(bool value) {
+  
+  _impl_.installed_ = value;
+}
+inline void PackageState::set_installed(bool value) {
+  _internal_set_installed(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PackageState.installed)
+}
+
+// int64 version_code = 3;
+inline void PackageState::clear_version_code() {
+  _impl_.version_code_ = int64_t{0};
+}
+inline int64_t PackageState::_internal_version_code() const {
+  return _impl_.version_code_;
+}
+inline int64_t PackageState::version_code() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PackageState.version_code)
+  return _internal_version_code();
+}
+inline void PackageState::_internal_set_version_code(int64_t value) {
+  
+  _impl_.version_code_ = value;
+}
+inline void PackageState::set_version_code(int64_t value) {
+  _internal_set_version_code(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PackageState.version_code)
+}
+
+// string version_name = 4;
+inline void PackageState::clear_version_name() {
+  _impl_.version_name_.ClearToEmpty();
+}
+inline const std::string& PackageState::version_name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PackageState.version_name)
+  return _internal_version_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void PackageState::set_version_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.version_name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PackageState.version_name)
+}
+inline std::string* PackageState::mutable_version_name() {
+  std::string* _s = _internal_mutable_version_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.PackageState.version_name)
+  return _s;
+}
+inline const std::string& PackageState::_internal_version_name() const {
+  return _impl_.version_name_.Get();
+}
+inline void PackageState::_internal_set_version_name(const std::string& value) {
+  
+  _impl_.version_name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* PackageState::_internal_mutable_version_name() {
+  
+  return _impl_.version_name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* PackageState::release_version_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.PackageState.version_name)
+  return _impl_.version_name_.Release();
+}
+inline void PackageState::set_allocated_version_name(std::string* version_name) {
+  if (version_name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.version_name_.SetAllocated(version_name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.version_name_.IsDefault()) {
+    _impl_.version_name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.PackageState.version_name)
+}
+
+// repeated bytes signer_sha256 = 5;
+inline int PackageState::_internal_signer_sha256_size() const {
+  return _impl_.signer_sha256_.size();
+}
+inline int PackageState::signer_sha256_size() const {
+  return _internal_signer_sha256_size();
+}
+inline void PackageState::clear_signer_sha256() {
+  _impl_.signer_sha256_.Clear();
+}
+inline std::string* PackageState::add_signer_sha256() {
+  std::string* _s = _internal_add_signer_sha256();
+  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.PackageState.signer_sha256)
+  return _s;
+}
+inline const std::string& PackageState::_internal_signer_sha256(int index) const {
+  return _impl_.signer_sha256_.Get(index);
+}
+inline const std::string& PackageState::signer_sha256(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PackageState.signer_sha256)
+  return _internal_signer_sha256(index);
+}
+inline std::string* PackageState::mutable_signer_sha256(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.PackageState.signer_sha256)
+  return _impl_.signer_sha256_.Mutable(index);
+}
+inline void PackageState::set_signer_sha256(int index, const std::string& value) {
+  _impl_.signer_sha256_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PackageState.signer_sha256)
+}
+inline void PackageState::set_signer_sha256(int index, std::string&& value) {
+  _impl_.signer_sha256_.Mutable(index)->assign(std::move(value));
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PackageState.signer_sha256)
+}
+inline void PackageState::set_signer_sha256(int index, const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.signer_sha256_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set_char:dsa.control.v1.PackageState.signer_sha256)
+}
+inline void PackageState::set_signer_sha256(int index, const void* value, size_t size) {
+  _impl_.signer_sha256_.Mutable(index)->assign(
+    reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.PackageState.signer_sha256)
+}
+inline std::string* PackageState::_internal_add_signer_sha256() {
+  return _impl_.signer_sha256_.Add();
+}
+inline void PackageState::add_signer_sha256(const std::string& value) {
+  _impl_.signer_sha256_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.PackageState.signer_sha256)
+}
+inline void PackageState::add_signer_sha256(std::string&& value) {
+  _impl_.signer_sha256_.Add(std::move(value));
+  // @@protoc_insertion_point(field_add:dsa.control.v1.PackageState.signer_sha256)
+}
+inline void PackageState::add_signer_sha256(const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.signer_sha256_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add_char:dsa.control.v1.PackageState.signer_sha256)
+}
+inline void PackageState::add_signer_sha256(const void* value, size_t size) {
+  _impl_.signer_sha256_.Add()->assign(reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.PackageState.signer_sha256)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
+PackageState::signer_sha256() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.PackageState.signer_sha256)
+  return _impl_.signer_sha256_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
+PackageState::mutable_signer_sha256() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.PackageState.signer_sha256)
+  return &_impl_.signer_sha256_;
+}
+
+// -------------------------------------------------------------------
+
 // OpenLink
 
 // string url = 1;
@@ -17448,6 +19407,622 @@ inline void ClockProbe::_internal_set_host_sent_ns(uint64_t value) {
 inline void ClockProbe::set_host_sent_ns(uint64_t value) {
   _internal_set_host_sent_ns(value);
   // @@protoc_insertion_point(field_set:dsa.control.v1.ClockProbe.host_sent_ns)
+}
+
+// -------------------------------------------------------------------
+
+// VideoCodecSupport
+
+// .dsa.control.v1.VideoCodec codec = 1;
+inline void VideoCodecSupport::clear_codec() {
+  _impl_.codec_ = 0;
+}
+inline ::dsa::control::v1::VideoCodec VideoCodecSupport::_internal_codec() const {
+  return static_cast< ::dsa::control::v1::VideoCodec >(_impl_.codec_);
+}
+inline ::dsa::control::v1::VideoCodec VideoCodecSupport::codec() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoCodecSupport.codec)
+  return _internal_codec();
+}
+inline void VideoCodecSupport::_internal_set_codec(::dsa::control::v1::VideoCodec value) {
+  
+  _impl_.codec_ = value;
+}
+inline void VideoCodecSupport::set_codec(::dsa::control::v1::VideoCodec value) {
+  _internal_set_codec(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoCodecSupport.codec)
+}
+
+// uint32 max_width = 2;
+inline void VideoCodecSupport::clear_max_width() {
+  _impl_.max_width_ = 0u;
+}
+inline uint32_t VideoCodecSupport::_internal_max_width() const {
+  return _impl_.max_width_;
+}
+inline uint32_t VideoCodecSupport::max_width() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoCodecSupport.max_width)
+  return _internal_max_width();
+}
+inline void VideoCodecSupport::_internal_set_max_width(uint32_t value) {
+  
+  _impl_.max_width_ = value;
+}
+inline void VideoCodecSupport::set_max_width(uint32_t value) {
+  _internal_set_max_width(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoCodecSupport.max_width)
+}
+
+// uint32 max_height = 3;
+inline void VideoCodecSupport::clear_max_height() {
+  _impl_.max_height_ = 0u;
+}
+inline uint32_t VideoCodecSupport::_internal_max_height() const {
+  return _impl_.max_height_;
+}
+inline uint32_t VideoCodecSupport::max_height() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoCodecSupport.max_height)
+  return _internal_max_height();
+}
+inline void VideoCodecSupport::_internal_set_max_height(uint32_t value) {
+  
+  _impl_.max_height_ = value;
+}
+inline void VideoCodecSupport::set_max_height(uint32_t value) {
+  _internal_set_max_height(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoCodecSupport.max_height)
+}
+
+// -------------------------------------------------------------------
+
+// VideoCapabilities
+
+// repeated .dsa.control.v1.VideoCodecSupport codecs = 1;
+inline int VideoCapabilities::_internal_codecs_size() const {
+  return _impl_.codecs_.size();
+}
+inline int VideoCapabilities::codecs_size() const {
+  return _internal_codecs_size();
+}
+inline void VideoCapabilities::clear_codecs() {
+  _impl_.codecs_.Clear();
+}
+inline ::dsa::control::v1::VideoCodecSupport* VideoCapabilities::mutable_codecs(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.VideoCapabilities.codecs)
+  return _impl_.codecs_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::VideoCodecSupport >*
+VideoCapabilities::mutable_codecs() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.VideoCapabilities.codecs)
+  return &_impl_.codecs_;
+}
+inline const ::dsa::control::v1::VideoCodecSupport& VideoCapabilities::_internal_codecs(int index) const {
+  return _impl_.codecs_.Get(index);
+}
+inline const ::dsa::control::v1::VideoCodecSupport& VideoCapabilities::codecs(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoCapabilities.codecs)
+  return _internal_codecs(index);
+}
+inline ::dsa::control::v1::VideoCodecSupport* VideoCapabilities::_internal_add_codecs() {
+  return _impl_.codecs_.Add();
+}
+inline ::dsa::control::v1::VideoCodecSupport* VideoCapabilities::add_codecs() {
+  ::dsa::control::v1::VideoCodecSupport* _add = _internal_add_codecs();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.VideoCapabilities.codecs)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::VideoCodecSupport >&
+VideoCapabilities::codecs() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.VideoCapabilities.codecs)
+  return _impl_.codecs_;
+}
+
+// -------------------------------------------------------------------
+
+// VideoDecoderOpen
+
+// .dsa.control.v1.VideoCodec codec = 1;
+inline void VideoDecoderOpen::clear_codec() {
+  _impl_.codec_ = 0;
+}
+inline ::dsa::control::v1::VideoCodec VideoDecoderOpen::_internal_codec() const {
+  return static_cast< ::dsa::control::v1::VideoCodec >(_impl_.codec_);
+}
+inline ::dsa::control::v1::VideoCodec VideoDecoderOpen::codec() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoDecoderOpen.codec)
+  return _internal_codec();
+}
+inline void VideoDecoderOpen::_internal_set_codec(::dsa::control::v1::VideoCodec value) {
+  
+  _impl_.codec_ = value;
+}
+inline void VideoDecoderOpen::set_codec(::dsa::control::v1::VideoCodec value) {
+  _internal_set_codec(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoDecoderOpen.codec)
+}
+
+// uint32 width = 2;
+inline void VideoDecoderOpen::clear_width() {
+  _impl_.width_ = 0u;
+}
+inline uint32_t VideoDecoderOpen::_internal_width() const {
+  return _impl_.width_;
+}
+inline uint32_t VideoDecoderOpen::width() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoDecoderOpen.width)
+  return _internal_width();
+}
+inline void VideoDecoderOpen::_internal_set_width(uint32_t value) {
+  
+  _impl_.width_ = value;
+}
+inline void VideoDecoderOpen::set_width(uint32_t value) {
+  _internal_set_width(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoDecoderOpen.width)
+}
+
+// uint32 height = 3;
+inline void VideoDecoderOpen::clear_height() {
+  _impl_.height_ = 0u;
+}
+inline uint32_t VideoDecoderOpen::_internal_height() const {
+  return _impl_.height_;
+}
+inline uint32_t VideoDecoderOpen::height() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoDecoderOpen.height)
+  return _internal_height();
+}
+inline void VideoDecoderOpen::_internal_set_height(uint32_t value) {
+  
+  _impl_.height_ = value;
+}
+inline void VideoDecoderOpen::set_height(uint32_t value) {
+  _internal_set_height(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoDecoderOpen.height)
+}
+
+// -------------------------------------------------------------------
+
+// VideoDecoderOpened
+
+// bool ok = 1;
+inline void VideoDecoderOpened::clear_ok() {
+  _impl_.ok_ = false;
+}
+inline bool VideoDecoderOpened::_internal_ok() const {
+  return _impl_.ok_;
+}
+inline bool VideoDecoderOpened::ok() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoDecoderOpened.ok)
+  return _internal_ok();
+}
+inline void VideoDecoderOpened::_internal_set_ok(bool value) {
+  
+  _impl_.ok_ = value;
+}
+inline void VideoDecoderOpened::set_ok(bool value) {
+  _internal_set_ok(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoDecoderOpened.ok)
+}
+
+// string error = 2;
+inline void VideoDecoderOpened::clear_error() {
+  _impl_.error_.ClearToEmpty();
+}
+inline const std::string& VideoDecoderOpened::error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoDecoderOpened.error)
+  return _internal_error();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void VideoDecoderOpened::set_error(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.error_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoDecoderOpened.error)
+}
+inline std::string* VideoDecoderOpened::mutable_error() {
+  std::string* _s = _internal_mutable_error();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.VideoDecoderOpened.error)
+  return _s;
+}
+inline const std::string& VideoDecoderOpened::_internal_error() const {
+  return _impl_.error_.Get();
+}
+inline void VideoDecoderOpened::_internal_set_error(const std::string& value) {
+  
+  _impl_.error_.Set(value, GetArenaForAllocation());
+}
+inline std::string* VideoDecoderOpened::_internal_mutable_error() {
+  
+  return _impl_.error_.Mutable(GetArenaForAllocation());
+}
+inline std::string* VideoDecoderOpened::release_error() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.VideoDecoderOpened.error)
+  return _impl_.error_.Release();
+}
+inline void VideoDecoderOpened::set_allocated_error(std::string* error) {
+  if (error != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.error_.SetAllocated(error, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.error_.IsDefault()) {
+    _impl_.error_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.VideoDecoderOpened.error)
+}
+
+// -------------------------------------------------------------------
+
+// VideoPacket
+
+// uint64 frame_index = 1;
+inline void VideoPacket::clear_frame_index() {
+  _impl_.frame_index_ = uint64_t{0u};
+}
+inline uint64_t VideoPacket::_internal_frame_index() const {
+  return _impl_.frame_index_;
+}
+inline uint64_t VideoPacket::frame_index() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoPacket.frame_index)
+  return _internal_frame_index();
+}
+inline void VideoPacket::_internal_set_frame_index(uint64_t value) {
+  
+  _impl_.frame_index_ = value;
+}
+inline void VideoPacket::set_frame_index(uint64_t value) {
+  _internal_set_frame_index(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoPacket.frame_index)
+}
+
+// int64 timestamp_us = 2;
+inline void VideoPacket::clear_timestamp_us() {
+  _impl_.timestamp_us_ = int64_t{0};
+}
+inline int64_t VideoPacket::_internal_timestamp_us() const {
+  return _impl_.timestamp_us_;
+}
+inline int64_t VideoPacket::timestamp_us() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoPacket.timestamp_us)
+  return _internal_timestamp_us();
+}
+inline void VideoPacket::_internal_set_timestamp_us(int64_t value) {
+  
+  _impl_.timestamp_us_ = value;
+}
+inline void VideoPacket::set_timestamp_us(int64_t value) {
+  _internal_set_timestamp_us(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoPacket.timestamp_us)
+}
+
+// bytes data = 3;
+inline void VideoPacket::clear_data() {
+  _impl_.data_.ClearToEmpty();
+}
+inline const std::string& VideoPacket::data() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoPacket.data)
+  return _internal_data();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void VideoPacket::set_data(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.data_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoPacket.data)
+}
+inline std::string* VideoPacket::mutable_data() {
+  std::string* _s = _internal_mutable_data();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.VideoPacket.data)
+  return _s;
+}
+inline const std::string& VideoPacket::_internal_data() const {
+  return _impl_.data_.Get();
+}
+inline void VideoPacket::_internal_set_data(const std::string& value) {
+  
+  _impl_.data_.Set(value, GetArenaForAllocation());
+}
+inline std::string* VideoPacket::_internal_mutable_data() {
+  
+  return _impl_.data_.Mutable(GetArenaForAllocation());
+}
+inline std::string* VideoPacket::release_data() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.VideoPacket.data)
+  return _impl_.data_.Release();
+}
+inline void VideoPacket::set_allocated_data(std::string* data) {
+  if (data != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.data_.SetAllocated(data, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.data_.IsDefault()) {
+    _impl_.data_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.VideoPacket.data)
+}
+
+// bool codec_config = 4;
+inline void VideoPacket::clear_codec_config() {
+  _impl_.codec_config_ = false;
+}
+inline bool VideoPacket::_internal_codec_config() const {
+  return _impl_.codec_config_;
+}
+inline bool VideoPacket::codec_config() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoPacket.codec_config)
+  return _internal_codec_config();
+}
+inline void VideoPacket::_internal_set_codec_config(bool value) {
+  
+  _impl_.codec_config_ = value;
+}
+inline void VideoPacket::set_codec_config(bool value) {
+  _internal_set_codec_config(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoPacket.codec_config)
+}
+
+// bool end_of_stream = 5;
+inline void VideoPacket::clear_end_of_stream() {
+  _impl_.end_of_stream_ = false;
+}
+inline bool VideoPacket::_internal_end_of_stream() const {
+  return _impl_.end_of_stream_;
+}
+inline bool VideoPacket::end_of_stream() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoPacket.end_of_stream)
+  return _internal_end_of_stream();
+}
+inline void VideoPacket::_internal_set_end_of_stream(bool value) {
+  
+  _impl_.end_of_stream_ = value;
+}
+inline void VideoPacket::set_end_of_stream(bool value) {
+  _internal_set_end_of_stream(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoPacket.end_of_stream)
+}
+
+// -------------------------------------------------------------------
+
+// VideoFrame
+
+// uint64 frame_index = 1;
+inline void VideoFrame::clear_frame_index() {
+  _impl_.frame_index_ = uint64_t{0u};
+}
+inline uint64_t VideoFrame::_internal_frame_index() const {
+  return _impl_.frame_index_;
+}
+inline uint64_t VideoFrame::frame_index() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoFrame.frame_index)
+  return _internal_frame_index();
+}
+inline void VideoFrame::_internal_set_frame_index(uint64_t value) {
+  
+  _impl_.frame_index_ = value;
+}
+inline void VideoFrame::set_frame_index(uint64_t value) {
+  _internal_set_frame_index(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoFrame.frame_index)
+}
+
+// int64 timestamp_us = 2;
+inline void VideoFrame::clear_timestamp_us() {
+  _impl_.timestamp_us_ = int64_t{0};
+}
+inline int64_t VideoFrame::_internal_timestamp_us() const {
+  return _impl_.timestamp_us_;
+}
+inline int64_t VideoFrame::timestamp_us() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoFrame.timestamp_us)
+  return _internal_timestamp_us();
+}
+inline void VideoFrame::_internal_set_timestamp_us(int64_t value) {
+  
+  _impl_.timestamp_us_ = value;
+}
+inline void VideoFrame::set_timestamp_us(int64_t value) {
+  _internal_set_timestamp_us(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoFrame.timestamp_us)
+}
+
+// uint32 width = 3;
+inline void VideoFrame::clear_width() {
+  _impl_.width_ = 0u;
+}
+inline uint32_t VideoFrame::_internal_width() const {
+  return _impl_.width_;
+}
+inline uint32_t VideoFrame::width() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoFrame.width)
+  return _internal_width();
+}
+inline void VideoFrame::_internal_set_width(uint32_t value) {
+  
+  _impl_.width_ = value;
+}
+inline void VideoFrame::set_width(uint32_t value) {
+  _internal_set_width(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoFrame.width)
+}
+
+// uint32 height = 4;
+inline void VideoFrame::clear_height() {
+  _impl_.height_ = 0u;
+}
+inline uint32_t VideoFrame::_internal_height() const {
+  return _impl_.height_;
+}
+inline uint32_t VideoFrame::height() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoFrame.height)
+  return _internal_height();
+}
+inline void VideoFrame::_internal_set_height(uint32_t value) {
+  
+  _impl_.height_ = value;
+}
+inline void VideoFrame::set_height(uint32_t value) {
+  _internal_set_height(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoFrame.height)
+}
+
+// uint32 stride = 5;
+inline void VideoFrame::clear_stride() {
+  _impl_.stride_ = 0u;
+}
+inline uint32_t VideoFrame::_internal_stride() const {
+  return _impl_.stride_;
+}
+inline uint32_t VideoFrame::stride() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoFrame.stride)
+  return _internal_stride();
+}
+inline void VideoFrame::_internal_set_stride(uint32_t value) {
+  
+  _impl_.stride_ = value;
+}
+inline void VideoFrame::set_stride(uint32_t value) {
+  _internal_set_stride(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoFrame.stride)
+}
+
+// bytes nv12 = 6;
+inline void VideoFrame::clear_nv12() {
+  _impl_.nv12_.ClearToEmpty();
+}
+inline const std::string& VideoFrame::nv12() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoFrame.nv12)
+  return _internal_nv12();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void VideoFrame::set_nv12(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.nv12_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoFrame.nv12)
+}
+inline std::string* VideoFrame::mutable_nv12() {
+  std::string* _s = _internal_mutable_nv12();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.VideoFrame.nv12)
+  return _s;
+}
+inline const std::string& VideoFrame::_internal_nv12() const {
+  return _impl_.nv12_.Get();
+}
+inline void VideoFrame::_internal_set_nv12(const std::string& value) {
+  
+  _impl_.nv12_.Set(value, GetArenaForAllocation());
+}
+inline std::string* VideoFrame::_internal_mutable_nv12() {
+  
+  return _impl_.nv12_.Mutable(GetArenaForAllocation());
+}
+inline std::string* VideoFrame::release_nv12() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.VideoFrame.nv12)
+  return _impl_.nv12_.Release();
+}
+inline void VideoFrame::set_allocated_nv12(std::string* nv12) {
+  if (nv12 != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.nv12_.SetAllocated(nv12, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.nv12_.IsDefault()) {
+    _impl_.nv12_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.VideoFrame.nv12)
+}
+
+// bool end_of_stream = 7;
+inline void VideoFrame::clear_end_of_stream() {
+  _impl_.end_of_stream_ = false;
+}
+inline bool VideoFrame::_internal_end_of_stream() const {
+  return _impl_.end_of_stream_;
+}
+inline bool VideoFrame::end_of_stream() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoFrame.end_of_stream)
+  return _internal_end_of_stream();
+}
+inline void VideoFrame::_internal_set_end_of_stream(bool value) {
+  
+  _impl_.end_of_stream_ = value;
+}
+inline void VideoFrame::set_end_of_stream(bool value) {
+  _internal_set_end_of_stream(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoFrame.end_of_stream)
+}
+
+// -------------------------------------------------------------------
+
+// VideoFlush
+
+// -------------------------------------------------------------------
+
+// VideoFlushed
+
+// -------------------------------------------------------------------
+
+// VideoError
+
+// string error = 1;
+inline void VideoError::clear_error() {
+  _impl_.error_.ClearToEmpty();
+}
+inline const std::string& VideoError::error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.VideoError.error)
+  return _internal_error();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void VideoError::set_error(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.error_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.VideoError.error)
+}
+inline std::string* VideoError::mutable_error() {
+  std::string* _s = _internal_mutable_error();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.VideoError.error)
+  return _s;
+}
+inline const std::string& VideoError::_internal_error() const {
+  return _impl_.error_.Get();
+}
+inline void VideoError::_internal_set_error(const std::string& value) {
+  
+  _impl_.error_.Set(value, GetArenaForAllocation());
+}
+inline std::string* VideoError::_internal_mutable_error() {
+  
+  return _impl_.error_.Mutable(GetArenaForAllocation());
+}
+inline std::string* VideoError::release_error() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.VideoError.error)
+  return _impl_.error_.Release();
+}
+inline void VideoError::set_allocated_error(std::string* error) {
+  if (error != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.error_.SetAllocated(error, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.error_.IsDefault()) {
+    _impl_.error_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.VideoError.error)
 }
 
 // -------------------------------------------------------------------
@@ -20095,282 +22670,6 @@ inline void AccessibilityActionResult::set_allocated_error(std::string* error) {
 
 // -------------------------------------------------------------------
 
-// AudioOutputOpen
-
-// uint32 sample_rate = 1;
-inline void AudioOutputOpen::clear_sample_rate() {
-  _impl_.sample_rate_ = 0u;
-}
-inline uint32_t AudioOutputOpen::_internal_sample_rate() const {
-  return _impl_.sample_rate_;
-}
-inline uint32_t AudioOutputOpen::sample_rate() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioOutputOpen.sample_rate)
-  return _internal_sample_rate();
-}
-inline void AudioOutputOpen::_internal_set_sample_rate(uint32_t value) {
-  
-  _impl_.sample_rate_ = value;
-}
-inline void AudioOutputOpen::set_sample_rate(uint32_t value) {
-  _internal_set_sample_rate(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioOutputOpen.sample_rate)
-}
-
-// uint32 channel_count = 2;
-inline void AudioOutputOpen::clear_channel_count() {
-  _impl_.channel_count_ = 0u;
-}
-inline uint32_t AudioOutputOpen::_internal_channel_count() const {
-  return _impl_.channel_count_;
-}
-inline uint32_t AudioOutputOpen::channel_count() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioOutputOpen.channel_count)
-  return _internal_channel_count();
-}
-inline void AudioOutputOpen::_internal_set_channel_count(uint32_t value) {
-  
-  _impl_.channel_count_ = value;
-}
-inline void AudioOutputOpen::set_channel_count(uint32_t value) {
-  _internal_set_channel_count(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioOutputOpen.channel_count)
-}
-
-// .dsa.control.v1.AudioSampleFormat format = 3;
-inline void AudioOutputOpen::clear_format() {
-  _impl_.format_ = 0;
-}
-inline ::dsa::control::v1::AudioSampleFormat AudioOutputOpen::_internal_format() const {
-  return static_cast< ::dsa::control::v1::AudioSampleFormat >(_impl_.format_);
-}
-inline ::dsa::control::v1::AudioSampleFormat AudioOutputOpen::format() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioOutputOpen.format)
-  return _internal_format();
-}
-inline void AudioOutputOpen::_internal_set_format(::dsa::control::v1::AudioSampleFormat value) {
-  
-  _impl_.format_ = value;
-}
-inline void AudioOutputOpen::set_format(::dsa::control::v1::AudioSampleFormat value) {
-  _internal_set_format(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioOutputOpen.format)
-}
-
-// uint32 frames_per_burst = 4;
-inline void AudioOutputOpen::clear_frames_per_burst() {
-  _impl_.frames_per_burst_ = 0u;
-}
-inline uint32_t AudioOutputOpen::_internal_frames_per_burst() const {
-  return _impl_.frames_per_burst_;
-}
-inline uint32_t AudioOutputOpen::frames_per_burst() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioOutputOpen.frames_per_burst)
-  return _internal_frames_per_burst();
-}
-inline void AudioOutputOpen::_internal_set_frames_per_burst(uint32_t value) {
-  
-  _impl_.frames_per_burst_ = value;
-}
-inline void AudioOutputOpen::set_frames_per_burst(uint32_t value) {
-  _internal_set_frames_per_burst(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioOutputOpen.frames_per_burst)
-}
-
-// string name = 5;
-inline void AudioOutputOpen::clear_name() {
-  _impl_.name_.ClearToEmpty();
-}
-inline const std::string& AudioOutputOpen::name() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioOutputOpen.name)
-  return _internal_name();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void AudioOutputOpen::set_name(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioOutputOpen.name)
-}
-inline std::string* AudioOutputOpen::mutable_name() {
-  std::string* _s = _internal_mutable_name();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AudioOutputOpen.name)
-  return _s;
-}
-inline const std::string& AudioOutputOpen::_internal_name() const {
-  return _impl_.name_.Get();
-}
-inline void AudioOutputOpen::_internal_set_name(const std::string& value) {
-  
-  _impl_.name_.Set(value, GetArenaForAllocation());
-}
-inline std::string* AudioOutputOpen::_internal_mutable_name() {
-  
-  return _impl_.name_.Mutable(GetArenaForAllocation());
-}
-inline std::string* AudioOutputOpen::release_name() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.AudioOutputOpen.name)
-  return _impl_.name_.Release();
-}
-inline void AudioOutputOpen::set_allocated_name(std::string* name) {
-  if (name != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.name_.IsDefault()) {
-    _impl_.name_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AudioOutputOpen.name)
-}
-
-// -------------------------------------------------------------------
-
-// AudioOutputReady
-
-// uint32 buffered_frames = 1;
-inline void AudioOutputReady::clear_buffered_frames() {
-  _impl_.buffered_frames_ = 0u;
-}
-inline uint32_t AudioOutputReady::_internal_buffered_frames() const {
-  return _impl_.buffered_frames_;
-}
-inline uint32_t AudioOutputReady::buffered_frames() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioOutputReady.buffered_frames)
-  return _internal_buffered_frames();
-}
-inline void AudioOutputReady::_internal_set_buffered_frames(uint32_t value) {
-  
-  _impl_.buffered_frames_ = value;
-}
-inline void AudioOutputReady::set_buffered_frames(uint32_t value) {
-  _internal_set_buffered_frames(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioOutputReady.buffered_frames)
-}
-
-// uint32 device_frames = 2;
-inline void AudioOutputReady::clear_device_frames() {
-  _impl_.device_frames_ = 0u;
-}
-inline uint32_t AudioOutputReady::_internal_device_frames() const {
-  return _impl_.device_frames_;
-}
-inline uint32_t AudioOutputReady::device_frames() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioOutputReady.device_frames)
-  return _internal_device_frames();
-}
-inline void AudioOutputReady::_internal_set_device_frames(uint32_t value) {
-  
-  _impl_.device_frames_ = value;
-}
-inline void AudioOutputReady::set_device_frames(uint32_t value) {
-  _internal_set_device_frames(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioOutputReady.device_frames)
-}
-
-// -------------------------------------------------------------------
-
-// AudioPcm
-
-// uint64 position = 1;
-inline void AudioPcm::clear_position() {
-  _impl_.position_ = uint64_t{0u};
-}
-inline uint64_t AudioPcm::_internal_position() const {
-  return _impl_.position_;
-}
-inline uint64_t AudioPcm::position() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioPcm.position)
-  return _internal_position();
-}
-inline void AudioPcm::_internal_set_position(uint64_t value) {
-  
-  _impl_.position_ = value;
-}
-inline void AudioPcm::set_position(uint64_t value) {
-  _internal_set_position(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioPcm.position)
-}
-
-// bytes data = 2;
-inline void AudioPcm::clear_data() {
-  _impl_.data_.ClearToEmpty();
-}
-inline const std::string& AudioPcm::data() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioPcm.data)
-  return _internal_data();
-}
-template <typename ArgT0, typename... ArgT>
-inline PROTOBUF_ALWAYS_INLINE
-void AudioPcm::set_data(ArgT0&& arg0, ArgT... args) {
- 
- _impl_.data_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioPcm.data)
-}
-inline std::string* AudioPcm::mutable_data() {
-  std::string* _s = _internal_mutable_data();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AudioPcm.data)
-  return _s;
-}
-inline const std::string& AudioPcm::_internal_data() const {
-  return _impl_.data_.Get();
-}
-inline void AudioPcm::_internal_set_data(const std::string& value) {
-  
-  _impl_.data_.Set(value, GetArenaForAllocation());
-}
-inline std::string* AudioPcm::_internal_mutable_data() {
-  
-  return _impl_.data_.Mutable(GetArenaForAllocation());
-}
-inline std::string* AudioPcm::release_data() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.AudioPcm.data)
-  return _impl_.data_.Release();
-}
-inline void AudioPcm::set_allocated_data(std::string* data) {
-  if (data != nullptr) {
-    
-  } else {
-    
-  }
-  _impl_.data_.SetAllocated(data, GetArenaForAllocation());
-#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  if (_impl_.data_.IsDefault()) {
-    _impl_.data_.Set("", GetArenaForAllocation());
-  }
-#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
-  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AudioPcm.data)
-}
-
-// -------------------------------------------------------------------
-
-// AudioOutputControl
-
-// .dsa.control.v1.AudioOutputCommand command = 1;
-inline void AudioOutputControl::clear_command() {
-  _impl_.command_ = 0;
-}
-inline ::dsa::control::v1::AudioOutputCommand AudioOutputControl::_internal_command() const {
-  return static_cast< ::dsa::control::v1::AudioOutputCommand >(_impl_.command_);
-}
-inline ::dsa::control::v1::AudioOutputCommand AudioOutputControl::command() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.AudioOutputControl.command)
-  return _internal_command();
-}
-inline void AudioOutputControl::_internal_set_command(::dsa::control::v1::AudioOutputCommand value) {
-  
-  _impl_.command_ = value;
-}
-inline void AudioOutputControl::set_command(::dsa::control::v1::AudioOutputCommand value) {
-  _internal_set_command(value);
-  // @@protoc_insertion_point(field_set:dsa.control.v1.AudioOutputControl.command)
-}
-
-// -------------------------------------------------------------------
-
 // Envelope
 
 // .dsa.control.v1.Hello hello = 1;
@@ -22593,6 +24892,80 @@ inline ::dsa::control::v1::PowerState* Envelope::mutable_power_state() {
   return _msg;
 }
 
+// .dsa.control.v1.PowerHint power_hint = 110;
+inline bool Envelope::_internal_has_power_hint() const {
+  return body_case() == kPowerHint;
+}
+inline bool Envelope::has_power_hint() const {
+  return _internal_has_power_hint();
+}
+inline void Envelope::set_has_power_hint() {
+  _impl_._oneof_case_[0] = kPowerHint;
+}
+inline void Envelope::clear_power_hint() {
+  if (_internal_has_power_hint()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.power_hint_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::PowerHint* Envelope::release_power_hint() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.power_hint)
+  if (_internal_has_power_hint()) {
+    clear_has_body();
+    ::dsa::control::v1::PowerHint* temp = _impl_.body_.power_hint_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.power_hint_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::PowerHint& Envelope::_internal_power_hint() const {
+  return _internal_has_power_hint()
+      ? *_impl_.body_.power_hint_
+      : reinterpret_cast< ::dsa::control::v1::PowerHint&>(::dsa::control::v1::_PowerHint_default_instance_);
+}
+inline const ::dsa::control::v1::PowerHint& Envelope::power_hint() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.power_hint)
+  return _internal_power_hint();
+}
+inline ::dsa::control::v1::PowerHint* Envelope::unsafe_arena_release_power_hint() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.power_hint)
+  if (_internal_has_power_hint()) {
+    clear_has_body();
+    ::dsa::control::v1::PowerHint* temp = _impl_.body_.power_hint_;
+    _impl_.body_.power_hint_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_power_hint(::dsa::control::v1::PowerHint* power_hint) {
+  clear_body();
+  if (power_hint) {
+    set_has_power_hint();
+    _impl_.body_.power_hint_ = power_hint;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.power_hint)
+}
+inline ::dsa::control::v1::PowerHint* Envelope::_internal_mutable_power_hint() {
+  if (!_internal_has_power_hint()) {
+    clear_body();
+    set_has_power_hint();
+    _impl_.body_.power_hint_ = CreateMaybeMessage< ::dsa::control::v1::PowerHint >(GetArenaForAllocation());
+  }
+  return _impl_.body_.power_hint_;
+}
+inline ::dsa::control::v1::PowerHint* Envelope::mutable_power_hint() {
+  ::dsa::control::v1::PowerHint* _msg = _internal_mutable_power_hint();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.power_hint)
+  return _msg;
+}
+
 // .dsa.control.v1.DeviceIdle device_idle = 42;
 inline bool Envelope::_internal_has_device_idle() const {
   return body_case() == kDeviceIdle;
@@ -22664,6 +25037,80 @@ inline ::dsa::control::v1::DeviceIdle* Envelope::_internal_mutable_device_idle()
 inline ::dsa::control::v1::DeviceIdle* Envelope::mutable_device_idle() {
   ::dsa::control::v1::DeviceIdle* _msg = _internal_mutable_device_idle();
   // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.device_idle)
+  return _msg;
+}
+
+// .dsa.control.v1.HostMemory host_memory = 43;
+inline bool Envelope::_internal_has_host_memory() const {
+  return body_case() == kHostMemory;
+}
+inline bool Envelope::has_host_memory() const {
+  return _internal_has_host_memory();
+}
+inline void Envelope::set_has_host_memory() {
+  _impl_._oneof_case_[0] = kHostMemory;
+}
+inline void Envelope::clear_host_memory() {
+  if (_internal_has_host_memory()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.host_memory_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::HostMemory* Envelope::release_host_memory() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.host_memory)
+  if (_internal_has_host_memory()) {
+    clear_has_body();
+    ::dsa::control::v1::HostMemory* temp = _impl_.body_.host_memory_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.host_memory_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::HostMemory& Envelope::_internal_host_memory() const {
+  return _internal_has_host_memory()
+      ? *_impl_.body_.host_memory_
+      : reinterpret_cast< ::dsa::control::v1::HostMemory&>(::dsa::control::v1::_HostMemory_default_instance_);
+}
+inline const ::dsa::control::v1::HostMemory& Envelope::host_memory() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.host_memory)
+  return _internal_host_memory();
+}
+inline ::dsa::control::v1::HostMemory* Envelope::unsafe_arena_release_host_memory() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.host_memory)
+  if (_internal_has_host_memory()) {
+    clear_has_body();
+    ::dsa::control::v1::HostMemory* temp = _impl_.body_.host_memory_;
+    _impl_.body_.host_memory_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_host_memory(::dsa::control::v1::HostMemory* host_memory) {
+  clear_body();
+  if (host_memory) {
+    set_has_host_memory();
+    _impl_.body_.host_memory_ = host_memory;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.host_memory)
+}
+inline ::dsa::control::v1::HostMemory* Envelope::_internal_mutable_host_memory() {
+  if (!_internal_has_host_memory()) {
+    clear_body();
+    set_has_host_memory();
+    _impl_.body_.host_memory_ = CreateMaybeMessage< ::dsa::control::v1::HostMemory >(GetArenaForAllocation());
+  }
+  return _impl_.body_.host_memory_;
+}
+inline ::dsa::control::v1::HostMemory* Envelope::mutable_host_memory() {
+  ::dsa::control::v1::HostMemory* _msg = _internal_mutable_host_memory();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.host_memory)
   return _msg;
 }
 
@@ -23034,6 +25481,154 @@ inline ::dsa::control::v1::InstallResult* Envelope::_internal_mutable_install_re
 inline ::dsa::control::v1::InstallResult* Envelope::mutable_install_result() {
   ::dsa::control::v1::InstallResult* _msg = _internal_mutable_install_result();
   // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.install_result)
+  return _msg;
+}
+
+// .dsa.control.v1.QueryPackage query_package = 65;
+inline bool Envelope::_internal_has_query_package() const {
+  return body_case() == kQueryPackage;
+}
+inline bool Envelope::has_query_package() const {
+  return _internal_has_query_package();
+}
+inline void Envelope::set_has_query_package() {
+  _impl_._oneof_case_[0] = kQueryPackage;
+}
+inline void Envelope::clear_query_package() {
+  if (_internal_has_query_package()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.query_package_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::QueryPackage* Envelope::release_query_package() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.query_package)
+  if (_internal_has_query_package()) {
+    clear_has_body();
+    ::dsa::control::v1::QueryPackage* temp = _impl_.body_.query_package_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.query_package_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::QueryPackage& Envelope::_internal_query_package() const {
+  return _internal_has_query_package()
+      ? *_impl_.body_.query_package_
+      : reinterpret_cast< ::dsa::control::v1::QueryPackage&>(::dsa::control::v1::_QueryPackage_default_instance_);
+}
+inline const ::dsa::control::v1::QueryPackage& Envelope::query_package() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.query_package)
+  return _internal_query_package();
+}
+inline ::dsa::control::v1::QueryPackage* Envelope::unsafe_arena_release_query_package() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.query_package)
+  if (_internal_has_query_package()) {
+    clear_has_body();
+    ::dsa::control::v1::QueryPackage* temp = _impl_.body_.query_package_;
+    _impl_.body_.query_package_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_query_package(::dsa::control::v1::QueryPackage* query_package) {
+  clear_body();
+  if (query_package) {
+    set_has_query_package();
+    _impl_.body_.query_package_ = query_package;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.query_package)
+}
+inline ::dsa::control::v1::QueryPackage* Envelope::_internal_mutable_query_package() {
+  if (!_internal_has_query_package()) {
+    clear_body();
+    set_has_query_package();
+    _impl_.body_.query_package_ = CreateMaybeMessage< ::dsa::control::v1::QueryPackage >(GetArenaForAllocation());
+  }
+  return _impl_.body_.query_package_;
+}
+inline ::dsa::control::v1::QueryPackage* Envelope::mutable_query_package() {
+  ::dsa::control::v1::QueryPackage* _msg = _internal_mutable_query_package();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.query_package)
+  return _msg;
+}
+
+// .dsa.control.v1.PackageState package_state = 66;
+inline bool Envelope::_internal_has_package_state() const {
+  return body_case() == kPackageState;
+}
+inline bool Envelope::has_package_state() const {
+  return _internal_has_package_state();
+}
+inline void Envelope::set_has_package_state() {
+  _impl_._oneof_case_[0] = kPackageState;
+}
+inline void Envelope::clear_package_state() {
+  if (_internal_has_package_state()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.package_state_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::PackageState* Envelope::release_package_state() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.package_state)
+  if (_internal_has_package_state()) {
+    clear_has_body();
+    ::dsa::control::v1::PackageState* temp = _impl_.body_.package_state_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.package_state_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::PackageState& Envelope::_internal_package_state() const {
+  return _internal_has_package_state()
+      ? *_impl_.body_.package_state_
+      : reinterpret_cast< ::dsa::control::v1::PackageState&>(::dsa::control::v1::_PackageState_default_instance_);
+}
+inline const ::dsa::control::v1::PackageState& Envelope::package_state() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.package_state)
+  return _internal_package_state();
+}
+inline ::dsa::control::v1::PackageState* Envelope::unsafe_arena_release_package_state() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.package_state)
+  if (_internal_has_package_state()) {
+    clear_has_body();
+    ::dsa::control::v1::PackageState* temp = _impl_.body_.package_state_;
+    _impl_.body_.package_state_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_package_state(::dsa::control::v1::PackageState* package_state) {
+  clear_body();
+  if (package_state) {
+    set_has_package_state();
+    _impl_.body_.package_state_ = package_state;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.package_state)
+}
+inline ::dsa::control::v1::PackageState* Envelope::_internal_mutable_package_state() {
+  if (!_internal_has_package_state()) {
+    clear_body();
+    set_has_package_state();
+    _impl_.body_.package_state_ = CreateMaybeMessage< ::dsa::control::v1::PackageState >(GetArenaForAllocation());
+  }
+  return _impl_.body_.package_state_;
+}
+inline ::dsa::control::v1::PackageState* Envelope::mutable_package_state() {
+  ::dsa::control::v1::PackageState* _msg = _internal_mutable_package_state();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.package_state)
   return _msg;
 }
 
@@ -24739,299 +27334,595 @@ inline ::dsa::control::v1::AccessibilityActionResult* Envelope::mutable_accessib
   return _msg;
 }
 
-// .dsa.control.v1.AudioOutputOpen audio_output_open = 100;
-inline bool Envelope::_internal_has_audio_output_open() const {
-  return body_case() == kAudioOutputOpen;
+// .dsa.control.v1.VideoCapabilities video_capabilities = 120;
+inline bool Envelope::_internal_has_video_capabilities() const {
+  return body_case() == kVideoCapabilities;
 }
-inline bool Envelope::has_audio_output_open() const {
-  return _internal_has_audio_output_open();
+inline bool Envelope::has_video_capabilities() const {
+  return _internal_has_video_capabilities();
 }
-inline void Envelope::set_has_audio_output_open() {
-  _impl_._oneof_case_[0] = kAudioOutputOpen;
+inline void Envelope::set_has_video_capabilities() {
+  _impl_._oneof_case_[0] = kVideoCapabilities;
 }
-inline void Envelope::clear_audio_output_open() {
-  if (_internal_has_audio_output_open()) {
+inline void Envelope::clear_video_capabilities() {
+  if (_internal_has_video_capabilities()) {
     if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.audio_output_open_;
+      delete _impl_.body_.video_capabilities_;
     }
     clear_has_body();
   }
 }
-inline ::dsa::control::v1::AudioOutputOpen* Envelope::release_audio_output_open() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.audio_output_open)
-  if (_internal_has_audio_output_open()) {
+inline ::dsa::control::v1::VideoCapabilities* Envelope::release_video_capabilities() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.video_capabilities)
+  if (_internal_has_video_capabilities()) {
     clear_has_body();
-    ::dsa::control::v1::AudioOutputOpen* temp = _impl_.body_.audio_output_open_;
+    ::dsa::control::v1::VideoCapabilities* temp = _impl_.body_.video_capabilities_;
     if (GetArenaForAllocation() != nullptr) {
       temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
     }
-    _impl_.body_.audio_output_open_ = nullptr;
+    _impl_.body_.video_capabilities_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline const ::dsa::control::v1::AudioOutputOpen& Envelope::_internal_audio_output_open() const {
-  return _internal_has_audio_output_open()
-      ? *_impl_.body_.audio_output_open_
-      : reinterpret_cast< ::dsa::control::v1::AudioOutputOpen&>(::dsa::control::v1::_AudioOutputOpen_default_instance_);
+inline const ::dsa::control::v1::VideoCapabilities& Envelope::_internal_video_capabilities() const {
+  return _internal_has_video_capabilities()
+      ? *_impl_.body_.video_capabilities_
+      : reinterpret_cast< ::dsa::control::v1::VideoCapabilities&>(::dsa::control::v1::_VideoCapabilities_default_instance_);
 }
-inline const ::dsa::control::v1::AudioOutputOpen& Envelope::audio_output_open() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.audio_output_open)
-  return _internal_audio_output_open();
+inline const ::dsa::control::v1::VideoCapabilities& Envelope::video_capabilities() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.video_capabilities)
+  return _internal_video_capabilities();
 }
-inline ::dsa::control::v1::AudioOutputOpen* Envelope::unsafe_arena_release_audio_output_open() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.audio_output_open)
-  if (_internal_has_audio_output_open()) {
+inline ::dsa::control::v1::VideoCapabilities* Envelope::unsafe_arena_release_video_capabilities() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.video_capabilities)
+  if (_internal_has_video_capabilities()) {
     clear_has_body();
-    ::dsa::control::v1::AudioOutputOpen* temp = _impl_.body_.audio_output_open_;
-    _impl_.body_.audio_output_open_ = nullptr;
+    ::dsa::control::v1::VideoCapabilities* temp = _impl_.body_.video_capabilities_;
+    _impl_.body_.video_capabilities_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline void Envelope::unsafe_arena_set_allocated_audio_output_open(::dsa::control::v1::AudioOutputOpen* audio_output_open) {
+inline void Envelope::unsafe_arena_set_allocated_video_capabilities(::dsa::control::v1::VideoCapabilities* video_capabilities) {
   clear_body();
-  if (audio_output_open) {
-    set_has_audio_output_open();
-    _impl_.body_.audio_output_open_ = audio_output_open;
+  if (video_capabilities) {
+    set_has_video_capabilities();
+    _impl_.body_.video_capabilities_ = video_capabilities;
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.audio_output_open)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.video_capabilities)
 }
-inline ::dsa::control::v1::AudioOutputOpen* Envelope::_internal_mutable_audio_output_open() {
-  if (!_internal_has_audio_output_open()) {
+inline ::dsa::control::v1::VideoCapabilities* Envelope::_internal_mutable_video_capabilities() {
+  if (!_internal_has_video_capabilities()) {
     clear_body();
-    set_has_audio_output_open();
-    _impl_.body_.audio_output_open_ = CreateMaybeMessage< ::dsa::control::v1::AudioOutputOpen >(GetArenaForAllocation());
+    set_has_video_capabilities();
+    _impl_.body_.video_capabilities_ = CreateMaybeMessage< ::dsa::control::v1::VideoCapabilities >(GetArenaForAllocation());
   }
-  return _impl_.body_.audio_output_open_;
+  return _impl_.body_.video_capabilities_;
 }
-inline ::dsa::control::v1::AudioOutputOpen* Envelope::mutable_audio_output_open() {
-  ::dsa::control::v1::AudioOutputOpen* _msg = _internal_mutable_audio_output_open();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.audio_output_open)
+inline ::dsa::control::v1::VideoCapabilities* Envelope::mutable_video_capabilities() {
+  ::dsa::control::v1::VideoCapabilities* _msg = _internal_mutable_video_capabilities();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.video_capabilities)
   return _msg;
 }
 
-// .dsa.control.v1.AudioOutputReady audio_output_ready = 101;
-inline bool Envelope::_internal_has_audio_output_ready() const {
-  return body_case() == kAudioOutputReady;
+// .dsa.control.v1.VideoDecoderOpen video_decoder_open = 121;
+inline bool Envelope::_internal_has_video_decoder_open() const {
+  return body_case() == kVideoDecoderOpen;
 }
-inline bool Envelope::has_audio_output_ready() const {
-  return _internal_has_audio_output_ready();
+inline bool Envelope::has_video_decoder_open() const {
+  return _internal_has_video_decoder_open();
 }
-inline void Envelope::set_has_audio_output_ready() {
-  _impl_._oneof_case_[0] = kAudioOutputReady;
+inline void Envelope::set_has_video_decoder_open() {
+  _impl_._oneof_case_[0] = kVideoDecoderOpen;
 }
-inline void Envelope::clear_audio_output_ready() {
-  if (_internal_has_audio_output_ready()) {
+inline void Envelope::clear_video_decoder_open() {
+  if (_internal_has_video_decoder_open()) {
     if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.audio_output_ready_;
+      delete _impl_.body_.video_decoder_open_;
     }
     clear_has_body();
   }
 }
-inline ::dsa::control::v1::AudioOutputReady* Envelope::release_audio_output_ready() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.audio_output_ready)
-  if (_internal_has_audio_output_ready()) {
+inline ::dsa::control::v1::VideoDecoderOpen* Envelope::release_video_decoder_open() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.video_decoder_open)
+  if (_internal_has_video_decoder_open()) {
     clear_has_body();
-    ::dsa::control::v1::AudioOutputReady* temp = _impl_.body_.audio_output_ready_;
+    ::dsa::control::v1::VideoDecoderOpen* temp = _impl_.body_.video_decoder_open_;
     if (GetArenaForAllocation() != nullptr) {
       temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
     }
-    _impl_.body_.audio_output_ready_ = nullptr;
+    _impl_.body_.video_decoder_open_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline const ::dsa::control::v1::AudioOutputReady& Envelope::_internal_audio_output_ready() const {
-  return _internal_has_audio_output_ready()
-      ? *_impl_.body_.audio_output_ready_
-      : reinterpret_cast< ::dsa::control::v1::AudioOutputReady&>(::dsa::control::v1::_AudioOutputReady_default_instance_);
+inline const ::dsa::control::v1::VideoDecoderOpen& Envelope::_internal_video_decoder_open() const {
+  return _internal_has_video_decoder_open()
+      ? *_impl_.body_.video_decoder_open_
+      : reinterpret_cast< ::dsa::control::v1::VideoDecoderOpen&>(::dsa::control::v1::_VideoDecoderOpen_default_instance_);
 }
-inline const ::dsa::control::v1::AudioOutputReady& Envelope::audio_output_ready() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.audio_output_ready)
-  return _internal_audio_output_ready();
+inline const ::dsa::control::v1::VideoDecoderOpen& Envelope::video_decoder_open() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.video_decoder_open)
+  return _internal_video_decoder_open();
 }
-inline ::dsa::control::v1::AudioOutputReady* Envelope::unsafe_arena_release_audio_output_ready() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.audio_output_ready)
-  if (_internal_has_audio_output_ready()) {
+inline ::dsa::control::v1::VideoDecoderOpen* Envelope::unsafe_arena_release_video_decoder_open() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.video_decoder_open)
+  if (_internal_has_video_decoder_open()) {
     clear_has_body();
-    ::dsa::control::v1::AudioOutputReady* temp = _impl_.body_.audio_output_ready_;
-    _impl_.body_.audio_output_ready_ = nullptr;
+    ::dsa::control::v1::VideoDecoderOpen* temp = _impl_.body_.video_decoder_open_;
+    _impl_.body_.video_decoder_open_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline void Envelope::unsafe_arena_set_allocated_audio_output_ready(::dsa::control::v1::AudioOutputReady* audio_output_ready) {
+inline void Envelope::unsafe_arena_set_allocated_video_decoder_open(::dsa::control::v1::VideoDecoderOpen* video_decoder_open) {
   clear_body();
-  if (audio_output_ready) {
-    set_has_audio_output_ready();
-    _impl_.body_.audio_output_ready_ = audio_output_ready;
+  if (video_decoder_open) {
+    set_has_video_decoder_open();
+    _impl_.body_.video_decoder_open_ = video_decoder_open;
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.audio_output_ready)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.video_decoder_open)
 }
-inline ::dsa::control::v1::AudioOutputReady* Envelope::_internal_mutable_audio_output_ready() {
-  if (!_internal_has_audio_output_ready()) {
+inline ::dsa::control::v1::VideoDecoderOpen* Envelope::_internal_mutable_video_decoder_open() {
+  if (!_internal_has_video_decoder_open()) {
     clear_body();
-    set_has_audio_output_ready();
-    _impl_.body_.audio_output_ready_ = CreateMaybeMessage< ::dsa::control::v1::AudioOutputReady >(GetArenaForAllocation());
+    set_has_video_decoder_open();
+    _impl_.body_.video_decoder_open_ = CreateMaybeMessage< ::dsa::control::v1::VideoDecoderOpen >(GetArenaForAllocation());
   }
-  return _impl_.body_.audio_output_ready_;
+  return _impl_.body_.video_decoder_open_;
 }
-inline ::dsa::control::v1::AudioOutputReady* Envelope::mutable_audio_output_ready() {
-  ::dsa::control::v1::AudioOutputReady* _msg = _internal_mutable_audio_output_ready();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.audio_output_ready)
+inline ::dsa::control::v1::VideoDecoderOpen* Envelope::mutable_video_decoder_open() {
+  ::dsa::control::v1::VideoDecoderOpen* _msg = _internal_mutable_video_decoder_open();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.video_decoder_open)
   return _msg;
 }
 
-// .dsa.control.v1.AudioPcm audio_pcm = 102;
-inline bool Envelope::_internal_has_audio_pcm() const {
-  return body_case() == kAudioPcm;
+// .dsa.control.v1.VideoDecoderOpened video_decoder_opened = 122;
+inline bool Envelope::_internal_has_video_decoder_opened() const {
+  return body_case() == kVideoDecoderOpened;
 }
-inline bool Envelope::has_audio_pcm() const {
-  return _internal_has_audio_pcm();
+inline bool Envelope::has_video_decoder_opened() const {
+  return _internal_has_video_decoder_opened();
 }
-inline void Envelope::set_has_audio_pcm() {
-  _impl_._oneof_case_[0] = kAudioPcm;
+inline void Envelope::set_has_video_decoder_opened() {
+  _impl_._oneof_case_[0] = kVideoDecoderOpened;
 }
-inline void Envelope::clear_audio_pcm() {
-  if (_internal_has_audio_pcm()) {
+inline void Envelope::clear_video_decoder_opened() {
+  if (_internal_has_video_decoder_opened()) {
     if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.audio_pcm_;
+      delete _impl_.body_.video_decoder_opened_;
     }
     clear_has_body();
   }
 }
-inline ::dsa::control::v1::AudioPcm* Envelope::release_audio_pcm() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.audio_pcm)
-  if (_internal_has_audio_pcm()) {
+inline ::dsa::control::v1::VideoDecoderOpened* Envelope::release_video_decoder_opened() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.video_decoder_opened)
+  if (_internal_has_video_decoder_opened()) {
     clear_has_body();
-    ::dsa::control::v1::AudioPcm* temp = _impl_.body_.audio_pcm_;
+    ::dsa::control::v1::VideoDecoderOpened* temp = _impl_.body_.video_decoder_opened_;
     if (GetArenaForAllocation() != nullptr) {
       temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
     }
-    _impl_.body_.audio_pcm_ = nullptr;
+    _impl_.body_.video_decoder_opened_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline const ::dsa::control::v1::AudioPcm& Envelope::_internal_audio_pcm() const {
-  return _internal_has_audio_pcm()
-      ? *_impl_.body_.audio_pcm_
-      : reinterpret_cast< ::dsa::control::v1::AudioPcm&>(::dsa::control::v1::_AudioPcm_default_instance_);
+inline const ::dsa::control::v1::VideoDecoderOpened& Envelope::_internal_video_decoder_opened() const {
+  return _internal_has_video_decoder_opened()
+      ? *_impl_.body_.video_decoder_opened_
+      : reinterpret_cast< ::dsa::control::v1::VideoDecoderOpened&>(::dsa::control::v1::_VideoDecoderOpened_default_instance_);
 }
-inline const ::dsa::control::v1::AudioPcm& Envelope::audio_pcm() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.audio_pcm)
-  return _internal_audio_pcm();
+inline const ::dsa::control::v1::VideoDecoderOpened& Envelope::video_decoder_opened() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.video_decoder_opened)
+  return _internal_video_decoder_opened();
 }
-inline ::dsa::control::v1::AudioPcm* Envelope::unsafe_arena_release_audio_pcm() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.audio_pcm)
-  if (_internal_has_audio_pcm()) {
+inline ::dsa::control::v1::VideoDecoderOpened* Envelope::unsafe_arena_release_video_decoder_opened() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.video_decoder_opened)
+  if (_internal_has_video_decoder_opened()) {
     clear_has_body();
-    ::dsa::control::v1::AudioPcm* temp = _impl_.body_.audio_pcm_;
-    _impl_.body_.audio_pcm_ = nullptr;
+    ::dsa::control::v1::VideoDecoderOpened* temp = _impl_.body_.video_decoder_opened_;
+    _impl_.body_.video_decoder_opened_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline void Envelope::unsafe_arena_set_allocated_audio_pcm(::dsa::control::v1::AudioPcm* audio_pcm) {
+inline void Envelope::unsafe_arena_set_allocated_video_decoder_opened(::dsa::control::v1::VideoDecoderOpened* video_decoder_opened) {
   clear_body();
-  if (audio_pcm) {
-    set_has_audio_pcm();
-    _impl_.body_.audio_pcm_ = audio_pcm;
+  if (video_decoder_opened) {
+    set_has_video_decoder_opened();
+    _impl_.body_.video_decoder_opened_ = video_decoder_opened;
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.audio_pcm)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.video_decoder_opened)
 }
-inline ::dsa::control::v1::AudioPcm* Envelope::_internal_mutable_audio_pcm() {
-  if (!_internal_has_audio_pcm()) {
+inline ::dsa::control::v1::VideoDecoderOpened* Envelope::_internal_mutable_video_decoder_opened() {
+  if (!_internal_has_video_decoder_opened()) {
     clear_body();
-    set_has_audio_pcm();
-    _impl_.body_.audio_pcm_ = CreateMaybeMessage< ::dsa::control::v1::AudioPcm >(GetArenaForAllocation());
+    set_has_video_decoder_opened();
+    _impl_.body_.video_decoder_opened_ = CreateMaybeMessage< ::dsa::control::v1::VideoDecoderOpened >(GetArenaForAllocation());
   }
-  return _impl_.body_.audio_pcm_;
+  return _impl_.body_.video_decoder_opened_;
 }
-inline ::dsa::control::v1::AudioPcm* Envelope::mutable_audio_pcm() {
-  ::dsa::control::v1::AudioPcm* _msg = _internal_mutable_audio_pcm();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.audio_pcm)
+inline ::dsa::control::v1::VideoDecoderOpened* Envelope::mutable_video_decoder_opened() {
+  ::dsa::control::v1::VideoDecoderOpened* _msg = _internal_mutable_video_decoder_opened();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.video_decoder_opened)
   return _msg;
 }
 
-// .dsa.control.v1.AudioOutputControl audio_output_control = 103;
-inline bool Envelope::_internal_has_audio_output_control() const {
-  return body_case() == kAudioOutputControl;
+// .dsa.control.v1.VideoPacket video_packet = 123;
+inline bool Envelope::_internal_has_video_packet() const {
+  return body_case() == kVideoPacket;
 }
-inline bool Envelope::has_audio_output_control() const {
-  return _internal_has_audio_output_control();
+inline bool Envelope::has_video_packet() const {
+  return _internal_has_video_packet();
 }
-inline void Envelope::set_has_audio_output_control() {
-  _impl_._oneof_case_[0] = kAudioOutputControl;
+inline void Envelope::set_has_video_packet() {
+  _impl_._oneof_case_[0] = kVideoPacket;
 }
-inline void Envelope::clear_audio_output_control() {
-  if (_internal_has_audio_output_control()) {
+inline void Envelope::clear_video_packet() {
+  if (_internal_has_video_packet()) {
     if (GetArenaForAllocation() == nullptr) {
-      delete _impl_.body_.audio_output_control_;
+      delete _impl_.body_.video_packet_;
     }
     clear_has_body();
   }
 }
-inline ::dsa::control::v1::AudioOutputControl* Envelope::release_audio_output_control() {
-  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.audio_output_control)
-  if (_internal_has_audio_output_control()) {
+inline ::dsa::control::v1::VideoPacket* Envelope::release_video_packet() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.video_packet)
+  if (_internal_has_video_packet()) {
     clear_has_body();
-    ::dsa::control::v1::AudioOutputControl* temp = _impl_.body_.audio_output_control_;
+    ::dsa::control::v1::VideoPacket* temp = _impl_.body_.video_packet_;
     if (GetArenaForAllocation() != nullptr) {
       temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
     }
-    _impl_.body_.audio_output_control_ = nullptr;
+    _impl_.body_.video_packet_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline const ::dsa::control::v1::AudioOutputControl& Envelope::_internal_audio_output_control() const {
-  return _internal_has_audio_output_control()
-      ? *_impl_.body_.audio_output_control_
-      : reinterpret_cast< ::dsa::control::v1::AudioOutputControl&>(::dsa::control::v1::_AudioOutputControl_default_instance_);
+inline const ::dsa::control::v1::VideoPacket& Envelope::_internal_video_packet() const {
+  return _internal_has_video_packet()
+      ? *_impl_.body_.video_packet_
+      : reinterpret_cast< ::dsa::control::v1::VideoPacket&>(::dsa::control::v1::_VideoPacket_default_instance_);
 }
-inline const ::dsa::control::v1::AudioOutputControl& Envelope::audio_output_control() const {
-  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.audio_output_control)
-  return _internal_audio_output_control();
+inline const ::dsa::control::v1::VideoPacket& Envelope::video_packet() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.video_packet)
+  return _internal_video_packet();
 }
-inline ::dsa::control::v1::AudioOutputControl* Envelope::unsafe_arena_release_audio_output_control() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.audio_output_control)
-  if (_internal_has_audio_output_control()) {
+inline ::dsa::control::v1::VideoPacket* Envelope::unsafe_arena_release_video_packet() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.video_packet)
+  if (_internal_has_video_packet()) {
     clear_has_body();
-    ::dsa::control::v1::AudioOutputControl* temp = _impl_.body_.audio_output_control_;
-    _impl_.body_.audio_output_control_ = nullptr;
+    ::dsa::control::v1::VideoPacket* temp = _impl_.body_.video_packet_;
+    _impl_.body_.video_packet_ = nullptr;
     return temp;
   } else {
     return nullptr;
   }
 }
-inline void Envelope::unsafe_arena_set_allocated_audio_output_control(::dsa::control::v1::AudioOutputControl* audio_output_control) {
+inline void Envelope::unsafe_arena_set_allocated_video_packet(::dsa::control::v1::VideoPacket* video_packet) {
   clear_body();
-  if (audio_output_control) {
-    set_has_audio_output_control();
-    _impl_.body_.audio_output_control_ = audio_output_control;
+  if (video_packet) {
+    set_has_video_packet();
+    _impl_.body_.video_packet_ = video_packet;
   }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.audio_output_control)
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.video_packet)
 }
-inline ::dsa::control::v1::AudioOutputControl* Envelope::_internal_mutable_audio_output_control() {
-  if (!_internal_has_audio_output_control()) {
+inline ::dsa::control::v1::VideoPacket* Envelope::_internal_mutable_video_packet() {
+  if (!_internal_has_video_packet()) {
     clear_body();
-    set_has_audio_output_control();
-    _impl_.body_.audio_output_control_ = CreateMaybeMessage< ::dsa::control::v1::AudioOutputControl >(GetArenaForAllocation());
+    set_has_video_packet();
+    _impl_.body_.video_packet_ = CreateMaybeMessage< ::dsa::control::v1::VideoPacket >(GetArenaForAllocation());
   }
-  return _impl_.body_.audio_output_control_;
+  return _impl_.body_.video_packet_;
 }
-inline ::dsa::control::v1::AudioOutputControl* Envelope::mutable_audio_output_control() {
-  ::dsa::control::v1::AudioOutputControl* _msg = _internal_mutable_audio_output_control();
-  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.audio_output_control)
+inline ::dsa::control::v1::VideoPacket* Envelope::mutable_video_packet() {
+  ::dsa::control::v1::VideoPacket* _msg = _internal_mutable_video_packet();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.video_packet)
+  return _msg;
+}
+
+// .dsa.control.v1.VideoFrame video_frame = 124;
+inline bool Envelope::_internal_has_video_frame() const {
+  return body_case() == kVideoFrame;
+}
+inline bool Envelope::has_video_frame() const {
+  return _internal_has_video_frame();
+}
+inline void Envelope::set_has_video_frame() {
+  _impl_._oneof_case_[0] = kVideoFrame;
+}
+inline void Envelope::clear_video_frame() {
+  if (_internal_has_video_frame()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.video_frame_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::VideoFrame* Envelope::release_video_frame() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.video_frame)
+  if (_internal_has_video_frame()) {
+    clear_has_body();
+    ::dsa::control::v1::VideoFrame* temp = _impl_.body_.video_frame_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.video_frame_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::VideoFrame& Envelope::_internal_video_frame() const {
+  return _internal_has_video_frame()
+      ? *_impl_.body_.video_frame_
+      : reinterpret_cast< ::dsa::control::v1::VideoFrame&>(::dsa::control::v1::_VideoFrame_default_instance_);
+}
+inline const ::dsa::control::v1::VideoFrame& Envelope::video_frame() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.video_frame)
+  return _internal_video_frame();
+}
+inline ::dsa::control::v1::VideoFrame* Envelope::unsafe_arena_release_video_frame() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.video_frame)
+  if (_internal_has_video_frame()) {
+    clear_has_body();
+    ::dsa::control::v1::VideoFrame* temp = _impl_.body_.video_frame_;
+    _impl_.body_.video_frame_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_video_frame(::dsa::control::v1::VideoFrame* video_frame) {
+  clear_body();
+  if (video_frame) {
+    set_has_video_frame();
+    _impl_.body_.video_frame_ = video_frame;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.video_frame)
+}
+inline ::dsa::control::v1::VideoFrame* Envelope::_internal_mutable_video_frame() {
+  if (!_internal_has_video_frame()) {
+    clear_body();
+    set_has_video_frame();
+    _impl_.body_.video_frame_ = CreateMaybeMessage< ::dsa::control::v1::VideoFrame >(GetArenaForAllocation());
+  }
+  return _impl_.body_.video_frame_;
+}
+inline ::dsa::control::v1::VideoFrame* Envelope::mutable_video_frame() {
+  ::dsa::control::v1::VideoFrame* _msg = _internal_mutable_video_frame();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.video_frame)
+  return _msg;
+}
+
+// .dsa.control.v1.VideoFlush video_flush = 125;
+inline bool Envelope::_internal_has_video_flush() const {
+  return body_case() == kVideoFlush;
+}
+inline bool Envelope::has_video_flush() const {
+  return _internal_has_video_flush();
+}
+inline void Envelope::set_has_video_flush() {
+  _impl_._oneof_case_[0] = kVideoFlush;
+}
+inline void Envelope::clear_video_flush() {
+  if (_internal_has_video_flush()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.video_flush_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::VideoFlush* Envelope::release_video_flush() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.video_flush)
+  if (_internal_has_video_flush()) {
+    clear_has_body();
+    ::dsa::control::v1::VideoFlush* temp = _impl_.body_.video_flush_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.video_flush_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::VideoFlush& Envelope::_internal_video_flush() const {
+  return _internal_has_video_flush()
+      ? *_impl_.body_.video_flush_
+      : reinterpret_cast< ::dsa::control::v1::VideoFlush&>(::dsa::control::v1::_VideoFlush_default_instance_);
+}
+inline const ::dsa::control::v1::VideoFlush& Envelope::video_flush() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.video_flush)
+  return _internal_video_flush();
+}
+inline ::dsa::control::v1::VideoFlush* Envelope::unsafe_arena_release_video_flush() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.video_flush)
+  if (_internal_has_video_flush()) {
+    clear_has_body();
+    ::dsa::control::v1::VideoFlush* temp = _impl_.body_.video_flush_;
+    _impl_.body_.video_flush_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_video_flush(::dsa::control::v1::VideoFlush* video_flush) {
+  clear_body();
+  if (video_flush) {
+    set_has_video_flush();
+    _impl_.body_.video_flush_ = video_flush;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.video_flush)
+}
+inline ::dsa::control::v1::VideoFlush* Envelope::_internal_mutable_video_flush() {
+  if (!_internal_has_video_flush()) {
+    clear_body();
+    set_has_video_flush();
+    _impl_.body_.video_flush_ = CreateMaybeMessage< ::dsa::control::v1::VideoFlush >(GetArenaForAllocation());
+  }
+  return _impl_.body_.video_flush_;
+}
+inline ::dsa::control::v1::VideoFlush* Envelope::mutable_video_flush() {
+  ::dsa::control::v1::VideoFlush* _msg = _internal_mutable_video_flush();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.video_flush)
+  return _msg;
+}
+
+// .dsa.control.v1.VideoFlushed video_flushed = 126;
+inline bool Envelope::_internal_has_video_flushed() const {
+  return body_case() == kVideoFlushed;
+}
+inline bool Envelope::has_video_flushed() const {
+  return _internal_has_video_flushed();
+}
+inline void Envelope::set_has_video_flushed() {
+  _impl_._oneof_case_[0] = kVideoFlushed;
+}
+inline void Envelope::clear_video_flushed() {
+  if (_internal_has_video_flushed()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.video_flushed_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::VideoFlushed* Envelope::release_video_flushed() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.video_flushed)
+  if (_internal_has_video_flushed()) {
+    clear_has_body();
+    ::dsa::control::v1::VideoFlushed* temp = _impl_.body_.video_flushed_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.video_flushed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::VideoFlushed& Envelope::_internal_video_flushed() const {
+  return _internal_has_video_flushed()
+      ? *_impl_.body_.video_flushed_
+      : reinterpret_cast< ::dsa::control::v1::VideoFlushed&>(::dsa::control::v1::_VideoFlushed_default_instance_);
+}
+inline const ::dsa::control::v1::VideoFlushed& Envelope::video_flushed() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.video_flushed)
+  return _internal_video_flushed();
+}
+inline ::dsa::control::v1::VideoFlushed* Envelope::unsafe_arena_release_video_flushed() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.video_flushed)
+  if (_internal_has_video_flushed()) {
+    clear_has_body();
+    ::dsa::control::v1::VideoFlushed* temp = _impl_.body_.video_flushed_;
+    _impl_.body_.video_flushed_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_video_flushed(::dsa::control::v1::VideoFlushed* video_flushed) {
+  clear_body();
+  if (video_flushed) {
+    set_has_video_flushed();
+    _impl_.body_.video_flushed_ = video_flushed;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.video_flushed)
+}
+inline ::dsa::control::v1::VideoFlushed* Envelope::_internal_mutable_video_flushed() {
+  if (!_internal_has_video_flushed()) {
+    clear_body();
+    set_has_video_flushed();
+    _impl_.body_.video_flushed_ = CreateMaybeMessage< ::dsa::control::v1::VideoFlushed >(GetArenaForAllocation());
+  }
+  return _impl_.body_.video_flushed_;
+}
+inline ::dsa::control::v1::VideoFlushed* Envelope::mutable_video_flushed() {
+  ::dsa::control::v1::VideoFlushed* _msg = _internal_mutable_video_flushed();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.video_flushed)
+  return _msg;
+}
+
+// .dsa.control.v1.VideoError video_error = 127;
+inline bool Envelope::_internal_has_video_error() const {
+  return body_case() == kVideoError;
+}
+inline bool Envelope::has_video_error() const {
+  return _internal_has_video_error();
+}
+inline void Envelope::set_has_video_error() {
+  _impl_._oneof_case_[0] = kVideoError;
+}
+inline void Envelope::clear_video_error() {
+  if (_internal_has_video_error()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.video_error_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::VideoError* Envelope::release_video_error() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.video_error)
+  if (_internal_has_video_error()) {
+    clear_has_body();
+    ::dsa::control::v1::VideoError* temp = _impl_.body_.video_error_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.video_error_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::VideoError& Envelope::_internal_video_error() const {
+  return _internal_has_video_error()
+      ? *_impl_.body_.video_error_
+      : reinterpret_cast< ::dsa::control::v1::VideoError&>(::dsa::control::v1::_VideoError_default_instance_);
+}
+inline const ::dsa::control::v1::VideoError& Envelope::video_error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.video_error)
+  return _internal_video_error();
+}
+inline ::dsa::control::v1::VideoError* Envelope::unsafe_arena_release_video_error() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.video_error)
+  if (_internal_has_video_error()) {
+    clear_has_body();
+    ::dsa::control::v1::VideoError* temp = _impl_.body_.video_error_;
+    _impl_.body_.video_error_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_video_error(::dsa::control::v1::VideoError* video_error) {
+  clear_body();
+  if (video_error) {
+    set_has_video_error();
+    _impl_.body_.video_error_ = video_error;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.video_error)
+}
+inline ::dsa::control::v1::VideoError* Envelope::_internal_mutable_video_error() {
+  if (!_internal_has_video_error()) {
+    clear_body();
+    set_has_video_error();
+    _impl_.body_.video_error_ = CreateMaybeMessage< ::dsa::control::v1::VideoError >(GetArenaForAllocation());
+  }
+  return _impl_.body_.video_error_;
+}
+inline ::dsa::control::v1::VideoError* Envelope::mutable_video_error() {
+  ::dsa::control::v1::VideoError* _msg = _internal_mutable_video_error();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.video_error)
   return _msg;
 }
 
@@ -25183,6 +28074,24 @@ inline Envelope::BodyCase Envelope::body_case() const {
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 
 // @@protoc_insertion_point(namespace_scope)
 
@@ -25198,11 +28107,11 @@ template <> struct is_proto_enum< ::dsa::control::v1::RejectReason> : ::std::tru
 template <> struct is_proto_enum< ::dsa::control::v1::PointerAction> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PointerTool> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::KeyAction> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::PowerHintKind> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::InstallStatus> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::FileAction> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::VideoCodec> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::NodeAction> : ::std::true_type {};
-template <> struct is_proto_enum< ::dsa::control::v1::AudioSampleFormat> : ::std::true_type {};
-template <> struct is_proto_enum< ::dsa::control::v1::AudioOutputCommand> : ::std::true_type {};
 
 PROTOBUF_NAMESPACE_CLOSE
 
