@@ -105,6 +105,15 @@ pub struct SetTaskDensity {
     #[prost(uint32, tag = "2")]
     pub density_dpi: u32,
 }
+/// A task's window draws its title bar over the top `height` pixels of the task: asks the
+/// caller's Android to give the task a top system bar inset of that height. 0 removes it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetTaskCaption {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(uint32, tag = "2")]
+    pub height: u32,
+}
 /// Turns the connection into a stream of input for the caller's Android: after the answer
 /// (Done), the client sends only PointerEvent, KeyEvent, ImeComposition and ImeCommit frames, which the service passes on
 /// as they come, without answering them. Input is never waited on, so a pointer that moves
@@ -580,6 +589,14 @@ pub struct Task {
     pub min_width: u32,
     #[prost(uint32, tag = "10")]
     pub min_height: u32,
+    /// Whether the task's app asked for a light status bar (dark icons) or a dark one, which
+    /// the window's caption buttons follow.
+    #[prost(enumeration = "StatusBarAppearance", tag = "11")]
+    pub status_bar_appearance: i32,
+    /// The status bar color the app set, as 0xAARRGGBB; 0 when none. Used only while the
+    /// appearance is unspecified.
+    #[prost(fixed32, tag = "12")]
+    pub status_bar_color: u32,
 }
 /// The task ended.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1105,7 +1122,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 70, 71, 37"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 38, 70, 71, 37"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1179,6 +1196,8 @@ pub mod request {
         WidgetPointer(super::WidgetPointer),
         #[prost(message, tag = "36")]
         GetPackage(super::GetPackage),
+        #[prost(message, tag = "38")]
+        SetTaskCaption(super::SetTaskCaption),
         #[prost(message, tag = "70")]
         WatchLog(super::WatchLog),
         #[prost(message, tag = "71")]
@@ -1668,6 +1687,36 @@ impl KeyAction {
             "KEY_ACTION_UNSPECIFIED" => Some(Self::Unspecified),
             "KEY_ACTION_DOWN" => Some(Self::Down),
             "KEY_ACTION_UP" => Some(Self::Up),
+            _ => None,
+        }
+    }
+}
+/// Whether an app asked for dark status bar icons (a light status bar) or light ones.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum StatusBarAppearance {
+    Unspecified = 0,
+    Light = 1,
+    Dark = 2,
+}
+impl StatusBarAppearance {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "STATUS_BAR_APPEARANCE_UNSPECIFIED",
+            Self::Light => "STATUS_BAR_APPEARANCE_LIGHT",
+            Self::Dark => "STATUS_BAR_APPEARANCE_DARK",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "STATUS_BAR_APPEARANCE_UNSPECIFIED" => Some(Self::Unspecified),
+            "STATUS_BAR_APPEARANCE_LIGHT" => Some(Self::Light),
+            "STATUS_BAR_APPEARANCE_DARK" => Some(Self::Dark),
             _ => None,
         }
     }
