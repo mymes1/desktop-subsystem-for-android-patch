@@ -727,4 +727,91 @@
   <data name="Logs_Priority_F" xml:space="preserve">
     <value>Fatal</value>
   </data>
+  <data name="NavApps.Content" xml:space="preserve">
+    <value>Apps</value>
+  </data>
+  <data name="AppsTitle.Text" xml:space="preserve">
+    <value>Apps</value>
+  </data>
+  <data name="AppsRefreshButton.Content" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="AppsIntro.Text" xml:space="preserve">
+    <value>The Android apps installed on this PC. Open an app, change its permissions, storage and notifications in App info, or uninstall an app you installed. They are also listed in Windows Settings under Apps &gt; Installed apps. Android starts when you open this page.</value>
+  </data>
+  <data name="AppsErrorBar.Title" xml:space="preserve">
+    <value>The apps could not be read or changed</value>
+  </data>
+  <data name="AppsDoneBar.Title" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="AppsManageCard.Title" xml:space="preserve">
+    <value>Manage apps</value>
+  </data>
+  <data name="AppsManageCard.Description" xml:space="preserve">
+    <value>Open the list of apps in Android's own settings</value>
+  </data>
+  <data name="AppsInstalledHeader.Text" xml:space="preserve">
+    <value>Installed apps</value>
+  </data>
+  <data name="AppsSearch.PlaceholderText" xml:space="preserve">
+    <value>Search apps</value>
+  </data>
+  <data name="AppsNone.Text" xml:space="preserve">
+    <value>No app is installed in Android yet. Open an APK file to install one.</value>
+  </data>
+  <data name="AppsNoMatch.Text" xml:space="preserve">
+    <value>No app matches your search.</value>
+  </data>
+  <data name="AppsOpenButton.Content" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="AppsInfoButton.Content" xml:space="preserve">
+    <value>App info</value>
+  </data>
+  <data name="AppsUninstallButton.Content" xml:space="preserve">
+    <value>Uninstall</value>
+  </data>
+  <data name="AppsUninstallConfirmTitle" xml:space="preserve">
+    <value>Uninstall {0}?</value>
+  </data>
+  <data name="AppsUninstallConfirmBody" xml:space="preserve">
+    <value>{0} and its data will be removed from Android. This cannot be undone.</value>
+  </data>
+  <data name="Apps_Count" xml:space="preserve">
+    <value>{0} apps</value>
+  </data>
+  <data name="Apps_CountMatching" xml:space="preserve">
+    <value>{0} of {1} apps</value>
+  </data>
+  <data name="Apps_Version" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
+  <data name="Apps_Installed" xml:space="preserve">
+    <value>Installed {0}</value>
+  </data>
+  <data name="Apps_System" xml:space="preserve">
+    <value>Part of Android</value>
+  </data>
+  <data name="Apps_SystemTip" xml:space="preserve">
+    <value>This app is part of Android and cannot be uninstalled.</value>
+  </data>
+  <data name="Apps_Uninstalled" xml:space="preserve">
+    <value>{0} is uninstalled.</value>
+  </data>
+  <data name="Apps_NotUninstalled" xml:space="preserve">
+    <value>{0} was not uninstalled: {1} ({2})</value>
+  </data>
+  <data name="Apps_Refused_not-installed" xml:space="preserve">
+    <value>it is no longer installed</value>
+  </data>
+  <data name="Apps_Refused_system-app" xml:space="preserve">
+    <value>it is part of Android</value>
+  </data>
+  <data name="Apps_Refused_blocked" xml:space="preserve">
+    <value>Android does not allow it, because the app is a device administrator or a policy keeps it</value>
+  </data>
+  <data name="Apps_Refused_other" xml:space="preserve">
+    <value>Android could not uninstall it</value>
+  </data>
 </root>

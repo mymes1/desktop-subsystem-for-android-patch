@@ -81,7 +81,8 @@
 //! with `package`, `label`, `version_name`, `version_code`, `first_install_time_ms`,
 //! `last_update_time_ms`, `system_app`, `app_bytes`, `data_bytes`, `cache_bytes`,
 //! `total_bytes` and `icon_png` in base64; `info` prints one such object; `uninstall` prints
-//! `package`, `uninstalled`, `status` and `message`.
+//! `package`, `uninstalled`, `status` and `message`; `settings` prints `opened` with the package,
+//! or null for the list of apps.
 //!
 //! `dsa freeze` stops every process of the Android until one of its windows is shown
 //! again. Its notifications, alarms and widgets stop with it.
@@ -924,9 +925,13 @@ fn apps(
             client
                 .open_app_settings(package.as_deref())
                 .map_err(|e| e.to_string())?;
-            Ok(match package {
-                Some(package) => format!("Opening the settings of {package}"),
-                None => "Opening the list of apps".into(),
+            Ok(if invocation.json {
+                json!({ "opened": package }).to_string()
+            } else {
+                match package {
+                    Some(package) => format!("Opening the settings of {package}"),
+                    None => "Opening the list of apps".into(),
+                }
             })
         }
     }
