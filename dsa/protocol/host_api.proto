@@ -233,6 +233,56 @@ message ClipboardText {
 // Android.
 message WatchNotifications {}
 
+// Turns the connection into the location of the caller's Android: after the answer (Done),
+// the service sends a LocationWanted at once and each time the Android starts or stops
+// wanting locations. While one is wanted, the client runs the host's location service in the
+// user's session, where the user's privacy settings apply, and sends a LocationFix for each
+// position and a LocationStatus each time access changes. Neither is answered. The
+// connection lasts across restarts of the Android, which wants no location while stopped.
+message WatchLocation {}
+
+// Whether the caller's Android wants locations now, and how often.
+message LocationWanted {
+  bool active = 1;
+  // In milliseconds; 0 lets the client choose.
+  uint32 interval_ms = 2;
+}
+
+// Whether the user's host lets DSA read its location.
+enum LocationAccess {
+  LOCATION_ACCESS_UNSPECIFIED = 0;
+  LOCATION_ACCESS_ALLOWED = 1;
+  // Location is off for DSA, or for the whole computer, in the privacy settings.
+  LOCATION_ACCESS_DENIED = 2;
+  // No location device, or the location service failed.
+  LOCATION_ACCESS_UNAVAILABLE = 3;
+}
+
+// Whether the client can give locations, on a connection that carries the location.
+message LocationStatus {
+  LocationAccess access = 1;
+  string detail = 2;
+}
+
+// One position from the host's location service, on a connection that carries the location.
+// Each `has_` flag says whether the value after it is known.
+message LocationFix {
+  double latitude_degrees = 1;
+  double longitude_degrees = 2;
+  // In meters; 0 when unknown.
+  float horizontal_accuracy_meters = 3;
+  bool has_altitude = 4;
+  double altitude_meters = 5;
+  // In meters; 0 when unknown.
+  float vertical_accuracy_meters = 6;
+  bool has_speed = 7;
+  float speed_meters_per_second = 8;
+  bool has_bearing = 9;
+  float bearing_degrees = 10;
+  // Milliseconds since the Unix epoch (UTC).
+  uint64 unix_time_ms = 11;
+}
+
 // A notification of the caller's Android, on a connection that watches them
 // (WatchNotifications). One with the key of an earlier one replaces it.
 message Notification {
@@ -1106,6 +1156,7 @@ message Request {
     StopApp stop_app = 37;
     WatchPrintJobs watch_print_jobs = 120;
     ReportPrintJob report_print_job = 121;
+    WatchLocation watch_location = 200;
   }
 }
 
@@ -1157,5 +1208,8 @@ message Envelope {
     PrintJobOffer print_job_offer = 120;
     PrintJobData print_job_data = 121;
     PrintJobWithdrawn print_job_withdrawn = 122;
+    LocationWanted location_wanted = 200;
+    LocationStatus location_status = 201;
+    LocationFix location_fix = 202;
   }
 }

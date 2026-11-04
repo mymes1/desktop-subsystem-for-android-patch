@@ -39,6 +39,7 @@ jobs:
       hwcomposer: ${{ steps.find.outputs.hwcomposer }}
       codec2: ${{ steps.find.outputs.codec2 }}
       power: ${{ steps.find.outputs.power }}
+      gnss: ${{ steps.find.outputs.gnss }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,6 +72,7 @@ jobs:
           part 'dsa/(guest/hwcomposer|protocol)/' hwcomposer
           part 'dsa/(guest/codec2|protocol)/' codec2
           part 'dsa/(guest/power|protocol)/' power
+          part 'dsa/(guest/gnss|protocol)/' gnss
 
   repository:
     name: Check the repository rules
@@ -373,13 +375,32 @@ jobs:
       - name: Run the tests
         run: dsa/guest/power/test.sh
 
+  gnss-hal:
+    name: Test the guest GNSS HAL's rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.gnss == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The channel messages go through the generated protobuf-lite codec, built against the
+      # 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/gnss/test.sh
+
   # One check that always reports: it fails when any job failed or was cancelled, and passes
   # when every job passed or was skipped because its part did not change.
   result:
     name: Report the test result
     if: always()
     needs:
-      [changes, repository, rust, unix-socket, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal]
+      [changes, repository, rust, unix-socket, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

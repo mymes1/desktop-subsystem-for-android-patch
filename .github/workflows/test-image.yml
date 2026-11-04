@@ -17,6 +17,7 @@ on:
       - "dsa/guest/codec2/**"
       - "dsa/guest/audio/**"
       - "dsa/guest/power/**"
+      - "dsa/guest/gnss/**"
       - "dsa/guest/aidl/**"
       - "dsa/guest/transport/**"
       - "dsa/guest/agent/**"
@@ -303,6 +304,40 @@ jobs:
           path: .scratch/build-audio/dsa-audio
           if-no-files-found: error
 
+  gnss-hal:
+    name: Build the guest GNSS HAL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-gnss for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/gnss/build.sh .scratch .scratch/build-gnss
+
+      - name: Verify the binary links only the platform's C libraries
+        run: |
+          target=.scratch/build-gnss/dsa-gnss
+          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "$target needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
+
+      - name: Keep the GNSS HAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-gnss-hal
+          path: .scratch/build-gnss/dsa-gnss
+          if-no-files-found: error
+
   agent:
     name: Build the guest agent
     runs-on: ubuntu-latest
@@ -334,7 +369,7 @@ jobs:
 
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }}, ${{ matrix.arch }})
-    needs: [guest-graphics, channeld, hwcomposer, power-hal, codec2, audio, agent]
+    needs: [guest-graphics, channeld, hwcomposer, power-hal, gnss-hal, codec2, audio, agent]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -463,6 +498,16 @@ jobs:
         run: |
           uv run dsa/graphics/check-guest-driver.py --executable .scratch/audio/dsa-audio .scratch/aosp-inputs/*/*target_files*.zip
 
+      - name: Download the guest GNSS HAL
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-gnss-hal
+          path: .scratch/gnss-hal
+
+      - name: Check the GNSS HAL starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/gnss-hal/dsa-gnss .scratch/aosp-inputs/*/*target_files*.zip
+
       - name: Download the guest agent
         uses: actions/download-artifact@v4
         with:
@@ -478,6 +523,7 @@ jobs:
           args+=(--codec2 .scratch/codec2/dsa-codec2)
           args+=(--audio .scratch/audio/dsa-audio)
           args+=(--power-hal .scratch/power-hal)
+          args+=(--gnss-hal .scratch/gnss-hal/dsa-gnss)
           args+=(--agent .scratch/agent/DsaAgent.apk)
           args+=(--aapt2 .scratch/build-tools/aapt2)
           uv run dsa/guest/image/make-image.py "${args[@]}"

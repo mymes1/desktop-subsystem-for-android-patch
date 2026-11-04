@@ -807,6 +807,12 @@ impl UserAndroid for WithProgramStatus {
     ) -> Option<std::sync::mpsc::Receiver<crate::notifications::NotificationEvent>> {
         self.android.watch_notifications()
     }
+    fn watch_location(&self) -> Option<std::sync::mpsc::Receiver<crate::location::Wanted>> {
+        self.android.watch_location()
+    }
+    fn host_location(&self, event: crate::location::LocationEvent) {
+        self.android.host_location(event)
+    }
     fn notification_action(
         &self,
         action: crate::notifications::NotificationAction,

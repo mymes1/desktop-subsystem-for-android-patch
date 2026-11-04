@@ -29,6 +29,7 @@ pub mod frames;
 pub mod microphone;
 pub mod hosts;
 pub mod links;
+pub mod location;
 pub mod log;
 pub mod notifications;
 pub mod present;
@@ -136,6 +137,8 @@ pub struct Compositor {
     show_widgets: bool,
     /// Whether the documents the user's Android prints are printed here.
     print_jobs: bool,
+    /// Whether the user's Android gets the computer's location from Windows.
+    give_location: bool,
 }
 
 /// The installed apps an event from the watch of the tasks carries, if it carries them.
@@ -228,6 +231,7 @@ impl Compositor {
             show_notifications: true,
             show_widgets: true,
             print_jobs: true,
+            give_location: true,
         }
     }
 
@@ -260,6 +264,7 @@ impl Compositor {
             show_notifications: false,
             show_widgets: false,
             print_jobs: false,
+            give_location: false,
         }
     }
 
@@ -359,6 +364,7 @@ impl Compositor {
         let task_windows = self.start_task_windows(&stop);
         let links_thread = self.start_links(&stop);
         let clipboard_thread = self.start_clipboard(&stop);
+        let location_thread = self.start_location(&stop);
         let notifications_thread = self.start_notifications(&stop);
         let widgets_thread = self.start_widgets(&stop);
         let video_thread = self.start_video(&stop);
@@ -550,6 +556,9 @@ impl Compositor {
         if let Some(thread) = clipboard_thread {
             let _ = thread.join();
         }
+        if let Some(thread) = location_thread {
+            let _ = thread.join();
+        }
         if let Some(thread) = notifications_thread {
             let _ = thread.join();
         }
@@ -664,6 +673,28 @@ impl Compositor {
                 note(
                     failed.as_deref(),
                     &format!("could not start the clipboard's thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts giving the user's Android the computer's location, on a thread of its own that
+    /// ends with `stop`. Windows' location service runs only while Android wants a location.
+    fn start_location(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        if !self.give_location {
+            return None;
+        }
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-location".into())
+            .spawn(move || location::follow(connector, stop, logger))
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the location's thread: {e}"),
                 )
             })
             .ok()

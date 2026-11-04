@@ -324,6 +324,12 @@ impl UserAndroid for UpdatingAndroid {
     ) -> Option<std::sync::mpsc::Receiver<crate::notifications::NotificationEvent>> {
         UserAndroid::watch_notifications(&*self.session)
     }
+    fn watch_location(&self) -> Option<std::sync::mpsc::Receiver<crate::location::Wanted>> {
+        UserAndroid::watch_location(&*self.session)
+    }
+    fn host_location(&self, event: crate::location::LocationEvent) {
+        UserAndroid::host_location(&*self.session, event)
+    }
     fn notification_action(
         &self,
         action: crate::notifications::NotificationAction,

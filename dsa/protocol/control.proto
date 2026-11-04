@@ -422,6 +422,62 @@ message PowerHint {
   int32 duration_ms = 4;
 }
 
+// Guest to host, from the guest's GNSS HAL: whether the framework wants locations now
+// (between its start and stop of the GNSS engine), and how often. The host runs its own
+// location service only while one is wanted, and sends a LocationFix each time it has a
+// new position. The HAL sends this again each time it subscribes to the channel, and the
+// channel daemon each time the host connects, so a host that connects again knows. When the
+// HAL's process dies, the daemon tells the host that no location is wanted any longer.
+message LocationRequest {
+  bool active = 1;
+  // How often the framework wants a location, in milliseconds. 0 lets the host choose.
+  uint32 interval_ms = 2;
+}
+
+// Whether the host lets DSA read its location.
+enum LocationAccess {
+  LOCATION_ACCESS_UNSPECIFIED = 0;
+  // The host's location service runs for DSA.
+  LOCATION_ACCESS_ALLOWED = 1;
+  // The user turned location off for DSA (or for the whole computer) in the host's privacy
+  // settings. No fix comes until they turn it on again.
+  LOCATION_ACCESS_DENIED = 2;
+  // The host has no way to find its location now: no location device, or the service failed.
+  LOCATION_ACCESS_UNAVAILABLE = 3;
+}
+
+// Host to guest: whether the host can give the guest locations, sent when a location is
+// wanted and each time it changes while one is. A guest told DENIED or UNAVAILABLE gets no
+// fix until it is told ALLOWED again.
+message LocationStatus {
+  LocationAccess access = 1;
+  // Why, in words for the guest's log. Empty when there is nothing to add.
+  string detail = 2;
+}
+
+// Host to guest: one position from the host's location service, which the GNSS HAL hands to
+// the framework as the guest's GNSS location. Each `has_` flag says whether the value after
+// it is known; a value that is not known is left out of the guest's location.
+message LocationFix {
+  double latitude_degrees = 1;
+  double longitude_degrees = 2;
+  // The radius of 68% confidence around the position, in meters. 0 when unknown.
+  float horizontal_accuracy_meters = 3;
+  bool has_altitude = 4;
+  // Above the WGS84 ellipsoid, in meters.
+  double altitude_meters = 5;
+  // In meters; 0 when unknown.
+  float vertical_accuracy_meters = 6;
+  bool has_speed = 7;
+  float speed_meters_per_second = 8;
+  bool has_bearing = 9;
+  // Degrees east of true north, from 0 up to 360.
+  float bearing_degrees = 10;
+  // When the host's location service took the position, in milliseconds since the Unix
+  // epoch (UTC).
+  uint64 unix_time_ms = 11;
+}
+
 // Guest to host, from the agent: whether the guest's device is in Doze (the device idle
 // controller's deep idle state). The host takes the device not to be in Doze when the agent
 // connects; the agent sends this on each change after that.
@@ -1399,5 +1455,8 @@ message Envelope {
     PrintJobCancel print_job_cancel = 222;
     PrintJobResult print_job_result = 223;
     GuestMemoryPressure guest_memory_pressure = 141;
+    LocationRequest location_request = 200;
+    LocationStatus location_status = 201;
+    LocationFix location_fix = 202;
   }
 }

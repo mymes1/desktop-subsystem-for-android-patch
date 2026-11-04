@@ -72,6 +72,7 @@ use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogW
 use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{InputEvent, PointerEvent};
 use crate::keys::KeyEvent;
+use crate::location::{Fix, LocationEvent, Wanted};
 use crate::memory::{
     snapshot_from_wire, snapshot_to_wire, GuestMemoryReport, HostMemory, MemorySnapshot,
 };
@@ -209,6 +210,15 @@ pub trait UserAndroid: Send + Sync {
         Err(TaskRequestError::Failed(
             "this Android does not print on the host".into(),
         ))
+    }
+    /// Whether this Android wants the host's location, from what it wants now on. `None`
+    /// when it takes no location from the host.
+    fn watch_location(&self) -> Option<Receiver<Wanted>> {
+        None
+    }
+    /// What the host's location service reported, for this Android while it wants a location.
+    fn host_location(&self, event: LocationEvent) {
+        let _ = event;
     }
     /// The widgets this Android hosts now and every change to them. `None` when it hosts none.
     fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
@@ -406,6 +416,12 @@ impl UserAndroid for Session {
     }
     fn watch_clipboard(&self) -> Option<Receiver<String>> {
         Some(Session::watch_clipboard(self))
+    }
+    fn watch_location(&self) -> Option<Receiver<Wanted>> {
+        Some(Session::watch_location(self))
+    }
+    fn host_location(&self, event: LocationEvent) {
+        Session::host_location(self, event)
     }
     fn links_in_android(&self, on: bool) {
         Session::links_in_android(self, on)
@@ -1088,6 +1104,9 @@ impl HostApiService {
             if let Some(request::Body::WatchPrintJobs(_)) = request.body {
                 return self.watch_print_jobs(connection, &peer, request.id);
             }
+            if let Some(request::Body::WatchLocation(_)) = request.body {
+                return self.watch_location(connection, &peer, request.id);
+            }
             if let Some(request::Body::WatchWidgets(_)) = request.body {
                 return self.watch_widgets(connection, &peer, request.id);
             }
@@ -1645,6 +1664,102 @@ impl HostApiService {
                     eprintln!(
                         "local API: a client of {} sent an unreadable frame on a connection \
                          that carries the clipboard ({error}); dropping it",
+                        peer.user
+                    );
+                }
+            }
+        }
+    }
+
+    /// Answers a WatchLocation request, then tells the client each time its Android starts or
+    /// stops wanting the location, and passes the positions and statuses the client sends to
+    /// its Android, until the client goes away. A position that is not on Earth is dropped,
+    /// and so is a frame that cannot be read; anything else the client sends closes the
+    /// connection.
+    fn watch_location(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let watched = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => match android.watch_location() {
+                Some(watch) => Ok((android, watch)),
+                None => Err(error(
+                    ErrorCode::Unavailable,
+                    "this Android takes no location from the host".into(),
+                )),
+            },
+        };
+        let (android, watch) = match watched {
+            Ok(watched) => watched,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::Done(types::Done {})),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_err() {
+            return;
+        }
+        loop {
+            loop {
+                match watch.try_recv() {
+                    Ok(wanted) => {
+                        let frame = Body::LocationWanted(wanted.to_host_api());
+                        if send(&mut *connection, frame).is_err() {
+                            return;
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => {
+                        connection.close();
+                        return;
+                    }
+                }
+            }
+            let frame = match connection.recv(Some(CLIPBOARD_POLL)) {
+                Ok(frame) => frame,
+                Err(TransportError::Timeout) => continue,
+                Err(_) => return,
+            };
+            match decode(&frame) {
+                Ok(Envelope {
+                    body: Some(Body::LocationFix(fix)),
+                }) => match Fix::from_host_api(&fix) {
+                    Ok(fix) => android.host_location(LocationEvent::Fix(fix)),
+                    Err(why) => eprintln!(
+                        "local API: dropped a location from a client of {}: {why}",
+                        peer.user
+                    ),
+                },
+                Ok(Envelope {
+                    body: Some(Body::LocationStatus(status)),
+                }) => match LocationEvent::from_host_api_status(&status) {
+                    Ok(event) => android.host_location(event),
+                    Err(why) => eprintln!(
+                        "local API: dropped a location status from a client of {}: {why}",
+                        peer.user
+                    ),
+                },
+                Ok(_) => {
+                    eprintln!(
+                        "local API: a client of {} sent something other than a location on a \
+                         connection that carries the location; closing its connection",
+                        peer.user
+                    );
+                    connection.close();
+                    return;
+                }
+                Err(error) => {
+                    eprintln!(
+                        "local API: a client of {} sent an unreadable frame on a connection \
+                         that carries the location ({error}); dropping it",
                         peer.user
                     );
                 }
@@ -2464,7 +2579,8 @@ impl HostApiService {
                         | request::Body::WatchAccessibility(_)
                         | request::Body::WatchLog(_)
                         | request::Body::CollectDiagnostics(_)
-                        | request::Body::StopApp(_) => unreachable!("answered above"),
+                        | request::Body::StopApp(_)
+                        | request::Body::WatchLocation(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -3182,6 +3298,23 @@ impl HostApiClient {
         }
     }
 
+    /// Carries the location between the host and the caller's Android: the client hears when
+    /// the Android wants it and sends what the host's location service reports. The
+    /// connection carries nothing else from here on, so the client is used up.
+    pub fn watch_location(mut self) -> Result<LocationStream, ClientError> {
+        match self.exchange(
+            request::Body::WatchLocation(types::WatchLocation {}),
+            self.timeout,
+        )? {
+            response::Body::Done(_) => Ok(LocationStream {
+                connection: self.connection,
+            }),
+            _ => Err(ClientError::Malformed(
+                "expected the answer that the location is carried".into(),
+            )),
+        }
+    }
+
     /// Installs the APK called `name`, of `size` bytes read from `content`, in the caller's
     /// Android, and returns how the install ended: a refusal by Android is an outcome, not an
     /// error. An error means the APK did not get there. The connection ends with the install,
@@ -3720,6 +3853,39 @@ impl ClipboardStream {
             Ok(_) => Err(ClientError::Malformed("expected clipboard text".into())),
             Err(error) => Err(ClientError::Malformed(error.to_string())),
         }
+    }
+}
+
+/// A connection that carries the location between the host and the caller's Android, from
+/// [`HostApiClient::watch_location`].
+pub struct LocationStream {
+    connection: Box<dyn Connection>,
+}
+
+impl LocationStream {
+    /// The Android's next word on whether it wants the location, waiting at most `timeout`.
+    /// `Ok(None)` means none came in time; an error means the connection has ended.
+    pub fn next(&mut self, timeout: Duration) -> Result<Option<Wanted>, ClientError> {
+        let frame = match self.connection.recv(Some(timeout)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => return Ok(None),
+            Err(error) => return Err(ClientError::Transport(error)),
+        };
+        match decode(&frame) {
+            Ok(Envelope {
+                body: Some(Body::LocationWanted(wanted)),
+            }) => Ok(Some(Wanted::from_host_api(&wanted))),
+            Ok(_) => Err(ClientError::Malformed(
+                "expected whether the location is wanted".into(),
+            )),
+            Err(error) => Err(ClientError::Malformed(error.to_string())),
+        }
+    }
+
+    /// Sends what the host's location service reported. Nothing is awaited. An error means
+    /// the connection has ended, and a new one is needed.
+    pub fn send(&mut self, event: &LocationEvent) -> Result<(), ClientError> {
+        send(&mut *self.connection, event.to_host_api()).map_err(ClientError::Transport)
     }
 }
 

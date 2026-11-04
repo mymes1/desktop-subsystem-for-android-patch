@@ -14,6 +14,10 @@
 //! - The daemon keeps the host's latest `PowerState`, which a listener that subscribes later,
 //!   such as a restarted health HAL, is told first, and each power mode the power HAL has on
 //!   (`PowerHint`), which the host is told each time it connects again.
+//! - The daemon keeps the GNSS HAL's `LocationRequest` while it wants a location, which the
+//!   host is told each time it connects again. When the HAL's process dies with a location
+//!   wanted, the host is told that none is wanted any longer, so it stops its location
+//!   service.
 //! - The agent says it is there (`AgentConnected`); that stops here. The host hears how far the
 //!   guest has got (`GuestBoot`) each time it connects and on each change: whether Android has
 //!   finished booting, and whether the agent is connected, which ends when its process dies.
@@ -37,7 +41,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
 use dsa_protocol::control::envelope::Body;
-use dsa_protocol::control::{Envelope, GuestBoot, PowerHintKind};
+use dsa_protocol::control::{Envelope, GuestBoot, LocationRequest, PowerHintKind};
 
 /// The agent's package, which is the name of its process.
 pub const AGENT_PROCESS: &str = "io.github.thisisthepy.dsa.agent";
@@ -156,6 +160,8 @@ struct State {
     power_state: Option<Vec<u8>>,
     /// The `PowerHint` that turned each power mode on, by mode, while it is on.
     power_modes: BTreeMap<i32, Vec<u8>>,
+    /// The `LocationRequest` that wants a location, and who sent it, while it does.
+    location_request: Option<(Peer, Vec<u8>)>,
 }
 
 impl State {
@@ -174,6 +180,19 @@ impl State {
                 agent_connected: self.agent.is_some(),
             })),
         })
+    }
+
+    /// Whether the process that wants a location has no listener any longer; then forgets
+    /// its request.
+    fn location_left(&mut self) -> bool {
+        let gone = self
+            .location_request
+            .as_ref()
+            .is_some_and(|(peer, _)| !self.listeners.iter().any(|s| s.peer == *peer));
+        if gone {
+            self.location_request = None;
+        }
+        gone
     }
 
     /// Whether the agent's listener is gone, which ends its connection; then forgets it.
@@ -303,7 +322,7 @@ impl Router {
         let before = state.listeners.len();
         state.listeners.retain(|s| s.id != id);
         let removed = state.listeners.len() != before;
-        self.tell_host_if_agent_left(&mut state);
+        self.tell_host_of_departures(&mut state);
         removed
     }
 
@@ -316,9 +335,13 @@ impl Router {
         }
     }
 
-    fn tell_host_if_agent_left(&self, state: &mut State) {
+    fn tell_host_of_departures(&self, state: &mut State) {
         if state.agent_left() {
             let _ = self.to_host.send(state.boot_report());
+        }
+        if state.location_left() {
+            let none = Body::LocationRequest(LocationRequest::default());
+            let _ = self.to_host.send(dsa_protocol::encode(&Envelope { body: Some(none) }));
         }
     }
 
@@ -367,7 +390,7 @@ impl Router {
             _ => {}
         }
         state.deliver(frame, None);
-        self.tell_host_if_agent_left(&mut state);
+        self.tell_host_of_departures(&mut state);
     }
 
     /// Tells a host that has just connected the state of every live task. Frames that were
@@ -380,6 +403,9 @@ impl Router {
         state.host_memory_low = false;
         let _ = self.to_host.send(state.boot_report());
         for frame in state.power_modes.values() {
+            let _ = self.to_host.send(frame.clone());
+        }
+        if let Some((_, frame)) = &state.location_request {
             let _ = self.to_host.send(frame.clone());
         }
         for frame in state.apps.values() {
@@ -496,6 +522,15 @@ impl Router {
                     "the guest's log is the daemon's to send".to_string(),
                 ))
             }
+            Some(Body::LocationRequest(request)) => {
+                // Kept only for a process that listens, so its death can be seen.
+                let listens = state.listeners.iter().any(|s| s.peer == sender);
+                state.location_request = if request.active && listens {
+                    Some((sender, frame.clone()))
+                } else {
+                    None
+                };
+            }
             Some(Body::PowerHint(hint)) if hint.kind == PowerHintKind::Mode as i32 => {
                 if !hint.enabled {
                     state.power_modes.remove(&hint.id);
@@ -507,7 +542,7 @@ impl Router {
             }
             Some(_) => {}
         }
-        self.tell_host_if_agent_left(&mut state);
+        self.tell_host_of_departures(&mut state);
         // Sent with the state locked, so the host gets the frames in the order the state
         // changed. The pump owns the other end for as long as the daemon runs; if it has
         // gone, the daemon is stopping and the frame has nowhere to go.

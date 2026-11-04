@@ -27,7 +27,8 @@ use dsa_protocol::control::{
 };
 use dsa_protocol::control::{
     CollectDiagnostics, DiagnosticsDone, DiagnosticsFile, LogBuffer, LogDump, LogRecord,
-    LogRecords, LogStream, VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen,
+    LocationAccess, LocationFix, LocationRequest, LocationStatus, LogRecords, LogStream,
+    VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen,
     VideoFlush, VideoFrame, VideoPacket,
 };
 use dsa_protocol::control::{PrintJob, PrintJobCancel, PrintJobChunk, PrintJobResult, PrintOutcome};
@@ -405,6 +406,36 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
                 id: 0,
                 enabled: false,
                 duration_ms: 80,
+            })),
+        ),
+        (
+            "location_request_active",
+            wrap(Body::LocationRequest(LocationRequest {
+                active: true,
+                interval_ms: 1000,
+            })),
+        ),
+        (
+            "location_status_denied",
+            wrap(Body::LocationStatus(LocationStatus {
+                access: LocationAccess::Denied as i32,
+                detail: String::new(),
+            })),
+        ),
+        (
+            "location_fix",
+            wrap(Body::LocationFix(LocationFix {
+                latitude_degrees: 37.5,
+                longitude_degrees: 127.0,
+                horizontal_accuracy_meters: 10.0,
+                has_altitude: true,
+                altitude_meters: 50.0,
+                vertical_accuracy_meters: 3.0,
+                has_speed: true,
+                speed_meters_per_second: 2.5,
+                has_bearing: true,
+                bearing_degrees: 90.0,
+                unix_time_ms: 1_700_000_000_000,
             })),
         ),
         (

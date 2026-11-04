@@ -10,6 +10,7 @@ use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::ime::{ImeCursor, ImeEvent};
 use dsa_host_core::input::{buttons, PointerAction, PointerEvent, PointerTool};
 use dsa_host_core::keys::{keycode, meta, KeyAction, KeyEvent};
+use dsa_host_core::location::{Fix, LocationEvent, Wanted};
 use dsa_host_core::notifications::{Notification, NotificationAction, NotificationEvent};
 use dsa_host_core::power::{PowerHub, PowerState};
 use dsa_host_core::power_hints::{mode, PowerHint};
@@ -543,6 +544,65 @@ fn pr4_the_guests_power_hints_reach_the_host_and_end_when_the_guest_stops() {
     session.stop();
     assert!(session.wait_for(SessionState::Stopped, WAIT));
     assert_eq!(hints.recv_timeout(WAIT), Ok(GuestPower::Stopped));
+}
+
+/// A position in Seoul with every value known.
+fn seoul() -> Fix {
+    Fix {
+        latitude_degrees: 37.5,
+        longitude_degrees: 127.0,
+        horizontal_accuracy_meters: Some(10.0),
+        altitude_meters: Some(50.0),
+        vertical_accuracy_meters: Some(3.0),
+        speed_meters_per_second: Some(2.5),
+        bearing_degrees: Some(90.0),
+        unix_time_ms: 1_700_000_000_000,
+    }
+}
+
+/// The next location message for the guest, past any other.
+fn next_location(agent: &mut Box<dyn Connection>) -> Body {
+    loop {
+        let body = next_body(agent);
+        if matches!(body, Body::LocationFix(_) | Body::LocationStatus(_)) {
+            return body;
+        }
+    }
+}
+
+#[test]
+fn fr26_the_guests_location_request_reaches_the_host_and_its_fixes_reach_the_guest() {
+    let (session, mut daemon, _launcher) = lifecycle_session(None);
+    let wanted = session.watch_location();
+    assert_eq!(wanted.recv_timeout(WAIT), Ok(Wanted::NONE));
+    // A position from before the guest wants one is dropped.
+    let equator = Fix {
+        latitude_degrees: 0.0,
+        ..seoul()
+    };
+    session.host_location(LocationEvent::Fix(equator));
+
+    send_body(
+        &mut daemon,
+        Body::LocationRequest(dsa_protocol::control::LocationRequest {
+            active: true,
+            interval_ms: 2000,
+        }),
+    );
+    assert_eq!(
+        wanted.recv_timeout(WAIT),
+        Ok(Wanted::every(Duration::from_secs(2)))
+    );
+    session.host_location(LocationEvent::Fix(seoul()));
+    assert_eq!(
+        next_location(&mut daemon),
+        Body::LocationFix(seoul().to_control())
+    );
+
+    // A guest that stops wants no location any longer.
+    session.stop();
+    assert!(session.wait_for(SessionState::Stopped, WAIT));
+    assert_eq!(wanted.recv_timeout(WAIT), Ok(Wanted::NONE));
 }
 
 #[test]

@@ -265,6 +265,29 @@ public final class VectorsTest {
                         .setId(0)
                         .setDurationMs(80))
                 .build());
+        cases.put("location_request_active", Envelope.newBuilder()
+                .setLocationRequest(LocationRequest.newBuilder()
+                        .setActive(true)
+                        .setIntervalMs(1000))
+                .build());
+        cases.put("location_status_denied", Envelope.newBuilder()
+                .setLocationStatus(LocationStatus.newBuilder()
+                        .setAccess(LocationAccess.LOCATION_ACCESS_DENIED))
+                .build());
+        cases.put("location_fix", Envelope.newBuilder()
+                .setLocationFix(LocationFix.newBuilder()
+                        .setLatitudeDegrees(37.5)
+                        .setLongitudeDegrees(127.0)
+                        .setHorizontalAccuracyMeters(10.0f)
+                        .setHasAltitude(true)
+                        .setAltitudeMeters(50.0)
+                        .setVerticalAccuracyMeters(3.0f)
+                        .setHasSpeed(true)
+                        .setSpeedMetersPerSecond(2.5f)
+                        .setHasBearing(true)
+                        .setBearingDegrees(90.0f)
+                        .setUnixTimeMs(1700000000000L))
+                .build());
         cases.put("device_idle", Envelope.newBuilder()
                 .setDeviceIdle(DeviceIdle.newBuilder().setIdle(true))
                 .build());

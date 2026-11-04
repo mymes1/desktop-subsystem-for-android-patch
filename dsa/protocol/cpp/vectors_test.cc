@@ -259,6 +259,26 @@ std::map<std::string, v1::Envelope> Cases() {
     hint->set_id(0);
     hint->set_duration_ms(80);
   }
+  {
+    v1::LocationRequest* request = cases["location_request_active"].mutable_location_request();
+    request->set_active(true);
+    request->set_interval_ms(1000);
+  }
+  cases["location_status_denied"].mutable_location_status()->set_access(v1::LOCATION_ACCESS_DENIED);
+  {
+    v1::LocationFix* fix = cases["location_fix"].mutable_location_fix();
+    fix->set_latitude_degrees(37.5);
+    fix->set_longitude_degrees(127.0);
+    fix->set_horizontal_accuracy_meters(10.0f);
+    fix->set_has_altitude(true);
+    fix->set_altitude_meters(50.0);
+    fix->set_vertical_accuracy_meters(3.0f);
+    fix->set_has_speed(true);
+    fix->set_speed_meters_per_second(2.5f);
+    fix->set_has_bearing(true);
+    fix->set_bearing_degrees(90.0f);
+    fix->set_unix_time_ms(1700000000000ULL);
+  }
   cases["device_idle"].mutable_device_idle()->set_idle(true);
   cases["clipboard_text"].mutable_clipboard_text()->set_text("hello \xec\x95\x88\xeb\x85\x95");
   cases["clipboard_sharing_off"].mutable_clipboard_sharing()->set_on(false);

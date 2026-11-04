@@ -1116,6 +1116,70 @@ class ImageLayoutTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 make_image.modify(source, root / "modified.zip", power_hal=root)
 
+    def test_fr26_dsa_gnss_hal_replaces_cuttlefishs(self):
+        # The guest's location is the host's: Cuttlefish's GNSS HAL goes, as an APEX or as
+        # plain files, so nothing else claims IGnss/default.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            gnss = root / "dsa-gnss"
+            gnss.write_bytes(b"\x7fELF gnss")
+            channeld = root / "dsa-channeld"
+            channeld.write_bytes(b"\x7fELF channeld")
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("VENDOR/apex/com.google.cf.gnss.apex", b"apex")
+                archive.writestr("VENDOR/bin/hw/android.hardware.gnss-service.example", b"\x7fELF example")
+                archive.writestr("VENDOR/etc/init/android.hardware.gnss-service.example.rc", "service gnss\n")
+                archive.writestr("VENDOR/etc/vintf/manifest/android.hardware.gnss-service.example.xml", "<manifest/>")
+                archive.writestr("VENDOR/bin/hw/android.hardware.sensors-service.example", b"\x7fELF sensors")
+                archive.writestr(
+                    "META/apexkeys.txt",
+                    'name="com.google.cf.gnss.apex" public_key="a"\n'
+                    'name="com.android.hardware.gatekeeper.nonsecure.apex" public_key="c"\n',
+                )
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, channeld=channeld, gnss_hal=gnss)
+
+            with zipfile.ZipFile(modified) as archive:
+                names = archive.namelist()
+                self.assertNotIn("VENDOR/apex/com.google.cf.gnss.apex", names)
+                self.assertNotIn("VENDOR/bin/hw/android.hardware.gnss-service.example", names)
+                self.assertNotIn("VENDOR/etc/init/android.hardware.gnss-service.example.rc", names)
+                self.assertNotIn("VENDOR/etc/vintf/manifest/android.hardware.gnss-service.example.xml", names)
+                self.assertIn("VENDOR/bin/hw/android.hardware.sensors-service.example", names)
+                apexkeys = archive.read("META/apexkeys.txt").decode()
+                self.assertNotIn("cf.gnss", apexkeys)
+                self.assertIn("gatekeeper", apexkeys)
+                self.assertEqual(archive.read("VENDOR/bin/hw/dsa-gnss"), b"\x7fELF gnss")
+                self.assertIn("service vendor.dsa-gnss /vendor/bin/hw/dsa-gnss",
+                              archive.read("VENDOR/etc/init/dsa-gnss.rc").decode())
+                manifest = archive.read("VENDOR/etc/vintf/manifest/dsa-gnss.xml").decode()
+                self.assertIn("<name>android.hardware.gnss</name>", manifest)
+                self.assertIn("<version>4</version>", manifest)
+                self.assertIn("<fqname>IGnss/default</fqname>", manifest)
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+                self.assertIn("vendor/bin/hw/dsa-gnss 0 2000 755 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/init/dsa-gnss.rc 0 0 644 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/vintf/manifest/dsa-gnss.xml 0 0 644 capabilities=0x0", fs_config)
+                contexts = archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode()
+                self.assertIn("/vendor/bin/hw/dsa-gnss u:object_r:hal_gnss_default_exec:s0", contexts)
+                policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertIn("(allow hal_gnss_server dsa_channel_service (service_manager (find)))", policy)
+                self.assertIn("(allow dsa_channeld hal_gnss_server (binder (call transfer)))", policy)
+
+    def test_fr26_the_gnss_hal_needs_the_channel_daemon(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            with self.assertRaises(ValueError):
+                make_image.modify(source, root / "modified.zip", gnss_hal=root / "dsa-gnss")
+
     def test_pr4_the_codec_hal_is_installed_with_its_decoders_and_policy(self):
         # The host decodes the guest's video on its GPU: the image carries the codec HAL, the
         # list of its decoders, its service's label, and keeps codec buffers out of pools.
@@ -1374,6 +1438,8 @@ class ImageLayoutTests(unittest.TestCase):
             self.assertIn("vendor_service_contexts does not label", proc.stdout)
             # Without the agent the host never learns of a task, so no window opens.
             self.assertIn("SYSTEM_EXT/priv-app/DsaAgent/DsaAgent.apk is missing", proc.stdout)
+            # Without the GNSS HAL the guest never gets the host's location.
+            self.assertIn("VENDOR/bin/hw/dsa-gnss is missing", proc.stdout)
 
     def test_fr3_check_image_rejects_an_agent_not_signed_with_the_platform_key(self):
         check_script = Path(__file__).with_name("check-image.py")
