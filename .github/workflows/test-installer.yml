@@ -490,8 +490,9 @@ jobs:
                 Stop-Process -Id $app.Id -Force
                 $app.WaitForExit(10000) | Out-Null
 
-                # The window Windows' list of installed apps opens (its UninstallString), at
-                # its confirmation, without uninstalling anything.
+                # The window Windows' list of installed apps opens (its UninstallString). It
+                # does not ask again, so it shows the app and the uninstall's progress at once;
+                # the stand-in dsa's uninstall is slow and removes nothing.
                 $app = Start-Process $exe -ArgumentList '--uninstall-app', 'com.example.notes', '--lang', $lang -PassThru
                 $window = Wait-ProcessWindow $app.Id 90
                 if (-not $window) {
@@ -508,6 +509,7 @@ jobs:
           } finally {
             Set-AppTheme
             Remove-Item Env:DSA_CLI -ErrorAction SilentlyContinue
+            Get-Process cmd, PING -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           }
 
       # Task Manager and the taskbar name a program by its version information.

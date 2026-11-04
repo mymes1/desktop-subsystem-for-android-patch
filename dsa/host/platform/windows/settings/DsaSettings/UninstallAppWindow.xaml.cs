@@ -11,8 +11,8 @@ using Palette = Dsa.Setup.Palette;
 namespace Dsa.Settings;
 
 /// <summary>
-/// The window Windows' list of installed apps opens to uninstall an Android app. It asks once,
-/// then shows the uninstall and how it ended. It follows the theme Windows uses for apps, as the
+/// The window Windows' list of installed apps opens to uninstall an Android app. Windows has
+/// already asked, so it uninstalls at once, shows how it ended, and closes itself after success. It follows the theme Windows uses for apps, as the
 /// APK install window does.
 /// </summary>
 public partial class UninstallAppWindow : Window
@@ -36,13 +36,9 @@ public partial class UninstallAppWindow : Window
         Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/logo.ico"));
         Title = App.Text.Get("UninstallWindow_Caption");
         CaptionTitle.Text = Title;
-        ReadingText.Text = App.Text.Get("UninstallWindow_Reading");
         ProgressDetail.Text = App.Text.Get("UninstallWindow_BusyDetail");
-        CancelButton.Content = App.Text.Get("UninstallWindow_Cancel");
         CloseButton.Content = App.Text.Get("UninstallWindow_Close");
-        UninstallButton.Content = App.Text.Get("UninstallWindow_Uninstall");
         System.Windows.Automation.AutomationProperties.SetName(CaptionClose, App.Text.Get("UninstallWindow_Close"));
-        ApkInstallWindow.Marquee(ReadingBar);
         ApkInstallWindow.Marquee(ProgressMarquee);
         _vm.PropertyChanged += (_, _) => Render();
         Render();
@@ -52,7 +48,17 @@ public partial class UninstallAppWindow : Window
             Palette.ApplyBackdrop(handle, _dark);
             HwndSource.FromHwnd(handle)?.AddHook(Hook);
         };
-        Loaded += async (_, _) => await _vm.LoadAsync();
+        // Windows has already asked the user, so the uninstall starts as soon as the window shows.
+        Loaded += async (_, _) =>
+        {
+            await _vm.RunAsync();
+            if (_vm.ClosesItself)
+            {
+                // Long enough to read that it is done, then the window goes by itself.
+                await Task.Delay(TimeSpan.FromSeconds(2.5));
+                Close();
+            }
+        };
     }
 
     /// <summary>Opens a window that uninstalls <paramref name="package"/>.</summary>
@@ -92,12 +98,9 @@ public partial class UninstallAppWindow : Window
         Chips.Visibility = Visible(_vm.VersionChip.Length > 0 || _vm.SizeChip.Length > 0);
         AppIcon.Source = IconImage(_vm.App?.IconPng);
 
-        ReadingPanel.Visibility = Visible(page == UninstallPage.Reading);
-        SummaryText.Visibility = Visible(page == UninstallPage.Confirm);
         ProgressPanel.Visibility = Visible(page == UninstallPage.Progress);
         ResultPanel.Visibility = Visible(page is UninstallPage.Done or UninstallPage.Failed);
 
-        SummaryText.Text = _vm.Summary;
         ProgressTitle.Text = _vm.ProgressTitle;
 
         var good = page == UninstallPage.Done;
@@ -107,16 +110,10 @@ public partial class UninstallAppWindow : Window
         ResultTitle.Text = _vm.ResultTitle;
         ResultText.Text = _vm.ResultText;
 
-        UninstallButton.Visibility = Visible(page is UninstallPage.Reading or UninstallPage.Confirm);
-        UninstallButton.IsEnabled = _vm.CanUninstall;
-        CancelButton.Visibility = Visible(page is UninstallPage.Reading or UninstallPage.Confirm);
-        CloseButton.Visibility = Visible(page is UninstallPage.Done or UninstallPage.Failed);
+        CloseButton.IsEnabled = page != UninstallPage.Progress;
         CaptionClose.IsEnabled = page != UninstallPage.Progress;
-
-        UninstallButton.IsDefault = _vm.CanUninstall;
-        CloseButton.IsDefault = CloseButton.Visibility == Visibility.Visible;
-        CancelButton.IsCancel = CancelButton.Visibility == Visibility.Visible;
-        CloseButton.IsCancel = !CancelButton.IsCancel;
+        CloseButton.IsDefault = true;
+        CloseButton.IsCancel = true;
     }
 
     /// <summary>The app's icon, or DSA's logo without one.</summary>
@@ -141,8 +138,6 @@ public partial class UninstallAppWindow : Window
         }
         return new BitmapImage(new Uri("pack://application:,,,/Assets/logo.png"));
     }
-
-    private async void OnUninstall(object sender, RoutedEventArgs e) => await _vm.UninstallAsync();
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();
 
