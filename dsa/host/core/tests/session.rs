@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use dsa_host_core::apk::{self, InstallStatus};
+use dsa_host_core::apps::UninstallStatus;
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::ime::{ImeCursor, ImeEvent};
 use dsa_host_core::input::{buttons, PointerAction, PointerEvent, PointerTool};
@@ -2881,6 +2882,7 @@ fn fr11_an_installed_app_reaches_the_start_menu_through_the_installed_apps_repor
             package_name: "com.example.notes".into(),
             label: "Notes".into(),
             icon_png: vec![0x89, b'P', b'N', b'G'],
+            ..Default::default()
         }),
     );
     send_body(
@@ -2950,6 +2952,125 @@ fn fr11_the_install_window_learns_the_installed_version_and_signer_from_the_agen
         }),
     );
     assert_eq!(asking.join().unwrap().expect("an answer"), None);
+}
+
+#[test]
+fn fr22_installed_apps_carry_their_version_dates_sizes_and_kind() {
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_tasks();
+    send_body(
+        &mut agent,
+        Body::InstalledApp(dsa_protocol::control::InstalledApp {
+            package_name: "com.example.notes".into(),
+            label: "Notes".into(),
+            icon_png: vec![0x89, b'P', b'N', b'G'],
+            version_name: "4.1".into(),
+            version_code: 41,
+            first_install_time_ms: 1_700_000_000_000,
+            last_update_time_ms: 1_710_000_000_000,
+            system_app: false,
+            app_bytes: 3_000_000,
+            data_bytes: 20_000,
+            cache_bytes: 1_000,
+        }),
+    );
+    send_body(
+        &mut agent,
+        Body::InstalledApps(dsa_protocol::control::InstalledApps {
+            package_names: vec!["com.example.notes".into()],
+        }),
+    );
+    loop {
+        if let TaskEvent::Installed(apps) = watch.events.recv_timeout(WAIT).expect("the apps") {
+            let notes = &apps[0];
+            assert_eq!(notes.version_name, "4.1");
+            assert_eq!(notes.version_code, 41);
+            assert_eq!(notes.first_install_time_ms, 1_700_000_000_000);
+            assert_eq!(notes.last_update_time_ms, 1_710_000_000_000);
+            assert!(!notes.system_app);
+            assert_eq!(notes.total_bytes(), 3_021_000);
+            break;
+        }
+    }
+}
+
+#[test]
+fn fr22_a_refresh_waits_for_the_agents_fresh_list() {
+    let (session, mut agent, _launcher) = active_session();
+    let session = Arc::new(session);
+    let refreshing = {
+        let session = Arc::clone(&session);
+        thread::spawn(move || session.refresh_apps(WAIT))
+    };
+    loop {
+        if let Body::RefreshApps(_) = next_body(&mut agent) {
+            break;
+        }
+    }
+    send_body(
+        &mut agent,
+        Body::InstalledApps(dsa_protocol::control::InstalledApps {
+            package_names: vec![],
+        }),
+    );
+    refreshing.join().unwrap().expect("the fresh list");
+}
+
+#[test]
+fn fr22_app_info_and_manage_apps_ask_android_for_its_settings() {
+    let (session, mut agent, _launcher) = active_session();
+    session
+        .open_app_settings(Some("com.example.notes"))
+        .expect("asked");
+    session.open_app_settings(None).expect("asked");
+    let mut opened = Vec::new();
+    while opened.len() < 2 {
+        if let Body::OpenAppSettings(open) = next_body(&mut agent) {
+            opened.push(open.package_name);
+        }
+    }
+    assert_eq!(opened, vec!["com.example.notes".to_string(), String::new()]);
+}
+
+#[test]
+fn fr22_an_uninstall_carries_androids_answer() {
+    let (session, mut agent, _launcher) = active_session();
+    let session = Arc::new(session);
+    for (package, status, expected) in [
+        (
+            "com.example.notes",
+            dsa_protocol::control::UninstallStatus::Success,
+            UninstallStatus::Uninstalled,
+        ),
+        (
+            "com.android.settings",
+            dsa_protocol::control::UninstallStatus::SystemApp,
+            UninstallStatus::SystemApp,
+        ),
+    ] {
+        let uninstalling = {
+            let session = Arc::clone(&session);
+            thread::spawn(move || session.uninstall_app(package, WAIT))
+        };
+        let request_id = loop {
+            if let Body::UninstallApp(request) = next_body(&mut agent) {
+                assert_eq!(request.package_name, package);
+                break request.request_id;
+            }
+        };
+        send_body(
+            &mut agent,
+            Body::UninstallResult(dsa_protocol::control::UninstallResult {
+                request_id,
+                package_name: package.into(),
+                status: status as i32,
+                message: "from Android".into(),
+            }),
+        );
+        let outcome = uninstalling.join().unwrap().expect("an answer");
+        assert_eq!(outcome.status, expected);
+        assert_eq!(outcome.package_name, package);
+    }
 }
 
 #[test]

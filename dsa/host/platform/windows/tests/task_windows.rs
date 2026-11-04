@@ -311,6 +311,7 @@ fn fr3_an_apps_window_host_is_made_with_the_apps_name_and_icon() {
         package_name: "com.example.app1".into(),
         label: "Clock".into(),
         icon_png: vec![0x89, b'P', b'N', b'G'],
+        ..Default::default()
     };
     running.android.publish(TaskEvent::App(clock.clone()));
     running

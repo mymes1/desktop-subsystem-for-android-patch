@@ -61,6 +61,7 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::apps::{self, UninstallOutcome};
 use crate::diagnostics::HostFile;
 use crate::files::{self, FileAction, FileTransfer};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
@@ -251,6 +252,28 @@ pub trait UserAndroid: Send + Sync {
             "this Android cannot say which apps it has installed".into(),
         ))
     }
+    /// Asks this Android to read its installed apps again, sizes included, and waits for the
+    /// fresh list, which the watch of its tasks then carries.
+    fn refresh_apps(&self) -> Result<(), TaskRequestError> {
+        Err(TaskRequestError::Failed(
+            "this Android cannot list its apps again".into(),
+        ))
+    }
+    /// Opens Android's own settings of `package` in a window of its own, or the list of every
+    /// app when it is `None`.
+    fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
+        let _ = package;
+        Err(TaskRequestError::Failed(
+            "this Android cannot open its app settings".into(),
+        ))
+    }
+    /// Uninstalls the user app `package` and says how it went.
+    fn uninstall_app(&self, package: &str) -> Result<UninstallOutcome, TaskRequestError> {
+        let _ = package;
+        Err(TaskRequestError::Failed(
+            "this Android cannot uninstall apps".into(),
+        ))
+    }
     /// Watches a task's accessibility tree; Android reads it while any watch of the task
     /// lasts. `None` when this Android does not export its accessibility tree.
     fn watch_accessibility(&self, task_id: i32) -> Option<AccessibilityWatch> {
@@ -430,6 +453,15 @@ impl UserAndroid for Session {
     }
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
         Session::package_state(self, package, PACKAGE_QUERY_WAIT).map_err(request_error)
+    }
+    fn refresh_apps(&self) -> Result<(), TaskRequestError> {
+        Session::refresh_apps(self, apps::REFRESH_WAIT).map_err(request_error)
+    }
+    fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
+        Session::open_app_settings(self, package).map_err(request_error)
+    }
+    fn uninstall_app(&self, package: &str) -> Result<UninstallOutcome, TaskRequestError> {
+        Session::uninstall_app(self, package, apps::UNINSTALL_WAIT).map_err(request_error)
     }
     fn watch_accessibility(&self, task_id: i32) -> Option<AccessibilityWatch> {
         Some(Session::watch_accessibility(self, task_id))
@@ -633,6 +665,14 @@ fn app_to_wire(app: AppInfo) -> types::AppInfo {
         package_name: app.package_name,
         label: app.label,
         icon_png: app.icon_png,
+        version_name: app.version_name,
+        version_code: app.version_code,
+        first_install_time_ms: app.first_install_time_ms,
+        last_update_time_ms: app.last_update_time_ms,
+        system_app: app.system_app,
+        app_bytes: app.app_bytes,
+        data_bytes: app.data_bytes,
+        cache_bytes: app.cache_bytes,
     }
 }
 
@@ -641,6 +681,14 @@ fn app_from_wire(app: types::AppInfo) -> AppInfo {
         package_name: app.package_name,
         label: app.label,
         icon_png: app.icon_png,
+        version_name: app.version_name,
+        version_code: app.version_code,
+        first_install_time_ms: app.first_install_time_ms,
+        last_update_time_ms: app.last_update_time_ms,
+        system_app: app.system_app,
+        app_bytes: app.app_bytes,
+        data_bytes: app.data_bytes,
+        cache_bytes: app.cache_bytes,
     }
 }
 
@@ -1844,6 +1892,36 @@ impl HostApiService {
         }
     }
 
+    fn open_app_settings(&self, peer: &Peer, package: &str) -> response::Body {
+        if !package.is_empty() && !apk::valid_package_name(package) {
+            return not_a_package(package);
+        }
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.open_app_settings(Some(package).filter(|p| !p.is_empty())) {
+            Ok(()) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    fn uninstall_app(&self, peer: &Peer, package: &str) -> response::Body {
+        if !apk::valid_package_name(package) {
+            return not_a_package(package);
+        }
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.uninstall_app(package) {
+            Ok(outcome) => response::Body::UninstallResult(outcome.to_wire()),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
     fn package_state(&self, peer: &Peer, package: &str) -> response::Body {
         if !apk::valid_package_name(package) {
             return error(
@@ -2172,14 +2250,26 @@ impl HostApiService {
                         .unwrap_or_default(),
                 )),
             },
-            Some(request::Body::ListApps(_)) => match self.androids.android(&peer.user) {
+            Some(request::Body::ListApps(list)) => match self.androids.android(&peer.user) {
                 Err(why) => error(ErrorCode::Unavailable, why),
-                Ok(android) => response::Body::InstalledApps(installed_to_wire(
-                    android
-                        .watch_tasks()
-                        .and_then(|watch| installed_of(watch.current)),
-                )),
+                Ok(android) => match list.refresh.then(|| android.refresh_apps()) {
+                    Some(Err(TaskRequestError::NotRunning(why))) => {
+                        error(ErrorCode::NotRunning, why)
+                    }
+                    Some(Err(TaskRequestError::Failed(why))) => error(ErrorCode::Unavailable, why),
+                    Some(Ok(())) | None => response::Body::InstalledApps(installed_to_wire(
+                        android
+                            .watch_tasks()
+                            .and_then(|watch| installed_of(watch.current)),
+                    )),
+                },
             },
+            Some(request::Body::OpenAppSettings(open)) => {
+                self.open_app_settings(peer, &open.package_name)
+            }
+            Some(request::Body::UninstallApp(uninstall)) => {
+                self.uninstall_app(peer, &uninstall.package_name)
+            }
             Some(request::Body::CloseTask(close)) => self.request(
                 peer,
                 TaskRequest::Close {
@@ -2247,6 +2337,8 @@ impl HostApiService {
                         | request::Body::GetVmId(_)
                         | request::Body::ListTasks(_)
                         | request::Body::ListApps(_)
+                        | request::Body::OpenAppSettings(_)
+                        | request::Body::UninstallApp(_)
                         | request::Body::WatchTasks(_)
                         | request::Body::CloseTask(_)
                         | request::Body::LaunchApp(_)
@@ -2534,6 +2626,16 @@ fn error(code: ErrorCode, detail: String) -> response::Body {
     })
 }
 
+fn not_a_package(package: &str) -> response::Body {
+    error(
+        ErrorCode::UnknownRequest,
+        format!(
+            "{:?} is not a package name, such as com.example.notes",
+            package.chars().take(80).collect::<String>()
+        ),
+    )
+}
+
 fn status(android: &dyn UserAndroid) -> response::Body {
     response::Body::Status(types::Status {
         state: to_wire(android.state()) as i32,
@@ -2740,10 +2842,52 @@ impl HostApiClient {
     /// The apps installed in the caller's Android that a launcher lists, in package order;
     /// `None` until it has said which since the service started.
     pub fn installed_apps(&mut self) -> Result<Option<Vec<AppInfo>>, ClientError> {
-        match self.exchange(request::Body::ListApps(types::ListApps {}), self.timeout)? {
+        self.list_apps(false)
+    }
+
+    /// The apps installed in the caller's Android, as [`HostApiClient::installed_apps`], after
+    /// Android has read them again, so their sizes are current. Needs the Android to be running.
+    pub fn refreshed_apps(&mut self) -> Result<Option<Vec<AppInfo>>, ClientError> {
+        self.list_apps(true)
+    }
+
+    fn list_apps(&mut self, refresh: bool) -> Result<Option<Vec<AppInfo>>, ClientError> {
+        let timeout = if refresh {
+            self.timeout.max(apps::REFRESH_WAIT + Duration::from_secs(5))
+        } else {
+            self.timeout
+        };
+        match self.exchange(
+            request::Body::ListApps(types::ListApps { refresh }),
+            timeout,
+        )? {
             response::Body::InstalledApps(installed) => Ok(installed_from_wire(installed)),
             _ => Err(ClientError::Malformed(
                 "expected the list of installed apps".into(),
+            )),
+        }
+    }
+
+    /// Opens Android's own settings of `package` in a window of its own, or Android's list of
+    /// every app when it is `None`.
+    pub fn open_app_settings(&mut self, package: Option<&str>) -> Result<(), ClientError> {
+        self.done(request::Body::OpenAppSettings(types::OpenAppSettings {
+            package_name: package.unwrap_or_default().to_string(),
+        }))
+    }
+
+    /// Uninstalls the user app `package` from the caller's Android and says how it went.
+    pub fn uninstall_app(&mut self, package: &str) -> Result<UninstallOutcome, ClientError> {
+        match self.exchange(
+            request::Body::UninstallApp(types::UninstallApp {
+                package_name: package.to_string(),
+            }),
+            self.timeout
+                .max(apps::UNINSTALL_WAIT + Duration::from_secs(5)),
+        )? {
+            response::Body::UninstallResult(result) => Ok(UninstallOutcome::from_wire(result)),
+            _ => Err(ClientError::Malformed(
+                "expected how the uninstall went".into(),
             )),
         }
     }

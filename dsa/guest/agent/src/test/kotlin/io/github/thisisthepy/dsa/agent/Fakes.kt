@@ -186,6 +186,15 @@ class FakeActions : TaskActions {
         return packageName in launchable
     }
 
+    /** Each app whose settings were opened; null for the list of every app. */
+    val settingsOpened = mutableListOf<String?>()
+    var settingsOpen = true
+
+    override fun openAppSettings(packageName: String?): Boolean {
+        settingsOpened += packageName
+        return settingsOpen
+    }
+
     override fun closeTask(taskId: Int): Boolean {
         closed += taskId
         return taskId in closable

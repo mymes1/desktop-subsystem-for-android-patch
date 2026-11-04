@@ -219,6 +219,17 @@ pub fn start_menu_programs() -> Option<PathBuf> {
     })
 }
 
+/// The key in a user's registry where Windows' list of installed apps (Settings > Apps >
+/// Installed apps) finds the apps installed for that user. The window manager puts one key
+/// under it for each Android app; nothing else of DSA goes there.
+pub const INSTALLED_APPS_KEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+
+/// The registry hive of the profile at `profile` (`<profile>\NTUSER.DAT`), which the
+/// uninstaller loads to remove DSA's keys of a user who is not signed in.
+pub fn user_hive_in_profile(profile: &Path) -> PathBuf {
+    join(profile, &["NTUSER.DAT"])
+}
+
 /// The local application data folder of the profile at `profile`, where Windows puts it unless
 /// the user moved it: `<profile>\AppData\Local`.
 pub fn default_local_app_data(profile: &Path) -> PathBuf {

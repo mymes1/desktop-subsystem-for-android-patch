@@ -483,8 +483,18 @@ impl StartMenuSetup {
     }
 }
 
-/// Keeps the Start menu in step with each list of installed apps that arrives on `installed`,
-/// until it closes. When several lists are waiting, only the latest is acted on.
+/// The `dsa` command installed beside the window manager, which Windows' list of installed
+/// apps runs to uninstall an app.
+pub fn default_cli() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()?
+        .parent()
+        .map(|dir| dir.join("dsa.exe"))
+}
+
+/// Keeps the Start menu, and Windows' list of installed apps, in step with each list of
+/// installed apps that arrives on `installed`, until it closes. When several lists are waiting,
+/// only the latest is acted on.
 pub fn keep(
     installed: Receiver<Vec<AppInfo>>,
     setup: StartMenuSetup,
@@ -492,12 +502,20 @@ pub fn keep(
 ) {
     let _com = ComApartment::enter();
     let mut previous: Option<BTreeSet<String>> = None;
+    let cli = default_cli();
+    let keys = crate::installed_apps::RegistryKeys::current_user();
     while let Ok(mut apps) = installed.recv() {
         while let Ok(newer) = installed.try_recv() {
             apps = newer;
         }
         for problem in setup.sync(&apps, &ShellLinks) {
             note(logger.as_deref(), &format!("Start menu: {problem}"));
+        }
+        if let Some(cli) = &cli {
+            let entries = crate::installed_apps::entries(&apps, &setup.apps_dir, cli);
+            for problem in crate::installed_apps::sync(&entries, &keys) {
+                note(logger.as_deref(), &format!("Installed apps: {problem}"));
+            }
         }
         let now: BTreeSet<String> = apps.iter().map(|app| app.package_name.clone()).collect();
         if let Some(previous) = &previous {

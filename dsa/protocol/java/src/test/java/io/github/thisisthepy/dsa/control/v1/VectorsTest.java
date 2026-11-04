@@ -317,6 +317,13 @@ public final class VectorsTest {
         cases.put("query_package", Envelope.newBuilder()
                 .setQueryPackage(QueryPackage.newBuilder().setRequestId(7).setPackageName("com.example.notes"))
                 .build());
+        cases.put("uninstall_app", Envelope.newBuilder()
+                .setUninstallApp(UninstallApp.newBuilder().setRequestId(7).setPackageName("com.example.notes"))
+                .build());
+        cases.put("uninstall_result", Envelope.newBuilder()
+                .setUninstallResult(UninstallResult.newBuilder().setRequestId(7).setPackageName("com.example.notes")
+                        .setStatus(UninstallStatus.UNINSTALL_STATUS_SYSTEM_APP).setMessage("system"))
+                .build());
         cases.put("package_state_installed", Envelope.newBuilder()
                 .setPackageState(PackageState.newBuilder().setRequestId(7).setInstalled(true)
                         .setVersionCode(42).setVersionName("1.2")

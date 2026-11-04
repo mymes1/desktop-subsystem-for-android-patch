@@ -46,6 +46,14 @@ object Messages {
             .setPackageName(app.packageName)
             .setLabel(app.label)
             .setIconPng(ByteString.copyFrom(app.iconPng))
+            .setVersionName(app.versionName)
+            .setVersionCode(app.versionCode)
+            .setFirstInstallTimeMs(maxOf(0L, app.firstInstallTimeMs))
+            .setLastUpdateTimeMs(maxOf(0L, app.lastUpdateTimeMs))
+            .setSystemApp(app.systemApp)
+            .setAppBytes(maxOf(0L, app.appBytes))
+            .setDataBytes(maxOf(0L, app.dataBytes))
+            .setCacheBytes(maxOf(0L, app.cacheBytes))
         return Envelope.newBuilder().setInstalledApp(info).build().toByteArray()
     }
 

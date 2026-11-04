@@ -8,6 +8,7 @@ import io.github.thisisthepy.dsa.agent.windowing.Size
 import io.github.thisisthepy.dsa.control.v1.CloseTask
 import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.LaunchApp
+import io.github.thisisthepy.dsa.control.v1.OpenAppSettings
 import io.github.thisisthepy.dsa.control.v1.ResizeTask
 import io.github.thisisthepy.dsa.control.v1.SetTaskDensity
 import org.junit.Assert.assertEquals
@@ -132,5 +133,24 @@ class HostRequestsTest {
         assertTrue(requests.handle(garbage) is RequestResult.Malformed)
         assertTrue(requests.handle(ByteArray(0)) is RequestResult.Malformed)
         assertTrue(actions.launched.isEmpty() && actions.closed.isEmpty())
+    }
+
+    private fun settings(packageName: String) = Envelope.newBuilder()
+        .setOpenAppSettings(OpenAppSettings.newBuilder().setPackageName(packageName))
+        .build().toByteArray()
+
+    @Test
+    fun fr22_app_info_opens_the_apps_settings_and_manage_apps_opens_the_list() {
+        assertEquals(RequestResult.SettingsOpened("com.example.notes"), requests.handle(settings("com.example.notes")))
+        assertEquals(RequestResult.SettingsOpened(null), requests.handle(settings("")))
+        assertEquals(listOf("com.example.notes", null), actions.settingsOpened)
+    }
+
+    @Test
+    fun fr22_settings_for_a_name_that_is_not_a_package_are_not_opened() {
+        assertTrue(requests.handle(settings("../evil")) is RequestResult.Malformed)
+        actions.settingsOpen = false
+        assertTrue(requests.handle(settings("com.example.notes")) is RequestResult.SettingsFailed)
+        assertEquals(listOf<String?>("com.example.notes"), actions.settingsOpened)
     }
 }
