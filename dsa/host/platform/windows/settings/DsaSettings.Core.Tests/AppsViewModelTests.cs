@@ -46,7 +46,7 @@ public class AppsViewModelTests
         (new AppsViewModel(new AppsService(cli), new AppsText()), cli);
 
     [Fact]
-    public async Task Fr22_the_apps_page_lists_each_app_with_its_icon_version_size_and_date()
+    public async Task Fr23_the_apps_page_lists_each_app_with_its_icon_version_size_and_date()
     {
         var (vm, _) = Make(new FakeCli().Answer("apps list --json", List));
         await vm.RefreshAsync();
@@ -69,7 +69,7 @@ public class AppsViewModelTests
     }
 
     [Fact]
-    public async Task Fr22_search_finds_an_app_by_name_or_package()
+    public async Task Fr23_search_finds_an_app_by_name_or_package()
     {
         var (vm, _) = Make(new FakeCli().Answer("apps list --json", List));
         await vm.RefreshAsync();
@@ -84,7 +84,7 @@ public class AppsViewModelTests
     }
 
     [Fact]
-    public async Task Fr22_open_app_info_and_manage_apps_go_through_dsa()
+    public async Task Fr23_open_app_info_and_manage_apps_go_through_dsa()
     {
         var (vm, cli) = Make(new FakeCli()
             .Answer("apps list --json", List)
@@ -102,7 +102,7 @@ public class AppsViewModelTests
     }
 
     [Fact]
-    public async Task Fr22_uninstalling_a_user_app_removes_it_from_the_list()
+    public async Task Fr23_uninstalling_a_user_app_removes_it_from_the_list()
     {
         var cli = new FakeCli()
             .Answer("apps list --json", List)
@@ -118,7 +118,7 @@ public class AppsViewModelTests
     }
 
     [Fact]
-    public async Task Fr22_a_refused_uninstall_says_why_in_the_users_language()
+    public async Task Fr23_a_refused_uninstall_says_why_in_the_users_language()
     {
         var (vm, _) = Make(new FakeCli()
             .Answer("apps list --json", List)
@@ -132,7 +132,7 @@ public class AppsViewModelTests
     }
 
     [Fact]
-    public async Task Fr22_a_service_that_cannot_be_reached_is_said_so()
+    public async Task Fr23_a_service_that_cannot_be_reached_is_said_so()
     {
         var (vm, _) = Make(new FakeCli().Fail("apps list --json", "dsa: cannot reach the DSA service"));
         await vm.RefreshAsync();

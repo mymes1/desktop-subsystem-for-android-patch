@@ -654,7 +654,7 @@ jobs:
           Set-Content "$userRoot\logs\dsa-wm.log" 'log'
           Set-Content "$userRoot\monitors.txt" '1920x1080'
           Set-Content "$userRoot\compositor.json" '{}'
-          # fr22: an Android app's entry in Windows' list of installed apps, as the window
+          # fr23: an Android app's entry in Windows' list of installed apps, as the window
           # manager makes it, and another program's entry, which must stay.
           $installedApps = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
           $ours = "$installedApps\Thisisthepy.DSA.org.example"

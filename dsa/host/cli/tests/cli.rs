@@ -1360,7 +1360,7 @@ fn fr12_dsa_widgets_says_why_a_widget_was_not_placed() {
 }
 
 #[test]
-fn fr22_dsa_apps_is_parsed() {
+fn fr23_dsa_apps_is_parsed() {
     use dsa_cli::AppsAction;
     assert_eq!(parse(&args("apps")).unwrap().apps, Some(AppsAction::List));
     assert_eq!(
@@ -1372,7 +1372,9 @@ fn fr22_dsa_apps_is_parsed() {
         Some(AppsAction::Info("com.example.notes".into()))
     );
     assert_eq!(
-        parse(&args("apps uninstall com.example.notes")).unwrap().apps,
+        parse(&args("apps uninstall com.example.notes"))
+            .unwrap()
+            .apps,
         Some(AppsAction::Uninstall("com.example.notes".into()))
     );
     assert_eq!(
@@ -1380,7 +1382,9 @@ fn fr22_dsa_apps_is_parsed() {
         Some(AppsAction::Settings(None))
     );
     assert_eq!(
-        parse(&args("apps settings com.example.notes")).unwrap().apps,
+        parse(&args("apps settings com.example.notes"))
+            .unwrap()
+            .apps,
         Some(AppsAction::Settings(Some("com.example.notes".into())))
     );
     assert_eq!(parse(&args("apps")).unwrap().command, Cmd::Apps);
@@ -1393,7 +1397,7 @@ fn fr22_dsa_apps_is_parsed() {
 }
 
 #[test]
-fn fr22_dsa_apps_list_and_info_show_each_app_with_its_details() {
+fn fr23_dsa_apps_list_and_info_show_each_app_with_its_details() {
     use dsa_host_core::host_api_conformance::{KNOWN_PACKAGE, SYSTEM_PACKAGE};
     let ((listener, _, user), endpoint) = local_pair();
     let androids = Arc::new(FakeAndroids::default());
@@ -1402,7 +1406,10 @@ fn fr22_dsa_apps_list_and_info_show_each_app_with_its_details() {
     let list = dsa(&endpoint, "apps list");
     assert!(list.status.success(), "{}", stderr(&list));
     let text = stdout(&list);
-    assert!(text.contains("com.example.notes  Notes 4.1  2.9 MB"), "{text}");
+    assert!(
+        text.contains("com.example.notes  Notes 4.1  2.9 MB"),
+        "{text}"
+    );
     assert!(text.contains("com.android.settings  Settings 16"), "{text}");
     assert!(text.contains("(system)"), "{text}");
     let android = androids.of(&user).unwrap();
@@ -1448,7 +1455,7 @@ fn fr22_dsa_apps_list_and_info_show_each_app_with_its_details() {
 }
 
 #[test]
-fn fr22_dsa_apps_uninstall_removes_a_user_app_and_refuses_a_system_app() {
+fn fr23_dsa_apps_uninstall_removes_a_user_app_and_refuses_a_system_app() {
     let ((listener, _, _), endpoint) = local_pair();
     let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
 
@@ -1474,7 +1481,7 @@ fn fr22_dsa_apps_uninstall_removes_a_user_app_and_refuses_a_system_app() {
 }
 
 #[test]
-fn fr22_dsa_apps_settings_opens_androids_app_page_or_its_list_of_apps() {
+fn fr23_dsa_apps_settings_opens_androids_app_page_or_its_list_of_apps() {
     let ((listener, _, user), endpoint) = local_pair();
     let androids = Arc::new(FakeAndroids::default());
     let _service = RunningService::start(listener, androids.clone());

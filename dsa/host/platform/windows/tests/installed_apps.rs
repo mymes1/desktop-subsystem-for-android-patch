@@ -38,19 +38,31 @@ fn value<'a>(entry: &'a Entry, name: &str) -> Option<&'a Value> {
 }
 
 #[test]
-fn fr22_each_app_is_listed_with_its_name_icon_version_publisher_size_and_uninstall() {
+fn fr23_each_app_is_listed_with_its_name_icon_version_publisher_size_and_uninstall() {
     let program = Path::new(r"C:\Users\u\AppData\Local\DSA\apps\com.example.notes\Notes.exe");
     let cli = Path::new(r"C:\Program Files\DSA\dsa.exe");
     let entry = entry(&notes(), program, cli);
     assert_eq!(entry.key, "Thisisthepy.DSA.com.example.notes");
-    assert_eq!(value(&entry, "DisplayName"), Some(&Value::Text("Notes".into())));
+    assert_eq!(
+        value(&entry, "DisplayName"),
+        Some(&Value::Text("Notes".into()))
+    );
     assert_eq!(
         value(&entry, "DisplayIcon"),
         Some(&Value::Text(format!("\"{}\",0", program.display())))
     );
-    assert_eq!(value(&entry, "DisplayVersion"), Some(&Value::Text("4.1".into())));
-    assert_eq!(value(&entry, "Publisher"), Some(&Value::Text(PUBLISHER.into())));
-    assert_eq!(value(&entry, "InstallDate"), Some(&Value::Text("20231114".into())));
+    assert_eq!(
+        value(&entry, "DisplayVersion"),
+        Some(&Value::Text("4.1".into()))
+    );
+    assert_eq!(
+        value(&entry, "Publisher"),
+        Some(&Value::Text(PUBLISHER.into()))
+    );
+    assert_eq!(
+        value(&entry, "InstallDate"),
+        Some(&Value::Text("20231114".into()))
+    );
     assert_eq!(value(&entry, "EstimatedSize"), Some(&Value::Number(2950)));
     assert_eq!(value(&entry, "NoModify"), Some(&Value::Number(1)));
     assert_eq!(value(&entry, "NoRepair"), Some(&Value::Number(1)));
@@ -67,7 +79,7 @@ fn fr22_each_app_is_listed_with_its_name_icon_version_publisher_size_and_uninsta
 }
 
 #[test]
-fn fr22_an_app_android_says_little_of_still_gets_a_name_and_no_empty_values() {
+fn fr23_an_app_android_says_little_of_still_gets_a_name_and_no_empty_values() {
     let bare = AppInfo {
         package_name: "com.example.bare".into(),
         ..Default::default()
@@ -82,7 +94,7 @@ fn fr22_an_app_android_says_little_of_still_gets_a_name_and_no_empty_values() {
 }
 
 #[test]
-fn fr22_install_dates_are_utc_days() {
+fn fr23_install_dates_are_utc_days() {
     assert_eq!(install_date(0), None);
     assert_eq!(install_date(1).as_deref(), Some("19700101"));
     // 2000-02-29T23:59:59Z, a leap day.
@@ -92,7 +104,7 @@ fn fr22_install_dates_are_utc_days() {
 }
 
 #[test]
-fn fr22_the_entries_point_at_each_apps_window_program_and_skip_bad_names() {
+fn fr23_the_entries_point_at_each_apps_window_program_and_skip_bad_names() {
     let bad = AppInfo {
         package_name: "..\\evil".into(),
         label: "Evil".into(),
@@ -106,7 +118,9 @@ fn fr22_the_entries_point_at_each_apps_window_program_and_skip_bad_names() {
     assert_eq!(list.len(), 1);
     assert_eq!(
         value(&list[0], "DisplayIcon"),
-        Some(&Value::Text(r#""C:\apps\com.example.notes\Notes.exe",0"#.into()))
+        Some(&Value::Text(
+            r#""C:\apps\com.example.notes\Notes.exe",0"#.into()
+        ))
     );
 }
 
@@ -133,7 +147,7 @@ impl InstalledAppKeys for FakeKeys {
 }
 
 #[test]
-fn fr22_keys_follow_the_apps_and_only_ours_are_touched() {
+fn fr23_keys_follow_the_apps_and_only_ours_are_touched() {
     let keys = FakeKeys::default();
     keys.write("{1234-another-program}", &[("DisplayName", Value::Text("Other".into()))])
         .unwrap();
@@ -143,7 +157,11 @@ fn fr22_keys_follow_the_apps_and_only_ours_are_touched() {
         label: "Clock".into(),
         ..Default::default()
     };
-    assert!(sync(&entries(&[notes(), clock], Path::new(r"C:\apps"), cli), &keys).is_empty());
+    assert!(sync(
+        &entries(&[notes(), clock], Path::new(r"C:\apps"), cli),
+        &keys
+    )
+    .is_empty());
     assert_eq!(
         keys.names().unwrap(),
         vec![
@@ -165,13 +183,16 @@ fn fr22_keys_follow_the_apps_and_only_ours_are_touched() {
 
     // Uninstalling DSA removes every key of ours and nothing else.
     assert!(remove_all(&keys).is_empty());
-    assert_eq!(keys.names().unwrap(), vec!["{1234-another-program}".to_string()]);
+    assert_eq!(
+        keys.names().unwrap(),
+        vec!["{1234-another-program}".to_string()]
+    );
     assert!(is_ours(&key_name("com.example.notes")));
     assert!(!is_ours("Thisisthepy.DSA."));
 }
 
 #[test]
-fn fr22_registry_keys_are_written_updated_and_removed() {
+fn fr23_registry_keys_are_written_updated_and_removed() {
     let path = format!(
         "Software\\Thisisthepy-DSA-tests\\installed-apps-{}",
         std::process::id()

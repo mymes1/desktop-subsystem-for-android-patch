@@ -369,9 +369,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             "list" if command == Some(Command::Apps) && apps.is_none() => {
                 apps = Some(AppsAction::List);
             }
-            action @ ("info" | "uninstall")
-                if command == Some(Command::Apps) && apps.is_none() =>
-            {
+            action @ ("info" | "uninstall") if command == Some(Command::Apps) && apps.is_none() => {
                 let package = args.next().ok_or_else(|| {
                     format!(
                         "dsa apps {action} needs the app's package, such as com.example.notes; \

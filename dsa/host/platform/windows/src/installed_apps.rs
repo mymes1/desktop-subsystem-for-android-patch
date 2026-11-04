@@ -388,7 +388,10 @@ mod registry {
         let key = Key(raw);
         // A value an earlier version of the entry had and this one does not goes.
         for old in enumerate(&key, true) {
-            if !values.iter().any(|(name, _)| name.eq_ignore_ascii_case(&old)) {
+            if !values
+                .iter()
+                .any(|(name, _)| name.eq_ignore_ascii_case(&old))
+            {
                 let old_w = wide(&old);
                 // SAFETY: an open key and a NUL-terminated name.
                 unsafe { RegDeleteValueW(key.0, old_w.as_ptr()) };

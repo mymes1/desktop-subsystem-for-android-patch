@@ -21,7 +21,6 @@ use dsa_protocol::control::{
     RejectReason, RequestGuestMemory, ResizeTask, Role, ScreenState, SetTaskDensity, TaskFrames,
     TaskRemoved, TaskUpdated,
 };
-use dsa_protocol::control::{UninstallApp, UninstallResult, UninstallStatus};
 use dsa_protocol::control::{
     AddWidget, ListWidgetProviders, RemoveWidget, ResizeWidget, WidgetAdded, WidgetFrame,
     WidgetList, WidgetPointer, WidgetProvider, WidgetProviders, WidgetUpdated,
@@ -31,6 +30,7 @@ use dsa_protocol::control::{
     LogRecords, LogStream, VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen,
     VideoFlush, VideoFrame, VideoPacket,
 };
+use dsa_protocol::control::{UninstallApp, UninstallResult, UninstallStatus};
 use dsa_protocol::{decode, encode};
 
 /// The key of the notification in the notification cases.

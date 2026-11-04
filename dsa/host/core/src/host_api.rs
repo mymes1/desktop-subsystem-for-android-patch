@@ -2853,7 +2853,8 @@ impl HostApiClient {
 
     fn list_apps(&mut self, refresh: bool) -> Result<Option<Vec<AppInfo>>, ClientError> {
         let timeout = if refresh {
-            self.timeout.max(apps::REFRESH_WAIT + Duration::from_secs(5))
+            self.timeout
+                .max(apps::REFRESH_WAIT + Duration::from_secs(5))
         } else {
             self.timeout
         };

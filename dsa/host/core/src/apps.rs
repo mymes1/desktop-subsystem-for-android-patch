@@ -150,7 +150,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fr22_every_status_survives_the_control_channel_and_the_local_api() {
+    fn fr23_every_status_survives_the_control_channel_and_the_local_api() {
         for status in [
             UninstallStatus::Uninstalled,
             UninstallStatus::NotInstalled,

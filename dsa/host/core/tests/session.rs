@@ -2955,7 +2955,7 @@ fn fr11_the_install_window_learns_the_installed_version_and_signer_from_the_agen
 }
 
 #[test]
-fn fr22_installed_apps_carry_their_version_dates_sizes_and_kind() {
+fn fr23_installed_apps_carry_their_version_dates_sizes_and_kind() {
     let (session, mut agent, _launcher) = active_session();
     let watch = session.watch_tasks();
     send_body(
@@ -2995,7 +2995,7 @@ fn fr22_installed_apps_carry_their_version_dates_sizes_and_kind() {
 }
 
 #[test]
-fn fr22_a_refresh_waits_for_the_agents_fresh_list() {
+fn fr23_a_refresh_waits_for_the_agents_fresh_list() {
     let (session, mut agent, _launcher) = active_session();
     let session = Arc::new(session);
     let refreshing = {
@@ -3017,7 +3017,7 @@ fn fr22_a_refresh_waits_for_the_agents_fresh_list() {
 }
 
 #[test]
-fn fr22_app_info_and_manage_apps_ask_android_for_its_settings() {
+fn fr23_app_info_and_manage_apps_ask_android_for_its_settings() {
     let (session, mut agent, _launcher) = active_session();
     session
         .open_app_settings(Some("com.example.notes"))
@@ -3033,7 +3033,7 @@ fn fr22_app_info_and_manage_apps_ask_android_for_its_settings() {
 }
 
 #[test]
-fn fr22_an_uninstall_carries_androids_answer() {
+fn fr23_an_uninstall_carries_androids_answer() {
     let (session, mut agent, _launcher) = active_session();
     let session = Arc::new(session);
     for (package, status, expected) in [

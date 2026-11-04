@@ -79,7 +79,7 @@ class AppUninstallerTest {
     private fun results(): List<UninstallResult> = daemon.sentMessages().filter { it.hasUninstallResult() }.map { it.uninstallResult }
 
     @Test
-    fun fr22_a_user_app_is_uninstalled_and_the_host_hears_it_is_gone() {
+    fun fr23_a_user_app_is_uninstalled_and_the_host_hears_it_is_gone() {
         started()
         daemon.sent.clear()
 
@@ -95,7 +95,7 @@ class AppUninstallerTest {
     }
 
     @Test
-    fun fr22_a_system_app_or_a_missing_package_is_refused_with_its_reason() {
+    fun fr23_a_system_app_or_a_missing_package_is_refused_with_its_reason() {
         started()
 
         uninstall(1, "com.android.settings")
@@ -116,7 +116,7 @@ class AppUninstallerTest {
     }
 
     @Test
-    fun fr22_an_uninstall_android_refuses_is_answered_with_its_reason() {
+    fun fr23_an_uninstall_android_refuses_is_answered_with_its_reason() {
         started()
         uninstaller.answer = PackageInstallerStatus.FAILURE_BLOCKED
 

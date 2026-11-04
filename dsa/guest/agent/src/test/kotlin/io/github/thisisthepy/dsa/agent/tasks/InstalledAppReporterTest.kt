@@ -113,7 +113,7 @@ class InstalledAppReporterTest {
     )
 
     @Test
-    fun fr22_each_app_carries_its_version_dates_sizes_and_kind() {
+    fun fr23_each_app_carries_its_version_dates_sizes_and_kind() {
         reporter.update(listOf(detailed(), app("org.example.clock")))
 
         val notes = sent.first { it.hasInstalledApp() && it.installedApp.packageName == "org.example.notes" }.installedApp
@@ -128,7 +128,7 @@ class InstalledAppReporterTest {
     }
 
     @Test
-    fun fr22_a_new_version_or_size_describes_the_app_again() {
+    fun fr23_a_new_version_or_size_describes_the_app_again() {
         reporter.update(listOf(detailed()))
         sent.clear()
 
@@ -140,7 +140,7 @@ class InstalledAppReporterTest {
     }
 
     @Test
-    fun fr22_a_forced_update_sends_the_list_even_when_nothing_changed() {
+    fun fr23_a_forced_update_sends_the_list_even_when_nothing_changed() {
         reporter.update(listOf(detailed()))
         sent.clear()
 
