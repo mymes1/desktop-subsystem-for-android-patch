@@ -36,6 +36,9 @@ import io.github.thisisthepy.dsa.agent.memory.AppProcesses
 import io.github.thisisthepy.dsa.agent.memory.ClosedApps
 import io.github.thisisthepy.dsa.agent.memory.MemoryReporter
 import io.github.thisisthepy.dsa.agent.memory.MemorySource
+import io.github.thisisthepy.dsa.agent.background.AppStopper
+import io.github.thisisthepy.dsa.agent.background.BackgroundApps
+import io.github.thisisthepy.dsa.agent.background.MediaSource
 import io.github.thisisthepy.dsa.agent.notifications.NotificationForwarder
 import io.github.thisisthepy.dsa.agent.notifications.NotificationSource
 import io.github.thisisthepy.dsa.agent.print.HostPrinter
@@ -87,7 +90,9 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * that can open them ([FileReceiver]). APKs the host sends are installed through the guest's
  * package installer ([ApkInstaller]), and the host is told how each install went. The guest's
  * notifications go to the host's notification centre, and a click or a dismissal there comes
- * back to them ([NotificationForwarder]). While a host accessibility client watches a task, the
+ * back to them ([NotificationForwarder]). Apps that keep running with no window, because they
+ * run a foreground service, are shown in the host's notification area, and their media sessions
+ * reach the host's media keys ([BackgroundApps]). While a host accessibility client watches a task, the
  * agent's accessibility service is on and the task's accessibility tree goes to the host
  * ([AccessibilityExport]); otherwise the service is off. The widgets the user placed on the
  * host's desktop are hosted and drawn here, and their images go to the host ([WidgetManager]).
@@ -122,6 +127,8 @@ class Agent(
     fileOpener: FileOpener = FileOpener.NONE,
     clipboard: GuestClipboard = GuestClipboard.NONE,
     notifications: NotificationSource = NotificationSource.NONE,
+    media: MediaSource = MediaSource.NONE,
+    stopper: AppStopper = AppStopper.NONE,
     packageInstaller: PackageInstallerPort = PackageInstallerPort.NONE,
     packages: PackageInfoPort = PackageInfoPort.NONE,
     packageUninstaller: PackageUninstallerPort = PackageUninstallerPort.NONE,
@@ -181,12 +188,22 @@ class Agent(
     }
     private val clipboardSync = ClipboardSync(clipboard, { frame -> channel.send(frame) }, log, isConnected = { channel.connected })
     private val diagnosticsCollector = DiagnosticsCollector(diagnostics, { frame -> channel.send(frame) }, log, diagnosticsRunner)
+    private val backgroundApps = BackgroundApps(
+        ownPackage,
+        notifications,
+        media,
+        stopper,
+        { frame -> channel.send(frame) },
+        log,
+        isConnected = { channel.connected },
+    )
     private val notificationForwarder = NotificationForwarder(
         ownPackage,
         notifications,
         { frame -> channel.send(frame) },
         log,
         isConnected = { channel.connected },
+        also = backgroundApps,
     )
     private val apkInstaller = ApkInstaller(
         packageInstaller,
@@ -263,6 +280,7 @@ class Agent(
             lifecycle.start { work -> scheduler.post(work) }
             clipboardSync.start { work -> scheduler.post(work) }
             notificationForwarder.start { work -> scheduler.post(work) }
+            backgroundApps.start { work -> scheduler.post(work) }
             widgetManager.start(later = { work -> scheduler.postDelayed(RETRY_MILLIS, work) }) { work ->
                 scheduler.post(work)
             }
@@ -334,6 +352,7 @@ class Agent(
         lifecycle.connected()
         clipboardSync.connected()
         notificationForwarder.connected()
+        backgroundApps.connected()
         widgetManager.connected()
         apkInstaller.connected()
         printer.connected()
@@ -411,6 +430,7 @@ class Agent(
         }
         if (clipboardSync.handle(envelope)) return true
         if (notificationForwarder.handle(envelope)) return true
+        if (backgroundApps.handle(envelope)) return true
         if (apkInstaller.handle(envelope)) return true
         if (packageQueries.handle(envelope)) return true
         if (printer.handle(envelope)) return true

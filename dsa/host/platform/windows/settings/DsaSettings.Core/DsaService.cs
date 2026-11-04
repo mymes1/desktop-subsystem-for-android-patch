@@ -107,7 +107,8 @@ public sealed class DsaService
         Bool(json, "input_trace"),
         Bool(json, "resize_trace"),
         Int(json, "memory_limit_mb"),
-        Bool(json, "arm_translation", missing: true));
+        Bool(json, "arm_translation", missing: true),
+        Bool(json, "stop_without_asking"));
 
     public async Task<SettingsInfo> SettingsAsync() =>
         ReadSettings(await RunJsonAsync("settings").ConfigureAwait(true));
@@ -124,6 +125,11 @@ public sealed class DsaService
     public Task<SettingsInfo> SetClipboardAsync(bool on) => SetAsync("clipboard", on ? "on" : "off");
 
     public Task<SettingsInfo> SetDeveloperModeAsync(bool on) => SetAsync("developer-mode", on ? "on" : "off");
+
+    /// <summary>Whether stopping an app from the notification area skips the question that
+    /// confirms it.</summary>
+    public Task<SettingsInfo> SetStopWithoutAskingAsync(bool on) =>
+        SetAsync("stop-without-asking", on ? "on" : "off");
 
     public Task<SettingsInfo> SetAdbPortAsync(int port) =>
         SetAsync("adb-port", port.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -371,6 +377,35 @@ public sealed class DsaService
     public async Task RemoveWidgetAsync(int id) =>
         await RunJsonAsync("widgets", "remove", id.ToString(System.Globalization.CultureInfo.InvariantCulture))
             .ConfigureAwait(true);
+
+    /// <summary>The apps that run in the background in Android, and its media sessions. It
+    /// never starts Android; one that is not running has none.</summary>
+    public async Task<BackgroundList> BackgroundAsync()
+    {
+        var json = await RunJsonAsync("background", "list").ConfigureAwait(true);
+        var apps = Items(json, "apps")
+            .Select(a => new BackgroundApp(String(a, "package"), String(a, "label"), String(a, "title"),
+                String(a, "text"),
+                Items(a, "actions").Where(t => t.ValueKind == JsonValueKind.String)
+                    .Select(t => t.GetString() ?? "").ToList(),
+                Base64(a, "icon_png")))
+            .ToList();
+        var media = Items(json, "media")
+            .Select(m => new MediaInfo(String(m, "package"), String(m, "label"), String(m, "title"),
+                String(m, "artist"), String(m, "album"), String(m, "playback")))
+            .ToList();
+        return new BackgroundList(apps, media);
+    }
+
+    /// <summary>Stops <paramref name="package"/>: Android force-stops it, which ends what it
+    /// does in the background and frees its memory.</summary>
+    public async Task StopBackgroundAsync(string package) =>
+        await RunJsonAsync("background", "stop", package).ConfigureAwait(true);
+
+    /// <summary>Opens the window of <paramref name="package"/>, which runs in the
+    /// background.</summary>
+    public async Task OpenBackgroundAsync(string package) =>
+        await RunJsonAsync("background", "open", package).ConfigureAwait(true);
 
     /// <summary>Saves the diagnostics of Android and of DSA on this computer to
     /// <paramref name="path"/>, as one zip archive. Returns what dsa said.</summary>

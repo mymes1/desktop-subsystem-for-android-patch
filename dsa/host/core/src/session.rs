@@ -117,6 +117,10 @@ use crate::adb_bridge::{AdbBridge, BridgeStream, GuestAdb};
 use crate::apk::{self, InstallOutcome, InstalledPackage};
 use crate::apps::UninstallOutcome;
 use crate::arm_translation::GuestArmTranslation;
+use crate::background::{
+    self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundHub, BackgroundWatch,
+    MediaCommand, MediaSession,
+};
 use crate::clipboard;
 use crate::clock_trace::ClockTrace;
 use crate::files::{self, FileAction, FileTransfer};
@@ -544,6 +548,8 @@ enum Command {
     ShareClipboard(bool),
     /// The user did something with a notification on the host.
     Notification(NotificationAction, Sender<Result<(), SessionError>>),
+    /// The user acted on an app that runs in the background, or pressed a media key.
+    Background(BackgroundRequest, Sender<Result<(), SessionError>>),
     /// The user pressed in a widget's window: a guest in Doze wakes, as the press may open
     /// an app.
     WidgetPressed(Sender<()>),
@@ -584,6 +590,8 @@ struct Shared {
     print_watchers: Mutex<Vec<Sender<PrintEvent>>>,
     /// The guest's print jobs on their way, and those a watcher has.
     prints: Mutex<print::Assembler>,
+    /// The apps that run in the background, their media sessions, and who watches them.
+    background: Mutex<BackgroundHub>,
     /// The install under way, by its transfer ID, with who waits for the agent's word on it.
     installs: Mutex<HashMap<u32, Sender<InstallEvent>>>,
     /// The transfer ID of the last install.
@@ -643,6 +651,13 @@ pub enum GuestPower {
     /// The host passed the user's input (a press, a release, a scroll or a key) to the guest.
     /// The host hears of it before Android does, so its boost starts here.
     HostInput,
+}
+
+/// What the user asks of an app that runs in the background.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BackgroundRequest {
+    App(String, BackgroundCommand),
+    Media(String, MediaCommand),
 }
 
 /// What the agent answers about widgets.
@@ -997,6 +1012,7 @@ impl Session {
             notification_watchers: Mutex::new(Vec::new()),
             print_watchers: Mutex::new(Vec::new()),
             prints: Mutex::new(print::Assembler::new()),
+            background: Mutex::new(BackgroundHub::default()),
             installs: Mutex::new(HashMap::new()),
             last_install: AtomicU32::new(0),
             install_turn: Mutex::new(()),
@@ -1796,6 +1812,37 @@ impl Session {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.commands
             .send(Command::Notification(action, reply_tx))
+            .map_err(|_| SessionError::Gone)?;
+        reply_rx.recv().map_err(|_| SessionError::Gone)?
+    }
+
+    /// The apps that run in the background and the active media sessions now, and every
+    /// change to them from now on. The watch lasts across restarts of the guest.
+    pub fn watch_background(&self) -> BackgroundWatch {
+        self.shared
+            .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .watch()
+    }
+
+    /// The apps that run in the background and the active media sessions now.
+    pub fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+        let hub = self
+            .shared
+            .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        (hub.apps(), hub.media())
+    }
+
+    /// Passes what the user did with an app that runs in the background to the guest.
+    /// Opening it wakes a guest in Doze or frozen first; any other command thaws a frozen one
+    /// without turning its screen on. Needs a running guest.
+    pub fn background_action(&self, request: BackgroundRequest) -> Result<(), SessionError> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.commands
+            .send(Command::Background(request, reply_tx))
             .map_err(|_| SessionError::Gone)?;
         reply_rx.recv().map_err(|_| SessionError::Gone)?
     }
@@ -2760,7 +2807,8 @@ impl Worker {
                         Ok(Command::Stop) => {}
                         Ok(Command::Send(_, reply))
                         | Ok(Command::Freeze(reply))
-                        | Ok(Command::Notification(_, reply)) => {
+                        | Ok(Command::Notification(_, reply))
+                        | Ok(Command::Background(_, reply)) => {
                             let _ = reply.send(Err(SessionError::NotActive(SessionState::Stopped)));
                         }
                         Ok(Command::WindowsShown(shown)) => self.set_shown(shown),
@@ -2788,7 +2836,8 @@ impl Worker {
                         Ok(Command::Start) => {}
                         Ok(Command::Send(_, reply))
                         | Ok(Command::Freeze(reply))
-                        | Ok(Command::Notification(_, reply)) => {
+                        | Ok(Command::Notification(_, reply))
+                        | Ok(Command::Background(_, reply)) => {
                             let _ =
                                 reply.send(Err(SessionError::NotActive(SessionState::Stopping)));
                         }
@@ -2884,6 +2933,10 @@ impl Worker {
             }
             Command::Notification(action, reply) => {
                 let _ = reply.send(self.act_on_notification(action));
+                self.running()
+            }
+            Command::Background(request, reply) => {
+                let _ = reply.send(self.act_on_background(request));
                 self.running()
             }
             Command::WidgetPressed(reply) => {
@@ -3261,6 +3314,107 @@ impl Worker {
         Ok(())
     }
 
+    fn publish_background(&mut self, event: BackgroundEvent) {
+        self.shared
+            .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .apply(event);
+    }
+
+    /// Passes what the user did with an app that runs in the background to the guest.
+    ///
+    /// Opening it is a click: the guest wakes, as for a notification. Any other command
+    /// leaves the screen as it is, since playback and a stop need no screen; a frozen guest
+    /// is thawed for it, because a frozen guest reads nothing. A package the guest does not
+    /// run in the background is ignored, except for a stop, which the guest carries out for
+    /// any app.
+    fn act_on_background(&mut self, request: BackgroundRequest) -> Result<(), SessionError> {
+        let state = self.state();
+        if !matches!(
+            state,
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) || !self.agent_connected
+        {
+            return Err(SessionError::NotActive(state));
+        }
+        let body = match request {
+            BackgroundRequest::App(package_name, command) => {
+                let known = self
+                    .shared
+                    .background
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .has_app(&package_name);
+                let (command, action) = match command {
+                    BackgroundCommand::Open => (control::BackgroundAppCommand::Open, 0),
+                    BackgroundCommand::Action(index) => (
+                        control::BackgroundAppCommand::Action,
+                        i32::try_from(index).unwrap_or(i32::MAX),
+                    ),
+                    BackgroundCommand::Stop => (control::BackgroundAppCommand::Stop, 0),
+                };
+                if !known && command != control::BackgroundAppCommand::Stop {
+                    eprintln!(
+                        "background apps: the host acted on an app that does not run in the                          background; ignored"
+                    );
+                    return Ok(());
+                }
+                if command == control::BackgroundAppCommand::Open {
+                    // The app opens on a screen that is on, as for a notification's click.
+                    self.hidden_since = Instant::now();
+                    self.wake();
+                } else {
+                    self.thaw_for_work();
+                }
+                Body::BackgroundAppAction(control::BackgroundAppAction {
+                    package_name,
+                    command: command as i32,
+                    action,
+                })
+            }
+            BackgroundRequest::Media(package_name, command) => {
+                let known = self
+                    .shared
+                    .background
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .has_media(&package_name);
+                if !known {
+                    eprintln!(
+                        "background apps: a media key for a package with no media session; ignored"
+                    );
+                    return Ok(());
+                }
+                self.thaw_for_work();
+                Body::MediaControl(control::MediaControl {
+                    package_name,
+                    command: command.to_control() as i32,
+                })
+            }
+        };
+        if !self.running() {
+            return Err(SessionError::NotActive(self.state()));
+        }
+        self.send_body(body);
+        Ok(())
+    }
+
+    /// Thaws a frozen guest so it reads what comes next, without turning its screen on: the
+    /// guest stays in Doze, and is frozen again by the usual rules.
+    fn thaw_for_work(&mut self) {
+        if self.state() != SessionState::Frozen {
+            return;
+        }
+        if !self.resume_frozen() {
+            return;
+        }
+        self.dozing_since = Some(Instant::now());
+        self.shared.set(SessionState::Dozing, None);
+        self.send_clock();
+        self.send_dismissals();
+    }
+
     /// Sends the dismissals that waited for the guest to be thawed.
     fn send_dismissals(&mut self) {
         for key in std::mem::take(&mut self.dismissals) {
@@ -3430,26 +3584,8 @@ impl Worker {
     /// Thaws a frozen guest, turns its screen on, and makes the session `Active`. The session
     /// does not wait for the guest to leave Doze: the screen coming on is what ends it.
     fn wake(&mut self) {
-        if self.state() == SessionState::Frozen {
-            if let Err(why) = self.launcher.thaw() {
-                self.stop(StopReason::GuestExited {
-                    why: format!("the frozen guest could not be resumed: {why}"),
-                    diagnostics: None,
-                });
-                return;
-            }
-            if let Some(frozen_at) = self.frozen_at.take() {
-                self.discount_frozen_time(frozen_at.elapsed());
-            }
-            if std::mem::take(&mut self.power_pending) {
-                if let Some(power) = self.power {
-                    self.send_body(Body::PowerState(power.to_control()));
-                }
-            }
-            if std::mem::take(&mut self.host_memory_pending) {
-                let low = self.host_memory_low;
-                self.send_body(Body::HostMemory(control::HostMemory { low }));
-            }
+        if self.state() == SessionState::Frozen && !self.resume_frozen() {
+            return;
         }
         if !self.screen_on {
             self.screen_on = true;
@@ -3464,6 +3600,31 @@ impl Worker {
         // A guest frozen while the host slept has its clock set now.
         self.send_clock();
         self.send_dismissals();
+    }
+
+    /// Resumes a frozen guest and sends it what waited for it. False when it could not be
+    /// resumed, and the session stopped.
+    fn resume_frozen(&mut self) -> bool {
+        if let Err(why) = self.launcher.thaw() {
+            self.stop(StopReason::GuestExited {
+                why: format!("the frozen guest could not be resumed: {why}"),
+                diagnostics: None,
+            });
+            return false;
+        }
+        if let Some(frozen_at) = self.frozen_at.take() {
+            self.discount_frozen_time(frozen_at.elapsed());
+        }
+        if std::mem::take(&mut self.power_pending) {
+            if let Some(power) = self.power {
+                self.send_body(Body::PowerState(power.to_control()));
+            }
+        }
+        if std::mem::take(&mut self.host_memory_pending) {
+            let low = self.host_memory_low;
+            self.send_body(Body::HostMemory(control::HostMemory { low }));
+        }
+        true
     }
 
     /// Moves what the boot timers count from past a freeze of length `frozen`, so a thawed guest
@@ -3987,7 +4148,10 @@ impl Worker {
     fn handle_starting(&mut self, command: Command) -> bool {
         match command {
             Command::Start => true,
-            Command::Send(_, reply) | Command::Freeze(reply) | Command::Notification(_, reply) => {
+            Command::Send(_, reply)
+            | Command::Freeze(reply)
+            | Command::Notification(_, reply)
+            | Command::Background(_, reply) => {
                 let _ = reply.send(Err(SessionError::NotActive(SessionState::Starting)));
                 true
             }
@@ -4249,6 +4413,24 @@ impl Worker {
             Some(Body::NotificationRemoved(removed)) => {
                 self.guest_notification_removed(removed.key)
             }
+            Some(Body::BackgroundApp(app)) => match background::checked_app(app) {
+                Ok(app) => self.publish_background(BackgroundEvent::App(app)),
+                Err(why) => eprintln!("background apps: dropped one from the guest: {why}"),
+            },
+            Some(Body::BackgroundAppGone(gone)) => {
+                self.publish_background(BackgroundEvent::AppRemoved {
+                    package_name: gone.package_name,
+                })
+            }
+            Some(Body::MediaSession(session)) => match background::checked_media(session) {
+                Ok(session) => self.publish_background(BackgroundEvent::Media(session)),
+                Err(why) => eprintln!("background apps: dropped a media session: {why}"),
+            },
+            Some(Body::MediaSessionGone(gone)) => {
+                self.publish_background(BackgroundEvent::MediaRemoved {
+                    package_name: gone.package_name,
+                })
+            }
             Some(Body::InstallProgress(progress)) => self.shared.install_event(
                 progress.transfer_id,
                 InstallEvent::Progress(progress.received),
@@ -4355,6 +4537,8 @@ impl Worker {
             | Some(Body::ArmTranslationQuery(_))
             | Some(Body::NotificationClicked(_))
             | Some(Body::NotificationDismissed(_))
+            | Some(Body::BackgroundAppAction(_))
+            | Some(Body::MediaControl(_))
             | Some(Body::InstallApk(_))
             | Some(Body::ApkChunk(_))
             | Some(Body::CancelInstall(_))
@@ -4443,6 +4627,12 @@ impl Worker {
         self.end_print_jobs();
         // So do its notifications.
         self.clear_notifications();
+        // And its background apps and media sessions.
+        self.shared
+            .background
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         // And the modes and boosts its power HAL asked for.
         self.shared.publish_power(GuestPower::Stopped);
         // And its wish for the host's location, so the host's location service stops.

@@ -1886,3 +1886,91 @@ fn fr23_dsa_apps_settings_opens_androids_app_page_or_its_list_of_apps() {
         vec![Some("com.example.notes".to_string()), None]
     );
 }
+
+#[test]
+fn fr24_dsa_background_is_parsed() {
+    use dsa_cli::BackgroundAction;
+    assert_eq!(
+        parse(&args("background")).unwrap().background,
+        Some(BackgroundAction::List)
+    );
+    assert_eq!(
+        parse(&args("background list --json")).unwrap().background,
+        Some(BackgroundAction::List)
+    );
+    assert_eq!(
+        parse(&args("background stop com.example.music"))
+            .unwrap()
+            .background,
+        Some(BackgroundAction::Stop("com.example.music".into()))
+    );
+    assert_eq!(
+        parse(&args("background open com.example.music"))
+            .unwrap()
+            .background,
+        Some(BackgroundAction::Open("com.example.music".into()))
+    );
+    assert!(parse(&args("background stop")).is_err());
+    assert!(parse(&args("background stop ../music")).is_err());
+    assert_eq!(parse(&args("status")).unwrap().background, None);
+    assert!(parse(&args("settings set stop-without-asking on")).is_ok());
+    assert!(parse(&args("settings set stop-without-asking maybe")).is_err());
+}
+
+#[test]
+fn fr24_dsa_background_lists_and_stops_the_apps_that_run_in_the_background() {
+    use dsa_host_core::background::{BackgroundApp, BackgroundCommand, BackgroundEvent};
+    use dsa_host_core::host_api::UserAndroids;
+    use dsa_host_core::session::BackgroundRequest;
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+
+    let json = json_of(&dsa(&endpoint, "background --json"));
+    assert_eq!(json["apps"].as_array().unwrap().len(), 0);
+    let output = dsa(&endpoint, "background");
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "No app runs in the background.");
+
+    let _ = androids.android(&user).unwrap();
+    let android = androids.of(&user).unwrap();
+    android.background_event(BackgroundEvent::App(BackgroundApp {
+        package_name: "com.example.music".into(),
+        app_label: "Music".into(),
+        icon_png: vec![0x89, b'P', b'N', b'G'],
+        title: "Playing".into(),
+        text: "Song".into(),
+        actions: vec!["Pause".into()],
+    }));
+    let json = json_of(&dsa(&endpoint, "background list --json"));
+    assert_eq!(json["apps"][0]["package"], "com.example.music");
+    assert_eq!(json["apps"][0]["label"], "Music");
+    assert_eq!(json["apps"][0]["title"], "Playing");
+    assert_eq!(json["apps"][0]["actions"][0], "Pause");
+    assert_eq!(json["apps"][0]["icon_png"], "iVBORw==");
+
+    let output = dsa(&endpoint, "start --wait --timeout 5");
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json = json_of(&dsa(&endpoint, "background stop com.example.music --json"));
+    assert_eq!(json["stopped"], "com.example.music");
+    assert_eq!(
+        *android.background_requests.lock().unwrap(),
+        vec![BackgroundRequest::App(
+            "com.example.music".into(),
+            BackgroundCommand::Stop
+        )]
+    );
+}
+
+#[test]
+fn fr24_stopping_without_asking_is_a_setting_off_by_default() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["stop_without_asking"], false);
+    let changed = json_of(&dsa(
+        &endpoint,
+        "settings set stop-without-asking on --json",
+    ));
+    assert_eq!(changed["stop_without_asking"], true);
+}

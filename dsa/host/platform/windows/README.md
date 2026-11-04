@@ -204,6 +204,16 @@ after two minutes. `"keep_window_manager": false` turns this off.
   `dsa-wm.exe --notification <uri>`: that passes the click to the service and ends, and the
   app opens in Android, which leaves Doze first. Dismissing a toast dismisses the
   notification in Android too, unless the app keeps it.
+- It shows each app that keeps running in Android with no window, because it runs a
+  foreground service, as an icon in the notification area: the app's icon, with the
+  service's notification as its tooltip. Each icon has a GUID made from the app's package,
+  so Windows remembers per app whether it shows on the taskbar. A click opens the app; the
+  right click menu has Open, the notification's actions and Stop, which asks first (with
+  "Do not ask again", the `stop-without-asking` setting) and then has Android force-stop
+  the app. The icon goes when the service ends. An app's media session gets Windows' media
+  controls (SystemMediaTransportControls) through a hidden window that carries the app's
+  AppUserModelID, so the media keys and the media flyout reach it. The service's ongoing
+  notification is never a toast.
 - It shows the widgets the user placed on the desktop, each in a borderless layered window
   of its own. The window is a tool window owned by the shell's desktop window (`Progman`),
   so it is neither in the taskbar nor in Alt+Tab, stays when the user shows the desktop, and

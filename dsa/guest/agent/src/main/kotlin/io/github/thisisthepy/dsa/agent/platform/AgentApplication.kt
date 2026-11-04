@@ -70,6 +70,8 @@ class AgentApplication : Application() {
             fileOpener = AndroidFileOpener(this),
             clipboard = AndroidClipboard(this, log),
             notifications = AndroidNotifications(this, log),
+            media = AndroidMediaSessions(this, log, android.os.Handler(thread.looper)),
+            stopper = AndroidAppStopper(this, log),
             packageInstaller = AndroidPackageInstaller(this, log),
             packageUninstaller = AndroidPackageUninstaller(this, log),
             packages = AndroidPackageInfo(this),

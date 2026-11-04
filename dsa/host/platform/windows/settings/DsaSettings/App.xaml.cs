@@ -17,6 +17,7 @@ public partial class App : Application
     internal static AppsViewModel Apps { get; } = new(new AppsService(Cli), Text);
     internal static WidgetsViewModel Widgets { get; } = new(Service, Text, Cli);
     internal static DeviceIdentityViewModel DeviceIdentity { get; } = new(Cli, Service, Text);
+    internal static BackgroundViewModel Background { get; } = new(Service, Text);
 
     /// <summary>The argument that names an APK to install: Explorer opens APK files with it, and
     /// the app then shows the APK install window instead of the settings.</summary>

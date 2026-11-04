@@ -43,7 +43,8 @@ public sealed record SettingsInfo(
     bool InputTrace = false,
     bool ResizeTrace = false,
     int MemoryLimitMb = 0,
-    bool ArmTranslation = true)
+    bool ArmTranslation = true,
+    bool StopWithoutAsking = false)
 {
     /// <summary>The loopback port adb connects to in developer mode unless the user picks
     /// another.</summary>
@@ -143,3 +144,16 @@ public sealed record PlacedWidget(int Id, string Provider, string Label, string 
 
 /// <summary>The widgets on offer and the ones placed.</summary>
 public sealed record WidgetList(IReadOnlyList<WidgetOffer> Offers, IReadOnlyList<PlacedWidget> Placed);
+
+/// <summary>An app in Android that keeps running with no window because it runs a foreground
+/// service, with the notification the service keeps shown.</summary>
+public sealed record BackgroundApp(string Package, string Label, string Title, string Text,
+    IReadOnlyList<string> Actions, byte[] IconPng);
+
+/// <summary>An app's active media session: what it plays, and whether it plays
+/// (<c>playing</c>, <c>paused</c> or <c>stopped</c>).</summary>
+public sealed record MediaInfo(string Package, string Label, string Title, string Artist, string Album,
+    string Playback);
+
+/// <summary>The apps that run in the background, and the media sessions.</summary>
+public sealed record BackgroundList(IReadOnlyList<BackgroundApp> Apps, IReadOnlyList<MediaInfo> Media);

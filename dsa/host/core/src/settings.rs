@@ -56,6 +56,9 @@ pub struct Settings {
     /// Whether text copied on the host can be pasted in the user's Android, and the reverse.
     /// On by default.
     pub clipboard: bool,
+    /// Whether stopping an app that runs in the background skips the question that confirms
+    /// it. Off by default, so the first stop asks.
+    pub stop_without_asking: bool,
     /// Whether the service updates DSA itself.
     pub program_updates: bool,
     /// Whether the service downloads new Android images.
@@ -85,6 +88,7 @@ impl Default for Settings {
             links_in_android: false,
             memory_limit_mb: 0,
             clipboard: true,
+            stop_without_asking: false,
             program_updates: true,
             image_updates: true,
             input_trace: false,
@@ -161,6 +165,8 @@ pub struct UserSettings {
     pub adb_port: u16,
     #[serde(default = "yes")]
     pub arm_translation: bool,
+    #[serde(default)]
+    pub stop_without_asking: bool,
 }
 
 impl Default for UserSettings {
@@ -174,6 +180,7 @@ impl Default for UserSettings {
             developer_mode: false,
             adb_port: DEFAULT_ADB_PORT,
             arm_translation: true,
+            stop_without_asking: false,
         }
     }
 }
@@ -190,6 +197,7 @@ impl UserSettings {
             developer_mode: settings.developer_mode,
             adb_port: normalise_adb_port(settings.adb_port),
             arm_translation: settings.arm_translation,
+            stop_without_asking: settings.stop_without_asking,
         }
     }
 }
@@ -345,6 +353,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         links_in_android: mine.links_in_android,
         memory_limit_mb: mine.memory_limit_mb,
         clipboard: mine.clipboard,
+        stop_without_asking: mine.stop_without_asking,
         program_updates: machine.program_updates,
         image_updates: machine.image_updates,
         input_trace: machine.input_trace,
@@ -525,6 +534,7 @@ mod tests {
                     links_in_android: true,
                     memory_limit_mb: 0,
                     clipboard: false,
+                    stop_without_asking: false,
                     program_updates: false,
                     image_updates: true,
                     input_trace: true,
@@ -626,6 +636,34 @@ mod tests {
             )
             .unwrap();
         assert!(!FileSettings::new(&dir).get("uid:1000").unwrap().clipboard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr24_stopping_asks_by_default_and_do_not_ask_again_is_kept() {
+        let dir = scratch("stop");
+        let store = FileSettings::new(&dir);
+        assert!(!store.get("uid:1000").unwrap().stop_without_asking);
+        // A file saved before the setting existed asks.
+        std::fs::create_dir_all(dir.join("users")).unwrap();
+        std::fs::write(
+            dir.join("users").join("uid_1001.json"),
+            r#"{"render_gpu": "display", "clipboard": false}"#,
+        )
+        .unwrap();
+        assert!(!store.get("uid:1001").unwrap().stop_without_asking);
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    stop_without_asking: true,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert!(again.get("uid:1000").unwrap().stop_without_asking);
+        assert!(!again.get("uid:1001").unwrap().stop_without_asking);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -338,6 +338,32 @@ jobs:
             Remove-Item Env:DSA_CLI
           }
 
+      # The "Running in the background" page with apps on it: this runner's Android does not
+      # boot, so a stand-in dsa says a music app and a download run in the background.
+      - name: fr24_settings_app_lists_the_apps_that_run_in_the_background
+        run: |
+          . .github/scripts/installer/setup-ui.ps1
+          New-Item -ItemType Directory -Force screens | Out-Null
+          $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
+          $env:DSA_CLI = (Resolve-Path .github/scripts/apk/fake-dsa.cmd).Path
+          $env:FAKE_DSA_STATE = "$PWD\.scratch\fake-android-unused"
+          $listed = & $env:DSA_CLI background list --json | ConvertFrom-Json
+          if ($listed.apps.Count -ne 2) { throw "the stand-in dsa lists $($listed.apps.Count) apps, not 2" }
+          foreach ($theme in 'light', 'dark') {
+            Set-AppTheme -Dark:($theme -eq 'dark')
+            $app = Start-Process $exe -ArgumentList '--page', 'background' -PassThru
+            $window = Wait-ProcessWindow $app.Id 90
+            if (-not $window) {
+              Show-Desktop "settings-$theme-background-timeout"
+              throw "DSA Settings showed no window within 90 seconds"
+            }
+            Start-Sleep -Seconds 8
+            Save-WindowScreen $window "$PWD\screens\settings-$theme-background.png"
+            if ($app.HasExited) { throw "DSA Settings exited while showing the background apps (code $($app.ExitCode))" }
+            Stop-Process -Id $app.Id -Force
+            $app.WaitForExit(10000) | Out-Null
+          }
+          Remove-Item Env:DSA_CLI
       # In a window as short as the app allows, some navigation items are out of view at
       # first. The mouse wheel over the pane, and Tab through the pane, bring every item into
       # view; the wheel over the page brings its last card into view.

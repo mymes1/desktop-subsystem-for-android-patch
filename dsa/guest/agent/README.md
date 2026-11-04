@@ -62,6 +62,19 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   it. The agent allows its own listener at start (`MANAGE_NOTIFICATION_LISTENERS`). The
   listener is called over binder in the agent's persistent process, so notifications still
   arrive while the device is in Doze.
+- **Apps that run in the background.** An app that runs a foreground service (music, a
+  download, a VPN) keeps running with no window. The agent reads each service's ongoing
+  notification and tells the host which packages run one (`BackgroundApp`: the app's name
+  and icon, the notification's title, text and action titles; one per package, from its
+  latest service), and when a package runs none any more (`BackgroundAppGone`). The host
+  shows each in its notification area. What the user does there comes back as
+  `BackgroundAppAction`: open runs the notification's content intent, an action sends that
+  action's intent, and stop force-stops the package (`ActivityManager.forceStopPackage`,
+  with `FORCE_STOP_PACKAGES`), never the agent or the system. The agent also reads the
+  active media sessions through `MediaSessionManager`, which a notification listener may,
+  and sends each (`MediaSession`: title, artist, album, art of at most 256 pixels, playback
+  state and the commands it takes) until it ends (`MediaSessionGone`); a host media key
+  (`MediaControl`) goes to the session's transport controls.
 - **Widgets.** The agent is the guest's widget host (`AppWidgetHost`, host ID `0x0D5A`).
   It lists the installed widgets for the host's gallery (`WidgetProviders`, in parts under
   256 KiB, with previews of at most 160 pixels and 48 KiB), and places one the host asks for
@@ -431,6 +444,7 @@ A platform app may use framework interfaces the SDK does not publish. The agent 
 | `IWindowManager.get/setWindowingMode` | The display's windowing mode (reflection) |
 | `ActivityOptions.setLaunchWindowingMode` | A freeform window for a launched app (reflection) |
 | `ServiceManager.checkService` | The control daemon's service (reflection) |
+| `ActivityManager.forceStopPackage` | Stopping an app the user stops on the host (reflection) |
 | `Binder.markVintfStability` | Marking the listener the daemon calls as a stable interface (reflection) |
 | `InputManager.injectInputEvent`, `MotionEvent.setActionButton`, `InputEvent.setDisplayId` | Injecting the host's pointer and key input (reflection) |
 | `IActivityTaskManager.setFocusedTask` | Giving a task the input focus before its keys |
@@ -473,6 +487,7 @@ The release APK, `build/outputs/apk/release/dsa-agent-release-unsigned.apk`, is 
 | `src/main/kotlin/.../agent/power/` | The screen, Doze and the battery, as the host asks |
 | `src/main/kotlin/.../agent/clipboard/` | The clipboard shared with the host |
 | `src/main/kotlin/.../agent/notifications/` | The notifications shown on the host |
+| `src/main/kotlin/.../agent/background/` | The apps that run in the background, their media sessions, and stopping them |
 | `src/main/kotlin/.../agent/widgets/` | The widgets placed on the host's desktop |
 | `src/main/kotlin/.../agent/install/` | Installing the APKs the host sends |
 | `src/main/kotlin/.../agent/platform/` | The framework side: the application, task source, actions, windowing, input injection, the input method, binder channel, power controls |

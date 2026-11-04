@@ -1154,5 +1154,52 @@
   </data>
   <data name="UninstallWindow_RefusedDetail" xml:space="preserve">
     <value>{0} was not uninstalled: {1} ({2}).</value>
+  <data name="NavBackground.Content" xml:space="preserve">
+    <value>Running in the background</value>
+  </data>
+  <data name="BackgroundTitle.Text" xml:space="preserve">
+    <value>Running in the background</value>
+  </data>
+  <data name="BackgroundRefreshButton.Content" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="BackgroundIntro.Text" xml:space="preserve">
+    <value>These Android apps keep running after their windows close, because they play music, download files, keep a VPN on or do other work in the background. Each also has an icon in the notification area of the taskbar. Stopping an app ends what it is doing and frees the memory it used.</value>
+  </data>
+  <data name="BackgroundErrorBar.Title" xml:space="preserve">
+    <value>The apps that run in the background could not be read or changed</value>
+  </data>
+  <data name="BackgroundDoneBar.Title" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="BackgroundAppsHeader.Text" xml:space="preserve">
+    <value>Apps</value>
+  </data>
+  <data name="BackgroundNone.Text" xml:space="preserve">
+    <value>No app runs in the background.</value>
+  </data>
+  <data name="BackgroundOpenButton.Content" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="BackgroundStopButton.Content" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="BackgroundStoppingHeader.Text" xml:space="preserve">
+    <value>Stopping apps</value>
+  </data>
+  <data name="BackgroundAskCard.Header" xml:space="preserve">
+    <value>Ask before stopping an app from the notification area</value>
+  </data>
+  <data name="BackgroundAskCard.Description" xml:space="preserve">
+    <value>Turn this back on if you chose not to be asked again.</value>
+  </data>
+  <data name="Background_Playing" xml:space="preserve">
+    <value>Playing {0}</value>
+  </data>
+  <data name="Background_Paused" xml:space="preserve">
+    <value>Paused: {0}</value>
+  </data>
+  <data name="Background_Stopped" xml:space="preserve">
+    <value>{0} was stopped.</value>
   </data>
 </root>
