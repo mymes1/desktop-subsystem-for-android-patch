@@ -924,6 +924,60 @@ pub struct Settings {
     #[prost(bool, tag = "12")]
     pub resize_trace: bool,
 }
+/// Asks for the device identity of the caller's Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetDeviceIdentity {}
+/// Replaces the device identity of the caller's Android with `identity`. Android reads it when
+/// it starts, so a change applies from its next start. A value the service does not accept
+/// changes nothing and is answered with ERROR_CODE_INVALID_SETTING.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetDeviceIdentity {
+    #[prost(message, optional, tag = "1")]
+    pub identity: ::core::option::Option<DeviceIdentity>,
+}
+/// The names and build fingerprint Android reports to apps. An empty value is the image's own.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DeviceIdentity {
+    #[prost(string, tag = "1")]
+    pub manufacturer: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub brand: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub model: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub device: ::prost::alloc::string::String,
+    /// The product name.
+    #[prost(string, tag = "5")]
+    pub name: ::prost::alloc::string::String,
+    /// ro.build.characteristics: comma-separated words such as "tablet".
+    #[prost(string, tag = "6")]
+    pub characteristics: ::prost::alloc::string::String,
+    /// The whole fingerprint, brand/name/device:release/id/incremental:type/tags. When set it is
+    /// the fingerprint, whatever the parts below say.
+    #[prost(string, tag = "7")]
+    pub fingerprint: ::prost::alloc::string::String,
+    #[prost(string, tag = "8")]
+    pub fingerprint_release: ::prost::alloc::string::String,
+    #[prost(string, tag = "9")]
+    pub fingerprint_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "10")]
+    pub fingerprint_incremental: ::prost::alloc::string::String,
+    #[prost(string, tag = "11")]
+    pub fingerprint_type: ::prost::alloc::string::String,
+    #[prost(string, tag = "12")]
+    pub fingerprint_tags: ::prost::alloc::string::String,
+}
+/// The answer to GetDeviceIdentity and SetDeviceIdentity.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DeviceIdentityReport {
+    /// What the user chose; an empty value is the default.
+    #[prost(message, optional, tag = "1")]
+    pub chosen: ::core::option::Option<DeviceIdentity>,
+    /// Every value as Android reports it from its next start. The fingerprint's release, build ID
+    /// and incremental version are empty when the image does not say them.
+    #[prost(message, optional, tag = "2")]
+    pub effective: ::core::option::Option<DeviceIdentity>,
+}
 /// Turns the connection into the accessibility tree of one of the caller's task windows, for a
 /// host accessibility client (a screen reader, an inspection tool) that reads that window.
 /// After the answer (Done), the service sends an AccessibilityTree each time the task's tree
@@ -1062,7 +1116,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 70, 71"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 70, 71, 80, 81"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1140,6 +1194,10 @@ pub mod request {
         WatchLog(super::WatchLog),
         #[prost(message, tag = "71")]
         CollectDiagnostics(super::CollectDiagnostics),
+        #[prost(message, tag = "80")]
+        GetDeviceIdentity(super::GetDeviceIdentity),
+        #[prost(message, tag = "81")]
+        SetDeviceIdentity(super::SetDeviceIdentity),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1148,7 +1206,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 80"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -1184,6 +1242,8 @@ pub mod response {
         Widgets(super::Widgets),
         #[prost(message, tag = "15")]
         PackageState(super::PackageState),
+        #[prost(message, tag = "80")]
+        DeviceIdentity(super::DeviceIdentityReport),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.

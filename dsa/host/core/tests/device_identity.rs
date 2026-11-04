@@ -2,8 +2,8 @@
 
 use dsa_host_core::bootconfig;
 use dsa_host_core::device_identity::{
-    append_overlay, ramdisk_overlay, split_fingerprint, DeviceIdentity, DeviceIdentityStore,
-    Field, FileDeviceIdentities, ImageBuild, MemoryDeviceIdentities, RAMDISK_PROP_PATH,
+    append_overlay, ramdisk_overlay, split_fingerprint, DeviceIdentity, DeviceIdentityStore, Field,
+    FileDeviceIdentities, ImageBuild, MemoryDeviceIdentities, RAMDISK_PROP_PATH,
 };
 
 fn build() -> ImageBuild {
@@ -16,10 +16,8 @@ fn build() -> ImageBuild {
 }
 
 fn scratch(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "dsa-device-identity-{name}-{}",
-        std::process::id()
-    ));
+    let dir =
+        std::env::temp_dir().join(format!("dsa-device-identity-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }
@@ -32,8 +30,11 @@ fn cpio_files(base: &[u8]) -> Vec<(String, u32, Vec<u8>)> {
         let header = &base[at..at + 110];
         assert_eq!(&header[..6], b"070701", "a newc header at {at}");
         let field = |i: usize| {
-            u32::from_str_radix(std::str::from_utf8(&header[6 + i * 8..14 + i * 8]).unwrap(), 16)
-                .unwrap()
+            u32::from_str_radix(
+                std::str::from_utf8(&header[6 + i * 8..14 + i * 8]).unwrap(),
+                16,
+            )
+            .unwrap()
         };
         let mode = field(1);
         let size = field(6) as usize;
@@ -75,10 +76,15 @@ fn fr17_the_defaults_are_dsas_own() {
 
 #[test]
 fn fr17_an_unchanged_identity_adds_nothing_to_the_boot() {
-    assert_eq!(DeviceIdentity::default().boot_properties(Some(&build())), None);
+    assert_eq!(
+        DeviceIdentity::default().boot_properties(Some(&build())),
+        None
+    );
     // Setting a value to its default is no change either.
     let mut identity = DeviceIdentity::default();
-    identity.set(Field::Model, "Desktop Subsystem for Android").unwrap();
+    identity
+        .set(Field::Model, "Desktop Subsystem for Android")
+        .unwrap();
     identity.set(Field::Brand, "DSA").unwrap();
     assert!(identity.is_default());
 }
@@ -92,10 +98,22 @@ fn fr17_a_changed_identity_reaches_every_partition() {
     identity.set(Field::Device, "ex_tab").unwrap();
     identity.set(Field::Name, "ex_tab_x86").unwrap();
     identity.set(Field::Characteristics, "phone").unwrap();
-    let props = identity.boot_properties(Some(&build())).expect("a property file");
+    let props = identity
+        .boot_properties(Some(&build()))
+        .expect("a property file");
 
-    assert_eq!(property(&props, "ro.product.model").as_deref(), Some("Example Tab (2026)"));
-    for partition in ["system", "system_ext", "vendor", "product", "odm", "vendor_dlkm"] {
+    assert_eq!(
+        property(&props, "ro.product.model").as_deref(),
+        Some("Example Tab (2026)")
+    );
+    for partition in [
+        "system",
+        "system_ext",
+        "vendor",
+        "product",
+        "odm",
+        "vendor_dlkm",
+    ] {
         assert_eq!(
             property(&props, &format!("ro.product.{partition}.manufacturer")).as_deref(),
             Some("Example Corp.")
@@ -109,11 +127,26 @@ fn fr17_a_changed_identity_reaches_every_partition() {
             Some("example/ex_tab_x86/ex_tab:16/BP2A.250605.031/13690935.dsa0123456789ab:user/release-keys")
         );
     }
-    assert_eq!(property(&props, "ro.product.brand").as_deref(), Some("example"));
-    assert_eq!(property(&props, "ro.product.name").as_deref(), Some("ex_tab_x86"));
-    assert_eq!(property(&props, "ro.build.characteristics").as_deref(), Some("phone"));
-    assert_eq!(property(&props, "ro.build.product").as_deref(), Some("ex_tab"));
-    assert_eq!(property(&props, "ro.build.flavor").as_deref(), Some("ex_tab_x86-user"));
+    assert_eq!(
+        property(&props, "ro.product.brand").as_deref(),
+        Some("example")
+    );
+    assert_eq!(
+        property(&props, "ro.product.name").as_deref(),
+        Some("ex_tab_x86")
+    );
+    assert_eq!(
+        property(&props, "ro.build.characteristics").as_deref(),
+        Some("phone")
+    );
+    assert_eq!(
+        property(&props, "ro.build.product").as_deref(),
+        Some("ex_tab")
+    );
+    assert_eq!(
+        property(&props, "ro.build.flavor").as_deref(),
+        Some("ex_tab_x86-user")
+    );
     assert_eq!(
         property(&props, "ro.build.fingerprint").as_deref(),
         Some("example/ex_tab_x86/ex_tab:16/BP2A.250605.031/13690935.dsa0123456789ab:user/release-keys")
@@ -135,7 +168,10 @@ fn fr17_fingerprint_parts_and_the_whole_string_combine_as_set() {
     // The whole string wins over its parts for Build.FINGERPRINT; each partition's own
     // fingerprint stays the composed one, which keeps the image's tag.
     identity
-        .set(Field::Fingerprint, "google/oriole/oriole:14/UQ1A.240105.004/11206848:user/release-keys")
+        .set(
+            Field::Fingerprint,
+            "google/oriole/oriole:14/UQ1A.240105.004/11206848:user/release-keys",
+        )
         .unwrap();
     let props = identity.boot_properties(Some(&build())).unwrap();
     assert_eq!(
@@ -151,7 +187,10 @@ fn fr17_fingerprint_parts_and_the_whole_string_combine_as_set() {
     parts_only.set(Field::Brand, "example").unwrap();
     let props = parts_only.boot_properties(None).unwrap();
     assert_eq!(property(&props, "ro.build.fingerprint"), None);
-    assert_eq!(property(&props, "ro.product.brand").as_deref(), Some("example"));
+    assert_eq!(
+        property(&props, "ro.product.brand").as_deref(),
+        Some("example")
+    );
 }
 
 #[test]
@@ -172,9 +211,15 @@ fn fr17_values_that_are_not_allowed_are_refused() {
         (Field::FingerprintType, "debug"),
         (Field::FingerprintRelease, "16:1"),
         (Field::FingerprintTags, "release keys"),
-        (Field::Fingerprint, "DSA/dsa_x86_64:16/ID/1:user/release-keys"),
+        (
+            Field::Fingerprint,
+            "DSA/dsa_x86_64:16/ID/1:user/release-keys",
+        ),
         (Field::Fingerprint, "DSA/dsa/dsa:16/ID/1:root/release-keys"),
-        (Field::Fingerprint, "DSA/dsa/dsa:16/ID/1:user/release-keys:extra"),
+        (
+            Field::Fingerprint,
+            "DSA/dsa/dsa:16/ID/1:user/release-keys:extra",
+        ),
     ];
     for (field, value) in refused {
         let mut identity = DeviceIdentity::default();
@@ -186,9 +231,14 @@ fn fr17_values_that_are_not_allowed_are_refused() {
         assert!(identity.is_default(), "a refused value changed nothing");
     }
     let mut identity = DeviceIdentity::default();
-    identity.set(Field::Characteristics, "tablet,nosdcard").unwrap();
     identity
-        .set(Field::Fingerprint, "DSA/dsa_x86_64/dsa_x86_64:16/BP2A.250605.031/1.dsaab:user/release-keys")
+        .set(Field::Characteristics, "tablet,nosdcard")
+        .unwrap();
+    identity
+        .set(
+            Field::Fingerprint,
+            "DSA/dsa_x86_64/dsa_x86_64:16/BP2A.250605.031/1.dsaab:user/release-keys",
+        )
         .unwrap();
     assert!(split_fingerprint("a/b/c:d/e/f:g/h").is_some());
     assert!(split_fingerprint("a/b/c:d/e/f:g").is_none());
@@ -199,7 +249,9 @@ fn fr17_every_field_has_a_name_the_command_takes() {
     for field in Field::ALL {
         assert_eq!(Field::parse(field.key()).unwrap(), field);
     }
-    assert!(Field::parse("serial").unwrap_err().contains("fingerprint.tags"));
+    assert!(Field::parse("serial")
+        .unwrap_err()
+        .contains("fingerprint.tags"));
 }
 
 #[test]
@@ -210,7 +262,10 @@ fn fr17_the_identity_is_kept_per_user_and_reset_restores_the_defaults() {
     mine.set(Field::Model, "My tablet").unwrap();
     store.set("S-1-5-21-1", &mine).unwrap();
     assert_eq!(store.get("S-1-5-21-1").unwrap().model, "My tablet");
-    assert!(store.get("S-1-5-21-2").unwrap().is_default(), "another user's is untouched");
+    assert!(
+        store.get("S-1-5-21-2").unwrap().is_default(),
+        "another user's is untouched"
+    );
     assert!(dir.join("users").join("S-1-5-21-1.device.json").exists());
 
     // An identity with a value that is not allowed changes nothing.
@@ -224,7 +279,10 @@ fn fr17_the_identity_is_kept_per_user_and_reset_restores_the_defaults() {
     store.set("S-1-5-21-1", &DeviceIdentity::default()).unwrap();
     assert!(store.get("S-1-5-21-1").unwrap().is_default());
     assert!(!dir.join("users").join("S-1-5-21-1.device.json").exists());
-    assert!(store.get("../escape").is_err(), "a user name never leaves the folder");
+    assert!(
+        store.get("../escape").is_err(),
+        "a user name never leaves the folder"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 
     let memory = MemoryDeviceIdentities::default();
@@ -240,7 +298,12 @@ fn fr17_the_identity_file_goes_in_the_initrd_before_the_bootconfig() {
     let names: Vec<&str> = files.iter().map(|(name, _, _)| name.as_str()).collect();
     assert_eq!(
         names,
-        ["system", "system/etc", "system/etc/ramdisk", RAMDISK_PROP_PATH]
+        [
+            "system",
+            "system/etc",
+            "system/etc/ramdisk",
+            RAMDISK_PROP_PATH
+        ]
     );
     assert_eq!(files[0].1 & 0o170000, 0o040000, "a folder");
     assert_eq!(files[3].1, 0o100644, "a plain file init can read");
@@ -268,5 +331,8 @@ fn fr17_the_image_build_comes_from_image_json() {
                      "incremental": "13690935.dsa0123456789ab", "tags": "release-keys"}
     });
     assert_eq!(ImageBuild::from_manifest(&manifest), Some(build()));
-    assert_eq!(ImageBuild::from_manifest(&serde_json::json!({"version": "1"})), None);
+    assert_eq!(
+        ImageBuild::from_manifest(&serde_json::json!({"version": "1"})),
+        None
+    );
 }

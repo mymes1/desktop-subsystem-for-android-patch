@@ -1883,7 +1883,11 @@ pub fn device_identity_is_the_callers_own(make: MakeLocal<'_>) {
         Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::InvalidSetting),
         other => panic!("a bad fingerprint was not refused: {other:?}"),
     }
-    assert_eq!(store.get(&user).unwrap(), wanted, "a refused value changes nothing");
+    assert_eq!(
+        store.get(&user).unwrap(),
+        wanted,
+        "a refused value changes nothing"
+    );
 
     let (chosen, _) = client
         .set_device_identity(&DeviceIdentity::default())

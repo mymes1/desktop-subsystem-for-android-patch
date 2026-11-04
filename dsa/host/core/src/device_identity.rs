@@ -272,8 +272,7 @@ fn fingerprint(value: &str) -> Result<(), String> {
             "the fingerprint is at most {MAX_FINGERPRINT} characters long"
         ));
     }
-    let Some([brand, name, device, release, id, incremental, kind, tag]) =
-        split_fingerprint(value)
+    let Some([brand, name, device, release, id, incremental, kind, tag]) = split_fingerprint(value)
     else {
         return Err(format!("{format}, and {value:?} does not"));
     };
@@ -430,7 +429,9 @@ impl DeviceIdentity {
 
     /// Whether the user changed nothing.
     pub fn is_default(&self) -> bool {
-        Field::ALL.into_iter().all(|field| self.get(field).is_empty())
+        Field::ALL
+            .into_iter()
+            .all(|field| self.get(field).is_empty())
     }
 
     /// Every value as Android will report it: the user's where they chose one, the image's
