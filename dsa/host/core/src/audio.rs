@@ -146,8 +146,7 @@ impl JitterBuffer {
                 // The guest skipped frames: keep the timeline with silence, but never more
                 // than the queue can hold.
                 let gap = ((position - next) as usize).min(self.max_frames);
-                self.samples
-                    .extend(std::iter::repeat(0).take(gap * CHANNELS as usize));
+                self.samples.resize(self.samples.len() + gap * CHANNELS as usize, 0);
                 self.stats.gap_frames += gap as u64;
             } else if position < next {
                 // Frames already queued, sent again.
@@ -572,8 +571,9 @@ pub fn serve_port(
                 let spawned = thread::Builder::new()
                     .name("dsa-audio-stream".into())
                     .spawn(move || {
-                        let line = |l: &str| stream_log(l);
-                        if let Err(e) = serve_stream(connection.as_mut(), &*device, &build, &line) {
+                        if let Err(e) =
+                            serve_stream(connection.as_mut(), &*device, &build, &*stream_log)
+                        {
                             stream_log(&e);
                         }
                         stream_active.fetch_sub(1, Ordering::SeqCst);
