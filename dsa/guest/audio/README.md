@@ -3,7 +3,8 @@
 `dsa-audio` is the guest's primary audio module (`android.hardware.audio.core.IModule/default`,
 version 4). audioserver mixes every app's sound into its one output stream, as on any
 device, and the module sends that sound to the host, which plays it on the user's default
-output device.
+output device. Its input is the host's microphone: what the user's default capture device
+records reaches apps that record, through the same port.
 
 ## How sound travels
 
@@ -30,8 +31,29 @@ stream's sound is dropped and the module connects again each second. The guest p
 silent, and nothing in it waits.
 
 The volume and the mute stay the mixer's: the module says it has neither, so audioserver
-applies them to the sound before the module sees it. The module records nothing, has no
-external devices and no direct or offloaded outputs.
+applies them to the sound before the module sees it. The module has no external devices
+and no direct or offloaded outputs.
+
+## How the microphone travels
+
+1. The module has a second mix port, primary input (48 kHz, stereo, 16-bit), and a
+   device port, Built-In Mic, routed into it. audioserver converts to whatever an app
+   asked for.
+2. An app records only with the RECORD_AUDIO permission, which the framework checks
+   before it opens a stream; nothing here changes that.
+3. When audioserver opens an input stream, the module connects to the host's audio port
+   (src/input_link.cpp), says Hello and sends AudioInputOpen. The host opens the
+   user's default capture device and answers AudioInputOpened. When the host lets no
+   program record (the user turned the microphone off for desktop apps in the privacy
+   settings) or has no microphone, the answer carries the reason, the open fails, and the
+   app's recording fails with it.
+4. While the stream is open, the host sends what it records as AudioPcm, and the link
+   queues it (src/capture_queue.cpp). The stream's thread
+   (src/input_stream_logic.cpp) hands it to the framework at the guest's own pace, and
+   gives silence for what has not arrived, so a slow host never holds up the recording.
+   setMicMute silences it.
+5. Closing the stream closes the connection, and the host closes its capture device, so
+   the device is open only while an app records.
 
 ## In the image
 

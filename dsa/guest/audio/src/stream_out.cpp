@@ -11,37 +11,16 @@
 #include <cstring>
 
 #include "log.h"
+#include "stream_support.h"
 
 namespace dsa::audio {
 
 using core::StreamDescriptor;
-using ::aidl::android::hardware::common::fmq::GrantorDescriptor;
-using ::aidl::android::hardware::common::fmq::MQDescriptor;
-using ::aidl::android::hardware::common::fmq::SynchronizedReadWrite;
+using namespace support;
 
 namespace {
 
 constexpr int32_t kFrameBytes = 4;
-// How long the stream's thread waits for a command before it checks whether it was closed.
-constexpr int64_t kCommandWaitNs = 100 * 1000 * 1000;
-// The platform's ANDROID_PRIORITY_URGENT_AUDIO.
-constexpr int kUrgentAudioPriority = -19;
-
-class MonotonicClock final : public Clock {
-   public:
-    int64_t nowNs() override {
-        timespec now{};
-        clock_gettime(CLOCK_MONOTONIC, &now);
-        return static_cast<int64_t>(now.tv_sec) * 1000000000 + now.tv_nsec;
-    }
-    void sleepUntilNs(int64_t deadline) override {
-        timespec until{};
-        until.tv_sec = static_cast<time_t>(deadline / 1000000000);
-        until.tv_nsec = static_cast<long>(deadline % 1000000000);
-        while (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &until, nullptr) == EINTR) {
-        }
-    }
-};
 
 class QueueSource final : public PcmSource {
    public:
@@ -51,78 +30,6 @@ class QueueSource final : public PcmSource {
    private:
     SharedQueue& mQueue;
 };
-
-template <typename T>
-MQDescriptor<T, SynchronizedReadWrite> describe(const SharedQueue& queue) {
-    MQDescriptor<T, SynchronizedReadWrite> descriptor;
-    for (int i = 0; i < queue.grantorCount(); ++i) {
-        const Grantor g = queue.grantor(i);
-        GrantorDescriptor grantor;
-        grantor.fdIndex = g.fdIndex;
-        grantor.offset = g.offset;
-        grantor.extent = g.extent;
-        descriptor.grantors.push_back(grantor);
-    }
-    descriptor.handle.fds.emplace_back(dup(queue.fd()));
-    descriptor.quantum = queue.quantum();
-    descriptor.flags = kSynchronizedReadWrite;
-    return descriptor;
-}
-
-Command toCommand(const StreamDescriptor::Command& command) {
-    using Tag = StreamDescriptor::Command::Tag;
-    Command c;
-    switch (command.getTag()) {
-        case Tag::halReservedExit:
-            c.kind = Command::Kind::Exit;
-            break;
-        case Tag::getStatus:
-            c.kind = Command::Kind::GetStatus;
-            break;
-        case Tag::start:
-            c.kind = Command::Kind::Start;
-            break;
-        case Tag::burst:
-            c.kind = Command::Kind::Burst;
-            c.bytes = command.get<Tag::burst>();
-            break;
-        case Tag::drain:
-            c.kind = Command::Kind::Drain;
-            break;
-        case Tag::standby:
-            c.kind = Command::Kind::Standby;
-            break;
-        case Tag::pause:
-            c.kind = Command::Kind::Pause;
-            break;
-        case Tag::flush:
-            c.kind = Command::Kind::Flush;
-            break;
-        case Tag::flushFromFrame:
-            // The module tells the framework it cannot flush from a frame.
-            c.kind = Command::Kind::Unsupported;
-            break;
-    }
-    return c;
-}
-
-StreamDescriptor::Reply toReply(const Reply& r) {
-    StreamDescriptor::Reply reply;
-    reply.status = r.status;
-    reply.fmqByteCount = r.fmqByteCount;
-    reply.observable.frames = r.observableFrames;
-    reply.observable.timeNs = r.observableTimeNs;
-    reply.hardware.frames = r.hardwareFrames;
-    reply.hardware.timeNs = r.hardwareTimeNs;
-    reply.latencyMs = r.latencyMs;
-    reply.xrunFrames = r.xrunFrames;
-    reply.state = static_cast<StreamDescriptor::State>(static_cast<int32_t>(r.state));
-    return reply;
-}
-
-ndk::ScopedAStatus unsupported() {
-    return ndk::ScopedAStatus::fromExceptionCode(EX_UNSUPPORTED_OPERATION);
-}
 
 }  // namespace
 
@@ -151,7 +58,11 @@ std::shared_ptr<StreamOut> StreamOut::create(int32_t portConfigId, int64_t buffe
     descriptor->frameSizeBytes = kFrameBytes;
     descriptor->bufferSizeFrames = bufferFrames;
     descriptor->audio.set<StreamDescriptor::AudioBuffer::Tag::fmq>(describe<int8_t>(stream->mData));
-    stream->mCommon = ndk::SharedRefBase::make<StreamCommon>(stream);
+    std::weak_ptr<StreamOut> weak = stream;
+    stream->mCommon = ndk::SharedRefBase::make<StreamCommon>([weak] {
+        auto open = weak.lock();
+        return open != nullptr && open->close();
+    });
     stream->mHost = std::make_unique<HostLink>("primary", static_cast<uint32_t>(bufferFrames),
                                                connectToHost);
     stream->mWorker = std::thread([raw = stream.get()] { raw->work(); });
@@ -236,8 +147,7 @@ ndk::ScopedAStatus StreamOut::setPlaybackRateParameters(const media::AudioPlayba
 ndk::ScopedAStatus StreamOut::selectPresentation(int32_t, int32_t) { return unsupported(); }
 
 ndk::ScopedAStatus StreamCommon::close() {
-    auto stream = mStream.lock();
-    if (stream == nullptr || !stream->close()) {
+    if (!mClose || !mClose()) {
         return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_STATE);
     }
     return ndk::ScopedAStatus::ok();

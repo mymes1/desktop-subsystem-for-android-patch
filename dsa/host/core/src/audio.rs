@@ -8,18 +8,24 @@
 //! from that queue at the device's pace through a [`Renderer`], which converts to the device's
 //! format. When the queue runs dry the device plays silence; nothing ever waits on the guest.
 //!
-//! Nothing here names a host operating system API. The platform supplies the device through
+//! The same port carries the microphone. A connection that opens with AudioInputOpen is an
+//! input stream: the host opens the default capture device for as long as the connection is
+//! open, and sends what it records to the guest as it comes ([`serve_stream`]). When the host
+//! lets no program record, the guest is told why and the stream does not open.
+//!
+//! Nothing here names a host operating system API. The platform supplies the devices through
 //! [`AudioDevice`].
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::thread;
 use std::time::Duration;
 
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
-    AudioOutputCommand, AudioOutputOpen, AudioOutputReady, AudioSampleFormat, Envelope, Role,
+    AudioInputOpen, AudioInputOpened, AudioOutputCommand, AudioOutputOpen, AudioOutputReady,
+    AudioPcm, AudioSampleFormat, Envelope, Role,
 };
 use dsa_protocol::handshake::{host_accept_open, local_hello};
 use dsa_protocol::{decode, encode};
@@ -384,11 +390,33 @@ pub trait Playback: Send {
     }
 }
 
-/// The host's output device.
+/// Takes what the capture device records: whole frames of the guest's format (48 kHz, stereo,
+/// little-endian 16-bit). It runs on the device's thread and never waits.
+pub type CaptureSink = Box<dyn FnMut(&[u8]) + Send>;
+
+/// One stream recording from the capture device. Dropping it stops the recording and closes
+/// the device.
+pub trait Recording: Send {
+    /// The device's own delay, in frames at the guest's rate, when known.
+    fn device_frames(&self) -> u32 {
+        0
+    }
+}
+
+/// The host's output and capture devices.
 pub trait AudioDevice: Send + Sync {
     /// Starts playing what `source` holds on the user's default output device, following it
     /// when the user picks another. `name` names the stream in the log.
     fn play(&self, name: &str, source: SharedBuffer) -> Result<Box<dyn Playback>, String>;
+
+    /// Opens the user's default capture device and hands what it records to `sink` until the
+    /// returned recording is dropped. Fails, with the reason in words, when the host lets no
+    /// program record (the user turned the microphone off in the privacy settings) or has no
+    /// capture device.
+    fn record(&self, name: &str, sink: CaptureSink) -> Result<Box<dyn Recording>, String> {
+        let _ = (name, sink);
+        Err("this host has no capture device".into())
+    }
 }
 
 /// How one stream on the audio port ended.
@@ -401,24 +429,32 @@ pub struct StreamEnd {
     pub reason: String,
 }
 
-fn refuse_format(open: &AudioOutputOpen) -> Option<String> {
-    if open.sample_rate != SAMPLE_RATE
-        || open.channel_count != u32::from(CHANNELS)
-        || open.format != AudioSampleFormat::S16le as i32
+fn refuse_format(sample_rate: u32, channel_count: u32, format: i32) -> Option<String> {
+    if sample_rate != SAMPLE_RATE
+        || channel_count != u32::from(CHANNELS)
+        || format != AudioSampleFormat::S16le as i32
     {
         return Some(format!(
-            "the guest asked for {} Hz, {} channels, sample format {}; the host plays only \
-             {SAMPLE_RATE} Hz, {CHANNELS} channels, 16-bit",
-            open.sample_rate, open.channel_count, open.format
+            "the guest asked for {sample_rate} Hz, {channel_count} channels, sample format \
+             {format}; the host takes only {SAMPLE_RATE} Hz, {CHANNELS} channels, 16-bit"
         ));
     }
     None
 }
 
-/// Serves one connection on the audio port until the guest closes it: the handshake, the
-/// stream's format, then its sound and its state. The device plays only while the stream is
-/// started, and what the guest sends never makes this wait or panic: a bad message ends this
-/// stream, and nothing else. `log` takes lines for the host's log.
+fn stream_name(name: &str) -> String {
+    if name.is_empty() {
+        "unnamed".to_string()
+    } else {
+        name.chars().take(64).collect()
+    }
+}
+
+/// Serves one connection on the audio port until the guest closes it: the handshake, then
+/// either an output stream (its format, its sound and its state) or an input stream (its
+/// format, then the capture device's sound sent back). What the guest sends never makes
+/// this wait or panic: a bad message ends this stream, and nothing else. `log` takes lines
+/// for the host's log.
 pub fn serve_stream(
     connection: &mut dyn Connection,
     device: &dyn AudioDevice,
@@ -428,25 +464,149 @@ pub fn serve_stream(
     let local = local_hello(Role::Host, build);
     host_accept_open(connection, &local, Role::GuestAudio, OPEN_TIMEOUT)
         .map_err(|e| format!("audio stream refused: {e}"))?;
-    let open = match connection.recv(Some(OPEN_TIMEOUT)).map(|f| decode(&f)) {
+    match connection.recv(Some(OPEN_TIMEOUT)).map(|f| decode(&f)) {
         Ok(Ok(Envelope {
             body: Some(Body::AudioOutputOpen(open)),
-        })) => open,
+        })) => serve_output(connection, open, device, log),
+        Ok(Ok(Envelope {
+            body: Some(Body::AudioInputOpen(open)),
+        })) => serve_input(connection, open, device, log),
         Ok(_) => {
             connection.close();
-            return Err("the audio stream did not start with its format".into());
+            Err("the audio stream did not start with its format".into())
         }
-        Err(e) => return Err(format!("the audio stream ended before its format: {e}")),
-    };
-    if let Some(why) = refuse_format(&open) {
+        Err(e) => Err(format!("the audio stream ended before its format: {e}")),
+    }
+}
+
+/// How long the input stream waits for the capture device before it looks at the connection.
+const INPUT_POLL: Duration = Duration::from_millis(10);
+
+/// The recorded pieces the host holds while the connection does not take them: about half a
+/// second of the 10 ms pieces a shared-mode device delivers. Past this the newest is dropped,
+/// so the capture device never waits.
+const INPUT_QUEUE: usize = 50;
+
+/// An input stream: opens the capture device for as long as the connection is open, and
+/// sends each piece it records to the guest. A device that does not open is the guest's
+/// error to report: the host says why in AudioInputOpened, closes the connection and goes on.
+fn serve_input(
+    connection: &mut dyn Connection,
+    open: AudioInputOpen,
+    device: &dyn AudioDevice,
+    log: &dyn Fn(&str),
+) -> Result<StreamEnd, String> {
+    if let Some(why) = refuse_format(open.sample_rate, open.channel_count, open.format) {
         connection.close();
         return Err(why);
     }
-    let name = if open.name.is_empty() {
-        "unnamed".to_string()
-    } else {
-        open.name.chars().take(64).collect()
+    let name = stream_name(&open.name);
+    let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE);
+    let dropped = Arc::new(AtomicU64::new(0));
+    let sink: CaptureSink = {
+        let dropped = Arc::clone(&dropped);
+        Box::new(move |pcm: &[u8]| {
+            let whole = pcm.len() / BYTES_PER_FRAME * BYTES_PER_FRAME;
+            if whole == 0 {
+                return;
+            }
+            if tx.try_send(pcm[..whole].to_vec()).is_err() {
+                dropped.fetch_add((whole / BYTES_PER_FRAME) as u64, Ordering::Relaxed);
+            }
+        })
     };
+    let recording = match device.record(&name, sink) {
+        Ok(recording) => recording,
+        Err(why) => {
+            let _ = connection.send(&encode(&Envelope {
+                body: Some(Body::AudioInputOpened(AudioInputOpened {
+                    error: why.clone(),
+                    device_frames: 0,
+                })),
+            }));
+            connection.close();
+            return Err(format!("audio input {name} did not open: {why}"));
+        }
+    };
+    let device_frames = recording.device_frames();
+    connection
+        .send(&encode(&Envelope {
+            body: Some(Body::AudioInputOpened(AudioInputOpened {
+                error: String::new(),
+                device_frames,
+            })),
+        }))
+        .map_err(|e| format!("audio input {name}: {e}"))?;
+    log(&format!("audio input {name} opened"));
+    let mut position = 0u64;
+    let mut stats = BufferStats::default();
+    let reason = 'serve: loop {
+        let mut pieces = Vec::new();
+        match rx.recv_timeout(INPUT_POLL) {
+            Ok(piece) => pieces.push(piece),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                break "the capture device stopped".to_string()
+            }
+        }
+        pieces.extend(rx.try_iter());
+        for data in pieces {
+            let frames = (data.len() / BYTES_PER_FRAME) as u64;
+            let pcm = AudioPcm { position, data };
+            if let Err(e) = connection.send(&encode(&Envelope {
+                body: Some(Body::AudioPcm(pcm)),
+            })) {
+                break 'serve e.to_string();
+            }
+            position += frames;
+            stats.received_frames += frames;
+        }
+        // The guest sends nothing more on an input stream; this only notices it closing.
+        match connection.recv(Some(Duration::from_millis(1))) {
+            Ok(frame) => match decode(&frame) {
+                Ok(Envelope { body: Some(other) }) => log(&format!(
+                    "audio input {name}: ignored a message that is not for an input stream ({})",
+                    body_name(&other)
+                )),
+                Ok(Envelope { body: None }) => {}
+                Err(e) => break e.to_string(),
+            },
+            Err(TransportError::Timeout) => {}
+            Err(TransportError::Closed) => break "the guest closed it".to_string(),
+            Err(e) => break e.to_string(),
+        }
+    };
+    // The capture device closes before the connection does, so it is open only while the
+    // guest's stream is.
+    drop(recording);
+    connection.close();
+    // What was recorded and not yet sent when the stream ended.
+    let unsent: usize = rx.try_iter().map(|piece| piece.len() / BYTES_PER_FRAME).sum();
+    stats.dropped_frames = dropped.load(Ordering::Relaxed) + unsent as u64;
+    log(&format!(
+        "audio input {name} closed ({reason}): {} frames sent, {} dropped, device delay \
+         {device_frames} frames",
+        stats.received_frames, stats.dropped_frames
+    ));
+    Ok(StreamEnd {
+        name,
+        stats,
+        reason,
+    })
+}
+
+/// An output stream: plays what the guest sends while it is started.
+fn serve_output(
+    connection: &mut dyn Connection,
+    open: AudioOutputOpen,
+    device: &dyn AudioDevice,
+    log: &dyn Fn(&str),
+) -> Result<StreamEnd, String> {
+    if let Some(why) = refuse_format(open.sample_rate, open.channel_count, open.format) {
+        connection.close();
+        return Err(why);
+    }
+    let name = stream_name(&open.name);
     let source = SharedBuffer::default();
     let mut playback: Option<Box<dyn Playback>> = None;
     let mut device_frames = 0;
@@ -535,6 +695,9 @@ fn body_name(body: &Body) -> &'static str {
         Body::Hello(_) => "Hello",
         Body::AudioOutputOpen(_) => "AudioOutputOpen",
         Body::AudioOutputReady(_) => "AudioOutputReady",
+        Body::AudioInputOpen(_) => "AudioInputOpen",
+        Body::AudioPcm(_) => "AudioPcm",
+        Body::AudioOutputControl(_) => "AudioOutputControl",
         _ => "another message",
     }
 }

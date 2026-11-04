@@ -17,13 +17,15 @@
 //! ([`links`]). It shows the notifications of the user's Android as toasts, and passes the
 //! user's dismissals back ([`notifications`]). It shows the widgets the user placed on the
 //! desktop, each in a borderless window of its own on the desktop ([`widgets`]). It plays the
-//! sound of the user's Android on their default output device ([`audio`]).
+//! sound of the user's Android on their default output device ([`audio`]), and records
+//! their default capture device for its microphone ([`microphone`]).
 
 pub mod adapter;
 pub mod audio;
 pub mod clipboard;
 pub mod display_gpu;
 pub mod frames;
+pub mod microphone;
 pub mod hosts;
 pub mod links;
 pub mod log;

@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // The primary audio module (IModule/default): one output, the speaker, which is the host's
-// default output device. Its one mix port plays 48 kHz stereo 16-bit sound, the format the
-// host's audio port takes, so the framework's mixer converts everything else before it
-// reaches the stream. There is no input and no external device.
+// default output device, and one input, the built-in microphone, which is the host's default
+// capture device. Each has one mix port of 48 kHz stereo 16-bit sound, the format the host's
+// audio port carries, so the framework converts everything else on its side. There is no
+// external device.
 //
 // The framework learns the module's ports and routes from here, builds audio policy from
 // them, and then asks for a configuration of the mix port, a patch from it to the speaker,
@@ -15,6 +16,7 @@
 
 #include <aidl/android/hardware/audio/core/BnModule.h>
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -25,6 +27,7 @@ namespace dsa::audio {
 namespace core = ::aidl::android::hardware::audio::core;
 namespace media = ::aidl::android::media::audio::common;
 
+class StreamIn;
 class StreamOut;
 
 // The module's fixed ports and the IDs it hands out.
@@ -32,6 +35,10 @@ constexpr int32_t kMixPortId = 1;
 constexpr int32_t kSpeakerPortId = 2;
 // The speaker's own configuration, which always exists, has the port's ID.
 constexpr int32_t kSpeakerConfigId = kSpeakerPortId;
+// The input: its mix port, and the microphone with its own configuration.
+constexpr int32_t kInputMixPortId = 3;
+constexpr int32_t kMicPortId = 4;
+constexpr int32_t kMicConfigId = kMicPortId;
 // IDs of configurations the framework asks for start here.
 constexpr int32_t kFirstConfigId = 100;
 
@@ -109,6 +116,7 @@ class Module final : public core::BnModule {
     std::vector<media::AudioPortConfig>::iterator findConfig(int32_t id);
     bool configInUse(int32_t id) const;
     void streamClosed(int32_t portConfigId);
+    void inputClosed(int32_t portConfigId);
 
     std::mutex mLock;
     std::vector<media::AudioPort> mPorts;
@@ -117,9 +125,12 @@ class Module final : public core::BnModule {
     std::vector<core::AudioPatch> mPatches;
     // The open streams, by the mix port configuration they play.
     std::map<int32_t, std::weak_ptr<StreamOut>> mStreams;
+    // The open input streams, by the mix port configuration they record.
+    std::map<int32_t, std::weak_ptr<StreamIn>> mInputs;
     int32_t mNextConfigId = kFirstConfigId;
     int32_t mNextPatchId = 1;
-    bool mMicMute = false;
+    // Read by the input stream's thread, which never takes the module's lock.
+    std::shared_ptr<std::atomic<bool>> mMicMute = std::make_shared<std::atomic<bool>>(false);
 };
 
 }  // namespace dsa::audio

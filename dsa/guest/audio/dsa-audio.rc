@@ -1,5 +1,6 @@
 # The guest's primary audio module, which plays the guest's sound on the host's default
-# output device. audioserver holds its streams, so a restart of the module restarts it too.
+# output device and records from its default capture device. audioserver holds its streams,
+# so a restart of the module restarts it too.
 service vendor.dsa-audio /vendor/bin/hw/dsa-audio
     class hal
     user audioserver
