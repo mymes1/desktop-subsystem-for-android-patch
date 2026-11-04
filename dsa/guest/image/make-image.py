@@ -808,6 +808,7 @@ IDENTITY_PROP_FILES = {
     "ODM_DLKM/etc/build.prop",
     "SYSTEM_DLKM/etc/build.prop",
     "INIT_BOOT/RAMDISK/system/etc/ramdisk/build.prop",
+    "BOOT/RAMDISK/system/etc/ramdisk/build.prop",
 }
 PRODUCT_PROP_FILE = "PRODUCT/etc/build.prop"
 

@@ -2212,6 +2212,7 @@ class DeviceIdentityTests(unittest.TestCase):
                          "DSA/dsa_x86_64/dsa_x86_64:16/BP4A/1.dsaab:user/test-keys")
         self.assertIn("VENDOR_DLKM/etc/build.prop", make_image.IDENTITY_PROP_FILES)
         self.assertIn("INIT_BOOT/RAMDISK/system/etc/ramdisk/build.prop", make_image.IDENTITY_PROP_FILES)
+        self.assertIn("BOOT/RAMDISK/system/etc/ramdisk/build.prop", make_image.IDENTITY_PROP_FILES)
 
     def test_fr17_the_product_props_import_the_identity_the_boot_carries(self):
         text = make_image.edit_props("ro.product.product.brand=Android\n", product=True)
