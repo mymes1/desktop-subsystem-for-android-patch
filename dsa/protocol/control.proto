@@ -1335,13 +1335,13 @@ message Envelope {
     DiagnosticsFile diagnostics_file = 134;
     DiagnosticsDone diagnostics_done = 135;
     StopApp stop_app = 136;
-    CameraList camera_list = 200;
-    CameraOpen camera_open = 201;
-    CameraOpened camera_opened = 202;
-    CameraFrame camera_frame = 203;
-    CameraStop camera_stop = 204;
-    CameraStill camera_still = 205;
-    CameraStillTaken camera_still_taken = 206;
-    CameraError camera_error = 207;
+    CameraList camera_list = 260;
+    CameraOpen camera_open = 261;
+    CameraOpened camera_opened = 262;
+    CameraFrame camera_frame = 263;
+    CameraStop camera_stop = 264;
+    CameraStill camera_still = 265;
+    CameraStillTaken camera_still_taken = 266;
+    CameraError camera_error = 267;
   }
 }
