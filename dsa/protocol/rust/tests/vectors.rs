@@ -30,6 +30,9 @@ use dsa_protocol::control::{
     LogRecords, LogStream, VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen,
     VideoFlush, VideoFrame, VideoPacket,
 };
+use dsa_protocol::control::{
+    SensorActivate, SensorDescription, SensorKind, SensorList, SensorReading, SensorReadings,
+};
 use dsa_protocol::{decode, encode};
 
 /// The key of the notification in the notification cases.
@@ -910,6 +913,37 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
             wrap(Body::DiagnosticsDone(DiagnosticsDone {
                 request_id: 3,
                 error: "the agent did not answer".into(),
+            })),
+        ),
+        (
+            "sensor_list",
+            wrap(Body::SensorList(SensorList {
+                sensors: vec![SensorDescription {
+                    kind: SensorKind::Gyroscope as i32,
+                    name: "Gyro".into(),
+                    vendor: String::new(),
+                    max_range: 2.0,
+                    resolution: 0.0,
+                    min_interval_us: 16000,
+                }],
+            })),
+        ),
+        (
+            "sensor_activate",
+            wrap(Body::SensorActivate(SensorActivate {
+                kind: SensorKind::Accelerometer as i32,
+                enabled: true,
+                interval_us: 20000,
+            })),
+        ),
+        (
+            "sensor_readings",
+            wrap(Body::SensorReadings(SensorReadings {
+                readings: vec![SensorReading {
+                    kind: SensorKind::Light as i32,
+                    timestamp_us: 1000,
+                    values: vec![2.5],
+                }],
             })),
         ),
     ])

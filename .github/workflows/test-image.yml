@@ -15,6 +15,7 @@ on:
       - "dsa/guest/channeld/**"
       - "dsa/guest/hwcomposer/**"
       - "dsa/guest/codec2/**"
+      - "dsa/guest/sensors/**"
       - "dsa/guest/power/**"
       - "dsa/guest/aidl/**"
       - "dsa/guest/transport/**"
@@ -228,6 +229,40 @@ jobs:
             .scratch/build-power/dsa-health
           if-no-files-found: error
 
+  sensors:
+    name: Build the guest sensors HAL
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+
+      # aidl comes from the runner's Android SDK build-tools.
+      - name: Build dsa-sensors for the guest
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: bash dsa/guest/sensors/build.sh .scratch .scratch/build-sensors
+
+      - name: Verify the binary links only the platform's C libraries
+        run: |
+          target=".scratch/build-sensors/dsa-sensors"
+          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
+          echo "needs: $needed"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
+
+      - name: Keep the sensors HAL
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-sensors
+          path: .scratch/build-sensors/dsa-sensors
+          if-no-files-found: error
+
   agent:
     name: Build the guest agent
     runs-on: ubuntu-latest
@@ -259,7 +294,7 @@ jobs:
 
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }})
-    needs: [guest-graphics, channeld, hwcomposer, power-hal, codec2, agent]
+    needs: [guest-graphics, channeld, hwcomposer, power-hal, codec2, sensors, agent]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -364,6 +399,16 @@ jobs:
         run: |
           uv run dsa/graphics/check-guest-driver.py --executable .scratch/codec2/dsa-codec2 .scratch/aosp-inputs/*/*target_files*.zip
 
+      - name: Download the guest sensors HAL
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-sensors
+          path: .scratch/sensors
+
+      - name: Check the sensors HAL starts on the image
+        run: |
+          uv run dsa/graphics/check-guest-driver.py --executable .scratch/sensors/dsa-sensors .scratch/aosp-inputs/*/*target_files*.zip
+
       - name: Download the guest power and health HALs
         uses: actions/download-artifact@v4
         with:
@@ -389,6 +434,7 @@ jobs:
           args+=(--channeld .scratch/channeld/dsa-channeld)
           args+=(--hwcomposer .scratch/hwcomposer/dsa-hwcomposer)
           args+=(--codec2 .scratch/codec2/dsa-codec2)
+          args+=(--sensors .scratch/sensors/dsa-sensors)
           args+=(--power-hal .scratch/power-hal)
           args+=(--agent .scratch/agent/DsaAgent.apk)
           args+=(--aapt2 .scratch/build-tools/aapt2)

@@ -35,6 +35,9 @@ enum Role {
   // The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
   // host asks it for no secret, and the control port refuses it.
   ROLE_GUEST_VIDEO = 4;
+  // The guest's sensors HAL, on the sensor port. It reads the host's sensors and nothing
+  // else, so the host asks it for no secret, and the control port refuses it.
+  ROLE_GUEST_SENSORS = 10;
 }
 
 // The first frame on a new connection, sent by the guest. The host checks it, then asks the
@@ -809,6 +812,64 @@ message VideoError {
   string error = 1;
 }
 
+// The sensor port: the host's motion and light sensors, shown to the guest by its sensors
+// HAL. The HAL opens the connection with a Hello of ROLE_GUEST_SENSORS; the host answers
+// HelloAccepted and then a SensorList. The host runs a sensor only while the HAL has it on
+// (SensorActivate), and stops every sensor when the connection ends.
+
+// A sensor the host can show to the guest. Values reach the guest in Android's units and on
+// Android's axes: the host converts them.
+enum SensorKind {
+  SENSOR_KIND_UNSPECIFIED = 0;
+  // Acceleration including gravity, in m/s^2: x, y, z.
+  SENSOR_KIND_ACCELEROMETER = 1;
+  // Rate of rotation, in rad/s: x, y, z.
+  SENSOR_KIND_GYROSCOPE = 2;
+  // The device's orientation as a unit quaternion: x, y, z, w.
+  SENSOR_KIND_ROTATION_VECTOR = 3;
+  // Illuminance, in lux.
+  SENSOR_KIND_LIGHT = 4;
+}
+
+// One sensor this computer has. `max_range` and `resolution` are in the kind's units;
+// `min_interval_us` is the shortest time between readings it gives.
+message SensorDescription {
+  SensorKind kind = 1;
+  string name = 2;
+  string vendor = 3;
+  float max_range = 4;
+  float resolution = 5;
+  uint32 min_interval_us = 6;
+}
+
+// Host to guest, on the sensor port: the sensors this computer has. A sensor it does not
+// have, or that the host's privacy settings do not let DSA read, is not in the list. Sent once, after
+// HelloAccepted.
+message SensorList {
+  repeated SensorDescription sensors = 1;
+}
+
+// Guest to host, on the sensor port: start the sensor, with a reading about every
+// `interval_us`, or stop it.
+message SensorActivate {
+  SensorKind kind = 1;
+  bool enabled = 2;
+  uint32 interval_us = 3;
+}
+
+// One reading. `timestamp_us` is on the host's monotonic clock, so the guest can space the
+// readings that arrive together; `values` are in the order SensorKind gives.
+message SensorReading {
+  SensorKind kind = 1;
+  uint64 timestamp_us = 2;
+  repeated float values = 3;
+}
+
+// Host to guest, on the sensor port: the readings since the last message, oldest first.
+message SensorReadings {
+  repeated SensorReading readings = 1;
+}
+
 // Guest to host, from the control daemon: the answer to a ClockProbe, sent as soon as the
 // probe is read.
 message ClockAnswer {
@@ -1224,5 +1285,8 @@ message Envelope {
     DiagnosticsFile diagnostics_file = 134;
     DiagnosticsDone diagnostics_done = 135;
     StopApp stop_app = 136;
+    SensorList sensor_list = 200;
+    SensorActivate sensor_activate = 201;
+    SensorReadings sensor_readings = 202;
   }
 }

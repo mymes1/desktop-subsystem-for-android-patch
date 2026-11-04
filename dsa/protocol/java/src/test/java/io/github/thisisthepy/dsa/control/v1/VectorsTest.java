@@ -517,6 +517,27 @@ public final class VectorsTest {
                         .setRequestId(3)
                         .setError("the agent did not answer"))
                 .build());
+        cases.put("sensor_list", Envelope.newBuilder()
+                .setSensorList(SensorList.newBuilder()
+                        .addSensors(SensorDescription.newBuilder()
+                                .setKind(SensorKind.SENSOR_KIND_GYROSCOPE)
+                                .setName("Gyro")
+                                .setMaxRange(2.0f)
+                                .setMinIntervalUs(16000)))
+                .build());
+        cases.put("sensor_activate", Envelope.newBuilder()
+                .setSensorActivate(SensorActivate.newBuilder()
+                        .setKind(SensorKind.SENSOR_KIND_ACCELEROMETER)
+                        .setEnabled(true)
+                        .setIntervalUs(20000))
+                .build());
+        cases.put("sensor_readings", Envelope.newBuilder()
+                .setSensorReadings(SensorReadings.newBuilder()
+                        .addReadings(SensorReading.newBuilder()
+                                .setKind(SensorKind.SENSOR_KIND_LIGHT)
+                                .setTimestampUs(1000)
+                                .addValues(2.5f)))
+                .build());
         WidgetProvider clock = WidgetProvider.newBuilder()
                 .setProvider("com.example.clock/.ClockWidget")
                 .setPackageName("com.example.clock")

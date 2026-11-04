@@ -3822,6 +3822,13 @@ impl Worker {
             | Some(Body::VideoError(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }
+            Some(Body::SensorList(_))
+            | Some(Body::SensorActivate(_))
+            | Some(Body::SensorReadings(_)) => {
+                eprintln!(
+                    "control channel: dropping a sensor message, which belongs on the sensor port"
+                );
+            }
             Some(Body::LogRecords(_))
             | Some(Body::DiagnosticsFile(_))
             | Some(Body::DiagnosticsDone(_)) => {

@@ -1070,6 +1070,62 @@ class ImageLayoutTests(unittest.TestCase):
                               archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
                 self.assertIn("debug.stagefright.c2-poolmask=262144", archive.read("VENDOR/build.prop").decode())
 
+    def test_fr26_the_sensors_hal_replaces_cuttlefishs_with_its_policy(self):
+        # The guest reads the host's sensors: the image carries DSA's sensors HAL, labelled
+        # in the sensors domain with leave to reach the host over vsock, and no other.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            sensors = root / "dsa-sensors"
+            sensors.write_bytes(b"\x7fELF sensors")
+            other = ('<manifest version="1.0" type="device"><hal format="aidl">'
+                     "<name>android.hardware.sensors</name><fqname>ISensors/default</fqname>"
+                     "</hal></manifest>")
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+                archive.writestr("VENDOR/apex/com.android.hardware.sensors.apex", b"apex")
+                archive.writestr("VENDOR/apex/com.google.cf.sensors.apex", b"apex")
+                archive.writestr("VENDOR/etc/vintf/manifest/sensors-default.xml", other)
+                archive.writestr("VENDOR/etc/vintf/manifest/other.xml", "<manifest/>")
+                archive.writestr("META/apexkeys.txt",
+                                 'name="com.google.cf.sensors.apex" public_key="k"\n'
+                                 'name="com.android.adbd.apex" public_key="k"\n')
+
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, sensors=sensors)
+
+            with zipfile.ZipFile(modified) as archive:
+                names = set(archive.namelist())
+                self.assertEqual(archive.read("VENDOR/bin/hw/dsa-sensors"), b"\x7fELF sensors")
+                self.assertIn("service vendor.dsa-sensors /vendor/bin/hw/dsa-sensors",
+                              archive.read("VENDOR/etc/init/dsa-sensors.rc").decode())
+                manifest = archive.read("VENDOR/etc/vintf/manifest/dsa-sensors.xml").decode()
+                self.assertIn("<name>android.hardware.sensors</name>", manifest)
+                self.assertIn("<version>2</version>", manifest)
+                self.assertIn("<fqname>ISensors/default</fqname>", manifest)
+                # Cuttlefish's sensors HAL goes, in an APEX or declared beside it.
+                self.assertNotIn("VENDOR/apex/com.android.hardware.sensors.apex", names)
+                self.assertNotIn("VENDOR/apex/com.google.cf.sensors.apex", names)
+                self.assertNotIn("VENDOR/etc/vintf/manifest/sensors-default.xml", names)
+                self.assertIn("VENDOR/etc/vintf/manifest/other.xml", names)
+                apexkeys = archive.read("META/apexkeys.txt").decode()
+                self.assertNotIn("com.google.cf.sensors", apexkeys)
+                self.assertIn("com.android.adbd", apexkeys)
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+                self.assertIn("vendor/bin/hw/dsa-sensors 0 2000 755 capabilities=0x0", fs_config)
+                self.assertIn("vendor/etc/init/dsa-sensors.rc 0 0 644 capabilities=0x0", fs_config)
+                self.assertIn("/vendor/bin/hw/dsa-sensors u:object_r:hal_sensors_default_exec:s0",
+                              archive.read("VENDOR/etc/selinux/vendor_file_contexts").decode())
+                self.assertIn("(allow hal_sensors_server self (vsock_socket",
+                              archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
+
+    def test_fr26_without_the_sensors_hal_cuttlefishs_stays(self):
+        self.assertNotIn("com.google.cf.sensors", make_image.removed_apexes())
+        self.assertFalse(make_image.removed("VENDOR/apex/com.google.cf.sensors.apex"))
+        self.assertTrue(make_image.removed("VENDOR/apex/com.google.cf.sensors.apex", sensors=True))
+
     def test_pr4_without_the_codec_hal_codec_buffers_stay_pooled(self):
         self.assertNotIn("debug.stagefright.c2-poolmask", make_image.edit_props("ro.debuggable=1\n"))
 
@@ -1259,6 +1315,8 @@ class ImageLayoutTests(unittest.TestCase):
             self.assertIn("VENDOR/bin/hw/dsa-health is missing", proc.stdout)
             # Without the codec HAL every video decodes on the guest's processors.
             self.assertIn("VENDOR/bin/hw/dsa-codec2 is missing", proc.stdout)
+            # Without the sensors HAL apps see none of the host's sensors.
+            self.assertIn("VENDOR/bin/hw/dsa-sensors is missing", proc.stdout)
             self.assertIn("androidboot.dsa.display_width", proc.stdout)
 
     def test_fr3_check_image_rejects_the_wifi_trace_setup(self):
