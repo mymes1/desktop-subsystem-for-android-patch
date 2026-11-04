@@ -2462,7 +2462,9 @@ pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
         HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
     let _service = RunningService::start_service(listener, service);
     let mut client = connect(&mut *connector);
-    let none = client.arm_translation().expect("asking where translation stands");
+    let none = client
+        .arm_translation()
+        .expect("asking where translation stands");
     assert_eq!(none.package, None);
     assert!(none.enabled, "on by default");
     assert!(!none.restart_needed);
@@ -2478,15 +2480,23 @@ pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
         )
         .expect("installing the package");
     assert_eq!(installed.package, Some(arm_package()));
-    let guest = installed.guest.clone().expect("the running Android answered");
+    let guest = installed
+        .guest
+        .clone()
+        .expect("the running Android answered");
     assert!(guest.installed);
     assert!(!guest.active, "a package is used from the next start");
     assert!(installed.restart_needed);
     let android = androids.of(&user).unwrap();
-    assert_eq!(android.arm_image.lock().unwrap().as_deref(), Some(&image[..]));
+    assert_eq!(
+        android.arm_image.lock().unwrap().as_deref(),
+        Some(&image[..])
+    );
     assert_eq!(store.arm_translation(&user).unwrap(), Some(arm_package()));
 
-    let removed = client.remove_arm_translation().expect("removing the package");
+    let removed = client
+        .remove_arm_translation()
+        .expect("removing the package");
     assert_eq!(removed.package, None);
     assert!(!removed.restart_needed);
     assert!(android.arm_image.lock().unwrap().is_none());
@@ -2537,7 +2547,13 @@ pub fn unusable_arm_translation_is_refused(make: MakeLocal<'_>) {
         other => panic!("expected the image to be refused, got {other:?}"),
     }
     assert_eq!(store.arm_translation(&user).unwrap(), None);
-    assert!(androids.of(&user).unwrap().arm_image.lock().unwrap().is_none());
+    assert!(androids
+        .of(&user)
+        .unwrap()
+        .arm_image
+        .lock()
+        .unwrap()
+        .is_none());
 }
 
 pub fn developer_mode_port_refusal_is_reported(make: MakeLocal<'_>) {

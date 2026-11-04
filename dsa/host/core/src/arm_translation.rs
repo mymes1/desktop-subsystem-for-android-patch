@@ -58,7 +58,9 @@ pub struct Package {
 /// A text field of the description: printable, without spaces at either end, not too long.
 fn check_text(what: &str, value: &str, max: usize) -> Result<(), String> {
     if value.is_empty() || value.chars().count() > max {
-        return Err(format!("the package's {what} must have from 1 to {max} characters"));
+        return Err(format!(
+            "the package's {what} must have from 1 to {max} characters"
+        ));
     }
     if value.trim() != value || value.chars().any(char::is_control) {
         return Err(format!(
@@ -91,7 +93,9 @@ impl Package {
             ));
         }
         if self.abis.is_empty() {
-            return Err(format!("the package names no ABI; it must translate {ARM64}"));
+            return Err(format!(
+                "the package names no ABI; it must translate {ARM64}"
+            ));
         }
         if let Some(other) = self.abis.iter().find(|abi| abi.as_str() != ARM64) {
             return Err(format!(
@@ -168,8 +172,8 @@ pub fn open_package(dir: &Path) -> Result<PackageDir, String> {
 /// against.
 pub fn file_sha256(path: &Path) -> Result<Vec<u8>, String> {
     use sha2::Digest;
-    let mut file = std::fs::File::open(path)
-        .map_err(|e| format!("{} cannot be read: {e}", path.display()))?;
+    let mut file =
+        std::fs::File::open(path).map_err(|e| format!("{} cannot be read: {e}", path.display()))?;
     let mut hasher = sha2::Sha256::new();
     let mut buffer = vec![0u8; 1 << 20];
     loop {
@@ -245,14 +249,24 @@ mod tests {
     #[test]
     fn fr25_a_package_must_name_a_library_file_and_translate_arm64_only() {
         assert_eq!(package().check(), Ok(()));
-        for library in ["", "libbridge", "../lib/libx.so", "lib x.so", "/system/lib64/l.so"] {
+        for library in [
+            "",
+            "libbridge",
+            "../lib/libx.so",
+            "lib x.so",
+            "/system/lib64/l.so",
+        ] {
             let bad = Package {
                 library: library.into(),
                 ..package()
             };
             assert!(bad.check().is_err(), "{library:?} is taken");
         }
-        for abis in [vec![], vec!["armeabi-v7a".to_string()], vec!["x86_64".to_string()]] {
+        for abis in [
+            vec![],
+            vec!["armeabi-v7a".to_string()],
+            vec!["x86_64".to_string()],
+        ] {
             let bad = Package {
                 abis: abis.clone(),
                 ..package()
@@ -270,7 +284,11 @@ mod tests {
     fn fr25_a_package_folder_needs_its_description_and_an_erofs_image() {
         let dir = scratch("folder");
         assert!(open_package(&dir).unwrap_err().contains(MANIFEST));
-        std::fs::write(dir.join(MANIFEST), serde_json::to_string(&package()).unwrap()).unwrap();
+        std::fs::write(
+            dir.join(MANIFEST),
+            serde_json::to_string(&package()).unwrap(),
+        )
+        .unwrap();
         assert!(open_package(&dir).is_err(), "no image");
         std::fs::write(dir.join(IMAGE), vec![7u8; 4096]).unwrap();
         assert!(open_package(&dir).unwrap_err().contains("erofs"));
@@ -308,11 +326,17 @@ mod tests {
             abilist: "x86_64,arm64-v8a".into(),
         };
         let inactive = GuestArmTranslation::default();
-        assert!(!restart_needed(Some(&installed), true, None), "nothing known");
+        assert!(
+            !restart_needed(Some(&installed), true, None),
+            "nothing known"
+        );
         assert!(restart_needed(Some(&installed), true, Some(&inactive)));
         assert!(!restart_needed(Some(&installed), true, Some(&active)));
         assert!(restart_needed(None, true, Some(&active)), "removed");
-        assert!(restart_needed(Some(&installed), false, Some(&active)), "turned off");
+        assert!(
+            restart_needed(Some(&installed), false, Some(&active)),
+            "turned off"
+        );
         assert!(!restart_needed(None, true, Some(&inactive)));
     }
 }

@@ -10,9 +10,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::compositor::resize_pacing::ResizePacer;
 use dsa_host_core::host_api::{HostApiClient, InputStream};
 use dsa_host_core::input::InputEvent;
-use dsa_host_core::compositor::resize_pacing::ResizePacer;
 use dsa_host_core::tasks::{coalesce, TaskRequest};
 use dsa_transport::Connector;
 

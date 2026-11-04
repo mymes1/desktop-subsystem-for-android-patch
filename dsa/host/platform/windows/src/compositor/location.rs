@@ -15,8 +15,8 @@ use std::time::Duration;
 use dsa_host_core::location::{self, Access, Fix, LocationEvent, LocationProvider};
 use dsa_transport::Connector;
 use windows::Devices::Geolocation::{
-    AltitudeReferenceSystem, GeolocationAccessStatus, Geolocator, Geoposition,
-    PositionAccuracy, PositionChangedEventArgs, PositionStatus, StatusChangedEventArgs,
+    AltitudeReferenceSystem, GeolocationAccessStatus, Geolocator, Geoposition, PositionAccuracy,
+    PositionChangedEventArgs, PositionStatus, StatusChangedEventArgs,
 };
 use windows::Foundation::{IReference, TypedEventHandler};
 
@@ -135,27 +135,24 @@ fn open(interval: Duration, events: Sender<LocationEvent>) -> Result<Running, (A
         .map_err(|e| unavailable("setting the interval", e))?;
 
     let statuses = events.clone();
-    let on_status = TypedEventHandler::<Geolocator, StatusChangedEventArgs>::new(
-        move |_, args| {
-            if let Some(args) = args.as_ref() {
-                if let Some(event) = status_event(args.Status()?) {
-                    let _ = statuses.send(event);
-                }
+    let on_status = TypedEventHandler::<Geolocator, StatusChangedEventArgs>::new(move |_, args| {
+        if let Some(args) = args.as_ref() {
+            if let Some(event) = status_event(args.Status()?) {
+                let _ = statuses.send(event);
             }
-            Ok(())
-        },
-    );
+        }
+        Ok(())
+    });
     let status_token = geolocator
         .StatusChanged(&on_status)
         .map_err(|e| unavailable("following the location service", e))?;
-    let on_position = TypedEventHandler::<Geolocator, PositionChangedEventArgs>::new(
-        move |_, args| {
+    let on_position =
+        TypedEventHandler::<Geolocator, PositionChangedEventArgs>::new(move |_, args| {
             if let Some(args) = args.as_ref() {
                 let _ = events.send(LocationEvent::Fix(fix_of(&args.Position()?)?));
             }
             Ok(())
-        },
-    );
+        });
     let position_token = match geolocator.PositionChanged(&on_position) {
         Ok(token) => token,
         Err(e) => {
@@ -178,10 +175,9 @@ pub fn status_event(status: PositionStatus) -> Option<LocationEvent> {
             Access::Denied,
             "location was turned off in Windows' privacy settings",
         ),
-        PositionStatus::NotAvailable => (
-            Access::Unavailable,
-            "this computer has no location service",
-        ),
+        PositionStatus::NotAvailable => {
+            (Access::Unavailable, "this computer has no location service")
+        }
         _ => return None,
     };
     Some(LocationEvent::Status {

@@ -8,15 +8,13 @@ use std::time::Duration;
 
 use dsa_host_core::audio::{
     serve_port, serve_stream, AudioDevice, CaptureSink, DeviceFormat, JitterBuffer, Playback,
-    Recording, Renderer,
-    SampleType, SharedBuffer, StreamEnd, BYTES_PER_FRAME, MAX_BUFFER_FRAMES, MAX_STREAMS,
-    TARGET_BUFFER_FRAMES,
+    Recording, Renderer, SampleType, SharedBuffer, StreamEnd, BYTES_PER_FRAME, MAX_BUFFER_FRAMES,
+    MAX_STREAMS, TARGET_BUFFER_FRAMES,
 };
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
-    AudioInputOpen, AudioInputOpened, AudioOutputCommand, AudioOutputControl, AudioOutputOpen, AudioPcm,
-    AudioSampleFormat, Envelope,
-    Hello, RejectReason, Role,
+    AudioInputOpen, AudioInputOpened, AudioOutputCommand, AudioOutputControl, AudioOutputOpen,
+    AudioPcm, AudioSampleFormat, Envelope, Hello, RejectReason, Role,
 };
 use dsa_protocol::handshake::local_hello;
 use dsa_protocol::{decode, encode};
@@ -626,7 +624,10 @@ fn fr26_a_blocked_microphone_fails_the_open_and_the_host_goes_on() {
     // The port still serves: sound still plays, and a second try is answered the same way.
     let mut output = connector.connect(WAIT).unwrap();
     send(output.as_mut(), Body::Hello(guest_hello()));
-    assert!(matches!(recv(output.as_mut()), Some(Body::HelloAccepted(_))));
+    assert!(matches!(
+        recv(output.as_mut()),
+        Some(Body::HelloAccepted(_))
+    ));
     send(output.as_mut(), Body::AudioOutputOpen(open_message()));
     assert!(matches!(
         recv(output.as_mut()),

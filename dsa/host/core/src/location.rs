@@ -237,7 +237,10 @@ impl Fix {
 pub enum LocationEvent {
     Fix(Fix),
     /// Whether DSA may read the location, and why, in words for the logs.
-    Status { access: Access, detail: String },
+    Status {
+        access: Access,
+        detail: String,
+    },
 }
 
 impl LocationEvent {

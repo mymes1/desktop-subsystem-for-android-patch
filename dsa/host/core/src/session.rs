@@ -827,7 +827,10 @@ impl Shared {
     /// that is not under way is dropped and logged.
     /// Hands the control daemon's word on ARM translation to whoever waits for it.
     fn arm_translation_event(&self, state: control::ArmTranslationState) {
-        let waiting = self.arm_translation.lock().unwrap_or_else(|e| e.into_inner());
+        let waiting = self
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         match waiting.as_ref() {
             Some(waiting) => {
                 let _ = waiting.send(state);
@@ -1493,11 +1496,13 @@ impl Session {
         events: &Receiver<control::ArmTranslationState>,
     ) -> Result<GuestArmTranslation, SessionError> {
         self.send(dsa_protocol::encode(&control::Envelope {
-            body: Some(Body::ArmTranslationInstall(control::ArmTranslationInstall {
-                transfer_id,
-                size,
-                sha256: sha256.to_vec(),
-            })),
+            body: Some(Body::ArmTranslationInstall(
+                control::ArmTranslationInstall {
+                    transfer_id,
+                    size,
+                    sha256: sha256.to_vec(),
+                },
+            )),
         }))?;
         let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;
         let mut sent = 0u64;
@@ -1594,7 +1599,9 @@ impl Session {
             .arm_translation
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = Some(tx);
-        let sent = self.send(dsa_protocol::encode(&control::Envelope { body: Some(body) }));
+        let sent = self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(body),
+        }));
         let answer = sent.and_then(|()| {
             events.recv_timeout(ARM_TRANSLATION_WAIT).map_err(|_| {
                 SessionError::NoAnswer("Android did not say where ARM translation stands".into())

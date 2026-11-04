@@ -377,7 +377,11 @@ impl GuestLauncher for AndroidVmLauncher {
         self.data_disk = Some(config.data_disk.clone());
         // Removed on every way out of this function: by then the VM has read them or will
         // never run.
-        let more = self.bootconfig.as_mut().map(|source| source()).unwrap_or_default();
+        let more = self
+            .bootconfig
+            .as_mut()
+            .map(|source| source())
+            .unwrap_or_default();
         let properties = self
             .boot_properties
             .as_mut()

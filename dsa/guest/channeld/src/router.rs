@@ -382,7 +382,9 @@ impl Router {
         }
         if state.location_left() {
             let none = Body::LocationRequest(LocationRequest::default());
-            let _ = self.to_host.send(dsa_protocol::encode(&Envelope { body: Some(none) }));
+            let _ = self
+                .to_host
+                .send(dsa_protocol::encode(&Envelope { body: Some(none) }));
         }
     }
 

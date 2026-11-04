@@ -42,8 +42,8 @@
 //! frame and when that frame was shown, and says both on the window (`window_marks`), where
 //! `dsa launch --wait-first-frame` reads them.
 
-use std::ffi::c_void;
 use std::collections::HashMap;
+use std::ffi::c_void;
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -990,16 +990,7 @@ impl WindowPresenter {
             bottom: height,
             back: 1,
         };
-        context.CopySubresourceRegion(
-            last,
-            0,
-            0,
-            0,
-            0,
-            texture,
-            0,
-            Some(&whole as *const _),
-        );
+        context.CopySubresourceRegion(last, 0, 0, 0, 0, texture, 0, Some(&whole as *const _));
         Ok(())
     }
 
@@ -1043,16 +1034,7 @@ impl WindowPresenter {
             bottom: area.bottom,
             back: 1,
         };
-        context.CopySubresourceRegion(
-            readback,
-            0,
-            0,
-            0,
-            0,
-            source,
-            0,
-            Some(&from as *const _),
-        );
+        context.CopySubresourceRegion(readback, 0, 0, 0, 0, source, 0, Some(&from as *const _));
         let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
         context
             .Map(readback, 0, D3D11_MAP_READ, 0, Some(&mut mapped))

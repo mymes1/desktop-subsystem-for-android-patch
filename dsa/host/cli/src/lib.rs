@@ -204,9 +204,9 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::apk::{ApkFile, InstallKind, InstallOutcome, InstalledPackage};
 use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer};
+use dsa_host_core::arm_translation;
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
-use dsa_host_core::arm_translation;
 use dsa_host_core::host_api::{
     ArmTranslationStatus, ClientError, HostApiClient, SettingsReport, Status, TaskList,
 };
@@ -705,18 +705,21 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             "--json" => json = true,
             "--progress" if command == Some(Command::Install) => progress = true,
             "--wait-first-frame" if command == Some(Command::Launch) => wait_first_frame = true,
-            number if command == Some(Command::Tap)
-                && package.is_some()
-                && coordinates.len() < 2
-                && !number.starts_with('-') =>
+            number
+                if command == Some(Command::Tap)
+                    && package.is_some()
+                    && coordinates.len() < 2
+                    && !number.starts_with('-') =>
             {
                 let value: u32 = number
                     .parse()
                     .map_err(|_| format!("a point is two whole numbers, not {number:?}"))?;
                 coordinates.push(value);
             }
-            name if matches!(command, Some(Command::Launch | Command::Tap | Command::StopApp))
-                && package.is_none()
+            name if matches!(
+                command,
+                Some(Command::Launch | Command::Tap | Command::StopApp)
+            ) && package.is_none()
                 && !name.starts_with('-') =>
             {
                 if !is_package_name(name) {
@@ -1872,7 +1875,10 @@ fn install_arm_translation(
     let status = connect(connector, None, false, Duration::from_secs(10))?
         .install_arm_translation(&opened.package, opened.size, &sha256, &mut image)
         .map_err(|e| format!("the ARM translation package was not installed: {e}"))?;
-    let done = format!("Installed {} {}", opened.package.name, opened.package.version);
+    let done = format!(
+        "Installed {} {}",
+        opened.package.name, opened.package.version
+    );
     Ok(show_arm_translation(invocation, &status, Some(&done)))
 }
 

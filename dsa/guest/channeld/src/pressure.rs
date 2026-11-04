@@ -41,7 +41,10 @@ impl Sample {
         let stall_percent = psi
             .lines()
             .find_map(|line| line.strip_prefix("some "))
-            .and_then(|rest| rest.split_whitespace().find_map(|f| f.strip_prefix("avg10=")))
+            .and_then(|rest| {
+                rest.split_whitespace()
+                    .find_map(|f| f.strip_prefix("avg10="))
+            })
             .and_then(|v| v.parse::<f64>().ok())
             .unwrap_or(0.0);
         Sample {

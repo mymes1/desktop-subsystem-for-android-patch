@@ -372,7 +372,14 @@ impl ComputeSystem {
         run_operation(self.api, "HcsModifyComputeSystem", timeout, |operation| {
             // SAFETY: a live handle, a live operation, a NUL-terminated string and no
             // identity token.
-            unsafe { function(self.handle, operation, request_w.as_ptr(), std::ptr::null_mut()) }
+            unsafe {
+                function(
+                    self.handle,
+                    operation,
+                    request_w.as_ptr(),
+                    std::ptr::null_mut(),
+                )
+            }
         })
         .map(drop)
     }

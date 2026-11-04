@@ -13,9 +13,9 @@ use std::io;
 use std::ptr::{null, null_mut};
 
 use dsa_host_core::audio::AUDIO_PORT;
+use dsa_host_core::camera::CAMERA_PORT;
 use dsa_host_core::compositor::{GRAPHICS_COMMAND_PORT, GRAPHICS_PROCESS_PIPE_PORT};
 use dsa_host_core::sensors::SENSOR_PORT;
-use dsa_host_core::camera::CAMERA_PORT;
 use dsa_host_core::video::VIDEO_PORT;
 use windows_sys::Win32::Foundation::{LocalFree, ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, HLOCAL};
 use windows_sys::Win32::Security::Authorization::{

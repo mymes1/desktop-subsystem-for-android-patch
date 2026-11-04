@@ -81,7 +81,10 @@ fn printing(
         if let Some(android) = androids.androids.lock().unwrap().values().next().cloned() {
             break android;
         }
-        assert!(Instant::now() < deadline, "the print jobs were never watched");
+        assert!(
+            Instant::now() < deadline,
+            "the print jobs were never watched"
+        );
         thread::sleep(Duration::from_millis(10));
     };
     (android, stop, serving, service)
@@ -152,7 +155,10 @@ fn fr26_a_job_withdrawn_while_its_dialog_is_open_is_not_printed() {
     hand(&android, sample_print_job(6, 100));
     let deadline = Instant::now() + WAIT;
     while printer.documents.lock().unwrap().is_empty() {
-        assert!(Instant::now() < deadline, "the job never reached the printer");
+        assert!(
+            Instant::now() < deadline,
+            "the job never reached the printer"
+        );
         thread::sleep(Duration::from_millis(10));
     }
     android.print(PrintEvent::Withdrawn { job_id: 6 });
@@ -174,7 +180,12 @@ impl Printer for Panicking {
 fn nfr5_a_printer_that_fails_badly_fails_the_job_and_nothing_else() {
     let dir = spool("panic");
     let withdrawn = AtomicBool::new(false);
-    let outcome = print_one(&sample_print_job(1, 100), &Panicking, Some(&dir), &withdrawn);
+    let outcome = print_one(
+        &sample_print_job(1, 100),
+        &Panicking,
+        Some(&dir),
+        &withdrawn,
+    );
     assert!(matches!(outcome, PrintOutcome::Failed(_)));
     let left = std::fs::read_dir(&dir).map(|d| d.count()).unwrap_or(0);
     assert_eq!(left, 0, "the document is removed");

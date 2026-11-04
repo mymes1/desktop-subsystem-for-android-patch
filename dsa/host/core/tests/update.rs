@@ -440,7 +440,11 @@ fn fr27_an_image_of_another_architecture_is_not_usable() {
         manifest["arch"] = serde_json::json!(arch);
         std::fs::write(&path, manifest.to_string()).unwrap();
     };
-    let other = if guest_arch() == "arm64" { "x86_64" } else { "arm64" };
+    let other = if guest_arch() == "arm64" {
+        "x86_64"
+    } else {
+        "arm64"
+    };
     set_arch("17.0.0-1", guest_arch());
     set_arch("17.0.0-2", other);
     assert!(image_is_usable(&root.join("images").join("17.0.0-1")));

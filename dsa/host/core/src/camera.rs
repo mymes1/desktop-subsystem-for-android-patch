@@ -509,11 +509,15 @@ fn still_of(
     };
     let (width, height) = (still.width, still.height);
     if width == 0 || height == 0 || width > MAX_SIDE || height > MAX_SIDE {
-        return fail(format!("a still of {width}x{height} is not one the host makes"));
+        return fail(format!(
+            "a still of {width}x{height} is not one the host makes"
+        ));
     }
     // An odd size is made one pixel smaller, as 4:2:0 needs even sides.
     let Some(picture) = scale_nv12(last, width & !1, height & !1) else {
-        return fail(format!("a still of {width}x{height} is not one the host makes"));
+        return fail(format!(
+            "a still of {width}x{height} is not one the host makes"
+        ));
     };
     let quality = still.quality.clamp(1, 100) as u8;
     match cameras.encode_jpeg(&picture, quality) {

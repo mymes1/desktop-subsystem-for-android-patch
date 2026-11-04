@@ -2,17 +2,27 @@
 //! enclosure places them, and their rates.
 
 use dsa_host_core::camera::{facing_of, Facing, Panel};
-use dsa_host_windows::camera_capture::{consent_blocks, device_key, frame_rate, panel_from_windows};
+use dsa_host_windows::camera_capture::{
+    consent_blocks, device_key, frame_rate, panel_from_windows,
+};
 
 #[test]
 fn fr26_cameras_blocked_in_the_privacy_settings_are_not_offered() {
     let allow = Some("Allow".to_string());
     let deny = Some("Deny".to_string());
-    assert!(!consent_blocks(&[allow.clone(), allow.clone(), allow.clone()]));
+    assert!(!consent_blocks(&[
+        allow.clone(),
+        allow.clone(),
+        allow.clone()
+    ]));
     // Nothing written yet: Windows allows.
     assert!(!consent_blocks(&[None, None, None]));
     // Camera access off for the user, for the machine, or for desktop apps.
-    assert!(consent_blocks(&[deny.clone(), allow.clone(), allow.clone()]));
+    assert!(consent_blocks(&[
+        deny.clone(),
+        allow.clone(),
+        allow.clone()
+    ]));
     assert!(consent_blocks(&[allow.clone(), deny.clone(), None]));
     assert!(consent_blocks(&[allow, None, deny]));
 }

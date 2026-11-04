@@ -74,7 +74,6 @@ mod system {
     };
     use windows::core::{GUID, PWSTR};
     use windows::Devices::Enumeration::{DeviceClass, DeviceInformation};
-    use windows_future::AsyncStatus;
     use windows::Win32::Foundation::E_ACCESSDENIED;
     use windows::Win32::Graphics::Imaging::{
         CLSID_WICImagingFactory, GUID_ContainerFormatJpeg, GUID_WICPixelFormat24bppBGR,
@@ -98,6 +97,7 @@ mod system {
         COINIT_MULTITHREADED, STREAM_SEEK_CUR,
     };
     use windows::Win32::System::Variant::{VARIANT, VT_R4};
+    use windows_future::AsyncStatus;
 
     use super::{consent_blocks, device_key, frame_rate, panel_from_windows};
 
@@ -440,7 +440,8 @@ mod system {
                         .Lock(&mut data, None, Some(&mut len))
                         .map_err(|e| format!("cannot read the picture: {e}"))?;
                     let bytes = std::slice::from_raw_parts(data, len as usize);
-                    let picture = picture_from_planes(0, bytes, width as usize, rows, width, height);
+                    let picture =
+                        picture_from_planes(0, bytes, width as usize, rows, width, height);
                     let _ = buffer.Unlock();
                     picture
                 };
@@ -467,7 +468,10 @@ mod system {
                 .SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_NV12)
                 .map_err(|e| e.to_string())?;
             media_type
-                .SetUINT64(&MF_MT_FRAME_SIZE, (u64::from(width) << 32) | u64::from(height))
+                .SetUINT64(
+                    &MF_MT_FRAME_SIZE,
+                    (u64::from(width) << 32) | u64::from(height),
+                )
                 .map_err(|e| e.to_string())?;
             media_type
                 .SetUINT64(&MF_MT_FRAME_RATE, (u64::from(fps.max(1)) << 32) | 1)

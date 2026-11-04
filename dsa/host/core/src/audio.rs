@@ -581,7 +581,10 @@ fn serve_input(
     drop(recording);
     connection.close();
     // What was recorded and not yet sent when the stream ended.
-    let unsent: usize = rx.try_iter().map(|piece| piece.len() / BYTES_PER_FRAME).sum();
+    let unsent: usize = rx
+        .try_iter()
+        .map(|piece| piece.len() / BYTES_PER_FRAME)
+        .sum();
     stats.dropped_frames = dropped.load(Ordering::Relaxed) + unsent as u64;
     log(&format!(
         "audio input {name} closed ({reason}): {} frames sent, {} dropped, device delay \

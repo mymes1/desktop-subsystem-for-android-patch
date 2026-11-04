@@ -15,10 +15,7 @@ use dsa_protocol::control::{
 use sha2::{Digest, Sha256};
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "dsa-channeld-arm-{name}-{}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("dsa-channeld-arm-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }
@@ -79,7 +76,11 @@ fn fr25_an_image_that_arrives_whole_is_put_in_place_and_reported() {
     let image: Vec<u8> = (0..10_000u32).map(|i| i as u8).collect();
     install(&router, 7, &image, Sha256::digest(&image).to_vec(), 4096);
     let answers: Vec<_> = std::iter::from_fn(|| from_guest.try_recv().ok()).collect();
-    assert_eq!(answers.len(), 4, "one answer for the start and one per chunk");
+    assert_eq!(
+        answers.len(),
+        4,
+        "one answer for the start and one per chunk"
+    );
     let last = match dsa_protocol::decode(answers.last().unwrap()).unwrap().body {
         Some(Body::ArmTranslationState(state)) => state,
         other => panic!("unexpected {other:?}"),
@@ -101,7 +102,13 @@ fn fr25_an_image_that_does_not_match_its_digest_leaves_the_old_one() {
     while from_guest.try_recv().is_ok() {}
 
     let new = b"new image, damaged on the way".to_vec();
-    install(&router, 2, &new, Sha256::digest(b"something else").to_vec(), 1024);
+    install(
+        &router,
+        2,
+        &new,
+        Sha256::digest(b"something else").to_vec(),
+        1024,
+    );
     let answers: Vec<_> = std::iter::from_fn(|| from_guest.try_recv().ok()).collect();
     let last = match dsa_protocol::decode(answers.last().unwrap()).unwrap().body {
         Some(Body::ArmTranslationState(state)) => state,
@@ -173,7 +180,9 @@ fn fr25_the_package_messages_never_reach_the_guest_clients() {
     send(&router, Body::ArmTranslationQuery(ArmTranslationQuery {}));
     // Only the daemon's own answer comes out; no listener is handed the frame.
     assert!(matches!(
-        dsa_protocol::decode(&from_guest.try_recv().unwrap()).unwrap().body,
+        dsa_protocol::decode(&from_guest.try_recv().unwrap())
+            .unwrap()
+            .body,
         Some(Body::ArmTranslationState(_))
     ));
     assert!(from_guest.try_recv().is_err());

@@ -936,7 +936,11 @@ fn fr4_a_maximised_task_window_shows_its_task_1_to_1_without_a_new_texture_or_a_
     // The window changes size only together with a frame of that size, which comes in the
     // same texture.
     if let (Some(sink), Some(texture)) = (&sink, texture) {
-        assert_eq!(client_size(hwnd), normal, "the window took a size it had no frame of");
+        assert_eq!(
+            client_size(hwnd),
+            normal,
+            "the window took a size it had no frame of"
+        );
         assert_eq!(sink.target(3, 1280, 720), Some(texture), "a new texture");
         sink.frame(3, max);
         wait_for("the window to take the size of its frame", || {

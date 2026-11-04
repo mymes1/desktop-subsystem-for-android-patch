@@ -29,12 +29,14 @@ use dsa_protocol::control::{
     CameraDevice, CameraFacing, CameraFrame, CameraList, CameraMode, CameraOpen, CameraStill,
 };
 use dsa_protocol::control::{
-    CollectDiagnostics, DiagnosticsDone, DiagnosticsFile, LogBuffer, LogDump, LogRecord,
-    LocationAccess, LocationFix, LocationRequest, LocationStatus, LogRecords, LogStream,
-    VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen,
-    VideoFlush, VideoFrame, VideoPacket,
+    CollectDiagnostics, DiagnosticsDone, DiagnosticsFile, LocationAccess, LocationFix,
+    LocationRequest, LocationStatus, LogBuffer, LogDump, LogRecord, LogRecords, LogStream,
+    VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen, VideoFlush, VideoFrame,
+    VideoPacket,
 };
-use dsa_protocol::control::{PrintJob, PrintJobCancel, PrintJobChunk, PrintJobResult, PrintOutcome};
+use dsa_protocol::control::{
+    PrintJob, PrintJobCancel, PrintJobChunk, PrintJobResult, PrintOutcome,
+};
 use dsa_protocol::control::{
     SensorActivate, SensorDescription, SensorKind, SensorList, SensorReading, SensorReadings,
 };

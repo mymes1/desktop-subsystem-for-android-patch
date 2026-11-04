@@ -16,8 +16,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::audio::{
-    AudioDevice, CaptureSink, DeviceFormat, Playback, Recording, Renderer, SampleType, SharedBuffer,
-    CHANNELS, SAMPLE_RATE,
+    AudioDevice, CaptureSink, DeviceFormat, Playback, Recording, Renderer, SampleType,
+    SharedBuffer, CHANNELS, SAMPLE_RATE,
 };
 use windows::core::PWSTR;
 use windows::Win32::Foundation::HANDLE;

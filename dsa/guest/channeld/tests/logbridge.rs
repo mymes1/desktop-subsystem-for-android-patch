@@ -431,7 +431,9 @@ fn fr21_pstore_records_are_cleared_once_the_host_has_them() {
         connect,
         Arc::new(|| false),
     );
-    bridge.from_host(&host(Body::CollectDiagnostics(CollectDiagnostics { request_id: 3 })));
+    bridge.from_host(&host(Body::CollectDiagnostics(CollectDiagnostics {
+        request_id: 3,
+    })));
     let mut connection = listener.accept(WAIT).unwrap();
     loop {
         let frame = connection.recv(Some(WAIT)).unwrap();
@@ -439,7 +441,9 @@ fn fr21_pstore_records_are_cleared_once_the_host_has_them() {
             break;
         }
     }
-    wait_until("the sent record is cleared", || !delivered.lock().unwrap().is_empty());
+    wait_until("the sent record is cleared", || {
+        !delivered.lock().unwrap().is_empty()
+    });
     // Only what reached the host; a record that could not be read stays for the next time.
     assert_eq!(
         *delivered.lock().unwrap(),
@@ -460,7 +464,9 @@ fn fr21_pstore_records_stay_when_the_host_cannot_be_reached() {
         connect,
         Arc::new(|| false),
     );
-    bridge.from_host(&host(Body::CollectDiagnostics(CollectDiagnostics { request_id: 4 })));
+    bridge.from_host(&host(Body::CollectDiagnostics(CollectDiagnostics {
+        request_id: 4,
+    })));
     thread::sleep(Duration::from_millis(300));
     assert!(delivered.lock().unwrap().is_empty());
 }

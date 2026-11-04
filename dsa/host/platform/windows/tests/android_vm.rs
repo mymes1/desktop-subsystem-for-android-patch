@@ -155,8 +155,16 @@ fn fr27_an_arm64_boot_gets_a_folder_of_its_own_with_the_kernel_and_the_initrd() 
     config.kernel = image.join("Image");
     std::fs::write(&config.kernel, b"MZ kernel").unwrap();
 
-    let boot = prepare_boot(GuestArch::Arm64, &mut config, None, &secret(), "", &boot_dir, "dsa-7-0")
-        .expect("the boot folder is written");
+    let boot = prepare_boot(
+        GuestArch::Arm64,
+        &mut config,
+        None,
+        &secret(),
+        "",
+        &boot_dir,
+        "dsa-7-0",
+    )
+    .expect("the boot folder is written");
     let folder = boot_dir.join("dsa-7-0");
     assert_eq!(config.kernel, folder.join("Image"));
     assert_eq!(config.initrd, Some(folder.join("initrd.img")));
@@ -172,7 +180,11 @@ fn fr27_an_arm64_boot_gets_a_folder_of_its_own_with_the_kernel_and_the_initrd() 
     assert_eq!(names, ["Image", "initrd.img"], "only this boot's files");
     assert_eq!(
         boot.vm_access(),
-        [folder.clone(), folder.join("Image"), folder.join("initrd.img")]
+        [
+            folder.clone(),
+            folder.join("Image"),
+            folder.join("initrd.img")
+        ]
     );
     // The document the launcher makes from it boots from that folder.
     let doc = config.to_hcs_document_for(GuestArch::Arm64).unwrap();
@@ -193,8 +205,16 @@ fn fr27_an_x86_64_boot_keeps_its_initrd_beside_the_others() {
     std::fs::create_dir_all(&boot_dir).unwrap();
     let mut config = missing_files();
     let kernel = config.kernel.clone();
-    let boot = prepare_boot(GuestArch::X86_64, &mut config, None, &secret(), "", &boot_dir, "dsa-7-1")
-        .expect("the initrd is written");
+    let boot = prepare_boot(
+        GuestArch::X86_64,
+        &mut config,
+        None,
+        &secret(),
+        "",
+        &boot_dir,
+        "dsa-7-1",
+    )
+    .expect("the initrd is written");
     assert_eq!(config.kernel, kernel, "booted from where it is");
     assert_eq!(boot.initrd(), boot_dir.join("dsa-7-1.initrd"));
     assert_eq!(boot.vm_access(), [boot_dir.join("dsa-7-1.initrd")]);

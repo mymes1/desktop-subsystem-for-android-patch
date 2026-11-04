@@ -59,8 +59,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
 };
 
-use crate::compositor::log::{note, CompositorLogger};
 use crate::compositor::log::{input_trace, input_trace_on};
+use crate::compositor::log::{note, CompositorLogger};
 use crate::compositor::present::{self, Gpu, WindowPresenter};
 use crate::compositor::window_marks;
 
@@ -406,7 +406,8 @@ unsafe fn trace_press(hwnd: HWND, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     1
 }
 
-unsafe extern "system" fn task_window_proc(    hwnd: HWND,
+unsafe extern "system" fn task_window_proc(
+    hwnd: HWND,
     message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
@@ -1085,7 +1086,14 @@ impl Ui {
         // shortcut set to open maximized or minimized), whatever is passed above. A task
         // window opens at its task's size, so it is shown normally again.
         if IsZoomed(hwnd) != 0 || IsIconic(hwnd) != 0 {
-            ShowWindow(hwnd, if focused { SW_SHOWNORMAL } else { SW_SHOWNOACTIVATE });
+            ShowWindow(
+                hwnd,
+                if focused {
+                    SW_SHOWNORMAL
+                } else {
+                    SW_SHOWNOACTIVATE
+                },
+            );
         }
         self.open.insert(task_id, hwnd);
     }

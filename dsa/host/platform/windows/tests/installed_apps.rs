@@ -91,7 +91,10 @@ fn fr23_uninstalling_from_windows_runs_the_windowed_settings_app_not_the_console
     );
     let command = uninstall_command(&uninstaller, "com.example.notes");
     assert!(!command.contains("dsa.exe"), "{command}");
-    assert!(command.ends_with("--uninstall-app com.example.notes"), "{command}");
+    assert!(
+        command.ends_with("--uninstall-app com.example.notes"),
+        "{command}"
+    );
 }
 
 #[test]

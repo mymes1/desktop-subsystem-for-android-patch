@@ -487,7 +487,8 @@ impl StartMenuSetup {
 /// (`<install>\settings\DsaSettings.exe`), which Windows' list of installed apps runs to
 /// uninstall an app. It is a windowed program, unlike `dsa.exe`, so no console flashes up.
 pub fn uninstaller_beside(wm: &std::path::Path) -> Option<PathBuf> {
-    wm.parent().map(|dir| dir.join("settings").join("DsaSettings.exe"))
+    wm.parent()
+        .map(|dir| dir.join("settings").join("DsaSettings.exe"))
 }
 
 /// The settings app installed with this window manager.

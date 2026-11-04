@@ -68,11 +68,11 @@ use crate::accessibility::{
 use crate::apk::{self, InstallOutcome, InstalledPackage};
 use crate::apps::{self, UninstallOutcome};
 use crate::arm_translation::{self, GuestArmTranslation, Package};
-use crate::device_identity::{DeviceIdentity, DeviceIdentityStore, ImageBuild};
 use crate::background::{
     self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundWatch, MediaCommand,
     MediaSession, Playback,
 };
+use crate::device_identity::{DeviceIdentity, DeviceIdentityStore, ImageBuild};
 use crate::diagnostics::HostFile;
 use crate::files::{self, FileAction, FileTransfer};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
@@ -419,9 +419,9 @@ pub enum InstallError {
 /// API reports it.
 fn arm_install_error(error: SessionError) -> InstallError {
     match error {
-        SessionError::NotActive(state) => InstallError::NotRunning(format!(
-            "Android is {state}; start it and try again"
-        )),
+        SessionError::NotActive(state) => {
+            InstallError::NotRunning(format!("Android is {state}; start it and try again"))
+        }
         SessionError::InstallRefused(why) => InstallError::Refused(why),
         other => InstallError::Refused(format!("Android could not be reached: {other}")),
     }
@@ -3211,9 +3211,7 @@ impl HostApiService {
             ) {
                 match android.remove_arm_translation() {
                     Ok(state) => guest = Some(state),
-                    Err(InstallError::NotRunning(why)) => {
-                        return error(ErrorCode::NotRunning, why)
-                    }
+                    Err(InstallError::NotRunning(why)) => return error(ErrorCode::NotRunning, why),
                     Err(InstallError::Refused(why)) => return error(ErrorCode::Unavailable, why),
                 }
             }
@@ -3276,7 +3274,10 @@ impl HostApiService {
         let package = match package {
             Ok(package) => package,
             Err(why) => {
-                eprintln!("arm translation: refused a package from {}: {why}", peer.user);
+                eprintln!(
+                    "arm translation: refused a package from {}: {why}",
+                    peer.user
+                );
                 return refuse(connection, error(ErrorCode::InstallRefused, why));
             }
         };

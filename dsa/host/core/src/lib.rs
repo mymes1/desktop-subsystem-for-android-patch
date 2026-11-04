@@ -63,10 +63,10 @@ pub mod guest_log;
 pub mod guest_log_api;
 pub mod handshake;
 pub mod host_api;
-pub mod host_config;
-pub mod host_paths;
 #[cfg(feature = "conformance")]
 pub mod host_api_conformance;
+pub mod host_config;
+pub mod host_paths;
 pub mod ime;
 pub mod input;
 pub mod input_trace;

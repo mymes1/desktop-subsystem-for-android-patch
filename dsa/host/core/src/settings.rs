@@ -780,7 +780,9 @@ mod tests {
             abis: vec!["arm64-v8a".into()],
             license: "Apache-2.0".into(),
         };
-        store.set_arm_translation("uid:1000", Some(&package)).unwrap();
+        store
+            .set_arm_translation("uid:1000", Some(&package))
+            .unwrap();
         let again = FileSettings::new(&dir);
         assert_eq!(again.arm_translation("uid:1000").unwrap(), Some(package));
         assert_eq!(again.arm_translation("uid:1001").unwrap(), None);
@@ -798,7 +800,12 @@ mod tests {
             )
             .unwrap();
         assert!(!off.arm_translation);
-        assert!(!FileSettings::new(&dir).get("uid:1000").unwrap().arm_translation);
+        assert!(
+            !FileSettings::new(&dir)
+                .get("uid:1000")
+                .unwrap()
+                .arm_translation
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

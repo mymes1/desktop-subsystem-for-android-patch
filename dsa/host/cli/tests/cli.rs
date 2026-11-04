@@ -619,11 +619,18 @@ fn fr3_dsa_launch_and_dsa_tasks_are_parsed() {
 
 #[test]
 fn nfr4_dsa_launch_can_wait_for_the_first_frame() {
-    let launch = parse(&args("launch com.android.settings --wait-first-frame --json")).unwrap();
+    let launch = parse(&args(
+        "launch com.android.settings --wait-first-frame --json",
+    ))
+    .unwrap();
     assert_eq!(launch.command, Cmd::Launch);
     assert!(launch.wait_first_frame);
     assert!(launch.json);
-    assert!(!parse(&args("launch com.android.settings")).unwrap().wait_first_frame);
+    assert!(
+        !parse(&args("launch com.android.settings"))
+            .unwrap()
+            .wait_first_frame
+    );
     assert!(
         parse(&args("status --wait-first-frame")).is_err(),
         "only a launch has a first frame"
@@ -923,7 +930,9 @@ fn fr25_dsa_arm_translation_commands_are_parsed() {
         Cmd::ArmTranslationStatus
     );
     assert_eq!(
-        parse(&args("arm-translation status --json")).unwrap().command,
+        parse(&args("arm-translation status --json"))
+            .unwrap()
+            .command,
         Cmd::ArmTranslationStatus
     );
     let install = parse(&args("arm-translation install C:\\packages\\digitalis")).unwrap();
@@ -939,7 +948,9 @@ fn fr25_dsa_arm_translation_commands_are_parsed() {
     assert!(parse(&args("arm-translation install")).is_err());
     assert!(parse(&args("arm-translation enable")).is_err());
     assert_eq!(
-        parse(&args("settings set arm-translation off")).unwrap().change,
+        parse(&args("settings set arm-translation off"))
+            .unwrap()
+            .change,
         Some(Change::ArmTranslation(false))
     );
 }
@@ -966,14 +977,20 @@ fn fr25_dsa_installs_reports_and_removes_an_arm_translation_package() {
     assert_eq!(none["supported"], false);
     assert_eq!(none["enabled"], true);
 
-    let installed = dsa(&endpoint, &format!("arm-translation install {} --json", folder.display()));
+    let installed = dsa(
+        &endpoint,
+        &format!("arm-translation install {} --json", folder.display()),
+    );
     let installed = json_of(&installed);
     assert_eq!(installed["package"]["name"], "Translator");
     assert_eq!(installed["supported"], true);
     assert_eq!(installed["android"]["installed"], true);
     assert_eq!(installed["restart_needed"], true);
     let text = stdout(&dsa(&endpoint, "arm-translation status"));
-    assert!(text.contains("ARM apps: supported by Translator 1.0 (Apache-2.0)"), "{text}");
+    assert!(
+        text.contains("ARM apps: supported by Translator 1.0 (Apache-2.0)"),
+        "{text}"
+    );
     assert!(text.contains("Restart Android"), "{text}");
 
     let removed = json_of(&dsa(&endpoint, "arm-translation remove --json"));
@@ -982,7 +999,10 @@ fn fr25_dsa_installs_reports_and_removes_an_arm_translation_package() {
 
     // A folder that is not a package is refused before Android is asked for anything.
     std::fs::write(folder.join("system.img"), vec![0u8; 8192]).unwrap();
-    let refused = dsa(&endpoint, &format!("arm-translation install {}", folder.display()));
+    let refused = dsa(
+        &endpoint,
+        &format!("arm-translation install {}", folder.display()),
+    );
     assert!(!refused.status.success());
     assert!(stderr(&refused).contains("erofs"), "{}", stderr(&refused));
     let _ = std::fs::remove_dir_all(&folder);

@@ -70,7 +70,10 @@ fn fr21_the_pstore_disk_has_one_partition_the_kernel_finds_by_uuid() {
         guid[6],
         guid[8],
         guid[9],
-        guid[10..].iter().map(|b| format!("{b:02x}")).collect::<String>()
+        guid[10..]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
     );
     assert_eq!(text, PARTITION_UUID);
     assert!(
@@ -115,10 +118,7 @@ fn fr19_the_pstore_disk_is_in_the_user_root_and_uninstall_removes_it() {
         root.pstore_disk(),
         PathBuf::from(r"C:\Users\me\AppData\Local\DSA\pstore.vhd")
     );
-    assert_eq!(
-        pstore_disk_beside(&root.android_disk()),
-        root.pstore_disk()
-    );
+    assert_eq!(pstore_disk_beside(&root.android_disk()), root.pstore_disk());
     assert!(!UserRoot::kept_on_uninstall("pstore.vhd"));
 }
 
@@ -126,7 +126,14 @@ fn fr19_the_pstore_disk_is_in_the_user_root_and_uninstall_removes_it() {
 fn fr21_the_pstore_partition_name_is_not_one_of_androids() {
     assert_eq!(PARTITION_NAME, "dsa_pstore");
     let android = [
-        "misc", "super", "userdata", "metadata", "vbmeta", "boot", "init_boot", "vendor_boot",
+        "misc",
+        "super",
+        "userdata",
+        "metadata",
+        "vbmeta",
+        "boot",
+        "init_boot",
+        "vendor_boot",
     ];
     for name in android {
         assert!(

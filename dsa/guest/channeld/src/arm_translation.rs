@@ -158,7 +158,10 @@ impl ArmTranslation {
                 self.state(id, 0, false, String::new())
             }
             Err(error) => {
-                let why = format!("cannot write {IMAGE_NAME} in {}: {error}", self.dir.display());
+                let why = format!(
+                    "cannot write {IMAGE_NAME} in {}: {error}",
+                    self.dir.display()
+                );
                 self.failed(id, 0, why)
             }
         }
