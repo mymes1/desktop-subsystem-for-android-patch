@@ -1376,6 +1376,159 @@ struct DiagnosticsDoneDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DiagnosticsDoneDefaultTypeInternal _DiagnosticsDone_default_instance_;
+PROTOBUF_CONSTEXPR CameraMode::CameraMode(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.width_)*/0u
+  , /*decltype(_impl_.height_)*/0u
+  , /*decltype(_impl_.max_fps_)*/0u
+  , /*decltype(_impl_.min_fps_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraModeDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraModeDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraModeDefaultTypeInternal() {}
+  union {
+    CameraMode _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraModeDefaultTypeInternal _CameraMode_default_instance_;
+PROTOBUF_CONSTEXPR CameraDevice::CameraDevice(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.modes_)*/{}
+  , /*decltype(_impl_.id_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.facing_)*/0
+  , /*decltype(_impl_.sensor_orientation_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraDeviceDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraDeviceDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraDeviceDefaultTypeInternal() {}
+  union {
+    CameraDevice _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraDeviceDefaultTypeInternal _CameraDevice_default_instance_;
+PROTOBUF_CONSTEXPR CameraList::CameraList(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.cameras_)*/{}
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraListDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraListDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraListDefaultTypeInternal() {}
+  union {
+    CameraList _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraListDefaultTypeInternal _CameraList_default_instance_;
+PROTOBUF_CONSTEXPR CameraOpen::CameraOpen(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.id_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.width_)*/0u
+  , /*decltype(_impl_.height_)*/0u
+  , /*decltype(_impl_.fps_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraOpenDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraOpenDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraOpenDefaultTypeInternal() {}
+  union {
+    CameraOpen _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraOpenDefaultTypeInternal _CameraOpen_default_instance_;
+PROTOBUF_CONSTEXPR CameraOpened::CameraOpened(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.error_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.ok_)*/false
+  , /*decltype(_impl_.width_)*/0u
+  , /*decltype(_impl_.height_)*/0u
+  , /*decltype(_impl_.fps_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraOpenedDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraOpenedDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraOpenedDefaultTypeInternal() {}
+  union {
+    CameraOpened _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraOpenedDefaultTypeInternal _CameraOpened_default_instance_;
+PROTOBUF_CONSTEXPR CameraFrame::CameraFrame(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.nv12_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.sequence_)*/uint64_t{0u}
+  , /*decltype(_impl_.timestamp_ns_)*/uint64_t{0u}
+  , /*decltype(_impl_.width_)*/0u
+  , /*decltype(_impl_.height_)*/0u
+  , /*decltype(_impl_.stride_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraFrameDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraFrameDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraFrameDefaultTypeInternal() {}
+  union {
+    CameraFrame _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraFrameDefaultTypeInternal _CameraFrame_default_instance_;
+PROTOBUF_CONSTEXPR CameraStop::CameraStop(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraStopDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraStopDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraStopDefaultTypeInternal() {}
+  union {
+    CameraStop _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraStopDefaultTypeInternal _CameraStop_default_instance_;
+PROTOBUF_CONSTEXPR CameraStill::CameraStill(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_.width_)*/0u
+  , /*decltype(_impl_.height_)*/0u
+  , /*decltype(_impl_.quality_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraStillDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraStillDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraStillDefaultTypeInternal() {}
+  union {
+    CameraStill _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraStillDefaultTypeInternal _CameraStill_default_instance_;
+PROTOBUF_CONSTEXPR CameraStillTaken::CameraStillTaken(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.jpeg_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.error_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraStillTakenDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraStillTakenDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraStillTakenDefaultTypeInternal() {}
+  union {
+    CameraStillTaken _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraStillTakenDefaultTypeInternal _CameraStillTaken_default_instance_;
+PROTOBUF_CONSTEXPR CameraError::CameraError(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.error_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CameraErrorDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CameraErrorDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CameraErrorDefaultTypeInternal() {}
+  union {
+    CameraError _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraErrorDefaultTypeInternal _CameraError_default_instance_;
 PROTOBUF_CONSTEXPR Envelope::Envelope(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.body_)*/{}
@@ -1453,32 +1606,36 @@ bool Role_IsValid(int value) {
     case 1:
     case 2:
     case 4:
+    case 8:
       return true;
     default:
       return false;
   }
 }
 
-static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> Role_strings[4] = {};
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> Role_strings[5] = {};
 
 static const char Role_names[] =
   "ROLE_GUEST"
+  "ROLE_GUEST_CAMERA"
   "ROLE_GUEST_VIDEO"
   "ROLE_HOST"
   "ROLE_UNSPECIFIED";
 
 static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry Role_entries[] = {
   { {Role_names + 0, 10}, 2 },
-  { {Role_names + 10, 16}, 4 },
-  { {Role_names + 26, 9}, 1 },
-  { {Role_names + 35, 16}, 0 },
+  { {Role_names + 10, 17}, 8 },
+  { {Role_names + 27, 16}, 4 },
+  { {Role_names + 43, 9}, 1 },
+  { {Role_names + 52, 16}, 0 },
 };
 
 static const int Role_entries_by_number[] = {
-  3, // 0 -> ROLE_UNSPECIFIED
-  2, // 1 -> ROLE_HOST
+  4, // 0 -> ROLE_UNSPECIFIED
+  3, // 1 -> ROLE_HOST
   0, // 2 -> ROLE_GUEST
-  1, // 4 -> ROLE_GUEST_VIDEO
+  2, // 4 -> ROLE_GUEST_VIDEO
+  1, // 8 -> ROLE_GUEST_CAMERA
 };
 
 const std::string& Role_Name(
@@ -1487,12 +1644,12 @@ const std::string& Role_Name(
       ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
           Role_entries,
           Role_entries_by_number,
-          4, Role_strings);
+          5, Role_strings);
   (void) dummy;
   int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
       Role_entries,
       Role_entries_by_number,
-      4, value);
+      5, value);
   return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
                      Role_strings[idx].get();
 }
@@ -1500,7 +1657,7 @@ bool Role_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, Role* value) {
   int int_value;
   bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
-      Role_entries, 4, name, &int_value);
+      Role_entries, 5, name, &int_value);
   if (success) {
     *value = static_cast<Role>(int_value);
   }
@@ -2173,6 +2330,65 @@ bool LogBuffer_Parse(
       LogBuffer_entries, 9, name, &int_value);
   if (success) {
     *value = static_cast<LogBuffer>(int_value);
+  }
+  return success;
+}
+bool CameraFacing_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+    case 3:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> CameraFacing_strings[4] = {};
+
+static const char CameraFacing_names[] =
+  "CAMERA_FACING_BACK"
+  "CAMERA_FACING_EXTERNAL"
+  "CAMERA_FACING_FRONT"
+  "CAMERA_FACING_UNSPECIFIED";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry CameraFacing_entries[] = {
+  { {CameraFacing_names + 0, 18}, 2 },
+  { {CameraFacing_names + 18, 22}, 3 },
+  { {CameraFacing_names + 40, 19}, 1 },
+  { {CameraFacing_names + 59, 25}, 0 },
+};
+
+static const int CameraFacing_entries_by_number[] = {
+  3, // 0 -> CAMERA_FACING_UNSPECIFIED
+  2, // 1 -> CAMERA_FACING_FRONT
+  0, // 2 -> CAMERA_FACING_BACK
+  1, // 3 -> CAMERA_FACING_EXTERNAL
+};
+
+const std::string& CameraFacing_Name(
+    CameraFacing value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          CameraFacing_entries,
+          CameraFacing_entries_by_number,
+          4, CameraFacing_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      CameraFacing_entries,
+      CameraFacing_entries_by_number,
+      4, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     CameraFacing_strings[idx].get();
+}
+bool CameraFacing_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, CameraFacing* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      CameraFacing_entries, 4, name, &int_value);
+  if (success) {
+    *value = static_cast<CameraFacing>(int_value);
   }
   return success;
 }
@@ -25471,6 +25687,2631 @@ std::string DiagnosticsDone::GetTypeName() const {
 
 // ===================================================================
 
+class CameraMode::_Internal {
+ public:
+};
+
+CameraMode::CameraMode(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraMode)
+}
+CameraMode::CameraMode(const CameraMode& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraMode* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.width_){}
+    , decltype(_impl_.height_){}
+    , decltype(_impl_.max_fps_){}
+    , decltype(_impl_.min_fps_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.width_, &from._impl_.width_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.min_fps_) -
+    reinterpret_cast<char*>(&_impl_.width_)) + sizeof(_impl_.min_fps_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraMode)
+}
+
+inline void CameraMode::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.width_){0u}
+    , decltype(_impl_.height_){0u}
+    , decltype(_impl_.max_fps_){0u}
+    , decltype(_impl_.min_fps_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+CameraMode::~CameraMode() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraMode)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraMode::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void CameraMode::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraMode::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraMode)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.width_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.min_fps_) -
+      reinterpret_cast<char*>(&_impl_.width_)) + sizeof(_impl_.min_fps_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraMode::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 width = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.width_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 height = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.height_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 max_fps = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.max_fps_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 min_fps = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.min_fps_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraMode::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraMode)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 width = 1;
+  if (this->_internal_width() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_width(), target);
+  }
+
+  // uint32 height = 2;
+  if (this->_internal_height() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_height(), target);
+  }
+
+  // uint32 max_fps = 3;
+  if (this->_internal_max_fps() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_max_fps(), target);
+  }
+
+  // uint32 min_fps = 4;
+  if (this->_internal_min_fps() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(4, this->_internal_min_fps(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraMode)
+  return target;
+}
+
+size_t CameraMode::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraMode)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 width = 1;
+  if (this->_internal_width() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_width());
+  }
+
+  // uint32 height = 2;
+  if (this->_internal_height() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_height());
+  }
+
+  // uint32 max_fps = 3;
+  if (this->_internal_max_fps() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_max_fps());
+  }
+
+  // uint32 min_fps = 4;
+  if (this->_internal_min_fps() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_min_fps());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraMode::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraMode*>(
+      &from));
+}
+
+void CameraMode::MergeFrom(const CameraMode& from) {
+  CameraMode* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraMode)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_width() != 0) {
+    _this->_internal_set_width(from._internal_width());
+  }
+  if (from._internal_height() != 0) {
+    _this->_internal_set_height(from._internal_height());
+  }
+  if (from._internal_max_fps() != 0) {
+    _this->_internal_set_max_fps(from._internal_max_fps());
+  }
+  if (from._internal_min_fps() != 0) {
+    _this->_internal_set_min_fps(from._internal_min_fps());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraMode::CopyFrom(const CameraMode& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraMode)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraMode::IsInitialized() const {
+  return true;
+}
+
+void CameraMode::InternalSwap(CameraMode* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CameraMode, _impl_.min_fps_)
+      + sizeof(CameraMode::_impl_.min_fps_)
+      - PROTOBUF_FIELD_OFFSET(CameraMode, _impl_.width_)>(
+          reinterpret_cast<char*>(&_impl_.width_),
+          reinterpret_cast<char*>(&other->_impl_.width_));
+}
+
+std::string CameraMode::GetTypeName() const {
+  return "dsa.control.v1.CameraMode";
+}
+
+
+// ===================================================================
+
+class CameraDevice::_Internal {
+ public:
+};
+
+CameraDevice::CameraDevice(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraDevice)
+}
+CameraDevice::CameraDevice(const CameraDevice& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraDevice* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.modes_){from._impl_.modes_}
+    , decltype(_impl_.id_){}
+    , decltype(_impl_.name_){}
+    , decltype(_impl_.facing_){}
+    , decltype(_impl_.sensor_orientation_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.id_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.id_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_id().empty()) {
+    _this->_impl_.id_.Set(from._internal_id(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_name().empty()) {
+    _this->_impl_.name_.Set(from._internal_name(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.facing_, &from._impl_.facing_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.sensor_orientation_) -
+    reinterpret_cast<char*>(&_impl_.facing_)) + sizeof(_impl_.sensor_orientation_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraDevice)
+}
+
+inline void CameraDevice::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.modes_){arena}
+    , decltype(_impl_.id_){}
+    , decltype(_impl_.name_){}
+    , decltype(_impl_.facing_){0}
+    , decltype(_impl_.sensor_orientation_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.id_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.id_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+CameraDevice::~CameraDevice() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraDevice)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraDevice::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.modes_.~RepeatedPtrField();
+  _impl_.id_.Destroy();
+  _impl_.name_.Destroy();
+}
+
+void CameraDevice::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraDevice::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraDevice)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.modes_.Clear();
+  _impl_.id_.ClearToEmpty();
+  _impl_.name_.ClearToEmpty();
+  ::memset(&_impl_.facing_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.sensor_orientation_) -
+      reinterpret_cast<char*>(&_impl_.facing_)) + sizeof(_impl_.sensor_orientation_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraDevice::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_id();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string name = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.CameraFacing facing = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_facing(static_cast<::dsa::control::v1::CameraFacing>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 sensor_orientation = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.sensor_orientation_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .dsa.control.v1.CameraMode modes = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_modes(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<42>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraDevice::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraDevice)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string id = 1;
+  if (!this->_internal_id().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_id().data(), static_cast<int>(this->_internal_id().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.CameraDevice.id");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_id(), target);
+  }
+
+  // string name = 2;
+  if (!this->_internal_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.CameraDevice.name");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_name(), target);
+  }
+
+  // .dsa.control.v1.CameraFacing facing = 3;
+  if (this->_internal_facing() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      3, this->_internal_facing(), target);
+  }
+
+  // uint32 sensor_orientation = 4;
+  if (this->_internal_sensor_orientation() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(4, this->_internal_sensor_orientation(), target);
+  }
+
+  // repeated .dsa.control.v1.CameraMode modes = 5;
+  for (unsigned i = 0,
+      n = static_cast<unsigned>(this->_internal_modes_size()); i < n; i++) {
+    const auto& repfield = this->_internal_modes(i);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+        InternalWriteMessage(5, repfield, repfield.GetCachedSize(), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraDevice)
+  return target;
+}
+
+size_t CameraDevice::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraDevice)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated .dsa.control.v1.CameraMode modes = 5;
+  total_size += 1UL * this->_internal_modes_size();
+  for (const auto& msg : this->_impl_.modes_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // string id = 1;
+  if (!this->_internal_id().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_id());
+  }
+
+  // string name = 2;
+  if (!this->_internal_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_name());
+  }
+
+  // .dsa.control.v1.CameraFacing facing = 3;
+  if (this->_internal_facing() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_facing());
+  }
+
+  // uint32 sensor_orientation = 4;
+  if (this->_internal_sensor_orientation() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_sensor_orientation());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraDevice::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraDevice*>(
+      &from));
+}
+
+void CameraDevice::MergeFrom(const CameraDevice& from) {
+  CameraDevice* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraDevice)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.modes_.MergeFrom(from._impl_.modes_);
+  if (!from._internal_id().empty()) {
+    _this->_internal_set_id(from._internal_id());
+  }
+  if (!from._internal_name().empty()) {
+    _this->_internal_set_name(from._internal_name());
+  }
+  if (from._internal_facing() != 0) {
+    _this->_internal_set_facing(from._internal_facing());
+  }
+  if (from._internal_sensor_orientation() != 0) {
+    _this->_internal_set_sensor_orientation(from._internal_sensor_orientation());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraDevice::CopyFrom(const CameraDevice& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraDevice)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraDevice::IsInitialized() const {
+  return true;
+}
+
+void CameraDevice::InternalSwap(CameraDevice* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.modes_.InternalSwap(&other->_impl_.modes_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.id_, lhs_arena,
+      &other->_impl_.id_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.name_, lhs_arena,
+      &other->_impl_.name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CameraDevice, _impl_.sensor_orientation_)
+      + sizeof(CameraDevice::_impl_.sensor_orientation_)
+      - PROTOBUF_FIELD_OFFSET(CameraDevice, _impl_.facing_)>(
+          reinterpret_cast<char*>(&_impl_.facing_),
+          reinterpret_cast<char*>(&other->_impl_.facing_));
+}
+
+std::string CameraDevice::GetTypeName() const {
+  return "dsa.control.v1.CameraDevice";
+}
+
+
+// ===================================================================
+
+class CameraList::_Internal {
+ public:
+};
+
+CameraList::CameraList(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraList)
+}
+CameraList::CameraList(const CameraList& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraList* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.cameras_){from._impl_.cameras_}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraList)
+}
+
+inline void CameraList::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.cameras_){arena}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+CameraList::~CameraList() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraList)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraList::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.cameras_.~RepeatedPtrField();
+}
+
+void CameraList::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraList::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraList)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.cameras_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraList::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // repeated .dsa.control.v1.CameraDevice cameras = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_cameras(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<10>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraList::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraList)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // repeated .dsa.control.v1.CameraDevice cameras = 1;
+  for (unsigned i = 0,
+      n = static_cast<unsigned>(this->_internal_cameras_size()); i < n; i++) {
+    const auto& repfield = this->_internal_cameras(i);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+        InternalWriteMessage(1, repfield, repfield.GetCachedSize(), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraList)
+  return target;
+}
+
+size_t CameraList::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraList)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated .dsa.control.v1.CameraDevice cameras = 1;
+  total_size += 1UL * this->_internal_cameras_size();
+  for (const auto& msg : this->_impl_.cameras_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraList::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraList*>(
+      &from));
+}
+
+void CameraList::MergeFrom(const CameraList& from) {
+  CameraList* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraList)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.cameras_.MergeFrom(from._impl_.cameras_);
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraList::CopyFrom(const CameraList& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraList)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraList::IsInitialized() const {
+  return true;
+}
+
+void CameraList::InternalSwap(CameraList* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.cameras_.InternalSwap(&other->_impl_.cameras_);
+}
+
+std::string CameraList::GetTypeName() const {
+  return "dsa.control.v1.CameraList";
+}
+
+
+// ===================================================================
+
+class CameraOpen::_Internal {
+ public:
+};
+
+CameraOpen::CameraOpen(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraOpen)
+}
+CameraOpen::CameraOpen(const CameraOpen& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraOpen* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.id_){}
+    , decltype(_impl_.width_){}
+    , decltype(_impl_.height_){}
+    , decltype(_impl_.fps_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.id_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.id_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_id().empty()) {
+    _this->_impl_.id_.Set(from._internal_id(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.width_, &from._impl_.width_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.fps_) -
+    reinterpret_cast<char*>(&_impl_.width_)) + sizeof(_impl_.fps_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraOpen)
+}
+
+inline void CameraOpen::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.id_){}
+    , decltype(_impl_.width_){0u}
+    , decltype(_impl_.height_){0u}
+    , decltype(_impl_.fps_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.id_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.id_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+CameraOpen::~CameraOpen() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraOpen)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraOpen::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.id_.Destroy();
+}
+
+void CameraOpen::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraOpen::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraOpen)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.id_.ClearToEmpty();
+  ::memset(&_impl_.width_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.fps_) -
+      reinterpret_cast<char*>(&_impl_.width_)) + sizeof(_impl_.fps_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraOpen::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_id();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 width = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.width_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 height = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.height_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 fps = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.fps_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraOpen::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraOpen)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string id = 1;
+  if (!this->_internal_id().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_id().data(), static_cast<int>(this->_internal_id().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.CameraOpen.id");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_id(), target);
+  }
+
+  // uint32 width = 2;
+  if (this->_internal_width() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_width(), target);
+  }
+
+  // uint32 height = 3;
+  if (this->_internal_height() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_height(), target);
+  }
+
+  // uint32 fps = 4;
+  if (this->_internal_fps() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(4, this->_internal_fps(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraOpen)
+  return target;
+}
+
+size_t CameraOpen::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraOpen)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string id = 1;
+  if (!this->_internal_id().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_id());
+  }
+
+  // uint32 width = 2;
+  if (this->_internal_width() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_width());
+  }
+
+  // uint32 height = 3;
+  if (this->_internal_height() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_height());
+  }
+
+  // uint32 fps = 4;
+  if (this->_internal_fps() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_fps());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraOpen::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraOpen*>(
+      &from));
+}
+
+void CameraOpen::MergeFrom(const CameraOpen& from) {
+  CameraOpen* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraOpen)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_id().empty()) {
+    _this->_internal_set_id(from._internal_id());
+  }
+  if (from._internal_width() != 0) {
+    _this->_internal_set_width(from._internal_width());
+  }
+  if (from._internal_height() != 0) {
+    _this->_internal_set_height(from._internal_height());
+  }
+  if (from._internal_fps() != 0) {
+    _this->_internal_set_fps(from._internal_fps());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraOpen::CopyFrom(const CameraOpen& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraOpen)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraOpen::IsInitialized() const {
+  return true;
+}
+
+void CameraOpen::InternalSwap(CameraOpen* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.id_, lhs_arena,
+      &other->_impl_.id_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CameraOpen, _impl_.fps_)
+      + sizeof(CameraOpen::_impl_.fps_)
+      - PROTOBUF_FIELD_OFFSET(CameraOpen, _impl_.width_)>(
+          reinterpret_cast<char*>(&_impl_.width_),
+          reinterpret_cast<char*>(&other->_impl_.width_));
+}
+
+std::string CameraOpen::GetTypeName() const {
+  return "dsa.control.v1.CameraOpen";
+}
+
+
+// ===================================================================
+
+class CameraOpened::_Internal {
+ public:
+};
+
+CameraOpened::CameraOpened(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraOpened)
+}
+CameraOpened::CameraOpened(const CameraOpened& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraOpened* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.error_){}
+    , decltype(_impl_.ok_){}
+    , decltype(_impl_.width_){}
+    , decltype(_impl_.height_){}
+    , decltype(_impl_.fps_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_error().empty()) {
+    _this->_impl_.error_.Set(from._internal_error(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.ok_, &from._impl_.ok_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.fps_) -
+    reinterpret_cast<char*>(&_impl_.ok_)) + sizeof(_impl_.fps_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraOpened)
+}
+
+inline void CameraOpened::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.error_){}
+    , decltype(_impl_.ok_){false}
+    , decltype(_impl_.width_){0u}
+    , decltype(_impl_.height_){0u}
+    , decltype(_impl_.fps_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+CameraOpened::~CameraOpened() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraOpened)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraOpened::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.error_.Destroy();
+}
+
+void CameraOpened::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraOpened::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraOpened)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.error_.ClearToEmpty();
+  ::memset(&_impl_.ok_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.fps_) -
+      reinterpret_cast<char*>(&_impl_.ok_)) + sizeof(_impl_.fps_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraOpened::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // bool ok = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.ok_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string error = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_error();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 width = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.width_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 height = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.height_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 fps = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.fps_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraOpened::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraOpened)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // bool ok = 1;
+  if (this->_internal_ok() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(1, this->_internal_ok(), target);
+  }
+
+  // string error = 2;
+  if (!this->_internal_error().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_error().data(), static_cast<int>(this->_internal_error().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.CameraOpened.error");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_error(), target);
+  }
+
+  // uint32 width = 3;
+  if (this->_internal_width() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_width(), target);
+  }
+
+  // uint32 height = 4;
+  if (this->_internal_height() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(4, this->_internal_height(), target);
+  }
+
+  // uint32 fps = 5;
+  if (this->_internal_fps() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(5, this->_internal_fps(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraOpened)
+  return target;
+}
+
+size_t CameraOpened::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraOpened)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string error = 2;
+  if (!this->_internal_error().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_error());
+  }
+
+  // bool ok = 1;
+  if (this->_internal_ok() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // uint32 width = 3;
+  if (this->_internal_width() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_width());
+  }
+
+  // uint32 height = 4;
+  if (this->_internal_height() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_height());
+  }
+
+  // uint32 fps = 5;
+  if (this->_internal_fps() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_fps());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraOpened::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraOpened*>(
+      &from));
+}
+
+void CameraOpened::MergeFrom(const CameraOpened& from) {
+  CameraOpened* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraOpened)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_error().empty()) {
+    _this->_internal_set_error(from._internal_error());
+  }
+  if (from._internal_ok() != 0) {
+    _this->_internal_set_ok(from._internal_ok());
+  }
+  if (from._internal_width() != 0) {
+    _this->_internal_set_width(from._internal_width());
+  }
+  if (from._internal_height() != 0) {
+    _this->_internal_set_height(from._internal_height());
+  }
+  if (from._internal_fps() != 0) {
+    _this->_internal_set_fps(from._internal_fps());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraOpened::CopyFrom(const CameraOpened& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraOpened)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraOpened::IsInitialized() const {
+  return true;
+}
+
+void CameraOpened::InternalSwap(CameraOpened* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.error_, lhs_arena,
+      &other->_impl_.error_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CameraOpened, _impl_.fps_)
+      + sizeof(CameraOpened::_impl_.fps_)
+      - PROTOBUF_FIELD_OFFSET(CameraOpened, _impl_.ok_)>(
+          reinterpret_cast<char*>(&_impl_.ok_),
+          reinterpret_cast<char*>(&other->_impl_.ok_));
+}
+
+std::string CameraOpened::GetTypeName() const {
+  return "dsa.control.v1.CameraOpened";
+}
+
+
+// ===================================================================
+
+class CameraFrame::_Internal {
+ public:
+};
+
+CameraFrame::CameraFrame(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraFrame)
+}
+CameraFrame::CameraFrame(const CameraFrame& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraFrame* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.nv12_){}
+    , decltype(_impl_.sequence_){}
+    , decltype(_impl_.timestamp_ns_){}
+    , decltype(_impl_.width_){}
+    , decltype(_impl_.height_){}
+    , decltype(_impl_.stride_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.nv12_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.nv12_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_nv12().empty()) {
+    _this->_impl_.nv12_.Set(from._internal_nv12(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.sequence_, &from._impl_.sequence_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.stride_) -
+    reinterpret_cast<char*>(&_impl_.sequence_)) + sizeof(_impl_.stride_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraFrame)
+}
+
+inline void CameraFrame::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.nv12_){}
+    , decltype(_impl_.sequence_){uint64_t{0u}}
+    , decltype(_impl_.timestamp_ns_){uint64_t{0u}}
+    , decltype(_impl_.width_){0u}
+    , decltype(_impl_.height_){0u}
+    , decltype(_impl_.stride_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.nv12_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.nv12_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+CameraFrame::~CameraFrame() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraFrame)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraFrame::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.nv12_.Destroy();
+}
+
+void CameraFrame::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraFrame::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraFrame)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.nv12_.ClearToEmpty();
+  ::memset(&_impl_.sequence_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.stride_) -
+      reinterpret_cast<char*>(&_impl_.sequence_)) + sizeof(_impl_.stride_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraFrame::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint64 sequence = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.sequence_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 timestamp_ns = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.timestamp_ns_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 width = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.width_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 height = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.height_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 stride = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.stride_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bytes nv12 = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
+          auto str = _internal_mutable_nv12();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraFrame::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraFrame)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint64 sequence = 1;
+  if (this->_internal_sequence() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(1, this->_internal_sequence(), target);
+  }
+
+  // uint64 timestamp_ns = 2;
+  if (this->_internal_timestamp_ns() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_timestamp_ns(), target);
+  }
+
+  // uint32 width = 3;
+  if (this->_internal_width() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_width(), target);
+  }
+
+  // uint32 height = 4;
+  if (this->_internal_height() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(4, this->_internal_height(), target);
+  }
+
+  // uint32 stride = 5;
+  if (this->_internal_stride() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(5, this->_internal_stride(), target);
+  }
+
+  // bytes nv12 = 6;
+  if (!this->_internal_nv12().empty()) {
+    target = stream->WriteBytesMaybeAliased(
+        6, this->_internal_nv12(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraFrame)
+  return target;
+}
+
+size_t CameraFrame::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraFrame)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // bytes nv12 = 6;
+  if (!this->_internal_nv12().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
+        this->_internal_nv12());
+  }
+
+  // uint64 sequence = 1;
+  if (this->_internal_sequence() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_sequence());
+  }
+
+  // uint64 timestamp_ns = 2;
+  if (this->_internal_timestamp_ns() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_timestamp_ns());
+  }
+
+  // uint32 width = 3;
+  if (this->_internal_width() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_width());
+  }
+
+  // uint32 height = 4;
+  if (this->_internal_height() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_height());
+  }
+
+  // uint32 stride = 5;
+  if (this->_internal_stride() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_stride());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraFrame::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraFrame*>(
+      &from));
+}
+
+void CameraFrame::MergeFrom(const CameraFrame& from) {
+  CameraFrame* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraFrame)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_nv12().empty()) {
+    _this->_internal_set_nv12(from._internal_nv12());
+  }
+  if (from._internal_sequence() != 0) {
+    _this->_internal_set_sequence(from._internal_sequence());
+  }
+  if (from._internal_timestamp_ns() != 0) {
+    _this->_internal_set_timestamp_ns(from._internal_timestamp_ns());
+  }
+  if (from._internal_width() != 0) {
+    _this->_internal_set_width(from._internal_width());
+  }
+  if (from._internal_height() != 0) {
+    _this->_internal_set_height(from._internal_height());
+  }
+  if (from._internal_stride() != 0) {
+    _this->_internal_set_stride(from._internal_stride());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraFrame::CopyFrom(const CameraFrame& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraFrame)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraFrame::IsInitialized() const {
+  return true;
+}
+
+void CameraFrame::InternalSwap(CameraFrame* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.nv12_, lhs_arena,
+      &other->_impl_.nv12_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CameraFrame, _impl_.stride_)
+      + sizeof(CameraFrame::_impl_.stride_)
+      - PROTOBUF_FIELD_OFFSET(CameraFrame, _impl_.sequence_)>(
+          reinterpret_cast<char*>(&_impl_.sequence_),
+          reinterpret_cast<char*>(&other->_impl_.sequence_));
+}
+
+std::string CameraFrame::GetTypeName() const {
+  return "dsa.control.v1.CameraFrame";
+}
+
+
+// ===================================================================
+
+class CameraStop::_Internal {
+ public:
+};
+
+CameraStop::CameraStop(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraStop)
+}
+CameraStop::CameraStop(const CameraStop& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraStop* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraStop)
+}
+
+inline void CameraStop::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+CameraStop::~CameraStop() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraStop)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraStop::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void CameraStop::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraStop::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraStop)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraStop::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraStop::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraStop)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraStop)
+  return target;
+}
+
+size_t CameraStop::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraStop)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraStop::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraStop*>(
+      &from));
+}
+
+void CameraStop::MergeFrom(const CameraStop& from) {
+  CameraStop* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraStop)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraStop::CopyFrom(const CameraStop& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraStop)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraStop::IsInitialized() const {
+  return true;
+}
+
+void CameraStop::InternalSwap(CameraStop* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+}
+
+std::string CameraStop::GetTypeName() const {
+  return "dsa.control.v1.CameraStop";
+}
+
+
+// ===================================================================
+
+class CameraStill::_Internal {
+ public:
+};
+
+CameraStill::CameraStill(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraStill)
+}
+CameraStill::CameraStill(const CameraStill& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraStill* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.request_id_){}
+    , decltype(_impl_.width_){}
+    , decltype(_impl_.height_){}
+    , decltype(_impl_.quality_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.request_id_, &from._impl_.request_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.quality_) -
+    reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.quality_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraStill)
+}
+
+inline void CameraStill::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.request_id_){0u}
+    , decltype(_impl_.width_){0u}
+    , decltype(_impl_.height_){0u}
+    , decltype(_impl_.quality_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+CameraStill::~CameraStill() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraStill)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraStill::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void CameraStill::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraStill::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraStill)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.request_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.quality_) -
+      reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.quality_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraStill::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 width = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.width_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 height = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.height_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 quality = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.quality_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraStill::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraStill)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // uint32 width = 2;
+  if (this->_internal_width() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_width(), target);
+  }
+
+  // uint32 height = 3;
+  if (this->_internal_height() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_height(), target);
+  }
+
+  // uint32 quality = 4;
+  if (this->_internal_quality() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(4, this->_internal_quality(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraStill)
+  return target;
+}
+
+size_t CameraStill::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraStill)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  // uint32 width = 2;
+  if (this->_internal_width() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_width());
+  }
+
+  // uint32 height = 3;
+  if (this->_internal_height() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_height());
+  }
+
+  // uint32 quality = 4;
+  if (this->_internal_quality() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_quality());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraStill::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraStill*>(
+      &from));
+}
+
+void CameraStill::MergeFrom(const CameraStill& from) {
+  CameraStill* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraStill)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  if (from._internal_width() != 0) {
+    _this->_internal_set_width(from._internal_width());
+  }
+  if (from._internal_height() != 0) {
+    _this->_internal_set_height(from._internal_height());
+  }
+  if (from._internal_quality() != 0) {
+    _this->_internal_set_quality(from._internal_quality());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraStill::CopyFrom(const CameraStill& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraStill)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraStill::IsInitialized() const {
+  return true;
+}
+
+void CameraStill::InternalSwap(CameraStill* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CameraStill, _impl_.quality_)
+      + sizeof(CameraStill::_impl_.quality_)
+      - PROTOBUF_FIELD_OFFSET(CameraStill, _impl_.request_id_)>(
+          reinterpret_cast<char*>(&_impl_.request_id_),
+          reinterpret_cast<char*>(&other->_impl_.request_id_));
+}
+
+std::string CameraStill::GetTypeName() const {
+  return "dsa.control.v1.CameraStill";
+}
+
+
+// ===================================================================
+
+class CameraStillTaken::_Internal {
+ public:
+};
+
+CameraStillTaken::CameraStillTaken(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraStillTaken)
+}
+CameraStillTaken::CameraStillTaken(const CameraStillTaken& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraStillTaken* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.jpeg_){}
+    , decltype(_impl_.error_){}
+    , decltype(_impl_.request_id_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.jpeg_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.jpeg_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_jpeg().empty()) {
+    _this->_impl_.jpeg_.Set(from._internal_jpeg(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_error().empty()) {
+    _this->_impl_.error_.Set(from._internal_error(), 
+      _this->GetArenaForAllocation());
+  }
+  _this->_impl_.request_id_ = from._impl_.request_id_;
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraStillTaken)
+}
+
+inline void CameraStillTaken::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.jpeg_){}
+    , decltype(_impl_.error_){}
+    , decltype(_impl_.request_id_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.jpeg_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.jpeg_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+CameraStillTaken::~CameraStillTaken() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraStillTaken)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraStillTaken::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.jpeg_.Destroy();
+  _impl_.error_.Destroy();
+}
+
+void CameraStillTaken::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraStillTaken::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraStillTaken)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.jpeg_.ClearToEmpty();
+  _impl_.error_.ClearToEmpty();
+  _impl_.request_id_ = 0u;
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraStillTaken::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bytes jpeg = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_jpeg();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string error = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_error();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraStillTaken::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraStillTaken)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // bytes jpeg = 2;
+  if (!this->_internal_jpeg().empty()) {
+    target = stream->WriteBytesMaybeAliased(
+        2, this->_internal_jpeg(), target);
+  }
+
+  // string error = 3;
+  if (!this->_internal_error().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_error().data(), static_cast<int>(this->_internal_error().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.CameraStillTaken.error");
+    target = stream->WriteStringMaybeAliased(
+        3, this->_internal_error(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraStillTaken)
+  return target;
+}
+
+size_t CameraStillTaken::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraStillTaken)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // bytes jpeg = 2;
+  if (!this->_internal_jpeg().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
+        this->_internal_jpeg());
+  }
+
+  // string error = 3;
+  if (!this->_internal_error().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_error());
+  }
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraStillTaken::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraStillTaken*>(
+      &from));
+}
+
+void CameraStillTaken::MergeFrom(const CameraStillTaken& from) {
+  CameraStillTaken* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraStillTaken)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_jpeg().empty()) {
+    _this->_internal_set_jpeg(from._internal_jpeg());
+  }
+  if (!from._internal_error().empty()) {
+    _this->_internal_set_error(from._internal_error());
+  }
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraStillTaken::CopyFrom(const CameraStillTaken& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraStillTaken)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraStillTaken::IsInitialized() const {
+  return true;
+}
+
+void CameraStillTaken::InternalSwap(CameraStillTaken* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.jpeg_, lhs_arena,
+      &other->_impl_.jpeg_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.error_, lhs_arena,
+      &other->_impl_.error_, rhs_arena
+  );
+  swap(_impl_.request_id_, other->_impl_.request_id_);
+}
+
+std::string CameraStillTaken::GetTypeName() const {
+  return "dsa.control.v1.CameraStillTaken";
+}
+
+
+// ===================================================================
+
+class CameraError::_Internal {
+ public:
+};
+
+CameraError::CameraError(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.CameraError)
+}
+CameraError::CameraError(const CameraError& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  CameraError* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.error_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_error().empty()) {
+    _this->_impl_.error_.Set(from._internal_error(), 
+      _this->GetArenaForAllocation());
+  }
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.CameraError)
+}
+
+inline void CameraError::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.error_){}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+CameraError::~CameraError() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.CameraError)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void CameraError::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.error_.Destroy();
+}
+
+void CameraError::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void CameraError::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.CameraError)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.error_.ClearToEmpty();
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* CameraError::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string error = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_error();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* CameraError::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.CameraError)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string error = 1;
+  if (!this->_internal_error().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_error().data(), static_cast<int>(this->_internal_error().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.CameraError.error");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_error(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.CameraError)
+  return target;
+}
+
+size_t CameraError::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.CameraError)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string error = 1;
+  if (!this->_internal_error().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_error());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void CameraError::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const CameraError*>(
+      &from));
+}
+
+void CameraError::MergeFrom(const CameraError& from) {
+  CameraError* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.CameraError)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_error().empty()) {
+    _this->_internal_set_error(from._internal_error());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void CameraError::CopyFrom(const CameraError& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.CameraError)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool CameraError::IsInitialized() const {
+  return true;
+}
+
+void CameraError::InternalSwap(CameraError* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.error_, lhs_arena,
+      &other->_impl_.error_, rhs_arena
+  );
+}
+
+std::string CameraError::GetTypeName() const {
+  return "dsa.control.v1.CameraError";
+}
+
+
+// ===================================================================
+
 class Envelope::_Internal {
  public:
   static const ::dsa::control::v1::Hello& hello(const Envelope* msg);
@@ -25554,6 +28395,14 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::DiagnosticsFile& diagnostics_file(const Envelope* msg);
   static const ::dsa::control::v1::DiagnosticsDone& diagnostics_done(const Envelope* msg);
   static const ::dsa::control::v1::StopApp& stop_app(const Envelope* msg);
+  static const ::dsa::control::v1::CameraList& camera_list(const Envelope* msg);
+  static const ::dsa::control::v1::CameraOpen& camera_open(const Envelope* msg);
+  static const ::dsa::control::v1::CameraOpened& camera_opened(const Envelope* msg);
+  static const ::dsa::control::v1::CameraFrame& camera_frame(const Envelope* msg);
+  static const ::dsa::control::v1::CameraStop& camera_stop(const Envelope* msg);
+  static const ::dsa::control::v1::CameraStill& camera_still(const Envelope* msg);
+  static const ::dsa::control::v1::CameraStillTaken& camera_still_taken(const Envelope* msg);
+  static const ::dsa::control::v1::CameraError& camera_error(const Envelope* msg);
 };
 
 const ::dsa::control::v1::Hello&
@@ -25879,6 +28728,38 @@ Envelope::_Internal::diagnostics_done(const Envelope* msg) {
 const ::dsa::control::v1::StopApp&
 Envelope::_Internal::stop_app(const Envelope* msg) {
   return *msg->_impl_.body_.stop_app_;
+}
+const ::dsa::control::v1::CameraList&
+Envelope::_Internal::camera_list(const Envelope* msg) {
+  return *msg->_impl_.body_.camera_list_;
+}
+const ::dsa::control::v1::CameraOpen&
+Envelope::_Internal::camera_open(const Envelope* msg) {
+  return *msg->_impl_.body_.camera_open_;
+}
+const ::dsa::control::v1::CameraOpened&
+Envelope::_Internal::camera_opened(const Envelope* msg) {
+  return *msg->_impl_.body_.camera_opened_;
+}
+const ::dsa::control::v1::CameraFrame&
+Envelope::_Internal::camera_frame(const Envelope* msg) {
+  return *msg->_impl_.body_.camera_frame_;
+}
+const ::dsa::control::v1::CameraStop&
+Envelope::_Internal::camera_stop(const Envelope* msg) {
+  return *msg->_impl_.body_.camera_stop_;
+}
+const ::dsa::control::v1::CameraStill&
+Envelope::_Internal::camera_still(const Envelope* msg) {
+  return *msg->_impl_.body_.camera_still_;
+}
+const ::dsa::control::v1::CameraStillTaken&
+Envelope::_Internal::camera_still_taken(const Envelope* msg) {
+  return *msg->_impl_.body_.camera_still_taken_;
+}
+const ::dsa::control::v1::CameraError&
+Envelope::_Internal::camera_error(const Envelope* msg) {
+  return *msg->_impl_.body_.camera_error_;
 }
 void Envelope::set_allocated_hello(::dsa::control::v1::Hello* hello) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -27095,6 +29976,126 @@ void Envelope::set_allocated_stop_app(::dsa::control::v1::StopApp* stop_app) {
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.stop_app)
 }
+void Envelope::set_allocated_camera_list(::dsa::control::v1::CameraList* camera_list) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (camera_list) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(camera_list);
+    if (message_arena != submessage_arena) {
+      camera_list = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, camera_list, submessage_arena);
+    }
+    set_has_camera_list();
+    _impl_.body_.camera_list_ = camera_list;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.camera_list)
+}
+void Envelope::set_allocated_camera_open(::dsa::control::v1::CameraOpen* camera_open) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (camera_open) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(camera_open);
+    if (message_arena != submessage_arena) {
+      camera_open = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, camera_open, submessage_arena);
+    }
+    set_has_camera_open();
+    _impl_.body_.camera_open_ = camera_open;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.camera_open)
+}
+void Envelope::set_allocated_camera_opened(::dsa::control::v1::CameraOpened* camera_opened) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (camera_opened) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(camera_opened);
+    if (message_arena != submessage_arena) {
+      camera_opened = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, camera_opened, submessage_arena);
+    }
+    set_has_camera_opened();
+    _impl_.body_.camera_opened_ = camera_opened;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.camera_opened)
+}
+void Envelope::set_allocated_camera_frame(::dsa::control::v1::CameraFrame* camera_frame) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (camera_frame) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(camera_frame);
+    if (message_arena != submessage_arena) {
+      camera_frame = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, camera_frame, submessage_arena);
+    }
+    set_has_camera_frame();
+    _impl_.body_.camera_frame_ = camera_frame;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.camera_frame)
+}
+void Envelope::set_allocated_camera_stop(::dsa::control::v1::CameraStop* camera_stop) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (camera_stop) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(camera_stop);
+    if (message_arena != submessage_arena) {
+      camera_stop = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, camera_stop, submessage_arena);
+    }
+    set_has_camera_stop();
+    _impl_.body_.camera_stop_ = camera_stop;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.camera_stop)
+}
+void Envelope::set_allocated_camera_still(::dsa::control::v1::CameraStill* camera_still) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (camera_still) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(camera_still);
+    if (message_arena != submessage_arena) {
+      camera_still = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, camera_still, submessage_arena);
+    }
+    set_has_camera_still();
+    _impl_.body_.camera_still_ = camera_still;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.camera_still)
+}
+void Envelope::set_allocated_camera_still_taken(::dsa::control::v1::CameraStillTaken* camera_still_taken) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (camera_still_taken) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(camera_still_taken);
+    if (message_arena != submessage_arena) {
+      camera_still_taken = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, camera_still_taken, submessage_arena);
+    }
+    set_has_camera_still_taken();
+    _impl_.body_.camera_still_taken_ = camera_still_taken;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.camera_still_taken)
+}
+void Envelope::set_allocated_camera_error(::dsa::control::v1::CameraError* camera_error) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (camera_error) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(camera_error);
+    if (message_arena != submessage_arena) {
+      camera_error = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, camera_error, submessage_arena);
+    }
+    set_has_camera_error();
+    _impl_.body_.camera_error_ = camera_error;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.camera_error)
+}
 Envelope::Envelope(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
@@ -27515,6 +30516,46 @@ Envelope::Envelope(const Envelope& from)
     case kStopApp: {
       _this->_internal_mutable_stop_app()->::dsa::control::v1::StopApp::MergeFrom(
           from._internal_stop_app());
+      break;
+    }
+    case kCameraList: {
+      _this->_internal_mutable_camera_list()->::dsa::control::v1::CameraList::MergeFrom(
+          from._internal_camera_list());
+      break;
+    }
+    case kCameraOpen: {
+      _this->_internal_mutable_camera_open()->::dsa::control::v1::CameraOpen::MergeFrom(
+          from._internal_camera_open());
+      break;
+    }
+    case kCameraOpened: {
+      _this->_internal_mutable_camera_opened()->::dsa::control::v1::CameraOpened::MergeFrom(
+          from._internal_camera_opened());
+      break;
+    }
+    case kCameraFrame: {
+      _this->_internal_mutable_camera_frame()->::dsa::control::v1::CameraFrame::MergeFrom(
+          from._internal_camera_frame());
+      break;
+    }
+    case kCameraStop: {
+      _this->_internal_mutable_camera_stop()->::dsa::control::v1::CameraStop::MergeFrom(
+          from._internal_camera_stop());
+      break;
+    }
+    case kCameraStill: {
+      _this->_internal_mutable_camera_still()->::dsa::control::v1::CameraStill::MergeFrom(
+          from._internal_camera_still());
+      break;
+    }
+    case kCameraStillTaken: {
+      _this->_internal_mutable_camera_still_taken()->::dsa::control::v1::CameraStillTaken::MergeFrom(
+          from._internal_camera_still_taken());
+      break;
+    }
+    case kCameraError: {
+      _this->_internal_mutable_camera_error()->::dsa::control::v1::CameraError::MergeFrom(
+          from._internal_camera_error());
       break;
     }
     case BODY_NOT_SET: {
@@ -28042,6 +31083,54 @@ void Envelope::clear_body() {
     case kStopApp: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.stop_app_;
+      }
+      break;
+    }
+    case kCameraList: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.camera_list_;
+      }
+      break;
+    }
+    case kCameraOpen: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.camera_open_;
+      }
+      break;
+    }
+    case kCameraOpened: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.camera_opened_;
+      }
+      break;
+    }
+    case kCameraFrame: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.camera_frame_;
+      }
+      break;
+    }
+    case kCameraStop: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.camera_stop_;
+      }
+      break;
+    }
+    case kCameraStill: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.camera_still_;
+      }
+      break;
+    }
+    case kCameraStillTaken: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.camera_still_taken_;
+      }
+      break;
+    }
+    case kCameraError: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.camera_error_;
       }
       break;
     }
@@ -28717,6 +31806,70 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.CameraList camera_list = 260;
+      case 260:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          ptr = ctx->ParseMessage(_internal_mutable_camera_list(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.CameraOpen camera_open = 261;
+      case 261:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          ptr = ctx->ParseMessage(_internal_mutable_camera_open(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.CameraOpened camera_opened = 262;
+      case 262:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
+          ptr = ctx->ParseMessage(_internal_mutable_camera_opened(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.CameraFrame camera_frame = 263;
+      case 263:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
+          ptr = ctx->ParseMessage(_internal_mutable_camera_frame(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.CameraStop camera_stop = 264;
+      case 264:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
+          ptr = ctx->ParseMessage(_internal_mutable_camera_stop(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.CameraStill camera_still = 265;
+      case 265:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
+          ptr = ctx->ParseMessage(_internal_mutable_camera_still(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.CameraStillTaken camera_still_taken = 266;
+      case 266:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
+          ptr = ctx->ParseMessage(_internal_mutable_camera_still_taken(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.CameraError camera_error = 267;
+      case 267:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
+          ptr = ctx->ParseMessage(_internal_mutable_camera_error(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -29313,6 +32466,62 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::developer_mode(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.CameraList camera_list = 260;
+  if (_internal_has_camera_list()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(260, _Internal::camera_list(this),
+        _Internal::camera_list(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.CameraOpen camera_open = 261;
+  if (_internal_has_camera_open()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(261, _Internal::camera_open(this),
+        _Internal::camera_open(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.CameraOpened camera_opened = 262;
+  if (_internal_has_camera_opened()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(262, _Internal::camera_opened(this),
+        _Internal::camera_opened(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.CameraFrame camera_frame = 263;
+  if (_internal_has_camera_frame()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(263, _Internal::camera_frame(this),
+        _Internal::camera_frame(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.CameraStop camera_stop = 264;
+  if (_internal_has_camera_stop()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(264, _Internal::camera_stop(this),
+        _Internal::camera_stop(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.CameraStill camera_still = 265;
+  if (_internal_has_camera_still()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(265, _Internal::camera_still(this),
+        _Internal::camera_still(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.CameraStillTaken camera_still_taken = 266;
+  if (_internal_has_camera_still_taken()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(266, _Internal::camera_still_taken(this),
+        _Internal::camera_still_taken(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.CameraError camera_error = 267;
+  if (_internal_has_camera_error()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(267, _Internal::camera_error(this),
+        _Internal::camera_error(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -29897,6 +33106,62 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.stop_app_);
       break;
     }
+    // .dsa.control.v1.CameraList camera_list = 260;
+    case kCameraList: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.camera_list_);
+      break;
+    }
+    // .dsa.control.v1.CameraOpen camera_open = 261;
+    case kCameraOpen: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.camera_open_);
+      break;
+    }
+    // .dsa.control.v1.CameraOpened camera_opened = 262;
+    case kCameraOpened: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.camera_opened_);
+      break;
+    }
+    // .dsa.control.v1.CameraFrame camera_frame = 263;
+    case kCameraFrame: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.camera_frame_);
+      break;
+    }
+    // .dsa.control.v1.CameraStop camera_stop = 264;
+    case kCameraStop: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.camera_stop_);
+      break;
+    }
+    // .dsa.control.v1.CameraStill camera_still = 265;
+    case kCameraStill: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.camera_still_);
+      break;
+    }
+    // .dsa.control.v1.CameraStillTaken camera_still_taken = 266;
+    case kCameraStillTaken: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.camera_still_taken_);
+      break;
+    }
+    // .dsa.control.v1.CameraError camera_error = 267;
+    case kCameraError: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.camera_error_);
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -30328,6 +33593,46 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_stop_app());
       break;
     }
+    case kCameraList: {
+      _this->_internal_mutable_camera_list()->::dsa::control::v1::CameraList::MergeFrom(
+          from._internal_camera_list());
+      break;
+    }
+    case kCameraOpen: {
+      _this->_internal_mutable_camera_open()->::dsa::control::v1::CameraOpen::MergeFrom(
+          from._internal_camera_open());
+      break;
+    }
+    case kCameraOpened: {
+      _this->_internal_mutable_camera_opened()->::dsa::control::v1::CameraOpened::MergeFrom(
+          from._internal_camera_opened());
+      break;
+    }
+    case kCameraFrame: {
+      _this->_internal_mutable_camera_frame()->::dsa::control::v1::CameraFrame::MergeFrom(
+          from._internal_camera_frame());
+      break;
+    }
+    case kCameraStop: {
+      _this->_internal_mutable_camera_stop()->::dsa::control::v1::CameraStop::MergeFrom(
+          from._internal_camera_stop());
+      break;
+    }
+    case kCameraStill: {
+      _this->_internal_mutable_camera_still()->::dsa::control::v1::CameraStill::MergeFrom(
+          from._internal_camera_still());
+      break;
+    }
+    case kCameraStillTaken: {
+      _this->_internal_mutable_camera_still_taken()->::dsa::control::v1::CameraStillTaken::MergeFrom(
+          from._internal_camera_still_taken());
+      break;
+    }
+    case kCameraError: {
+      _this->_internal_mutable_camera_error()->::dsa::control::v1::CameraError::MergeFrom(
+          from._internal_camera_error());
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -30714,6 +34019,46 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::DiagnosticsFile >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::DiagnosticsDone*
 Arena::CreateMaybeMessage< ::dsa::control::v1::DiagnosticsDone >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::DiagnosticsDone >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraMode*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraMode >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraMode >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraDevice*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraDevice >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraDevice >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraList*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraList >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraList >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraOpen*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraOpen >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraOpen >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraOpened*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraOpened >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraOpened >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraFrame*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraFrame >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraFrame >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraStop*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraStop >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraStop >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraStill*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraStill >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraStill >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraStillTaken*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraStillTaken >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraStillTaken >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraError*
+Arena::CreateMaybeMessage< ::dsa::control::v1::CameraError >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::CameraError >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::Envelope*
 Arena::CreateMaybeMessage< ::dsa::control::v1::Envelope >(Arena* arena) {

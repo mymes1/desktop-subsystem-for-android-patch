@@ -1251,12 +1251,134 @@ pub struct DiagnosticsDone {
     #[prost(string, tag = "2")]
     pub error: ::prost::alloc::string::String,
 }
+/// One picture size a camera delivers, and the frame rates it delivers it at.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraMode {
+    #[prost(uint32, tag = "1")]
+    pub width: u32,
+    #[prost(uint32, tag = "2")]
+    pub height: u32,
+    #[prost(uint32, tag = "3")]
+    pub max_fps: u32,
+    #[prost(uint32, tag = "4")]
+    pub min_fps: u32,
+}
+/// One camera of the host computer.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CameraDevice {
+    /// The host's name for it, unchanged while the camera stays plugged in. Opaque to the guest.
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    /// The name the computer gives it, such as "Integrated Camera".
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(enumeration = "CameraFacing", tag = "3")]
+    pub facing: i32,
+    /// The clockwise angle, 0, 90, 180 or 270, a picture must turn to stand upright on the
+    /// screen in its natural orientation.
+    #[prost(uint32, tag = "4")]
+    pub sensor_orientation: u32,
+    #[prost(message, repeated, tag = "5")]
+    pub modes: ::prost::alloc::vec::Vec<CameraMode>,
+}
+/// Host to guest, first on each connection: the cameras an app in the guest may use now. A
+/// camera the user has blocked in the computer's privacy settings is not listed, nor is one
+/// that cannot be opened.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CameraList {
+    #[prost(message, repeated, tag = "1")]
+    pub cameras: ::prost::alloc::vec::Vec<CameraDevice>,
+}
+/// Guest to host: start the camera `id` at about `width` by `height` and `fps` frames a
+/// second. Sent again on the same connection, it changes the size or rate.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraOpen {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub width: u32,
+    #[prost(uint32, tag = "3")]
+    pub height: u32,
+    #[prost(uint32, tag = "4")]
+    pub fps: u32,
+}
+/// Host to guest: the answer to CameraOpen, with the size and rate the pictures come in. When
+/// `ok` is false, `error` says, in words a person can act on, why the camera did not start
+/// (the user has blocked it, another program holds it, it was unplugged).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraOpened {
+    #[prost(bool, tag = "1")]
+    pub ok: bool,
+    #[prost(string, tag = "2")]
+    pub error: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub width: u32,
+    #[prost(uint32, tag = "4")]
+    pub height: u32,
+    #[prost(uint32, tag = "5")]
+    pub fps: u32,
+}
+/// Host to guest: one picture, as 8-bit 4:2:0 with the luma plane then the interleaved
+/// chroma plane (NV12), each row `stride` bytes long, laid out as in VideoFrame.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraFrame {
+    /// Counts the pictures of this connection, from 0.
+    #[prost(uint64, tag = "1")]
+    pub sequence: u64,
+    /// When the camera took it, in nanoseconds on a clock of the host's that only goes forward
+    /// while the camera runs.
+    #[prost(uint64, tag = "2")]
+    pub timestamp_ns: u64,
+    #[prost(uint32, tag = "3")]
+    pub width: u32,
+    #[prost(uint32, tag = "4")]
+    pub height: u32,
+    #[prost(uint32, tag = "5")]
+    pub stride: u32,
+    #[prost(bytes = "vec", tag = "6")]
+    pub nv12: ::prost::alloc::vec::Vec<u8>,
+}
+/// Guest to host: stop the camera and let it go. The connection stays open for a new
+/// CameraOpen.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraStop {}
+/// Guest to host: a still picture of `width` by `height`, encoded as JPEG at `quality` (1 to
+/// 100), made from the newest picture of the running camera.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraStill {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(uint32, tag = "2")]
+    pub width: u32,
+    #[prost(uint32, tag = "3")]
+    pub height: u32,
+    #[prost(uint32, tag = "4")]
+    pub quality: u32,
+}
+/// Host to guest: the answer to CameraStill. `jpeg` is empty and `error` says why when there
+/// is no picture.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraStillTaken {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(bytes = "vec", tag = "2")]
+    pub jpeg: ::prost::alloc::vec::Vec<u8>,
+    #[prost(string, tag = "3")]
+    pub error: ::prost::alloc::string::String,
+}
+/// Host to guest: the running camera failed or went away (unplugged, or blocked by the user);
+/// `error` says how. No more pictures come until a new CameraOpen succeeds.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct CameraError {
+    #[prost(string, tag = "1")]
+    pub error: ::prost::alloc::string::String,
+}
 /// The one message type on the wire. Each frame carries exactly one.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 260, 261, 262, 263, 264, 265, 266, 267"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1426,6 +1548,22 @@ pub mod envelope {
         DiagnosticsDone(super::DiagnosticsDone),
         #[prost(message, tag = "136")]
         StopApp(super::StopApp),
+        #[prost(message, tag = "260")]
+        CameraList(super::CameraList),
+        #[prost(message, tag = "261")]
+        CameraOpen(super::CameraOpen),
+        #[prost(message, tag = "262")]
+        CameraOpened(super::CameraOpened),
+        #[prost(message, tag = "263")]
+        CameraFrame(super::CameraFrame),
+        #[prost(message, tag = "264")]
+        CameraStop(super::CameraStop),
+        #[prost(message, tag = "265")]
+        CameraStill(super::CameraStill),
+        #[prost(message, tag = "266")]
+        CameraStillTaken(super::CameraStillTaken),
+        #[prost(message, tag = "267")]
+        CameraError(super::CameraError),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1466,6 +1604,9 @@ pub enum Role {
     /// The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
     /// host asks it for no secret, and the control port refuses it.
     GuestVideo = 4,
+    /// The guest's camera provider HAL, on the camera port. It carries camera pictures and
+    /// nothing else, so the host asks it for no secret, and the control port refuses it.
+    GuestCamera = 8,
 }
 impl Role {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -1478,6 +1619,7 @@ impl Role {
             Self::Host => "ROLE_HOST",
             Self::Guest => "ROLE_GUEST",
             Self::GuestVideo => "ROLE_GUEST_VIDEO",
+            Self::GuestCamera => "ROLE_GUEST_CAMERA",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -1487,6 +1629,7 @@ impl Role {
             "ROLE_HOST" => Some(Self::Host),
             "ROLE_GUEST" => Some(Self::Guest),
             "ROLE_GUEST_VIDEO" => Some(Self::GuestVideo),
+            "ROLE_GUEST_CAMERA" => Some(Self::GuestCamera),
             _ => None,
         }
     }
@@ -1918,6 +2061,42 @@ impl LogBuffer {
             "LOG_BUFFER_STATS" => Some(Self::Stats),
             "LOG_BUFFER_SECURITY" => Some(Self::Security),
             "LOG_BUFFER_KERNEL" => Some(Self::Kernel),
+            _ => None,
+        }
+    }
+}
+/// Where a camera faces, as the host computer's enclosure reports it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum CameraFacing {
+    Unspecified = 0,
+    /// On the side of the screen, facing the user.
+    Front = 1,
+    /// On the back of the screen, facing away from the user.
+    Back = 2,
+    /// A camera the enclosure does not place: a USB camera, or one whose place is unknown.
+    External = 3,
+}
+impl CameraFacing {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "CAMERA_FACING_UNSPECIFIED",
+            Self::Front => "CAMERA_FACING_FRONT",
+            Self::Back => "CAMERA_FACING_BACK",
+            Self::External => "CAMERA_FACING_EXTERNAL",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "CAMERA_FACING_UNSPECIFIED" => Some(Self::Unspecified),
+            "CAMERA_FACING_FRONT" => Some(Self::Front),
+            "CAMERA_FACING_BACK" => Some(Self::Back),
+            "CAMERA_FACING_EXTERNAL" => Some(Self::External),
             _ => None,
         }
     }

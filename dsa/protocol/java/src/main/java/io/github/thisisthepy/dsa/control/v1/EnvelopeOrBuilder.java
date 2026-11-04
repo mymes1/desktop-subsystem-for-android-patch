@@ -898,5 +898,93 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.StopApp getStopApp();
 
+  /**
+   * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+   * @return Whether the cameraList field is set.
+   */
+  boolean hasCameraList();
+  /**
+   * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+   * @return The cameraList.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraList getCameraList();
+
+  /**
+   * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+   * @return Whether the cameraOpen field is set.
+   */
+  boolean hasCameraOpen();
+  /**
+   * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+   * @return The cameraOpen.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraOpen getCameraOpen();
+
+  /**
+   * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+   * @return Whether the cameraOpened field is set.
+   */
+  boolean hasCameraOpened();
+  /**
+   * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+   * @return The cameraOpened.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraOpened getCameraOpened();
+
+  /**
+   * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+   * @return Whether the cameraFrame field is set.
+   */
+  boolean hasCameraFrame();
+  /**
+   * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+   * @return The cameraFrame.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraFrame getCameraFrame();
+
+  /**
+   * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+   * @return Whether the cameraStop field is set.
+   */
+  boolean hasCameraStop();
+  /**
+   * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+   * @return The cameraStop.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraStop getCameraStop();
+
+  /**
+   * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+   * @return Whether the cameraStill field is set.
+   */
+  boolean hasCameraStill();
+  /**
+   * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+   * @return The cameraStill.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraStill getCameraStill();
+
+  /**
+   * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+   * @return Whether the cameraStillTaken field is set.
+   */
+  boolean hasCameraStillTaken();
+  /**
+   * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+   * @return The cameraStillTaken.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraStillTaken getCameraStillTaken();
+
+  /**
+   * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+   * @return Whether the cameraError field is set.
+   */
+  boolean hasCameraError();
+  /**
+   * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+   * @return The cameraError.
+   */
+  io.github.thisisthepy.dsa.control.v1.CameraError getCameraError();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

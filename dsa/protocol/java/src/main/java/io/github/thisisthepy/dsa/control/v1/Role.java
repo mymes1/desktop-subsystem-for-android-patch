@@ -33,6 +33,15 @@ public enum Role
    * <code>ROLE_GUEST_VIDEO = 4;</code>
    */
   ROLE_GUEST_VIDEO(4),
+  /**
+   * <pre>
+   * The guest's camera provider HAL, on the camera port. It carries camera pictures and
+   * nothing else, so the host asks it for no secret, and the control port refuses it.
+   * </pre>
+   *
+   * <code>ROLE_GUEST_CAMERA = 8;</code>
+   */
+  ROLE_GUEST_CAMERA(8),
   UNRECOGNIZED(-1),
   ;
 
@@ -57,6 +66,15 @@ public enum Role
    * <code>ROLE_GUEST_VIDEO = 4;</code>
    */
   public static final int ROLE_GUEST_VIDEO_VALUE = 4;
+  /**
+   * <pre>
+   * The guest's camera provider HAL, on the camera port. It carries camera pictures and
+   * nothing else, so the host asks it for no secret, and the control port refuses it.
+   * </pre>
+   *
+   * <code>ROLE_GUEST_CAMERA = 8;</code>
+   */
+  public static final int ROLE_GUEST_CAMERA_VALUE = 8;
 
 
   @java.lang.Override
@@ -84,6 +102,7 @@ public enum Role
       case 1: return ROLE_HOST;
       case 2: return ROLE_GUEST;
       case 4: return ROLE_GUEST_VIDEO;
+      case 8: return ROLE_GUEST_CAMERA;
       default: return null;
     }
   }

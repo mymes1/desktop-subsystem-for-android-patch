@@ -101,6 +101,14 @@ public  final class Envelope extends
     DIAGNOSTICS_FILE(134),
     DIAGNOSTICS_DONE(135),
     STOP_APP(136),
+    CAMERA_LIST(260),
+    CAMERA_OPEN(261),
+    CAMERA_OPENED(262),
+    CAMERA_FRAME(263),
+    CAMERA_STOP(264),
+    CAMERA_STILL(265),
+    CAMERA_STILL_TAKEN(266),
+    CAMERA_ERROR(267),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -197,6 +205,14 @@ public  final class Envelope extends
         case 134: return DIAGNOSTICS_FILE;
         case 135: return DIAGNOSTICS_DONE;
         case 136: return STOP_APP;
+        case 260: return CAMERA_LIST;
+        case 261: return CAMERA_OPEN;
+        case 262: return CAMERA_OPENED;
+        case 263: return CAMERA_FRAME;
+        case 264: return CAMERA_STOP;
+        case 265: return CAMERA_STILL;
+        case 266: return CAMERA_STILL_TAKEN;
+        case 267: return CAMERA_ERROR;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -4268,6 +4284,406 @@ public  final class Envelope extends
     }
   }
 
+  public static final int CAMERA_LIST_FIELD_NUMBER = 260;
+  /**
+   * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+   */
+  @java.lang.Override
+  public boolean hasCameraList() {
+    return bodyCase_ == 260;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CameraList getCameraList() {
+    if (bodyCase_ == 260) {
+       return (io.github.thisisthepy.dsa.control.v1.CameraList) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CameraList.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+   */
+  private void setCameraList(io.github.thisisthepy.dsa.control.v1.CameraList value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 260;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+   */
+  private void mergeCameraList(io.github.thisisthepy.dsa.control.v1.CameraList value) {
+    value.getClass();
+  if (bodyCase_ == 260 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CameraList.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CameraList.newBuilder((io.github.thisisthepy.dsa.control.v1.CameraList) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 260;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+   */
+  private void clearCameraList() {
+    if (bodyCase_ == 260) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CAMERA_OPEN_FIELD_NUMBER = 261;
+  /**
+   * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+   */
+  @java.lang.Override
+  public boolean hasCameraOpen() {
+    return bodyCase_ == 261;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CameraOpen getCameraOpen() {
+    if (bodyCase_ == 261) {
+       return (io.github.thisisthepy.dsa.control.v1.CameraOpen) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CameraOpen.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+   */
+  private void setCameraOpen(io.github.thisisthepy.dsa.control.v1.CameraOpen value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 261;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+   */
+  private void mergeCameraOpen(io.github.thisisthepy.dsa.control.v1.CameraOpen value) {
+    value.getClass();
+  if (bodyCase_ == 261 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CameraOpen.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CameraOpen.newBuilder((io.github.thisisthepy.dsa.control.v1.CameraOpen) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 261;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+   */
+  private void clearCameraOpen() {
+    if (bodyCase_ == 261) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CAMERA_OPENED_FIELD_NUMBER = 262;
+  /**
+   * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+   */
+  @java.lang.Override
+  public boolean hasCameraOpened() {
+    return bodyCase_ == 262;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CameraOpened getCameraOpened() {
+    if (bodyCase_ == 262) {
+       return (io.github.thisisthepy.dsa.control.v1.CameraOpened) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CameraOpened.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+   */
+  private void setCameraOpened(io.github.thisisthepy.dsa.control.v1.CameraOpened value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 262;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+   */
+  private void mergeCameraOpened(io.github.thisisthepy.dsa.control.v1.CameraOpened value) {
+    value.getClass();
+  if (bodyCase_ == 262 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CameraOpened.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CameraOpened.newBuilder((io.github.thisisthepy.dsa.control.v1.CameraOpened) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 262;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+   */
+  private void clearCameraOpened() {
+    if (bodyCase_ == 262) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CAMERA_FRAME_FIELD_NUMBER = 263;
+  /**
+   * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+   */
+  @java.lang.Override
+  public boolean hasCameraFrame() {
+    return bodyCase_ == 263;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CameraFrame getCameraFrame() {
+    if (bodyCase_ == 263) {
+       return (io.github.thisisthepy.dsa.control.v1.CameraFrame) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CameraFrame.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+   */
+  private void setCameraFrame(io.github.thisisthepy.dsa.control.v1.CameraFrame value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 263;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+   */
+  private void mergeCameraFrame(io.github.thisisthepy.dsa.control.v1.CameraFrame value) {
+    value.getClass();
+  if (bodyCase_ == 263 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CameraFrame.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CameraFrame.newBuilder((io.github.thisisthepy.dsa.control.v1.CameraFrame) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 263;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+   */
+  private void clearCameraFrame() {
+    if (bodyCase_ == 263) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CAMERA_STOP_FIELD_NUMBER = 264;
+  /**
+   * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+   */
+  @java.lang.Override
+  public boolean hasCameraStop() {
+    return bodyCase_ == 264;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CameraStop getCameraStop() {
+    if (bodyCase_ == 264) {
+       return (io.github.thisisthepy.dsa.control.v1.CameraStop) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CameraStop.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+   */
+  private void setCameraStop(io.github.thisisthepy.dsa.control.v1.CameraStop value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 264;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+   */
+  private void mergeCameraStop(io.github.thisisthepy.dsa.control.v1.CameraStop value) {
+    value.getClass();
+  if (bodyCase_ == 264 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CameraStop.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CameraStop.newBuilder((io.github.thisisthepy.dsa.control.v1.CameraStop) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 264;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+   */
+  private void clearCameraStop() {
+    if (bodyCase_ == 264) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CAMERA_STILL_FIELD_NUMBER = 265;
+  /**
+   * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+   */
+  @java.lang.Override
+  public boolean hasCameraStill() {
+    return bodyCase_ == 265;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CameraStill getCameraStill() {
+    if (bodyCase_ == 265) {
+       return (io.github.thisisthepy.dsa.control.v1.CameraStill) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CameraStill.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+   */
+  private void setCameraStill(io.github.thisisthepy.dsa.control.v1.CameraStill value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 265;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+   */
+  private void mergeCameraStill(io.github.thisisthepy.dsa.control.v1.CameraStill value) {
+    value.getClass();
+  if (bodyCase_ == 265 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CameraStill.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CameraStill.newBuilder((io.github.thisisthepy.dsa.control.v1.CameraStill) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 265;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+   */
+  private void clearCameraStill() {
+    if (bodyCase_ == 265) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CAMERA_STILL_TAKEN_FIELD_NUMBER = 266;
+  /**
+   * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+   */
+  @java.lang.Override
+  public boolean hasCameraStillTaken() {
+    return bodyCase_ == 266;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CameraStillTaken getCameraStillTaken() {
+    if (bodyCase_ == 266) {
+       return (io.github.thisisthepy.dsa.control.v1.CameraStillTaken) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CameraStillTaken.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+   */
+  private void setCameraStillTaken(io.github.thisisthepy.dsa.control.v1.CameraStillTaken value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 266;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+   */
+  private void mergeCameraStillTaken(io.github.thisisthepy.dsa.control.v1.CameraStillTaken value) {
+    value.getClass();
+  if (bodyCase_ == 266 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CameraStillTaken.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CameraStillTaken.newBuilder((io.github.thisisthepy.dsa.control.v1.CameraStillTaken) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 266;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+   */
+  private void clearCameraStillTaken() {
+    if (bodyCase_ == 266) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int CAMERA_ERROR_FIELD_NUMBER = 267;
+  /**
+   * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+   */
+  @java.lang.Override
+  public boolean hasCameraError() {
+    return bodyCase_ == 267;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.CameraError getCameraError() {
+    if (bodyCase_ == 267) {
+       return (io.github.thisisthepy.dsa.control.v1.CameraError) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.CameraError.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+   */
+  private void setCameraError(io.github.thisisthepy.dsa.control.v1.CameraError value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 267;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+   */
+  private void mergeCameraError(io.github.thisisthepy.dsa.control.v1.CameraError value) {
+    value.getClass();
+  if (bodyCase_ == 267 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.CameraError.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.CameraError.newBuilder((io.github.thisisthepy.dsa.control.v1.CameraError) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 267;
+  }
+  /**
+   * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+   */
+  private void clearCameraError() {
+    if (bodyCase_ == 267) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -8267,6 +8683,390 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+     */
+    @java.lang.Override
+    public boolean hasCameraList() {
+      return instance.hasCameraList();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CameraList getCameraList() {
+      return instance.getCameraList();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+     */
+    public Builder setCameraList(io.github.thisisthepy.dsa.control.v1.CameraList value) {
+      copyOnWrite();
+      instance.setCameraList(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+     */
+    public Builder setCameraList(
+        io.github.thisisthepy.dsa.control.v1.CameraList.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCameraList(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+     */
+    public Builder mergeCameraList(io.github.thisisthepy.dsa.control.v1.CameraList value) {
+      copyOnWrite();
+      instance.mergeCameraList(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraList camera_list = 260;</code>
+     */
+    public Builder clearCameraList() {
+      copyOnWrite();
+      instance.clearCameraList();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+     */
+    @java.lang.Override
+    public boolean hasCameraOpen() {
+      return instance.hasCameraOpen();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CameraOpen getCameraOpen() {
+      return instance.getCameraOpen();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+     */
+    public Builder setCameraOpen(io.github.thisisthepy.dsa.control.v1.CameraOpen value) {
+      copyOnWrite();
+      instance.setCameraOpen(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+     */
+    public Builder setCameraOpen(
+        io.github.thisisthepy.dsa.control.v1.CameraOpen.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCameraOpen(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+     */
+    public Builder mergeCameraOpen(io.github.thisisthepy.dsa.control.v1.CameraOpen value) {
+      copyOnWrite();
+      instance.mergeCameraOpen(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpen camera_open = 261;</code>
+     */
+    public Builder clearCameraOpen() {
+      copyOnWrite();
+      instance.clearCameraOpen();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+     */
+    @java.lang.Override
+    public boolean hasCameraOpened() {
+      return instance.hasCameraOpened();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CameraOpened getCameraOpened() {
+      return instance.getCameraOpened();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+     */
+    public Builder setCameraOpened(io.github.thisisthepy.dsa.control.v1.CameraOpened value) {
+      copyOnWrite();
+      instance.setCameraOpened(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+     */
+    public Builder setCameraOpened(
+        io.github.thisisthepy.dsa.control.v1.CameraOpened.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCameraOpened(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+     */
+    public Builder mergeCameraOpened(io.github.thisisthepy.dsa.control.v1.CameraOpened value) {
+      copyOnWrite();
+      instance.mergeCameraOpened(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraOpened camera_opened = 262;</code>
+     */
+    public Builder clearCameraOpened() {
+      copyOnWrite();
+      instance.clearCameraOpened();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+     */
+    @java.lang.Override
+    public boolean hasCameraFrame() {
+      return instance.hasCameraFrame();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CameraFrame getCameraFrame() {
+      return instance.getCameraFrame();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+     */
+    public Builder setCameraFrame(io.github.thisisthepy.dsa.control.v1.CameraFrame value) {
+      copyOnWrite();
+      instance.setCameraFrame(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+     */
+    public Builder setCameraFrame(
+        io.github.thisisthepy.dsa.control.v1.CameraFrame.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCameraFrame(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+     */
+    public Builder mergeCameraFrame(io.github.thisisthepy.dsa.control.v1.CameraFrame value) {
+      copyOnWrite();
+      instance.mergeCameraFrame(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraFrame camera_frame = 263;</code>
+     */
+    public Builder clearCameraFrame() {
+      copyOnWrite();
+      instance.clearCameraFrame();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+     */
+    @java.lang.Override
+    public boolean hasCameraStop() {
+      return instance.hasCameraStop();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CameraStop getCameraStop() {
+      return instance.getCameraStop();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+     */
+    public Builder setCameraStop(io.github.thisisthepy.dsa.control.v1.CameraStop value) {
+      copyOnWrite();
+      instance.setCameraStop(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+     */
+    public Builder setCameraStop(
+        io.github.thisisthepy.dsa.control.v1.CameraStop.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCameraStop(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+     */
+    public Builder mergeCameraStop(io.github.thisisthepy.dsa.control.v1.CameraStop value) {
+      copyOnWrite();
+      instance.mergeCameraStop(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStop camera_stop = 264;</code>
+     */
+    public Builder clearCameraStop() {
+      copyOnWrite();
+      instance.clearCameraStop();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+     */
+    @java.lang.Override
+    public boolean hasCameraStill() {
+      return instance.hasCameraStill();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CameraStill getCameraStill() {
+      return instance.getCameraStill();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+     */
+    public Builder setCameraStill(io.github.thisisthepy.dsa.control.v1.CameraStill value) {
+      copyOnWrite();
+      instance.setCameraStill(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+     */
+    public Builder setCameraStill(
+        io.github.thisisthepy.dsa.control.v1.CameraStill.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCameraStill(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+     */
+    public Builder mergeCameraStill(io.github.thisisthepy.dsa.control.v1.CameraStill value) {
+      copyOnWrite();
+      instance.mergeCameraStill(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStill camera_still = 265;</code>
+     */
+    public Builder clearCameraStill() {
+      copyOnWrite();
+      instance.clearCameraStill();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+     */
+    @java.lang.Override
+    public boolean hasCameraStillTaken() {
+      return instance.hasCameraStillTaken();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CameraStillTaken getCameraStillTaken() {
+      return instance.getCameraStillTaken();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+     */
+    public Builder setCameraStillTaken(io.github.thisisthepy.dsa.control.v1.CameraStillTaken value) {
+      copyOnWrite();
+      instance.setCameraStillTaken(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+     */
+    public Builder setCameraStillTaken(
+        io.github.thisisthepy.dsa.control.v1.CameraStillTaken.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCameraStillTaken(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+     */
+    public Builder mergeCameraStillTaken(io.github.thisisthepy.dsa.control.v1.CameraStillTaken value) {
+      copyOnWrite();
+      instance.mergeCameraStillTaken(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraStillTaken camera_still_taken = 266;</code>
+     */
+    public Builder clearCameraStillTaken() {
+      copyOnWrite();
+      instance.clearCameraStillTaken();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+     */
+    @java.lang.Override
+    public boolean hasCameraError() {
+      return instance.hasCameraError();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.CameraError getCameraError() {
+      return instance.getCameraError();
+    }
+    /**
+     * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+     */
+    public Builder setCameraError(io.github.thisisthepy.dsa.control.v1.CameraError value) {
+      copyOnWrite();
+      instance.setCameraError(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+     */
+    public Builder setCameraError(
+        io.github.thisisthepy.dsa.control.v1.CameraError.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCameraError(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+     */
+    public Builder mergeCameraError(io.github.thisisthepy.dsa.control.v1.CameraError value) {
+      copyOnWrite();
+      instance.mergeCameraError(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.CameraError camera_error = 267;</code>
+     */
+    public Builder clearCameraError() {
+      copyOnWrite();
+      instance.clearCameraError();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -8366,9 +9166,17 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.DiagnosticsDone.class,
             io.github.thisisthepy.dsa.control.v1.StopApp.class,
             io.github.thisisthepy.dsa.control.v1.DeveloperMode.class,
+            io.github.thisisthepy.dsa.control.v1.CameraList.class,
+            io.github.thisisthepy.dsa.control.v1.CameraOpen.class,
+            io.github.thisisthepy.dsa.control.v1.CameraOpened.class,
+            io.github.thisisthepy.dsa.control.v1.CameraFrame.class,
+            io.github.thisisthepy.dsa.control.v1.CameraStop.class,
+            io.github.thisisthepy.dsa.control.v1.CameraStill.class,
+            io.github.thisisthepy.dsa.control.v1.CameraStillTaken.class,
+            io.github.thisisthepy.dsa.control.v1.CameraError.class,
           };
           java.lang.String info =
-              "\u0000Q\u0001\u0000\u0001\u008cQ\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
+              "\u0000Y\u0001\u0000\u0001\u010bY\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
               "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
               "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
               "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
@@ -8378,7 +9186,8 @@ public  final class Envelope extends
               "P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000" +
               "`<\u0000a<\u0000b<\u0000c<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
               "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
-              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000";
+              "<\u0000\u0087<\u0000\u0088<\u0000\u008c<\u0000\u0104<\u0000\u0105<\u0000\u0106<\u0000" +
+              "\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a<\u0000\u010b<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
