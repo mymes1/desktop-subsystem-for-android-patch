@@ -187,10 +187,12 @@ message AppInfo {
   bytes icon_png = 3;
 }
 
-// Guest to host, from the agent: an app a launcher lists is installed in the guest, or its
-// name or icon changed. The host shows it in its own start menu. The agent sends it on each
-// connection for every such app, and again whenever the app is installed again or updated;
-// the InstalledApps that follows says which apps are still there.
+// Guest to host, from the agent: an app a launcher lists is installed in the guest, or
+// something about it changed: its name, icon, version or size. The host shows it in its own
+// start menu and its list of installed apps. The agent sends it on each connection for every
+// such app, and again whenever the app is installed again or updated, or the host asks
+// (RefreshApps) and the app's sizes changed; the InstalledApps that follows says which apps
+// are still there.
 message InstalledApp {
   string package_name = 1;
   // The app's own name, as a launcher shows it.
@@ -198,6 +200,63 @@ message InstalledApp {
   // The app's launcher icon, as a square PNG image of at most 256 pixels on a side. Empty
   // when the app has no icon the agent could draw.
   bytes icon_png = 3;
+  // The installed version, as the package manager reports it.
+  string version_name = 4;
+  int64 version_code = 5;
+  // When the app was first installed and last updated, in milliseconds since the Unix epoch.
+  uint64 first_install_time_ms = 6;
+  uint64 last_update_time_ms = 7;
+  // True for an app that is part of the Android image, which cannot be uninstalled.
+  bool system_app = 8;
+  // The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+  // agent could not read them.
+  uint64 app_bytes = 9;
+  uint64 data_bytes = 10;
+  uint64 cache_bytes = 11;
+}
+
+// Host to guest: read the installed apps again, sizes included, and send the InstalledApp of
+// each one that changed, then InstalledApps, even when nothing changed, so the host knows its
+// list is fresh.
+message RefreshApps {}
+
+// Host to guest: open Android's own settings for an app (its permissions, storage and
+// notifications) as a new task in its own window. An empty `package_name` opens the list of
+// every installed app instead.
+message OpenAppSettings {
+  string package_name = 1;
+}
+
+// Whether an app was uninstalled, and if not, why. The reasons are stable, so the host can say
+// in the user's language what went wrong; the message beside them gives the guest's own words.
+enum UninstallStatus {
+  UNINSTALL_STATUS_UNSPECIFIED = 0;
+  // The app is gone.
+  UNINSTALL_STATUS_SUCCESS = 1;
+  // No app of that package is installed.
+  UNINSTALL_STATUS_NOT_INSTALLED = 2;
+  // The app is part of the Android image; only apps the user installed can be uninstalled.
+  UNINSTALL_STATUS_SYSTEM_APP = 3;
+  // Android refused: the app is a device administrator, or a policy keeps it.
+  UNINSTALL_STATUS_BLOCKED = 4;
+  // Anything else. The message says what.
+  UNINSTALL_STATUS_OTHER = 5;
+}
+
+// Host to guest: uninstall a user app. The agent does it through the package installer and
+// answers with UninstallResult of the same `request_id`.
+message UninstallApp {
+  uint32 request_id = 1;
+  string package_name = 2;
+}
+
+// Guest to host, from the agent: how an UninstallApp went.
+message UninstallResult {
+  uint32 request_id = 1;
+  string package_name = 2;
+  UninstallStatus status = 3;
+  // The guest's own words, for the log and a bug report.
+  string message = 4;
 }
 
 // Guest to host, from the agent: every app a launcher lists, by package, in package order.
@@ -1153,6 +1212,10 @@ message Envelope {
     InstallResult install_result = 64;
     QueryPackage query_package = 65;
     PackageState package_state = 66;
+    UninstallApp uninstall_app = 67;
+    UninstallResult uninstall_result = 68;
+    RefreshApps refresh_apps = 69;
+    OpenAppSettings open_app_settings = 30;
     OpenLink open_link = 50;
     LinkHandling link_handling = 51;
     OpenFile open_file = 52;

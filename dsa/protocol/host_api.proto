@@ -116,8 +116,48 @@ message ListTasks {}
 message WatchTasks {}
 
 // Asks for the apps installed in the caller's Android that a launcher lists, as the host's
-// start menu shows them.
-message ListApps {}
+// start menu shows them. With `refresh`, the caller's Android must be running: it reads the
+// apps again, sizes included, and the answer waits for that fresh list.
+message ListApps {
+  bool refresh = 1;
+}
+
+// Opens Android's own settings for an app (its permissions, storage and notifications) in a
+// window of its own. An empty `package_name` opens Android's list of every installed app.
+// Answered with Done once Android has been asked.
+message OpenAppSettings {
+  string package_name = 1;
+}
+
+// Uninstalls an app the user installed in the caller's Android. Android must be running. The
+// answer is UninstallResult.
+message UninstallApp {
+  // An Android package name, such as "com.example.notes".
+  string package_name = 1;
+}
+
+// Whether an app was uninstalled, and if not, why.
+enum UninstallStatus {
+  UNINSTALL_STATUS_UNSPECIFIED = 0;
+  // The app is gone.
+  UNINSTALL_STATUS_SUCCESS = 1;
+  // No app of that package is installed.
+  UNINSTALL_STATUS_NOT_INSTALLED = 2;
+  // The app is part of the Android image; only apps the user installed can be uninstalled.
+  UNINSTALL_STATUS_SYSTEM_APP = 3;
+  // Android refused: the app is a device administrator, or a policy keeps it.
+  UNINSTALL_STATUS_BLOCKED = 4;
+  // Anything else. The message says what.
+  UNINSTALL_STATUS_OTHER = 5;
+}
+
+// The answer to UninstallApp.
+message UninstallResult {
+  string package_name = 1;
+  UninstallStatus status = 2;
+  // Android's own words, for the log and a bug report.
+  string message = 3;
+}
 
 // The user closed a task's window: asks the caller's Android to end the task.
 message CloseTask {
@@ -595,7 +635,9 @@ message TaskFrames {
 }
 
 // The name and launcher icon of an app the caller's Android has a task of. Sent before the
-// app's first task, and again before the next one once the app has had no task.
+// app's first task, and again before the next one once the app has had no task. In the list
+// of installed apps it also carries the app's version, dates and sizes; for a task they are
+// left empty.
 message AppInfo {
   string package_name = 1;
   // The app's own name, as a launcher shows it.
@@ -603,6 +645,19 @@ message AppInfo {
   // The app's launcher icon, as a square PNG image of at most 256 pixels on a side. Empty
   // when Android gave none.
   bytes icon_png = 3;
+  // The installed version, as the package manager reports it.
+  string version_name = 4;
+  int64 version_code = 5;
+  // When the app was first installed and last updated, in milliseconds since the Unix epoch.
+  uint64 first_install_time_ms = 6;
+  uint64 last_update_time_ms = 7;
+  // True for an app that is part of the Android image, which cannot be uninstalled.
+  bool system_app = 8;
+  // The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+  // agent could not read them.
+  uint64 app_bytes = 9;
+  uint64 data_bytes = 10;
+  uint64 cache_bytes = 11;
 }
 
 // The apps installed in the caller's Android that a launcher lists. The list is kept while
@@ -1009,6 +1064,8 @@ message Request {
     WatchAccessibility watch_accessibility = 28;
     WidgetPointer widget_pointer = 35;
     GetPackage get_package = 36;
+    OpenAppSettings open_app_settings = 37;
+    UninstallApp uninstall_app = 38;
     WatchLog watch_log = 70;
     CollectDiagnostics collect_diagnostics = 71;
   }
@@ -1031,6 +1088,7 @@ message Response {
     Widget widget = 13;
     Widgets widgets = 14;
     PackageState package_state = 15;
+    UninstallResult uninstall_result = 16;
   }
 }
 
