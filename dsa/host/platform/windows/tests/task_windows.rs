@@ -288,11 +288,14 @@ fn fr3_two_apps_open_two_native_windows_each_in_its_own_window_host() {
     assert_ne!(window_thread(open[0].hwnd), window_thread(open[1].hwnd));
     for (window, (label, size)) in open
         .iter()
-        .zip([("Clock", (400, 300)), ("Maps", (500, 350))])
+        .zip([("Clock", (400u32, 300u32)), ("Maps", (500, 350))])
     {
         assert_eq!(title(window.hwnd), label);
         assert_ne!(unsafe { IsWindowVisible(window.hwnd as HWND) }, 0);
-        assert_eq!(client_size(window.hwnd), size);
+        // The task's size, or the smallest a window may have on this monitor when the task
+        // is smaller: at 200 % that is 440 pixels a side.
+        let size = min_client_size(dpi_of_new_windows(), None, Some(size));
+        assert_eq!(client_size(window.hwnd), (size.0 as i32, size.1 as i32));
     }
 
     // A new label retitles the window in place.
@@ -526,32 +529,10 @@ fn fr4_frames_of_a_resizing_task_reuse_one_texture_and_each_is_shown() {
     windows_of(&running, 0);
 }
 
-/// One step of a drag, as the test saw it.
-struct DragStep {
-    /// How long the step held the window back.
-    took: Duration,
-    /// The window's client size when the fake guest was asked for the step's size.
-    client_when_asked: (i32, i32),
-    /// The window's client size before the step.
-    before: (i32, i32),
-}
-
-/// Drags the window one step to `outer`. The fake guest watches for the request of the client
-/// size that step comes to and notes the window's size then. When `answer` is set it answers
-/// the request at once with a frame of that size; otherwise it never answers.
-///
-/// A step that waits for its frame asks the guest for the size while the window still has
-/// the old one; a step that does not wait takes the size first and only then asks. The size
-/// the guest notes therefore says whether the step waited, however slowly the machine runs
-/// the resize itself, and an answer that follows the request rather than a timer comes in
-/// time however the machine schedules the threads.
-fn drag_step(
-    running: &Running,
-    sink: &Arc<dyn DisplaySink>,
-    hwnd: isize,
-    outer: (i32, i32),
-    answer: bool,
-) -> DragStep {
+/// Drags the window one step to `outer` and returns the client size the step proposes, once
+/// the guest has been asked for it. The step itself does not wait for the guest: the window
+/// keeps the size of the frame it shows, so the step returns at once with the old size.
+fn drag_step(running: &Running, hwnd: isize, outer: (i32, i32)) -> (u32, u32) {
     let before = client_size(hwnd);
     let (window, _) = window_and_work_area(hwnd);
     let client = (
@@ -559,44 +540,32 @@ fn drag_step(
         outer.1 - (window.bottom - window.top - before.1),
     );
     let size = (client.0 as u32, client.1 as u32);
-    let guest = {
-        let sink = Arc::clone(sink);
-        let android = Arc::clone(&running.android);
-        thread::spawn(move || {
-            let deadline = Instant::now() + WAIT;
-            loop {
-                let asked = android.requests.lock().unwrap().iter().any(|request| {
-                    matches!(request, TaskRequest::Resize { task_id: 1, width, height, .. }
-                        if (*width, *height) == size)
-                });
-                if asked {
-                    break;
-                }
-                if Instant::now() >= deadline {
-                    return None;
-                }
-                thread::sleep(Duration::from_millis(1));
-            }
-            let when_asked = client_size(hwnd);
-            if answer {
-                sink.frame(3, size);
-            }
-            Some(when_asked)
-        })
-    };
     let started = Instant::now();
     resize_to(hwnd, outer.0, outer.1);
     let took = started.elapsed();
-    assert_eq!(client_size(hwnd), client, "the step did not take its size");
-    let client_when_asked = guest
-        .join()
-        .unwrap()
-        .unwrap_or_else(|| panic!("the guest was never asked for {size:?}"));
-    DragStep {
-        took,
-        client_when_asked,
+    assert!(
+        took < Duration::from_millis(400),
+        "the drag step waited {took:?} for the guest"
+    );
+    assert_eq!(
+        client_size(hwnd),
         before,
-    }
+        "the window took the size {size:?} before a frame of that size was shown"
+    );
+    wait_for(&format!("the guest to be asked for {size:?}"), || {
+        running
+            .android
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|request| {
+                matches!(request, TaskRequest::Resize { task_id: 1, width, height, .. }
+                    if (*width, *height) == size)
+            })
+            .then_some(())
+    });
+    size
 }
 
 #[test]
@@ -627,59 +596,30 @@ fn fr4_a_dragged_window_keeps_a_new_size_back_until_the_frame_of_that_size_is_sh
     sink.frame(3, (width as u32, height as u32));
     unsafe { SendMessageW(hwnd as HWND, WM_ENTERSIZEMOVE, 0, 0) };
 
-    // The guest is asked for the size while the window keeps its old one, and the window
-    // takes the size only once the frame is in: the step returns with the new size, and
-    // nothing on the screen disagrees in between.
-    let step = drag_step(&running, &sink, hwnd, (560, 450), true);
+    // The guest is asked for the size while the window keeps its old one; the window takes
+    // the size together with the frame of that size.
+    let size = drag_step(&running, hwnd, (900, 800));
+    sink.frame(3, size);
+    wait_for("the window to take the size of its frame", || {
+        (client_size(hwnd) == (size.0 as i32, size.1 as i32)).then_some(())
+    });
+
+    // A guest that never answers leaves the window at the size of the frame it shows.
+    let shown = size;
+    let late = drag_step(&running, hwnd, (960, 860));
+    drag_step(&running, hwnd, (980, 880));
+    thread::sleep(Duration::from_millis(300));
     assert_eq!(
-        step.client_when_asked, step.before,
-        "the window took its new size before it asked the guest for a frame of that size"
-    );
-    assert!(
-        step.took < Duration::from_millis(400),
-        "the resize waited {:?} for a frame that came as soon as it was asked for",
-        step.took
+        client_size(hwnd),
+        (shown.0 as i32, shown.1 as i32),
+        "the window changed size without a frame of that size"
     );
 
-    // A guest that never answers holds the step back for the wait's budget and no longer.
-    let step = drag_step(&running, &sink, hwnd, (600, 480), false);
-    assert_eq!(
-        step.client_when_asked, step.before,
-        "the window took its new size before it asked the guest for a frame of that size"
-    );
-    let took = step.took;
-    assert!(
-        took >= Duration::from_millis(45),
-        "the resize returned after {took:?} without a frame, before the wait's budget"
-    );
-    assert!(
-        took < Duration::from_millis(400),
-        "the resize waited {took:?} for a frame that never came"
-    );
-
-    // After steps in a row without a frame the drag stops waiting: the next takes its size
-    // before the guest is asked for it.
-    drag_step(&running, &sink, hwnd, (610, 490), false);
-    drag_step(&running, &sink, hwnd, (620, 500), false);
-    let step = drag_step(&running, &sink, hwnd, (630, 510), false);
-    assert_ne!(
-        step.client_when_asked, step.before,
-        "a drag whose guest never answers still held its fourth step back for a frame"
-    );
-
-    // The drag has not given up for good: later in the same drag, a step waits again, and a
-    // guest that answers by then has every step after it wait too.
-    thread::sleep(Duration::from_millis(600));
-    let step = drag_step(&running, &sink, hwnd, (640, 520), true);
-    assert_eq!(
-        step.client_when_asked, step.before,
-        "a drag that gave up never waited again"
-    );
-    let step = drag_step(&running, &sink, hwnd, (650, 530), true);
-    assert_eq!(
-        step.client_when_asked, step.before,
-        "a guest that answered again was not waited for on the next step"
-    );
+    // A late frame of an earlier step is still a frame of a size the window can take.
+    sink.frame(3, late);
+    wait_for("the window to take the size of the late frame", || {
+        (client_size(hwnd) == (late.0 as i32, late.1 as i32)).then_some(())
+    });
 
     unsafe { SendMessageW(hwnd as HWND, WM_EXITSIZEMOVE, 0, 0) };
     running.android.publish(TaskEvent::Removed { task_id: 1 });
@@ -974,15 +914,34 @@ fn fr4_a_maximised_task_window_shows_its_task_1_to_1_without_a_new_texture_or_a_
         let handle = wait_for("display 3 to reach task 1's window", || {
             sink.target(3, 1280, 720)
         });
-        sink.frame(3, (400, 300));
+        // A frame of the window's size, which may be larger than the task's on a monitor
+        // whose smallest window is larger.
+        let (width, height) = client_size(hwnd);
+        sink.frame(3, (width as u32, height as u32));
         handle
     });
 
     // Only the requests the maximise makes count, not the ones the window made opening.
     thread::sleep(Duration::from_millis(200));
     let before = running.android.requests.lock().unwrap().len();
+    let normal = client_size(hwnd);
     unsafe { ShowWindow(hwnd as HWND, SW_MAXIMIZE) };
     assert_ne!(unsafe { IsZoomed(hwnd as HWND) }, 0);
+    // The task is given the size live, so its app lays itself out again instead of being
+    // recreated at a size it has not drawn at.
+    wait_for("the maximised size to reach the guest", || {
+        (resizes_since(&running, before, 1) == vec![(max, true)]).then_some(())
+    });
+    // The window changes size only together with a frame of that size, which comes in the
+    // same texture.
+    if let (Some(sink), Some(texture)) = (&sink, texture) {
+        assert_eq!(client_size(hwnd), normal, "the window took a size it had no frame of");
+        assert_eq!(sink.target(3, 1280, 720), Some(texture), "a new texture");
+        sink.frame(3, max);
+        wait_for("the window to take the size of its frame", || {
+            (client_size(hwnd) == (max.0 as i32, max.1 as i32)).then_some(())
+        });
+    }
     let (width, height) = client_size(hwnd);
     assert_eq!(
         (width as u32, height as u32),
@@ -1008,18 +967,6 @@ fn fr4_a_maximised_task_window_shows_its_task_1_to_1_without_a_new_texture_or_a_
         work.bottom
     );
 
-    // The task is given the size live, so its app lays itself out again instead of being
-    // recreated at a size it has not drawn at.
-    wait_for("the maximised size to reach the guest", || {
-        (resizes_since(&running, before, 1) == vec![(max, true)]).then_some(())
-    });
-    // The guest's frames keep coming in the same texture, the first ones still of the old
-    // size, then of the new one.
-    if let (Some(sink), Some(texture)) = (&sink, texture) {
-        assert_eq!(sink.target(3, 1280, 720), Some(texture), "a new texture");
-        sink.frame(3, (400, 300));
-        sink.frame(3, max);
-    }
     // Once the task has the size, it is reconfigured once, at that size.
     let mut maximised = clock.clone();
     maximised.bounds.right = maximised.bounds.left + max.0 as i32;
@@ -1051,11 +998,16 @@ fn fr4_a_maximised_task_window_shows_its_task_1_to_1_without_a_new_texture_or_a_
     let restored_from = running.android.requests.lock().unwrap().len();
     unsafe { ShowWindow(hwnd as HWND, SW_RESTORE) };
     assert_eq!(unsafe { IsZoomed(hwnd as HWND) }, 0);
-    let (width, height) = client_size(hwnd);
-    let restored = (width as u32, height as u32);
+    let restored = (normal.0 as u32, normal.1 as u32);
     assert_ne!(restored, max);
     wait_for("the restored size to reach the guest", || {
         (resizes_since(&running, restored_from, 1) == vec![(restored, true)]).then_some(())
+    });
+    if let Some(sink) = &sink {
+        sink.frame(3, restored);
+    }
+    wait_for("the window to take its restored size", || {
+        (client_size(hwnd) == normal).then_some(())
     });
 
     running.android.publish(TaskEvent::Removed { task_id: 1 });
@@ -1227,8 +1179,10 @@ fn fr5_a_right_click_in_a_task_window_reaches_its_task_as_a_secondary_click() {
             (7, PointerAction::Up, PointerTool::Mouse, 0),
         ]
     );
-    let expected_x = x as f32 * 400.0 / width as f32;
-    let expected_y = y as f32 * 300.0 / height as f32;
+    // The window shows the task 1:1, so the point is the same pixel of the task, kept
+    // inside it while the window is larger (the smallest window can exceed a small task).
+    let expected_x = x.min(399) as f32;
+    let expected_y = y.min(299) as f32;
     assert!((given[0].x - expected_x).abs() <= 2.0, "{:?}", given[0]);
     assert!((given[0].y - expected_y).abs() <= 2.0, "{:?}", given[0]);
 }
@@ -1292,9 +1246,9 @@ fn fr5_the_wheel_in_a_task_window_scrolls_its_task() {
     let scroll = pointers(&running, 1)[0];
     assert_eq!(scroll.action, PointerAction::Scroll);
     assert_eq!((scroll.scroll_x, scroll.scroll_y), (0.0, -1.0));
-    let (width, height) = client_size(open[0].hwnd);
-    assert!((scroll.x - 10.0 * 400.0 / width as f32).abs() <= 2.0);
-    assert!((scroll.y - 20.0 * 300.0 / height as f32).abs() <= 2.0);
+    // The window shows the task 1:1: the wheel scrolls at the same pixel of the task.
+    assert!((scroll.x - 10.0).abs() <= 2.0, "{scroll:?}");
+    assert!((scroll.y - 20.0).abs() <= 2.0, "{scroll:?}");
 }
 
 /// Reaches the in-memory local API only once `up` is set, as a service that is starting.
