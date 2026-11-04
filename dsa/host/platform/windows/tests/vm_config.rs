@@ -162,13 +162,15 @@ fn fr27_an_arm64_vm_without_an_initrd_names_none() {
 #[test]
 fn fr27_an_arm64_initrd_outside_the_kernels_folder_is_refused() {
     // The firmware reads only the boot folder, so it could not load the initrd.
-    let error = config()
+    let mut outside = config();
+    outside.initrd = Some(PathBuf::from(r"C:\ProgramData\DSA\initrd.img"));
+    let error = outside
         .to_hcs_document_for(GuestArch::Arm64)
         .unwrap_err()
         .to_string();
     assert!(error.contains("kernel's folder"), "{error}");
     // x86_64 boots the files from wherever they are.
-    document(&config());
+    document(&outside);
 }
 
 #[test]
