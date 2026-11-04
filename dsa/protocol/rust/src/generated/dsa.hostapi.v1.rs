@@ -218,6 +218,121 @@ pub struct ActOnNotification {
     #[prost(enumeration = "NotificationAction", tag = "2")]
     pub action: i32,
 }
+/// An app in the caller's Android that runs a foreground service, so it keeps running with no
+/// window: music playback, a download, a VPN. One per package.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackgroundApp {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub app_label: ::prost::alloc::string::String,
+    /// The app's icon, a PNG image; empty for none.
+    #[prost(bytes = "vec", tag = "3")]
+    pub icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// The title and text of the notification the service keeps shown.
+    #[prost(string, tag = "4")]
+    pub title: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub text: ::prost::alloc::string::String,
+    /// The titles of that notification's actions, in its order ("Pause", "Next").
+    #[prost(string, repeated, tag = "6")]
+    pub actions: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// An app's active media session in the caller's Android. One per package.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MediaSession {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub app_label: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub title: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
+    pub artist: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub album: ::prost::alloc::string::String,
+    /// The album art, a PNG image; empty for none.
+    #[prost(bytes = "vec", tag = "6")]
+    pub art_png: ::prost::alloc::vec::Vec<u8>,
+    #[prost(enumeration = "MediaPlayback", tag = "7")]
+    pub playback: i32,
+    #[prost(bool, tag = "8")]
+    pub can_play: bool,
+    #[prost(bool, tag = "9")]
+    pub can_pause: bool,
+    #[prost(bool, tag = "10")]
+    pub can_next: bool,
+    #[prost(bool, tag = "11")]
+    pub can_previous: bool,
+}
+/// Asks for the apps that run in the background in the caller's Android and their media
+/// sessions. The answer is BackgroundApps; an Android that is not running has none.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListBackgroundApps {}
+/// The apps that run in the background, and the active media sessions.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BackgroundApps {
+    #[prost(message, repeated, tag = "1")]
+    pub apps: ::prost::alloc::vec::Vec<BackgroundApp>,
+    #[prost(message, repeated, tag = "2")]
+    pub media: ::prost::alloc::vec::Vec<MediaSession>,
+}
+/// Watches the apps that run in the background. The answer is BackgroundApps, and the
+/// connection then carries a BackgroundAppEvent for each change. The client sends nothing
+/// more on it. When the Android stops, every app and session is removed. The watch lasts
+/// across restarts of the Android.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchBackgroundApps {}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackgroundAppRemoved {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct MediaSessionRemoved {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
+/// A change to the apps that run in the background, on a connection that watches them.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct BackgroundAppEvent {
+    #[prost(oneof = "background_app_event::Body", tags = "1, 2, 3, 4")]
+    pub body: ::core::option::Option<background_app_event::Body>,
+}
+/// Nested message and enum types in `BackgroundAppEvent`.
+pub mod background_app_event {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Body {
+        /// An app started to run in the background, or its notification changed.
+        #[prost(message, tag = "1")]
+        App(super::BackgroundApp),
+        #[prost(message, tag = "2")]
+        AppRemoved(super::BackgroundAppRemoved),
+        /// A session became active, or its metadata or playback changed.
+        #[prost(message, tag = "3")]
+        Media(super::MediaSession),
+        #[prost(message, tag = "4")]
+        MediaRemoved(super::MediaSessionRemoved),
+    }
+}
+/// Acts on an app of the caller's Android that runs in the background. Answered with Done.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ActOnBackgroundApp {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "BackgroundAppCommand", tag = "2")]
+    pub command: i32,
+    #[prost(int32, tag = "3")]
+    pub action: i32,
+}
+/// Runs a command on the package's media session, as a media key does. Answered with Done.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ControlMedia {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "MediaCommand", tag = "2")]
+    pub command: i32,
+}
 /// Asks for the widgets the apps in the caller's Android offer. The answer is WidgetProviders.
 /// Needs the caller's Android to be running.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -923,6 +1038,10 @@ pub struct Settings {
     /// summary at the end of a drag. Off by default; the same rules as input_trace.
     #[prost(bool, tag = "12")]
     pub resize_trace: bool,
+    /// Whether stopping an app that runs in the background skips the question that confirms
+    /// it. Off by default: the first stop asks, and the user may tick "do not ask again".
+    #[prost(bool, tag = "13")]
+    pub stop_without_asking: bool,
 }
 /// Turns the connection into the accessibility tree of one of the caller's task windows, for a
 /// host accessibility client (a screen reader, an inspection tool) that reads that window.
@@ -1062,7 +1181,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 70, 71"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 70, 71, 37, 38, 39, 40"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1140,6 +1259,14 @@ pub mod request {
         WatchLog(super::WatchLog),
         #[prost(message, tag = "71")]
         CollectDiagnostics(super::CollectDiagnostics),
+        #[prost(message, tag = "37")]
+        ListBackgroundApps(super::ListBackgroundApps),
+        #[prost(message, tag = "38")]
+        WatchBackgroundApps(super::WatchBackgroundApps),
+        #[prost(message, tag = "39")]
+        ActOnBackgroundApp(super::ActOnBackgroundApp),
+        #[prost(message, tag = "40")]
+        ControlMedia(super::ControlMedia),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1148,7 +1275,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -1184,6 +1311,8 @@ pub mod response {
         Widgets(super::Widgets),
         #[prost(message, tag = "15")]
         PackageState(super::PackageState),
+        #[prost(message, tag = "16")]
+        BackgroundApps(super::BackgroundApps),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -1191,7 +1320,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 21"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1243,6 +1372,8 @@ pub mod envelope {
         LogEntries(super::LogEntries),
         #[prost(message, tag = "51")]
         DiagnosticsData(super::DiagnosticsData),
+        #[prost(message, tag = "21")]
+        BackgroundAppEvent(super::BackgroundAppEvent),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1448,6 +1579,114 @@ impl NotificationAction {
             "NOTIFICATION_ACTION_UNSPECIFIED" => Some(Self::Unspecified),
             "NOTIFICATION_ACTION_OPEN" => Some(Self::Open),
             "NOTIFICATION_ACTION_DISMISS" => Some(Self::Dismiss),
+            _ => None,
+        }
+    }
+}
+/// The state of a media session's playback.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum MediaPlayback {
+    Unspecified = 0,
+    Stopped = 1,
+    Playing = 2,
+    Paused = 3,
+}
+impl MediaPlayback {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MEDIA_PLAYBACK_UNSPECIFIED",
+            Self::Stopped => "MEDIA_PLAYBACK_STOPPED",
+            Self::Playing => "MEDIA_PLAYBACK_PLAYING",
+            Self::Paused => "MEDIA_PLAYBACK_PAUSED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MEDIA_PLAYBACK_UNSPECIFIED" => Some(Self::Unspecified),
+            "MEDIA_PLAYBACK_STOPPED" => Some(Self::Stopped),
+            "MEDIA_PLAYBACK_PLAYING" => Some(Self::Playing),
+            "MEDIA_PLAYBACK_PAUSED" => Some(Self::Paused),
+            _ => None,
+        }
+    }
+}
+/// What the user does with an app that runs in the background.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum BackgroundAppCommand {
+    Unspecified = 0,
+    /// Opens the app's window, as clicking its notification does. Android leaves Doze first.
+    Open = 1,
+    /// Runs the notification's action with the index in `action`.
+    Action = 2,
+    /// Stops the app: Android force-stops it, which ends its services and frees its memory.
+    Stop = 3,
+}
+impl BackgroundAppCommand {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "BACKGROUND_APP_COMMAND_UNSPECIFIED",
+            Self::Open => "BACKGROUND_APP_COMMAND_OPEN",
+            Self::Action => "BACKGROUND_APP_COMMAND_ACTION",
+            Self::Stop => "BACKGROUND_APP_COMMAND_STOP",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "BACKGROUND_APP_COMMAND_UNSPECIFIED" => Some(Self::Unspecified),
+            "BACKGROUND_APP_COMMAND_OPEN" => Some(Self::Open),
+            "BACKGROUND_APP_COMMAND_ACTION" => Some(Self::Action),
+            "BACKGROUND_APP_COMMAND_STOP" => Some(Self::Stop),
+            _ => None,
+        }
+    }
+}
+/// A command for a media session.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum MediaCommand {
+    Unspecified = 0,
+    Play = 1,
+    Pause = 2,
+    Next = 3,
+    Previous = 4,
+    Stop = 5,
+}
+impl MediaCommand {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "MEDIA_COMMAND_UNSPECIFIED",
+            Self::Play => "MEDIA_COMMAND_PLAY",
+            Self::Pause => "MEDIA_COMMAND_PAUSE",
+            Self::Next => "MEDIA_COMMAND_NEXT",
+            Self::Previous => "MEDIA_COMMAND_PREVIOUS",
+            Self::Stop => "MEDIA_COMMAND_STOP",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "MEDIA_COMMAND_UNSPECIFIED" => Some(Self::Unspecified),
+            "MEDIA_COMMAND_PLAY" => Some(Self::Play),
+            "MEDIA_COMMAND_PAUSE" => Some(Self::Pause),
+            "MEDIA_COMMAND_NEXT" => Some(Self::Next),
+            "MEDIA_COMMAND_PREVIOUS" => Some(Self::Previous),
+            "MEDIA_COMMAND_STOP" => Some(Self::Stop),
             _ => None,
         }
     }

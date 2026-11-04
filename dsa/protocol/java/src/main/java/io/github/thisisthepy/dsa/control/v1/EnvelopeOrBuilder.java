@@ -569,6 +569,72 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.NotificationDismissed getNotificationDismissed();
 
   /**
+   * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
+   * @return Whether the backgroundApp field is set.
+   */
+  boolean hasBackgroundApp();
+  /**
+   * <code>.dsa.control.v1.BackgroundApp background_app = 74;</code>
+   * @return The backgroundApp.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackgroundApp getBackgroundApp();
+
+  /**
+   * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
+   * @return Whether the backgroundAppGone field is set.
+   */
+  boolean hasBackgroundAppGone();
+  /**
+   * <code>.dsa.control.v1.BackgroundAppGone background_app_gone = 75;</code>
+   * @return The backgroundAppGone.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackgroundAppGone getBackgroundAppGone();
+
+  /**
+   * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
+   * @return Whether the backgroundAppAction field is set.
+   */
+  boolean hasBackgroundAppAction();
+  /**
+   * <code>.dsa.control.v1.BackgroundAppAction background_app_action = 76;</code>
+   * @return The backgroundAppAction.
+   */
+  io.github.thisisthepy.dsa.control.v1.BackgroundAppAction getBackgroundAppAction();
+
+  /**
+   * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
+   * @return Whether the mediaSession field is set.
+   */
+  boolean hasMediaSession();
+  /**
+   * <code>.dsa.control.v1.MediaSession media_session = 77;</code>
+   * @return The mediaSession.
+   */
+  io.github.thisisthepy.dsa.control.v1.MediaSession getMediaSession();
+
+  /**
+   * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
+   * @return Whether the mediaSessionGone field is set.
+   */
+  boolean hasMediaSessionGone();
+  /**
+   * <code>.dsa.control.v1.MediaSessionGone media_session_gone = 78;</code>
+   * @return The mediaSessionGone.
+   */
+  io.github.thisisthepy.dsa.control.v1.MediaSessionGone getMediaSessionGone();
+
+  /**
+   * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
+   * @return Whether the mediaControl field is set.
+   */
+  boolean hasMediaControl();
+  /**
+   * <code>.dsa.control.v1.MediaControl media_control = 79;</code>
+   * @return The mediaControl.
+   */
+  io.github.thisisthepy.dsa.control.v1.MediaControl getMediaControl();
+
+  /**
    * <code>.dsa.control.v1.ListWidgetProviders list_widget_providers = 90;</code>
    * @return Whether the listWidgetProviders field is set.
    */
