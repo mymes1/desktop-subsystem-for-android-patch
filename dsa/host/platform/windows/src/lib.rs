@@ -39,6 +39,8 @@
 //!   each node is in it).
 //! - [`app_exe`]: each app's own copy of the window host, named and drawn as the app
 //!   (Windows only).
+//! - [`camera_capture`]: the computer's cameras, through Media Foundation, for the apps in
+//!   the guest.
 //! - [`video_decoder`]: the guest's video, decoded with Media Foundation on the GPU (the
 //!   decoding part on Windows only).
 //! - [`sensors`]: the computer's motion and light sensors, read for the guest's sensors HAL
@@ -61,6 +63,7 @@ pub mod android_vm;
 pub mod app_exe;
 #[cfg(windows)]
 pub mod app_window;
+pub mod camera_capture;
 #[cfg(windows)]
 pub mod compositor;
 pub mod console_log;

@@ -376,6 +376,20 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if (name.startswith("VENDOR/etc/vintf/manifest/") and name != sensors_manifest
                 and b"<name>android.hardware.sensors</name>" in z.read(name)):
             problems.append(f"{name} declares a second sensors HAL, which fails the VINTF check")
+    # DSA's camera HAL: without it apps see Cuttlefish's emulated cameras, or none.
+    if "VENDOR/bin/hw/dsa-camera" not in names:
+        problems.append("VENDOR/bin/hw/dsa-camera is missing from the image")
+    if "VENDOR/etc/init/dsa-camera.rc" not in names:
+        problems.append("VENDOR/etc/init/dsa-camera.rc is missing, so init never starts the camera HAL")
+    camera_manifest = "VENDOR/etc/vintf/manifest/dsa-camera.xml"
+    if camera_manifest not in names:
+        problems.append(f"{camera_manifest} is missing, so the camera HAL is not declared")
+    elif "<fqname>ICameraProvider/internal/0</fqname>" not in z.read(camera_manifest).decode():
+        problems.append("dsa-camera.xml does not declare ICameraProvider/internal/0")
+    if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-camera" not in z.read("META/file_contexts.bin"):
+        problems.append("META/file_contexts.bin does not label dsa-camera, so init refuses to start it")
+    if "VENDOR/apex/com.google.emulated.camera.provider.hal.apex" in names:
+        problems.append("com.google.emulated.camera.provider.hal is still in the image and would serve fake cameras")
 
     if "VENDOR/etc/selinux/vendor_file_contexts" in names:
         vendor_fc = z.read("VENDOR/etc/selinux/vendor_file_contexts").decode()
@@ -457,6 +471,8 @@ for boot_arg in ["androidboot.dsa.display_width=", "androidboot.dsa.display_heig
 for boot_arg in ["androidboot.hardware.hwcomposer.mode=", "androidboot.vendor.apex.com.android.hardware.graphics.composer="]:
     if boot_arg in manifest["kernel_cmdline"]:
         problems.append(f"the kernel command line still sets {boot_arg} for Cuttlefish's composer")
+if "androidboot.vendor.apex.com.google.emulated.camera.provider.hal=" in manifest["kernel_cmdline"]:
+    problems.append("the kernel command line still selects Cuttlefish's emulated cameras")
 
 def ramdisk_entries(data, texts=None):
     """Name to mode of every entry in a ramdisk of gzip'd newc cpio archives. With `texts`,

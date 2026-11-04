@@ -33,6 +33,7 @@
 //! - [`print`]: the documents apps in the guest print, which the host prints.
 //! - [`video`]: the guest's video, decoded on the host's hardware decoder.
 //! - [`sensors`]: the host's motion and light sensors, read by the guest's sensors HAL.
+//! - [`camera`]: the host's cameras, used by the apps in the guest.
 //! - [`ime`]: text input through the host's input method in a task's window.
 //! - [`settings`]: the settings a user changes from the settings app, kept by the service.
 //! - [`memory`]: how much memory a user's Android takes, in the guest and on the host.
@@ -46,6 +47,7 @@ pub mod apk;
 pub mod apk_info;
 pub mod audio;
 pub mod bootconfig;
+pub mod camera;
 pub mod clipboard;
 pub mod clock_trace;
 pub mod compositor;

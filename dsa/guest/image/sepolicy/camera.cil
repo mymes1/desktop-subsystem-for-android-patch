@@ -1,0 +1,12 @@
+; Desktop Subsystem for Android (DSA)
+; The guest's camera provider HAL (/vendor/bin/hw/dsa-camera) runs in the vendor camera HAL
+; domain, hal_camera_default (one of hal_camera_server), labelled by vendor_file_contexts. It serves
+; android.hardware.camera.provider.ICameraProvider/internal/0 (vendor_service_contexts labels
+; it hal_camera_service, which the domain may register), reaches the host's camera port over
+; vsock, and writes the pictures into the apps' graphics buffers, which it maps through the
+; DRM card the allocator hands out (graphics-vsock.cil labels the cards gpu_device).
+; cameraserver, which the apps reach it through, keeps Android's camera permission.
+
+(allow hal_camera_server self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+(allow hal_camera_server gpu_device (dir (search)))
+(allow hal_camera_server gpu_device (chr_file (open read write ioctl getattr map)))

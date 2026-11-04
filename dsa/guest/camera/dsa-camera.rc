@@ -1,0 +1,8 @@
+# The guest's camera provider HAL: the host computer's cameras, as Android's. It runs in the
+# vendor camera HAL domain (hal_camera_default), as a vendor's camera provider does.
+service vendor.dsa-camera /vendor/bin/hw/dsa-camera
+    class hal
+    user cameraserver
+    group audio camera input drmrpc
+    ioprio rt 4
+    task_profiles CameraServiceCapacity MaxPerformance

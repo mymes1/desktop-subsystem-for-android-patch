@@ -41,6 +41,9 @@ enum Role {
   // The guest's sensors HAL, on the sensor port. It reads the host's sensors and nothing
   // else, so the host asks it for no secret, and the control port refuses it.
   ROLE_GUEST_SENSORS = 10;
+  // The guest's camera provider HAL, on the camera port. It carries camera pictures and
+  // nothing else, so the host asks it for no secret, and the control port refuses it.
+  ROLE_GUEST_CAMERA = 8;
 }
 
 // The first frame on a new connection, sent by the guest. The host checks it, then asks the
@@ -1421,6 +1424,114 @@ message PrintJobResult {
   string message = 3;
 }
 
+// The camera port (vsock 5572): the guest's camera provider HAL opens one connection to list
+// the host's cameras and one for each camera an app opens. After the handshake (a Hello of
+// ROLE_GUEST_CAMERA, which needs no secret) the host sends CameraList. The HAL may then send
+// CameraOpen; once the host answers with CameraOpened, it sends the camera's pictures as
+// CameraFrame until the HAL sends CameraStop or closes the connection. The host holds the
+// camera open only between CameraOpen and CameraStop, so the computer's camera light and its
+// in-use indicator show only while an app uses it. Every message on the port is one of these.
+
+// Where a camera faces, as the host computer's enclosure reports it.
+enum CameraFacing {
+  CAMERA_FACING_UNSPECIFIED = 0;
+  // On the side of the screen, facing the user.
+  CAMERA_FACING_FRONT = 1;
+  // On the back of the screen, facing away from the user.
+  CAMERA_FACING_BACK = 2;
+  // A camera the enclosure does not place: a USB camera, or one whose place is unknown.
+  CAMERA_FACING_EXTERNAL = 3;
+}
+
+// One picture size a camera delivers, and the frame rates it delivers it at.
+message CameraMode {
+  uint32 width = 1;
+  uint32 height = 2;
+  uint32 max_fps = 3;
+  uint32 min_fps = 4;
+}
+
+// One camera of the host computer.
+message CameraDevice {
+  // The host's name for it, unchanged while the camera stays plugged in. Opaque to the guest.
+  string id = 1;
+  // The name the computer gives it, such as "Integrated Camera".
+  string name = 2;
+  CameraFacing facing = 3;
+  // The clockwise angle, 0, 90, 180 or 270, a picture must turn to stand upright on the
+  // screen in its natural orientation.
+  uint32 sensor_orientation = 4;
+  repeated CameraMode modes = 5;
+}
+
+// Host to guest, first on each connection: the cameras an app in the guest may use now. A
+// camera the user has blocked in the computer's privacy settings is not listed, nor is one
+// that cannot be opened.
+message CameraList {
+  repeated CameraDevice cameras = 1;
+}
+
+// Guest to host: start the camera `id` at about `width` by `height` and `fps` frames a
+// second. Sent again on the same connection, it changes the size or rate.
+message CameraOpen {
+  string id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 fps = 4;
+}
+
+// Host to guest: the answer to CameraOpen, with the size and rate the pictures come in. When
+// `ok` is false, `error` says, in words a person can act on, why the camera did not start
+// (the user has blocked it, another program holds it, it was unplugged).
+message CameraOpened {
+  bool ok = 1;
+  string error = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 fps = 5;
+}
+
+// Host to guest: one picture, as 8-bit 4:2:0 with the luma plane then the interleaved
+// chroma plane (NV12), each row `stride` bytes long, laid out as in VideoFrame.
+message CameraFrame {
+  // Counts the pictures of this connection, from 0.
+  uint64 sequence = 1;
+  // When the camera took it, in nanoseconds on a clock of the host's that only goes forward
+  // while the camera runs.
+  uint64 timestamp_ns = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 stride = 5;
+  bytes nv12 = 6;
+}
+
+// Guest to host: stop the camera and let it go. The connection stays open for a new
+// CameraOpen.
+message CameraStop {}
+
+// Guest to host: a still picture of `width` by `height`, encoded as JPEG at `quality` (1 to
+// 100), made from the newest picture of the running camera.
+message CameraStill {
+  uint32 request_id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 quality = 4;
+}
+
+// Host to guest: the answer to CameraStill. `jpeg` is empty and `error` says why when there
+// is no picture.
+message CameraStillTaken {
+  uint32 request_id = 1;
+  bytes jpeg = 2;
+  string error = 3;
+}
+
+// Host to guest: the running camera failed or went away (unplugged, or blocked by the user);
+// `error` says how. No more pictures come until a new CameraOpen succeeds.
+message CameraError {
+  string error = 1;
+}
+
 // The one message type on the wire. Each frame carries exactly one.
 message Envelope {
   oneof body {
@@ -1522,5 +1633,13 @@ message Envelope {
     SensorList sensor_list = 240;
     SensorActivate sensor_activate = 241;
     SensorReadings sensor_readings = 242;
+    CameraList camera_list = 260;
+    CameraOpen camera_open = 261;
+    CameraOpened camera_opened = 262;
+    CameraFrame camera_frame = 263;
+    CameraStop camera_stop = 264;
+    CameraStill camera_still = 265;
+    CameraStillTaken camera_still_taken = 266;
+    CameraError camera_error = 267;
   }
 }

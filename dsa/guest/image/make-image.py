@@ -452,24 +452,27 @@ def kernel_disk_names(text):
     return KERNEL_DISK_NAME.findall(text)
 
 
-def removed_apexes(hwcomposer=False, power=False, gnss=False, sensors=False):
+def removed_apexes(hwcomposer=False, power=False, gnss=False, sensors=False,
+                   camera=False):
     """The vendor APEXes the guest must not have; Cuttlefish's composers too when DSA's
     composer replaces them, its power and health HALs when DSA's replace them, its GNSS HAL
-    when DSA's replaces it, and its sensors HAL when DSA's replaces it."""
+    when DSA's replaces it, its sensors HAL when DSA's replaces it, and its emulated cameras
+    when DSA's camera HAL lends the host's."""
     return (REMOVED_APEXES + (CUTTLEFISH_COMPOSER_APEXES if hwcomposer else [])
             + (CUTTLEFISH_POWER_APEXES if power else [])
             + (CUTTLEFISH_GNSS_APEXES if gnss else [])
-            + (CUTTLEFISH_SENSORS_APEXES if sensors else []))
+            + (CUTTLEFISH_SENSORS_APEXES if sensors else [])
+            + (CUTTLEFISH_CAMERA_APEXES if camera else []))
 
 
-def removed(name, hwcomposer=False, power=False, gnss=False, sensors=False):
+def removed(name, hwcomposer=False, power=False, gnss=False, sensors=False, camera=False):
     """Whether a target_files member belongs to an app, a HAL or a service the guest must not have."""
     return (
         name in REMOVED_INIT_SCRIPTS
         or any(f"/{app}/" in name for app in REMOVED_APPS)
         or any(
             name in (f"VENDOR/apex/{apex}.apex", f"VENDOR/apex/{apex}.capex")
-            for apex in removed_apexes(hwcomposer, power, gnss, sensors)
+            for apex in removed_apexes(hwcomposer, power, gnss, sensors, camera)
         )
         or (gnss and cuttlefish_gnss_file(name))
     )
@@ -1015,6 +1018,26 @@ CUTTLEFISH_SENSORS_APEXES = [
     "com.android.hardware.sensors",
     "com.google.cf.sensors",
 ]
+# DSA's camera provider HAL (dsa/guest/camera), which lends the host computer's cameras to
+# Android, and the Cuttlefish APEX whose emulated cameras it replaces. It runs in the vendor
+# camera HAL domain (hal_camera_default); camera.cil lets it reach the host's camera port and
+# map the apps' buffers it writes pictures into. Apps reach it through cameraserver, so
+# Android's camera permission applies. The features file declares the cameras a computer
+# has, so apps that need a camera install and offer it.
+CAMERA_DIR = REPO / "dsa/guest/camera"
+CAMERA_FILES = {
+    "VENDOR/bin/hw/dsa-camera": None,
+    "VENDOR/etc/init/dsa-camera.rc": CAMERA_DIR / "dsa-camera.rc",
+    "VENDOR/etc/vintf/manifest/dsa-camera.xml": CAMERA_DIR / "dsa-camera.xml",
+    "VENDOR/etc/permissions/dsa-camera-features.xml": CAMERA_DIR / "dsa-camera-features.xml",
+}
+CAMERA_CONTEXT = "/vendor/bin/hw/dsa-camera u:object_r:hal_camera_default_exec:s0"
+CAMERA_INSTANCE = "android.hardware.camera.provider.ICameraProvider/internal/0"
+CAMERA_SERVICE_CONTEXT = f"{CAMERA_INSTANCE} u:object_r:hal_camera_service:s0"
+CAMERA_APEX_MODULE = "com.google.emulated.camera.provider.hal"
+CUTTLEFISH_CAMERA_APEXES = [
+    "com.google.emulated.camera.provider.hal",
+]
 # The freeform display every task window lives on, as the hwcomposer reads it from
 # ro.boot.dsa.*. The host shows windows, not this display, so its size bounds a window's.
 # These are defaults: the host replaces the width and height from the user's monitors.
@@ -1105,7 +1128,8 @@ AGENT_FS_CONFIG = [
 
 
 def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power=False, codec2=False,
-                                audio=False, gnss=False, sensors=False):
+                                audio=False, gnss=False, sensors=False,
+                                camera=False):
     """Adds same_process_hal_file contexts for guest graphics libraries if not present, and
     opens the DRM cards to every graphics client.
 
@@ -1138,6 +1162,8 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
         entries.append((r"/vendor/bin/hw/dsa-gnss", GNSS_CONTEXT))
     if sensors:
         entries.append((r"/vendor/bin/hw/dsa-sensors", SENSORS_CONTEXT))
+    if camera:
+        entries.append((r"/vendor/bin/hw/dsa-camera", CAMERA_CONTEXT))
     # Usually there already, as /(vendor|system/vendor)/overlay(/.*)?.
     entries.append(("overlay(/.*)?", VENDOR_OVERLAY_CONTEXT))
     for pattern, rule in entries:
@@ -1146,14 +1172,16 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def update_vendor_service_contexts(text, codec2=False, channeld=True):
-    """Labels the daemon's binder service in vendor_service_contexts if it is not yet, and the
-    codec HAL's when `codec2` is set."""
+def update_vendor_service_contexts(text, codec2=False, channeld=True, camera=False):
+    """Labels the daemon's binder service in vendor_service_contexts if it is not yet, the
+    codec HAL's when `codec2` is set, and the camera HAL's when `camera` is set."""
     lines = text.splitlines()
     if channeld and not any(line.split()[:1] == [CHANNEL_INSTANCE] for line in lines):
         lines.append(CHANNEL_SERVICE_CONTEXT)
     if codec2 and not any(line.split()[:1] == [CODEC2_INSTANCE] for line in lines):
         lines.append(CODEC2_SERVICE_CONTEXT)
+    if camera and not any(line.split()[:1] == [CAMERA_INSTANCE] for line in lines):
+        lines.append(CAMERA_SERVICE_CONTEXT)
     return "\n".join(lines) + "\n"
 
 
@@ -1208,7 +1236,8 @@ def add_filesystem_config(fs_config_text, rules):
 
 
 def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=False, power=False,
-                                    codec2=False, audio=False, gnss=False, sensors=False):
+                                    codec2=False, audio=False, gnss=False, sensors=False,
+                                    camera=False):
     """Adds filesystem configuration entries for the files DSA adds to vendor if not present."""
     lines = fs_config_text.splitlines()
     entries = [
@@ -1238,7 +1267,8 @@ def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=F
         ]
     for name in ((list(POWER_FILES) if power else []) + (list(CODEC2_FILES) if codec2 else [])
                  + (list(GNSS_FILES) if gnss else [])
-                 + (list(SENSORS_FILES) if sensors else [])):
+                 + (list(SENSORS_FILES) if sensors else [])
+                 + (list(CAMERA_FILES) if camera else [])):
         path = name.lower()
         mode = "0 2000 755" if "/bin/" in path else "0 0 644"
         entries.append((path, f"{path} {mode} capabilities=0x0"))
@@ -1263,6 +1293,7 @@ POWER_POLICY = HERE / "sepolicy/power.cil"
 GNSS_POLICY = HERE / "sepolicy/gnss.cil"
 CODEC2_POLICY = HERE / "sepolicy/codec2.cil"
 SENSORS_POLICY = HERE / "sepolicy/sensors.cil"
+CAMERA_POLICY = HERE / "sepolicy/camera.cil"
 AGENT_POLICY = HERE / "sepolicy/agent.cil"
 MEMORY_POLICY = HERE / "sepolicy/memory.cil"
 AUDIO_POLICY = HERE / "sepolicy/audio.cil"
@@ -1400,7 +1431,7 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, power_hal=None,
            codec2=None, audio=None, gnss_hal=None,
-           sensors=None):
+           sensors=None, camera=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -1410,7 +1441,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     DSA's codec HAL, whose video decoders decode on the host's GPU, when `codec2` names it,
     and DSA's GNSS HAL, which gives the guest the host's location, in place of Cuttlefish's
     when `gnss_hal` names it, and DSA's sensors HAL in place of Cuttlefish's when `sensors`
-    names it."""
+    names it, and DSA's camera HAL, which lends the host's cameras, in place of Cuttlefish's
+    emulated cameras when `camera` names it."""
     fstab = (HERE / "fstab.dsa").read_bytes()
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
     vulkan_payload = Path(vulkan_driver).read_bytes() if vulkan_driver else None
@@ -1454,10 +1486,18 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             for name, source in SENSORS_FILES.items()
         }
     has_sensors = sensors_payloads is not None
+    camera_payloads = None
+    if camera is not None:
+        camera_payloads = {
+            name: Path(camera).read_bytes() if source is None else source.read_bytes()
+            for name, source in CAMERA_FILES.items()
+        }
+    has_camera = camera_payloads is not None
     build_tag = image_build_tag([
         graphics_payload, vulkan_payload, channeld_payload, agent_payload, hwcomposer_payload,
         overlay_payload, *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
         audio_payload, *(gnss_payloads or {}).values(), *(sensors_payloads or {}).values(),
+        *(camera_payloads or {}).values(),
     ])
     replaced_graphics_payload = False
     replaced_vulkan_payload = False
@@ -1508,6 +1548,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             if has_sensors:
                 # The sensors HAL reaches the host's sensor port.
                 plat_patched += "\n" + SENSORS_POLICY.read_text()
+            if has_camera:
+                # The camera HAL reaches the host's camera port.
+                plat_patched += "\n" + CAMERA_POLICY.read_text()
             if agent_payload is not None:
                 # What the agent needs to put the guest into Doze and set its battery.
                 plat_patched += "\n" + AGENT_POLICY.read_text()
@@ -1542,13 +1585,13 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             text = zin.read(name).decode() if name in names else ""
             if name == "VENDOR/etc/selinux/vendor_file_contexts":
                 text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer,
-                                                   has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors)
+                                                   has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera)
             file_contexts.append(text if text.endswith("\n") or not text else text + "\n")
         compiled_file_contexts = compile_file_contexts(otatools, "".join(file_contexts))
 
         for info in zin.infolist():
             name = info.filename
-            if removed(name, has_hwcomposer, has_power, has_gnss, has_sensors):
+            if removed(name, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera):
                 if name.endswith((".apk", ".apex", ".capex")):
                     print(f"removing {name}", flush=True)
                 continue
@@ -1597,7 +1640,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 elif name == "META/apexkeys.txt":
                     data = b"".join(
                         line + b"\n" for line in data.splitlines()
-                        if not any(f'name="{a}.apex"' in line.decode() for a in removed_apexes(has_hwcomposer, has_power, has_gnss, has_sensors))
+                        if not any(f'name="{a}.apex"' in line.decode() for a in removed_apexes(has_hwcomposer, has_power, has_gnss, has_sensors, has_camera))
                     )
                 elif name == "META/apkcerts.txt":
                     data = b"".join(
@@ -1625,17 +1668,19 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                             text += f"{prefix}fstab.dsa 0 0 644 capabilities=0x0\n"
                     if name == "META/vendor_filesystem_config.txt":
                         text = update_vendor_filesystem_config(text, channeld_payload is not None, has_hwcomposer,
-                                                               has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors)
+                                                               has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera)
                         if overlay_payload is not None:
                             text = add_filesystem_config(text, FRAMEWORK_OVERLAY_FS_CONFIG)
                     data = text.encode()
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
                                                        has_hwcomposer, has_power, codec2=has_codec2,
-                                                       audio=has_audio, gnss=has_gnss, sensors=has_sensors).encode()
-                elif name == VENDOR_SERVICE_CONTEXTS and (channeld_payload is not None or has_codec2):
+                                                       audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera).encode()
+                elif name == VENDOR_SERVICE_CONTEXTS and (channeld_payload is not None or has_codec2
+                                                          or has_camera):
                     data = update_vendor_service_contexts(
-                        data.decode(), codec2=has_codec2, channeld=channeld_payload is not None).encode()
+                        data.decode(), codec2=has_codec2, channeld=channeld_payload is not None,
+                        camera=has_camera).encode()
                 elif has_audio and AUDIO_POLICY_CONFIG.match(name):
                     data = without_primary_audio_module(data.decode()).encode()
                 elif name == VENDOR_PROPERTY_CONTEXTS:
@@ -1673,9 +1718,12 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if has_sensors:
             for name, payload in sensors_payloads.items():
                 zout.writestr(name, payload)
-        if (channeld_payload is not None or has_codec2) and VENDOR_SERVICE_CONTEXTS not in names:
+        if has_camera:
+            for name, payload in camera_payloads.items():
+                zout.writestr(name, payload)
+        if (channeld_payload is not None or has_codec2 or has_camera) and VENDOR_SERVICE_CONTEXTS not in names:
             zout.writestr(VENDOR_SERVICE_CONTEXTS, update_vendor_service_contexts(
-                "", codec2=has_codec2, channeld=channeld_payload is not None))
+                "", codec2=has_codec2, channeld=channeld_payload is not None, camera=has_camera))
         if overlay_payload is not None:
             zout.writestr(FRAMEWORK_OVERLAY_APK, overlay_payload)
         if agent_payload is not None:
@@ -1688,7 +1736,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(
                 "VENDOR/etc/selinux/vendor_file_contexts",
                 update_vendor_file_contexts("", channeld_payload is not None, has_hwcomposer, has_power,
-                                            codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors).encode(),
+                                            codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera).encode(),
             )
     if graphics_payload is not None and not replaced_graphics_payload:
         dest.unlink(missing_ok=True)
@@ -2276,9 +2324,10 @@ def data_disk(otatools, work, out):
 SERIAL_CONSOLE = {"x86_64": ["console=ttyS0", "8250.nr_uarts=1"], "arm64": ["console=ttyAMA0"]}
 
 
-def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH):
+def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camera=False):
     """Returns the kernel command line shared by every DSA guest image of `arch`. With
-    `hwcomposer`, the image has DSA's composer in place of Cuttlefish's."""
+    `hwcomposer`, the image has DSA's composer in place of Cuttlefish's; with `camera`, DSA's
+    camera HAL in place of Cuttlefish's emulated cameras, whose APEX is then not selected."""
     if hwcomposer:
         composer = [f"androidboot.dsa.{key}={value}" for key, value in DISPLAY_BOOTCONFIG.items()]
         apexes = {module: apex for module, apex in VENDOR_APEX_BOOTCONFIG.items()
@@ -2292,6 +2341,8 @@ def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH):
             "androidboot.hardware.hwcomposer.display_finder_mode=noop",
         ]
         apexes = VENDOR_APEX_BOOTCONFIG
+    if camera:
+        apexes = {module: apex for module, apex in apexes.items() if module != CAMERA_APEX_MODULE}
     return " ".join([
         # No audit=1, as on Android devices: SELinux denials reach logd's auditd without it.
         # With it, the kernel also audited every iptables change and BPF program load with
@@ -2345,6 +2396,9 @@ def main():
     parser.add_argument("--sensors", type=Path,
                         help="DSA's sensors HAL (dsa-sensors) built for the guest; it replaces "
                              "Cuttlefish's, and shows the host's motion and light sensors")
+    parser.add_argument("--camera", type=Path,
+                        help="DSA's camera HAL (dsa-camera) built for the guest; it replaces "
+                             "Cuttlefish's emulated cameras with the host computer's")
     parser.add_argument("--power-hal", type=Path,
                         help="a folder holding DSA's power and health HALs (dsa-power, dsa-health) built "
                              "for the guest; they replace Cuttlefish's, take the guest's power hints to "
@@ -2410,7 +2464,7 @@ def main():
            otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
            framework_overlay=framework_overlay, power_hal=args.power_hal,
            codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
-           sensors=args.sensors)
+           sensors=args.sensors, camera=args.camera)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path
@@ -2462,7 +2516,8 @@ def main():
         shutil.copy(args.kernel, out / kernel)
         files.append(kernel)
 
-    cmdline = kernel_cmdline(partition_cmdline, hwcomposer=args.hwcomposer is not None, arch=args.arch)
+    cmdline = kernel_cmdline(partition_cmdline, hwcomposer=args.hwcomposer is not None, arch=args.arch,
+                             camera=args.camera is not None)
     manifest = {
         "version": spec["version"],
         "android_major": spec["android_major"],
