@@ -571,6 +571,25 @@ std::map<std::string, v1::Envelope> Cases() {
     result->set_message("out of paper");
   }
   {
+    v1::SensorDescription* gyro = cases["sensor_list"].mutable_sensor_list()->add_sensors();
+    gyro->set_kind(v1::SENSOR_KIND_GYROSCOPE);
+    gyro->set_name("Gyro");
+    gyro->set_max_range(2.0f);
+    gyro->set_min_interval_us(16000);
+  }
+  {
+    v1::SensorActivate* activate = cases["sensor_activate"].mutable_sensor_activate();
+    activate->set_kind(v1::SENSOR_KIND_ACCELEROMETER);
+    activate->set_enabled(true);
+    activate->set_interval_us(20000);
+  }
+  {
+    v1::SensorReading* reading = cases["sensor_readings"].mutable_sensor_readings()->add_readings();
+    reading->set_kind(v1::SENSOR_KIND_LIGHT);
+    reading->set_timestamp_us(1000);
+    reading->add_values(2.5f);
+  }
+  {
     const std::string provider = "com.example.clock/.ClockWidget";
     auto clock = [&](v1::WidgetProvider* p) {
       p->set_provider(provider);

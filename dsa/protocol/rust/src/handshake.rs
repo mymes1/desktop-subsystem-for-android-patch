@@ -75,6 +75,7 @@ fn role_name(role: i32) -> String {
         Ok(Role::Guest) => "the guest".into(),
         Ok(Role::GuestAudio) => "the guest's audio HAL".into(),
         Ok(Role::GuestVideo) => "the guest's video codec HAL".into(),
+        Ok(Role::GuestSensors) => "the guest's sensors HAL".into(),
         Ok(Role::Unspecified) => "no role".into(),
         Err(_) => format!("an unknown role ({role})"),
     }

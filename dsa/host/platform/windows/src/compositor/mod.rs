@@ -117,6 +117,9 @@ pub struct Compositor {
     /// Binds the video port, where the guest's codec HAL has its streams decoded. None in
     /// tests, which have no GPU decoders.
     bind_video: Option<BindFn>,
+    /// Binds the sensor port, where the guest's sensors HAL reads this computer's sensors.
+    /// None in tests, which read no sensors.
+    bind_sensors: Option<BindFn>,
     logger: Option<Arc<CompositorLogger>>,
     /// What copies each display's frames into the task windows, when there is one.
     presenter: Option<Arc<dyn DisplayPresenter>>,
@@ -210,6 +213,11 @@ impl Compositor {
             HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
         });
 
+        let bind_sensors: BindFn = Box::new(move |vm_id| {
+            let service_id = Guid::vsock_service(dsa_host_core::sensors::SENSOR_PORT);
+            HvSocketListener::bind(vm_id, service_id).map(|l| Box::new(l) as Box<dyn Listener>)
+        });
+
         Compositor {
             config,
             renderer,
@@ -220,6 +228,7 @@ impl Compositor {
             bind_process_pipe: Some(bind_process_pipe),
             bind_video: Some(bind_video),
             bind_audio: Some(bind_audio),
+            bind_sensors: Some(bind_sensors),
             logger: None,
             presenter: None,
             host_listener: Some(session_host_listener()),
@@ -253,6 +262,7 @@ impl Compositor {
             bind_process_pipe: Some(bind_process_pipe),
             bind_video: None,
             bind_audio: None,
+            bind_sensors: None,
             logger: None,
             presenter: None,
             host_listener: None,
@@ -370,6 +380,7 @@ impl Compositor {
         let video_thread = self.start_video(&stop);
         let print_thread = self.start_print(&stop);
         let audio_thread = self.start_audio(&stop);
+        let sensors_thread = self.start_sensors(&stop);
 
         // 1. Monitor thread that tracks the VM ID and state via the local API.
         let monitor_stop = Arc::clone(&stop);
@@ -574,6 +585,9 @@ impl Compositor {
         if let Some(thread) = audio_thread {
             let _ = thread.join();
         }
+        if let Some(thread) = sensors_thread {
+            let _ = thread.join();
+        }
 
         if let Some(logger) = &self.logger {
             logger.log("dsa-wm stopped cleanly");
@@ -637,6 +651,35 @@ impl Compositor {
                     failed.as_deref(),
                     &format!("could not start the audio port's thread: {e}"),
                 )
+            })
+            .ok()
+    }
+
+    /// Starts serving this computer's sensors to the guest, on a thread of its own that ends
+    /// with `stop`: the guest's sensors HAL connects to the sensor port, and each sensor runs
+    /// only while an app in the guest listens to it. The window manager serves them because
+    /// it runs in the user's session, where Windows lets the user's own apps read sensors.
+    fn start_sensors(&mut self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        let bind = self.bind_sensors.take()?;
+        let listener = VmBoundListener::new(Arc::clone(&self.vm_id_slot), bind);
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-sensors".into())
+            .spawn(move || {
+                let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |line: &str| {
+                    if let Some(logger) = &logger {
+                        logger.log(line);
+                    }
+                });
+                let build = format!("dsa-wm {}", crate::VERSION);
+                dsa_host_core::sensors::serve(
+                    Box::new(listener),
+                    Arc::new(crate::sensors::WindowsSensors),
+                    build,
+                    stop,
+                    log,
+                );
             })
             .ok()
     }

@@ -356,6 +356,27 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-codec2" not in z.read("META/file_contexts.bin"):
         problems.append("META/file_contexts.bin does not label dsa-codec2, so init refuses to start it")
 
+    # DSA's sensors HAL: without it apps see none of the host's sensors, or Cuttlefish's
+    # made-up ones.
+    if "VENDOR/bin/hw/dsa-sensors" not in names:
+        problems.append("VENDOR/bin/hw/dsa-sensors is missing from the image")
+    if "VENDOR/etc/init/dsa-sensors.rc" not in names:
+        problems.append("VENDOR/etc/init/dsa-sensors.rc is missing, so init never starts the sensors HAL")
+    sensors_manifest = "VENDOR/etc/vintf/manifest/dsa-sensors.xml"
+    if sensors_manifest not in names:
+        problems.append(f"{sensors_manifest} is missing, so the sensors HAL is not declared")
+    elif "<fqname>ISensors/default</fqname>" not in z.read(sensors_manifest).decode():
+        problems.append("dsa-sensors.xml does not declare ISensors/default")
+    if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-sensors" not in z.read("META/file_contexts.bin"):
+        problems.append("META/file_contexts.bin does not label dsa-sensors, so init refuses to start it")
+    for apex in ["com.android.hardware.sensors", "com.google.cf.sensors"]:
+        if f"VENDOR/apex/{apex}.apex" in names:
+            problems.append(f"{apex} is still in the image and would serve its sensors HAL too")
+    for name in sorted(names):
+        if (name.startswith("VENDOR/etc/vintf/manifest/") and name != sensors_manifest
+                and b"<name>android.hardware.sensors</name>" in z.read(name)):
+            problems.append(f"{name} declares a second sensors HAL, which fails the VINTF check")
+
     if "VENDOR/etc/selinux/vendor_file_contexts" in names:
         vendor_fc = z.read("VENDOR/etc/selinux/vendor_file_contexts").decode()
         for expected in ["vulkan", "libOpenglSystemCommon"]:

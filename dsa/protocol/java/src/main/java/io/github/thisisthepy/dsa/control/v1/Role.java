@@ -42,6 +42,15 @@ public enum Role
    * <code>ROLE_GUEST_VIDEO = 4;</code>
    */
   ROLE_GUEST_VIDEO(4),
+  /**
+   * <pre>
+   * The guest's sensors HAL, on the sensor port. It reads the host's sensors and nothing
+   * else, so the host asks it for no secret, and the control port refuses it.
+   * </pre>
+   *
+   * <code>ROLE_GUEST_SENSORS = 10;</code>
+   */
+  ROLE_GUEST_SENSORS(10),
   UNRECOGNIZED(-1),
   ;
 
@@ -75,6 +84,15 @@ public enum Role
    * <code>ROLE_GUEST_VIDEO = 4;</code>
    */
   public static final int ROLE_GUEST_VIDEO_VALUE = 4;
+  /**
+   * <pre>
+   * The guest's sensors HAL, on the sensor port. It reads the host's sensors and nothing
+   * else, so the host asks it for no secret, and the control port refuses it.
+   * </pre>
+   *
+   * <code>ROLE_GUEST_SENSORS = 10;</code>
+   */
+  public static final int ROLE_GUEST_SENSORS_VALUE = 10;
 
 
   @java.lang.Override
@@ -103,6 +121,7 @@ public enum Role
       case 2: return ROLE_GUEST;
       case 3: return ROLE_GUEST_AUDIO;
       case 4: return ROLE_GUEST_VIDEO;
+      case 10: return ROLE_GUEST_SENSORS;
       default: return null;
     }
   }

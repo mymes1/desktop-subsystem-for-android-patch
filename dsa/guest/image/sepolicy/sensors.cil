@@ -1,0 +1,8 @@
+; Desktop Subsystem for Android (DSA)
+; The guest's sensors HAL (/vendor/bin/hw/dsa-sensors) runs in the platform's sensors HAL
+; domain, labelled by vendor_file_contexts, which already lets it serve
+; android.hardware.sensors.ISensors/default and write the framework's event queue. It reads the
+; host's sensors over vsock, from the host's sensor port; this rule lets it open that
+; connection.
+
+(allow hal_sensors_server self (vsock_socket (create connect read write getattr setopt getopt shutdown)))

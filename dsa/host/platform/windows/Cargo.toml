@@ -89,6 +89,8 @@ windows = { version = "0.62", features = [
     "Data_Xml_Dom",
     # The computer's location, which the user's Android gets as its GNSS location.
     "Devices_Geolocation",
+    # The computer's motion and light sensors, for the guest's sensors HAL.
+    "Devices_Sensors",
     "Foundation",
     "UI_Notifications",
     # Decoding the PNG frames of the widgets on the desktop.

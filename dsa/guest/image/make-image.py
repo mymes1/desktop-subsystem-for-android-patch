@@ -452,23 +452,24 @@ def kernel_disk_names(text):
     return KERNEL_DISK_NAME.findall(text)
 
 
-def removed_apexes(hwcomposer=False, power=False, gnss=False):
+def removed_apexes(hwcomposer=False, power=False, gnss=False, sensors=False):
     """The vendor APEXes the guest must not have; Cuttlefish's composers too when DSA's
-    composer replaces them, its power and health HALs when DSA's replace them, and its GNSS
-    HAL when DSA's replaces it."""
+    composer replaces them, its power and health HALs when DSA's replace them, its GNSS HAL
+    when DSA's replaces it, and its sensors HAL when DSA's replaces it."""
     return (REMOVED_APEXES + (CUTTLEFISH_COMPOSER_APEXES if hwcomposer else [])
             + (CUTTLEFISH_POWER_APEXES if power else [])
-            + (CUTTLEFISH_GNSS_APEXES if gnss else []))
+            + (CUTTLEFISH_GNSS_APEXES if gnss else [])
+            + (CUTTLEFISH_SENSORS_APEXES if sensors else []))
 
 
-def removed(name, hwcomposer=False, power=False, gnss=False):
+def removed(name, hwcomposer=False, power=False, gnss=False, sensors=False):
     """Whether a target_files member belongs to an app, a HAL or a service the guest must not have."""
     return (
         name in REMOVED_INIT_SCRIPTS
         or any(f"/{app}/" in name for app in REMOVED_APPS)
         or any(
             name in (f"VENDOR/apex/{apex}.apex", f"VENDOR/apex/{apex}.capex")
-            for apex in removed_apexes(hwcomposer, power, gnss)
+            for apex in removed_apexes(hwcomposer, power, gnss, sensors)
         )
         or (gnss and cuttlefish_gnss_file(name))
     )
@@ -481,6 +482,17 @@ def cuttlefish_gnss_file(name):
         return False
     return any(name.startswith(folder) and "gnss" in name[len(folder):].lower()
                for folder in CUTTLEFISH_GNSS_FOLDERS)
+
+
+def other_sensors_manifest(name, data):
+    """Whether a target_files member is a vendor VINTF fragment, not DSA's, that declares a
+    sensors HAL. Two declarations of android.hardware.sensors would fail the device's VINTF
+    check, so the other one goes when DSA's sensors HAL is installed."""
+    return (
+        name.startswith("VENDOR/etc/vintf/manifest/")
+        and name not in SENSORS_FILES
+        and b"<name>android.hardware.sensors</name>" in data
+    )
 
 
 def framework_overlay_sources(dest):
@@ -988,6 +1000,21 @@ CODEC2_SERVICE_CONTEXT = f"{CODEC2_INSTANCE} u:object_r:hal_codec2_service:s0"
 # surface keeps its pool (BUFFERQUEUE, 1 << 18), which reaches the HAL as the surface's
 # allocator. The guest's software decoders take handles as well.
 CODEC2_PROPS = {"debug.stagefright.c2-poolmask": str(1 << 18)}
+# DSA's sensors HAL (dsa/guest/sensors), which shows the host's accelerometer, gyroscope,
+# orientation and light sensors to Android, and the Cuttlefish APEXes whose sensors HAL it
+# replaces. It runs in the vendor sensors domain; sensors.cil lets it reach the host's sensor
+# port over vsock.
+SENSORS_DIR = REPO / "dsa/guest/sensors"
+SENSORS_FILES = {
+    "VENDOR/bin/hw/dsa-sensors": None,
+    "VENDOR/etc/init/dsa-sensors.rc": SENSORS_DIR / "dsa-sensors.rc",
+    "VENDOR/etc/vintf/manifest/dsa-sensors.xml": SENSORS_DIR / "dsa-sensors.xml",
+}
+SENSORS_CONTEXT = "/vendor/bin/hw/dsa-sensors u:object_r:hal_sensors_default_exec:s0"
+CUTTLEFISH_SENSORS_APEXES = [
+    "com.android.hardware.sensors",
+    "com.google.cf.sensors",
+]
 # The freeform display every task window lives on, as the hwcomposer reads it from
 # ro.boot.dsa.*. The host shows windows, not this display, so its size bounds a window's.
 # These are defaults: the host replaces the width and height from the user's monitors.
@@ -1078,7 +1105,7 @@ AGENT_FS_CONFIG = [
 
 
 def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power=False, codec2=False,
-                                audio=False, gnss=False):
+                                audio=False, gnss=False, sensors=False):
     """Adds same_process_hal_file contexts for guest graphics libraries if not present, and
     opens the DRM cards to every graphics client.
 
@@ -1109,6 +1136,8 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
         entries.append((r"/vendor/bin/hw/dsa-audio", AUDIO_CONTEXT))
     if gnss:
         entries.append((r"/vendor/bin/hw/dsa-gnss", GNSS_CONTEXT))
+    if sensors:
+        entries.append((r"/vendor/bin/hw/dsa-sensors", SENSORS_CONTEXT))
     # Usually there already, as /(vendor|system/vendor)/overlay(/.*)?.
     entries.append(("overlay(/.*)?", VENDOR_OVERLAY_CONTEXT))
     for pattern, rule in entries:
@@ -1179,7 +1208,7 @@ def add_filesystem_config(fs_config_text, rules):
 
 
 def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=False, power=False,
-                                    codec2=False, audio=False, gnss=False):
+                                    codec2=False, audio=False, gnss=False, sensors=False):
     """Adds filesystem configuration entries for the files DSA adds to vendor if not present."""
     lines = fs_config_text.splitlines()
     entries = [
@@ -1208,7 +1237,8 @@ def update_vendor_filesystem_config(fs_config_text, channeld=False, hwcomposer=F
              "vendor/etc/vintf/manifest/dsa-hwcomposer.xml 0 0 644 capabilities=0x0"),
         ]
     for name in ((list(POWER_FILES) if power else []) + (list(CODEC2_FILES) if codec2 else [])
-                 + (list(GNSS_FILES) if gnss else [])):
+                 + (list(GNSS_FILES) if gnss else [])
+                 + (list(SENSORS_FILES) if sensors else [])):
         path = name.lower()
         mode = "0 2000 755" if "/bin/" in path else "0 0 644"
         entries.append((path, f"{path} {mode} capabilities=0x0"))
@@ -1232,6 +1262,7 @@ CHANNELD_POLICY = HERE / "sepolicy/channeld.cil"
 POWER_POLICY = HERE / "sepolicy/power.cil"
 GNSS_POLICY = HERE / "sepolicy/gnss.cil"
 CODEC2_POLICY = HERE / "sepolicy/codec2.cil"
+SENSORS_POLICY = HERE / "sepolicy/sensors.cil"
 AGENT_POLICY = HERE / "sepolicy/agent.cil"
 MEMORY_POLICY = HERE / "sepolicy/memory.cil"
 AUDIO_POLICY = HERE / "sepolicy/audio.cil"
@@ -1368,7 +1399,8 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, power_hal=None,
-           codec2=None, audio=None, gnss_hal=None):
+           codec2=None, audio=None, gnss_hal=None,
+           sensors=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -1377,7 +1409,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     Cuttlefish's when `power_hal` names the folder that holds dsa-power and dsa-health, and
     DSA's codec HAL, whose video decoders decode on the host's GPU, when `codec2` names it,
     and DSA's GNSS HAL, which gives the guest the host's location, in place of Cuttlefish's
-    when `gnss_hal` names it."""
+    when `gnss_hal` names it, and DSA's sensors HAL in place of Cuttlefish's when `sensors`
+    names it."""
     fstab = (HERE / "fstab.dsa").read_bytes()
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
     vulkan_payload = Path(vulkan_driver).read_bytes() if vulkan_driver else None
@@ -1414,10 +1447,17 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             for name, source in GNSS_FILES.items()
         }
     has_gnss = gnss_payloads is not None
+    sensors_payloads = None
+    if sensors is not None:
+        sensors_payloads = {
+            name: Path(sensors).read_bytes() if source is None else source.read_bytes()
+            for name, source in SENSORS_FILES.items()
+        }
+    has_sensors = sensors_payloads is not None
     build_tag = image_build_tag([
         graphics_payload, vulkan_payload, channeld_payload, agent_payload, hwcomposer_payload,
         overlay_payload, *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
-        audio_payload, *(gnss_payloads or {}).values(),
+        audio_payload, *(gnss_payloads or {}).values(), *(sensors_payloads or {}).values(),
     ])
     replaced_graphics_payload = False
     replaced_vulkan_payload = False
@@ -1465,6 +1505,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             if has_gnss:
                 # The GNSS HAL reaches the daemon.
                 plat_patched += "\n" + GNSS_POLICY.read_text()
+            if has_sensors:
+                # The sensors HAL reaches the host's sensor port.
+                plat_patched += "\n" + SENSORS_POLICY.read_text()
             if agent_payload is not None:
                 # What the agent needs to put the guest into Doze and set its battery.
                 plat_patched += "\n" + AGENT_POLICY.read_text()
@@ -1499,15 +1542,19 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             text = zin.read(name).decode() if name in names else ""
             if name == "VENDOR/etc/selinux/vendor_file_contexts":
                 text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer,
-                                                   has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss)
+                                                   has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors)
             file_contexts.append(text if text.endswith("\n") or not text else text + "\n")
         compiled_file_contexts = compile_file_contexts(otatools, "".join(file_contexts))
 
         for info in zin.infolist():
             name = info.filename
-            if removed(name, has_hwcomposer, has_power, has_gnss):
+            if removed(name, has_hwcomposer, has_power, has_gnss, has_sensors):
                 if name.endswith((".apk", ".apex", ".capex")):
                     print(f"removing {name}", flush=True)
+                continue
+            if (has_sensors and name.startswith("VENDOR/etc/vintf/manifest/")
+                    and other_sensors_manifest(name, zin.read(name))):
+                print(f"removing {name}, which declares another sensors HAL", flush=True)
                 continue
             if kept_modules.match(name):
                 continue
@@ -1550,7 +1597,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 elif name == "META/apexkeys.txt":
                     data = b"".join(
                         line + b"\n" for line in data.splitlines()
-                        if not any(f'name="{a}.apex"' in line.decode() for a in removed_apexes(has_hwcomposer, has_power, has_gnss))
+                        if not any(f'name="{a}.apex"' in line.decode() for a in removed_apexes(has_hwcomposer, has_power, has_gnss, has_sensors))
                     )
                 elif name == "META/apkcerts.txt":
                     data = b"".join(
@@ -1578,14 +1625,14 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                             text += f"{prefix}fstab.dsa 0 0 644 capabilities=0x0\n"
                     if name == "META/vendor_filesystem_config.txt":
                         text = update_vendor_filesystem_config(text, channeld_payload is not None, has_hwcomposer,
-                                                               has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss)
+                                                               has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors)
                         if overlay_payload is not None:
                             text = add_filesystem_config(text, FRAMEWORK_OVERLAY_FS_CONFIG)
                     data = text.encode()
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
                                                        has_hwcomposer, has_power, codec2=has_codec2,
-                                                       audio=has_audio, gnss=has_gnss).encode()
+                                                       audio=has_audio, gnss=has_gnss, sensors=has_sensors).encode()
                 elif name == VENDOR_SERVICE_CONTEXTS and (channeld_payload is not None or has_codec2):
                     data = update_vendor_service_contexts(
                         data.decode(), codec2=has_codec2, channeld=channeld_payload is not None).encode()
@@ -1623,6 +1670,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if has_gnss:
             for name, payload in gnss_payloads.items():
                 zout.writestr(name, payload)
+        if has_sensors:
+            for name, payload in sensors_payloads.items():
+                zout.writestr(name, payload)
         if (channeld_payload is not None or has_codec2) and VENDOR_SERVICE_CONTEXTS not in names:
             zout.writestr(VENDOR_SERVICE_CONTEXTS, update_vendor_service_contexts(
                 "", codec2=has_codec2, channeld=channeld_payload is not None))
@@ -1638,7 +1688,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(
                 "VENDOR/etc/selinux/vendor_file_contexts",
                 update_vendor_file_contexts("", channeld_payload is not None, has_hwcomposer, has_power,
-                                            codec2=has_codec2, audio=has_audio, gnss=has_gnss).encode(),
+                                            codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors).encode(),
             )
     if graphics_payload is not None and not replaced_graphics_payload:
         dest.unlink(missing_ok=True)
@@ -2292,6 +2342,9 @@ def main():
     parser.add_argument("--audio", type=Path,
                         help="DSA's primary audio module (dsa-audio) built for the guest; it plays the "
                              "guest's sound on the host's default output device")
+    parser.add_argument("--sensors", type=Path,
+                        help="DSA's sensors HAL (dsa-sensors) built for the guest; it replaces "
+                             "Cuttlefish's, and shows the host's motion and light sensors")
     parser.add_argument("--power-hal", type=Path,
                         help="a folder holding DSA's power and health HALs (dsa-power, dsa-health) built "
                              "for the guest; they replace Cuttlefish's, take the guest's power hints to "
@@ -2356,7 +2409,8 @@ def main():
     modify(target_files, modified, graphics_library=graphics_library, vulkan_driver=vulkan_driver,
            otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
            framework_overlay=framework_overlay, power_hal=args.power_hal,
-           codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal)
+           codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
+           sensors=args.sensors)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path
