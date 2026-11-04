@@ -559,3 +559,150 @@ Davey는 이 로그에 2건뿐이고 둘 다 액티비티 전환이다. 리플�
 - 창을 연 뒤 서비스 로그에 `power: <UTC> running Android's processors as any program (..., a window shown; took N us)`가 나오고, frugal은 창을 모두 닫은 뒤에만 나오는지.
 - 클릭마다 `power: <UTC> running Android's processors at full speed (the user's input, ...; took N us)`가 누름 시각(`app.pointer`)과 1 ms 안에 나오고, 약 1.5초 뒤 `as any program`으로 돌아오는지.
 - 같은 15회 클릭에서 첫 화면 변화의 p50과 p90, `Displayed SubSettings`의 시간이 줄었는지.
+
+## 뒤로 버튼의 호버 표시가 왼쪽으로 어긋나 보이는 문제 (FR-5)
+
+**확인 대상**: 소유자 보고(Windows 11, 2880x1800 모니터 200%, Intel Arc, develop dcbb771). Settings 창의 Network & internet에서 툴바의 뒤로 화살표 위에 마우스를 올리면 호버 표시가 실제 버튼보다 조금 왼쪽에 보인다. 입력 좌표가 어긋났다는 가설(dp, DPI, 창 테두리)을 포인터 경로 전체를 읽어 검증했다. 같은 빌드에서 클릭 지연을 잴 때 찍은 `SetWindowPos(300, 150, 900, 1100)` 창 캡처(`.scratch/test-dcbb771/touch1/opened-network.png`)를 픽셀 단위로 읽었다.
+
+**경로 (코드를 읽은 결과)**
+
+1. **Win32 메시지**: `dsa-app-window`의 창 스레드는 창을 만들기 전에 `PER_MONITOR_AWARE_V2`를 켠다(`app_window/window.rs`). `WM_MOUSEMOVE`와 버튼 메시지의 `lParam`은 클라이언트 좌표의 실제 픽셀이고, 휠과 `WM_POINTER*`는 화면 좌표를 `ScreenToClient`로 바꾼다(`app_window/pointer.rs`). 창 테두리, DWM의 보이지 않는 크기 조절 테두리, 캡션은 클라이언트 밖이라 매핑에 들어오지 않는다. 창 직사각형(`GetWindowRect`)을 쓰는 곳은 포인터 경로에 없다.
+2. **호스트 매핑**: `WindowGeometry::to_guest`는 클라이언트 좌표에 `작업 크기 / GetClientRect 크기`를 곱한다. 창의 클라이언트는 작업 크기와 같게 맞춰지므로(`apply_size`, 게스트 픽셀 하나가 창 픽셀 하나) 정상 상태의 비율은 정확히 1이다. 호버(`MouseMove`)와 클릭(`MouseButton`)은 같은 `message_point`와 같은 `to_guest`를 지난다.
+3. **에이전트 주입**: `PointerInput`은 호버와 누름 모두 `bounds.left + x`, `bounds.top + y`에 `SOURCE_MOUSE`로 주입한다. `bounds`는 에이전트가 호스트에 알린 작업 경계이고, hwcomposer도 같은 `TaskUpdated`로 작업 경계를 받아 레이어를 그 원점 기준으로 합성한다(`compose_request.cpp`의 `relativeTo`). 입력과 화면의 원점이 같은 값에서 나온다.
+4. **화면 쪽**: 각 프레임은 대상 버퍼의 왼쪽 위 작업 크기 영역을 채우고(gfxstream `CompositorVk`는 대상 이미지 크기로 정규화한다), 호스트는 `SetSourceSize`와 비주얼 배율(`visual_scale`)로 그 영역을 클라이언트 전체에 맞춘다. 자르기나 오프셋은 없다.
+
+**실측 (캡처의 픽셀)**
+
+- 카드의 왼쪽 끝은 x=45, 오른쪽 끝은 x=855다. 보이는 창 테두리는 12와 888이므로 양쪽 여백이 33픽셀로 같다. 화면이 가로로 밀려 그려지지 않는다.
+- 뒤로 버튼의 원형 배경은 x 61~140, y 74~153(중심 100.5, 113.5)이고, 화살표는 x 85~116, y 98~128(중심 100.5, 113)이다. 원과 화살표의 중심이 같다.
+
+**찾은 것**
+
+1. **호스트, 프로토콜, 에이전트의 포인터 경로에는 일정한 오프셋도 비율 오차도 없다.** 정상 상태에서 클라이언트 픽셀 (x, y)는 작업 픽셀 (x, y)에 정확히 닿는다. 호버와 클릭은 같은 변환을 지나므로 서로 다를 수 없다.
+2. **호버 표시의 위치로는 입력 오프셋을 알 수 없다.** 호버 상태는 포인터 아래의 뷰가 자기 경계에 그린다. 입력이 몇 픽셀 어긋나면 표시가 켜지는 커서 위치가 달라질 뿐, 표시가 그려지는 자리는 그대로다. 그러므로 "표시가 버튼보다 왼쪽에 그려진다"는 관찰은 입력 경로가 아니라 앱이 그린 것이다.
+3. **남은 후보는 Settings의 그리기다(추론, 게스트에서 확인하지 않음).** Android 16 Settings의 툴바 뒤로 버튼은 원형 배경이 따로 있고, 호버 상태 레이어는 버튼 뷰(최소 56dp 폭) 전체나 리플의 핫스팟 영역에 그려진다. 둘의 중심이 다르면 휴대폰에서 마우스를 써도 같은 모습이 된다. 확인하려면 게스트에서 `adb shell uiautomator dump`나 레이아웃 검사기로 뒤로 버튼 `ImageButton`의 경계와 원형 배경의 경계를 비교한다.
+4. **늘어난 프레임에서의 작은 편향**: 크기 조절 중 게스트가 새 크기를 그리기 전에는 이전 프레임이 늘어나 보이고, 매핑은 같은 비율을 따른다. 매핑은 픽셀 중심이 아닌 픽셀 인덱스를 비율로 곱하므로 늘린 비율 r에서 최대 r/2 게스트 픽셀만큼 왼쪽 위로 치우친다. 1:1인 정상 상태에서는 0이고, 한 픽셀 미만이라 보고된 증상의 원인이 아니다.
+
+**고친 것**
+
+- 코드 결함을 찾지 못했으므로 동작은 바꾸지 않았다. 대신 실제 기하로 회귀를 막는 테스트를 더했다. `fr5_at_200_percent_every_client_pixel_lands_on_the_same_task_pixel`(200%, 869x1031처럼 320 dpi에서 정수 dp가 아닌 크기의 모든 클라이언트 픽셀), `fr5_at_200_percent_a_hover_and_a_click_on_the_back_button_land_on_the_same_point`, `fr5_a_frame_stretched_by_a_non_integer_ratio_has_no_offset_that_grows_across_it`(호스트), `fr5_a_hover_and_a_click_at_one_point_reach_the_same_display_point`(에이전트).
+
+**실제 PC에서 확인할 것**
+
+- 뒤로 버튼 위에서 커서를 천천히 왼쪽에서 오른쪽으로 옮기며 호버 표시가 켜지는 x와 꺼지는 x를 적는다. 그 구간이 화살표 중심에 대해 좌우 대칭이면 입력은 맞고, 차이는 앱의 그리기다.
+- 게스트에서 `adb shell settings put system pointer_location 1`로 포인터 위치 표시를 켠다. 이 표시는 시스템 서버가 그리는 오버레이라 SystemUI가 없어도 나온다. 주입된 호버의 십자선이 Windows 커서 끝과 겹치면 입력은 맞다. 끝나면 `0`으로 끈다.
+
+## R7. 앱 하나를 연 비용을 Electron 앱 하나 수준으로 (NFR-1, NFR-2)
+
+소유자 목표: "안드로이드 앱 하나를 연 비용이 Electron 앱 하나를 연 비용과 비슷해야 한다." 이를 위해 프레임워크, system_server, zygote, ART 설정, init을 고쳐도 된다고 했다. 이 절은 공개 자료와 지금까지의 실측을 대조한 조사다. 절감량은 모두 추정치이고, 하드웨어에서 새로 측정하지 않았다.
+
+### 지금의 실측 (Settings 하나가 열린 `Active`)
+
+| 항목 | MiB |
+| --- | --- |
+| 호스트 합계 | 약 826 |
+| VM 상주 (`vmmem`) | 670 |
+| 창 관리자 (`dsa-wm`) | 119 |
+| 앱 창 실행 파일 | 38 |
+| 게스트 PSS: system_server | 131 |
+| 게스트 PSS: Settings | 101 |
+| 게스트 PSS: 에이전트 | 46 |
+| 게스트 PSS: 나머지 시스템 프로세스 | 약 110 |
+| 커널과 기타 | 336 |
+| 페이지 캐시 | 276 |
+
+프레임워크를 고치지 않을 때의 하한은 대기 약 350-400 MiB로 추정한다. 코덱 지연 적재, 창 관리자 GPU 해제, 커널 메모리 정리, Cuttlefish 전용 서비스 제거, 고정 RAM 상한 제거, 마지막 창을 닫으면 앱 종료는 다른 작업이 진행 중이라 여기서 다루지 않는다.
+
+### 1. Electron 앱 하나의 비용
+
+측정 방법을 밝힌 공개 수치는 적다. 찾은 것은 다음과 같다.
+
+| 대상 | 대기 메모리 | 출처와 성격 |
+| --- | --- | --- |
+| 최소 Electron 앱 (Windows) | 약 120 MB | levminer.com, 2022년 작성자 실측 |
+| 최소 Electron 앱 (Ubuntu) | USS 118 MB, PSS 207 MB | tauri-apps/tauri 이슈 #5889의 측정 |
+| Chromium 기본 비용 | 120-200 MB | dev.to 글, 추정 |
+| 메모 앱 수준 Electron 앱 | 약 281 MB | tech-insider.org 비교 글 |
+| 일반 Electron 앱 범위 | 150-400 MB | pkgpulse.com 비교 글 |
+| Discord | 백그라운드 50 MB부터, 사용 중 300-600 MB | itgeared.com |
+| VS Code, Slack | 공개 실측을 찾지 못했다 | 확장과 워크스페이스에 따라 크게 달라진다 |
+
+출처:
+- https://www.levminer.com/blog/tauri-vs-electron
+- https://github.com/tauri-apps/tauri/issues/5889
+- https://dev.to/gerus_team/your-electron-app-is-a-lie-and-heres-the-memory-bill-483b
+- https://tech-insider.org/tauri-vs-electron-2026/
+- https://www.pkgpulse.com/guides/electron-vs-tauri-2026
+- https://www.itgeared.com/how-much-ram-does-discord-use
+
+정리: 최소 Electron 앱은 Windows에서 약 120-200 MB, 흔한 Electron 앱은 150-400 MB다. 그래서 "Electron 앱 하나 수준"을 두 숫자로 잡는다.
+
+- 단기 목표: 단순한 앱 하나(Settings)를 연 `Active`에서 DSA 호스트 전체 메모리 400 MiB 이하. 흔한 Electron 앱 범위의 위쪽 끝이다.
+- 최종 목표: 같은 조건에서 250 MiB 이하, 앱을 하나 더 열 때 늘어나는 몫 80 MiB 이하. 최소 Electron 앱과 같은 체급이다.
+
+공개 수치의 질이 낮으므로, 같은 PC에서 최소 Electron 앱(고정 버전, 창 하나), VS Code, Discord를 띄워 10분 뒤 작업 관리자의 개인 작업 집합과 커밋 크기를 기록해 기준을 확정하기를 제안한다. `vmmem`은 게스트 메모리 전체가 개인 메모리이므로 비교는 개인 작업 집합끼리 한다.
+
+### 2. 안드로이드의 기본 메모리는 어디로 가는가
+
+| 구성 요소 | 일반적인 비용 | 줄이는 수단 |
+| --- | --- | --- |
+| 부트 이미지와 boot classpath (`boot.art`, `boot.oat`, 프레임워크 jar) | 파일 매핑 수십 MiB, 모든 Java 프로세스가 공유 | 미리 적재하는 클래스 축소 |
+| zygote의 미리 적재한 클래스와 리소스 (`preloaded-classes`, 미리 적재한 drawable) | zygote64 PSS 수십 MiB, 자식과 공유 | 목록 축소. 앱 시작이 느려진다 |
+| system_server | 100-200 MiB PSS. 서비스 약 100개, 각자 스레드와 Java 힙 | 서비스 끄기 (설정 또는 소스 수정) |
+| ART 힙과 JIT 코드 캐시 | 프로세스마다 수 MiB에서 수십 MiB | `dalvik.vm.heap*`, JIT 캐시 상한, 프로파일 저장 끄기 |
+| SurfaceFlinger | 수십 MiB, 그래픽 버퍼 별도 | DSA는 화면을 호스트가 그린다 |
+| HAL 프로세스 (vendor) | 하나당 2-10 MiB | 쓰지 않는 HAL 제거 |
+| Java 시스템 앱 (PermissionController, MediaProvider, ExtServices, NetworkStack 등) | 하나당 20-60 MiB PSS | 지연 시작, 상주 해제, 제거 |
+| 커널 (slab, 페이지 테이블, binder, 드라이버) | 수십에서 수백 MiB | 다른 작업이 진행 중 |
+
+자료:
+- AOSP `build/make/target/product/go_defaults_common.mk`: `ro.config.low_ram=true`, system_server를 `speed-profile`로 컴파일, eng 빌드가 아니면 Scudo 끄기, NetworkStack을 system_server 안에서 돌리기. https://android.googlesource.com/platform/build/+/38afe9570b/target/product/go_defaults_common.mk
+- Android (Go edition) 개발자 문서: 최소 RAM은 Android 8.1-10에서 512 MB, 11-12에서 1 GB, 13에서 2 GB. 저사양 설정은 PIP, 화면 분할, 다중 디스플레이, 다른 앱 위에 그리기를 끈다. https://developer.android.com/guide/topics/androidgo
+- ChromeOS ARC++ on Demand: Android 앱이 없으면 Android를 시작하지 않아 약 750 MB를 아낀다고 Google이 밝혔다. ARCVM은 virtio-balloon과 MGLRU로 메모리를 호스트와 나눈다. https://chromeos.dev/en/posts/improving-performance-with-new-arc-resource-management-features
+- WSA와 Waydroid의 대기 메모리는 측정 방법을 밝힌 공개 수치를 찾지 못했다. Anbox와 Waydroid는 호스트 커널을 함께 써서 커널 몫이 따로 없으므로 비교 대상으로 맞지 않는다.
+
+해석: 512 MB 기기에서 돌던 Android 8.1 Go가 보여 주듯, 안드로이드 자체는 300 MiB 안쪽에서 돌 수 있다. 다만 Go 구성은 기기 제약 때문에 기능을 끈 것이고, 그중 일부(다중 창, 다른 앱 위에 그리기)는 DSA의 자유형 창과 WSA 수준 호환성에 필요하다(R4의 `low_ram` 결정).
+
+### 3. 선택지와 순위
+
+절감량은 위 실측(게스트 PSS 합 약 390 MiB, 커널과 캐시 약 610 MiB)을 기준으로 한 추정이다. 호환성은 WSA에서 돌던 앱이 그대로 도는지로 본다.
+
+| 순위 | 선택지 | 추정 절감 | 앱 호환성 | 노력과 위험 |
+| --- | --- | --- | --- | --- |
+| 1 | (a) 설정만: Go 계열 속성 일부(`low_ram`은 끈 채), 힙과 JIT 상한, 프로파일 저장 끄기, USAP 끄기, 캐시 프로세스 수 축소, 오버레이로 서비스 끄기 | 60-150 MiB | 거의 영향 없음. 힙 상한은 큰 앱의 GC를 늘린다 | 낮음. 지금의 오버레이와 `build.prop` 편집으로 된다 |
+| 2 | (a) Java 시스템 앱 정리: 상주가 필요 없는 앱을 지연 시작으로, 쓰지 않는 앱 제거 | 40-120 MiB | 사진과 파일 접근에는 MediaProvider가 필요하다. 제거 대상 고르기가 관건이다 | 낮음에서 중간 |
+| 3 | (c) system_server와 프레임워크를 소스에서 빌드: 쓰지 않는 서비스(텔레포니, 프린트, 음성 상호작용, 백업 등)를 시작하지 않는 패치, 미리 적재 목록 축소 | 60-120 MiB | 서비스가 없어 `getSystemService`가 null이면 죽는 앱이 있다. 빈 서비스를 남겨야 한다 | 높음. 아래 비용 참조 |
+| 4 | (b) 이미지 빌드에서 바이너리 편집: `services.jar`의 dex에서 서비스 시작 호출을 바꾸기 | 30-80 MiB | 3과 같다 | 중간. 메서드 크기를 지키는 편집만 되고, 바뀐 jar는 system_server odex와 맞지 않아 기기에서 다시 컴파일된다. 버전마다 편집점을 다시 찾아야 한다 |
+| 5 | (d) 앱 여럿이 한 ART 프로세스를 나눠 쓰기 | 추가 앱 하나당 10-30 MiB | 낮다. UID와 SELinux 앱 격리가 깨진다 | 매우 높음. 권하지 않는다 |
+| 참고 | 커널과 페이지 캐시 (다른 작업이 진행 중) | 200-400 MiB | 영향 없음 | 진행 중 |
+
+(c)의 비용:
+- 필요한 것은 `frameworks/base`, `art`, `frameworks/native`지만 Soong은 트리 전체를 요구한다. AOSP 체크아웃은 100 GB 이상, 빌드 출력을 더하면 300 GB 안팎이다.
+- 첫 빌드는 64코어 서버에서 1-2시간이다. GitHub 기본 러너(4코어, 빈 디스크 약 14 GB)는 디스크 때문에 안 된다. 큰 러너(유료)나 자체 호스팅 러너가 필요하고, ccache와 `out/` 보존으로 증분 빌드를 줄인다.
+- 바뀐 모듈만 꺼내 공개 `target_files`의 같은 파일을 바꾸면 D14의 공개 빌드 재료 구조를 지킬 수 있다. 단, 같은 빌드 번호의 소스 태그로 빌드해야 boot classpath와 서명이 맞는다.
+- INTENT 영향: D14의 "AOSP 전체를 빌드하지 않는다"를 바꿔야 한다. D5는 바뀌지 않는다. 커널, ART, 프레임워크는 그대로 게스트에 남고, 그 안에서 덜 시작할 뿐이다.
+
+### 4. 권고와 단계별 계획
+
+1. 1단계 (설정만): 순위 1, 2와 진행 중인 커널, 창 관리자 작업. 목표: Settings 하나를 연 `Active`에서 호스트 합계 500 MiB 이하.
+2. 2단계 (바이너리 편집 시험): system_server 서비스 시작 목록을 줄이는 편집을 한 버전에서 시험하고, CTS 일부와 인기 앱 목록으로 호환성을 확인한다. 목표: 400 MiB 이하(단기 목표).
+3. 3단계 (소유자 결정 뒤, 소스 빌드를 CI로): 자체 호스팅 러너에서 `services.jar`, `framework.jar`, 부트 이미지를 빌드해 공개 재료에 갈아 끼우고, 미리 적재 목록을 데스크톱 앱 기준으로 다시 만든다. 목표: 250 MiB 이하, 추가 앱 하나당 80 MiB 이하(최종 목표).
+4. (d)는 하지 않는다. 앱 격리를 깨므로 호환성과 보안을 지킬 수 없다.
+
+### 5. 소유자에게 제안하는 문구 (SPEC과 INTENT는 바꾸지 않았다)
+
+NFR 제안 (새 항목, 가칭 "앱 하나의 메모리"):
+- 목표: Google 서비스 계열이 없는 구성에서, 단순한 앱 하나(Settings)를 연 `Active` 상태로 10분 뒤 DSA 호스트 프로세스 전체(게스트 VM, 동반 서비스, 창 관리자, 앱 창)의 개인 작업 집합 합계가 400 MiB 이하다. 최종 목표는 250 MiB이고, 앱을 하나 더 열 때 늘어나는 몫은 80 MiB 이하다.
+- 측정 방법: 같은 PC에서 최소 Electron 앱(고정 버전, 창 하나)의 같은 값을 함께 기록하고, 그 값과의 비율도 적는다.
+- 비용: 앱 하나 기준 상한이 생겨 기능을 더할 때마다 메모리 회귀를 막아야 한다. 얻는 것: 소유자의 목표가 검증 가능한 숫자가 된다.
+
+INTENT 제안:
+- D14에 "선택한 프레임워크 모듈(`services.jar`, `framework.jar`, 부트 이미지)은 같은 빌드 번호의 소스 태그에서 DSA 패치로 빌드해 공개 빌드 재료의 해당 파일을 바꾼다"를 더한다. 비용: 자체 호스팅이나 큰 러너, 디스크 300 GB, 버전마다 패치 유지. 얻는 것: 설정만으로 닿지 않는 약 100 MiB.
+- D8의 추정치(대기 500-800MB)를 위 목표로 바꾼다.
+- D5는 그대로 둔다.
+
+### 확인하지 못한 것
+
+- Electron 기준값의 이 PC 실측.
+- 위 절감량 전부. system_server의 서비스별 비용은 `dumpsys meminfo`로 나뉘지 않으므로, 서비스를 하나씩 끈 이미지로 차이를 재야 한다.
+- WSA, Waydroid의 대기 메모리 공개 실측.

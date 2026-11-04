@@ -51,6 +51,7 @@ public  final class Envelope extends
     SCREEN_STATE(40),
     POWER_STATE(41),
     POWER_HINT(110),
+    DEVELOPER_MODE(140),
     DEVICE_IDLE(42),
     HOST_MEMORY(43),
     HOST_SLEEP(44),
@@ -85,10 +86,6 @@ public  final class Envelope extends
     ACCESSIBILITY_TREE(81),
     ACCESSIBILITY_ACTION(82),
     ACCESSIBILITY_ACTION_RESULT(83),
-    AUDIO_OUTPUT_OPEN(100),
-    AUDIO_OUTPUT_READY(101),
-    AUDIO_PCM(102),
-    AUDIO_OUTPUT_CONTROL(103),
     VIDEO_CAPABILITIES(120),
     VIDEO_DECODER_OPEN(121),
     VIDEO_DECODER_OPENED(122),
@@ -149,6 +146,7 @@ public  final class Envelope extends
         case 40: return SCREEN_STATE;
         case 41: return POWER_STATE;
         case 110: return POWER_HINT;
+        case 140: return DEVELOPER_MODE;
         case 42: return DEVICE_IDLE;
         case 43: return HOST_MEMORY;
         case 44: return HOST_SLEEP;
@@ -183,10 +181,6 @@ public  final class Envelope extends
         case 81: return ACCESSIBILITY_TREE;
         case 82: return ACCESSIBILITY_ACTION;
         case 83: return ACCESSIBILITY_ACTION_RESULT;
-        case 100: return AUDIO_OUTPUT_OPEN;
-        case 101: return AUDIO_OUTPUT_READY;
-        case 102: return AUDIO_PCM;
-        case 103: return AUDIO_OUTPUT_CONTROL;
         case 120: return VIDEO_CAPABILITIES;
         case 121: return VIDEO_DECODER_OPEN;
         case 122: return VIDEO_DECODER_OPENED;
@@ -1767,6 +1761,56 @@ public  final class Envelope extends
    */
   private void clearPowerHint() {
     if (bodyCase_ == 110) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DEVELOPER_MODE_FIELD_NUMBER = 140;
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  @java.lang.Override
+  public boolean hasDeveloperMode() {
+    return bodyCase_ == 140;
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DeveloperMode getDeveloperMode() {
+    if (bodyCase_ == 140) {
+       return (io.github.thisisthepy.dsa.control.v1.DeveloperMode) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DeveloperMode.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  private void setDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 140;
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  private void mergeDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+    value.getClass();
+  if (bodyCase_ == 140 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DeveloperMode.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DeveloperMode.newBuilder((io.github.thisisthepy.dsa.control.v1.DeveloperMode) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 140;
+  }
+  /**
+   * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+   */
+  private void clearDeveloperMode() {
+    if (bodyCase_ == 140) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -3467,206 +3511,6 @@ public  final class Envelope extends
    */
   private void clearAccessibilityActionResult() {
     if (bodyCase_ == 83) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int AUDIO_OUTPUT_OPEN_FIELD_NUMBER = 100;
-  /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-   */
-  @java.lang.Override
-  public boolean hasAudioOutputOpen() {
-    return bodyCase_ == 100;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.AudioOutputOpen getAudioOutputOpen() {
-    if (bodyCase_ == 100) {
-       return (io.github.thisisthepy.dsa.control.v1.AudioOutputOpen) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-   */
-  private void setAudioOutputOpen(io.github.thisisthepy.dsa.control.v1.AudioOutputOpen value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 100;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-   */
-  private void mergeAudioOutputOpen(io.github.thisisthepy.dsa.control.v1.AudioOutputOpen value) {
-    value.getClass();
-  if (bodyCase_ == 100 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.newBuilder((io.github.thisisthepy.dsa.control.v1.AudioOutputOpen) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 100;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-   */
-  private void clearAudioOutputOpen() {
-    if (bodyCase_ == 100) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int AUDIO_OUTPUT_READY_FIELD_NUMBER = 101;
-  /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-   */
-  @java.lang.Override
-  public boolean hasAudioOutputReady() {
-    return bodyCase_ == 101;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.AudioOutputReady getAudioOutputReady() {
-    if (bodyCase_ == 101) {
-       return (io.github.thisisthepy.dsa.control.v1.AudioOutputReady) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.AudioOutputReady.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-   */
-  private void setAudioOutputReady(io.github.thisisthepy.dsa.control.v1.AudioOutputReady value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 101;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-   */
-  private void mergeAudioOutputReady(io.github.thisisthepy.dsa.control.v1.AudioOutputReady value) {
-    value.getClass();
-  if (bodyCase_ == 101 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.AudioOutputReady.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.AudioOutputReady.newBuilder((io.github.thisisthepy.dsa.control.v1.AudioOutputReady) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 101;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-   */
-  private void clearAudioOutputReady() {
-    if (bodyCase_ == 101) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int AUDIO_PCM_FIELD_NUMBER = 102;
-  /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-   */
-  @java.lang.Override
-  public boolean hasAudioPcm() {
-    return bodyCase_ == 102;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.AudioPcm getAudioPcm() {
-    if (bodyCase_ == 102) {
-       return (io.github.thisisthepy.dsa.control.v1.AudioPcm) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.AudioPcm.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-   */
-  private void setAudioPcm(io.github.thisisthepy.dsa.control.v1.AudioPcm value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 102;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-   */
-  private void mergeAudioPcm(io.github.thisisthepy.dsa.control.v1.AudioPcm value) {
-    value.getClass();
-  if (bodyCase_ == 102 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.AudioPcm.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.AudioPcm.newBuilder((io.github.thisisthepy.dsa.control.v1.AudioPcm) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 102;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-   */
-  private void clearAudioPcm() {
-    if (bodyCase_ == 102) {
-      bodyCase_ = 0;
-      body_ = null;
-    }
-  }
-
-  public static final int AUDIO_OUTPUT_CONTROL_FIELD_NUMBER = 103;
-  /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-   */
-  @java.lang.Override
-  public boolean hasAudioOutputControl() {
-    return bodyCase_ == 103;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-   */
-  @java.lang.Override
-  public io.github.thisisthepy.dsa.control.v1.AudioOutputControl getAudioOutputControl() {
-    if (bodyCase_ == 103) {
-       return (io.github.thisisthepy.dsa.control.v1.AudioOutputControl) body_;
-    }
-    return io.github.thisisthepy.dsa.control.v1.AudioOutputControl.getDefaultInstance();
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-   */
-  private void setAudioOutputControl(io.github.thisisthepy.dsa.control.v1.AudioOutputControl value) {
-    value.getClass();
-  body_ = value;
-    bodyCase_ = 103;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-   */
-  private void mergeAudioOutputControl(io.github.thisisthepy.dsa.control.v1.AudioOutputControl value) {
-    value.getClass();
-  if (bodyCase_ == 103 &&
-        body_ != io.github.thisisthepy.dsa.control.v1.AudioOutputControl.getDefaultInstance()) {
-      body_ = io.github.thisisthepy.dsa.control.v1.AudioOutputControl.newBuilder((io.github.thisisthepy.dsa.control.v1.AudioOutputControl) body_)
-          .mergeFrom(value).buildPartial();
-    } else {
-      body_ = value;
-    }
-    bodyCase_ = 103;
-  }
-  /**
-   * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-   */
-  private void clearAudioOutputControl() {
-    if (bodyCase_ == 103) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -5972,6 +5816,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    @java.lang.Override
+    public boolean hasDeveloperMode() {
+      return instance.hasDeveloperMode();
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DeveloperMode getDeveloperMode() {
+      return instance.getDeveloperMode();
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder setDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+      copyOnWrite();
+      instance.setDeveloperMode(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder setDeveloperMode(
+        io.github.thisisthepy.dsa.control.v1.DeveloperMode.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDeveloperMode(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder mergeDeveloperMode(io.github.thisisthepy.dsa.control.v1.DeveloperMode value) {
+      copyOnWrite();
+      instance.mergeDeveloperMode(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeveloperMode developer_mode = 140;</code>
+     */
+    public Builder clearDeveloperMode() {
+      copyOnWrite();
+      instance.clearDeveloperMode();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>
      */
     @java.lang.Override
@@ -7604,198 +7496,6 @@ public  final class Envelope extends
     }
 
     /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-     */
-    @java.lang.Override
-    public boolean hasAudioOutputOpen() {
-      return instance.hasAudioOutputOpen();
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.AudioOutputOpen getAudioOutputOpen() {
-      return instance.getAudioOutputOpen();
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-     */
-    public Builder setAudioOutputOpen(io.github.thisisthepy.dsa.control.v1.AudioOutputOpen value) {
-      copyOnWrite();
-      instance.setAudioOutputOpen(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-     */
-    public Builder setAudioOutputOpen(
-        io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.Builder builderForValue) {
-      copyOnWrite();
-      instance.setAudioOutputOpen(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-     */
-    public Builder mergeAudioOutputOpen(io.github.thisisthepy.dsa.control.v1.AudioOutputOpen value) {
-      copyOnWrite();
-      instance.mergeAudioOutputOpen(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputOpen audio_output_open = 100;</code>
-     */
-    public Builder clearAudioOutputOpen() {
-      copyOnWrite();
-      instance.clearAudioOutputOpen();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-     */
-    @java.lang.Override
-    public boolean hasAudioOutputReady() {
-      return instance.hasAudioOutputReady();
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.AudioOutputReady getAudioOutputReady() {
-      return instance.getAudioOutputReady();
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-     */
-    public Builder setAudioOutputReady(io.github.thisisthepy.dsa.control.v1.AudioOutputReady value) {
-      copyOnWrite();
-      instance.setAudioOutputReady(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-     */
-    public Builder setAudioOutputReady(
-        io.github.thisisthepy.dsa.control.v1.AudioOutputReady.Builder builderForValue) {
-      copyOnWrite();
-      instance.setAudioOutputReady(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-     */
-    public Builder mergeAudioOutputReady(io.github.thisisthepy.dsa.control.v1.AudioOutputReady value) {
-      copyOnWrite();
-      instance.mergeAudioOutputReady(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputReady audio_output_ready = 101;</code>
-     */
-    public Builder clearAudioOutputReady() {
-      copyOnWrite();
-      instance.clearAudioOutputReady();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-     */
-    @java.lang.Override
-    public boolean hasAudioPcm() {
-      return instance.hasAudioPcm();
-    }
-    /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.AudioPcm getAudioPcm() {
-      return instance.getAudioPcm();
-    }
-    /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-     */
-    public Builder setAudioPcm(io.github.thisisthepy.dsa.control.v1.AudioPcm value) {
-      copyOnWrite();
-      instance.setAudioPcm(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-     */
-    public Builder setAudioPcm(
-        io.github.thisisthepy.dsa.control.v1.AudioPcm.Builder builderForValue) {
-      copyOnWrite();
-      instance.setAudioPcm(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-     */
-    public Builder mergeAudioPcm(io.github.thisisthepy.dsa.control.v1.AudioPcm value) {
-      copyOnWrite();
-      instance.mergeAudioPcm(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioPcm audio_pcm = 102;</code>
-     */
-    public Builder clearAudioPcm() {
-      copyOnWrite();
-      instance.clearAudioPcm();
-      return this;
-    }
-
-    /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-     */
-    @java.lang.Override
-    public boolean hasAudioOutputControl() {
-      return instance.hasAudioOutputControl();
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-     */
-    @java.lang.Override
-    public io.github.thisisthepy.dsa.control.v1.AudioOutputControl getAudioOutputControl() {
-      return instance.getAudioOutputControl();
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-     */
-    public Builder setAudioOutputControl(io.github.thisisthepy.dsa.control.v1.AudioOutputControl value) {
-      copyOnWrite();
-      instance.setAudioOutputControl(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-     */
-    public Builder setAudioOutputControl(
-        io.github.thisisthepy.dsa.control.v1.AudioOutputControl.Builder builderForValue) {
-      copyOnWrite();
-      instance.setAudioOutputControl(builderForValue.build());
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-     */
-    public Builder mergeAudioOutputControl(io.github.thisisthepy.dsa.control.v1.AudioOutputControl value) {
-      copyOnWrite();
-      instance.mergeAudioOutputControl(value);
-      return this;
-    }
-    /**
-     * <code>.dsa.control.v1.AudioOutputControl audio_output_control = 103;</code>
-     */
-    public Builder clearAudioOutputControl() {
-      copyOnWrite();
-      instance.clearAudioOutputControl();
-      return this;
-    }
-
-    /**
      * <code>.dsa.control.v1.VideoCapabilities video_capabilities = 120;</code>
      */
     @java.lang.Override
@@ -8549,10 +8249,6 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.ResizeWidget.class,
             io.github.thisisthepy.dsa.control.v1.WidgetFrame.class,
             io.github.thisisthepy.dsa.control.v1.WidgetPointer.class,
-            io.github.thisisthepy.dsa.control.v1.AudioOutputOpen.class,
-            io.github.thisisthepy.dsa.control.v1.AudioOutputReady.class,
-            io.github.thisisthepy.dsa.control.v1.AudioPcm.class,
-            io.github.thisisthepy.dsa.control.v1.AudioOutputControl.class,
             io.github.thisisthepy.dsa.control.v1.PowerHint.class,
             io.github.thisisthepy.dsa.control.v1.VideoCapabilities.class,
             io.github.thisisthepy.dsa.control.v1.VideoDecoderOpen.class,
@@ -8568,9 +8264,10 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.CollectDiagnostics.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsFile.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsDone.class,
+            io.github.thisisthepy.dsa.control.v1.DeveloperMode.class,
           };
           java.lang.String info =
-              "\u0000S\u0001\u0000\u0001\u0087S\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
+              "\u0000P\u0001\u0000\u0001\u008cP\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
               "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
               "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
               "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
@@ -8578,9 +8275,9 @@ public  final class Envelope extends
               "*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u00004<\u00005<\u00006<\u0000<<\u0000" +
               "=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000F<\u0000G<\u0000H<\u0000I<\u0000" +
               "P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000" +
-              "`<\u0000a<\u0000b<\u0000c<\u0000d<\u0000e<\u0000f<\u0000g<\u0000n<\u0000x<\u0000" +
-              "y<\u0000z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000" +
-              "\u0084<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000";
+              "`<\u0000a<\u0000b<\u0000c<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
+              "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
+              "<\u0000\u0087<\u0000\u008c<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

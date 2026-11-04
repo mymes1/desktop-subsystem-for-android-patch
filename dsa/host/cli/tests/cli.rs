@@ -690,6 +690,7 @@ fn settings_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> R
                 log_dir: Some("C:\\ProgramData\\DSA\\logs".into()),
                 program_updates_available: true,
                 image_updates_available: true,
+                android_version: Some("17.0.0-16373615-7".into()),
             },
         );
     RunningService::start_service(listener, service)
@@ -753,6 +754,37 @@ fn fr19_trace_switches_are_settings_dsa_reads_and_parses() {
 }
 
 #[test]
+fn fr20_developer_mode_is_off_by_default_and_dsa_turns_it_on_with_the_adb_address() {
+    use dsa_cli::Change;
+    assert_eq!(
+        parse(&args("settings set developer-mode on"))
+            .unwrap()
+            .change,
+        Some(Change::DeveloperMode(true))
+    );
+    assert_eq!(
+        parse(&args("settings set adb-port 5037")).unwrap().change,
+        Some(Change::AdbPort(5037))
+    );
+    assert!(parse(&args("settings set adb-port 0")).is_err());
+    assert!(parse(&args("settings set adb-port 70000")).is_err());
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["developer_mode"], false);
+    assert_eq!(settings["adb_port"], 58526);
+    let changed = json_of(&dsa(&endpoint, "settings set developer-mode on --json"));
+    assert_eq!(changed["developer_mode"], true);
+    assert_eq!(changed["adb_address"], "127.0.0.1:58526");
+    let output = dsa(&endpoint, "settings");
+    assert!(
+        stdout(&output).contains("Developer mode: on (adb connect 127.0.0.1:58526)"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
 fn fr17_dsa_status_json_reports_the_state_and_the_last_reason() {
     let ((listener, _, _), endpoint) = local_pair();
     let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
@@ -774,6 +806,7 @@ fn fr17_dsa_settings_reads_and_changes_the_settings_through_the_service() {
     assert_eq!(settings["clipboard"], true);
     assert_eq!(settings["program_updates"], true);
     assert_eq!(settings["version"], "0.0.9");
+    assert_eq!(settings["android_version"], "17.0.0-16373615-7");
     assert_eq!(settings["log_dir"], "C:\\ProgramData\\DSA\\logs");
 
     let changed = json_of(&dsa(&endpoint, "settings set render-gpu Integrated --json"));
@@ -803,6 +836,11 @@ fn fr17_dsa_settings_reads_and_changes_the_settings_through_the_service() {
     );
     assert!(
         stdout(&text).contains("Freeze when idle: on"),
+        "{}",
+        stdout(&text)
+    );
+    assert!(
+        stdout(&text).contains("Android image: 17.0.0-16373615-7"),
         "{}",
         stdout(&text)
     );

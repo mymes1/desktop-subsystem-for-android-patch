@@ -5,6 +5,7 @@
 //! through the traits defined here and in `dsa-transport`.
 //!
 //! - [`session`]: one guest's life from start to stop.
+//! - [`adb_bridge`]: developer mode's loopback port, whose connections go to the guest's adbd.
 //! - [`accessibility`]: the accessibility tree of a task window, for host accessibility
 //!   clients such as screen readers.
 //! - [`audio`]: the guest's sound, played on the host's default output device.
@@ -35,6 +36,7 @@
 //!   which window each task and each frame goes to.
 
 pub mod accessibility;
+pub mod adb_bridge;
 pub mod apk;
 pub mod apk_info;
 pub mod audio;

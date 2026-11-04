@@ -914,6 +914,10 @@ pub struct Settings {
     /// On unless the user turns it off.
     #[prost(bool, tag = "9")]
     pub clipboard: bool,
+    /// The version of the Android image the caller's next start boots, such as
+    /// "17.0.0-16373615-7". Empty when the service does not know it. A client cannot change it.
+    #[prost(string, tag = "13")]
+    pub android_version: ::prost::alloc::string::String,
     /// Whether every DSA process writes the input trace (a click's path from the host to the app
     /// and back, on one clock) to its log. Off by default. It applies to the whole computer, so
     /// only an administrator may change it; a process reads it when it starts.
@@ -923,6 +927,15 @@ pub struct Settings {
     /// summary at the end of a drag. Off by default; the same rules as input_trace.
     #[prost(bool, tag = "12")]
     pub resize_trace: bool,
+    /// Whether the caller's Android takes adb connections: the service then listens on
+    /// 127.0.0.1:adb_port and bridges each connection to the guest's adbd. Off by default, and
+    /// the caller's own. It applies at once, without restarting Android.
+    #[prost(bool, tag = "14")]
+    pub developer_mode: bool,
+    /// The loopback port adb connects to while developer mode is on. 58526 unless the user
+    /// chooses another; 0 in a request means the default.
+    #[prost(uint32, tag = "15")]
+    pub adb_port: u32,
 }
 /// Turns the connection into the accessibility tree of one of the caller's task windows, for a
 /// host accessibility client (a screen reader, an inspection tool) that reads that window.

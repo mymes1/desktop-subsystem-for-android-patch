@@ -60,6 +60,8 @@ pub struct FakeAndroid {
     pub requests: Mutex<Vec<TaskRequest>>,
     /// The pointer events it was given, in order.
     pub pointers: Mutex<Vec<PointerEvent>>,
+    /// How many pointer events it refused because it was not running.
+    pub pointers_refused: Mutex<usize>,
     /// The key events it was given, in order.
     pub keys: Mutex<Vec<KeyEvent>>,
     /// The text input it was given, in order.
@@ -71,6 +73,10 @@ pub struct FakeAndroid {
     pub freeze_when_idle: Mutex<Vec<bool>>,
     /// Each word on whether web links open in it, in order.
     pub links_in_android: Mutex<Vec<bool>>,
+    /// Each word on developer mode (on, and the adb port), in order.
+    pub developer_mode: Mutex<Vec<(bool, u16)>>,
+    /// Set to refuse developer mode, as when the port is taken.
+    pub refuse_developer_mode: Mutex<Option<String>>,
     link_watchers: Mutex<Vec<Sender<String>>>,
     /// The files it was given, in order.
     pub files: Mutex<Vec<FileTransfer>>,
@@ -136,11 +142,14 @@ impl FakeAndroid {
             tasks: Mutex::new((TaskTable::new(), Vec::new())),
             requests: Mutex::new(Vec::new()),
             pointers: Mutex::new(Vec::new()),
+            pointers_refused: Mutex::new(0),
             keys: Mutex::new(Vec::new()),
             text: Mutex::new(Vec::new()),
             shown: Mutex::new(Vec::new()),
             freeze_when_idle: Mutex::new(Vec::new()),
             links_in_android: Mutex::new(Vec::new()),
+            developer_mode: Mutex::new(Vec::new()),
+            refuse_developer_mode: Mutex::new(None),
             link_watchers: Mutex::new(Vec::new()),
             files: Mutex::new(Vec::new()),
             clipboard_shared: Mutex::new(Vec::new()),
@@ -266,6 +275,13 @@ impl UserAndroid for FakeAndroid {
     }
     fn links_in_android(&self, on: bool) {
         self.links_in_android.lock().unwrap().push(on);
+    }
+    fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
+        if let Some(why) = self.refuse_developer_mode.lock().unwrap().clone() {
+            return Err(why);
+        }
+        self.developer_mode.lock().unwrap().push((on, port));
+        Ok(())
     }
     fn watch_links(&self) -> Option<mpsc::Receiver<String>> {
         let (tx, rx) = mpsc::channel();
@@ -494,6 +510,7 @@ impl UserAndroid for FakeAndroid {
     }
     fn pointer(&self, event: &PointerEvent) -> Result<(), TaskRequestError> {
         if self.state() != SessionState::Active {
+            *self.pointers_refused.lock().unwrap() += 1;
             return Err(TaskRequestError::NotRunning(format!(
                 "Android is {}, not running",
                 self.state()
@@ -798,6 +815,14 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::link_setting_reaches_the_caller(&mut || $make);
         }
         #[test]
+        fn fr20_developer_mode_is_off_by_default_and_reaches_the_callers_android() {
+            $crate::host_api_conformance::developer_mode_reaches_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr20_a_developer_mode_port_that_cannot_open_is_reported() {
+            $crate::host_api_conformance::developer_mode_port_refusal_is_reported(&mut || $make);
+        }
+        #[test]
         fn nfr5_a_link_client_that_sends_a_frame_is_disconnected() {
             $crate::host_api_conformance::link_client_that_sends_is_disconnected(&mut || $make);
         }
@@ -882,6 +907,10 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr17_settings_are_read_and_changed_through_the_service() {
             $crate::host_api_conformance::settings_round_trip(&mut || $make);
+        }
+        #[test]
+        fn fr17_the_settings_name_the_android_image_the_next_start_boots() {
+            $crate::host_api_conformance::android_version_follows_the_image(&mut || $make);
         }
         #[test]
         fn fr17_an_invalid_setting_is_refused_with_its_reason() {
@@ -1374,8 +1403,18 @@ pub fn pointer_input_to_stopped_android_is_dropped(make: MakeLocal<'_>) {
         .send(&pointer(4, PointerAction::Down, 1.0))
         .expect("the event is sent");
     // The service reads the stream on a thread of its own, and nothing answers an input
-    // event, so the test gives it time to drop the first event before Android starts.
-    thread::sleep(Duration::from_millis(300));
+    // event, so the test waits until Android has refused the first event before it starts.
+    let deadline = std::time::Instant::now() + WAIT;
+    while androids
+        .of(&user)
+        .is_none_or(|android| *android.pointers_refused.lock().unwrap() == 0)
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the event sent while Android was stopped never reached it"
+        );
+        thread::sleep(Duration::from_millis(5));
+    }
     // Once Android runs, the same stream carries input to it.
     connect(&mut *connector).start().unwrap();
     let up = pointer(4, PointerAction::Up, 2.0);
@@ -2066,6 +2105,68 @@ pub fn link_reaches_the_client(make: MakeLocal<'_>) {
     );
 }
 
+pub fn developer_mode_reaches_the_caller(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    let fresh = client.settings().unwrap().settings;
+    assert!(!fresh.developer_mode, "off by default");
+    assert_eq!(fresh.adb_port, 58526);
+    let on = client
+        .set_settings(&Settings {
+            developer_mode: true,
+            ..Settings::default()
+        })
+        .expect("turning developer mode on");
+    assert!(on.settings.developer_mode);
+    assert!(store.get(&user).unwrap().developer_mode);
+    client
+        .set_settings(&Settings {
+            developer_mode: true,
+            adb_port: 5037,
+            ..Settings::default()
+        })
+        .unwrap();
+    client.set_settings(&Settings::default()).unwrap();
+    assert_eq!(
+        *androids.of(&user).unwrap().developer_mode.lock().unwrap(),
+        vec![(true, 58526), (true, 5037), (false, 58526)]
+    );
+}
+
+pub fn developer_mode_port_refusal_is_reported(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    // The caller's Android is made by the first request that needs it.
+    client.settings().unwrap();
+    client.set_settings(&Settings::default()).unwrap();
+    *androids
+        .of(&user)
+        .unwrap()
+        .refuse_developer_mode
+        .lock()
+        .unwrap() = Some("cannot listen for adb on 127.0.0.1:58526".into());
+    match client.set_settings(&Settings {
+        developer_mode: true,
+        ..Settings::default()
+    }) {
+        Err(ClientError::Service { code, detail }) => {
+            assert_eq!(code, ErrorCode::InvalidSetting);
+            assert!(detail.contains("127.0.0.1:58526"), "{detail}");
+        }
+        other => panic!("expected the service to report the port, got {other:?}"),
+    }
+}
+
 pub fn link_setting_reaches_the_caller(make: MakeLocal<'_>) {
     let (listener, mut connector, user) = make();
     let store = Arc::new(MemorySettings::default());
@@ -2482,7 +2583,31 @@ fn facts() -> ServiceFacts {
         log_dir: Some("C:\\ProgramData\\DSA\\logs".into()),
         program_updates_available: true,
         image_updates_available: false,
+        android_version: Some("16.0.0-15581820-7".into()),
     }
+}
+
+pub fn android_version_follows_the_image(make: MakeLocal<'_>) {
+    let (listener, mut connector, _) = make();
+    let next = Arc::new(Mutex::new(Some("16.0.0-15581820-7".to_string())));
+    let source = Arc::clone(&next);
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(Arc::new(MemorySettings::default()), facts())
+        .with_android_version(Arc::new(move || source.lock().unwrap().clone()));
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    assert_eq!(
+        client.settings().unwrap().facts.android_version.as_deref(),
+        Some("16.0.0-15581820-7")
+    );
+    // An image update moves the next start to another image while the service runs.
+    *next.lock().unwrap() = Some("17.0.0-16373615-7".into());
+    assert_eq!(
+        client.settings().unwrap().facts.android_version.as_deref(),
+        Some("17.0.0-16373615-7")
+    );
+    *next.lock().unwrap() = None;
+    assert_eq!(client.settings().unwrap().facts.android_version, None);
 }
 
 pub fn settings_round_trip(make: MakeLocal<'_>) {

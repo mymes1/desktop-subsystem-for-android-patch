@@ -170,6 +170,17 @@ pub trait UserAndroid: Send + Sync {
     fn watch_links(&self) -> Option<Receiver<String>> {
         None
     }
+    /// Turns developer mode on (adb reaches this Android through `127.0.0.1:port`) or off,
+    /// as the user's setting says. An error says why the port could not be opened.
+    fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
+        if on {
+            Err(format!(
+                "this Android has no adb bridge, so 127.0.0.1:{port} stays closed"
+            ))
+        } else {
+            Ok(())
+        }
+    }
     /// Sends a file to this Android, which asks the user which app opens or takes it.
     fn open_file(&self, file: &FileTransfer) -> Result<(), TaskRequestError> {
         let _ = file;
@@ -380,6 +391,9 @@ impl UserAndroid for Session {
     }
     fn links_in_android(&self, on: bool) {
         Session::links_in_android(self, on)
+    }
+    fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
+        Session::developer_mode(self, on, port)
     }
     fn watch_links(&self) -> Option<Receiver<String>> {
         Some(Session::watch_links(self))
@@ -817,7 +831,13 @@ pub struct ServiceFacts {
     pub program_updates_available: bool,
     /// Whether this installation can download new Android images.
     pub image_updates_available: bool,
+    /// The version of the Android image the next start boots, if the service knows it.
+    pub android_version: Option<String>,
 }
+
+/// Says which Android image the next start boots. An image update changes it while the
+/// service runs, so the service asks each time a client reads the settings.
+pub type AndroidVersionSource = Arc<dyn Fn() -> Option<String> + Send + Sync>;
 
 /// The settings as the service reported them, with what it says about itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -833,6 +853,7 @@ pub struct HostApiService {
     androids: Arc<dyn UserAndroids>,
     program: Option<Arc<dyn UpdateProgram>>,
     settings: Option<(Arc<dyn SettingsStore>, ServiceFacts)>,
+    android_version: Option<AndroidVersionSource>,
     hello: types::Hello,
     handshake_timeout: Duration,
     /// Logs when each resize was handed to Android, and how long that took.
@@ -857,6 +878,7 @@ impl HostApiService {
             androids,
             program: None,
             settings: None,
+            android_version: None,
             hello: local_hello(Role::Service, build),
             handshake_timeout: Duration::from_secs(5),
             resize_trace: Mutex::new(ResizeTrace::new(
@@ -925,6 +947,22 @@ impl HostApiService {
         let detailed = store.machine().resize_trace;
         self.settings = Some((store, facts));
         self.with_resize_trace_detail(detailed)
+    }
+
+    /// Reports the Android image version `source` gives with the settings, in place of the
+    /// one in the facts.
+    pub fn with_android_version(mut self, source: AndroidVersionSource) -> HostApiService {
+        self.android_version = Some(source);
+        self
+    }
+
+    /// The facts as they stand now.
+    fn facts_now(&self, facts: &ServiceFacts) -> ServiceFacts {
+        let mut facts = facts.clone();
+        if let Some(source) = &self.android_version {
+            facts.android_version = source().filter(|version| !version.is_empty());
+        }
+        facts
     }
 
     /// Accepts connections until `stop` is set, serving each on its own thread. A failed
@@ -2395,7 +2433,9 @@ impl HostApiService {
             return Self::no_settings();
         };
         match store.get(&peer.user) {
-            Ok(settings) => response::Body::Settings(settings_to_wire(&settings, facts)),
+            Ok(settings) => {
+                response::Body::Settings(settings_to_wire(&settings, &self.facts_now(facts)))
+            }
             Err(why) => error(ErrorCode::Unavailable, why),
         }
     }
@@ -2419,6 +2459,19 @@ impl HostApiService {
             image_updates: wanted.image_updates,
             input_trace: wanted.input_trace,
             resize_trace: wanted.resize_trace,
+            developer_mode: wanted.developer_mode,
+            adb_port: match u16::try_from(wanted.adb_port) {
+                Ok(port) => port,
+                Err(_) => {
+                    return error(
+                        ErrorCode::InvalidSetting,
+                        format!(
+                            "the adb port {} is not a TCP port; use one from 1 to 65535",
+                            wanted.adb_port
+                        ),
+                    )
+                }
+            },
         };
         // The update and trace settings apply to every user of the machine, so only an
         // administrator may change them; the caller's own settings are theirs to change.
@@ -2450,11 +2503,21 @@ impl HostApiService {
         }
         match store.set(&peer.user, &wanted) {
             Ok(settings) => {
-                // The caller's Android follows the freeze, clipboard and link settings at once.
+                // The caller's Android follows the freeze, clipboard, link and developer mode
+                // settings at once.
                 if let Ok(android) = self.androids.android(&peer.user) {
                     android.freeze_when_idle(settings.freeze);
                     android.share_clipboard(settings.clipboard);
                     android.links_in_android(settings.links_in_android);
+                    if let Err(why) =
+                        android.developer_mode(settings.developer_mode, settings.adb_port)
+                    {
+                        // Kept as chosen, so it applies when the port is free again (the
+                        // next start of the service), but the caller learns why adb cannot
+                        // connect now.
+                        eprintln!("local API: developer mode for {}: {why}", peer.user);
+                        return error(ErrorCode::InvalidSetting, why);
+                    }
                 }
                 if settings.resize_trace != machine.resize_trace {
                     *self.resize_trace.lock().unwrap_or_else(|e| e.into_inner()) =
@@ -2463,7 +2526,7 @@ impl HostApiService {
                 eprintln!(
                     "local API: {} changed the settings: render GPU {}, freeze {}, clipboard \
                      {}, links in Android {}, program updates {}, image updates {}, input \
-                     trace {}, resize trace {}",
+                     trace {}, resize trace {}, developer mode {} (adb port {})",
                     peer.user,
                     settings.render_gpu,
                     on_off(settings.freeze),
@@ -2472,9 +2535,11 @@ impl HostApiService {
                     on_off(settings.program_updates),
                     on_off(settings.image_updates),
                     on_off(settings.input_trace),
-                    on_off(settings.resize_trace)
+                    on_off(settings.resize_trace),
+                    on_off(settings.developer_mode),
+                    settings.adb_port
                 );
-                response::Body::Settings(settings_to_wire(&settings, facts))
+                response::Body::Settings(settings_to_wire(&settings, &self.facts_now(facts)))
             }
             Err(why) => error(ErrorCode::InvalidSetting, why),
         }
@@ -2499,10 +2564,13 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         clipboard: settings.clipboard,
         input_trace: settings.input_trace,
         resize_trace: settings.resize_trace,
+        developer_mode: settings.developer_mode,
+        adb_port: settings.adb_port.into(),
         program_updates_available: facts.program_updates_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
         log_dir: facts.log_dir.clone().unwrap_or_default(),
+        android_version: facts.android_version.clone().unwrap_or_default(),
     }
 }
 
@@ -2517,12 +2585,17 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             image_updates: settings.image_updates,
             input_trace: settings.input_trace,
             resize_trace: settings.resize_trace,
+            developer_mode: settings.developer_mode,
+            adb_port: crate::settings::normalise_adb_port(
+                u16::try_from(settings.adb_port).unwrap_or(0),
+            ),
         },
         facts: ServiceFacts {
             version: settings.version,
             log_dir: Some(settings.log_dir).filter(|dir| !dir.is_empty()),
             program_updates_available: settings.program_updates_available,
             image_updates_available: settings.image_updates_available,
+            android_version: Some(settings.android_version).filter(|v| !v.is_empty()),
         },
     }
 }

@@ -114,6 +114,26 @@ public class ViewModelTests
     }
 
     [Fact]
+    public async Task Fr17_about_page_names_the_android_image_the_next_start_boots()
+    {
+        var cli = new FakeCli()
+            .Answer("settings --json", Settings.Replace("}", ",\"android_version\":\"17.0.0-16373615-7\"}"))
+            .Answer("gpus --json", "{\"gpus\":[]}");
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.True(vm.HasAndroidVersion);
+        Assert.Equal("17.0.0-16373615-7", vm.AndroidVersion);
+
+        // A service that does not know the image (or an older one) leaves the line empty.
+        var older = new SettingsViewModel(new DsaService(new FakeCli()
+            .Answer("settings --json", Settings)
+            .Answer("gpus --json", "{\"gpus\":[]}")), new KeyText());
+        await older.LoadAsync();
+        Assert.False(older.HasAndroidVersion);
+        Assert.Equal("", older.AndroidVersion);
+    }
+
+    [Fact]
     public async Task Fr17_settings_are_changed_through_the_service_only()
     {
         var cli = new FakeCli()
@@ -207,6 +227,31 @@ public class ViewModelTests
         Assert.True(vm.Clipboard);
         Assert.Contains("settings set clipboard off --json", cli.Calls);
         Assert.Contains("settings set clipboard on --json", cli.Calls);
+    }
+
+    [Fact]
+    public async Task Fr20_developer_mode_is_off_by_default_and_shows_the_adb_address_when_on()
+    {
+        var off = Settings.Replace("\"freeze\":false", "\"freeze\":false,\"developer_mode\":false,\"adb_port\":58526");
+        var on = off.Replace("\"developer_mode\":false", "\"developer_mode\":true");
+        var cli = new FakeCli()
+            .Answer("settings --json", off)
+            .Fail("gpus --json", "dsa: no GPU list")
+            .Answer("settings set developer-mode on --json", on)
+            .Answer("settings set adb-port 5037 --json", on.Replace("58526", "5037"));
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.False(vm.DeveloperMode);
+        Assert.Equal(58526, vm.AdbPort);
+
+        await vm.SetDeveloperModeAsync(true);
+        Assert.True(vm.DeveloperMode);
+        Assert.Equal("adb connect 127.0.0.1:58526", vm.AdbConnect);
+        await vm.SetAdbPortAsync("70000");
+        Assert.DoesNotContain(cli.Calls, call => call.Contains("adb-port 70000"));
+        await vm.SetAdbPortAsync("5037");
+        Assert.Equal("adb connect 127.0.0.1:5037", vm.AdbConnect);
+        Assert.Contains("settings set developer-mode on --json", cli.Calls);
     }
 
     [Fact]

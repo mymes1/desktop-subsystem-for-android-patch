@@ -19,6 +19,11 @@
           "name": "otatools.zip",
           "size": 531408470,
           "sha256": "516df2cce1758bb2d0a1b6eae2f5536b2598548a7e466227984bedaa580f9c79"
+        },
+        "dexpreopt_tools": {
+          "name": "dexpreopt_tools.zip",
+          "size": 209169640,
+          "sha256": "4d17c4f9524ac0fe8f6819387ce84b40eb24cad21f6bf4850707f697005dd8b7"
         }
       }
     },
@@ -40,6 +45,11 @@
           "name": "otatools.zip",
           "size": 502530087,
           "sha256": "b5beaa6d8d50edbc4220f6751ddafe4a1b0d2ef8e7decad19c23277428015389"
+        },
+        "dexpreopt_tools": {
+          "name": "dexpreopt_tools.zip",
+          "size": 216058332,
+          "sha256": "1687e9b36e6a22e5af88d99b304e3fa530458db2704d17e16b08f2ef1b4a6140"
         }
       }
     }
