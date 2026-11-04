@@ -1,7 +1,7 @@
 # Copyright 2026 The DSA Authors
 # SPDX-License-Identifier: Apache-2.0
 #
-# dsa-camera for x86_64 Android, built with the NDK by build.sh, which fetches the pinned
+# dsa-camera for x86_64 or arm64 Android, built with the NDK by build.sh, which fetches the pinned
 # sources into SCRATCH_DIR and generates the binder code into AIDL_GEN_DIR first.
 #
 # It builds the platform's camera metadata code from the fetched sources, so its metadata

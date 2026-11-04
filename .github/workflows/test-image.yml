@@ -229,9 +229,17 @@ jobs:
           if-no-files-found: error
 
   camera:
-    name: Build the guest camera HAL
+    name: Build the guest camera HAL (${{ matrix.arch }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -250,7 +258,7 @@ jobs:
       - name: Verify the binary links only the platform's C libraries
         run: |
           target=".scratch/build-camera/dsa-camera"
-          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
           needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
           echo "needs: $needed"
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so libnativewindow.so" || \
@@ -259,7 +267,7 @@ jobs:
       - name: Keep the camera HAL
         uses: actions/upload-artifact@v4
         with:
-          name: guest-camera
+          name: guest-camera${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-camera/dsa-camera
           if-no-files-found: error
 
@@ -309,8 +317,16 @@ jobs:
           if-no-files-found: error
 
   audio:
-    name: Build the guest audio module
+    name: Build the guest audio module (${{ matrix.arch }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -329,7 +345,7 @@ jobs:
       - name: Verify the binary links only the platform's C libraries
         run: |
           target=".scratch/build-audio/dsa-audio"
-          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
           needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
           echo "needs: $needed"
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
@@ -337,14 +353,22 @@ jobs:
       - name: Keep the audio module
         uses: actions/upload-artifact@v4
         with:
-          name: guest-audio
+          name: guest-audio${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-audio/dsa-audio
           if-no-files-found: error
 
   gnss-hal:
-    name: Build the guest GNSS HAL
+    name: Build the guest GNSS HAL (${{ matrix.arch }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -363,7 +387,7 @@ jobs:
       - name: Verify the binary links only the platform's C libraries
         run: |
           target=.scratch/build-gnss/dsa-gnss
-          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
           needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
           echo "$target needs: $needed"
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
@@ -371,14 +395,22 @@ jobs:
       - name: Keep the GNSS HAL
         uses: actions/upload-artifact@v4
         with:
-          name: guest-gnss-hal
+          name: guest-gnss-hal${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-gnss/dsa-gnss
           if-no-files-found: error
 
   sensors:
-    name: Build the guest sensors HAL
+    name: Build the guest sensors HAL (${{ matrix.arch }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -397,7 +429,7 @@ jobs:
       - name: Verify the binary links only the platform's C libraries
         run: |
           target=".scratch/build-sensors/dsa-sensors"
-          readelf -h "$target" | grep -Fq 'Advanced Micro Devices X86-64'
+          readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
           needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
           echo "needs: $needed"
           test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
@@ -405,7 +437,7 @@ jobs:
       - name: Keep the sensors HAL
         uses: actions/upload-artifact@v4
         with:
-          name: guest-sensors
+          name: guest-sensors${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-sensors/dsa-sensors
           if-no-files-found: error
 
@@ -550,7 +582,7 @@ jobs:
       - name: Download the guest sensors HAL
         uses: actions/download-artifact@v4
         with:
-          name: guest-sensors
+          name: guest-sensors${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/sensors
 
       - name: Check the sensors HAL starts on the image
@@ -560,7 +592,7 @@ jobs:
       - name: Download the guest camera HAL
         uses: actions/download-artifact@v4
         with:
-          name: guest-camera
+          name: guest-camera${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/camera
 
       - name: Check the camera HAL starts on the image
@@ -582,7 +614,7 @@ jobs:
       - name: Download the guest audio module
         uses: actions/download-artifact@v4
         with:
-          name: guest-audio
+          name: guest-audio${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/audio
 
       - name: Check the audio module starts on the image
@@ -592,7 +624,7 @@ jobs:
       - name: Download the guest GNSS HAL
         uses: actions/download-artifact@v4
         with:
-          name: guest-gnss-hal
+          name: guest-gnss-hal${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/gnss-hal
 
       - name: Check the GNSS HAL starts on the image

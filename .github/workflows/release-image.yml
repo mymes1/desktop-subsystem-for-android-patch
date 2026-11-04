@@ -292,10 +292,18 @@ jobs:
           if-no-files-found: error
 
   camera:
-    name: Build the guest camera HAL
+    name: Build the guest camera HAL (${{ matrix.arch }})
     if: inputs.rebuild_images
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -314,7 +322,7 @@ jobs:
       - name: Keep the camera HAL
         uses: actions/upload-artifact@v4
         with:
-          name: guest-camera
+          name: guest-camera${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-camera/dsa-camera
           if-no-files-found: error
 
@@ -356,9 +364,17 @@ jobs:
           if-no-files-found: error
 
   audio:
-    name: Build the guest audio module
+    name: Build the guest audio module (${{ matrix.arch }})
     if: inputs.rebuild_images
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -377,15 +393,23 @@ jobs:
       - name: Keep the audio module
         uses: actions/upload-artifact@v4
         with:
-          name: guest-audio
+          name: guest-audio${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-audio/dsa-audio
           if-no-files-found: error
 
   gnss-hal:
-    name: Build the guest GNSS HAL
+    name: Build the guest GNSS HAL (${{ matrix.arch }})
     if: inputs.rebuild_images
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -404,15 +428,23 @@ jobs:
       - name: Keep the GNSS HAL
         uses: actions/upload-artifact@v4
         with:
-          name: guest-gnss-hal
+          name: guest-gnss-hal${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-gnss/dsa-gnss
           if-no-files-found: error
 
   sensors:
-    name: Build the guest sensors HAL
+    name: Build the guest sensors HAL (${{ matrix.arch }})
     if: inputs.rebuild_images
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+    env:
+      DSA_GUEST_ARCH: ${{ matrix.arch }}
+      # What readelf calls the guest's machine.
+      GUEST_MACHINE: ${{ matrix.arch == 'arm64' && 'AArch64' || 'Advanced Micro Devices X86-64' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -431,7 +463,7 @@ jobs:
       - name: Keep the sensors HAL
         uses: actions/upload-artifact@v4
         with:
-          name: guest-sensors
+          name: guest-sensors${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/build-sensors/dsa-sensors
           if-no-files-found: error
 
@@ -544,25 +576,25 @@ jobs:
       - name: Download the guest audio module
         uses: actions/download-artifact@v4
         with:
-          name: guest-audio
+          name: guest-audio${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/audio
 
       - name: Download the guest GNSS HAL
         uses: actions/download-artifact@v4
         with:
-          name: guest-gnss-hal
+          name: guest-gnss-hal${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/gnss-hal
 
       - name: Download the guest sensors HAL
         uses: actions/download-artifact@v4
         with:
-          name: guest-sensors
+          name: guest-sensors${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/sensors
 
       - name: Download the guest camera HAL
         uses: actions/download-artifact@v4
         with:
-          name: guest-camera
+          name: guest-camera${{ matrix.arch == 'arm64' && '-arm64' || '' }}
           path: .scratch/camera
 
       - name: Download the guest agent
