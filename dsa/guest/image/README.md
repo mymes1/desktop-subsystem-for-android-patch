@@ -125,6 +125,16 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   console prints only emergencies (`dsa-console.rc`), because each byte written to the
   emulated port traps out of the VM and takes time from vsync and input. The console keeps
   the kernel's early boot and a panic, which the host keeps as the VM's console log.
+- The image reports DSA's device identity instead of Cuttlefish's, in every partition's
+  `build.prop` and in the generic ramdisk's: manufacturer `thisisthepy`, brand `DSA`, model
+  `Desktop Subsystem for Android`, device and product name `dsa_x86_64`,
+  `ro.build.characteristics=tablet`, and `user` in every fingerprint. The product
+  `build.prop` ends with `import` lines that take these properties from
+  `/second_stage_resources/system/etc/ramdisk/build.prop`. When a user changes the identity
+  in the settings, the host appends a small cpio archive with that file to the boot's
+  initrd; first stage init keeps it for the second stage, and init reads it before the
+  property service locks `ro.*`. `image.json` names the build's release, ID, incremental
+  version and tags under `identity`, so the host can compose a fingerprint.
 - Every APK, APEX and verified boot image is re-signed. The published build is signed with
   AOSP's test keys, whose private halves are public.
 

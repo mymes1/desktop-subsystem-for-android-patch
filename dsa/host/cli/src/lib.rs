@@ -13,6 +13,7 @@
 //! dsa share <file>
 //! dsa tasks
 //! dsa settings [set <name> <value>]
+//! dsa settings device | set device.<field> <value> | reset device[.<field>]
 //! dsa memory
 //! dsa gpus
 //! dsa widgets [list | add <provider> | remove <id>]
@@ -99,6 +100,17 @@
 //! takes, on the host and inside Android. `dsa gpus` lists the GPUs of this machine, for
 //! choosing the render GPU.
 //!
+//! `dsa settings device` shows the device identity Android reports to its apps: what the user
+//! chose, and each value as Android reports it from its next start.
+//! `dsa settings set device.<field> <value>` changes one value: `manufacturer`, `brand`,
+//! `model`, `device`, `name` (the product name), `characteristics` (the form factor, such as
+//! `tablet`), `fingerprint` (the whole string), or one part of the fingerprint
+//! (`fingerprint.release`, `fingerprint.id`, `fingerprint.incremental`, `fingerprint.type`,
+//! `fingerprint.tags`). `dsa settings reset device` puts every value back to the image's own,
+//! and `dsa settings reset device.<field>` one. Android reads them when it starts, so a change
+//! applies from its next start. With `--json` it prints `chosen` and `effective`, each with the
+//! fields above (`fingerprint_release` and so on for the parts).
+//!
 //! `dsa status` says `Active` only once Android has finished booting and its agent is connected.
 //! An Android that runs but has taken too long is `Stalled`, and a line after the state says why
 //! and what to do; so does `problem` in the JSON. `dsa start --wait` fails on it.
@@ -133,11 +145,13 @@ use serde_json::{json, Value};
 
 pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | launch <package> | \
      install <file.apk> [--progress] | apk-info <file.apk> | open <file> | share <file> | \
-     tasks | settings [set <name> <value>] | memory | gpus | \
+     tasks | settings [set <name> <value> | device | reset device[.<field>]] | memory | \
+     gpus | \
      widgets [list | add <provider> | remove <id>] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip>> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
+pub mod device;
 pub mod logs;
 
 /// What to ask the service.
@@ -198,6 +212,12 @@ pub enum Change {
     ImageUpdates(bool),
     InputTrace(bool),
     ResizeTrace(bool),
+    /// Show the device identity.
+    ShowDevice,
+    /// Change one value of the device identity.
+    Device(dsa_host_core::device_identity::Field, String),
+    /// Put one value of the device identity, or all of them, back to the image's own.
+    ResetDevice(Option<dsa_host_core::device_identity::Field>),
 }
 
 impl Change {
@@ -207,6 +227,9 @@ impl Change {
             "off" | "false" | "no" | "0" => Ok(false),
             _ => Err(format!("{name} is on or off, not {value:?}")),
         };
+        if let Some(field) = name.strip_prefix("device.") {
+            return device::parse_set(field, value);
+        }
         match name {
             "render-gpu" => Ok(Change::RenderGpu(value.to_string())),
             "freeze" => switch().map(Change::Freeze),
@@ -218,8 +241,8 @@ impl Change {
             "resize-trace" => switch().map(Change::ResizeTrace),
             _ => Err(format!(
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
-                 clipboard, links-in-android, program-updates, image-updates, input-trace \
-                 and resize-trace"
+                 clipboard, links-in-android, program-updates, image-updates, input-trace, \
+                 resize-trace and device.<field>"
             )),
         }
     }
@@ -377,6 +400,15 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     .next()
                     .ok_or_else(|| format!("dsa settings set {name} needs a value"))?;
                 change = Some(Change::parse(name, value)?);
+            }
+            "reset" if command == Some(Command::Settings) && change.is_none() => {
+                let name = args
+                    .next()
+                    .ok_or("dsa settings reset needs device or device.<field>")?;
+                change = Some(device::parse_reset(name)?);
+            }
+            "device" if command == Some(Command::Settings) && change.is_none() => {
+                change = Some(Change::ShowDevice);
             }
             "list" if command == Some(Command::Widgets) && widgets.is_none() => {
                 widgets = Some(WidgetAction::List);
@@ -832,6 +864,11 @@ fn describe_gpus(gpus: &Value) -> String {
 
 /// `dsa settings`, and `dsa settings set`.
 fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
+    if let Some(change @ (Change::ShowDevice | Change::Device(..) | Change::ResetDevice(_))) =
+        &invocation.change
+    {
+        return device::run(change, invocation.json, client);
+    }
     let mut report = client.settings().map_err(|e| e.to_string())?;
     if let Some(change) = &invocation.change {
         let mut wanted = report.settings.clone();
@@ -844,6 +881,9 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::ImageUpdates(on) => wanted.image_updates = *on,
             Change::InputTrace(on) => wanted.input_trace = *on,
             Change::ResizeTrace(on) => wanted.resize_trace = *on,
+            Change::ShowDevice | Change::Device(..) | Change::ResetDevice(_) => {
+                unreachable!("answered above")
+            }
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
     }

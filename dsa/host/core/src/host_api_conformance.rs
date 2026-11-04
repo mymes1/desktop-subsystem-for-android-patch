@@ -756,6 +756,10 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::guest_clipboard_reaches_the_client(&mut || $make);
         }
         #[test]
+        fn fr17_the_device_identity_is_the_callers_own_and_refuses_bad_values() {
+            $crate::host_api_conformance::device_identity_is_the_callers_own(&mut || $make);
+        }
+        #[test]
         fn fr13_turning_clipboard_sharing_off_and_on_reaches_the_callers_android() {
             $crate::host_api_conformance::clipboard_setting_reaches_the_caller(&mut || $make);
         }
@@ -1832,6 +1836,59 @@ pub fn guest_clipboard_reaches_the_client(make: MakeLocal<'_>) {
         clipboard.next(WAIT).unwrap().as_deref(),
         Some("copied in Android")
     );
+}
+
+pub fn device_identity_is_the_callers_own(make: MakeLocal<'_>) {
+    use crate::device_identity::{
+        DeviceIdentity, DeviceIdentityStore, Field, ImageBuild, MemoryDeviceIdentities,
+    };
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemoryDeviceIdentities::default());
+    let build = ImageBuild {
+        release: "16".into(),
+        id: "BP2A".into(),
+        incremental: "1.dsaab".into(),
+        tags: "release-keys".into(),
+    };
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_device_identities(store.clone(), Arc::new(move |_: &str| Some(build.clone())));
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+
+    let (chosen, effective) = client.device_identity().unwrap();
+    assert!(chosen.is_default());
+    assert_eq!(effective.model, "Desktop Subsystem for Android");
+    assert_eq!(
+        effective.fingerprint,
+        "DSA/dsa_x86_64/dsa_x86_64:16/BP2A/1.dsaab:user/release-keys"
+    );
+
+    let mut wanted = DeviceIdentity::default();
+    wanted.set(Field::Model, "My tablet").unwrap();
+    wanted.set(Field::Brand, "mine").unwrap();
+    let (chosen, effective) = client.set_device_identity(&wanted).unwrap();
+    assert_eq!(chosen, wanted);
+    assert_eq!(effective.model, "My tablet");
+    assert_eq!(
+        effective.fingerprint,
+        "mine/dsa_x86_64/dsa_x86_64:16/BP2A/1.dsaab:user/release-keys"
+    );
+    assert_eq!(store.get(&user).unwrap(), wanted);
+
+    let refused = DeviceIdentity {
+        fingerprint: "not a fingerprint".into(),
+        ..DeviceIdentity::default()
+    };
+    match client.set_device_identity(&refused) {
+        Err(ClientError::Service { code, .. }) => assert_eq!(code, ErrorCode::InvalidSetting),
+        other => panic!("a bad fingerprint was not refused: {other:?}"),
+    }
+    assert_eq!(store.get(&user).unwrap(), wanted, "a refused value changes nothing");
+
+    let (chosen, _) = client
+        .set_device_identity(&DeviceIdentity::default())
+        .unwrap();
+    assert!(chosen.is_default());
 }
 
 pub fn clipboard_setting_reaches_the_caller(make: MakeLocal<'_>) {

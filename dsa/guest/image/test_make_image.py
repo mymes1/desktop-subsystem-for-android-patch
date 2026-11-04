@@ -2109,14 +2109,14 @@ class BootLogTests(unittest.TestCase):
         self.assertIn("ro.build.version.incremental=15581820.dsa0123456789ab", props)
         self.assertIn("ro.system.build.version.incremental=15581820.dsa0123456789ab", props)
         self.assertIn("ro.system.build.fingerprint="
-                      "generic/aosp_cf/vsoc:16/BP4A/15581820.dsa0123456789ab:userdebug/test-keys", props)
+                      "DSA/dsa_x86_64/dsa_x86_64:16/BP4A/15581820.dsa0123456789ab:user/test-keys", props)
         self.assertIn("ro.build.id=BP4A", props)
 
     def test_fr14_vendor_fingerprint_carries_the_same_tag(self):
         vendor = ("ro.vendor.build.fingerprint=generic/aosp_cf/vsoc:16/BP4A/15581820:userdebug/test-keys\n"
                   "ro.vendor.build.version.incremental=15581820\n")
         props = make_image.edit_props(vendor, vendor=True, build_tag="dsaab").splitlines()
-        self.assertIn("ro.vendor.build.fingerprint=generic/aosp_cf/vsoc:16/BP4A/15581820.dsaab:userdebug/test-keys", props)
+        self.assertIn("ro.vendor.build.fingerprint=DSA/dsa_x86_64/dsa_x86_64:16/BP4A/15581820.dsaab:user/test-keys", props)
         self.assertIn("ro.vendor.build.version.incremental=15581820.dsaab", props)
 
     def test_fr14_the_build_tag_follows_the_image_content(self):
@@ -2156,6 +2156,84 @@ class BootLogTests(unittest.TestCase):
         self.assertNotIn("(allow ", policy)
         source = Path(make_image.__file__).read_text()
         self.assertIn('plat_patched += "\\n" + KERNEL_POLICY.read_text()', source)
+
+
+class DeviceIdentityTests(unittest.TestCase):
+    """The image reports DSA's device identity, and takes the one a user chose at boot."""
+
+    CUTTLEFISH = (
+        "ro.product.system.brand=Android\n"
+        "ro.product.system.model=mainline\n"
+        "ro.product.vendor.manufacturer=Google\n"
+        "ro.product.vendor.model=Cuttlefish x86_64 phone 64-bit only\n"
+        "ro.product.vendor.device=vsoc_x86_64_only\n"
+        "ro.product.vendor.name=aosp_cf_x86_64_only_phone\n"
+        "ro.product.board=cutf\n"
+        "ro.product.first_api_level=36\n"
+        "ro.build.product=vsoc_x86_64_only\n"
+        "ro.build.flavor=aosp_cf_x86_64_only_phone-userdebug\n"
+        "ro.build.description=aosp_cf_x86_64_only_phone-userdebug 16 BP4A 15581820 test-keys\n"
+        "ro.build.display.id=aosp_cf_x86_64_only_phone-userdebug 16 BP4A 15581820\n"
+        "ro.build.characteristics=default\n"
+        "ro.build.fingerprint=generic/aosp_cf_x86_64_only_phone/vsoc_x86_64_only:16/BP4A/15581820:userdebug/test-keys\n"
+    )
+
+    def props(self, text):
+        return dict(line.split("=", 1) for line in text.splitlines()
+                    if "=" in line and not line.startswith(("#", "import ")))
+
+    def test_fr17_every_identity_property_is_dsas(self):
+        props = self.props(make_image.edit_props(self.CUTTLEFISH))
+        self.assertEqual(props["ro.product.system.brand"], "DSA")
+        self.assertEqual(props["ro.product.system.model"], "Desktop Subsystem for Android")
+        self.assertEqual(props["ro.product.vendor.manufacturer"], "thisisthepy")
+        self.assertEqual(props["ro.product.vendor.device"], "dsa_x86_64")
+        self.assertEqual(props["ro.product.vendor.name"], "dsa_x86_64")
+        self.assertEqual(props["ro.build.product"], "dsa_x86_64")
+        self.assertEqual(props["ro.build.flavor"], "dsa_x86_64-user")
+        self.assertEqual(props["ro.build.description"], "dsa_x86_64-user 16 BP4A 15581820 test-keys")
+        self.assertEqual(props["ro.build.display.id"], "BP4A")
+        self.assertEqual(props["ro.build.characteristics"], "tablet")
+        self.assertEqual(props["ro.build.fingerprint"],
+                         "DSA/dsa_x86_64/dsa_x86_64:16/BP4A/15581820:user/test-keys")
+        # What is not identity stays.
+        self.assertEqual(props["ro.product.board"], "cutf")
+        self.assertEqual(props["ro.product.first_api_level"], "36")
+        for value in props.values():
+            for old in ("Cuttlefish", "vsoc_", "aosp_cf_", "userdebug"):
+                self.assertNotIn(old, value)
+
+    def test_fr17_dlkm_and_ramdisk_props_get_the_identity_and_the_tag(self):
+        text = ("ro.product.bootimage.model=Cuttlefish x86_64 phone 64-bit only\n"
+                "ro.bootimage.build.fingerprint=generic/aosp_cf/vsoc:16/BP4A/1:userdebug/test-keys\n")
+        props = self.props(make_image.edit_identity(text, build_tag="dsaab"))
+        self.assertEqual(props["ro.product.bootimage.model"], "Desktop Subsystem for Android")
+        self.assertEqual(props["ro.bootimage.build.fingerprint"],
+                         "DSA/dsa_x86_64/dsa_x86_64:16/BP4A/1.dsaab:user/test-keys")
+        self.assertIn("VENDOR_DLKM/etc/build.prop", make_image.IDENTITY_PROP_FILES)
+        self.assertIn("INIT_BOOT/RAMDISK/system/etc/ramdisk/build.prop", make_image.IDENTITY_PROP_FILES)
+
+    def test_fr17_the_product_props_import_the_identity_the_boot_carries(self):
+        text = make_image.edit_props("ro.product.product.brand=Android\n", product=True)
+        lines = text.splitlines()
+        imports = [line for line in lines if line.startswith("import ")]
+        prop = "/second_stage_resources/system/etc/ramdisk/build.prop"
+        for key in ["ro.product.*", "ro.build.characteristics", "ro.build.fingerprint",
+                    "ro.system.build.fingerprint", "ro.vendor.build.fingerprint"]:
+            self.assertIn(f"import {prop} {key}", imports)
+        # The imports come last, so they win over every value read before them.
+        self.assertTrue(all(line.startswith(("import ", "#")) for line in lines[-len(imports):]))
+        self.assertIn("ro.build.characteristics=tablet", lines)
+        self.assertEqual(make_image.PRODUCT_PROP_FILE, "PRODUCT/etc/build.prop")
+        self.assertIn(make_image.PRODUCT_PROP_FILE, make_image.PROP_FILES)
+        self.assertNotIn("import ", make_image.edit_props("ro.product.system.brand=Android\n"))
+
+    def test_fr17_image_json_names_the_build_the_host_composes_fingerprints_from(self):
+        system = ("ro.build.version.release_or_codename=16\nro.build.id=BP4A\n"
+                  "ro.build.version.incremental=15581820.dsaab\nro.build.tags=release-keys\n")
+        self.assertEqual(make_image.image_identity(system),
+                         {"release": "16", "id": "BP4A", "incremental": "15581820.dsaab",
+                          "tags": "release-keys"})
 
 
 if __name__ == "__main__":

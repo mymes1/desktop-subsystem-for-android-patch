@@ -727,4 +727,169 @@
   <data name="Logs_Priority_F" xml:space="preserve">
     <value>Fatal</value>
   </data>
+  <data name="NavIdentity.Content" xml:space="preserve">
+    <value>Device identity</value>
+  </data>
+  <data name="IdentityTitle.Text" xml:space="preserve">
+    <value>Device identity</value>
+  </data>
+  <data name="IdentityIntro.Text" xml:space="preserve">
+    <value>The names and build fingerprint Android reports to apps. Leave a box empty to keep the value shown in it. Android reads these when it starts, so a change applies from its next start.</value>
+  </data>
+  <data name="IdentityWarning.Title" xml:space="preserve">
+    <value>Apps may notice</value>
+  </data>
+  <data name="IdentityWarning.Message" xml:space="preserve">
+    <value>Changing the model or the fingerprint can change how apps behave: some check the device before they run, and payment and integrity checks may fail.</value>
+  </data>
+  <data name="IdentityDoneBar.Title" xml:space="preserve">
+    <value>Device identity</value>
+  </data>
+  <data name="IdentitySaveButton.Content" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="IdentityResetButton.Content" xml:space="preserve">
+    <value>Reset to defaults</value>
+  </data>
+  <data name="IdentityRestartButton.Content" xml:space="preserve">
+    <value>Restart Android now</value>
+  </data>
+  <data name="IdentityResetConfirmTitle" xml:space="preserve">
+    <value>Reset the device identity?</value>
+  </data>
+  <data name="IdentityResetConfirmBody" xml:space="preserve">
+    <value>Every value goes back to DSA's own. It applies from the next start of Android.</value>
+  </data>
+  <data name="IdentityNamesHeader.Text" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="IdentityFingerprintHeader.Text" xml:space="preserve">
+    <value>Build fingerprint</value>
+  </data>
+  <data name="IdentityPreview.Text" xml:space="preserve">
+    <value>Fingerprint from the next start</value>
+  </data>
+  <data name="Identity_Saved" xml:space="preserve">
+    <value>Saved. Android uses it from its next start.</value>
+  </data>
+  <data name="Identity_SavedRestart" xml:space="preserve">
+    <value>Saved. Restart Android to use it now.</value>
+  </data>
+  <data name="Identity_Reset" xml:space="preserve">
+    <value>Back to the defaults. Android uses them from its next start.</value>
+  </data>
+  <data name="Identity_ResetRestart" xml:space="preserve">
+    <value>Back to the defaults. Restart Android to use them now.</value>
+  </data>
+  <data name="Identity_Restarted" xml:space="preserve">
+    <value>Android started again with this identity.</value>
+  </data>
+  <data name="Identity_manufacturer" xml:space="preserve">
+    <value>Manufacturer</value>
+  </data>
+  <data name="Identity_manufacturer_Description" xml:space="preserve">
+    <value>Build.MANUFACTURER. Up to 64 printable ASCII characters.</value>
+  </data>
+  <data name="Identity_manufacturer_Invalid" xml:space="preserve">
+    <value>Use 1 to 64 printable ASCII characters, without a space at the start or end.</value>
+  </data>
+  <data name="Identity_brand" xml:space="preserve">
+    <value>Brand</value>
+  </data>
+  <data name="Identity_brand_Description" xml:space="preserve">
+    <value>Build.BRAND, and the first part of the fingerprint. Letters, digits, '.', '_' and '-'.</value>
+  </data>
+  <data name="Identity_brand_Invalid" xml:space="preserve">
+    <value>Use up to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit.</value>
+  </data>
+  <data name="Identity_model" xml:space="preserve">
+    <value>Model</value>
+  </data>
+  <data name="Identity_model_Description" xml:space="preserve">
+    <value>Build.MODEL, the name apps show for this device.</value>
+  </data>
+  <data name="Identity_model_Invalid" xml:space="preserve">
+    <value>Use 1 to 64 printable ASCII characters, without a space at the start or end.</value>
+  </data>
+  <data name="Identity_device" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="Identity_device_Description" xml:space="preserve">
+    <value>Build.DEVICE. Letters, digits, '.', '_' and '-'.</value>
+  </data>
+  <data name="Identity_device_Invalid" xml:space="preserve">
+    <value>Use up to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit.</value>
+  </data>
+  <data name="Identity_name" xml:space="preserve">
+    <value>Product name</value>
+  </data>
+  <data name="Identity_name_Description" xml:space="preserve">
+    <value>Build.PRODUCT. Letters, digits, '.', '_' and '-'.</value>
+  </data>
+  <data name="Identity_name_Invalid" xml:space="preserve">
+    <value>Use up to 32 letters, digits, '.', '_' or '-', starting with a letter or a digit.</value>
+  </data>
+  <data name="Identity_characteristics" xml:space="preserve">
+    <value>Form factor</value>
+  </data>
+  <data name="Identity_characteristics_Description" xml:space="preserve">
+    <value>ro.build.characteristics: tablet (large-screen layouts), default (a phone), or other words separated by commas.</value>
+  </data>
+  <data name="Identity_characteristics_Invalid" xml:space="preserve">
+    <value>Use lower-case words of letters, digits and '_', separated by commas.</value>
+  </data>
+  <data name="Identity_fingerprint_release" xml:space="preserve">
+    <value>Release</value>
+  </data>
+  <data name="Identity_fingerprint_release_Description" xml:space="preserve">
+    <value>The Android release in the fingerprint.</value>
+  </data>
+  <data name="Identity_fingerprint_release_Invalid" xml:space="preserve">
+    <value>Use 1 to 64 letters, digits, '.', '_' or '-'.</value>
+  </data>
+  <data name="Identity_fingerprint_id" xml:space="preserve">
+    <value>Build ID</value>
+  </data>
+  <data name="Identity_fingerprint_id_Description" xml:space="preserve">
+    <value>The build ID in the fingerprint.</value>
+  </data>
+  <data name="Identity_fingerprint_id_Invalid" xml:space="preserve">
+    <value>Use 1 to 64 letters, digits, '.', '_' or '-'.</value>
+  </data>
+  <data name="Identity_fingerprint_incremental" xml:space="preserve">
+    <value>Incremental version</value>
+  </data>
+  <data name="Identity_fingerprint_incremental_Description" xml:space="preserve">
+    <value>The incremental build version in the fingerprint.</value>
+  </data>
+  <data name="Identity_fingerprint_incremental_Invalid" xml:space="preserve">
+    <value>Use 1 to 64 letters, digits, '.', '_' or '-'.</value>
+  </data>
+  <data name="Identity_fingerprint_type" xml:space="preserve">
+    <value>Build type</value>
+  </data>
+  <data name="Identity_fingerprint_type_Description" xml:space="preserve">
+    <value>user, userdebug or eng. Only the fingerprint says it; Android stays a user build.</value>
+  </data>
+  <data name="Identity_fingerprint_type_Invalid" xml:space="preserve">
+    <value>Use user, userdebug or eng.</value>
+  </data>
+  <data name="Identity_fingerprint_tags" xml:space="preserve">
+    <value>Tags</value>
+  </data>
+  <data name="Identity_fingerprint_tags_Description" xml:space="preserve">
+    <value>Such as release-keys.</value>
+  </data>
+  <data name="Identity_fingerprint_tags_Invalid" xml:space="preserve">
+    <value>Use letters, digits, '.', '_', '-' or ','.</value>
+  </data>
+  <data name="Identity_fingerprint" xml:space="preserve">
+    <value>Whole fingerprint</value>
+  </data>
+  <data name="Identity_fingerprint_Description" xml:space="preserve">
+    <value>brand/name/device:release/id/incremental:type/tags. When set, it is Build.FINGERPRINT, whatever the parts above say.</value>
+  </data>
+  <data name="Identity_fingerprint_Invalid" xml:space="preserve">
+    <value>Write it as brand/name/device:release/id/incremental:type/tags, with the type user, userdebug or eng.</value>
+  </data>
 </root>

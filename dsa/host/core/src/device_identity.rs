@@ -19,6 +19,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use dsa_protocol::host_api::types;
 use serde::{Deserialize, Serialize};
 
 use crate::settings::{read_json, user_file_stem, write_json};
@@ -537,6 +538,42 @@ impl DeviceIdentity {
             lines.push(format!("ro.build.fingerprint={}", e.fingerprint));
         }
         Some(lines.join("\n") + "\n")
+    }
+}
+
+/// `identity` as the local API carries it.
+pub fn to_wire(identity: &DeviceIdentity) -> types::DeviceIdentity {
+    types::DeviceIdentity {
+        manufacturer: identity.manufacturer.clone(),
+        brand: identity.brand.clone(),
+        model: identity.model.clone(),
+        device: identity.device.clone(),
+        name: identity.name.clone(),
+        characteristics: identity.characteristics.clone(),
+        fingerprint: identity.fingerprint.clone(),
+        fingerprint_release: identity.fingerprint_release.clone(),
+        fingerprint_id: identity.fingerprint_id.clone(),
+        fingerprint_incremental: identity.fingerprint_incremental.clone(),
+        fingerprint_type: identity.fingerprint_type.clone(),
+        fingerprint_tags: identity.fingerprint_tags.clone(),
+    }
+}
+
+/// An identity the local API carried.
+pub fn from_wire(identity: types::DeviceIdentity) -> DeviceIdentity {
+    DeviceIdentity {
+        manufacturer: identity.manufacturer,
+        brand: identity.brand,
+        model: identity.model,
+        device: identity.device,
+        name: identity.name,
+        characteristics: identity.characteristics,
+        fingerprint: identity.fingerprint,
+        fingerprint_release: identity.fingerprint_release,
+        fingerprint_id: identity.fingerprint_id,
+        fingerprint_incremental: identity.fingerprint_incremental,
+        fingerprint_type: identity.fingerprint_type,
+        fingerprint_tags: identity.fingerprint_tags,
     }
 }
 

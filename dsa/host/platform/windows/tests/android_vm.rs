@@ -55,6 +55,39 @@ fn fr2_a_vm_that_cannot_start_is_reported_and_nothing_is_left_running() {
 }
 
 #[test]
+fn fr17_the_boot_initrd_carries_a_changed_device_identity_before_the_bootconfig() {
+    use dsa_host_windows::android_vm::write_boot_initrd;
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("boot-identity");
+    std::fs::create_dir_all(&dir).unwrap();
+    let initrd = dir.join("initrd.img");
+    std::fs::write(&initrd, b"ramdisk").unwrap();
+
+    let with = dir.join("with.initrd");
+    let file = write_boot_initrd(
+        &initrd,
+        Some("ro.product.model=My tablet\n"),
+        &secret(),
+        &with,
+    )
+    .unwrap();
+    let data = std::fs::read(&with).unwrap();
+    assert!(data.starts_with(b"ramdisk\0070701"), "padded to four bytes");
+    let at = |needle: &[u8]| data.windows(needle.len()).position(|w| w == needle);
+    let props = at(b"ro.product.model=My tablet\n").expect("the identity is in the initrd");
+    let config = at(b"#BOOTCONFIG\n").expect("the bootconfig still ends it");
+    assert!(at(b"system/etc/ramdisk/build.prop").is_some());
+    assert!(props < config);
+    drop(file);
+    assert!(!with.exists(), "the copy goes once the VM has read it");
+
+    let without = dir.join("without.initrd");
+    let _file = write_boot_initrd(&initrd, None, &secret(), &without).unwrap();
+    let data = std::fs::read(&without).unwrap();
+    assert!(data.starts_with(b"ramdisk"));
+    assert!(!data.windows(6).any(|w| w == b"070701"), "nothing added");
+}
+
+#[test]
 fn fr2_an_invalid_configuration_is_refused_before_hcs_is_called() {
     let mut config = missing_files();
     config.processors = 0;

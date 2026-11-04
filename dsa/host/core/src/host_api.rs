@@ -61,6 +61,7 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::device_identity::{DeviceIdentity, DeviceIdentityStore, ImageBuild};
 use crate::diagnostics::HostFile;
 use crate::files::{self, FileAction, FileTransfer};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
@@ -845,7 +846,12 @@ pub struct HostApiService {
     placements: Arc<dyn WidgetPlacements>,
     /// The host's logs that go in a user's diagnostics, by user.
     host_logs: Option<HostLogs>,
+    /// Where each user's device identity is kept, and what the image's build says.
+    identities: Option<(Arc<dyn DeviceIdentityStore>, ImageBuildSource)>,
 }
+
+/// Says what the build of the image a user's Android starts from is, by user.
+pub type ImageBuildSource = Arc<dyn Fn(&str) -> Option<ImageBuild> + Send + Sync>;
 
 /// Names the host's log files that go in a user's diagnostics archive: the service's own and
 /// those of the processes in that user's session, never another user's.
@@ -867,7 +873,19 @@ impl HostApiService {
             memory_wait: MEMORY_WAIT,
             placements: Arc::new(MemoryWidgetPlacements::default()),
             host_logs: None,
+            identities: None,
         }
+    }
+
+    /// Keeps each user's device identity in `store`; `build` says what the image's own build
+    /// is, for the values the user did not choose.
+    pub fn with_device_identities(
+        mut self,
+        store: Arc<dyn DeviceIdentityStore>,
+        build: ImageBuildSource,
+    ) -> HostApiService {
+        self.identities = Some((store, build));
+        self
     }
 
     /// Puts the host log files `host_logs` names for a user in that user's diagnostics.
@@ -2150,6 +2168,10 @@ impl HostApiService {
             Some(request::Body::UpdateProgram(_)) => self.update_program(peer),
             Some(request::Body::GetSettings(_)) => self.get_settings(peer),
             Some(request::Body::SetSettings(set)) => self.set_settings(peer, set),
+            Some(request::Body::GetDeviceIdentity(_)) => self.device_identity(peer, None),
+            Some(request::Body::SetDeviceIdentity(set)) => {
+                self.device_identity(peer, Some(set.identity.unwrap_or_default()))
+            }
             Some(request::Body::GetMemory(_)) => match self.androids.android(&peer.user) {
                 Err(why) => error(ErrorCode::Unavailable, why),
                 Ok(android) => {
@@ -2256,6 +2278,8 @@ impl HostApiService {
                         | request::Body::FreezeSession(_)
                         | request::Body::GetSettings(_)
                         | request::Body::SetSettings(_)
+                        | request::Body::GetDeviceIdentity(_)
+                        | request::Body::SetDeviceIdentity(_)
                         | request::Body::GetMemory(_)
                         | request::Body::StreamInput(_)
                         | request::Body::WatchClipboard(_)
@@ -2383,6 +2407,34 @@ impl HostApiService {
 }
 
 impl HostApiService {
+    /// The caller's device identity, after replacing it with `wanted` when there is one.
+    fn device_identity(
+        &self,
+        peer: &Peer,
+        wanted: Option<types::DeviceIdentity>,
+    ) -> response::Body {
+        let Some((store, build)) = &self.identities else {
+            return Self::no_settings();
+        };
+        let chosen = match wanted {
+            Some(wanted) => {
+                match store.set(&peer.user, &crate::device_identity::from_wire(wanted)) {
+                    Ok(chosen) => chosen,
+                    Err(why) => return error(ErrorCode::InvalidSetting, why),
+                }
+            }
+            None => match store.get(&peer.user) {
+                Ok(chosen) => chosen,
+                Err(why) => return error(ErrorCode::Unavailable, why),
+            },
+        };
+        let effective = chosen.effective(build(&peer.user).as_ref());
+        response::Body::DeviceIdentity(types::DeviceIdentityReport {
+            chosen: Some(crate::device_identity::to_wire(&chosen)),
+            effective: Some(crate::device_identity::to_wire(&effective)),
+        })
+    }
+
     fn no_settings() -> response::Body {
         error(
             ErrorCode::Unavailable,
@@ -2486,6 +2538,18 @@ fn on_off(value: bool) -> &'static str {
         "on"
     } else {
         "off"
+    }
+}
+
+fn identity_report(body: response::Body) -> Result<(DeviceIdentity, DeviceIdentity), ClientError> {
+    match body {
+        response::Body::DeviceIdentity(report) => Ok((
+            crate::device_identity::from_wire(report.chosen.unwrap_or_default()),
+            crate::device_identity::from_wire(report.effective.unwrap_or_default()),
+        )),
+        _ => Err(ClientError::Malformed(
+            "expected the device identity".into(),
+        )),
     }
 }
 
@@ -2723,6 +2787,25 @@ impl HostApiClient {
             response::Body::Settings(settings) => Ok(settings_from_wire(settings)),
             _ => Err(ClientError::Malformed("expected the settings".into())),
         }
+    }
+
+    /// The device identity the caller chose, and every value as Android reports it from its
+    /// next start.
+    pub fn device_identity(&mut self) -> Result<(DeviceIdentity, DeviceIdentity), ClientError> {
+        let body = request::Body::GetDeviceIdentity(types::GetDeviceIdentity {});
+        identity_report(self.exchange(body, self.timeout)?)
+    }
+
+    /// Replaces the caller's device identity with `identity`, and returns it as
+    /// [`device_identity`](Self::device_identity) does.
+    pub fn set_device_identity(
+        &mut self,
+        identity: &DeviceIdentity,
+    ) -> Result<(DeviceIdentity, DeviceIdentity), ClientError> {
+        let body = request::Body::SetDeviceIdentity(types::SetDeviceIdentity {
+            identity: Some(crate::device_identity::to_wire(identity)),
+        });
+        identity_report(self.exchange(body, self.timeout)?)
     }
 
     /// Replaces the settings of the caller's DSA, and returns them as the service now keeps
