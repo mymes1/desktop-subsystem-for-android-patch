@@ -28,8 +28,9 @@ const SECTORS: u64 = DISK_BYTES / SECTOR;
 
 /// The UUID of the disk's one partition, as the kernel prints and looks it up.
 pub const PARTITION_UUID: &str = "5f8b3c2e-9a41-4d6e-b07c-1e2d3f4a5b6c";
-/// The partition's name in the partition table.
-pub const PARTITION_NAME: &str = "pstore";
+/// The partition's name in the partition table. Android makes a `/dev/block/by-name` link for
+/// the partitions of every disk, so the name is DSA's own and never one of Android's.
+pub const PARTITION_NAME: &str = "dsa_pstore";
 const DISK_GUID: &str = "2c7d9e1f-6b3a-4f58-8e0d-a9b8c7d6e5f4";
 /// GPT's type for Linux file system data, the generic Linux type.
 const LINUX_DATA_TYPE: &str = "0fc63daf-8483-4772-8e79-3d69d8477de4";

@@ -121,3 +121,17 @@ fn fr19_the_pstore_disk_is_in_the_user_root_and_uninstall_removes_it() {
     );
     assert!(!UserRoot::kept_on_uninstall("pstore.vhd"));
 }
+
+#[test]
+fn fr21_the_pstore_partition_name_is_not_one_of_androids() {
+    assert_eq!(PARTITION_NAME, "dsa_pstore");
+    let android = [
+        "misc", "super", "userdata", "metadata", "vbmeta", "boot", "init_boot", "vendor_boot",
+    ];
+    for name in android {
+        assert!(
+            !PARTITION_NAME.starts_with(name),
+            "{PARTITION_NAME} would share {name}'s by-name link"
+        );
+    }
+}
