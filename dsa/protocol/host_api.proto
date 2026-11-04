@@ -872,6 +872,62 @@ message Settings {
   // The loopback port adb connects to while developer mode is on. 58526 unless the user
   // chooses another; 0 in a request means the default.
   uint32 adb_port = 15;
+  // Whether the caller's Android uses an installed ARM translation package. On unless the
+  // user turned it off; a client sends back the value it read. It applies from the next start
+  // of Android, because the ABIs Android installs apps for are fixed at boot.
+  bool arm_translation = 17;
+}
+
+// What an ARM translation package says of itself, from its arm-translation.json.
+message ArmTranslationPackage {
+  string name = 1;
+  string version = 2;
+  // The translator's native bridge library, a file name in the package's system/lib64.
+  string library = 3;
+  // The ABIs it translates. Only "arm64-v8a" is taken: the guest has no 32-bit zygote.
+  repeated string abis = 4;
+  // The package's licence, as an SPDX expression.
+  string license = 5;
+}
+
+// Installs an ARM translation package for the caller's Android. The service answers at once:
+// Done when it takes a package with this description and size, or an error. After Done the
+// client sends the package's system image, `size` bytes, in ApkChunk frames, and the service
+// answers the same request id once more: ArmTranslation once Android has the image, or an
+// error. The connection then ends. Android must be running; the package is used from its next
+// start.
+message InstallArmTranslation {
+  ArmTranslationPackage package = 1;
+  uint64 size = 2;
+  // The SHA-256 digest of the system image.
+  bytes sha256 = 3;
+}
+
+// Asks where ARM translation stands for the caller. Answered with ArmTranslation.
+message GetArmTranslation {}
+
+// Removes the caller's ARM translation package. Answered with ArmTranslation. Android goes
+// on using a package it has mounted until it restarts.
+message RemoveArmTranslation {}
+
+// Where ARM translation stands for the caller.
+message ArmTranslation {
+  // The installed package; absent when there is none.
+  ArmTranslationPackage package = 1;
+  // The arm_translation setting.
+  bool enabled = 2;
+  // Whether the running Android was asked, and answered: the three fields below hold only
+  // then.
+  bool guest_known = 3;
+  // A package image is on the user's Android disk.
+  bool guest_installed = 4;
+  // The running Android has a package laid over its system, so ARM64 apps install and run.
+  bool guest_active = 5;
+  // The ABIs the running Android installs apps for.
+  string abilist = 6;
+  // What is installed and switched on differs from what the running Android booted with, so
+  // it applies once Android starts again.
+  bool restart_needed = 7;
 }
 
 // Turns the connection into the accessibility tree of one of the caller's task windows, for a
@@ -1042,6 +1098,9 @@ message Request {
     WatchLog watch_log = 70;
     CollectDiagnostics collect_diagnostics = 71;
     StopApp stop_app = 37;
+    InstallArmTranslation install_arm_translation = 72;
+    GetArmTranslation get_arm_translation = 73;
+    RemoveArmTranslation remove_arm_translation = 74;
   }
 }
 
@@ -1062,6 +1121,7 @@ message Response {
     Widget widget = 13;
     Widgets widgets = 14;
     PackageState package_state = 15;
+    ArmTranslation arm_translation = 16;
   }
 }
 

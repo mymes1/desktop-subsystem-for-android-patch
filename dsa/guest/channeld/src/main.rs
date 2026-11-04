@@ -38,6 +38,7 @@ mod daemon {
     use std::sync::Arc;
     use std::thread;
 
+    use dsa_guest_channeld::arm_translation::{self, ArmTranslation, BootFacts};
     use dsa_guest_channeld::logbridge::{
         files_in, DiagnosticFiles, LogBridge, LogPackets, LogSource, PortConnector,
     };
@@ -224,6 +225,33 @@ mod daemon {
         }
     }
 
+    /// Reads a system property through bionic; empty when it is unset.
+    #[cfg(target_os = "android")]
+    fn read_property(name: &str) -> String {
+        use std::ffi::{c_char, c_int, CStr, CString};
+        extern "C" {
+            fn __system_property_get(name: *const c_char, value: *mut c_char) -> c_int;
+        }
+        /// bionic's `PROP_VALUE_MAX`.
+        const VALUE_MAX: usize = 92;
+        let Ok(name) = CString::new(name) else {
+            return String::new();
+        };
+        let mut value = [0 as c_char; VALUE_MAX];
+        // SAFETY: a NUL-terminated name and a buffer of the size bionic writes at most.
+        unsafe { __system_property_get(name.as_ptr(), value.as_mut_ptr()) };
+        // SAFETY: bionic leaves a NUL-terminated string there, empty if the property is unset.
+        unsafe { CStr::from_ptr(value.as_ptr()) }
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    /// A Linux system other than Android has no system properties.
+    #[cfg(not(target_os = "android"))]
+    fn read_property(_name: &str) -> String {
+        String::new()
+    }
+
     /// Off Android there is no adbd to switch.
     #[cfg(not(target_os = "android"))]
     fn switch_adb(_on: bool) {}
@@ -332,7 +360,14 @@ mod daemon {
         // The guest's clients (the agent and the hwcomposer) reach the daemon over binder.
         // Frames they send go to the host through `to_host`; the host's frames go to them.
         let (to_host, from_guest) = mpsc::channel::<Vec<u8>>();
-        let router = Arc::new(Router::new(to_host, check_agent).on_developer_mode(switch_adb));
+        let router = Arc::new(
+            Router::new(to_host, check_agent)
+                .on_developer_mode(switch_adb)
+                .on_arm_translation(Arc::new(ArmTranslation::new(
+                    arm_translation::DIR,
+                    BootFacts::of_system(|| read_property("ro.product.cpu.abilist")),
+                ))),
+        );
         let (to_guest, from_host) = mpsc::channel::<Vec<u8>>();
         // The guest's log goes on a port of its own, past the same handshake as the control
         // channel, and only while the host asks for it.

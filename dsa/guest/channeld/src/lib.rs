@@ -11,6 +11,7 @@
 //! users reach the daemon, so they run and are tested on any Linux, over the in-memory
 //! transport and over vsock. The binder service (`binder`, Android only) is the thin layer
 //! that lets those users in; [`aidl`] holds the values it shares with their generated code.
+//! [`arm_translation`] keeps the ARM translation package the host installs.
 //! [`reclaim`] decides when the guest drops its caches so the host gets the memory back.
 //! [`logbridge`] sends the guest's log on the log port, only while the host asks for it, and
 //! the guest's diagnostics; [`logd`] reads logd for it.
@@ -20,6 +21,7 @@
 //! arrival as the daemon can read it.
 
 pub mod aidl;
+pub mod arm_translation;
 #[cfg(target_os = "android")]
 pub mod binder;
 pub mod logbridge;

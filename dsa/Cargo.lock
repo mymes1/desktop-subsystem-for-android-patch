@@ -191,6 +191,7 @@ dependencies = [
  "dsa-protocol-schema",
  "dsa-transport",
  "libc",
+ "sha2 0.11.1",
 ]
 
 [[package]]

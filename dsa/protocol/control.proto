@@ -439,6 +439,56 @@ message DeveloperMode {
   bool on = 1;
 }
 
+// Host to guest, to the control daemon: an ARM translation package's system image (erofs)
+// follows in ArmTranslationChunk messages of the same `transfer_id`, in order. The daemon
+// writes it to the user's disk beside any package already there, checks its length and
+// SHA-256 once it has all `size` bytes, and only then puts it in the old one's place. It
+// answers each chunk with ArmTranslationState. The guest uses the package from its next boot,
+// when the host says one is installed. One transfer at a time; a new one drops an unfinished
+// one.
+message ArmTranslationInstall {
+  uint32 transfer_id = 1;
+  uint64 size = 2;
+  // The SHA-256 digest of the whole image.
+  bytes sha256 = 3;
+}
+
+// Host to guest: part of the image an ArmTranslationInstall announced.
+message ArmTranslationChunk {
+  uint32 transfer_id = 1;
+  // Where `data` starts in the image.
+  uint64 offset = 2;
+  bytes data = 3;
+}
+
+// Host to guest, to the control daemon: remove the installed ARM translation package. The
+// guest goes on using a package it has mounted until it restarts. Answered with
+// ArmTranslationState.
+message ArmTranslationRemove {}
+
+// Host to guest, to the control daemon: asks for ArmTranslationState.
+message ArmTranslationQuery {}
+
+// Guest to host, from the control daemon: where ARM translation stands in the guest. It
+// answers each of the messages above.
+message ArmTranslationState {
+  // The transfer this answers, or 0.
+  uint32 transfer_id = 1;
+  // How many bytes of that transfer the daemon has written.
+  uint64 received = 2;
+  // The transfer is complete and its image checked and in place.
+  bool done = 3;
+  // Non-empty when the transfer or the removal failed: why, in words a person can act on. A
+  // failed transfer leaves the package that was there before.
+  string error = 4;
+  // A package image is on the user's disk.
+  bool installed = 5;
+  // This boot runs with a package laid over the system: the bridge library is in place.
+  bool active = 6;
+  // The ABIs the package manager installs apps for (ro.product.cpu.abilist).
+  string abilist = 7;
+}
+
 // Guest to host, from the agent: a notification an app posted, or a new version of one it
 // posted before under the same key, which replaces it. Only notifications a person would see
 // come: not the ongoing notice of a foreground service, and not a group's summary, whose
@@ -1173,6 +1223,11 @@ message Envelope {
     PowerState power_state = 41;
     PowerHint power_hint = 110;
     DeveloperMode developer_mode = 140;
+    ArmTranslationInstall arm_translation_install = 150;
+    ArmTranslationChunk arm_translation_chunk = 151;
+    ArmTranslationRemove arm_translation_remove = 152;
+    ArmTranslationQuery arm_translation_query = 153;
+    ArmTranslationState arm_translation_state = 154;
     DeviceIdle device_idle = 42;
     HostMemory host_memory = 43;
     HostSleep host_sleep = 44;

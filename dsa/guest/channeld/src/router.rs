@@ -23,6 +23,8 @@
 //! - The host's `DeveloperMode` stops here too: it goes to the platform's developer mode
 //!   switch ([`Router::on_developer_mode`]), which has init start or stop adbd. A guest boots
 //!   with it off; the host says when it is on.
+//! - The host's ARM translation messages stop here as well: the package's image is the
+//!   daemon's to keep ([`Router::on_arm_translation`]), and the daemon answers each one.
 //! - The diagnostics the agent gathers go to the log port ([`Router::divert_diagnostics`]),
 //!   never on the control channel, and only the agent may send them. The guest's log is the
 //!   daemon's own to send; no client may.
@@ -37,7 +39,9 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
 use dsa_protocol::control::envelope::Body;
-use dsa_protocol::control::{Envelope, GuestBoot, PowerHintKind};
+use dsa_protocol::control::{ArmTranslationState, Envelope, GuestBoot, PowerHintKind};
+
+use crate::arm_translation::ArmTranslation;
 
 /// The agent's package, which is the name of its process.
 pub const AGENT_PROCESS: &str = "io.github.thisisthepy.dsa.agent";
@@ -194,6 +198,8 @@ pub struct Router {
     state: Mutex<State>,
     agent_check: AgentCheck,
     developer_mode: Option<DeveloperModeSwitch>,
+    /// The ARM translation package on the user's disk, which the host installs and removes.
+    arm_translation: Option<Arc<ArmTranslation>>,
     /// Where the agent's diagnostics go instead of the host's control channel.
     diagnostics: Mutex<Option<Sender<Vec<u8>>>>,
     /// How many times an app's last task has ended, and the wake-up for whoever waits on it.
@@ -218,6 +224,7 @@ impl Router {
             state: Mutex::new(State::default()),
             agent_check: Box::new(agent_check),
             developer_mode: None,
+            arm_translation: None,
             diagnostics: Mutex::new(None),
             apps_closed: (Mutex::new(0), Condvar::new()),
         }
@@ -251,6 +258,38 @@ impl Router {
     pub fn on_developer_mode(mut self, switch: impl Fn(bool) + Send + Sync + 'static) -> Router {
         self.developer_mode = Some(Box::new(switch));
         self
+    }
+
+    /// Hands the host's ARM translation messages to `package`, and its answers to the host.
+    pub fn on_arm_translation(mut self, package: Arc<ArmTranslation>) -> Router {
+        self.arm_translation = Some(package);
+        self
+    }
+
+    /// Answers the host's ARM translation message `body`, and says whether it was one. A guest
+    /// without the package's store answers that it has none.
+    fn arm_translation_message(&self, body: &Body) -> bool {
+        let state = match (body, &self.arm_translation) {
+            (_, Some(package)) => match package.handle(body) {
+                Some(state) => state,
+                None => return false,
+            },
+            (
+                Body::ArmTranslationInstall(_)
+                | Body::ArmTranslationChunk(_)
+                | Body::ArmTranslationRemove(_)
+                | Body::ArmTranslationQuery(_),
+                None,
+            ) => ArmTranslationState {
+                error: "this guest cannot keep an ARM translation package".into(),
+                ..ArmTranslationState::default()
+            },
+            _ => return false,
+        };
+        let _ = self.to_host.send(dsa_protocol::encode(&Envelope {
+            body: Some(Body::ArmTranslationState(state)),
+        }));
+        true
     }
 
     fn set_developer_mode(&self, on: bool) {
@@ -353,6 +392,12 @@ impl Router {
             // For the daemon alone: no client of the channel acts on it.
             self.set_developer_mode(mode.on);
             return;
+        }
+        if let Some(body) = &body {
+            // For the daemon alone, like developer mode.
+            if self.arm_translation_message(body) {
+                return;
+            }
         }
         let mut state = self.lock();
         match body {
