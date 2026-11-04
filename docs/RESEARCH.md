@@ -273,6 +273,11 @@
 
 **전후 비교 (추론, 실측 아님).** 전: 설정 앱은 100 ms마다 그릴 수 있는데 크기는 16-30 ms마다 바뀌었다. 앱이 그린 프레임은 이미 지나간 크기였고, 창은 늘린 프레임을 보였다. 후: 앱은 자기가 다 그린 직후에 가장 최근의 크기를 받는다. 창은 대략 100-150 ms마다 한 걸음씩 마우스를 따라가고, 그 사이에는 이전 크기와 이전 프레임 그대로다. 찌그러지거나 잘리거나 채운 그림은 없다. 대가는 느린 앱에서 창 가장자리가 마우스보다 뒤처져 보이는 것이다.
 
+**참고 구현과의 비교.** Windows 창 작업의 참고였던 Kotlin/Native 창 구현(`thisisthepy/compose-multiplatform-core-extended`, `extended/window/windows-shared/c/win32_window.c`와 `win32_resize_sync.h`, `feat/win32-resize-sync` 브랜치, 2026-11-05에 읽음)을 코드로만 비교했다. 실행하지는 않았다.
+
+- 기본 경로: 프레임을 그 크기를 바꾼 `SetWindowPos` 안의 `WM_SIZE`에서 그리고 Present한 뒤 `DwmFlush`로 DWM이 합성할 때까지 기다린다. 기다리지 않으면 단계가 DWM보다 빨리 쌓여, 새 사각형에 옛 크기의 그림이 보일 수 있다고 적혀 있다. DSA도 `WM_SIZE` 안에서 Present와 커밋을 하지만 `DwmFlush`는 없었다. 이것을 들였다. 프레임을 따라 크기를 받은 단계마다 `WaitForCommitCompletion` 뒤에 `DwmFlush`를 부른다.
+- 더 강한 경로(선택 사항, `DXC_RESIZE_SYNC=1`, Windows 11): Windows 11 설정 앱과 XAML이 쓰는 비공개 크기 동기화다. user32 서수 2615(`EnableResizeLayoutSynchronization`)를 창과 크기 0인 자식 창에 켜고, `WM_WINDOWPOSCHANGED`에서 서수 2614로 동기화 토큰을 받는다. 그림은 스왑체인이 아니라 Windows.UI.Composition 그리기 표면에 그리고 `IDCompositionDesktopDevicePartner6::SynchronizedCommit(token)`으로 커밋한다. 그러면 DWM이 창 테두리를 그 커밋까지 붙잡는다. 참고 구현의 기록에 따르면 스왑체인의 Present는 토큰을 실은 커밋에 속하지 않아 구멍과 낡은 프레임이 보였다. DSA는 프레임이 올 때까지 창 크기 자체를 바꾸지 않으므로 이 차이가 작다. 남는 차이는 크기를 받는 한 단계 안에서 테두리와 스왑체인 Present가 다른 DWM 프레임에 닿을 수 있다는 점이다. 이 경로는 들이지 않았다. 비공개 서수와 vtable 슬롯에 기대고, 참고 구현에서도 선택 사항이며, 프레임 경로를 스왑체인에서 그리기 표면으로 바꿔야 하기 때문이다. PC 녹화에서 크기를 받는 단계에 어긋난 프레임이 보이면 다음 후보다.
+
 **PC에서 잴 것.** 200% 배율에서 `dsa settings set resize-trace on`을 켜고 설정 앱 창의 오른쪽 아래 모서리와 왼쪽 가장자리를 각각 3초씩 끈다. `dsa-app-window.log`의 `stage=app.summary`에서 `waited=` 중앙값과 90번째 백분위를 R5의 표(112 ms, 305 ms)와 비교하고, `stage=app.frame_kept` 수를 본다. `dsa-wm.log`에서 `stage=wm.request_held` 수와 `stage=wm.request`의 간격을 본다. 끄는 동안 녹화해, 창 크기와 내용이 어긋난 프레임이 없는지, 손을 뗀 크기에 창이 정확히 멈추는지 확인한다.
 
 ## 부록 A. Microsoft에 낼 이슈 초안
