@@ -509,7 +509,9 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
             // Never larger than Android can draw: a larger window could only show the
             // task's frames with an empty margin. Maximising takes this size too.
             if let Some(max) = max {
-                let (width, height) = outer_size(max, dpi, false);
+                // Windows keeps every size it applies within the tracking sizes, a maximized
+                // window's too, so they are measured with the borders the window has now.
+                let (width, height) = outer_size(max, dpi, IsZoomed(hwnd) != 0);
                 info.ptMaxTrackSize = POINT {
                     x: width.min(info.ptMaxTrackSize.x),
                     y: height.min(info.ptMaxTrackSize.y),
@@ -690,14 +692,9 @@ unsafe extern "system" fn task_window_proc(    hwnd: HWND,
 /// move stay where they are.
 unsafe fn keep_to_frame(hwnd: HWND, data: &WindowData, pos: &mut WINDOWPOS) {
     let dpi = GetDpiForWindow(hwnd).max(96);
-    // A maximized window has a top border too, so its client area for the same outer size is
-    // smaller. Windows may propose the maximized size before the window counts as maximized,
-    // so a proposal of exactly that size counts too.
-    let maximized = IsZoomed(hwnd) != 0
-        || data
-            .max_client
-            .get()
-            .is_some_and(|max| (pos.cx, pos.cy) == outer_size(max, dpi, true));
+    // The client area this outer size gives, as WM_NCCALCSIZE will lay it out within the same
+    // move: a maximized window has a top border too.
+    let maximized = IsZoomed(hwnd) != 0;
     let (frame_width, frame_height) = outer_size((0, 0), dpi, maximized);
     let proposed = (
         (pos.cx - frame_width).max(0) as u32,
