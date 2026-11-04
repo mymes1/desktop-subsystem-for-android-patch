@@ -1150,8 +1150,12 @@ fn nfr1_dsa_memory_says_what_it_knows_of_the_host_and_android() {
 
 /// A file in a folder of this test run, holding `content`.
 fn apk_file(name: &str, content: &[u8]) -> std::path::PathBuf {
+    // A folder of its own for each file: tests run at once and two may use the same name
+    // (broken.apk) with different contents.
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let call = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
-        .join(format!("apks-{}", std::process::id()));
+        .join(format!("apks-{}-{call}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join(name);
     std::fs::write(&path, content).unwrap();
