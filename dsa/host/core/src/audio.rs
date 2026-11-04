@@ -12,7 +12,9 @@
 //! [`AudioDevice`].
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::thread;
 use std::time::Duration;
 
 use dsa_protocol::control::envelope::Body;
@@ -21,7 +23,7 @@ use dsa_protocol::control::{
 };
 use dsa_protocol::handshake::{host_accept_open, local_hello};
 use dsa_protocol::{decode, encode};
-use dsa_transport::{Connection, TransportError};
+use dsa_transport::{Connection, Listener, TransportError};
 
 /// The vsock port the guest's audio HAL connects to.
 pub const AUDIO_PORT: u32 = 5568;
@@ -540,3 +542,53 @@ fn body_name(body: &Body) -> &'static str {
 /// The streams that may play at once. Each one costs a thread and a device stream, and the
 /// guest opens one or two; more is a misbehaving process in the guest.
 pub const MAX_STREAMS: usize = 8;
+
+/// Serves the audio port until `stop` is set: each connection is a stream, served on a
+/// thread of its own by [`serve_stream`], so the platform's mixer sums them. A connection
+/// past [`MAX_STREAMS`] is closed at once, and the streams already playing go on.
+pub fn serve_port(
+    listener: &mut dyn Listener,
+    device: Arc<dyn AudioDevice>,
+    build: &str,
+    stop: &AtomicBool,
+    log: Arc<dyn Fn(&str) + Send + Sync>,
+) {
+    let active = Arc::new(AtomicUsize::new(0));
+    while !stop.load(Ordering::Relaxed) {
+        match listener.accept(Duration::from_millis(100)) {
+            Ok(mut connection) => {
+                if active.load(Ordering::SeqCst) >= MAX_STREAMS {
+                    log(&format!(
+                        "audio port: refused a stream, {MAX_STREAMS} already play"
+                    ));
+                    connection.close();
+                    continue;
+                }
+                active.fetch_add(1, Ordering::SeqCst);
+                let device = Arc::clone(&device);
+                let log = Arc::clone(&log);
+                let active = Arc::clone(&active);
+                let build = build.to_string();
+                let spawned = thread::Builder::new()
+                    .name("dsa-audio-stream".into())
+                    .spawn(move || {
+                        let line = |l: &str| log(l);
+                        if let Err(e) = serve_stream(connection.as_mut(), &*device, &build, &line) {
+                            log(&e);
+                        }
+                        active.fetch_sub(1, Ordering::SeqCst);
+                    });
+                if let Err(e) = spawned {
+                    // The connection went with the closure; the guest connects again.
+                    active.fetch_sub(1, Ordering::SeqCst);
+                    log(&format!("audio port: no thread for a stream: {e}"));
+                }
+            }
+            Err(TransportError::Timeout) => {}
+            Err(e) => {
+                log(&format!("audio port: {e}"));
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+}

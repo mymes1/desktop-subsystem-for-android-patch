@@ -1,13 +1,15 @@
 //! The guest's sound on the host: the jitter buffer, the conversion to the device's format,
 //! and a stream on the audio port over the in-memory transport, against a fake device.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use dsa_host_core::audio::{
-    serve_stream, AudioDevice, DeviceFormat, JitterBuffer, Playback, Renderer, SampleType,
-    SharedBuffer, StreamEnd, BYTES_PER_FRAME, MAX_BUFFER_FRAMES, TARGET_BUFFER_FRAMES,
+    serve_port, serve_stream, AudioDevice, DeviceFormat, JitterBuffer, Playback, Renderer,
+    SampleType, SharedBuffer, StreamEnd, BYTES_PER_FRAME, MAX_BUFFER_FRAMES, MAX_STREAMS,
+    TARGET_BUFFER_FRAMES,
 };
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
@@ -402,4 +404,41 @@ fn pr4_a_piece_that_is_not_whole_frames_ends_the_stream() {
     );
     let end = handle.join().unwrap().unwrap();
     assert!(end.reason.contains("whole frames"), "{}", end.reason);
+}
+
+#[test]
+fn pr4_streams_play_side_by_side_up_to_the_limit() {
+    let device = FakeDevice::default();
+    let (mut listener, mut connector) = memory::pair();
+    let stop = Arc::new(AtomicBool::new(false));
+    let server = {
+        let device: Arc<dyn AudioDevice> = Arc::new(device.clone());
+        let stop = Arc::clone(&stop);
+        thread::spawn(move || {
+            serve_port(&mut listener, device, "dsa-wm test", &stop, Arc::new(|_: &str| {}))
+        })
+    };
+    let mut guests = Vec::new();
+    for _ in 0..MAX_STREAMS {
+        let mut guest = connector.connect(WAIT).unwrap();
+        send(guest.as_mut(), Body::Hello(guest_hello()));
+        assert!(matches!(recv(guest.as_mut()), Some(Body::HelloAccepted(_))));
+        send(guest.as_mut(), Body::AudioOutputOpen(open_message()));
+        assert!(matches!(recv(guest.as_mut()), Some(Body::AudioOutputReady(_))));
+        send(guest.as_mut(), control(AudioOutputCommand::Start));
+        guests.push(guest);
+    }
+    // One more is closed at once; the others play on.
+    let mut extra = connector.connect(WAIT).unwrap();
+    assert_eq!(extra.recv(Some(WAIT)), Err(TransportError::Closed));
+    let deadline = std::time::Instant::now() + WAIT;
+    while device.playing.lock().unwrap().len() < MAX_STREAMS {
+        assert!(std::time::Instant::now() < deadline, "not every stream played");
+        thread::sleep(Duration::from_millis(5));
+    }
+    for mut guest in guests {
+        guest.close();
+    }
+    stop.store(true, Ordering::Relaxed);
+    server.join().unwrap();
 }

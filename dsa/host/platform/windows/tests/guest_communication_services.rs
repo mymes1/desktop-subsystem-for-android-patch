@@ -1,11 +1,13 @@
 //! Tests for Hyper-V socket service GUID registration.
 #![cfg(windows)]
 
+use dsa_host_core::audio::AUDIO_PORT;
 use dsa_host_core::compositor::{GRAPHICS_COMMAND_PORT, GRAPHICS_PROCESS_PIPE_PORT};
 use dsa_host_windows::guest_communication_services::{
     is_service_guid_registered_under, read_service_element_name_under, register_service_guid_under,
-    unregister_service_guid_under, RegistryHive, DEFAULT_SERVICE_SDDL,
-    GRAPHICS_COMMAND_ELEMENT_NAME, GRAPHICS_PROCESS_PIPE_ELEMENT_NAME,
+    register_graphics_service_guids_under, unregister_service_guid_under, RegistryHive,
+    AUDIO_ELEMENT_NAME, DEFAULT_SERVICE_SDDL, GRAPHICS_COMMAND_ELEMENT_NAME,
+    GRAPHICS_PROCESS_PIPE_ELEMENT_NAME,
 };
 use dsa_host_windows::guid::Guid;
 
@@ -110,4 +112,27 @@ fn pr1_unregistered_service_guid_is_reported_not_registered() {
         &base_key,
         unknown_guid
     ));
+}
+
+#[test]
+fn pr4_the_audio_port_is_registered_beside_the_graphics_ports() {
+    // dsa-wm listens on the audio port in the user's session, which Windows allows only for
+    // a registered service.
+    let base_key = format!("{}_audio", test_base_key());
+    let audio_guid = Guid::vsock_service(AUDIO_PORT);
+    assert_eq!(audio_guid.to_string(), "000015c0-facb-11e6-bd58-64006a7986d3");
+    register_graphics_service_guids_under(RegistryHive::CurrentUser, &base_key)
+        .expect("register the service GUIDs");
+    assert_eq!(
+        read_service_element_name_under(RegistryHive::CurrentUser, &base_key, audio_guid)
+            .as_deref(),
+        Some(AUDIO_ELEMENT_NAME)
+    );
+    for port in [GRAPHICS_COMMAND_PORT, GRAPHICS_PROCESS_PIPE_PORT, AUDIO_PORT] {
+        let _ = unregister_service_guid_under(
+            RegistryHive::CurrentUser,
+            &base_key,
+            Guid::vsock_service(port),
+        );
+    }
 }

@@ -82,6 +82,8 @@ windows = { version = "0.62", features = [
     "UI_Notifications",
     # Decoding the PNG frames of the widgets on the desktop.
     "Win32_Graphics_Imaging",
+    # Playing the guest's sound on the default output device (WASAPI).
+    "Win32_Media_Audio",
 ] }
 
 [build-dependencies]

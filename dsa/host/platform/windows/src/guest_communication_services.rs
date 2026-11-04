@@ -12,6 +12,7 @@
 use std::io;
 use std::ptr::{null, null_mut};
 
+use dsa_host_core::audio::AUDIO_PORT;
 use dsa_host_core::compositor::{GRAPHICS_COMMAND_PORT, GRAPHICS_PROCESS_PIPE_PORT};
 use windows_sys::Win32::Foundation::{LocalFree, ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, HLOCAL};
 use windows_sys::Win32::Security::Authorization::{
@@ -60,6 +61,10 @@ pub const GRAPHICS_COMMAND_ELEMENT_NAME: &str =
 /// Friendly name for the graphics process pipe service (port 5567).
 pub const GRAPHICS_PROCESS_PIPE_ELEMENT_NAME: &str =
     "Desktop Subsystem for Android Graphics Process Pipe";
+
+/// Friendly name for the audio service (port 5568), where the guest's audio module sends its
+/// sound.
+pub const AUDIO_ELEMENT_NAME: &str = "Desktop Subsystem for Android Audio";
 
 fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
@@ -277,7 +282,8 @@ pub fn unregister_service_guid(guid: Guid) -> Result<(), String> {
     )
 }
 
-/// Registers the graphics command stream (port 5566) and process pipe (port 5567) service GUIDs under `root` at `base_path`.
+/// Registers the graphics command stream (port 5566), process pipe (port 5567) and audio
+/// (port 5568) service GUIDs under `root` at `base_path`.
 pub fn register_graphics_service_guids_under(
     root: RegistryHive,
     base_path: &str,
@@ -298,10 +304,18 @@ pub fn register_graphics_service_guids_under(
         GRAPHICS_PROCESS_PIPE_ELEMENT_NAME,
         Some(DEFAULT_SERVICE_SDDL),
     )?;
+    register_service_guid_under(
+        root,
+        base_path,
+        Guid::vsock_service(AUDIO_PORT),
+        AUDIO_ELEMENT_NAME,
+        Some(DEFAULT_SERVICE_SDDL),
+    )?;
     Ok(())
 }
 
-/// Registers the graphics command stream (port 5566) and process pipe (port 5567) service GUIDs.
+/// Registers the graphics command stream (port 5566), process pipe (port 5567) and audio
+/// (port 5568) service GUIDs.
 ///
 /// This function is intended to be called by the DSA Windows service during startup so that
 /// user-session compositor processes can listen on these ports without requiring administrator rights.
