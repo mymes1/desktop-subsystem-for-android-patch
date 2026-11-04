@@ -941,6 +941,33 @@ TRACE_FS_CONFIG = [
     "system/etc/init/dsa-trace.rc 0 0 644 capabilities=0x0",
     "system/etc/init/dsa-console.rc 0 0 644 capabilities=0x0",
 ]
+# ARM app translation, for a translation package the user installs (`dsa arm-translation
+# install`). The host puts androidboot.dsa.arm_translation=on in the boot's bootconfig only
+# while one is installed and on. The product build.prop, read last, then imports the native
+# bridge and ABI properties from the "on" file; otherwise from the "off" file, which sets
+# nothing. ro.* properties are fixed once read, so this is decided at boot. The init script
+# mounts the package over /system before the zygote starts; a system script, because only init
+# itself may mount there.
+ARM_TRANSLATION_RC = "SYSTEM/etc/init/dsa-arm-translation.rc"
+ARM_TRANSLATION_PROPS = {
+    "SYSTEM/etc/dsa/arm-translation-on.prop": HERE / "arm-translation-on.prop",
+    "SYSTEM/etc/dsa/arm-translation-off.prop": HERE / "arm-translation-off.prop",
+}
+ARM_TRANSLATION_PRODUCT_PROPS = "PRODUCT/etc/build.prop"
+ARM_TRANSLATION_IMPORT = "import /system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop"
+ARM_TRANSLATION_FS_CONFIG = [
+    "system/etc/init/dsa-arm-translation.rc 0 0 644 capabilities=0x0",
+    "system/etc/dsa 0 0 755 capabilities=0x0",
+    "system/etc/dsa/arm-translation-on.prop 0 0 644 capabilities=0x0",
+    "system/etc/dsa/arm-translation-off.prop 0 0 644 capabilities=0x0",
+]
+
+
+def add_arm_translation_import(text):
+    """Returns the product build.prop with the ARM translation import as its last line, so the
+    imported properties win over every partition's own."""
+    lines = [line for line in text.splitlines() if line.strip() != ARM_TRANSLATION_IMPORT]
+    return "\n".join(lines + [ARM_TRANSLATION_IMPORT]) + "\n"
 # The property dsa-channeld sets to have init drop the caches and compact memory, so free
 # page reporting hands idle memory back to the host. vendor_property_contexts gives it the
 # type the daemon's policy lets it set.
@@ -1156,6 +1183,7 @@ AGENT_POLICY = HERE / "sepolicy/agent.cil"
 MEMORY_POLICY = HERE / "sepolicy/memory.cil"
 ADB_POLICY = HERE / "sepolicy/adb.cil"
 KERNEL_POLICY = HERE / "sepolicy/kernel.cil"
+ARM_TRANSLATION_POLICY = HERE / "sepolicy/arm-translation.cil"
 
 
 def narrow_vsock_neverallows(text):
@@ -1355,6 +1383,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             plat_patched += "\n" + ADB_POLICY.read_text()
             # The kernel thread whose devtmpfs nodes nothing uses.
             plat_patched += "\n" + KERNEL_POLICY.read_text()
+            # init mounting a user's ARM translation package over /system.
+            plat_patched += "\n" + ARM_TRANSLATION_POLICY.read_text()
             if channeld_payload is not None:
                 # Its rules name the domain they declare, so they go in whole.
                 plat_patched += "\n" + CHANNELD_POLICY.read_text()
@@ -1440,6 +1470,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = edit_props(data.decode(), codec2=has_codec2,
                                       vendor=name in VENDOR_PROP_FILES,
                                       build_tag=build_tag).encode()
+                    if name == ARM_TRANSLATION_PRODUCT_PROPS:
+                        data = add_arm_translation_import(data.decode()).encode()
                 elif name == WIFI_RC:
                     data = edit_wifi_rc(data.decode()).encode()
                 elif name.endswith(SETTINGS_APK):
@@ -1462,7 +1494,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     if overlay_payload is not None:
                         data += FRAMEWORK_OVERLAY_APKCERTS.encode() + b"\n"
                 elif name == SYSTEM_FS_CONFIG:
-                    data = add_filesystem_config(data.decode(), TRACE_FS_CONFIG).encode()
+                    data = add_filesystem_config(data.decode(),
+                                                 TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG).encode()
                 elif name == SYSTEM_EXT_FS_CONFIG and agent_payload is not None:
                     data = add_filesystem_config(data.decode(), AGENT_FS_CONFIG).encode()
                 elif name in FSTAB_DIRS.values():
@@ -1496,6 +1529,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         zout.writestr(MEMORY_RC, (HERE / "dsa-memory.rc").read_bytes())
         zout.writestr(TRACE_RC, (HERE / "dsa-trace.rc").read_bytes())
         zout.writestr(CONSOLE_RC, (HERE / "dsa-console.rc").read_bytes())
+        zout.writestr(ARM_TRANSLATION_RC, (HERE / "dsa-arm-translation.rc").read_bytes())
+        for target, source_file in ARM_TRANSLATION_PROPS.items():
+            zout.writestr(target, source_file.read_bytes())
         if VENDOR_PROPERTY_CONTEXTS not in names:
             zout.writestr(VENDOR_PROPERTY_CONTEXTS, update_vendor_property_contexts(""))
         zout.writestr(UNAVAILABLE_FEATURES, (HERE / "unavailable-features.xml").read_bytes())

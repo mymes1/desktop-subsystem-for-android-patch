@@ -236,6 +236,29 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "SYSTEM/etc/init/dsa-trace.rc" not in names:
         problems.append("SYSTEM/etc/init/dsa-trace.rc is missing, so the input trace has no main thread timing")
 
+    # ARM app translation: an installed package is mounted and its properties imported only
+    # when the host says so at boot; without one, nothing in the image may turn a bridge on.
+    for needed in ["SYSTEM/etc/init/dsa-arm-translation.rc", "SYSTEM/etc/dsa/arm-translation-on.prop",
+                   "SYSTEM/etc/dsa/arm-translation-off.prop"]:
+        if needed not in names:
+            problems.append(f"{needed} is missing, so an installed ARM translation package is never used")
+    if "PRODUCT/etc/build.prop" in names:
+        product_lines = z.read("PRODUCT/etc/build.prop").decode(errors="replace").splitlines()
+        wanted_import = "import /system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop"
+        if not product_lines or product_lines[-1].strip() != wanted_import:
+            problems.append("PRODUCT/etc/build.prop does not end with the ARM translation import, so an "
+                            "installed package's ABIs never reach the package manager")
+    if "SYSTEM/etc/init/dsa-arm-translation.rc" in names:
+        rc = z.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(errors="replace")
+        if "on post-fs-data && property:ro.boot.dsa.arm_translation=on" not in rc:
+            problems.append("dsa-arm-translation.rc mounts the ARM translation package without waiting "
+                            "for the host to say one is installed")
+    for name in sorted(n for n in names if n.endswith("build.prop") or n.endswith("prop.default")):
+        for line in z.read(name).decode(errors="replace").splitlines():
+            if line.startswith("ro.dalvik.vm.native.bridge=") and line not in (
+                    "ro.dalvik.vm.native.bridge=", "ro.dalvik.vm.native.bridge=0"):
+                problems.append(f"{name} sets {line}, so a native bridge is on with no package installed")
+
     # DSA's composer, which sends the host each task's frames: with Cuttlefish's in its place,
     # no task window ever gets one.
     if "VENDOR/bin/hw/dsa-hwcomposer" not in names:
