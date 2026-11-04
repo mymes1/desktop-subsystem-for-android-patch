@@ -267,6 +267,114 @@ message ActOnNotification {
   NotificationAction action = 2;
 }
 
+// An app in the caller's Android that runs a foreground service, so it keeps running with no
+// window: music playback, a download, a VPN. One per package.
+message BackgroundApp {
+  string package_name = 1;
+  string app_label = 2;
+  // The app's icon, a PNG image; empty for none.
+  bytes icon_png = 3;
+  // The title and text of the notification the service keeps shown.
+  string title = 4;
+  string text = 5;
+  // The titles of that notification's actions, in its order ("Pause", "Next").
+  repeated string actions = 6;
+}
+
+// The state of a media session's playback.
+enum MediaPlayback {
+  MEDIA_PLAYBACK_UNSPECIFIED = 0;
+  MEDIA_PLAYBACK_STOPPED = 1;
+  MEDIA_PLAYBACK_PLAYING = 2;
+  MEDIA_PLAYBACK_PAUSED = 3;
+}
+
+// An app's active media session in the caller's Android. One per package.
+message MediaSession {
+  string package_name = 1;
+  string app_label = 2;
+  string title = 3;
+  string artist = 4;
+  string album = 5;
+  // The album art, a PNG image; empty for none.
+  bytes art_png = 6;
+  MediaPlayback playback = 7;
+  bool can_play = 8;
+  bool can_pause = 9;
+  bool can_next = 10;
+  bool can_previous = 11;
+}
+
+// Asks for the apps that run in the background in the caller's Android and their media
+// sessions. The answer is BackgroundApps; an Android that is not running has none.
+message ListBackgroundApps {}
+
+// The apps that run in the background, and the active media sessions.
+message BackgroundApps {
+  repeated BackgroundApp apps = 1;
+  repeated MediaSession media = 2;
+}
+
+// Watches the apps that run in the background. The answer is BackgroundApps, and the
+// connection then carries a BackgroundAppEvent for each change. The client sends nothing
+// more on it. When the Android stops, every app and session is removed. The watch lasts
+// across restarts of the Android.
+message WatchBackgroundApps {}
+
+message BackgroundAppRemoved {
+  string package_name = 1;
+}
+
+message MediaSessionRemoved {
+  string package_name = 1;
+}
+
+// A change to the apps that run in the background, on a connection that watches them.
+message BackgroundAppEvent {
+  oneof body {
+    // An app started to run in the background, or its notification changed.
+    BackgroundApp app = 1;
+    BackgroundAppRemoved app_removed = 2;
+    // A session became active, or its metadata or playback changed.
+    MediaSession media = 3;
+    MediaSessionRemoved media_removed = 4;
+  }
+}
+
+// What the user does with an app that runs in the background.
+enum BackgroundAppCommand {
+  BACKGROUND_APP_COMMAND_UNSPECIFIED = 0;
+  // Opens the app's window, as clicking its notification does. Android leaves Doze first.
+  BACKGROUND_APP_COMMAND_OPEN = 1;
+  // Runs the notification's action with the index in `action`.
+  BACKGROUND_APP_COMMAND_ACTION = 2;
+  // Stops the app: Android force-stops it, which ends its services and frees its memory.
+  BACKGROUND_APP_COMMAND_STOP = 3;
+}
+
+// Acts on an app of the caller's Android that runs in the background. Answered with Done.
+message ActOnBackgroundApp {
+  string package_name = 1;
+  BackgroundAppCommand command = 2;
+  int32 action = 3;
+}
+
+// A command for a media session.
+enum MediaCommand {
+  MEDIA_COMMAND_UNSPECIFIED = 0;
+  MEDIA_COMMAND_PLAY = 1;
+  MEDIA_COMMAND_PAUSE = 2;
+  MEDIA_COMMAND_NEXT = 3;
+  MEDIA_COMMAND_PREVIOUS = 4;
+  MEDIA_COMMAND_STOP = 5;
+}
+
+// Runs a command on the package's media session, as a media key does. Answered with Done.
+message ControlMedia {
+  string package_name = 1;
+  MediaCommand command = 2;
+}
+
 // Asks for the widgets the apps in the caller's Android offer. The answer is WidgetProviders.
 // Needs the caller's Android to be running.
 message ListWidgetProviders {}
@@ -842,6 +950,9 @@ message Settings {
   // Whether every DSA process writes a line for each stage of each resize, rather than a
   // summary at the end of a drag. Off by default; the same rules as input_trace.
   bool resize_trace = 12;
+  // Whether stopping an app that runs in the background skips the question that confirms
+  // it. Off by default: the first stop asks, and the user may tick "do not ask again".
+  bool stop_without_asking = 13;
 }
 
 // Turns the connection into the accessibility tree of one of the caller's task windows, for a
@@ -1011,6 +1122,10 @@ message Request {
     GetPackage get_package = 36;
     WatchLog watch_log = 70;
     CollectDiagnostics collect_diagnostics = 71;
+    ListBackgroundApps list_background_apps = 37;
+    WatchBackgroundApps watch_background_apps = 38;
+    ActOnBackgroundApp act_on_background_app = 39;
+    ControlMedia control_media = 40;
   }
 }
 
@@ -1031,6 +1146,7 @@ message Response {
     Widget widget = 13;
     Widgets widgets = 14;
     PackageState package_state = 15;
+    BackgroundApps background_apps = 16;
   }
 }
 
@@ -1059,5 +1175,6 @@ message Envelope {
     WidgetEvent widget_event = 20;
     LogEntries log_entries = 50;
     DiagnosticsData diagnostics_data = 51;
+    BackgroundAppEvent background_app_event = 21;
   }
 }

@@ -472,6 +472,101 @@ message NotificationDismissed {
   string key = 1;
 }
 
+// Guest to host, from the agent: an app runs a foreground service, so it keeps running with
+// no window. Sent when the service's ongoing notification is posted and each time it
+// changes; the latest one replaces the earlier ones of the package. The icon is the app's,
+// a PNG image of at most 96 pixels on a side and 64 KiB; a larger one is left out.
+message BackgroundApp {
+  string package_name = 1;
+  // The app's name, as the guest shows it.
+  string app_label = 2;
+  bytes icon_png = 3;
+  // The ongoing notification's title and text ("Playing", "Downloading 3 files").
+  string title = 4;
+  string text = 5;
+  // The titles of the ongoing notification's actions, in its order ("Pause", "Next"). The
+  // host names one by its index in BackgroundAppAction. At most 8.
+  repeated string actions = 6;
+}
+
+// Guest to host, from the agent: the package runs no foreground service any more, because the
+// service ended, the app was stopped, or its process died.
+message BackgroundAppGone {
+  string package_name = 1;
+}
+
+// What the user did with an app that runs in the background, on the host.
+enum BackgroundAppCommand {
+  BACKGROUND_APP_COMMAND_UNSPECIFIED = 0;
+  // Opens the app: the agent runs the ongoing notification's content intent, else the app's
+  // launcher activity.
+  BACKGROUND_APP_COMMAND_OPEN = 1;
+  // Runs the ongoing notification's action with the index in `action`.
+  BACKGROUND_APP_COMMAND_ACTION = 2;
+  // Stops the app: the agent force-stops its package, which ends its services and processes,
+  // and answers with BackgroundAppGone (and MediaSessionGone when it had a session).
+  BACKGROUND_APP_COMMAND_STOP = 3;
+}
+
+// Host to guest: the user acted on an app that runs in the background. A package the guest
+// does not run in the background is answered with BackgroundAppGone, except a stop, which
+// the agent carries out for any package but its own and the system's.
+message BackgroundAppAction {
+  string package_name = 1;
+  BackgroundAppCommand command = 2;
+  int32 action = 3;
+}
+
+// The state of a media session's playback, as Android's PlaybackState reports it, folded to
+// what a host's media controls show.
+enum MediaPlayback {
+  MEDIA_PLAYBACK_UNSPECIFIED = 0;
+  MEDIA_PLAYBACK_STOPPED = 1;
+  MEDIA_PLAYBACK_PLAYING = 2;
+  MEDIA_PLAYBACK_PAUSED = 3;
+}
+
+// Guest to host, from the agent: an app's active media session, sent when it becomes active
+// and each time its metadata or playback state changes. One per package: the latest replaces
+// the earlier one. The art is a PNG image of at most 256 pixels on a side and 256 KiB; a
+// larger one is left out.
+message MediaSession {
+  string package_name = 1;
+  string app_label = 2;
+  string title = 3;
+  string artist = 4;
+  string album = 5;
+  bytes art_png = 6;
+  MediaPlayback playback = 7;
+  // Which commands the session takes now.
+  bool can_play = 8;
+  bool can_pause = 9;
+  bool can_next = 10;
+  bool can_previous = 11;
+}
+
+// Guest to host, from the agent: the package has no active media session any more.
+message MediaSessionGone {
+  string package_name = 1;
+}
+
+// A command for a media session, as a host's media keys and controls send it.
+enum MediaCommand {
+  MEDIA_COMMAND_UNSPECIFIED = 0;
+  MEDIA_COMMAND_PLAY = 1;
+  MEDIA_COMMAND_PAUSE = 2;
+  MEDIA_COMMAND_NEXT = 3;
+  MEDIA_COMMAND_PREVIOUS = 4;
+  MEDIA_COMMAND_STOP = 5;
+}
+
+// Host to guest: runs the command on the package's media session, through its transport
+// controls. A package with no active session is answered with MediaSessionGone.
+message MediaControl {
+  string package_name = 1;
+  MediaCommand command = 2;
+}
+
 // Host to guest: asks the agent for a GuestMemory report now, instead of at its next
 // periodic one.
 message RequestGuestMemory {}
@@ -1162,6 +1257,12 @@ message Envelope {
     NotificationRemoved notification_removed = 71;
     NotificationClicked notification_clicked = 72;
     NotificationDismissed notification_dismissed = 73;
+    BackgroundApp background_app = 74;
+    BackgroundAppGone background_app_gone = 75;
+    BackgroundAppAction background_app_action = 76;
+    MediaSession media_session = 77;
+    MediaSessionGone media_session_gone = 78;
+    MediaControl media_control = 79;
     ListWidgetProviders list_widget_providers = 90;
     WidgetProviders widget_providers = 91;
     AddWidget add_widget = 92;
