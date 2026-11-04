@@ -56,6 +56,9 @@ struct Guest {
     cannot_freeze: Option<String>,
     /// What the guest cannot run without and is missing now.
     missing: Option<String>,
+    /// The memory range the launcher offers, and each size the session set.
+    memory_range: Option<(u64, u64)>,
+    memory_sizes: Vec<u64>,
     /// What the launcher tells about a guest that is late.
     stall: Option<String>,
 }
@@ -132,6 +135,15 @@ impl GuestLauncher for FakeLauncher {
 
     fn prerequisite(&mut self) -> Option<String> {
         self.0.lock().unwrap().missing.clone()
+    }
+
+    fn memory_range_mb(&self) -> Option<(u64, u64)> {
+        self.0.lock().unwrap().memory_range
+    }
+
+    fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
+        self.0.lock().unwrap().memory_sizes.push(mb);
+        Ok(())
     }
 
     fn explain_stall(&mut self, _stall: GuestStall) -> Option<String> {
@@ -1055,6 +1067,27 @@ fn active_session() -> (Session, Box<dyn Connection>, FakeLauncher) {
     let agent = connect_agent(&mut connector, &launcher);
     assert!(session.wait_for(SessionState::Active, WAIT));
     (session, agent, launcher)
+}
+
+#[test]
+fn nfr2_the_guest_memory_grows_when_its_daemon_says_it_is_short() {
+    let launcher = FakeLauncher::default();
+    launcher.0.lock().unwrap().memory_range = Some((3072, 16384));
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    send_body(
+        &mut agent,
+        Body::GuestMemoryPressure(dsa_protocol::control::GuestMemoryPressure {
+            mem_total_kb: 2900 * 1024,
+            mem_available_kb: 200 * 1024,
+            stall_centipercent: 0,
+        }),
+    );
+    wait_until("the memory is grown", || {
+        launcher.0.lock().unwrap().memory_sizes == vec![4608]
+    });
 }
 
 #[test]

@@ -356,6 +356,18 @@ message PowerState {
   bool power_saver = 5;
 }
 
+// Guest to host, from the control daemon: how much memory the guest has and how hard it
+// works to find more. The host grows the VM's memory by hot-adding it when the guest runs
+// short, and gives it back when the guest no longer needs it. Sent every few seconds while
+// the guest is short, and at least every 30 seconds otherwise.
+message GuestMemoryPressure {
+  uint64 mem_total_kb = 1;
+  uint64 mem_available_kb = 2;
+  // The share of the last 10 seconds some task waited for memory (PSI "some avg10"), in
+  // hundredths of a percent.
+  uint32 stall_centipercent = 3;
+}
+
 // Host to guest: whether the host computer is short of memory. While it is, the guest gives
 // memory back the way a phone's low memory killer would, cheapest first: the agent ends the
 // cached app processes (apps the user is not using), and the control daemon then has the
@@ -1222,5 +1234,6 @@ message Envelope {
     DiagnosticsFile diagnostics_file = 134;
     DiagnosticsDone diagnostics_done = 135;
     StopApp stop_app = 136;
+    GuestMemoryPressure guest_memory_pressure = 141;
   }
 }

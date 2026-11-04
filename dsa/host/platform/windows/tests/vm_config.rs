@@ -4,9 +4,20 @@ use std::path::PathBuf;
 
 use dsa_host_windows::guid::Guid;
 use dsa_host_windows::vm::{
-    fine_grained_memory_supported, hosting_process_name_suffix_supported,
+    fine_grained_memory_supported, hosting_process_name_suffix_supported, memory_resize_request,
     runtime_id_from_properties, AndroidVmConfig, HOSTING_PROCESS_NAME_SUFFIX,
 };
+
+#[test]
+fn nfr2_the_memory_resize_request_names_the_vm_memory_size() {
+    let request: Value = serde_json::from_str(&memory_resize_request(4609)).unwrap();
+    assert_eq!(
+        request["ResourcePath"],
+        "VirtualMachine/ComputeTopology/Memory/SizeInMB"
+    );
+    assert_eq!(request["RequestType"], "Update");
+    assert_eq!(request["Settings"], 4608);
+}
 use serde_json::Value;
 
 const USER_SID: &str = "S-1-5-21-1004336348-1177238915-682003330-1001";
