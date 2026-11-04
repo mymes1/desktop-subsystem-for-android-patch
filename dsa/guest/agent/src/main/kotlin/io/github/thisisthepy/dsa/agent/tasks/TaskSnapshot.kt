@@ -42,7 +42,26 @@ data class TaskSnapshot(
      */
     val minWidth: Int = 0,
     val minHeight: Int = 0,
+    /**
+     * What the task's app told the system about its status bar's icons, which the host's
+     * caption buttons follow.
+     */
+    val statusBar: StatusBarAppearance = StatusBarAppearance.UNKNOWN,
+    /** The status bar color the app set, as ARGB; 0 when it set none. */
+    val statusBarColor: Int = 0,
 )
+
+/** Whether an app asked for dark status bar icons (a light status bar) or light ones. */
+enum class StatusBarAppearance {
+    /** The agent could not read it. */
+    UNKNOWN,
+
+    /** Dark icons on a light status bar (APPEARANCE_LIGHT_STATUS_BARS). */
+    LIGHT,
+
+    /** Light icons on a dark status bar. */
+    DARK,
+}
 
 /**
  * A configuration's screen size in density-independent pixels (Configuration's

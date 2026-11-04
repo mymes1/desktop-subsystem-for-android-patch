@@ -131,4 +131,38 @@ public interface TaskUpdatedOrBuilder extends
    * @return The minHeight.
    */
   int getMinHeight();
+
+  /**
+   * <pre>
+   * What the task's app told the system about its status bar: whether it asked for dark
+   * icons on a light status bar. The host draws its window's caption buttons in the
+   * matching tone over the app's status bar area.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+   * @return The enum numeric value on the wire for statusBarAppearance.
+   */
+  int getStatusBarAppearanceValue();
+  /**
+   * <pre>
+   * What the task's app told the system about its status bar: whether it asked for dark
+   * icons on a light status bar. The host draws its window's caption buttons in the
+   * matching tone over the app's status bar area.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;</code>
+   * @return The statusBarAppearance.
+   */
+  io.github.thisisthepy.dsa.control.v1.StatusBarAppearance getStatusBarAppearance();
+
+  /**
+   * <pre>
+   * The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+   * transparent. Used only while the appearance is unspecified.
+   * </pre>
+   *
+   * <code>fixed32 status_bar_color = 12;</code>
+   * @return The statusBarColor.
+   */
+  int getStatusBarColor();
 }

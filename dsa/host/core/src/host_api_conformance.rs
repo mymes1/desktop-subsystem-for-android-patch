@@ -33,7 +33,10 @@ use crate::keys::{keycode, meta, KeyAction, KeyEvent};
 use crate::notifications::{Notification, NotificationAction, NotificationEvent};
 use crate::session::SessionState;
 use crate::settings::{MemorySettings, Settings, SettingsStore};
-use crate::tasks::{Bounds, Task, TaskEvent, TaskRequest, TaskRequestError, TaskTable, TaskWatch};
+use crate::tasks::{
+    Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskRequestError, TaskTable,
+    TaskWatch,
+};
 use crate::widgets::{
     Placement, Widget, WidgetError, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
 };
@@ -1055,6 +1058,8 @@ pub fn sample_task(task_id: i32, label: &str) -> Task {
         max_height: 2160,
         min_width: 700,
         min_height: 500,
+        status_bar: StatusBarAppearance::Dark,
+        status_bar_color: 0xFF20_2124,
     }
 }
 

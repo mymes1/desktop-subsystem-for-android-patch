@@ -118,6 +118,8 @@ PROTOBUF_CONSTEXPR TaskUpdated::TaskUpdated(
   , /*decltype(_impl_.max_height_)*/0u
   , /*decltype(_impl_.min_width_)*/0u
   , /*decltype(_impl_.min_height_)*/0u
+  , /*decltype(_impl_.status_bar_appearance_)*/0
+  , /*decltype(_impl_.status_bar_color_)*/0u
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct TaskUpdatedDefaultTypeInternal {
   PROTOBUF_CONSTEXPR TaskUpdatedDefaultTypeInternal()
@@ -211,6 +213,20 @@ struct SetTaskDensityDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SetTaskDensityDefaultTypeInternal _SetTaskDensity_default_instance_;
+PROTOBUF_CONSTEXPR SetTaskCaption::SetTaskCaption(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.task_id_)*/0
+  , /*decltype(_impl_.height_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct SetTaskCaptionDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SetTaskCaptionDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SetTaskCaptionDefaultTypeInternal() {}
+  union {
+    SetTaskCaption _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SetTaskCaptionDefaultTypeInternal _SetTaskCaption_default_instance_;
 PROTOBUF_CONSTEXPR AppInfo::AppInfo(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.package_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
@@ -1535,6 +1551,61 @@ bool RejectReason_Parse(
       RejectReason_entries, 6, name, &int_value);
   if (success) {
     *value = static_cast<RejectReason>(int_value);
+  }
+  return success;
+}
+bool StatusBarAppearance_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> StatusBarAppearance_strings[3] = {};
+
+static const char StatusBarAppearance_names[] =
+  "STATUS_BAR_APPEARANCE_DARK"
+  "STATUS_BAR_APPEARANCE_LIGHT"
+  "STATUS_BAR_APPEARANCE_UNSPECIFIED";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry StatusBarAppearance_entries[] = {
+  { {StatusBarAppearance_names + 0, 26}, 2 },
+  { {StatusBarAppearance_names + 26, 27}, 1 },
+  { {StatusBarAppearance_names + 53, 33}, 0 },
+};
+
+static const int StatusBarAppearance_entries_by_number[] = {
+  2, // 0 -> STATUS_BAR_APPEARANCE_UNSPECIFIED
+  1, // 1 -> STATUS_BAR_APPEARANCE_LIGHT
+  0, // 2 -> STATUS_BAR_APPEARANCE_DARK
+};
+
+const std::string& StatusBarAppearance_Name(
+    StatusBarAppearance value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          StatusBarAppearance_entries,
+          StatusBarAppearance_entries_by_number,
+          3, StatusBarAppearance_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      StatusBarAppearance_entries,
+      StatusBarAppearance_entries_by_number,
+      3, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     StatusBarAppearance_strings[idx].get();
+}
+bool StatusBarAppearance_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, StatusBarAppearance* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      StatusBarAppearance_entries, 3, name, &int_value);
+  if (success) {
+    *value = static_cast<StatusBarAppearance>(int_value);
   }
   return success;
 }
@@ -3623,6 +3694,8 @@ TaskUpdated::TaskUpdated(const TaskUpdated& from)
     , decltype(_impl_.max_height_){}
     , decltype(_impl_.min_width_){}
     , decltype(_impl_.min_height_){}
+    , decltype(_impl_.status_bar_appearance_){}
+    , decltype(_impl_.status_bar_color_){}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
@@ -3646,8 +3719,8 @@ TaskUpdated::TaskUpdated(const TaskUpdated& from)
     _this->_impl_.bounds_ = new ::dsa::control::v1::Rect(*from._impl_.bounds_);
   }
   ::memcpy(&_impl_.task_id_, &from._impl_.task_id_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.min_height_) -
-    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.min_height_));
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.status_bar_color_) -
+    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.status_bar_color_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.TaskUpdated)
 }
 
@@ -3666,6 +3739,8 @@ inline void TaskUpdated::SharedCtor(
     , decltype(_impl_.max_height_){0u}
     , decltype(_impl_.min_width_){0u}
     , decltype(_impl_.min_height_){0u}
+    , decltype(_impl_.status_bar_appearance_){0}
+    , decltype(_impl_.status_bar_color_){0u}
     , /*decltype(_impl_._cached_size_)*/{}
   };
   _impl_.package_name_.InitDefault();
@@ -3711,8 +3786,8 @@ void TaskUpdated::Clear() {
   }
   _impl_.bounds_ = nullptr;
   ::memset(&_impl_.task_id_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.min_height_) -
-      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.min_height_));
+      reinterpret_cast<char*>(&_impl_.status_bar_color_) -
+      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.status_bar_color_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -3803,6 +3878,23 @@ const char* TaskUpdated::_InternalParse(const char* ptr, ::_pbi::ParseContext* c
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 80)) {
           _impl_.min_height_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
           CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_status_bar_appearance(static_cast<::dsa::control::v1::StatusBarAppearance>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // fixed32 status_bar_color = 12;
+      case 12:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 101)) {
+          _impl_.status_bar_color_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<uint32_t>(ptr);
+          ptr += sizeof(uint32_t);
         } else
           goto handle_unusual;
         continue;
@@ -3904,6 +3996,19 @@ uint8_t* TaskUpdated::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteUInt32ToArray(10, this->_internal_min_height(), target);
   }
 
+  // .dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;
+  if (this->_internal_status_bar_appearance() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      11, this->_internal_status_bar_appearance(), target);
+  }
+
+  // fixed32 status_bar_color = 12;
+  if (this->_internal_status_bar_color() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFixed32ToArray(12, this->_internal_status_bar_color(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -3976,6 +4081,17 @@ size_t TaskUpdated::ByteSizeLong() const {
     total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_min_height());
   }
 
+  // .dsa.control.v1.StatusBarAppearance status_bar_appearance = 11;
+  if (this->_internal_status_bar_appearance() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_status_bar_appearance());
+  }
+
+  // fixed32 status_bar_color = 12;
+  if (this->_internal_status_bar_color() != 0) {
+    total_size += 1 + 4;
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
   }
@@ -4028,6 +4144,12 @@ void TaskUpdated::MergeFrom(const TaskUpdated& from) {
   if (from._internal_min_height() != 0) {
     _this->_internal_set_min_height(from._internal_min_height());
   }
+  if (from._internal_status_bar_appearance() != 0) {
+    _this->_internal_set_status_bar_appearance(from._internal_status_bar_appearance());
+  }
+  if (from._internal_status_bar_color() != 0) {
+    _this->_internal_set_status_bar_color(from._internal_status_bar_color());
+  }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -4056,8 +4178,8 @@ void TaskUpdated::InternalSwap(TaskUpdated* other) {
       &other->_impl_.label_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TaskUpdated, _impl_.min_height_)
-      + sizeof(TaskUpdated::_impl_.min_height_)
+      PROTOBUF_FIELD_OFFSET(TaskUpdated, _impl_.status_bar_color_)
+      + sizeof(TaskUpdated::_impl_.status_bar_color_)
       - PROTOBUF_FIELD_OFFSET(TaskUpdated, _impl_.bounds_)>(
           reinterpret_cast<char*>(&_impl_.bounds_),
           reinterpret_cast<char*>(&other->_impl_.bounds_));
@@ -5317,6 +5439,219 @@ void SetTaskDensity::InternalSwap(SetTaskDensity* other) {
 
 std::string SetTaskDensity::GetTypeName() const {
   return "dsa.control.v1.SetTaskDensity";
+}
+
+
+// ===================================================================
+
+class SetTaskCaption::_Internal {
+ public:
+};
+
+SetTaskCaption::SetTaskCaption(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.SetTaskCaption)
+}
+SetTaskCaption::SetTaskCaption(const SetTaskCaption& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  SetTaskCaption* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.task_id_){}
+    , decltype(_impl_.height_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.task_id_, &from._impl_.task_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.height_) -
+    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.height_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.SetTaskCaption)
+}
+
+inline void SetTaskCaption::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.task_id_){0}
+    , decltype(_impl_.height_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+SetTaskCaption::~SetTaskCaption() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.SetTaskCaption)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void SetTaskCaption::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void SetTaskCaption::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void SetTaskCaption::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.SetTaskCaption)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.task_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.height_) -
+      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.height_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* SetTaskCaption::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // int32 task_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.task_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 height = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.height_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* SetTaskCaption::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.SetTaskCaption)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // int32 task_id = 1;
+  if (this->_internal_task_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(1, this->_internal_task_id(), target);
+  }
+
+  // uint32 height = 2;
+  if (this->_internal_height() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_height(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.SetTaskCaption)
+  return target;
+}
+
+size_t SetTaskCaption::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.SetTaskCaption)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // int32 task_id = 1;
+  if (this->_internal_task_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_task_id());
+  }
+
+  // uint32 height = 2;
+  if (this->_internal_height() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_height());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void SetTaskCaption::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const SetTaskCaption*>(
+      &from));
+}
+
+void SetTaskCaption::MergeFrom(const SetTaskCaption& from) {
+  SetTaskCaption* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.SetTaskCaption)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_task_id() != 0) {
+    _this->_internal_set_task_id(from._internal_task_id());
+  }
+  if (from._internal_height() != 0) {
+    _this->_internal_set_height(from._internal_height());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void SetTaskCaption::CopyFrom(const SetTaskCaption& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.SetTaskCaption)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool SetTaskCaption::IsInitialized() const {
+  return true;
+}
+
+void SetTaskCaption::InternalSwap(SetTaskCaption* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SetTaskCaption, _impl_.height_)
+      + sizeof(SetTaskCaption::_impl_.height_)
+      - PROTOBUF_FIELD_OFFSET(SetTaskCaption, _impl_.task_id_)>(
+          reinterpret_cast<char*>(&_impl_.task_id_),
+          reinterpret_cast<char*>(&other->_impl_.task_id_));
+}
+
+std::string SetTaskCaption::GetTypeName() const {
+  return "dsa.control.v1.SetTaskCaption";
 }
 
 
@@ -24876,6 +25211,7 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::CollectDiagnostics& collect_diagnostics(const Envelope* msg);
   static const ::dsa::control::v1::DiagnosticsFile& diagnostics_file(const Envelope* msg);
   static const ::dsa::control::v1::DiagnosticsDone& diagnostics_done(const Envelope* msg);
+  static const ::dsa::control::v1::SetTaskCaption& set_task_caption(const Envelope* msg);
 };
 
 const ::dsa::control::v1::Hello&
@@ -25193,6 +25529,10 @@ Envelope::_Internal::diagnostics_file(const Envelope* msg) {
 const ::dsa::control::v1::DiagnosticsDone&
 Envelope::_Internal::diagnostics_done(const Envelope* msg) {
   return *msg->_impl_.body_.diagnostics_done_;
+}
+const ::dsa::control::v1::SetTaskCaption&
+Envelope::_Internal::set_task_caption(const Envelope* msg) {
+  return *msg->_impl_.body_.set_task_caption_;
 }
 void Envelope::set_allocated_hello(::dsa::control::v1::Hello* hello) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -26379,6 +26719,21 @@ void Envelope::set_allocated_diagnostics_done(::dsa::control::v1::DiagnosticsDon
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.diagnostics_done)
 }
+void Envelope::set_allocated_set_task_caption(::dsa::control::v1::SetTaskCaption* set_task_caption) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (set_task_caption) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(set_task_caption);
+    if (message_arena != submessage_arena) {
+      set_task_caption = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, set_task_caption, submessage_arena);
+    }
+    set_has_set_task_caption();
+    _impl_.body_.set_task_caption_ = set_task_caption;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.set_task_caption)
+}
 Envelope::Envelope(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
@@ -26789,6 +27144,11 @@ Envelope::Envelope(const Envelope& from)
     case kDiagnosticsDone: {
       _this->_internal_mutable_diagnostics_done()->::dsa::control::v1::DiagnosticsDone::MergeFrom(
           from._internal_diagnostics_done());
+      break;
+    }
+    case kSetTaskCaption: {
+      _this->_internal_mutable_set_task_caption()->::dsa::control::v1::SetTaskCaption::MergeFrom(
+          from._internal_set_task_caption());
       break;
     }
     case BODY_NOT_SET: {
@@ -27304,6 +27664,12 @@ void Envelope::clear_body() {
     case kDiagnosticsDone: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.diagnostics_done_;
+      }
+      break;
+    }
+    case kSetTaskCaption: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.set_task_caption_;
       }
       break;
     }
@@ -27963,6 +28329,14 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.SetTaskCaption set_task_caption = 140;
+      case 140:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
+          ptr = ctx->ParseMessage(_internal_mutable_set_task_caption(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -28545,6 +28919,13 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::diagnostics_done(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.SetTaskCaption set_task_caption = 140;
+  if (_internal_has_set_task_caption()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(140, _Internal::set_task_caption(this),
+        _Internal::set_task_caption(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -29115,6 +29496,13 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.diagnostics_done_);
       break;
     }
+    // .dsa.control.v1.SetTaskCaption set_task_caption = 140;
+    case kSetTaskCaption: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.set_task_caption_);
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -29536,6 +29924,11 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_diagnostics_done());
       break;
     }
+    case kSetTaskCaption: {
+      _this->_internal_mutable_set_task_caption()->::dsa::control::v1::SetTaskCaption::MergeFrom(
+          from._internal_set_task_caption());
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -29622,6 +30015,10 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::ResizeTask >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::SetTaskDensity*
 Arena::CreateMaybeMessage< ::dsa::control::v1::SetTaskDensity >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::SetTaskDensity >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::SetTaskCaption*
+Arena::CreateMaybeMessage< ::dsa::control::v1::SetTaskCaption >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::SetTaskCaption >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::AppInfo*
 Arena::CreateMaybeMessage< ::dsa::control::v1::AppInfo >(Arena* arena) {

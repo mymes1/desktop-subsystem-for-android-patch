@@ -14,6 +14,7 @@
 
 pub mod accessibility;
 pub mod apk_install;
+pub mod caption;
 pub mod host_file;
 pub mod ime;
 pub mod keys;

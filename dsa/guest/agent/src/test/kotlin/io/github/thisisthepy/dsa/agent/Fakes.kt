@@ -228,6 +228,15 @@ class FakeActions : TaskActions {
         focused += taskId
         return focusable
     }
+
+    /** Each caption inset given: the task and its frame, null for a removal. */
+    val captionInsets = mutableListOf<Pair<Int, TaskBounds?>>()
+    var insetsTaken = true
+
+    override fun setCaptionInset(taskId: Int, frame: TaskBounds?): Boolean {
+        captionInsets += taskId to frame
+        return insetsTaken
+    }
 }
 
 class FakeWindowing(var acceptAfter: Int = 0) : WindowingControl {

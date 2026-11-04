@@ -99,6 +99,7 @@ public  final class Envelope extends
     COLLECT_DIAGNOSTICS(133),
     DIAGNOSTICS_FILE(134),
     DIAGNOSTICS_DONE(135),
+    SET_TASK_CAPTION(140),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -193,6 +194,7 @@ public  final class Envelope extends
         case 133: return COLLECT_DIAGNOSTICS;
         case 134: return DIAGNOSTICS_FILE;
         case 135: return DIAGNOSTICS_DONE;
+        case 140: return SET_TASK_CAPTION;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -4164,6 +4166,56 @@ public  final class Envelope extends
     }
   }
 
+  public static final int SET_TASK_CAPTION_FIELD_NUMBER = 140;
+  /**
+   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+   */
+  @java.lang.Override
+  public boolean hasSetTaskCaption() {
+    return bodyCase_ == 140;
+  }
+  /**
+   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SetTaskCaption getSetTaskCaption() {
+    if (bodyCase_ == 140) {
+       return (io.github.thisisthepy.dsa.control.v1.SetTaskCaption) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SetTaskCaption.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+   */
+  private void setSetTaskCaption(io.github.thisisthepy.dsa.control.v1.SetTaskCaption value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 140;
+  }
+  /**
+   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+   */
+  private void mergeSetTaskCaption(io.github.thisisthepy.dsa.control.v1.SetTaskCaption value) {
+    value.getClass();
+  if (bodyCase_ == 140 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SetTaskCaption.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SetTaskCaption.newBuilder((io.github.thisisthepy.dsa.control.v1.SetTaskCaption) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 140;
+  }
+  /**
+   * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+   */
+  private void clearSetTaskCaption() {
+    if (bodyCase_ == 140) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -8067,6 +8119,54 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+     */
+    @java.lang.Override
+    public boolean hasSetTaskCaption() {
+      return instance.hasSetTaskCaption();
+    }
+    /**
+     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SetTaskCaption getSetTaskCaption() {
+      return instance.getSetTaskCaption();
+    }
+    /**
+     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+     */
+    public Builder setSetTaskCaption(io.github.thisisthepy.dsa.control.v1.SetTaskCaption value) {
+      copyOnWrite();
+      instance.setSetTaskCaption(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+     */
+    public Builder setSetTaskCaption(
+        io.github.thisisthepy.dsa.control.v1.SetTaskCaption.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSetTaskCaption(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+     */
+    public Builder mergeSetTaskCaption(io.github.thisisthepy.dsa.control.v1.SetTaskCaption value) {
+      copyOnWrite();
+      instance.mergeSetTaskCaption(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SetTaskCaption set_task_caption = 140;</code>
+     */
+    public Builder clearSetTaskCaption() {
+      copyOnWrite();
+      instance.clearSetTaskCaption();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -8164,9 +8264,10 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.CollectDiagnostics.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsFile.class,
             io.github.thisisthepy.dsa.control.v1.DiagnosticsDone.class,
+            io.github.thisisthepy.dsa.control.v1.SetTaskCaption.class,
           };
           java.lang.String info =
-              "\u0000O\u0001\u0000\u0001\u0087O\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
+              "\u0000P\u0001\u0000\u0001\u008cP\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
               "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
               "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
               "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
@@ -8176,7 +8277,7 @@ public  final class Envelope extends
               "P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_<\u0000" +
               "`<\u0000a<\u0000b<\u0000c<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000" +
               "}<\u0000~<\u0000<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086" +
-              "<\u0000\u0087<\u0000";
+              "<\u0000\u0087<\u0000\u008c<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
