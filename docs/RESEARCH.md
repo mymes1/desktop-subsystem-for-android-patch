@@ -252,6 +252,25 @@
 
 **PC에서 잴 것.** `measure.ps1 -Part open`으로 Settings 하나를 연 상태의 각 프로세스 private와 `dsa memory`의 커널 내역을 기록한다. `-Part close`로 앱을 닫은 뒤 vm 상주 메모리가 몇 초 안에 얼마나 줄었는지 잰다. 32 GiB PC에서 `dsa settings set memory-limit 3G`와 `auto`를 바꿔 가며 `Dozing` 상주 메모리와 부팅 시간을 비교한다. `dsa-wm.log`에서 "no task window is shown" 줄의 GPU 메모리를 확인한다.
 
+## R9. 실행 중 메모리를 늘리고 줄일 수 있는가 (NFR-1, NFR-2)
+
+**질문.** VM을 처음부터 호스트 크기로 만들면 커널의 struct page가 최대 크기의 약 1.56%를 늘 차지한다(32 GiB PC에서 약 460 MiB). 작게 시작해 필요할 때 메모리를 더하고, 필요 없어지면 돌려줄 수 있는가.
+
+**확인한 것 (코드와 공개 자료, 실행하지 않음).**
+
+- DSA 커널(`config-wsl` 6.18.54.1 + `android.config`): `CONFIG_MEMORY_HOTPLUG=y`, `CONFIG_MEMORY_HOTREMOVE=y`, `CONFIG_MHP_DEFAULT_ONLINE_TYPE_ONLINE_AUTO=y`(더한 메모리를 커널이 바로 온라인으로 올린다), `CONFIG_MHP_MEMMAP_ON_MEMORY=y`, `CONFIG_HYPERV_BALLOON=y`, `CONFIG_PAGE_REPORTING=y`, `CONFIG_VIRTIO_MEM=m`. Hyper-V의 balloon 드라이버(`hv_balloon`)는 Dynamic Memory 프로토콜로 호스트의 핫애드 요청을 받아 메모리를 더하고(`hot_add` 매개변수, 기본 켜짐), 풍선을 부풀려 메모리를 돌려준다. virtio-mem은 모듈이고 Hyper-V에는 그 장치가 없다.
+- HCS: microsoft/hcsshim의 `internal/uvm` `UpdateMemory`는 실행 중인 유틸리티 VM에 `ResourcePath: VirtualMachine/ComputeTopology/Memory/SizeInMB`, `RequestType: Update`, `Settings: <MiB>`인 modify 요청을 보내 메모리 크기를 바꾼다. 같은 요청을 `HcsModifyComputeSystem`으로 보낸다.
+- WSL2: VM 최대 크기를 처음부터 정하고(기본 호스트의 50%), 빈 페이지 보고와 `autoMemoryReclaim`으로 돌려준다. 실행 중 핫애드는 쓰지 않는다. 같은 struct page 비용을 낸다.
+
+**설계.** VM은 3 GiB로 시작한다. 제어 데몬이 2초마다 `/proc/meminfo`와 `/proc/pressure/memory`를 읽고, 부족하면 바로, 아니면 30초마다 `GuestMemoryPressure`를 보낸다. 호스트는 가용 메모리가 전체의 1/5(최소 512 MiB) 아래이거나 메모리 대기가 10% 이상이면 현재 크기의 절반(최소 1 GiB)을 더한다(5초 간격, 최대는 호스트 메모리에서 max(10%, 2 GiB)를 뺀 값 또는 사용자 상한). 30초 동안 여유가 있으면 쓰는 양의 1.5배(최소 1 GiB 여유)로 줄이고 시작 크기 아래로는 내리지 않는다. 앱을 닫으면 #210의 즉시 반환(앱 종료, 캐시 버림, 빈 페이지 보고)이 함께 동작한다.
+
+**실기에서 확인할 것.** 이 경로는 실행해 보지 않았다.
+
+1. 그 modify 요청을 이 VM(HCS 스키마 2.x, Linux 커널을 직접 부팅하는 VM)이 받는지. 거절하면 서비스 로그에 `memory: Android's memory could not be set to N MiB`가 남는다.
+2. 받아들인 뒤 게스트 `MemTotal`이 실제로 늘어나는지. 30초 안에 늘지 않으면 `memory: Android's memory no longer grows`가 남고, VM은 시작 크기(3 GiB)를 유지한다. 이때 더 큰 고정 크기로 대신 시작하지 않는다. 그 결정은 소유자에게 묻는다.
+3. 크기를 줄이는 요청에 `hv_balloon`이 풍선을 부풀리는지, `vmmem` 상주 메모리가 줄어드는지.
+4. 측정: `measure.ps1 -Part grow -Package <무거운 앱들>`.
+
 ## 부록 A. Microsoft에 낼 이슈 초안
 
 R1의 선택지 D다. [microsoft/WSL](https://github.com/microsoft/WSL/issues)에 내는 이슈로, 아직 내지 않았다. 소유자가 낸다. 이슈는 영어로 내므로 본문은 영어로 둔다.
