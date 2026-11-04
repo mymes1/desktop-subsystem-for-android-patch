@@ -108,16 +108,16 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::background::{
+    self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundHub, BackgroundWatch,
+    MediaCommand, MediaSession,
+};
 use crate::clipboard;
 use crate::clock_trace::ClockTrace;
 use crate::files::{self, FileAction, FileTransfer};
 use crate::guest_log::{
     serve_log_connection, DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogHub,
     LogPortMessage, LogWatch, STREAM_TAIL,
-};
-use crate::background::{
-    self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundHub, BackgroundWatch,
-    MediaCommand, MediaSession,
 };
 use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{PointerAction, PointerEvent};

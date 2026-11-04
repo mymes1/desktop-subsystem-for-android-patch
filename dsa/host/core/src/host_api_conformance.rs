@@ -892,9 +892,7 @@ macro_rules! host_api_conformance {
         }
         #[test]
         fn fr22_stopping_an_app_of_a_stopped_android_says_it_is_not_running() {
-            $crate::host_api_conformance::background_action_needs_a_running_android(
-                &mut || $make,
-            );
+            $crate::host_api_conformance::background_action_needs_a_running_android(&mut || $make);
         }
         #[test]
         fn nfr5_a_malformed_action_on_a_background_app_is_refused() {
@@ -2382,7 +2380,11 @@ pub fn background_apps_reach_a_watcher(make: MakeLocal<'_>) {
     let mut watch = connect(&mut *connector)
         .watch_background()
         .expect("watching the apps that run in the background");
-    assert_eq!(watch.apps, vec![playing.clone()], "starts from the apps now");
+    assert_eq!(
+        watch.apps,
+        vec![playing.clone()],
+        "starts from the apps now"
+    );
     assert!(watch.media.is_empty());
     assert_eq!(watch.next(Duration::from_millis(50)).unwrap(), None);
 

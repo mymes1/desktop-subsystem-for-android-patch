@@ -15,8 +15,8 @@ use dsa_host_core::notifications::{Notification, NotificationAction, Notificatio
 use dsa_host_core::power::{PowerHub, PowerState};
 use dsa_host_core::power_hints::{mode, PowerHint};
 use dsa_host_core::session::{
-    BackgroundRequest, BootProblem, GuestLauncher, GuestPower, GuestStall, Session,
-    SessionConfig, SessionError, SessionEvent, SessionState, StopReason,
+    BackgroundRequest, BootProblem, GuestLauncher, GuestPower, GuestStall, Session, SessionConfig,
+    SessionError, SessionEvent, SessionState, StopReason,
 };
 use dsa_host_core::tasks::{Bounds, Task, TaskEvent, TaskRequest};
 use dsa_host_core::widgets::{self, Placement, Widget, WidgetEvent, WidgetSize};

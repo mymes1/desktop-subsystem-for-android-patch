@@ -505,8 +505,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     }
     let command = command.ok_or(USAGE)?;
     let widgets = (command == Command::Widgets).then(|| widgets.unwrap_or(WidgetAction::List));
-    let background = (command == Command::Background)
-        .then(|| background.unwrap_or(BackgroundAction::List));
+    let background =
+        (command == Command::Background).then(|| background.unwrap_or(BackgroundAction::List));
     if command == Command::Install && file.is_none() {
         return Err(format!(
             "dsa install needs the APK file to install\n{USAGE}"

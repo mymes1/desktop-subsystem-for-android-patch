@@ -1245,8 +1245,7 @@ pub(crate) mod png {
     use windows::Win32::Graphics::Imaging::{
         CLSID_WICImagingFactory, GUID_WICPixelFormat32bppBGRA, GUID_WICPixelFormat32bppPBGRA,
         IWICBitmapSource, IWICImagingFactory, IWICPalette, WICBitmapDitherTypeNone,
-        WICBitmapInterpolationModeFant, WICBitmapPaletteTypeCustom,
-        WICDecodeMetadataCacheOnDemand,
+        WICBitmapInterpolationModeFant, WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
     };
     use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
 
@@ -1264,7 +1263,12 @@ pub(crate) mod png {
         }
 
         /// The PNG image `png`, scaled to `width` by `height`, as premultiplied BGRA rows.
-        pub(crate) fn decode(&self, png: &[u8], width: u32, height: u32) -> Result<Vec<u8>, String> {
+        pub(crate) fn decode(
+            &self,
+            png: &[u8],
+            width: u32,
+            height: u32,
+        ) -> Result<Vec<u8>, String> {
             self.decode_as(png, width, height, &GUID_WICPixelFormat32bppPBGRA)
         }
 

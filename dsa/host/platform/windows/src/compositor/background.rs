@@ -254,9 +254,8 @@ pub fn sync(
     let mut apps: BTreeMap<String, BackgroundApp> = BTreeMap::new();
     let mut media: BTreeMap<String, MediaSession> = BTreeMap::new();
     while !stop.load(Ordering::Relaxed) {
-        let watched = HostApiClient::connect(&mut *connector, BUILD, ANSWER).and_then(|client| {
-            client.watch_background()
-        });
+        let watched = HostApiClient::connect(&mut *connector, BUILD, ANSWER)
+            .and_then(|client| client.watch_background());
         let mut stream = match watched {
             Ok(stream) => stream,
             Err(error) => {
@@ -264,7 +263,9 @@ pub fn sync(
                 if error != last_error {
                     note(
                         logger.as_deref(),
-                        &format!("the apps that run in the background cannot reach the service: {error}"),
+                        &format!(
+                            "the apps that run in the background cannot reach the service: {error}"
+                        ),
                     );
                     last_error = error;
                 }
@@ -332,9 +333,7 @@ pub fn sync(
                 Err(error) => {
                     note(
                         logger.as_deref(),
-                        &format!(
-                            "the background apps' connection to the service ended: {error}"
-                        ),
+                        &format!("the background apps' connection to the service ended: {error}"),
                     );
                     break;
                 }
@@ -350,10 +349,14 @@ pub fn sync(
 }
 
 /// Passes what the user did with the tray to the service.
-fn handle_reports(connector: &mut dyn Connector, tray: &mut dyn Tray, logger: Option<&CompositorLogger>) {
+fn handle_reports(
+    connector: &mut dyn Connector,
+    tray: &mut dyn Tray,
+    logger: Option<&CompositorLogger>,
+) {
     for report in tray.reports() {
-        let result = HostApiClient::connect(connector, BUILD, ANSWER).and_then(|mut client| {
-            match &report {
+        let result =
+            HostApiClient::connect(connector, BUILD, ANSWER).and_then(|mut client| match &report {
                 TrayReport::Command(package, command) => {
                     client.act_on_background(package, *command)
                 }
@@ -363,8 +366,7 @@ fn handle_reports(connector: &mut dyn Connector, tray: &mut dyn Tray, logger: Op
                     settings.stop_without_asking = true;
                     client.set_settings(&settings).map(|_| ())
                 }
-            }
-        });
+            });
         if let Err(error) = result {
             note(
                 logger,
@@ -897,7 +899,9 @@ mod win {
         let Some((controller, known)) = with_state(|s| {
             (
                 s.controller,
-                s.icons.get(&app.package_name).map(|icon| (icon.id, icon.by_guid)),
+                s.icons
+                    .get(&app.package_name)
+                    .map(|icon| (icon.id, icon.by_guid)),
             )
         }) else {
             return;
@@ -1031,7 +1035,8 @@ mod win {
                 biClrImportant: 0,
             };
             let mut bits: *mut core::ffi::c_void = null_mut();
-            let color = CreateDIBSection(null_mut(), &info, DIB_RGB_COLORS, &mut bits, null_mut(), 0);
+            let color =
+                CreateDIBSection(null_mut(), &info, DIB_RGB_COLORS, &mut bits, null_mut(), 0);
             if color.is_null() || bits.is_null() {
                 return fallback();
             }
@@ -1163,8 +1168,8 @@ mod win {
                 let id = (wparam & 0xffff) as u16;
                 if id == STOP_ID {
                     // SAFETY: a control of this dialog.
-                    let never = unsafe { IsDlgButtonChecked(hwnd, DO_NOT_ASK_ID as i32) }
-                        == BST_CHECKED;
+                    let never =
+                        unsafe { IsDlgButtonChecked(hwnd, DO_NOT_ASK_ID as i32) } == BST_CHECKED;
                     // SAFETY: ends this modal dialog.
                     unsafe { EndDialog(hwnd, if never { 2 } else { 1 }) };
                     1
@@ -1250,7 +1255,9 @@ mod media {
     use windows::Win32::System::WinRT::{
         CreateRandomAccessStreamOverStream, ISystemMediaTransportControlsInterop, BSOS_DEFAULT,
     };
-    use windows::Win32::UI::Shell::PropertiesSystem::{IPropertyStore, SHGetPropertyStoreForWindow};
+    use windows::Win32::UI::Shell::PropertiesSystem::{
+        IPropertyStore, SHGetPropertyStoreForWindow,
+    };
     use windows::Win32::UI::Shell::SHCreateMemStream;
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::UI::WindowsAndMessaging::{CreateWindowExW, DestroyWindow, WS_POPUP};
@@ -1354,8 +1361,9 @@ mod media {
             >()
             .map_err(|e| fail("Windows has no media controls", e))?;
             // SAFETY: a top-level window of this thread.
-            let controls: SystemMediaTransportControls = unsafe { interop.GetForWindow(hwnd(handle)) }
-                .map_err(|e| fail("the media controls of the window", e))?;
+            let controls: SystemMediaTransportControls =
+                unsafe { interop.GetForWindow(hwnd(handle)) }
+                    .map_err(|e| fail("the media controls of the window", e))?;
             let package = package.to_string();
             let token = controls
                 .ButtonPressed(&TypedEventHandler::<
@@ -1536,7 +1544,9 @@ mod tests {
 
     #[test]
     fn fr22_the_stop_question_names_the_app_in_the_users_language() {
-        assert!(Texts::english().stop_question("Music").starts_with("Stop Music?"));
+        assert!(Texts::english()
+            .stop_question("Music")
+            .starts_with("Stop Music?"));
         assert!(Texts::korean().stop_question("Music").starts_with("Music"));
         assert_ne!(Texts::korean().stop, Texts::english().stop);
     }
@@ -1614,8 +1624,7 @@ mod tests {
             }
         };
         wait("the app's icon was never shown", &|r| {
-            r.commands
-                .contains(&TrayCommand::Show(music(&["Pause"])))
+            r.commands.contains(&TrayCommand::Show(music(&["Pause"])))
         });
         recorded.lock().unwrap().reports.push(TrayReport::Command(
             "com.example.music".into(),

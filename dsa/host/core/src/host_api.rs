@@ -2249,7 +2249,10 @@ impl HostApiService {
                 )
             }
         };
-        self.background_request(peer, BackgroundRequest::Media(control.package_name, command))
+        self.background_request(
+            peer,
+            BackgroundRequest::Media(control.package_name, command),
+        )
     }
 
     fn background_request(&self, peer: &Peer, request: BackgroundRequest) -> response::Body {
@@ -3366,15 +3369,21 @@ impl HostApiClient {
             ),
             BackgroundCommand::Stop => (types::BackgroundAppCommand::Stop, 0),
         };
-        self.done(request::Body::ActOnBackgroundApp(types::ActOnBackgroundApp {
-            package_name: package.to_string(),
-            command: kind as i32,
-            action,
-        }))
+        self.done(request::Body::ActOnBackgroundApp(
+            types::ActOnBackgroundApp {
+                package_name: package.to_string(),
+                command: kind as i32,
+                action,
+            },
+        ))
     }
 
     /// Runs a media key's command on the package's media session.
-    pub fn control_media(&mut self, package: &str, command: MediaCommand) -> Result<(), ClientError> {
+    pub fn control_media(
+        &mut self,
+        package: &str,
+        command: MediaCommand,
+    ) -> Result<(), ClientError> {
         let command = match command {
             MediaCommand::Play => types::MediaCommand::Play,
             MediaCommand::Pause => types::MediaCommand::Pause,
@@ -3820,9 +3829,9 @@ impl BackgroundStream {
             Ok(Envelope {
                 body: Some(Body::BackgroundAppEvent(types::BackgroundAppEvent { body })),
             }) => match body {
-                Some(Event::App(app)) => Ok(Some(BackgroundEvent::App(background_app_from_wire(
-                    app,
-                )))),
+                Some(Event::App(app)) => {
+                    Ok(Some(BackgroundEvent::App(background_app_from_wire(app))))
+                }
                 Some(Event::AppRemoved(removed)) => Ok(Some(BackgroundEvent::AppRemoved {
                     package_name: removed.package_name,
                 })),
@@ -4045,10 +4054,7 @@ fn media_to_wire(session: MediaSession) -> types::MediaSession {
     }
 }
 
-fn background_to_wire(
-    apps: Vec<BackgroundApp>,
-    media: Vec<MediaSession>,
-) -> types::BackgroundApps {
+fn background_to_wire(apps: Vec<BackgroundApp>, media: Vec<MediaSession>) -> types::BackgroundApps {
     types::BackgroundApps {
         apps: apps.into_iter().map(background_app_to_wire).collect(),
         media: media.into_iter().map(media_to_wire).collect(),
@@ -4104,7 +4110,10 @@ fn media_from_wire(session: types::MediaSession) -> MediaSession {
 
 fn background_from_wire(list: types::BackgroundApps) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
     (
-        list.apps.into_iter().map(background_app_from_wire).collect(),
+        list.apps
+            .into_iter()
+            .map(background_app_from_wire)
+            .collect(),
         list.media.into_iter().map(media_from_wire).collect(),
     )
 }

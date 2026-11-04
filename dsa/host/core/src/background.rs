@@ -266,9 +266,7 @@ impl BackgroundHub {
         match map.get(&package) {
             Some(known) if *known == value => false,
             None if map.len() >= MAX_APPS => {
-                eprintln!(
-                    "background apps: dropped {package}; the host keeps at most {MAX_APPS}"
-                );
+                eprintln!("background apps: dropped {package}; the host keeps at most {MAX_APPS}");
                 false
             }
             _ => {
@@ -374,7 +372,10 @@ mod tests {
         let music = checked_app(app("com.example.music", "Song")).unwrap();
         hub.apply(BackgroundEvent::App(music.clone()));
         hub.apply(BackgroundEvent::App(music.clone()));
-        assert_eq!(watch.events.try_recv().unwrap(), BackgroundEvent::App(music));
+        assert_eq!(
+            watch.events.try_recv().unwrap(),
+            BackgroundEvent::App(music)
+        );
         assert!(watch.events.try_recv().is_err());
 
         hub.apply(BackgroundEvent::AppRemoved {
