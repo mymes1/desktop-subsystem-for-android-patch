@@ -201,6 +201,9 @@ Reply OutputStreamLogic::handle(const Command& command, PcmSource& source) {
             mState = StreamState::Idle;
             mSink.command(HostCommand::Flush);
             return reply(kStatusOk);
+
+        case Command::Kind::Unsupported:
+            return reply(kStatusInvalidOperation);
     }
     return reply(kStatusBadValue);
 }

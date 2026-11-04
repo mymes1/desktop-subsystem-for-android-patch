@@ -43,7 +43,8 @@ constexpr int32_t kStatusNotEnoughData = -61;     // -ENODATA
 constexpr int64_t kPositionUnknown = -1;
 
 struct Command {
-    enum class Kind { Exit, GetStatus, Start, Burst, Drain, Standby, Pause, Flush };
+    // Unsupported: a command the stream does not take, such as a flush from a frame.
+    enum class Kind { Exit, GetStatus, Start, Burst, Drain, Standby, Pause, Flush, Unsupported };
     Kind kind = Kind::GetStatus;
     // For Burst: the bytes the framework put in the data queue.
     int32_t bytes = 0;

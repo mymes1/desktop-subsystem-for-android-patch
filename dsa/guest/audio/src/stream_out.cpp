@@ -98,6 +98,10 @@ Command toCommand(const StreamDescriptor::Command& command) {
         case Tag::flush:
             c.kind = Command::Kind::Flush;
             break;
+        case Tag::flushFromFrame:
+            // The module tells the framework it cannot flush from a frame.
+            c.kind = Command::Kind::Unsupported;
+            break;
     }
     return c;
 }
@@ -254,6 +258,11 @@ ndk::ScopedAStatus StreamCommon::addEffect(const std::shared_ptr<effect::IEffect
 }
 
 ndk::ScopedAStatus StreamCommon::removeEffect(const std::shared_ptr<effect::IEffect>&) {
+    return unsupported();
+}
+
+ndk::ScopedAStatus StreamCommon::createMmapBuffer(core::MmapBufferDescriptor*) {
+    // The output is not a shared memory (MMAP) stream.
     return unsupported();
 }
 

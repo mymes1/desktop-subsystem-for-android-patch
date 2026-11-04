@@ -43,6 +43,7 @@ class StreamCommon final : public core::BnStreamCommon {
                                            bool in_async) override;
     ndk::ScopedAStatus addEffect(const std::shared_ptr<effect::IEffect>& in_effect) override;
     ndk::ScopedAStatus removeEffect(const std::shared_ptr<effect::IEffect>& in_effect) override;
+    ndk::ScopedAStatus createMmapBuffer(core::MmapBufferDescriptor* _aidl_return) override;
 
    private:
     std::weak_ptr<StreamOut> mStream;
