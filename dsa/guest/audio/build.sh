@@ -74,6 +74,7 @@ generate() {
     local dir="$1" version="$2"
     shift 2
     # The module runs on Android 14 and later, where every type the HAL uses is available.
+    local args=(--lang=ndk --structured --stability=vintf --min_sdk_version=34 --version="$version")
     if [[ -f "$dir/.hash" ]]; then
         args+=(--hash="$(tail -n 1 "$dir/.hash")")
     fi
