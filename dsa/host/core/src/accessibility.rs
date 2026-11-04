@@ -951,7 +951,7 @@ pub struct ScreenRect {
 
 /// A node's `bounds`, in pixels of the task, on the host's screen: the window shows the task
 /// (`task_size`, in guest pixels) 1:1 from the top left of its client area (`client_size`, in
-/// host pixels, which is the task's size unless the window waits for a frame of a new size),
+/// host pixels, which is the task's size but for a moment while the guest catches up),
 /// whose top left is at `client_origin` on the screen. Frames are never scaled to the window,
 /// so neither are the bounds. The result is cut to the client area, since nothing outside it
 /// is seen.

@@ -383,8 +383,8 @@ fn fr18_bounds_go_to_the_screen_through_the_window() {
         (rect.left, rect.top, rect.width, rect.height),
         (110.0, 70.0, 100.0, 50.0)
     );
-    // A window grown to twice the task's size, waiting for a frame of that size: the frame
-    // is shown 1:1, never stretched, and so are the bounds.
+    // A task smaller than its window for a moment: frames are shown 1:1, never stretched,
+    // and so are the bounds.
     let rect = to_screen(bounds(10, 20, 110, 70), (400, 600), (800, 1200), (0, 0));
     assert_eq!(
         (rect.left, rect.top, rect.width, rect.height),

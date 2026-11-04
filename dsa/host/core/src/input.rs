@@ -242,14 +242,12 @@ pub struct WindowGeometry {
 impl WindowGeometry {
     /// Converts a point in the client area to the task's guest pixels.
     ///
-    /// The window shows the task's frames 1:1 from its top left corner, never scaled, so a
-    /// point is the same pixel of the task. While the window waits for a frame of a new size,
-    /// what it shows is the last frame at its own size, cropped or with the app's background
-    /// colour beside it, and a point still lands on the pixel under it. A point inside the
-    /// client area always lands inside the task, so a click beside the frame, on the
-    /// background colour, reaches the task's nearest edge and never the task beside it on the
-    /// guest display. A point outside (the mouse dragged out of the window while a button is
-    /// down) keeps going, as it would on a phone's screen edge.
+    /// The window shows the task's frames 1:1 and takes the size of the frame it shows, so a
+    /// point is the same pixel of the task. The task's size can lead the frame for a moment
+    /// (the guest has taken a new size and not drawn it yet), so a point inside the client
+    /// area is kept inside the task, and a click on the window's edge never reaches the task
+    /// beside it on the guest display. A point outside (the mouse dragged out of the window
+    /// while a button is down) keeps going, as it would on a phone's screen edge.
     pub fn to_guest(&self, (x, y): (f64, f64)) -> (f32, f32) {
         let axis = |position: f64, client: u32, task: u32| -> f32 {
             if client == 0 || task == 0 {
@@ -526,8 +524,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fr4_a_point_lands_on_the_frame_pixel_under_it_while_the_window_waits_for_a_new_size() {
-        // The window grew to 1300x900; the frame shown is still 900x700, 1:1.
+    fn fr5_a_point_lands_on_the_same_pixel_of_the_task() {
+        // The guest reports a task smaller than the window for a moment.
         let grown = WindowGeometry {
             client: (1300, 900),
             task: (900, 700),
@@ -535,10 +533,10 @@ mod tests {
         for point in [(0.0, 0.0), (87.0, 54.0), (450.0, 350.0), (899.0, 699.0)] {
             assert_eq!(grown.to_guest(point), (point.0 as f32, point.1 as f32));
         }
-        // Beside the frame, on the background colour: the task's nearest edge.
+        // Past the task's edge but inside the window: the task's nearest edge.
         assert_eq!(grown.to_guest((1200.0, 100.0)), (899.0, 100.0));
         assert_eq!(grown.to_guest((1299.0, 899.0)), (899.0, 699.0));
-        // The window shrank to 600x500: the frame is cropped, not squashed.
+        // A task larger than the window for a moment: points still land 1:1.
         let shrunk = WindowGeometry {
             client: (600, 500),
             task: (900, 700),
@@ -612,8 +610,7 @@ mod tests {
         assert_eq!(geometry.to_guest((-20.0, 700.0)), (-20.0, 700.0));
     }
 
-    /// A window grown to twice its task's size, waiting for a frame of the new size: points
-    /// land 1:1.
+    /// A window larger than the task it shows for a moment: points land 1:1.
     fn geometry() -> WindowGeometry {
         WindowGeometry {
             client: (800, 600),
