@@ -596,9 +596,10 @@ fn fr4_a_dragged_window_keeps_a_new_size_back_until_the_frame_of_that_size_is_sh
     sink.frame(3, (width as u32, height as u32));
     unsafe { SendMessageW(hwnd as HWND, WM_ENTERSIZEMOVE, 0, 0) };
 
+    // Every size stays within the guest's 1280x720 buffers, the most a frame can be.
     // The guest is asked for the size while the window keeps its old one; the window takes
     // the size together with the frame of that size.
-    let size = drag_step(&running, hwnd, (900, 800));
+    let size = drag_step(&running, hwnd, (760, 640));
     sink.frame(3, size);
     wait_for("the window to take the size of its frame", || {
         (client_size(hwnd) == (size.0 as i32, size.1 as i32)).then_some(())
@@ -606,8 +607,8 @@ fn fr4_a_dragged_window_keeps_a_new_size_back_until_the_frame_of_that_size_is_sh
 
     // A guest that never answers leaves the window at the size of the frame it shows.
     let shown = size;
-    let late = drag_step(&running, hwnd, (960, 860));
-    drag_step(&running, hwnd, (980, 880));
+    let late = drag_step(&running, hwnd, (720, 600));
+    drag_step(&running, hwnd, (700, 580));
     thread::sleep(Duration::from_millis(300));
     assert_eq!(
         client_size(hwnd),
