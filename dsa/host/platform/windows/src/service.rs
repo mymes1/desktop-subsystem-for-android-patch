@@ -28,6 +28,9 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::device_identity::{
+    DeviceIdentity, DeviceIdentityStore, FileDeviceIdentities, ImageBuild,
+};
 use dsa_host_core::diagnostics::HostFile;
 use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
 use dsa_host_core::guest_log::{LogFilter, LogWatch, DEFAULT_BUFFERS, WARN};
@@ -322,6 +325,23 @@ pub fn create_user_android(
         let store = settings_store(config);
         let user = sid.to_string();
         Box::new(move || arm_translation_bootconfig(&*store, &user))
+    })
+    .with_boot_properties({
+        // The user's device identity, which Android reads once while it boots.
+        let identities = FileDeviceIdentities::new(config.settings_dir());
+        let (owner, build) = (sid.to_string(), build.to_string());
+        Box::new(move |vm: &AndroidVmConfig| {
+            let identity = identities.get(&owner).unwrap_or_else(|why| {
+                eprintln!("{build}: {why}; Android starts with the image's device identity");
+                DeviceIdentity::default()
+            });
+            let image = vm
+                .initrd
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .and_then(ImageBuild::from_image_dir);
+            identity.boot_properties(image.as_ref())
+        })
     });
     let launcher = if config.keep_window_manager {
         let mut keeper = WindowManagerKeeper::new(UserWindowManager::new(sid));
@@ -597,6 +617,18 @@ fn take_old_trace_markers(config: &HostConfig, store: &dyn SettingsStore, build:
     }
 }
 
+/// The build of the image a user's Android starts from next, from its `image.json`.
+fn current_image_build(config: &HostConfig, images: Option<&ImageStore>) -> Option<ImageBuild> {
+    let files = match images {
+        Some(images) => {
+            let current = images.state().ok()?.current;
+            config.image_files(Some(&images.image_dir(&current.version)))
+        }
+        None => config.image_files(None),
+    };
+    ImageBuild::from_image_dir(files.initrd?.parent()?)
+}
+
 /// The settings in the service's own folder. A user who has never saved settings starts
 /// from the render GPU in their own `compositor.json`, if they chose one there.
 /// The bootconfig that tells `user`'s next boot to use their ARM translation package, or
@@ -759,6 +791,7 @@ where
             None
         }
     };
+    let identity_images = updates.as_ref().map(|updates| Arc::clone(&updates.store));
     let factory_config = config.clone();
     let factory_build = build.to_string();
     let factory_status = program.as_ref().map(|_| Arc::clone(&program_status));
@@ -826,7 +859,14 @@ where
         .with_host_logs({
             let config = config.clone();
             Arc::new(move |sid: &str| host_logs_of(&config, sid))
-        });
+        })
+        .with_device_identities(
+            Arc::new(FileDeviceIdentities::new(config.settings_dir())),
+            {
+                let config = config.clone();
+                Arc::new(move |_: &str| current_image_build(&config, identity_images.as_deref()))
+            },
+        );
     {
         let androids = androids.clone();
         let (worker_build, stop) = (build.to_string(), Arc::clone(&stop));

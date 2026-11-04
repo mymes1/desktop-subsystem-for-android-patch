@@ -450,6 +450,36 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "ro.vulkan.apex=" not in vendor_props.splitlines():
         problems.append("VENDOR/build.prop does not claim ro.vulkan.apex empty, so the Vulkan APEX sets it")
 
+    # DSA's device identity, in every partition, and nothing left of Cuttlefish's.
+    identity_files = sorted(n for n in names if n.endswith("build.prop") or n.endswith("prop.default"))
+    for name in identity_files:
+        for line in z.read(name).decode(errors="replace").splitlines():
+            if "=" not in line or line.startswith("#"):
+                continue
+            key, value = line.split("=", 1)
+            m = make_image.PRODUCT_KEY.match(key)
+            if m and value != make_image.IDENTITY[m.group(2)]:
+                problems.append(f"{name} sets {line}, not DSA's {m.group(2)}")
+            if make_image.FINGERPRINT_KEY.match(key):
+                if not value.startswith("DSA/dsa_x86_64/dsa_x86_64:") or ":user/" not in value:
+                    problems.append(f"{name} sets {line}, not DSA's user build fingerprint")
+            if key == "ro.build.characteristics" and value != make_image.CHARACTERISTICS:
+                problems.append(f"{name} sets {line}, not {make_image.CHARACTERISTICS}")
+            if (m or make_image.FINGERPRINT_KEY.match(key) or key.startswith("ro.build.")) and any(
+                    old in value for old in ("Cuttlefish", "vsoc_", "aosp_cf_", "userdebug")):
+                problems.append(f"{name} still names Cuttlefish's build in {line}")
+    product_props = z.read(make_image.PRODUCT_PROP_FILE).decode() if make_image.PRODUCT_PROP_FILE in names else ""
+    if f"ro.build.characteristics={make_image.CHARACTERISTICS}" not in product_props.splitlines():
+        problems.append(f"{make_image.PRODUCT_PROP_FILE} does not set ro.build.characteristics={make_image.CHARACTERISTICS}")
+    for key in make_image.IDENTITY_IMPORTS:
+        if f"import {make_image.RAMDISK_PROP} {key}" not in product_props.splitlines():
+            problems.append(f"{make_image.PRODUCT_PROP_FILE} does not import {key} from the identity the boot carries")
+    print(f"device identity checked in {len(identity_files)} property files")
+
+identity = manifest.get("identity") or {}
+if not all(identity.get(k) for k in ("release", "id", "incremental", "tags")):
+    problems.append(f"image.json does not name the build's release, ID, incremental version and tags: {identity}")
+
 disks_to_check = [d for d in ["system.vhdx", "data.vhdx"] if (image / d).exists()]
 if not disks_to_check and (image / "disk.vhdx").exists():
     disks_to_check = ["disk.vhdx"]

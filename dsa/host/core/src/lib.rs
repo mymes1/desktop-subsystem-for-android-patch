@@ -52,6 +52,7 @@ pub mod camera;
 pub mod clipboard;
 pub mod clock_trace;
 pub mod compositor;
+pub mod device_identity;
 pub mod diagnostics;
 pub mod files;
 pub mod guest_display;

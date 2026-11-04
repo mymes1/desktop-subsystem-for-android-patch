@@ -1646,3 +1646,105 @@ fn fr12_dsa_widgets_says_why_a_widget_was_not_placed() {
     let output = dsa(&endpoint, "widgets remove 77");
     assert_eq!(output.status.code(), Some(1));
 }
+
+fn identity_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> RunningService {
+    use dsa_host_core::device_identity::{ImageBuild, MemoryDeviceIdentities};
+    use dsa_host_core::host_api::HostApiService;
+    let build = ImageBuild {
+        release: "16".into(),
+        id: "BP2A".into(),
+        incremental: "1.dsaab".into(),
+        tags: "release-keys".into(),
+    };
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_device_identities(
+            Arc::new(MemoryDeviceIdentities::default()),
+            Arc::new(move |_: &str| Some(build.clone())),
+        );
+    RunningService::start_service(listener, service)
+}
+
+fn dsa_words(endpoint: &str, words: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_dsa"))
+        .args(words)
+        .args([endpoint_flag(), endpoint])
+        .output()
+        .expect("running dsa")
+}
+
+#[test]
+fn fr17_dsa_settings_device_fields_are_parsed() {
+    use dsa_cli::Change;
+    use dsa_host_core::device_identity::Field;
+    let words = ["settings", "set", "device.model", "My tablet"].map(String::from);
+    assert_eq!(
+        parse(&words).unwrap().change,
+        Some(Change::Device(Field::Model, "My tablet".into()))
+    );
+    assert_eq!(
+        parse(&args("settings set device.fingerprint.type userdebug"))
+            .unwrap()
+            .change,
+        Some(Change::Device(Field::FingerprintType, "userdebug".into()))
+    );
+    assert_eq!(
+        parse(&args("settings reset device")).unwrap().change,
+        Some(Change::ResetDevice(None))
+    );
+    assert_eq!(
+        parse(&args("settings reset device.brand")).unwrap().change,
+        Some(Change::ResetDevice(Some(Field::Brand)))
+    );
+    assert_eq!(
+        parse(&args("settings device --json")).unwrap().change,
+        Some(Change::ShowDevice)
+    );
+    assert!(parse(&args("settings set device.serial X")).is_err());
+    assert!(parse(&args("settings set device.brand two/parts")).is_err());
+    assert!(parse(&args("settings reset gpu")).is_err());
+}
+
+#[test]
+fn fr17_dsa_changes_and_resets_the_device_identity_through_the_service() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = identity_service(listener);
+    let shown = json_of(&dsa(&endpoint, "settings device --json"));
+    assert_eq!(shown["effective"]["model"], "Desktop Subsystem for Android");
+    assert_eq!(shown["effective"]["manufacturer"], "thisisthepy");
+    assert_eq!(shown["chosen"]["model"], "");
+
+    let changed = json_of(&dsa_words(
+        &endpoint,
+        &["settings", "set", "device.model", "My tablet", "--json"],
+    ));
+    assert_eq!(changed["chosen"]["model"], "My tablet");
+    assert_eq!(changed["effective"]["model"], "My tablet");
+    let changed = json_of(&dsa(&endpoint, "settings set device.brand mine --json"));
+    assert_eq!(
+        changed["effective"]["model"], "My tablet",
+        "one change keeps the others"
+    );
+    assert_eq!(
+        changed["effective"]["fingerprint"],
+        "mine/dsa_x86_64/dsa_x86_64:16/BP2A/1.dsaab:user/release-keys"
+    );
+
+    let refused = dsa(&endpoint, "settings set device.fingerprint not-one");
+    assert_eq!(refused.status.code(), Some(2), "refused before it is sent");
+    assert!(
+        stderr(&refused).contains("fingerprint"),
+        "{}",
+        stderr(&refused)
+    );
+
+    let reset = json_of(&dsa(&endpoint, "settings reset device.brand --json"));
+    assert_eq!(reset["effective"]["brand"], "DSA");
+    assert_eq!(reset["chosen"]["model"], "My tablet");
+    let reset = json_of(&dsa(&endpoint, "settings reset device --json"));
+    assert_eq!(reset["effective"]["model"], "Desktop Subsystem for Android");
+
+    let text = dsa(&endpoint, "settings device");
+    assert!(text.status.success(), "{}", stderr(&text));
+    assert!(stdout(&text).contains("model: Desktop Subsystem for Android"));
+    assert!(stdout(&text).contains("next start"));
+}

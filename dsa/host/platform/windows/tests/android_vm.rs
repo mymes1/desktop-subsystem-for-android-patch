@@ -56,6 +56,43 @@ fn fr2_a_vm_that_cannot_start_is_reported_and_nothing_is_left_running() {
 }
 
 #[test]
+fn fr17_the_boot_initrd_carries_a_changed_device_identity_before_the_bootconfig() {
+    use dsa_host_windows::android_vm::write_boot_initrd;
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("boot-identity");
+    std::fs::create_dir_all(&dir).unwrap();
+    let initrd = dir.join("initrd.img");
+    std::fs::write(&initrd, b"ramdisk").unwrap();
+
+    let with = dir.join("with.initrd");
+    let file = write_boot_initrd(
+        &initrd,
+        Some("ro.product.model=My tablet\n"),
+        &secret(),
+        "",
+        &with,
+    )
+    .unwrap();
+    let data = std::fs::read(&with).unwrap();
+    assert!(
+        data.starts_with(b"ramdisk\x00070701"),
+        "padded to four bytes"
+    );
+    let at = |needle: &[u8]| data.windows(needle.len()).position(|w| w == needle);
+    let props = at(b"ro.product.model=My tablet\n").expect("the identity is in the initrd");
+    let config = at(b"#BOOTCONFIG\n").expect("the bootconfig still ends it");
+    assert!(at(b"system/etc/ramdisk/build.prop").is_some());
+    assert!(props < config);
+    drop(file);
+    assert!(!with.exists(), "the copy goes once the VM has read it");
+
+    let without = dir.join("without.initrd");
+    let _file = write_boot_initrd(&initrd, None, &secret(), "", &without).unwrap();
+    let data = std::fs::read(&without).unwrap();
+    assert!(data.starts_with(b"ramdisk"));
+    assert!(!data.windows(6).any(|w| w == b"070701"), "nothing added");
+}
+
+#[test]
 fn fr2_an_invalid_configuration_is_refused_before_hcs_is_called() {
     let mut config = missing_files();
     config.processors = 0;
@@ -118,7 +155,7 @@ fn fr27_an_arm64_boot_gets_a_folder_of_its_own_with_the_kernel_and_the_initrd() 
     config.kernel = image.join("Image");
     std::fs::write(&config.kernel, b"MZ kernel").unwrap();
 
-    let boot = prepare_boot(GuestArch::Arm64, &mut config, &secret(), "", &boot_dir, "dsa-7-0")
+    let boot = prepare_boot(GuestArch::Arm64, &mut config, None, &secret(), "", &boot_dir, "dsa-7-0")
         .expect("the boot folder is written");
     let folder = boot_dir.join("dsa-7-0");
     assert_eq!(config.kernel, folder.join("Image"));
@@ -156,7 +193,7 @@ fn fr27_an_x86_64_boot_keeps_its_initrd_beside_the_others() {
     std::fs::create_dir_all(&boot_dir).unwrap();
     let mut config = missing_files();
     let kernel = config.kernel.clone();
-    let boot = prepare_boot(GuestArch::X86_64, &mut config, &secret(), "", &boot_dir, "dsa-7-1")
+    let boot = prepare_boot(GuestArch::X86_64, &mut config, None, &secret(), "", &boot_dir, "dsa-7-1")
         .expect("the initrd is written");
     assert_eq!(config.kernel, kernel, "booted from where it is");
     assert_eq!(boot.initrd(), boot_dir.join("dsa-7-1.initrd"));

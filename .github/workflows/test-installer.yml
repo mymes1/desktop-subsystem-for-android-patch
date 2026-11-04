@@ -233,6 +233,11 @@ jobs:
           $again = & $dsa settings --json | ConvertFrom-Json
           if ($again.render_gpu -ne 'discrete') { throw "the service did not keep the render GPU" }
           & $dsa settings set render-gpu display --json | Out-Null
+          # The device identity is kept by the installed service, per user, and resets.
+          $identity = & $dsa settings set device.model "CI tablet" --json | ConvertFrom-Json
+          if ($identity.effective.model -ne 'CI tablet') { throw "the service did not keep the device model" }
+          $identity = & $dsa settings reset device --json | ConvertFrom-Json
+          if ($identity.effective.model -ne 'Desktop Subsystem for Android') { throw "resetting the device identity did not restore the default model" }
           $memory = & $dsa memory --json
           if ($LASTEXITCODE -ne 0) { throw "dsa memory failed: $memory" }
           Write-Host $memory
@@ -249,7 +254,7 @@ jobs:
           # The app opens on the page --page names, so each picture is of one fresh start.
           foreach ($theme in 'light', 'dark') {
             Set-AppTheme -Dark:($theme -eq 'dark')
-            foreach ($page in 'general', 'memory', 'display', 'updates', 'advanced', 'about') {
+            foreach ($page in 'general', 'memory', 'display', 'updates', 'advanced', 'device', 'about') {
               $app = Start-Process $exe -ArgumentList '--page', $page -PassThru
               $window = Wait-ProcessWindow $app.Id 90
               if (-not $window) {

@@ -835,10 +835,116 @@ def tag_build_version(key, value, build_tag):
     return value
 
 
-def edit_props(text, codec2=False, vendor=False, build_tag=None):
-    """Returns a build.prop with DSA's properties. With `vendor`, it is one init reads as
-    vendor_init, which gets only the properties vendor_init may set. With `build_tag`, the
-    incremental version and the fingerprints carry it."""
+# The device identity the image reports instead of Cuttlefish's. A user may change it from the
+# settings; the host then hands the guest a property file in the boot's initrd, which first
+# stage init keeps for the second stage at RAMDISK_PROP, and the product build.prop, which
+# init reads last, ends with imports that take the identity properties from it.
+IDENTITY = {
+    "brand": "DSA",
+    "manufacturer": "thisisthepy",
+    "model": "Desktop Subsystem for Android",
+    "device": "dsa_x86_64",
+    "name": "dsa_x86_64",
+}
+# Large-screen layouts without keeping phone apps out: apps pick their layout from the
+# window's size, and AOSP's tablet configurations use this value.
+CHARACTERISTICS = "tablet"
+BUILD_TYPE = "user"
+PRODUCT_KEY = re.compile(r"^ro\.product\.(?:([a-z_]+)\.)?(brand|manufacturer|model|device|name)$")
+RAMDISK_PROP = "/second_stage_resources/system/etc/ramdisk/build.prop"
+IDENTITY_PARTITIONS = ["system", "system_ext", "vendor", "product", "odm", "vendor_dlkm",
+                       "odm_dlkm", "system_dlkm"]
+IDENTITY_IMPORTS = [
+    "ro.product.*",
+    "ro.build.characteristics",
+    "ro.build.product",
+    "ro.build.flavor",
+    "ro.build.description",
+    "ro.build.fingerprint",
+    *(f"ro.{p}.build.fingerprint" for p in IDENTITY_PARTITIONS),
+]
+# Read only for DSA's identity, not for the rest of what edit_props sets: the dlkm partitions'
+# files and the generic ramdisk's, which first stage init hands the second stage.
+IDENTITY_PROP_FILES = {
+    "VENDOR_DLKM/etc/build.prop",
+    "ODM_DLKM/etc/build.prop",
+    "SYSTEM_DLKM/etc/build.prop",
+    "INIT_BOOT/RAMDISK/system/etc/ramdisk/build.prop",
+    "BOOT/RAMDISK/system/etc/ramdisk/build.prop",
+}
+PRODUCT_PROP_FILE = "PRODUCT/etc/build.prop"
+
+
+def identity_value(key, value):
+    """Returns a build property's value with DSA's device identity in place of the build's."""
+    m = PRODUCT_KEY.match(key)
+    if m:
+        return IDENTITY[m.group(2)]
+    if key == "ro.build.characteristics":
+        return CHARACTERISTICS
+    if key == "ro.build.product":
+        return IDENTITY["device"]
+    if key == "ro.build.flavor":
+        return f"{IDENTITY['name']}-{BUILD_TYPE}"
+    if key == "ro.build.description":
+        # flavor release id incremental tags
+        words = value.split(" ")
+        return " ".join([f"{IDENTITY['name']}-{BUILD_TYPE}", *words[1:]])
+    if key == "ro.build.display.id":
+        # A user build shows only the build ID; Cuttlefish's says its flavor first.
+        words = value.split(" ")
+        return words[2] if len(words) >= 3 and "-" in words[0] else value
+    if FINGERPRINT_KEY.match(key) and value.count(":") == 2 and value.count("/") == 5:
+        # brand/name/device:release/id/incremental:type/tags
+        _, build, kind = value.split(":")
+        tags = kind.split("/", 1)[1]
+        return f"{IDENTITY['brand']}/{IDENTITY['name']}/{IDENTITY['device']}:{build}:{BUILD_TYPE}/{tags}"
+    return value
+
+
+def edit_identity(text, build_tag=None):
+    """Returns a property file with DSA's device identity, and with `build_tag` in its
+    incremental version and fingerprints."""
+    out = []
+    for line in text.splitlines():
+        if "=" in line and not line.startswith("#"):
+            key, value = line.split("=", 1)
+            value = identity_value(key, value)
+            if build_tag:
+                value = tag_build_version(key, value, build_tag)
+            line = f"{key}={value}"
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def identity_imports(text):
+    """Returns the product build.prop ending with the imports that let the host's property
+    file, when the boot carries one, replace the identity of every partition."""
+    lines = text.splitlines()
+    if not any(line.startswith("ro.build.characteristics=") for line in lines):
+        lines.append(f"ro.build.characteristics={CHARACTERISTICS}")
+    lines.append("# The device identity chosen in DSA's settings, when the boot carries one.")
+    lines += [f"import {RAMDISK_PROP} {key}" for key in IDENTITY_IMPORTS]
+    return "\n".join(lines) + "\n"
+
+
+def image_identity(system_props):
+    """The parts of the image's fingerprint a user does not choose, for image.json."""
+    props = dict(line.split("=", 1) for line in system_props.splitlines()
+                 if "=" in line and not line.startswith("#"))
+    return {
+        "release": props.get("ro.build.version.release_or_codename") or props.get("ro.build.version.release", ""),
+        "id": props.get("ro.build.id", ""),
+        "incremental": props.get("ro.build.version.incremental", ""),
+        "tags": props.get("ro.build.tags", "release-keys"),
+    }
+
+
+def edit_props(text, codec2=False, vendor=False, build_tag=None, product=False):
+    """Returns a build.prop with DSA's properties and device identity. With `vendor`, it is one
+    init reads as vendor_init, which gets only the properties vendor_init may set. With
+    `build_tag`, the incremental version and the fingerprints carry it. With `product`, it ends
+    with the imports of the identity the user chose."""
     props_to_apply = {**USER_PROPS, **ADB_PROPS, **GRAPHICS_PROPS, **MEMORY_PROPS, **LOADER_PROPS, **FRP_PROPS,
                       **LOG_PROPS, **(CODEC2_PROPS if codec2 else {})}
     if vendor:
@@ -850,11 +956,15 @@ def edit_props(text, codec2=False, vendor=False, build_tag=None):
             continue
         if key.endswith("build.type"):
             line = f"{key}=user"
-        if build_tag and "=" in line and not line.startswith("#"):
-            line = f"{key}={tag_build_version(key, line.split('=', 1)[1], build_tag)}"
+        if "=" in line and not line.startswith("#"):
+            value = identity_value(key, line.split("=", 1)[1])
+            if build_tag:
+                value = tag_build_version(key, value, build_tag)
+            line = f"{key}={value}"
         out.append(line)
     out += [f"{k}={v}" for k, v in props_to_apply.items()]
-    return "\n".join(out) + "\n"
+    text = "\n".join(out) + "\n"
+    return identity_imports(text) if product else text
 
 
 # Wi-Fi's init script makes a kernel trace instance when boot completes, for WifiService to
@@ -1660,9 +1770,12 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 if name in PROP_FILES:
                     data = edit_props(data.decode(), codec2=has_codec2,
                                       vendor=name in VENDOR_PROP_FILES,
-                                      build_tag=build_tag).encode()
+                                      build_tag=build_tag,
+                                      product=name == PRODUCT_PROP_FILE).encode()
                     if name == ARM_TRANSLATION_PRODUCT_PROPS:
                         data = add_arm_translation_import(data.decode()).encode()
+                elif name in IDENTITY_PROP_FILES:
+                    data = edit_identity(data.decode(), build_tag=build_tag).encode()
                 elif name == WIFI_RC:
                     data = edit_wifi_rc(data.decode()).encode()
                 elif name.endswith(SETTINGS_APK):
@@ -2563,6 +2676,8 @@ def main():
         "build": int(spec["build_id"]) * 100 + spec.get("revision", 1),
         "source": {"branch": spec["branch"], "target": spec["target"], "arch": args.arch, "build_id": spec["build_id"], "revision": spec.get("revision", 1), "security_patch": spec["security_patch"]},
         "kernel_cmdline": cmdline,
+        # What the host needs to compose a fingerprint from a device identity the user chose.
+        "identity": image_identity(zipfile.ZipFile(signed).read("SYSTEM/build.prop").decode()),
         "files": {name: {"size": (out / name).stat().st_size, "sha256": sha256(out / name)} for name in files},
     }
     (out / "image.json").write_text(json.dumps(manifest, indent=2) + "\n")

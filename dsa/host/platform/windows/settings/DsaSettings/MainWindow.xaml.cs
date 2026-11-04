@@ -18,6 +18,7 @@ public partial class MainWindow : FluentWindow
         ["display"] = typeof(DisplayPage),
         ["updates"] = typeof(UpdatesPage),
         ["advanced"] = typeof(AdvancedPage),
+        ["device"] = typeof(DeviceIdentityPage),
         ["about"] = typeof(AboutPage),
         ["widgets"] = typeof(WidgetsPage),
         ["logs"] = typeof(LogsPage),
@@ -188,7 +189,7 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>The page to open with: <c>--page memory</c> (general, memory, display,
-    /// updates, advanced, about, widgets or logs) opens another than General.</summary>
+    /// updates, advanced, device, about, widgets or logs) opens another than General.</summary>
     private static Type StartPage()
     {
         var args = Environment.GetCommandLineArgs();

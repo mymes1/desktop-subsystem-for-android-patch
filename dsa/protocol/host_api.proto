@@ -1042,6 +1042,45 @@ message ArmTranslation {
   bool restart_needed = 7;
 }
 
+// Asks for the device identity of the caller's Android.
+message GetDeviceIdentity {}
+
+// Replaces the device identity of the caller's Android with `identity`. Android reads it when
+// it starts, so a change applies from its next start. A value the service does not accept
+// changes nothing and is answered with ERROR_CODE_INVALID_SETTING.
+message SetDeviceIdentity {
+  DeviceIdentity identity = 1;
+}
+
+// The names and build fingerprint Android reports to apps. An empty value is the image's own.
+message DeviceIdentity {
+  string manufacturer = 1;
+  string brand = 2;
+  string model = 3;
+  string device = 4;
+  // The product name.
+  string name = 5;
+  // ro.build.characteristics: comma-separated words such as "tablet".
+  string characteristics = 6;
+  // The whole fingerprint, brand/name/device:release/id/incremental:type/tags. When set it is
+  // the fingerprint, whatever the parts below say.
+  string fingerprint = 7;
+  string fingerprint_release = 8;
+  string fingerprint_id = 9;
+  string fingerprint_incremental = 10;
+  string fingerprint_type = 11;
+  string fingerprint_tags = 12;
+}
+
+// The answer to GetDeviceIdentity and SetDeviceIdentity.
+message DeviceIdentityReport {
+  // What the user chose; an empty value is the default.
+  DeviceIdentity chosen = 1;
+  // Every value as Android reports it from its next start. The fingerprint's release, build ID
+  // and incremental version are empty when the image does not say them.
+  DeviceIdentity effective = 2;
+}
+
 // Turns the connection into the accessibility tree of one of the caller's task windows, for a
 // host accessibility client (a screen reader, an inspection tool) that reads that window.
 // After the answer (Done), the service sends an AccessibilityTree each time the task's tree
@@ -1216,6 +1255,8 @@ message Request {
     InstallArmTranslation install_arm_translation = 72;
     GetArmTranslation get_arm_translation = 73;
     RemoveArmTranslation remove_arm_translation = 74;
+    GetDeviceIdentity get_device_identity = 80;
+    SetDeviceIdentity set_device_identity = 81;
   }
 }
 
@@ -1237,6 +1278,7 @@ message Response {
     Widgets widgets = 14;
     PackageState package_state = 15;
     ArmTranslation arm_translation = 16;
+    DeviceIdentityReport device_identity = 80;
   }
 }
 

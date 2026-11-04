@@ -6,13 +6,15 @@
 //!
 //! Each boot's secret reaches the guest as a bootconfig appended to a copy of the image's
 //! initrd. The copy exists only while the VM starts: the VM has read it by the time it runs,
-//! and it is deleted then.
+//! and it is deleted then. The user's device identity, when they changed it, travels in the
+//! same copy, as a property file in an archive between the image's initrd and the bootconfig.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use dsa_host_core::bootconfig;
+use dsa_host_core::device_identity::{append_overlay, ramdisk_overlay};
 use dsa_host_core::session::{GuestLauncher, GuestStall};
 use dsa_protocol::auth::{bootconfig_entry, BootSecret};
 
@@ -69,11 +71,16 @@ pub struct AndroidVmLauncher {
     memory_base: Option<u64>,
     /// More bootconfig for each boot, beside the secret.
     bootconfig: Option<BootconfigSource>,
+    /// The properties each boot hands Android in its initrd, if any.
+    boot_properties: Option<BootProperties>,
 }
 
 /// Supplies more bootconfig lines (`key = "value"`) for each boot. See
 /// [`AndroidVmLauncher::with_bootconfig`].
 pub type BootconfigSource = Box<dyn FnMut() -> String + Send>;
+
+/// See [`AndroidVmLauncher::with_boot_properties`].
+pub type BootProperties = Box<dyn FnMut(&AndroidVmConfig) -> Option<String> + Send>;
 
 /// See [`AndroidVmLauncher::with_prerequisite`].
 pub type Prerequisite = Box<dyn FnMut() -> Option<String> + Send>;
@@ -83,7 +90,7 @@ pub type Prerequisite = Box<dyn FnMut() -> Option<String> + Send>;
 pub type MemoryMax = Arc<Mutex<Option<u64>>>;
 
 /// A file that is removed when this is dropped.
-struct TransientFile(PathBuf);
+pub struct TransientFile(pub PathBuf);
 
 impl Drop for TransientFile {
     fn drop(&mut self) {
@@ -91,16 +98,21 @@ impl Drop for TransientFile {
     }
 }
 
-/// Writes `initrd` with `secret` and `more` appended as bootconfig to `path`, readable only
-/// by the account the host runs as until the VM is let in.
-fn write_boot_initrd(
+/// Writes `initrd`, then `properties` as Android's ramdisk property file when there are any,
+/// with `secret` and `more` appended as bootconfig, to `path`, readable only by the account
+/// the host runs as until the VM is let in.
+pub fn write_boot_initrd(
     initrd: &Path,
+    properties: Option<&str>,
     secret: &BootSecret,
     more: &str,
     path: &Path,
 ) -> Result<TransientFile, String> {
-    let image = std::fs::read(initrd)
+    let mut image = std::fs::read(initrd)
         .map_err(|e| format!("could not read the initrd {}: {e}", initrd.display()))?;
+    if let Some(properties) = properties {
+        image = append_overlay(&image, &ramdisk_overlay(properties));
+    }
     if let Some(folder) = path.parent() {
         std::fs::create_dir_all(folder)
             .map_err(|e| format!("could not create {}: {e}", folder.display()))?;
@@ -157,6 +169,7 @@ impl BootFiles {
 pub fn prepare_boot(
     arch: GuestArch,
     config: &mut AndroidVmConfig,
+    properties: Option<&str>,
     secret: &BootSecret,
     more: &str,
     boot_dir: &Path,
@@ -194,7 +207,7 @@ pub fn prepare_boot(
     } else {
         boot_dir.join(format!("{unique}.initrd"))
     };
-    let written = write_boot_initrd(&initrd, secret, more, &initrd_path)?;
+    let written = write_boot_initrd(&initrd, properties, secret, more, &initrd_path)?;
     config.initrd = Some(initrd_path);
     Ok(BootFiles {
         initrd: written,
@@ -227,6 +240,7 @@ impl AndroidVmLauncher {
             memory_max: MemoryMax::default(),
             memory_base: None,
             bootconfig: None,
+            boot_properties: None,
         }
     }
 
@@ -243,6 +257,13 @@ impl AndroidVmLauncher {
     /// installed ARM translation package.
     pub fn with_bootconfig(mut self, source: BootconfigSource) -> AndroidVmLauncher {
         self.bootconfig = Some(source);
+        self
+    }
+
+    /// Asks `properties` at every start for the property file to hand Android in the boot's
+    /// initrd: the user's device identity, which Android reads once while it boots.
+    pub fn with_boot_properties(mut self, properties: BootProperties) -> AndroidVmLauncher {
+        self.boot_properties = Some(properties);
         self
     }
 
@@ -357,9 +378,14 @@ impl GuestLauncher for AndroidVmLauncher {
         // Removed on every way out of this function: by then the VM has read them or will
         // never run.
         let more = self.bootconfig.as_mut().map(|source| source()).unwrap_or_default();
+        let properties = self
+            .boot_properties
+            .as_mut()
+            .and_then(|properties| properties(&config));
         let boot = prepare_boot(
             GuestArch::HOST,
             &mut config,
+            properties.as_deref(),
             secret,
             &more,
             &self.boot_dir,
