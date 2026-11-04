@@ -13,7 +13,7 @@
 
   The files follow one layout. The machine's folder (DATAFOLDER, %ProgramData%\DSA by
   default): dsa-hostd.json, images\, updates\, settings\, logs\, tmp\. Each user's
-  %LOCALAPPDATA%\DSA: android.vhdx, android.image-version, apps\, notifications\, logs\,
+  %LOCALAPPDATA%\DSA: android.vhdx, android.image-version, pstore.vhd, apps\, notifications\, logs\,
   compositor.json, monitors.txt, start-menu.json, tmp\. The Windows host's paths module (src\paths.rs) is
   the one place that builds them. The settings app (DSA Settings) goes in the program folder's
   settings folder, with a Start menu shortcut.

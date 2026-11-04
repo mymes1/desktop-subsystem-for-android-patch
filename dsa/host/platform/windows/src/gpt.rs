@@ -179,7 +179,7 @@ pub fn copy_partitions(
 }
 
 /// CRC-32 (IEEE, reflected), the checksum of a GPT header and of its entries.
-fn crc32(bytes: &[u8]) -> u32 {
+pub(crate) fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = !0u32;
     for &b in bytes {
         crc ^= b as u32;

@@ -253,6 +253,14 @@ impl GuestLauncher for AndroidVmLauncher {
         }
         config.fine_grained_memory =
             windows_build().is_some_and(|(build, ubr)| fine_grained_memory_supported(build, ubr));
+        // The guest kernel's last log of the boot before is on this disk; one that is missing
+        // or damaged is made again, empty, and Android starts either way.
+        if let Some(pstore) = &config.pstore_disk {
+            if let Err(why) = crate::pstore_disk::ensure(pstore) {
+                eprintln!("{why}; Android starts without its last log");
+                config.pstore_disk = None;
+            }
+        }
         let document = config
             .to_hcs_document()
             .map_err(|e| e.to_string())?
@@ -261,7 +269,10 @@ impl GuestLauncher for AndroidVmLauncher {
             ComputeSystem::create(&self.id, &document, CALL_TIMEOUT).map_err(|e| e.to_string())?;
         // The VM opens its disk when it starts. A disk in the user's profile admits only the
         // user, SYSTEM and administrators, so the VM is let in to that one file first.
-        for path in [&config.data_disk, &boot_initrd.0] {
+        for path in [Some(&config.data_disk), Some(&boot_initrd.0), config.pstore_disk.as_ref()]
+            .into_iter()
+            .flatten()
+        {
             grant_vm_access(&self.id, path).map_err(|e| {
                 format!(
                     "the Android VM could not be given access to {}: {e}",

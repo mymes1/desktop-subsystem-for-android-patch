@@ -82,9 +82,36 @@ mod daemon {
     /// crashed, and Android's last log lines.
     struct Pstore;
 
+    const PSTORE: &str = "/sys/fs/pstore";
+
     impl DiagnosticFiles for Pstore {
         fn files(&self) -> Vec<(String, Result<Vec<u8>, String>)> {
-            files_in(std::path::Path::new("/sys/fs/pstore"), "android/pstore")
+            files_in(std::path::Path::new(PSTORE), "android/pstore")
+        }
+
+        /// Unlinking a pstore file erases its record from the pstore disk. Android's init
+        /// leaves the folder to system, this daemon's user, without write access (0550), so
+        /// the daemon gives itself that first.
+        fn delivered(&self, names: &[String]) {
+            use std::os::unix::fs::PermissionsExt;
+            if names.is_empty() {
+                return;
+            }
+            let dir = std::path::Path::new(PSTORE);
+            let writable = std::fs::Permissions::from_mode(0o750);
+            if let Err(why) = std::fs::set_permissions(dir, writable) {
+                eprintln!("dsa-channeld: {PSTORE} cannot be cleared: {why}");
+                return;
+            }
+            for name in names {
+                let Some(file) = name.strip_prefix("android/pstore/") else {
+                    continue;
+                };
+                let path = std::path::Path::new(PSTORE).join(file);
+                if let Err(why) = std::fs::remove_file(&path) {
+                    eprintln!("dsa-channeld: {} was not cleared: {why}", path.display());
+                }
+            }
         }
     }
 
