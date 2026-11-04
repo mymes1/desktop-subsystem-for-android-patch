@@ -126,6 +126,13 @@ pub struct LaunchApp {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
 }
+/// Host to guest: the user's Stop. The agent ends every process of the app, even one a
+/// placed widget or a foreground service keeps running, and the guest gives the memory back.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StopApp {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+}
 /// Host to guest: the user resized the task's window; the task takes the window's client
 /// size, in guest display pixels. Only the latest size counts: during a live resize the host
 /// sends the size it has now, not every size it passed through. The agent keeps the task
@@ -176,12 +183,10 @@ pub struct AppInfo {
     #[prost(bytes = "vec", tag = "3")]
     pub icon_png: ::prost::alloc::vec::Vec<u8>,
 }
-/// Guest to host, from the agent: an app a launcher lists is installed in the guest, or
-/// something about it changed: its name, icon, version or size. The host shows it in its own
-/// start menu and its list of installed apps. The agent sends it on each connection for every
-/// such app, and again whenever the app is installed again or updated, or the host asks
-/// (RefreshApps) and the app's sizes changed; the InstalledApps that follows says which apps
-/// are still there.
+/// Guest to host, from the agent: an app a launcher lists is installed in the guest, or its
+/// name or icon changed. The host shows it in its own start menu. The agent sends it on each
+/// connection for every such app, and again whenever the app is installed again or updated;
+/// the InstalledApps that follows says which apps are still there.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct InstalledApp {
     #[prost(string, tag = "1")]
@@ -193,62 +198,6 @@ pub struct InstalledApp {
     /// when the app has no icon the agent could draw.
     #[prost(bytes = "vec", tag = "3")]
     pub icon_png: ::prost::alloc::vec::Vec<u8>,
-    /// The installed version, as the package manager reports it.
-    #[prost(string, tag = "4")]
-    pub version_name: ::prost::alloc::string::String,
-    #[prost(int64, tag = "5")]
-    pub version_code: i64,
-    /// When the app was first installed and last updated, in milliseconds since the Unix epoch.
-    #[prost(uint64, tag = "6")]
-    pub first_install_time_ms: u64,
-    #[prost(uint64, tag = "7")]
-    pub last_update_time_ms: u64,
-    /// True for an app that is part of the Android image, which cannot be uninstalled.
-    #[prost(bool, tag = "8")]
-    pub system_app: bool,
-    /// The storage the app takes, in bytes: its code, its data and its cache. Zero when the
-    /// agent could not read them.
-    #[prost(uint64, tag = "9")]
-    pub app_bytes: u64,
-    #[prost(uint64, tag = "10")]
-    pub data_bytes: u64,
-    #[prost(uint64, tag = "11")]
-    pub cache_bytes: u64,
-}
-/// Host to guest: read the installed apps again, sizes included, and send the InstalledApp of
-/// each one that changed, then InstalledApps, even when nothing changed, so the host knows its
-/// list is fresh.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct RefreshApps {}
-/// Host to guest: open Android's own settings for an app (its permissions, storage and
-/// notifications) as a new task in its own window. An empty `package_name` opens the list of
-/// every installed app instead.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct OpenAppSettings {
-    #[prost(string, tag = "1")]
-    pub package_name: ::prost::alloc::string::String,
-}
-/// Host to guest: uninstall a user app. The agent does it through the package installer and
-/// answers with UninstallResult of the same `request_id`.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct UninstallApp {
-    #[prost(uint32, tag = "1")]
-    pub request_id: u32,
-    #[prost(string, tag = "2")]
-    pub package_name: ::prost::alloc::string::String,
-}
-/// Guest to host, from the agent: how an UninstallApp went.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
-pub struct UninstallResult {
-    #[prost(uint32, tag = "1")]
-    pub request_id: u32,
-    #[prost(string, tag = "2")]
-    pub package_name: ::prost::alloc::string::String,
-    #[prost(enumeration = "UninstallStatus", tag = "3")]
-    pub status: i32,
-    /// The guest's own words, for the log and a bug report.
-    #[prost(string, tag = "4")]
-    pub message: ::prost::alloc::string::String,
 }
 /// Guest to host, from the agent: every app a launcher lists, by package, in package order.
 /// It follows the InstalledApp of each app it names that the host has not been told about on
@@ -598,6 +547,29 @@ pub struct GuestMemory {
     /// The processes with the largest proportional set size, largest first, at most 10.
     #[prost(message, repeated, tag = "14")]
     pub top_processes: ::prost::alloc::vec::Vec<ProcessMemory>,
+    /// What the kernel itself holds, from /proc/meminfo: slab it cannot free (SUnreclaim),
+    /// kernel stacks, page tables, vmalloc, per-CPU areas, and the contiguous memory area (CMA)
+    /// set aside for drivers.
+    #[prost(uint64, tag = "15")]
+    pub slab_unreclaimable_kb: u64,
+    #[prost(uint64, tag = "16")]
+    pub kernel_stack_kb: u64,
+    #[prost(uint64, tag = "17")]
+    pub page_tables_kb: u64,
+    #[prost(uint64, tag = "18")]
+    pub vmalloc_used_kb: u64,
+    #[prost(uint64, tag = "19")]
+    pub percpu_kb: u64,
+    #[prost(uint64, tag = "20")]
+    pub cma_total_kb: u64,
+    /// Huge pages reserved (HugePages_Total times Hugepagesize).
+    #[prost(uint64, tag = "21")]
+    pub hugetlb_kb: u64,
+    /// The memory the kernel was given, counted from its online memory blocks; what it gave to
+    /// MemTotal is this less what it reserved at boot (its own code, page structures, swiotlb,
+    /// pstore). 0 when the guest cannot read it.
+    #[prost(uint64, tag = "22")]
+    pub mem_online_kb: u64,
 }
 /// From the agent to the guest's control daemon, on each connection to it: the agent has
 /// subscribed and takes the host's frames. It stops at the daemon, which tells the host with
@@ -1281,7 +1253,7 @@ pub struct DiagnosticsDone {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 50, 51, 52, 53, 54, 70, 71, 72, 73, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1375,14 +1347,6 @@ pub mod envelope {
         QueryPackage(super::QueryPackage),
         #[prost(message, tag = "66")]
         PackageState(super::PackageState),
-        #[prost(message, tag = "67")]
-        UninstallApp(super::UninstallApp),
-        #[prost(message, tag = "68")]
-        UninstallResult(super::UninstallResult),
-        #[prost(message, tag = "69")]
-        RefreshApps(super::RefreshApps),
-        #[prost(message, tag = "30")]
-        OpenAppSettings(super::OpenAppSettings),
         #[prost(message, tag = "50")]
         OpenLink(super::OpenLink),
         #[prost(message, tag = "51")]
@@ -1457,6 +1421,8 @@ pub mod envelope {
         DiagnosticsFile(super::DiagnosticsFile),
         #[prost(message, tag = "135")]
         DiagnosticsDone(super::DiagnosticsDone),
+        #[prost(message, tag = "136")]
+        StopApp(super::StopApp),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -1560,51 +1526,6 @@ impl RejectReason {
             "REJECT_REASON_UNEXPECTED_ROLE" => Some(Self::UnexpectedRole),
             "REJECT_REASON_MALFORMED_HELLO" => Some(Self::MalformedHello),
             "REJECT_REASON_AUTHENTICATION_FAILED" => Some(Self::AuthenticationFailed),
-            _ => None,
-        }
-    }
-}
-/// Whether an app was uninstalled, and if not, why. The reasons are stable, so the host can say
-/// in the user's language what went wrong; the message beside them gives the guest's own words.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum UninstallStatus {
-    Unspecified = 0,
-    /// The app is gone.
-    Success = 1,
-    /// No app of that package is installed.
-    NotInstalled = 2,
-    /// The app is part of the Android image; only apps the user installed can be uninstalled.
-    SystemApp = 3,
-    /// Android refused: the app is a device administrator, or a policy keeps it.
-    Blocked = 4,
-    /// Anything else. The message says what.
-    Other = 5,
-}
-impl UninstallStatus {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::Unspecified => "UNINSTALL_STATUS_UNSPECIFIED",
-            Self::Success => "UNINSTALL_STATUS_SUCCESS",
-            Self::NotInstalled => "UNINSTALL_STATUS_NOT_INSTALLED",
-            Self::SystemApp => "UNINSTALL_STATUS_SYSTEM_APP",
-            Self::Blocked => "UNINSTALL_STATUS_BLOCKED",
-            Self::Other => "UNINSTALL_STATUS_OTHER",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "UNINSTALL_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
-            "UNINSTALL_STATUS_SUCCESS" => Some(Self::Success),
-            "UNINSTALL_STATUS_NOT_INSTALLED" => Some(Self::NotInstalled),
-            "UNINSTALL_STATUS_SYSTEM_APP" => Some(Self::SystemApp),
-            "UNINSTALL_STATUS_BLOCKED" => Some(Self::Blocked),
-            "UNINSTALL_STATUS_OTHER" => Some(Self::Other),
             _ => None,
         }
     }

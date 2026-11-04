@@ -1690,6 +1690,9 @@ impl Session {
             TaskRequest::Launch { package_name } => {
                 Body::LaunchApp(control::LaunchApp { package_name })
             }
+            TaskRequest::StopApp { package_name } => {
+                Body::StopApp(control::StopApp { package_name })
+            }
             TaskRequest::Resize {
                 task_id,
                 width,
@@ -3925,6 +3928,7 @@ impl Worker {
             | Some(Body::RefreshApps(_))
             | Some(Body::OpenAppSettings(_))
             | Some(Body::RequestGuestMemory(_))
+            | Some(Body::StopApp(_))
             | Some(Body::ListWidgetProviders(_))
             | Some(Body::AddWidget(_))
             | Some(Body::RemoveWidget(_))

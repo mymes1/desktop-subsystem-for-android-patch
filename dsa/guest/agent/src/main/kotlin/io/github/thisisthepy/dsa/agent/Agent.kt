@@ -32,6 +32,8 @@ import io.github.thisisthepy.dsa.agent.links.GuestBrowser
 import io.github.thisisthepy.dsa.agent.links.Links
 import io.github.thisisthepy.dsa.agent.power.DevicePower
 import io.github.thisisthepy.dsa.agent.power.Lifecycle
+import io.github.thisisthepy.dsa.agent.memory.AppProcesses
+import io.github.thisisthepy.dsa.agent.memory.ClosedApps
 import io.github.thisisthepy.dsa.agent.memory.MemoryReporter
 import io.github.thisisthepy.dsa.agent.memory.MemorySource
 import io.github.thisisthepy.dsa.agent.notifications.NotificationForwarder
@@ -121,6 +123,7 @@ class Agent(
     packages: PackageInfoPort = PackageInfoPort.NONE,
     packageUninstaller: PackageUninstallerPort = PackageUninstallerPort.NONE,
     widgets: WidgetPlatform = WidgetPlatform.NONE,
+    appProcesses: AppProcesses = AppProcesses.NONE,
     widgetStore: WidgetStore = WidgetStore.memory(),
     accessibility: AccessibilitySource = AccessibilitySource.NONE,
     clock: () -> Long = { System.nanoTime() / 1_000_000 },
@@ -205,6 +208,15 @@ class Agent(
         log,
         isConnected = { channel.connected },
     )
+    private val closedApps = ClosedApps(
+        appProcesses,
+        hasPlacedWidget = { packageName ->
+            widgets.placedIds().any { id -> widgets.info(id)?.packageName == packageName }
+        },
+        scheduler = scheduler,
+        log = log,
+        clock = clock,
+    )
     private val freeform = FreeformSetup(windowing, scheduler, log)
     private val arranger = TaskArranger(actions, windowing::displaySize, log)
     private val installed = InstalledAppReporter(ownPackage) { frame -> channel.send(frame) }
@@ -226,6 +238,7 @@ class Agent(
     fun start() {
         scheduler.post {
             freeform.start()
+            closedApps.configure()
             try {
                 inputMethods.useHostInputMethod()
             } catch (e: Exception) {
@@ -326,6 +339,7 @@ class Agent(
     private fun onFrame(frame: ByteArray) {
         if (input(frame)) return
         if (memoryRequest(frame)) return
+        if (stopRequest(frame)) return
         if (diagnosticsCollector.handle(frame)) return
         if (linksOrFiles(frame)) return
         val result = try {
@@ -457,6 +471,26 @@ class Agent(
         return true
     }
 
+    /**
+     * Ends an app when the host says Stop (StopApp), even one a widget or a foreground service
+     * keeps running. False for any other frame.
+     */
+    private fun stopRequest(frame: ByteArray): Boolean {
+        val envelope = try {
+            Envelope.parseFrom(frame)
+        } catch (e: InvalidProtocolBufferException) {
+            return false
+        }
+        if (envelope.bodyCase != Envelope.BodyCase.STOP_APP) return false
+        val packageName = envelope.stopApp.packageName
+        if (packageName.isEmpty() || packageName == ownPackage) {
+            log.warn("the host asked to stop ${packageName.ifEmpty { "no app" }}, which is not an app it can stop")
+        } else {
+            closedApps.stop(packageName, force = true)
+        }
+        return true
+    }
+
     private fun requestRefresh() {
         if (refreshPending) return
         refreshPending = true
@@ -500,6 +534,7 @@ class Agent(
         }
         keys.retainTasks(reporter.reported)
         text.retainTasks(reporter.reported)
+        closedApps.tasks(reported.mapNotNull(reporter::reportedPackage).toSet())
     }
 
     /**
