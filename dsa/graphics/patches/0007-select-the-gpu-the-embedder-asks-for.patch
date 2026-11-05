@@ -20,7 +20,7 @@ index 5f8abc0c2..8cced45ec 100644
 +
 +const char* gpuPreferenceRuleName(GpuPreference::Rule rule) {
 +    switch (rule) {
-+        case GpuPreference::Rule::None:
++        case GpuPreference::Rule::BuiltIn:
 +            return "none";
 +        case GpuPreference::Rule::Luid:
 +            return "LUID";
@@ -42,7 +42,7 @@ index 5f8abc0c2..8cced45ec 100644
 +        return false;
 +    }
 +    switch (preference.rule) {
-+        case GpuPreference::Rule::None:
++        case GpuPreference::Rule::BuiltIn:
 +            return false;
 +        case GpuPreference::Rule::Luid:
 +            return idProps.deviceLUIDValid &&
@@ -86,7 +86,7 @@ index 5f8abc0c2..8cced45ec 100644
 +        preference = sGpuPreference;
 +        sGpuPreferenceMatched = -1;
 +    }
-+    if (preference.rule != GpuPreference::Rule::None) {
++    if (preference.rule != GpuPreference::Rule::BuiltIn) {
 +        for (int i = 0; i < physicalDeviceCount; ++i) {
 +            if (deviceMatchesGpuPreference(deviceInfos[i].hasGraphicsQueueFamily,
 +                                           deviceInfos[i].physdevProps, deviceInfos[i].idProps,
@@ -132,13 +132,13 @@ index 2deb2d597..3e62ad36b 100644
 +// queue can match it. When no device matches, the renderer chooses as if none was asked.
 +struct GpuPreference {
 +    enum class Rule {
-+        None,        // the built-in ranking
++        BuiltIn,     // the built-in ranking (not None, which X11/X.h defines as a macro)
 +        Luid,        // VkPhysicalDeviceIDProperties::deviceLUID equals `luid`
 +        Integrated,  // the first integrated GPU
 +        Discrete,    // the first discrete GPU
 +        Name,        // the first device whose name contains `name`, ignoring case
 +    };
-+    Rule rule = Rule::None;
++    Rule rule = Rule::BuiltIn;
 +    uint8_t luid[VK_LUID_SIZE] = {};
 +    std::string name;
 +};
