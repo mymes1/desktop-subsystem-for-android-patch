@@ -140,7 +140,7 @@ jobs:
             Wait-SetupControl InstallButton -Enabled | Out-Null
             Save-SetupScreen "$PWD\screens\$theme-install.png"
             $publisher = Get-SetupText HeroPublisher
-            if ($publisher -cne 'Thisisthepy') { throw "the first screen names the publisher '$publisher', not Thisisthepy" }
+            if ($publisher -cne 'ThisIsThePy') { throw "the first screen names the publisher '$publisher', not ThisIsThePy" }
             if ($theme -eq 'light') { Copy-Item "screens\light-install.png" setup-screen.png }
             Invoke-SetupButton ChangeButton
             Wait-SetupControl ProgramFolderBox | Out-Null
@@ -183,7 +183,7 @@ jobs:
           if ($service.Status -ne 'Running') { throw "DsaHost is $($service.Status)" }
           $entry = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' |
             Where-Object { $_.DisplayName -eq 'Desktop Subsystem for Android (test package)' } | Select-Object -First 1
-          if ($entry.Publisher -cne 'Thisisthepy') { throw "the package names its publisher '$($entry.Publisher)', not Thisisthepy" }
+          if ($entry.Publisher -cne 'ThisIsThePy') { throw "the package names its publisher '$($entry.Publisher)', not ThisIsThePy" }
           $out = & "$env:PROGRAM_DIR\dsa.exe" status 2>&1
           Write-Host $out
           if ($LASTEXITCODE -ne 0 -or -not ($out -match '^Android: Stopped')) { throw "dsa status: $out" }
@@ -662,7 +662,7 @@ jobs:
             Write-Host "$name : $($info.FileDescription) | $($info.ProductName) | $($info.CompanyName) | $($info.ProductVersion)"
             if ($info.FileDescription -cne $expected[$name]) { throw "$name calls itself '$($info.FileDescription)', not '$($expected[$name])'" }
             if ($info.ProductName -cne 'Desktop Subsystem for Android') { throw "$name names its product '$($info.ProductName)'" }
-            if ($info.CompanyName -cne 'Thisisthepy') { throw "$name names its company '$($info.CompanyName)'" }
+            if ($info.CompanyName -cne 'ThisIsThePy') { throw "$name names its company '$($info.CompanyName)'" }
             if ($info.ProductVersion -cne '0.0.9') { throw "$name says it is version '$($info.ProductVersion)', not 0.0.9" }
           }
           $display = (Get-Service DsaHost).DisplayName
