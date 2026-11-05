@@ -108,7 +108,42 @@ public sealed class DsaService
         Bool(json, "resize_trace"),
         Int(json, "memory_limit_mb"),
         Bool(json, "arm_translation", missing: true),
-        Bool(json, "stop_without_asking"));
+        Bool(json, "stop_without_asking"),
+        Bool(json, "advanced_networking"),
+        json.TryGetProperty("network", out var network) && network.ValueKind == JsonValueKind.Object
+            ? ReadNetwork(network)
+            : null);
+
+    private static IReadOnlyList<string> Strings(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array
+            ? value.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString() ?? "")
+                .ToList()
+            : Array.Empty<string>();
+
+    /// <summary>The network as <c>dsa network --json</c> and the settings print it.</summary>
+    public static NetworkInfo ReadNetwork(JsonElement json) => new(
+        OptionalString(json, "mode") switch
+        {
+            "nat" => NetworkMode.Nat,
+            "advanced" => NetworkMode.Advanced,
+            "off" => NetworkMode.Off,
+            _ => NetworkMode.Unknown,
+        },
+        Strings(json, "addresses"),
+        Strings(json, "dns_servers"),
+        String(json, "gateway"),
+        OptionalString(json, "problem") is { Length: > 0 } problem ? problem : null);
+
+    /// <summary>Android's network as it stands now.</summary>
+    public async Task<NetworkInfo> NetworkAsync() =>
+        ReadNetwork(await RunJsonAsync("network").ConfigureAwait(true));
+
+    /// <summary>Puts Android on this computer's network, or back behind NAT, from its next
+    /// start.</summary>
+    public Task<SettingsInfo> SetAdvancedNetworkingAsync(bool on) =>
+        SetAsync("advanced-networking", on ? "on" : "off");
 
     public async Task<SettingsInfo> SettingsAsync() =>
         ReadSettings(await RunJsonAsync("settings").ConfigureAwait(true));
