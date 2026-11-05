@@ -3,8 +3,8 @@
 use std::path::PathBuf;
 
 use dsa_host_macos::vhdx::{
-    convert_to_raw, guid_bytes, is_vhdx, layout, BAT_REGION, FILE_PARAMETERS,
-    LOGICAL_SECTOR_SIZE, METADATA_REGION, VIRTUAL_DISK_SIZE,
+    convert_to_raw, guid_bytes, is_vhdx, layout, BAT_REGION, FILE_PARAMETERS, LOGICAL_SECTOR_SIZE,
+    METADATA_REGION, VIRTUAL_DISK_SIZE,
 };
 
 const MIB: usize = 1 << 20;
@@ -46,7 +46,10 @@ fn small_vhdx(log: bool) -> Vec<u8> {
     put(&mut file, meta, b"metadata");
     put(&mut file, meta + 10, &3u16.to_le_bytes());
     let items: [(&str, Vec<u8>); 3] = [
-        (FILE_PARAMETERS, [(MIB as u32).to_le_bytes(), 0u32.to_le_bytes()].concat()),
+        (
+            FILE_PARAMETERS,
+            [(MIB as u32).to_le_bytes(), 0u32.to_le_bytes()].concat(),
+        ),
         (VIRTUAL_DISK_SIZE, (3 * MIB as u64).to_le_bytes().to_vec()),
         (LOGICAL_SECTOR_SIZE, 512u32.to_le_bytes().to_vec()),
     ];

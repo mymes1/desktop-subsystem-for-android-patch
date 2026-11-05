@@ -89,11 +89,12 @@ mod macos {
                 dsa_host_macos::service::serve(config, &home, &build, stop)
             }
             Some("install-agent") => {
-                let program = std::env::current_exe()
-                    .map_err(|e| format!("finding this program: {e}"))?;
+                let program =
+                    std::env::current_exe().map_err(|e| format!("finding this program: {e}"))?;
                 let config = args.get(1).map(PathBuf::from);
                 let uid = dsa_host_unix::socket::current_uid();
-                let plist = dsa_host_macos::launchd::install(&home, uid, &program, config.as_deref())?;
+                let plist =
+                    dsa_host_macos::launchd::install(&home, uid, &program, config.as_deref())?;
                 println!("installed and started {}", plist.display());
                 Ok(())
             }

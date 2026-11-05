@@ -18,8 +18,13 @@ fn fr2_the_console_is_the_virtio_console() {
     let cmdline = for_virtualization_framework(HYPER_V_CMDLINE, "", false);
     let words: Vec<&str> = cmdline.split_whitespace().collect();
     assert_eq!(words[0], CONSOLE);
-    assert_eq!(words.iter().filter(|w| w.starts_with("console=")).count(), 1);
-    assert!(!words.iter().any(|w| w.starts_with("8250.") || w.starts_with("earlycon")));
+    assert_eq!(
+        words.iter().filter(|w| w.starts_with("console=")).count(),
+        1
+    );
+    assert!(!words
+        .iter()
+        .any(|w| w.starts_with("8250.") || w.starts_with("earlycon")));
     assert_eq!(words.iter().filter(|w| w.starts_with("panic=")).count(), 1);
 }
 
@@ -39,8 +44,15 @@ fn fr2_android_finds_its_partitions_on_every_pci_slot() {
 #[test]
 fn fr2_the_rest_of_the_image_command_line_is_kept_in_order() {
     let cmdline = for_virtualization_framework(HYPER_V_CMDLINE, "androidboot.extra=1", true);
-    let at = |word: &str| cmdline.find(word).unwrap_or_else(|| panic!("{word} is missing"));
-    assert!(at("init=/init") < at("blkdevparts=") && at("blkdevparts=") < at("androidboot.hardware=cutf_cvm"));
+    let at = |word: &str| {
+        cmdline
+            .find(word)
+            .unwrap_or_else(|| panic!("{word} is missing"))
+    };
+    assert!(
+        at("init=/init") < at("blkdevparts=")
+            && at("blkdevparts=") < at("androidboot.hardware=cutf_cvm")
+    );
     assert!(at("androidboot.hardware=cutf_cvm") < at("androidboot.extra=1"));
     // The pstore disk's settings appear once, from the host.
     assert_eq!(cmdline.matches("pstore_blk.blkdev=").count(), 1);
@@ -90,7 +102,9 @@ fn fr14_an_image_of_two_disks_shares_its_system_disk_and_templates_the_users() {
     assert_eq!(files.disk_template, dir.join("data.vhdx"));
     assert_eq!(files.kernel_cmdline, "init=/init");
     // An image for the other architecture is refused with the reason.
-    assert!(image_files(&dir, GuestArch::X86_64).unwrap_err().contains("arm64"));
+    assert!(image_files(&dir, GuestArch::X86_64)
+        .unwrap_err()
+        .contains("arm64"));
 }
 
 #[test]
