@@ -7,7 +7,7 @@
 #
 # The packages install the same things:
 #
-#   /usr/lib/dsa/bin/        dsa, dsa-hostd, dsa-devices and the other host programs
+#   /usr/lib/dsa/bin/        dsa, dsa-linux-hostd, dsa-devices and the other host programs
 #   /usr/bin/dsa             the command line client
 #   /usr/lib/dsa/vm/         the guest kernel (bzImage, or Image on arm64)
 #   /usr/lib/dsa/vm/image/   the Android image the first start uses, when one is given
@@ -156,7 +156,7 @@ install -d "$stage/usr/lib/systemd/system" "$stage/usr/lib/systemd/user" \
     "$stage/usr/lib/udev/rules.d" "$stage/usr/lib/modules-load.d"
 system_units=()
 user_units=()
-if has_program dsa-hostd; then
+if has_program dsa-linux-hostd; then
     install -m 0644 "$here/systemd/dsa-hostd.service" "$stage/usr/lib/systemd/system/"
     install -m 0644 "$here/systemd/90-dsa.preset" "$stage/usr/lib/systemd/system-preset/"
     system_units+=(dsa-hostd.service)
