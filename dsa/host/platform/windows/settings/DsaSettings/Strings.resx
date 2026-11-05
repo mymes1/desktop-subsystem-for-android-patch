@@ -1038,6 +1038,7 @@
   </data>
   <data name="Identity_fingerprint_Invalid" xml:space="preserve">
     <value>Write it as brand/name/device:release/id/incremental:type/tags, with the type user, userdebug or eng.</value>
+  </data>
   <data name="NavApps.Content" xml:space="preserve">
     <value>Apps</value>
   </data>
@@ -1154,6 +1155,7 @@
   </data>
   <data name="UninstallWindow_RefusedDetail" xml:space="preserve">
     <value>{0} was not uninstalled: {1} ({2}).</value>
+  </data>
   <data name="NavBackground.Content" xml:space="preserve">
     <value>Running in the background</value>
   </data>

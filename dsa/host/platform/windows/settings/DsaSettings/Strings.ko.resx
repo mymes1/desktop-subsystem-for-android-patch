@@ -1038,6 +1038,7 @@
   </data>
   <data name="Identity_fingerprint_Invalid" xml:space="preserve">
     <value>brand/name/device:release/id/incremental:type/tags 꼴로 쓰고, 유형은 user, userdebug, eng 중 하나로 하세요.</value>
+  </data>
   <data name="NavApps.Content" xml:space="preserve">
     <value>앱</value>
   </data>
@@ -1154,6 +1155,7 @@
   </data>
   <data name="UninstallWindow_RefusedDetail" xml:space="preserve">
     <value>{0}을(를) 제거하지 못했습니다: {1} ({2}).</value>
+  </data>
   <data name="NavBackground.Content" xml:space="preserve">
     <value>백그라운드에서 실행 중</value>
   </data>
