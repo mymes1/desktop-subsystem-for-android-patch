@@ -137,6 +137,25 @@ message TaskUpdated {
   // The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
   // transparent. Used only while the appearance is unspecified.
   fixed32 status_bar_color = 12;
+  // The orientation the task's top activity is locked to, if any. A task locked to portrait
+  // opens as a window taller than it is wide.
+  TaskOrientation orientation = 20;
+  // Whether the task's app asked to fill the screen (the task left the freeform windowing
+  // mode for fullscreen). The host makes the task's window fill its monitor.
+  bool fullscreen = 21;
+  // Whether the task's app went into picture-in-picture. The host makes the task's window a
+  // small window that stays above the others.
+  bool picture_in_picture = 22;
+}
+
+// The orientation a task's top activity asks for.
+enum TaskOrientation {
+  // The activity does not lock its orientation, or the agent could not read it.
+  TASK_ORIENTATION_UNSPECIFIED = 0;
+  // Portrait, reverse portrait, sensor portrait or user portrait.
+  TASK_ORIENTATION_PORTRAIT = 1;
+  // Landscape, reverse landscape, sensor landscape or user landscape.
+  TASK_ORIENTATION_LANDSCAPE = 2;
 }
 
 // Whether an app asked for dark status bar icons (a light status bar) or light ones.
@@ -1765,6 +1784,101 @@ message CameraError {
   string error = 1;
 }
 
+// Host to guest: the host's system settings, which the agent makes the guest's. Sent once
+// after the agent connects, when the host knows them, and on each change. Every field is sent
+// each time. The user does not change these in the guest: the host's are the guest's.
+message SystemSettings {
+  // The host's time zone as an IANA name, such as "Asia/Seoul". Empty when the host cannot
+  // name it; the guest's then stays as it is.
+  string time_zone = 1;
+  // The host's display languages as BCP 47 tags, preferred first, such as "ko-KR". The guest's
+  // system languages become these. Empty leaves the guest's as they are.
+  repeated string locales = 2;
+  // The locale the host formats dates, times and numbers by, as a BCP 47 tag. Empty when it
+  // is the first of `locales`.
+  string regional_format = 3;
+  // Whether the host shows times on a 24-hour clock.
+  bool time_24_hour = 4;
+  // The first day of the week in the host's regional format: 1 is Monday through 7, Sunday.
+  // 0 when the host does not say.
+  uint32 first_day_of_week = 5;
+  // Whether the host's apps use the dark theme. The guest's night mode follows it.
+  bool dark_mode = 6;
+  // The host's accent color as 0xAARRGGBB, which becomes the seed of the guest's dynamic
+  // colors. 0 when the host has none.
+  fixed32 accent_color = 7;
+}
+
+// Host to guest, for the control daemon: a game controller was connected to the host, or was
+// already there when the guest connected. The daemon makes it a gamepad input device in the
+// guest, which apps see as any USB or Bluetooth gamepad.
+message GamepadConnected {
+  // Names the controller until it is disconnected.
+  uint32 pad_id = 1;
+  // The controller's name, for the guest's input device.
+  string name = 2;
+  // The USB vendor and product IDs the guest's device reports. 0 when the host does not know
+  // them.
+  uint32 vendor_id = 3;
+  uint32 product_id = 4;
+  // Whether the controller can rumble, so the guest's device offers force feedback.
+  bool rumble = 5;
+}
+
+// Host to guest, for the control daemon: the controller was disconnected; its device in the
+// guest goes away.
+message GamepadDisconnected {
+  uint32 pad_id = 1;
+}
+
+// Host to guest, for the control daemon: the state of every button, stick and trigger of a
+// controller. Sent when any of them changes.
+message GamepadState {
+  uint32 pad_id = 1;
+  // The buttons held, one bit each: see GamepadButton.
+  uint32 buttons = 2;
+  // The sticks, from -32768 (left, or up) to 32767 (right, or down).
+  sint32 left_x = 3;
+  sint32 left_y = 4;
+  sint32 right_x = 5;
+  sint32 right_y = 6;
+  // The triggers, from 0 (released) to 255 (fully pressed).
+  uint32 left_trigger = 7;
+  uint32 right_trigger = 8;
+}
+
+// The bits of GamepadState.buttons.
+enum GamepadButton {
+  GAMEPAD_BUTTON_NONE = 0;
+  GAMEPAD_BUTTON_A = 1;
+  GAMEPAD_BUTTON_B = 2;
+  GAMEPAD_BUTTON_X = 4;
+  GAMEPAD_BUTTON_Y = 8;
+  GAMEPAD_BUTTON_LEFT_SHOULDER = 16;
+  GAMEPAD_BUTTON_RIGHT_SHOULDER = 32;
+  GAMEPAD_BUTTON_BACK = 64;
+  GAMEPAD_BUTTON_START = 128;
+  GAMEPAD_BUTTON_GUIDE = 256;
+  GAMEPAD_BUTTON_LEFT_THUMB = 512;
+  GAMEPAD_BUTTON_RIGHT_THUMB = 1024;
+  GAMEPAD_BUTTON_DPAD_UP = 2048;
+  GAMEPAD_BUTTON_DPAD_DOWN = 4096;
+  GAMEPAD_BUTTON_DPAD_LEFT = 8192;
+  GAMEPAD_BUTTON_DPAD_RIGHT = 16384;
+}
+
+// Guest to host, from the control daemon: an app plays a rumble effect on a controller, or
+// stops it (both strengths 0). The host runs the controller's motors at these strengths for
+// `duration_ms`, or until the next GamepadRumble for the controller.
+message GamepadRumble {
+  uint32 pad_id = 1;
+  // The strong (low frequency) and weak (high frequency) motors, from 0 to 65535.
+  uint32 strong = 2;
+  uint32 weak = 3;
+  // How long the effect lasts, in milliseconds; 0 until the next GamepadRumble.
+  uint32 duration_ms = 4;
+}
+
 // The one message type on the wire. Each frame carries exactly one.
 message Envelope {
   oneof body {
@@ -1890,5 +2004,10 @@ message Envelope {
     CameraStillTaken camera_still_taken = 266;
     CameraError camera_error = 267;
     SetTaskCaption set_task_caption = 155;
+    SystemSettings system_settings = 340;
+    GamepadConnected gamepad_connected = 341;
+    GamepadDisconnected gamepad_disconnected = 342;
+    GamepadState gamepad_state = 343;
+    GamepadRumble gamepad_rumble = 344;
   }
 }
