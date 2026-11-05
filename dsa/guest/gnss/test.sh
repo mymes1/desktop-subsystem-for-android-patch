@@ -21,6 +21,17 @@ if [[ -n "${PROTOBUF_PREFIX:-}" ]]; then
     protobuf+=(-I"$PROTOBUF_PREFIX/include" -L"$PROTOBUF_PREFIX/lib" -Wl,-rpath,"$PROTOBUF_PREFIX/lib")
 fi
 
+# The binder service needs the NDK to build, so this part is read from its source: no
+# extension call answers success with a null interface, which the framework dereferences.
+if grep -n '= nullptr;' "$here/src/gnss_service.cpp" | grep -i 'extension\|psds\|batching\|geofence\|navigation\|corrections'; then
+    echo "fr26: an extension call returns success with a null interface; return notOffered()" >&2
+    exit 1
+fi
+if awk '/getExtension/ {f=1} f && /ScopedAStatus::ok\(\)/ {print FILENAME": "NR": "$0; bad=1} /^}/ {f=0} END {exit bad}' "$here/src/gnss_service.cpp"; then :; else
+    echo "fr26: an extension call answers success; the framework then uses what it returned" >&2
+    exit 1
+fi
+
 rm -rf "$out"
 mkdir -p "$out"
 
