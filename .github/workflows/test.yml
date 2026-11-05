@@ -311,6 +311,47 @@ jobs:
           echo "{\"image_dir\": \"$image\", \"data_dir\": \"$RUNNER_TEMP/user\"}" > "$RUNNER_TEMP/dsa-hostd.json"
           target/release/dsa-hostd check "$RUNNER_TEMP/dsa-hostd.json"
 
+  # The Linux host's VM and its ports: the vsock suite over vsock loopback standing in for a
+  # guest, and the launcher against a real QEMU under KVM, booting the runner's own kernel.
+  linux-vm:
+    name: Test the Linux host's VM under KVM (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.linux == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: dsa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils
+          qemu-system-x86_64 --version
+
+      # The runner's user gets KVM and vhost-vsock, as a desktop user has them.
+      - name: Load KVM, vhost-vsock and vsock loopback
+        run: |
+          sudo modprobe vhost_vsock
+          sudo modprobe vsock_loopback
+          sudo chmod 666 /dev/kvm /dev/vhost-vsock
+          ls -l /dev/kvm /dev/vhost-vsock
+
+      - name: Give QEMU a kernel to boot
+        run: |
+          kernel="$RUNNER_TEMP/vmlinuz"
+          sudo cp "/boot/vmlinuz-$(uname -r)" "$kernel"
+          sudo chmod 644 "$kernel"
+          echo "DSA_QEMU_TEST_KERNEL=$kernel" >> "$GITHUB_ENV"
+
+      - name: Build the service and dsa
+        run: cargo build -p dsa-host-linux -p dsa-cli
+
+      - name: Run the tests
+        run: cargo test -p dsa-host-linux --features vsock-loopback-tests -- --nocapture
+
   agent:
     name: Test the guest agent (ubuntu-latest)
     needs: changes
@@ -577,7 +618,7 @@ jobs:
     name: Report the test result
     if: always()
     needs:
-      [changes, repository, rust, unix-socket, macos-host, linux-host, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
+      [changes, repository, rust, unix-socket, macos-host, linux-host, linux-vm, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

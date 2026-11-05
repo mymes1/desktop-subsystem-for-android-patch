@@ -7,7 +7,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/lib/dsa/bin/dsa-hostd serve /etc/dsa/dsa-hostd.json
+ExecStart=/usr/lib/dsa/bin/dsa-linux-hostd serve /etc/dsa/dsa-hostd.json
 RuntimeDirectory=dsa
 RuntimeDirectoryMode=0755
 StateDirectory=dsa
@@ -21,7 +21,9 @@ DeviceAllow=/dev/kvm rw
 DeviceAllow=/dev/vhost-vsock rw
 DeviceAllow=/dev/vhost-net rw
 DeviceAllow=/dev/net/tun rw
-CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_CHOWN CAP_NET_ADMIN CAP_SYS_RESOURCE
+# Advanced networking hands the VM a macvtap on the LAN, a /dev/tapN of its own.
+DeviceAllow=char-macvtap rw
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_CHOWN CAP_NET_ADMIN CAP_SYS_RESOURCE CAP_SYS_NICE
 NoNewPrivileges=yes
 ProtectSystem=full
 ProtectKernelModules=yes

@@ -229,6 +229,23 @@ class AndroidKernelConfigTests(unittest.TestCase):
         ]:
             self.assertIn(option, config)
 
+    def test_fr2_the_kernel_boots_under_kvm_with_virtio_devices(self):
+        # The Linux host runs the same kernel under QEMU: its disks, network adapter, vsock,
+        # balloon and virtio-mem are virtio, and the host stops the guest with SysRq on the
+        # serial console. Without them the guest finds no disk and never reaches the host.
+        config = VIRTIO_CONFIG.read_text()
+        for option in [
+            "CONFIG_VIRTIO_PCI=y",
+            "CONFIG_VIRTIO_BLK=y",
+            "CONFIG_VIRTIO_NET=y",
+            "CONFIG_VIRTIO_VSOCKETS=y",
+            "CONFIG_VIRTIO_BALLOON=y",
+            "CONFIG_VIRTIO_MEM=y",
+            "CONFIG_MAGIC_SYSRQ_SERIAL=y",
+        ]:
+            self.assertIn(option, config)
+        self.assertIn("CONFIG_PCI_HOST_GENERIC=y", ARM64_CONFIG.read_text())
+
     def test_fr27_the_arm64_kernel_uses_4k_pages(self):
         # The host's free page reporting order counts 4 KiB pages (5 is 128 KiB), and
         # Android's arm64 userspace and apps are built for 4 KiB pages.
