@@ -506,7 +506,7 @@ fn view_class() -> Result<&'static AnyClass, String> {
     static CLASS: OnceLock<Result<&'static AnyClass, String>> = OnceLock::new();
     CLASS
         .get_or_init(|| unsafe {
-            type Event = unsafe extern "C-unwind" fn(&AnyObject, Sel, *mut AnyObject);
+            type Event<'a> = unsafe extern "C-unwind" fn(&'a AnyObject, Sel, *mut AnyObject);
             let superclass = class(c"NSView")?;
             let mut b = ClassBuilder::new(c"DSATaskView", superclass)
                 .ok_or("the task view class is already defined")?;
@@ -515,10 +515,10 @@ fn view_class() -> Result<&'static AnyClass, String> {
                 sel!(rightMouseDown:),
                 sel!(otherMouseDown:),
             ] {
-                b.add_method(selector, mouse_down as Event);
+                b.add_method(selector, mouse_down as Event<'_>);
             }
             for selector in [sel!(mouseUp:), sel!(rightMouseUp:), sel!(otherMouseUp:)] {
-                b.add_method(selector, mouse_up as Event);
+                b.add_method(selector, mouse_up as Event<'_>);
             }
             for selector in [
                 sel!(mouseMoved:),
@@ -526,13 +526,13 @@ fn view_class() -> Result<&'static AnyClass, String> {
                 sel!(rightMouseDragged:),
                 sel!(otherMouseDragged:),
             ] {
-                b.add_method(selector, mouse_moved as Event);
+                b.add_method(selector, mouse_moved as Event<'_>);
             }
-            b.add_method(sel!(mouseExited:), mouse_exited as Event);
-            b.add_method(sel!(scrollWheel:), scroll_wheel as Event);
-            b.add_method(sel!(keyDown:), key_down as Event);
-            b.add_method(sel!(keyUp:), key_up as Event);
-            b.add_method(sel!(flagsChanged:), flags_changed as Event);
+            b.add_method(sel!(mouseExited:), mouse_exited as Event<'_>);
+            b.add_method(sel!(scrollWheel:), scroll_wheel as Event<'_>);
+            b.add_method(sel!(keyDown:), key_down as Event<'_>);
+            b.add_method(sel!(keyUp:), key_up as Event<'_>);
+            b.add_method(sel!(flagsChanged:), flags_changed as Event<'_>);
             b.add_method(
                 sel!(acceptsFirstResponder),
                 yes as unsafe extern "C-unwind" fn(_, _) -> _,
@@ -618,9 +618,9 @@ pub fn make(
     layer: &AnyObject,
     sink: Box<dyn InputSink>,
 ) -> Result<Retained<AnyObject>, String> {
-    let class = view_class()?;
+    let view_class = view_class()?;
     unsafe {
-        let allocated: Allocated<AnyObject> = msg_send![class, alloc];
+        let allocated: Allocated<AnyObject> = msg_send![view_class, alloc];
         let view: Option<Retained<AnyObject>> = msg_send![allocated, initWithFrame: frame];
         let view = view.ok_or("AppKit could not make the task view")?;
         // A layer-hosting view: the layer is set before the view wants one.

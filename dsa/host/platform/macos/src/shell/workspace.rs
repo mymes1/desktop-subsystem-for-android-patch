@@ -44,7 +44,8 @@ pub fn open_file(path: &Path) -> Result<(), String> {
     if !path.exists() {
         return Err(format!("{} does not exist", path.display()));
     }
-    open(&file_url(path)?)
+    let url = file_url(path)?;
+    open(&url)
 }
 
 /// Shows a host file selected in a Finder window.
