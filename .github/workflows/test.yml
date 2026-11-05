@@ -35,6 +35,7 @@ jobs:
     outputs:
       rust: ${{ steps.find.outputs.rust }}
       unix: ${{ steps.find.outputs.unix }}
+      macos: ${{ steps.find.outputs.macos }}
       agent: ${{ steps.find.outputs.agent }}
       apk: ${{ steps.find.outputs.apk }}
       protocol: ${{ steps.find.outputs.protocol }}
@@ -73,6 +74,7 @@ jobs:
           }
           part 'dsa/(Cargo\.(toml|lock)|deny\.toml|protocol/|host/|guest/(transport|channeld)/)' rust
           part 'dsa/(Cargo\.(toml|lock)|protocol/|host/(core|platform/unix|cli)/)' unix
+          part 'dsa/(Cargo\.(toml|lock)|protocol/|host/(core|platform/(unix|macos)|cli)/|host/platform/windows/src/(gpt|pstore_disk)\.rs|kernel/)' macos
           part 'dsa/(guest/agent|protocol)/' agent
           part 'dsa/(Cargo\.(toml|lock)|host/(core|cli)/)|\.github/scripts/apk/' apk
           part 'dsa/protocol/' protocol
@@ -196,6 +198,58 @@ jobs:
       # Linux runs this in the job above; macOS reads the peer's user another way.
       - name: Run the tests
         run: cargo test --no-fail-fast -p dsa-transport -p dsa-host-unix -p dsa-cli
+
+  # The macOS host on Apple silicon: its tests, the vsock transport over socket pairs, and
+  # dsa-hostd signed with the virtualization entitlement and checked by the framework itself.
+  # GitHub's macOS runners are VMs without nested virtualization, so no Android boots here.
+  macos-host:
+    name: Test the macOS host (macos-14)
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
+    runs-on: macos-14
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: dsa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the host target
+        run: rustc -vV
+
+      - name: Check formatting
+        run: cargo fmt -p dsa-host-macos -p dsa-cli --check
+
+      - name: Lint
+        run: cargo clippy -p dsa-host-macos -p dsa-cli --all-targets -- -D warnings
+
+      - name: Run the tests
+        run: cargo test --no-fail-fast -p dsa-host-macos -p dsa-cli
+
+      - name: Build and sign dsa-hostd
+        run: |
+          cargo build --release -p dsa-host-macos --bin dsa-hostd
+          codesign --force --sign - --options runtime \
+            --entitlements host/platform/macos/dsa-hostd.entitlements target/release/dsa-hostd
+          codesign --display --entitlements - target/release/dsa-hostd | tee "$RUNNER_TEMP/entitlements"
+          grep -q com.apple.security.virtualization "$RUNNER_TEMP/entitlements"
+          target/release/dsa-hostd version
+
+      # A stand-in image: an arm64 Image header, an initrd and raw disks. The framework
+      # validates the VM made from it, which needs the entitlement and the device set the
+      # host uses, without starting it.
+      - name: Have the framework validate the VM
+        run: |
+          image="$RUNNER_TEMP/image"
+          mkdir -p "$image"
+          head -c 4096 /dev/zero > "$image/Image"
+          printf 'ARM\x64' | dd of="$image/Image" bs=1 seek=56 conv=notrunc status=none
+          head -c 4096 /dev/zero > "$image/initrd.img"
+          mkfile -n 64m "$image/system.img"
+          mkfile -n 64m "$image/data.img"
+          echo '{"version": "0-ci", "arch": "arm64", "kernel_cmdline": "init=/init androidboot.boot_devices=vmbus console=ttyAMA0", "files": {"system.img": {}, "data.img": {}}}' > "$image/image.json"
+          echo "{\"image_dir\": \"$image\", \"data_dir\": \"$RUNNER_TEMP/user\"}" > "$RUNNER_TEMP/dsa-hostd.json"
+          target/release/dsa-hostd check "$RUNNER_TEMP/dsa-hostd.json"
 
   agent:
     name: Test the guest agent (ubuntu-latest)
@@ -463,7 +517,7 @@ jobs:
     name: Report the test result
     if: always()
     needs:
-      [changes, repository, rust, unix-socket, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
+      [changes, repository, rust, unix-socket, macos-host, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
