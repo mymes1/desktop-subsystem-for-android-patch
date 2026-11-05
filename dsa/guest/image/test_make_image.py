@@ -1841,6 +1841,12 @@ class GuestMemoryTests(unittest.TestCase):
             self.assertIn("write /proc/sys/vm/compact_memory 1", trigger)
             self.assertIn("setprop vendor.dsa.memory.reclaim 0", trigger)
 
+    def test_fr29_the_policy_of_the_file_sharing_jobs_goes_into_the_image_with_the_daemon(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=True) as archive:
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertIn("(typeattributeset domain (dsa_sharemount))", policy)
+            self.assertIn("(typeattributeset domain (dsa_files))", policy)
+
     def test_nfr1_an_idle_reclaim_swaps_cold_pages_out_before_dropping_caches_and_waits_for_boot(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=True) as archive:
             rc = archive.read("VENDOR/etc/init/dsa-channeld.rc").decode()
@@ -2629,12 +2635,6 @@ class DeveloperModeTests(unittest.TestCase):
         self.assertEqual(sorted(set(setters)), ["dsa_channeld"])
         # The host's folders carry the shared storage's label, so the media provider serves them.
         self.assertIn('(genfscon 9p "/" (u object_r media_rw_data_file ((s0) (s0))))', files)
-
-    def test_fr29_the_policy_of_the_file_sharing_jobs_goes_into_the_image_with_the_daemon(self):
-        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=True) as archive:
-            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
-            self.assertIn("(typeattributeset domain (dsa_sharemount))", policy)
-            self.assertIn("(typeattributeset domain (dsa_files))", policy)
 
     def test_fr20_adbd_may_listen_on_vsock(self):
         with tempfile.TemporaryDirectory() as tmp:
