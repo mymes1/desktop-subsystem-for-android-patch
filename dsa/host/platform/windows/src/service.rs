@@ -896,10 +896,11 @@ where
                 // So is file sharing, on with every folder unless they chose otherwise.
                 android.share_folders(
                     settings.as_ref().is_none_or(|s| s.file_sharing),
-                    settings.as_ref().map_or_else(
-                        dsa_host_core::file_share::all_folders,
-                        |s| s.shared_folders.clone(),
-                    ),
+                    settings
+                        .as_ref()
+                        .map_or_else(dsa_host_core::file_share::all_folders, |s| {
+                            s.shared_folders.clone()
+                        }),
                 );
                 // So is developer mode, off unless they turned it on, and its adb port.
                 if let Some(settings) = settings.as_ref().filter(|s| s.developer_mode) {

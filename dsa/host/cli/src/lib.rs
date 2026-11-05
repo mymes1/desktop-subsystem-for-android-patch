@@ -515,8 +515,9 @@ fn parse_shared_folders(value: &str) -> Result<Vec<String>, String> {
             .filter(|name| !name.is_empty())
             .collect(),
     };
-    dsa_host_core::file_share::normalise_folders(&names)
-        .map_err(|why| format!("shared-folders is all, none or a list such as Documents,Pictures: {why}"))
+    dsa_host_core::file_share::normalise_folders(&names).map_err(|why| {
+        format!("shared-folders is all, none or a list such as Documents,Pictures: {why}")
+    })
 }
 
 /// A memory limit as `dsa settings set memory-limit` takes it: `auto` (the service's

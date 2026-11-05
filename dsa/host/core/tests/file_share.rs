@@ -331,7 +331,13 @@ fn fr29_a_connection_is_served_only_after_the_guest_proves_the_boot_secret() {
         version.string("9P2000.L");
         // The proof and the first request may arrive in one piece, as on a real socket.
         daemon
-            .send(&[share_proof(&secret, &nonce).to_vec(), version.message(100, 1)].concat())
+            .send(
+                &[
+                    share_proof(&secret, &nonce).to_vec(),
+                    version.message(100, 1),
+                ]
+                .concat(),
+            )
             .unwrap();
         let reply = daemon.recv(Some(Duration::from_secs(5))).unwrap();
         assert_eq!(reply[4], 101);
