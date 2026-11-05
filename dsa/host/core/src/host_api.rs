@@ -1029,7 +1029,62 @@ pub type AndroidVersionSource = Arc<dyn Fn() -> Option<String> + Send + Sync>;
 pub struct SettingsReport {
     pub settings: Settings,
     pub facts: ServiceFacts,
+    /// The caller's network as it stands now; `None` from a service that does not report it.
+    pub network: Option<NetworkStatus>,
 }
+
+/// How a user's Android reaches the network.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct NetworkStatus {
+    /// `nat`, `advanced` or `off`.
+    pub mode: String,
+    /// The guest's addresses, IPv4 and IPv6.
+    pub addresses: Vec<String>,
+    pub dns_servers: Vec<String>,
+    pub gateway: String,
+    /// Why the network is not what the settings ask for, if it is not.
+    pub problem: Option<String>,
+}
+
+impl NetworkStatus {
+    /// Behind the NAT network the service makes for the VM.
+    pub const NAT: &'static str = "nat";
+    /// On the host's LAN as a device of its own.
+    pub const ADVANCED: &'static str = "advanced";
+    /// No network, because Android is not running.
+    pub const OFF: &'static str = "off";
+
+    pub fn off() -> NetworkStatus {
+        NetworkStatus {
+            mode: NetworkStatus::OFF.into(),
+            ..NetworkStatus::default()
+        }
+    }
+
+    fn to_wire(&self) -> types::NetworkStatus {
+        types::NetworkStatus {
+            mode: self.mode.clone(),
+            addresses: self.addresses.clone(),
+            dns_servers: self.dns_servers.clone(),
+            gateway: self.gateway.clone(),
+            problem: self.problem.clone().unwrap_or_default(),
+        }
+    }
+
+    fn from_wire(status: types::NetworkStatus) -> NetworkStatus {
+        NetworkStatus {
+            mode: status.mode,
+            addresses: status.addresses,
+            dns_servers: status.dns_servers,
+            gateway: status.gateway,
+            problem: Some(status.problem).filter(|p| !p.is_empty()),
+        }
+    }
+}
+
+/// Says how a user's Android reaches the network now, given the user's settings: `None` while
+/// it has no network (it is not running). The platform asks its network service.
+pub type NetworkSource = Arc<dyn Fn(&str, &Settings) -> Option<NetworkStatus> + Send + Sync>;
 
 /// Where ARM translation stands for a user.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1100,6 +1155,8 @@ pub struct HostApiService {
     program: Option<Arc<dyn UpdateProgram>>,
     settings: Option<(Arc<dyn SettingsStore>, ServiceFacts)>,
     android_version: Option<AndroidVersionSource>,
+    /// Reports each user's network with the settings.
+    network: Option<NetworkSource>,
     hello: types::Hello,
     handshake_timeout: Duration,
     /// Logs when each resize was handed to Android, and how long that took.
@@ -1130,6 +1187,7 @@ impl HostApiService {
             program: None,
             settings: None,
             android_version: None,
+            network: None,
             hello: local_hello(Role::Service, build),
             handshake_timeout: Duration::from_secs(5),
             resize_trace: Mutex::new(ResizeTrace::new(
@@ -1216,6 +1274,12 @@ impl HostApiService {
     /// one in the facts.
     pub fn with_android_version(mut self, source: AndroidVersionSource) -> HostApiService {
         self.android_version = Some(source);
+        self
+    }
+
+    /// Reports each user's network, as `source` gives it, with the settings.
+    pub fn with_network(mut self, source: NetworkSource) -> HostApiService {
+        self.network = Some(source);
         self
     }
 
@@ -3363,10 +3427,20 @@ impl HostApiService {
         };
         match store.get(&peer.user) {
             Ok(settings) => {
-                response::Body::Settings(settings_to_wire(&settings, &self.facts_now(facts)))
+                let mut wire = settings_to_wire(&settings, &self.facts_now(facts));
+                wire.network = self.network_now(&peer.user, &settings);
+                response::Body::Settings(wire)
             }
             Err(why) => error(ErrorCode::Unavailable, why),
         }
+    }
+
+    /// The caller's network as the platform reports it, or "off" when it cannot say (no
+    /// Android is running, so there is no network yet).
+    fn network_now(&self, user: &str, settings: &Settings) -> Option<types::NetworkStatus> {
+        let source = self.network.as_ref()?;
+        let status = source(user, settings).unwrap_or_else(NetworkStatus::off);
+        Some(status.to_wire())
     }
 
     fn set_settings(&self, peer: &Peer, set: types::SetSettings) -> response::Body {
@@ -3392,6 +3466,7 @@ impl HostApiService {
             resize_trace: wanted.resize_trace,
             developer_mode: wanted.developer_mode,
             arm_translation: wanted.arm_translation,
+            advanced_networking: wanted.advanced_networking,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -3458,7 +3533,8 @@ impl HostApiService {
                 eprintln!(
                     "local API: {} changed the settings: render GPU {}, freeze {}, clipboard \
                      {}, links in Android {}, program updates {}, image updates {}, input \
-                     trace {}, resize trace {}, developer mode {} (adb port {})",
+                     trace {}, resize trace {}, developer mode {} (adb port {}), advanced \
+                     networking {}",
                     peer.user,
                     settings.render_gpu,
                     on_off(settings.freeze),
@@ -3469,9 +3545,12 @@ impl HostApiService {
                     on_off(settings.input_trace),
                     on_off(settings.resize_trace),
                     on_off(settings.developer_mode),
-                    settings.adb_port
+                    settings.adb_port,
+                    on_off(settings.advanced_networking)
                 );
-                response::Body::Settings(settings_to_wire(&settings, &self.facts_now(facts)))
+                let mut wire = settings_to_wire(&settings, &self.facts_now(facts));
+                wire.network = self.network_now(&peer.user, &settings);
+                response::Body::Settings(wire)
             }
             Err(why) => error(ErrorCode::InvalidSetting, why),
         }
@@ -3513,6 +3592,8 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         developer_mode: settings.developer_mode,
         adb_port: settings.adb_port.into(),
         arm_translation: settings.arm_translation,
+        advanced_networking: settings.advanced_networking,
+        network: None,
         program_updates_available: facts.program_updates_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
@@ -3539,6 +3620,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
                 u16::try_from(settings.adb_port).unwrap_or(0),
             ),
             arm_translation: settings.arm_translation,
+            advanced_networking: settings.advanced_networking,
         },
         facts: ServiceFacts {
             version: settings.version,
@@ -3547,6 +3629,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             image_updates_available: settings.image_updates_available,
             android_version: Some(settings.android_version).filter(|v| !v.is_empty()),
         },
+        network: settings.network.map(NetworkStatus::from_wire),
     }
 }
 

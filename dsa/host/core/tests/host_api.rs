@@ -129,6 +129,57 @@ fn fr19_the_trace_switches_are_machine_settings_only_an_administrator_changes() 
 }
 
 #[test]
+fn fr28_advanced_networking_is_the_users_and_the_network_is_reported_with_the_settings() {
+    use dsa_host_core::host_api::{HostApiService, NetworkSource, NetworkStatus, ServiceFacts};
+    use dsa_host_core::settings::{Settings, SettingsStore};
+    let (listener, connector) = local::pair();
+    let store = Arc::new(dsa_host_core::settings::MemorySettings::default());
+    // Alice's Android runs; Bob's is not running.
+    let network: NetworkSource = Arc::new(|user: &str, settings: &Settings| {
+        (user == "alice").then(|| NetworkStatus {
+            mode: if settings.advanced_networking {
+                NetworkStatus::ADVANCED.into()
+            } else {
+                NetworkStatus::NAT.into()
+            },
+            addresses: vec!["172.28.0.2".into(), "fd5a:d5a::2".into()],
+            dns_servers: vec!["172.28.0.1".into()],
+            gateway: "172.28.0.1".into(),
+            problem: None,
+        })
+    });
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(store.clone(), ServiceFacts::default())
+        .with_network(network);
+    let _service = RunningService::start_service(Box::new(listener), service);
+
+    let mut alice =
+        HostApiClient::connect(&mut AsAdmin(connector.clone(), "alice", false), "a", WAIT).unwrap();
+    let report = alice.settings().unwrap();
+    assert!(!report.settings.advanced_networking, "off by default");
+    let status = report.network.expect("the network is reported");
+    assert_eq!(status.mode, NetworkStatus::NAT);
+    assert_eq!(status.addresses, vec!["172.28.0.2", "fd5a:d5a::2"]);
+    assert_eq!(status.dns_servers, vec!["172.28.0.1"]);
+    assert_eq!(status.gateway, "172.28.0.1");
+
+    // Any user may turn it on for themselves, without being an administrator.
+    let on = alice
+        .set_settings(&Settings {
+            advanced_networking: true,
+            ..report.settings.clone()
+        })
+        .unwrap();
+    assert!(on.settings.advanced_networking);
+    assert_eq!(on.network.unwrap().mode, NetworkStatus::ADVANCED);
+    assert!(store.get("alice").unwrap().advanced_networking);
+    assert!(!store.get("bob").unwrap().advanced_networking);
+
+    let mut bob = HostApiClient::connect(&mut AsAdmin(connector, "bob", false), "b", WAIT).unwrap();
+    assert_eq!(bob.settings().unwrap().network.unwrap().mode, NetworkStatus::OFF);
+}
+
+#[test]
 fn pr5_each_user_reaches_only_their_own_android() {
     let (listener, connector) = local::pair();
     let androids = Arc::new(FakeAndroids::default());

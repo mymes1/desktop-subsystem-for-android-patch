@@ -17,7 +17,8 @@
 //!                              "input_trace": false, "resize_trace": false}
 //! <dir>/users/<user>.json     {"render_gpu": "display", "freeze": false, "clipboard": true,
 //!                              "links_in_android": false, "developer_mode": false,
-//!                              "adb_port": 58526, "arm_translation": true}
+//!                              "adb_port": 58526, "arm_translation": true,
+//!                              "advanced_networking": false}
 //! <dir>/users/<user>.arm-translation.json
 //!                             the ARM translation package the user installed, if any
 //! ```
@@ -59,6 +60,10 @@ pub struct Settings {
     /// Whether stopping an app that runs in the background skips the question that confirms
     /// it. Off by default, so the first stop asks.
     pub stop_without_asking: bool,
+    /// Whether the user's Android joins the host's LAN as a device of its own, rather than
+    /// sitting behind the NAT network the service makes for its VM. Off by default; it applies
+    /// from the next start of Android.
+    pub advanced_networking: bool,
     /// Whether the service updates DSA itself.
     pub program_updates: bool,
     /// Whether the service downloads new Android images.
@@ -89,6 +94,7 @@ impl Default for Settings {
             memory_limit_mb: 0,
             clipboard: true,
             stop_without_asking: false,
+            advanced_networking: false,
             program_updates: true,
             image_updates: true,
             input_trace: false,
@@ -167,6 +173,8 @@ pub struct UserSettings {
     pub arm_translation: bool,
     #[serde(default)]
     pub stop_without_asking: bool,
+    #[serde(default)]
+    pub advanced_networking: bool,
 }
 
 impl Default for UserSettings {
@@ -181,6 +189,7 @@ impl Default for UserSettings {
             adb_port: DEFAULT_ADB_PORT,
             arm_translation: true,
             stop_without_asking: false,
+            advanced_networking: false,
         }
     }
 }
@@ -198,6 +207,7 @@ impl UserSettings {
             adb_port: normalise_adb_port(settings.adb_port),
             arm_translation: settings.arm_translation,
             stop_without_asking: settings.stop_without_asking,
+            advanced_networking: settings.advanced_networking,
         }
     }
 }
@@ -354,6 +364,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         memory_limit_mb: mine.memory_limit_mb,
         clipboard: mine.clipboard,
         stop_without_asking: mine.stop_without_asking,
+        advanced_networking: mine.advanced_networking,
         program_updates: machine.program_updates,
         image_updates: machine.image_updates,
         input_trace: machine.input_trace,
@@ -535,6 +546,7 @@ mod tests {
                     memory_limit_mb: 0,
                     clipboard: false,
                     stop_without_asking: false,
+                    advanced_networking: false,
                     program_updates: false,
                     image_updates: true,
                     input_trace: true,
@@ -664,6 +676,34 @@ mod tests {
         let again = FileSettings::new(&dir);
         assert!(again.get("uid:1000").unwrap().stop_without_asking);
         assert!(!again.get("uid:1001").unwrap().stop_without_asking);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr28_advanced_networking_is_off_by_default_and_kept_per_user() {
+        let dir = scratch("network");
+        let store = FileSettings::new(&dir);
+        assert!(!store.get("uid:1000").unwrap().advanced_networking);
+        // A file saved before the setting existed stays on NAT.
+        std::fs::create_dir_all(dir.join("users")).unwrap();
+        std::fs::write(
+            dir.join("users").join("uid_1001.json"),
+            r#"{"render_gpu": "display"}"#,
+        )
+        .unwrap();
+        assert!(!store.get("uid:1001").unwrap().advanced_networking);
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    advanced_networking: true,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert!(again.get("uid:1000").unwrap().advanced_networking);
+        assert!(!again.get("uid:1001").unwrap().advanced_networking);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

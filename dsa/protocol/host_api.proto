@@ -1174,6 +1174,31 @@ message Settings {
   // Whether stopping an app that runs in the background skips the question that confirms
   // it. Off by default: the first stop asks, and the user may tick "do not ask again".
   bool stop_without_asking = 18;
+  // Whether the caller's Android joins the host's LAN as a device of its own (advanced
+  // networking), so other devices on the LAN reach it and it reaches them directly. Off by
+  // default: Android is behind a NAT network the service makes for its VM. It applies from the
+  // next start of Android.
+  bool advanced_networking = 19;
+  // The caller's network as it stands now. Absent when the service cannot say. A client cannot
+  // change it.
+  NetworkStatus network = 20;
+}
+
+// How the caller's Android reaches the network.
+message NetworkStatus {
+  // "nat" (behind the NAT network the service makes for the VM), "advanced" (on the host's
+  // LAN) or "off" (Android is not running, so there is no network yet).
+  string mode = 1;
+  // The guest's addresses, IPv4 and IPv6, as the host's network service gave them out. A host
+  // program reaches a server in Android at any of them.
+  repeated string addresses = 2;
+  // The DNS servers the guest is given.
+  repeated string dns_servers = 3;
+  // The guest's default gateway.
+  string gateway = 4;
+  // Why advanced networking is not in use although it is on, or another problem with the
+  // network. Empty when there is none.
+  string problem = 5;
 }
 
 // What an ARM translation package says of itself, from its arm-translation.json.

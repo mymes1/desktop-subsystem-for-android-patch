@@ -152,9 +152,15 @@
 //! user's Android: while it is on, `adb connect 127.0.0.1:58526` connects, with no prompt to
 //! accept in Android. `adb-port` picks another loopback port than 58526. `stop-without-asking` (off by default)
 //! is whether stopping an app that runs in the background skips the question that confirms it.
+//! `advanced-networking` (off by default) puts the user's Android on this computer's network as
+//! a device of its own, so other devices there reach it, instead of behind a NAT network of its
+//! own; it applies the next time Android starts.
 //! `dsa settings set <name> <value>` changes one;
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
-//! takes, on the host and inside Android. `dsa gpus` lists the GPUs of this machine, for
+//! takes, on the host and inside Android. `dsa network` shows how the user's Android reaches
+//! the network: NAT, advanced or none while it is not running, its addresses (a program on this
+//! computer reaches a server in Android at any of them), its DNS servers and its gateway. With
+//! `--json` it prints `mode`, `addresses`, `dns_servers`, `gateway` and `problem`. `dsa gpus` lists the GPUs of this machine, for
 //! choosing the render GPU.
 //!
 //! `dsa arm-translation status` (or `dsa arm-translation`) says whether apps built only for
@@ -208,7 +214,8 @@ use dsa_host_core::arm_translation;
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
 use dsa_host_core::host_api::{
-    ArmTranslationStatus, ClientError, HostApiClient, SettingsReport, Status, TaskList,
+    ArmTranslationStatus, ClientError, HostApiClient, NetworkStatus, SettingsReport, Status,
+    TaskList,
 };
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::session::SessionState;
@@ -221,7 +228,7 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      launch <package> [--wait-first-frame] | tap <package> <x> <y> | stop-app <package> | \
      install <file.apk> [--progress] | apk-info <file.apk> | open <file> | share <file> | \
      tasks | settings [set <name> <value> | device | reset device[.<field>]] | memory | \
-     gpus | \
+     network | gpus | \
      widgets [list | add <provider> | remove <id> | watch] | \
      apps [list | info <package> | uninstall <package> | settings [<package>]] | \
      background [list | open <package> | stop <package>] | \
@@ -261,6 +268,8 @@ pub enum Command {
     Settings,
     /// Show how much memory the user's Android takes.
     Memory,
+    /// Show how the user's Android reaches the network: the mode, its addresses and DNS.
+    Network,
     /// List this machine's GPUs.
     Gpus,
     /// List, place or remove widgets ([`Invocation::widgets`]).
@@ -342,6 +351,7 @@ pub enum Change {
     /// Put one value of the device identity, or all of them, back to the image's own.
     ResetDevice(Option<dsa_host_core::device_identity::Field>),
     StopWithoutAsking(bool),
+    AdvancedNetworking(bool),
 }
 
 impl Change {
@@ -367,6 +377,7 @@ impl Change {
             "developer-mode" => switch().map(Change::DeveloperMode),
             "arm-translation" => switch().map(Change::ArmTranslation),
             "stop-without-asking" => switch().map(Change::StopWithoutAsking),
+            "advanced-networking" => switch().map(Change::AdvancedNetworking),
             "adb-port" => match value.parse::<u16>() {
                 Ok(port) if port > 0 => Ok(Change::AdbPort(port)),
                 _ => Err(format!(
@@ -377,7 +388,7 @@ impl Change {
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, image-updates, input-trace, \
                  resize-trace, memory-limit, developer-mode, adb-port, arm-translation, \
-                 stop-without-asking and device.<field>"
+                 stop-without-asking, advanced-networking and device.<field>"
             )),
         }
     }
@@ -607,7 +618,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             }
             "status" | "start" | "stop" | "freeze" | "update" | "launch" | "tap" | "stop-app"
             | "install" | "apk-info" | "open" | "share" | "tasks" | "settings" | "memory"
-            | "gpus" | "widgets" | "background"
+            | "gpus" | "widgets" | "background" | "network"
                 if command.is_none() =>
             {
                 command = Some(match arg.as_str() {
@@ -625,6 +636,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     "tasks" => Command::Tasks,
                     "settings" => Command::Settings,
                     "memory" => Command::Memory,
+                    "network" => Command::Network,
                     "gpus" => Command::Gpus,
                     "widgets" => Command::Widgets,
                     "background" => Command::Background,
@@ -1398,12 +1410,71 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "adb_address": adb_address(&report.settings),
         "arm_translation": report.settings.arm_translation,
         "stop_without_asking": report.settings.stop_without_asking,
+        "advanced_networking": report.settings.advanced_networking,
+        "network": network_json(report.network.as_ref()),
         "program_updates_available": report.facts.program_updates_available,
         "image_updates_available": report.facts.image_updates_available,
         "version": report.facts.version,
         "log_dir": report.facts.log_dir,
         "android_version": report.facts.android_version,
     })
+}
+
+/// The network as one JSON object (`mode`, `addresses`, `dns_servers`, `gateway`, `problem`),
+/// or null from a service that does not report it.
+pub fn network_json(network: Option<&NetworkStatus>) -> Value {
+    match network {
+        Some(network) => json!({
+            "mode": network.mode,
+            "addresses": network.addresses,
+            "dns_servers": network.dns_servers,
+            "gateway": network.gateway,
+            "problem": network.problem,
+        }),
+        None => Value::Null,
+    }
+}
+
+/// The network, one fact per line, with the advanced networking setting.
+pub fn describe_network(report: &SettingsReport) -> String {
+    let setting = format!(
+        "Advanced networking: {}",
+        on_off(report.settings.advanced_networking)
+    );
+    let Some(network) = &report.network else {
+        return format!("{setting}\nThis service does not report the network; update it.");
+    };
+    let mode = match network.mode.as_str() {
+        NetworkStatus::NAT => "NAT (behind this computer)",
+        NetworkStatus::ADVANCED => "advanced (on this computer's network)",
+        NetworkStatus::OFF => "none (Android is not running)",
+        other => other,
+    };
+    let list = |items: &[String]| {
+        if items.is_empty() {
+            "none".to_string()
+        } else {
+            items.join(", ")
+        }
+    };
+    let mut lines = vec![setting, format!("Network: {mode}")];
+    if network.mode != NetworkStatus::OFF {
+        lines.push(format!("Addresses: {}", list(&network.addresses)));
+        lines.push(format!("DNS servers: {}", list(&network.dns_servers)));
+        if !network.gateway.is_empty() {
+            lines.push(format!("Gateway: {}", network.gateway));
+        }
+    }
+    if let Some(problem) = &network.problem {
+        lines.push(format!("Problem: {problem}"));
+    }
+    if report.settings.advanced_networking != (network.mode == NetworkStatus::ADVANCED)
+        && network.mode != NetworkStatus::OFF
+        && network.problem.is_none()
+    {
+        lines.push("The change applies the next time Android starts.".into());
+    }
+    lines.join("\n")
 }
 
 /// The address `adb connect` takes in developer mode.
@@ -1471,6 +1542,10 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         format!(
             "Stop background apps without asking: {}",
             on_off(settings.stop_without_asking)
+        ),
+        format!(
+            "Advanced networking: {} (dsa network shows the addresses)",
+            on_off(settings.advanced_networking)
         ),
         format!("Service version: {}", facts.version),
     ];
@@ -1606,6 +1681,7 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
                 unreachable!("answered above")
             }
             Change::StopWithoutAsking(on) => wanted.stop_without_asking = *on,
+            Change::AdvancedNetworking(on) => wanted.advanced_networking = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
     }
@@ -2509,6 +2585,14 @@ pub fn run_with_starter(
             return Ok(describe_tasks(&list));
         }
         Command::Settings => return settings(invocation, &mut client),
+        Command::Network => {
+            let report = client.settings().map_err(|e| e.to_string())?;
+            return Ok(if invocation.json {
+                network_json(report.network.as_ref()).to_string()
+            } else {
+                describe_network(&report)
+            });
+        }
         Command::Memory => {
             let memory = client.memory().map_err(|e| e.to_string())?;
             return Ok(if invocation.json {
