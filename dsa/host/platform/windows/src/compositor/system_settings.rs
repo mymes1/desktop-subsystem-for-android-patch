@@ -84,7 +84,10 @@ fn wide(text: &str) -> Vec<u16> {
 
 /// A UTF-16 buffer Windows filled, up to its first null.
 fn from_wide(units: &[u16]) -> String {
-    let end = units.iter().position(|unit| *unit == 0).unwrap_or(units.len());
+    let end = units
+        .iter()
+        .position(|unit| *unit == 0)
+        .unwrap_or(units.len());
     String::from_utf16_lossy(&units[..end])
 }
 
@@ -114,8 +117,14 @@ fn locale_info(kind: u32) -> Option<String> {
     use windows_sys::Win32::Globalization::GetLocaleInfoEx;
     let mut buffer = [0u16; 128];
     // SAFETY: the user's default locale (null) and a buffer of the length passed.
-    let length =
-        unsafe { GetLocaleInfoEx(std::ptr::null(), kind, buffer.as_mut_ptr(), buffer.len() as i32) };
+    let length = unsafe {
+        GetLocaleInfoEx(
+            std::ptr::null(),
+            kind,
+            buffer.as_mut_ptr(),
+            buffer.len() as i32,
+        )
+    };
     (length > 0).then(|| from_wide(&buffer))
 }
 
@@ -126,7 +135,12 @@ fn ui_languages() -> Vec<String> {
     let mut length = 0u32;
     // SAFETY: asks for the length only.
     let sized = unsafe {
-        GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &mut count, std::ptr::null_mut(), &mut length)
+        GetUserPreferredUILanguages(
+            MUI_LANGUAGE_NAME,
+            &mut count,
+            std::ptr::null_mut(),
+            &mut length,
+        )
     };
     if sized == 0 || length == 0 {
         return Vec::new();
@@ -134,7 +148,12 @@ fn ui_languages() -> Vec<String> {
     let mut buffer = vec![0u16; length as usize];
     // SAFETY: a buffer of the length Windows asked for.
     let read = unsafe {
-        GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &mut count, buffer.as_mut_ptr(), &mut length)
+        GetUserPreferredUILanguages(
+            MUI_LANGUAGE_NAME,
+            &mut count,
+            buffer.as_mut_ptr(),
+            &mut length,
+        )
     };
     if read == 0 {
         return Vec::new();

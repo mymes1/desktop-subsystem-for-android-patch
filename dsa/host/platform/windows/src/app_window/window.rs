@@ -49,17 +49,11 @@ use windows_sys::Win32::Graphics::Gdi::{
     BeginPaint, EndPaint, GetMonitorInfoW, MonitorFromRect, MonitorFromWindow, MONITORINFO,
     MONITOR_DEFAULTTONEAREST, PAINTSTRUCT,
 };
-use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_F11;
-use windows_sys::Win32::UI::WindowsAndMessaging::{
-    GetClientRect, GetWindowPlacement, SetWindowPlacement, GWL_STYLE, HTBORDER, HTBOTTOMRIGHT,
-    HTLEFT, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST, SC_MAXIMIZE, SC_SIZE, SWP_FRAMECHANGED,
-    SWP_NOOWNERZORDER, SW_RESTORE, WINDOWPLACEMENT, WM_KEYDOWN, WM_KEYUP, WM_NCHITTEST,
-    WM_SYSCOMMAND, WM_SYSKEYDOWN, WM_SYSKEYUP, WS_POPUP,
-};
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::UI::HiDpi::{
     GetDpiForWindow, SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::VK_F11;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
     GetWindowLongPtrW, GetWindowRect, IsIconic, IsZoomed, KillTimer, LoadCursorW, LoadIconW,
@@ -73,6 +67,12 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_SETTINGCHANGE, WM_SIZE, WM_SIZING, WM_SYSCOLORCHANGE, WM_THEMECHANGED, WM_TIMER,
     WM_WINDOWPOSCHANGED, WM_WINDOWPOSCHANGING, WNDCLASSEXW, WS_EX_APPWINDOW,
     WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
+};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    GetClientRect, GetWindowPlacement, SetWindowPlacement, GWL_STYLE, HTBORDER, HTBOTTOMRIGHT,
+    HTLEFT, HWND_NOTOPMOST, HWND_TOP, HWND_TOPMOST, SC_MAXIMIZE, SC_SIZE, SWP_FRAMECHANGED,
+    SWP_NOOWNERZORDER, SW_RESTORE, WINDOWPLACEMENT, WM_KEYDOWN, WM_KEYUP, WM_NCHITTEST,
+    WM_SYSCOMMAND, WM_SYSKEYDOWN, WM_SYSKEYUP, WS_POPUP,
 };
 
 use crate::compositor::log::{input_trace, input_trace_on};
@@ -897,8 +897,18 @@ unsafe fn window_outer(hwnd: HWND, client: (u32, u32), dpi: u32) -> (i32, i32) {
 fn centred(monitor: &RECT, size: (u32, u32)) -> (i32, i32) {
     let (width, height) = (size.0 as i32, size.1 as i32);
     (
-        maximized_position(monitor.left, monitor.left, monitor.right - monitor.left, width),
-        maximized_position(monitor.top, monitor.top, monitor.bottom - monitor.top, height),
+        maximized_position(
+            monitor.left,
+            monitor.left,
+            monitor.right - monitor.left,
+            width,
+        ),
+        maximized_position(
+            monitor.top,
+            monitor.top,
+            monitor.bottom - monitor.top,
+            height,
+        ),
     )
 }
 
@@ -1010,7 +1020,8 @@ unsafe fn apply_mode(hwnd: HWND, data: &WindowData, mode: WindowMode) {
             place_self(hwnd, std::ptr::null_mut(), (0, 0, 0, 0), flags);
             // The title bar is back, and the app's top inset with it.
             data.caption.report_height(hwnd, &*data.report);
-            data.caption.repaint(hwnd, data.presenter.borrow().as_deref());
+            data.caption
+                .repaint(hwnd, data.presenter.borrow().as_deref());
         }
         WindowMode::PictureInPicture => {
             place_self(hwnd, HWND_NOTOPMOST, (0, 0, 0, 0), keep);
@@ -1121,7 +1132,12 @@ unsafe fn apply_size(hwnd: HWND, size: (u32, u32)) -> (u32, u32) {
             let client = fit_within(size, area);
             let (x, y) = centred(&monitor, client);
             let rect = (x, y, client.0 as i32, client.1 as i32);
-            place_self(hwnd, std::ptr::null_mut(), rect, SWP_NOZORDER | SWP_NOACTIVATE);
+            place_self(
+                hwnd,
+                std::ptr::null_mut(),
+                rect,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
             return client;
         }
     }

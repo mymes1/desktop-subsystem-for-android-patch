@@ -125,6 +125,7 @@ use crate::clipboard;
 use crate::clock_trace::ClockTrace;
 use crate::file_share::{self, ShareHost, Sharing, SharingNow};
 use crate::files::{self, FileAction, FileTransfer};
+use crate::gamepads::{GamepadEvent, GamepadRumble, GamepadTable};
 use crate::guest_log::{
     serve_log_connection, DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogHub,
     LogPortMessage, LogWatch, STREAM_TAIL,
@@ -136,7 +137,6 @@ use crate::links::{self, LinkGate};
 use crate::location::{LocationEvent, LocationHub, Wanted};
 use crate::memory::{GrowthAction, GuestMemory, GuestMemoryReport, GuestPressure, MemoryGrowth};
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent, RateLimit};
-use crate::gamepads::{GamepadEvent, GamepadRumble, GamepadTable};
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
@@ -4732,6 +4732,11 @@ impl Worker {
             }
             Some(Body::TaskUpdated(update)) => {
                 let bounds = update.bounds.unwrap_or_default();
+                let orientation = match update.orientation() {
+                    control::TaskOrientation::Portrait => TaskOrientation::Portrait,
+                    control::TaskOrientation::Landscape => TaskOrientation::Landscape,
+                    control::TaskOrientation::Unspecified => TaskOrientation::Unspecified,
+                };
                 let status_bar = match update.status_bar_appearance() {
                     control::StatusBarAppearance::Light => StatusBarAppearance::Light,
                     control::StatusBarAppearance::Dark => StatusBarAppearance::Dark,
@@ -4755,11 +4760,7 @@ impl Worker {
                     min_height: update.min_height,
                     status_bar,
                     status_bar_color: update.status_bar_color,
-                    orientation: match update.orientation() {
-                        control::TaskOrientation::Portrait => TaskOrientation::Portrait,
-                        control::TaskOrientation::Landscape => TaskOrientation::Landscape,
-                        control::TaskOrientation::Unspecified => TaskOrientation::Unspecified,
-                    },
+                    orientation,
                     fullscreen: update.fullscreen,
                     picture_in_picture: update.picture_in_picture,
                 }));
@@ -4845,9 +4846,9 @@ impl Worker {
             Some(Body::OpenLink(link)) => self.guest_link(link.url),
             Some(Body::FileProgress(progress)) => self.shared.file_progress(progress),
             Some(Body::ClipboardText(clip)) => self.guest_clipboard(clip.text),
-            Some(Body::GamepadRumble(rumble)) => {
-                self.shared.publish_rumble(GamepadRumble::from_control(&rumble))
-            }
+            Some(Body::GamepadRumble(rumble)) => self
+                .shared
+                .publish_rumble(GamepadRumble::from_control(&rumble)),
             Some(Body::Notification(notification)) => self.guest_notification(notification),
             Some(Body::NotificationRemoved(removed)) => {
                 self.guest_notification_removed(removed.key)

@@ -419,14 +419,14 @@ fn resolve(config: &Config, names: &[String]) -> Result<PathBuf, u16> {
         Ok(resolved) if resolved.starts_with(&root) => Ok(resolved),
         Ok(_) => Err(403),
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            let parent = path.parent().ok_or(403)?;
+            let parent = path.parent().ok_or(403u16)?;
             match fs::canonicalize(parent) {
                 Ok(folder) if folder.starts_with(&root) => {
                     // A dangling link that points outside is still outside.
                     if fs::symlink_metadata(&path).is_ok() {
                         return Err(403);
                     }
-                    Ok(folder.join(path.file_name().ok_or(403)?))
+                    Ok(folder.join(path.file_name().ok_or(403u16)?))
                 }
                 Ok(_) => Err(403),
                 Err(error) => Err(match error.kind() {

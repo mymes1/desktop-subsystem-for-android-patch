@@ -215,7 +215,9 @@ impl TaskWindows {
         self.tasks
             .keys()
             .copied()
-            .filter(|task_id| !self.closing.contains(task_id) && !self.pending.contains_key(task_id))
+            .filter(|task_id| {
+                !self.closing.contains(task_id) && !self.pending.contains_key(task_id)
+            })
             .collect()
     }
 
@@ -704,7 +706,8 @@ impl TaskWindows {
         self.told_sizes
             .retain(|task_id, _| present.contains(task_id));
         self.pending.retain(|task_id, _| present.contains(task_id));
-        self.told_modes.retain(|task_id, _| present.contains(task_id));
+        self.told_modes
+            .retain(|task_id, _| present.contains(task_id));
         self.displays.clear();
         for event in current {
             changes.extend(self.apply(event));
@@ -1297,7 +1300,14 @@ mod tests {
         assert!(windows.tick(now).is_empty());
         let changes = windows.tick(now + SETTLE);
         assert!(
-            matches!(changes[0], WindowChange::Open { width: 1000, height: 600, .. }),
+            matches!(
+                changes[0],
+                WindowChange::Open {
+                    width: 1000,
+                    height: 600,
+                    ..
+                }
+            ),
             "{changes:?}"
         );
     }

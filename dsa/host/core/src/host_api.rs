@@ -66,6 +66,7 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::app_windows::{self, AppWindowSettings};
 use crate::apps::{self, UninstallOutcome};
 use crate::arm_translation::{self, GuestArmTranslation, Package};
 use crate::background::{
@@ -76,6 +77,7 @@ use crate::data_reset::{UserDataReset, RESET_STOP_WAIT};
 use crate::device_identity::{DeviceIdentity, DeviceIdentityStore, ImageBuild};
 use crate::diagnostics::HostFile;
 use crate::files::{self, FileAction, FileTransfer};
+use crate::gamepads::{GamepadEvent, GamepadInfo, GamepadRumble, GamepadState};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
 use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{InputEvent, PointerEvent};
@@ -89,8 +91,6 @@ use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
 use crate::run_mode::{RunMode, RunModePolicy};
 use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
-use crate::app_windows::{self, AppWindowSettings};
-use crate::gamepads::{GamepadEvent, GamepadInfo, GamepadRumble, GamepadState};
 use crate::settings::{Settings, SettingsStore};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
@@ -3187,14 +3187,16 @@ impl HostApiService {
             Some(request::Body::SetAppWindowSettings(set)) => {
                 self.app_window_settings(peer, Some(set.app.unwrap_or_default()))
             }
-            Some(request::Body::SetSystemSettings(set)) => match self.androids.android(&peer.user) {
-                Err(why) => error(ErrorCode::Unavailable, why),
-                Ok(android) => {
-                    let settings = SystemSettings::from_wire(&set.settings.unwrap_or_default());
-                    android.set_system_settings(settings);
-                    response::Body::Done(types::Done {})
+            Some(request::Body::SetSystemSettings(set)) => {
+                match self.androids.android(&peer.user) {
+                    Err(why) => error(ErrorCode::Unavailable, why),
+                    Ok(android) => {
+                        let settings = SystemSettings::from_wire(&set.settings.unwrap_or_default());
+                        android.set_system_settings(settings);
+                        response::Body::Done(types::Done {})
+                    }
                 }
-            },
+            }
             Some(request::Body::ResetData(_)) => self.reset_data(peer),
             Some(request::Body::SetSettings(set)) => self.set_settings(peer, set),
             Some(request::Body::GetDeviceIdentity(_)) => self.device_identity(peer, None),
@@ -5330,8 +5332,11 @@ impl GamepadStream {
     /// Passes a change to a controller on. Nothing is awaited. An error means the connection
     /// has ended, and a new one is needed.
     pub fn send(&mut self, event: &GamepadEvent) -> Result<(), ClientError> {
-        send(&mut *self.connection, Body::GamepadEvent(gamepad_to_wire(event)))
-            .map_err(ClientError::Transport)
+        send(
+            &mut *self.connection,
+            Body::GamepadEvent(gamepad_to_wire(event)),
+        )
+        .map_err(ClientError::Transport)
     }
 
     /// The next rumble effect an app in the caller's Android played, waiting at most

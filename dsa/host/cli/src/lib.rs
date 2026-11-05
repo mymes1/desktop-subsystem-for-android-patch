@@ -229,8 +229,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::apk::{ApkFile, InstallKind, InstallOutcome, InstalledPackage};
-use dsa_host_core::app_windows::AppWindowSettings;
 use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer};
+use dsa_host_core::app_windows::AppWindowSettings;
 use dsa_host_core::arm_translation;
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
@@ -352,7 +352,9 @@ pub fn parse_start_size(value: &str) -> Result<Option<(u32, u32)>, String> {
     });
     match size {
         Some(size) => Ok(Some(size)),
-        None => Err(format!("--start-size is auto or a size such as 400x700, not {value:?}")),
+        None => Err(format!(
+            "--start-size is auto or a size such as 400x700, not {value:?}"
+        )),
     }
 }
 

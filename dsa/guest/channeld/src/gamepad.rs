@@ -206,7 +206,10 @@ impl GamepadDevices {
                 }
                 match self.maker.make(pad, self.to_host.clone()) {
                     Ok(device) => {
-                        eprintln!("dsa-channeld: gamepad {} ({}) is here", pad.pad_id, pad.name);
+                        eprintln!(
+                            "dsa-channeld: gamepad {} ({}) is here",
+                            pad.pad_id, pad.name
+                        );
                         pads.insert(pad.pad_id, Pad { device, last: None });
                     }
                     Err(why) => eprintln!(
@@ -245,10 +248,7 @@ impl GamepadDevices {
 
     /// Forgets every device, as when the host connects again and gives its controllers anew.
     pub fn reset(&self) {
-        self.pads
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clear();
+        self.pads.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 
     /// The controllers that have a device.
@@ -647,10 +647,7 @@ mod tests {
         assert_eq!(value(EV_ABS, ABS_RZ), Some(7));
         assert_eq!(value(EV_ABS, ABS_HAT0X), Some(-1));
         assert_eq!(value(EV_ABS, ABS_HAT0Y), Some(1));
-        assert_eq!(
-            events.last(),
-            Some(&InputEvent::new(EV_SYN, SYN_REPORT, 0))
-        );
+        assert_eq!(events.last(), Some(&InputEvent::new(EV_SYN, SYN_REPORT, 0)));
     }
 
     #[test]
@@ -701,9 +698,11 @@ mod tests {
             dsa_protocol::control::GamepadDisconnected { pad_id: 1 }
         )));
         assert_eq!(devices.pads(), vec![2]);
-        assert!(!devices.handle(&Body::ScreenState(
-            dsa_protocol::control::ScreenState { on: true }
-        )));
+        assert!(
+            !devices.handle(&Body::ScreenState(dsa_protocol::control::ScreenState {
+                on: true
+            }))
+        );
         devices.reset();
         assert!(devices.pads().is_empty());
     }

@@ -2122,7 +2122,9 @@ fn fr30_dsa_app_window_is_parsed() {
     assert_eq!(list.command, Cmd::AppWindow);
     assert_eq!(list.app_window, Some(AppWindowAction::List));
     assert_eq!(
-        parse(&args("app-window com.example.notes")).unwrap().app_window,
+        parse(&args("app-window com.example.notes"))
+            .unwrap()
+            .app_window,
         Some(AppWindowAction::Show("com.example.notes".into()))
     );
     assert_eq!(
@@ -2194,7 +2196,11 @@ fn fr30_dsa_app_window_changes_and_resets_an_apps_window_settings() {
     assert_eq!(none["apps"], serde_json::json!([]));
     let refused = dsa(&endpoint, "app-window com.example.notes --start-size 10x10");
     assert!(!refused.status.success());
-    assert!(stderr(&refused).contains("start size"), "{}", stderr(&refused));
+    assert!(
+        stderr(&refused).contains("start size"),
+        "{}",
+        stderr(&refused)
+    );
 }
 
 #[test]
