@@ -33,7 +33,11 @@ fn storage(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("Storage").join("Pictures")).unwrap();
     std::fs::create_dir_all(dir.join("Storage").join("Windows").join("Documents")).unwrap();
-    std::fs::write(dir.join("Storage").join("Pictures").join("cat.jpg"), b"meow").unwrap();
+    std::fs::write(
+        dir.join("Storage").join("Pictures").join("cat.jpg"),
+        b"meow",
+    )
+    .unwrap();
     std::fs::write(dir.join("secret.txt"), b"not android's").unwrap();
     dir
 }
@@ -86,8 +90,14 @@ fn fr29_the_host_lists_reads_and_writes_androids_shared_storage() {
           MKCOL /tok/Made HTTP/1.1\r\n\r\n",
     );
     assert!(answered.starts_with("HTTP/1.1 207"), "{answered}");
-    assert!(answered.contains("<D:href>/tok/Pictures/</D:href>"), "{answered}");
-    assert!(!answered.contains("Windows"), "the host's own folders are left out: {answered}");
+    assert!(
+        answered.contains("<D:href>/tok/Pictures/</D:href>"),
+        "{answered}"
+    );
+    assert!(
+        !answered.contains("Windows"),
+        "the host's own folders are left out: {answered}"
+    );
     assert!(answered.contains("HTTP/1.1 200 OK\r\n"), "{answered}");
     assert!(answered.contains("\r\n\r\nmeow"), "{answered}");
     assert!(answered.contains("HTTP/1.1 201 Created"), "{answered}");
@@ -121,7 +131,11 @@ fn fr29_requests_out_of_androids_storage_are_refused() {
         b"MOVE /tok/Pictures/cat.jpg HTTP/1.1\r\nDestination: http://127.0.0.1:1/tok/../cat.jpg\r\n\r\n",
     );
     assert!(moved.starts_with("HTTP/1.1 403"), "{moved}");
-    assert!(dir.join("Storage").join("Pictures").join("cat.jpg").is_file());
+    assert!(dir
+        .join("Storage")
+        .join("Pictures")
+        .join("cat.jpg")
+        .is_file());
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -134,10 +148,7 @@ fn fr29_a_symbolic_link_out_of_androids_storage_is_refused() {
         .unwrap();
     let answered = exchange(&config, b"GET /tok/way%20out HTTP/1.1\r\n\r\n");
     assert!(answered.starts_with("HTTP/1.1 403"), "{answered}");
-    let listed = exchange(
-        &config,
-        b"PROPFIND /tok/ HTTP/1.1\r\nDepth: 1\r\n\r\n",
-    );
+    let listed = exchange(&config, b"PROPFIND /tok/ HTTP/1.1\r\nDepth: 1\r\n\r\n");
     assert!(!listed.contains("way%20out"), "{listed}");
     let _ = std::fs::remove_dir_all(&dir);
 }

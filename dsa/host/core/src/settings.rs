@@ -628,7 +628,10 @@ mod tests {
             ..Settings::default()
         };
         assert!(store.set(user, &unknown).is_err());
-        assert_eq!(store.get(user).unwrap().shared_folders, ["Documents", "Pictures"]);
+        assert_eq!(
+            store.get(user).unwrap().shared_folders,
+            ["Documents", "Pictures"]
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

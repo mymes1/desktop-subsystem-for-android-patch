@@ -562,7 +562,11 @@ fn fr29_file_sharing_reaches_the_switch_and_the_agent() {
     let sent = frame(Body::FileSharing(sharing.clone()));
     router.from_host(&sent);
     assert_eq!(*switched.lock().unwrap(), vec![sharing]);
-    assert_eq!(agent.frames(), vec![sent], "the agent has the media scanner look");
+    assert_eq!(
+        agent.frames(),
+        vec![sent],
+        "the agent has the media scanner look"
+    );
 }
 
 #[test]

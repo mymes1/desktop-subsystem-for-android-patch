@@ -473,6 +473,31 @@ Files up to 64 MiB can be sent: the service holds the whole file in memory while
 and the limit keeps that bounded. A larger file is refused with a message before anything is
 sent.
 
+A file dragged from Explorer onto a task window goes to that window's app: each task window is
+an OLE drop target (`src/app_window/drop_target.rs`), and the file is sent the same way, named
+for the app, which the agent hands it to with `ACTION_SEND`. An APK dropped on a window goes to
+the APK install window instead, as opening it would. Folders are not sent.
+
+### Sharing folders with Android
+
+The user's Documents, Downloads, Pictures, Music, Videos and Desktop folders show in Android's
+shared storage under `Windows/<folder>`, all of them unless the user chooses fewer, and none
+while file sharing is off (`dsa settings set file-sharing on|off`,
+`dsa settings set shared-folders Documents,Pictures`, or the Advanced page of DSA Settings).
+The service serves each folder to the guest with a 9P2000.L file server on a Hyper-V socket
+(vsock port 5590); the guest mounts it with the kernel's `9p` file system. Each connection
+starts with a proof of the boot's secret, so no app in the guest reaches the server, and every
+request is served impersonating the signed-in user (`src/file_share.rs`), so Windows applies the
+user's own rights. Names that leave a folder (`..`, separators, device names) and links that
+point outside it are refused.
+
+The other way, Android's shared storage opens in Explorer from the "DSA Files" Start menu
+entry, the "Android files" button in DSA Settings, or `dsa files open`. The guest serves its
+storage as WebDAV on vsock port 5591, the service bridges a loopback port to it, and Explorer
+opens it through Windows' WebDAV redirector as `\\127.0.0.1@<port>\<token>`
+(`src/android_files.rs`). The token changes with each session. The redirector is the WebClient
+service, which Windows starts the first time such a path is opened.
+
 ## Installing APKs
 
 An APK file installs in Android three ways, which all end in the same local API request:

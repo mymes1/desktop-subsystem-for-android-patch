@@ -61,7 +61,11 @@ pub fn all_folders() -> Vec<String> {
 pub fn known_folders(names: &[String]) -> Vec<String> {
     FOLDERS
         .iter()
-        .filter(|known| names.iter().any(|name| name.trim().eq_ignore_ascii_case(known)))
+        .filter(|known| {
+            names
+                .iter()
+                .any(|name| name.trim().eq_ignore_ascii_case(known))
+        })
         .map(|known| known.to_string())
         .collect()
 }

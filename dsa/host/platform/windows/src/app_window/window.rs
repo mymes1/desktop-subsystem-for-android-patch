@@ -65,8 +65,8 @@ use crate::compositor::present::{self, Gpu, WindowPresenter};
 use crate::compositor::window_marks;
 
 use super::accessibility::{AccessibilityWindow, ApiConnect, WM_APP_ACCESSIBILITY};
-use super::drop_target::{self, DropHandler};
 use super::caption::{task_frame, CaptionWindow};
+use super::drop_target::{self, DropHandler};
 use super::ime::ImeWindow;
 use super::keys::KeyWindow;
 use super::pointer::PointerWindow;

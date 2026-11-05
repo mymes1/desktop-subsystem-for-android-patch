@@ -2421,7 +2421,10 @@ fn fr29_a_file_dropped_on_a_window_reaches_that_app_whole() {
             );
         }
         assert_eq!(sending.join().unwrap(), Ok(()));
-        assert_eq!(received, content, "the app gets the file as it is on the host");
+        assert_eq!(
+            received, content,
+            "the app gets the file as it is on the host"
+        );
     });
 }
 
@@ -2493,8 +2496,8 @@ fn fr29_android_files_open_a_loopback_address_and_have_the_guest_serve_them() {
     assert_eq!(path, format!("{}/", files.token));
     assert_eq!(session.android_files().unwrap(), url, "the address holds");
 
-    let mut client = std::net::TcpStream::connect(("127.0.0.1", port.parse::<u16>().unwrap()))
-        .unwrap();
+    let mut client =
+        std::net::TcpStream::connect(("127.0.0.1", port.parse::<u16>().unwrap())).unwrap();
     client.set_read_timeout(Some(WAIT)).unwrap();
     client.write_all(b"PROPFIND").unwrap();
     let mut answer = [0u8; 8];

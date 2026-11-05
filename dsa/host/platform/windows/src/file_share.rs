@@ -18,8 +18,8 @@ use windows_sys::Win32::Security::{ImpersonateLoggedOnUser, RevertToSelf};
 use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
 use windows_sys::Win32::System::Com::CoTaskMemFree;
 use windows_sys::Win32::UI::Shell::{
-    FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Downloads, FOLDERID_Music,
-    FOLDERID_Pictures, FOLDERID_Videos, SHGetKnownFolderPath,
+    FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Downloads, FOLDERID_Music, FOLDERID_Pictures,
+    FOLDERID_Videos, SHGetKnownFolderPath,
 };
 
 use crate::pipe::{current_user_sid, OwnedHandle};
@@ -128,7 +128,8 @@ impl ShareHost for UserFolders {
             .collect();
         let (mut available, mut total, mut free) = (0u64, 0u64, 0u64);
         // SAFETY: a NUL-terminated path and three out values.
-        let ok = unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, &mut total, &mut free) };
+        let ok =
+            unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, &mut total, &mut free) };
         (ok != 0).then_some((total, available))
     }
 
