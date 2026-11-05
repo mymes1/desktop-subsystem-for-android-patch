@@ -177,12 +177,12 @@ impl GamepadSource for XInputPads {
             return;
         }
         // The left motor is the strong, low-frequency one.
-        let mut vibration = XINPUT_VIBRATION {
+        let vibration = XINPUT_VIBRATION {
             wLeftMotorSpeed: strong,
             wRightMotorSpeed: weak,
         };
         // SAFETY: a slot index XInput takes and a valid pointer to the structure.
-        unsafe { XInputSetState(pad_id, &mut vibration) };
+        unsafe { XInputSetState(pad_id, &vibration) };
     }
 }
 

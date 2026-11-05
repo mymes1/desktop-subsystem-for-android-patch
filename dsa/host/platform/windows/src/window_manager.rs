@@ -82,7 +82,7 @@ fn sessions_of(sid: &str) -> io::Result<Vec<UserSession>> {
 
 /// The token of the user with SID `sid` from a session they are signed in to, the active one
 /// first. An error when they are signed in nowhere, or this process may not ask.
-pub fn user_token(sid: &str) -> io::Result<OwnedHandle> {
+pub(crate) fn user_token(sid: &str) -> io::Result<OwnedHandle> {
     let mut sessions = sessions_of(sid)?;
     sessions.sort_by_key(|session| !session.active);
     sessions
