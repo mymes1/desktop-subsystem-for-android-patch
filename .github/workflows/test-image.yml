@@ -392,7 +392,7 @@ jobs:
           readelf -h "$target" | grep -Fq "$GUEST_MACHINE"
           needed=$(readelf -d "$target" | sed -nE 's/.*NEEDED.*\[(.*)\]/\1/p' | sort | xargs)
           echo "$target needs: $needed"
-          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so"
+          test "$needed" = "libbinder_ndk.so libc.so libdl.so liblog.so libm.so"
 
       - name: Keep the GNSS HAL
         uses: actions/upload-artifact@v4
