@@ -408,6 +408,7 @@ jobs:
             Start-Sleep -Milliseconds 500
           }
           function Start-Short([string]$Page) {
+            Close-PrivacyExperience
             $app = Start-Process $exe -ArgumentList '--page', $Page -PassThru
             $window = Wait-ProcessWindow $app.Id 90
             if (-not $window) { throw "DSA Settings showed no window within 90 seconds" }

@@ -128,3 +128,13 @@ function Wait-SetupExit($Process, [int]$Seconds = 120) {
     if (-not $Process.WaitForExit($Seconds * 1000)) { throw "setup.exe did not finish within $Seconds seconds" }
     $Process.ExitCode
 }
+
+# Some runner images open Windows' first sign-in privacy screen over the whole desktop, which
+# takes the mouse wheel and the foreground from the window under test. It is closed and kept
+# from coming back.
+function Close-PrivacyExperience {
+    $key = 'HKCU:\Software\Policies\Microsoft\Windows\OOBE'
+    New-Item -Path $key -Force | Out-Null
+    Set-ItemProperty -Path $key -Name DisablePrivacyExperience -Value 1 -Type DWord
+    Get-Process UserOOBEBroker, WWAHost -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
