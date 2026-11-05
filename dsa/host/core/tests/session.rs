@@ -17,6 +17,7 @@ use dsa_host_core::notifications::{Notification, NotificationAction, Notificatio
 use dsa_host_core::power::{PowerHub, PowerState};
 use dsa_host_core::power_hints::{mode, PowerHint};
 use dsa_host_core::print::{PrintEvent, PrintJob, PrintOutcome};
+use dsa_host_core::run_mode::{RunMode, RunModePolicy};
 use dsa_host_core::session::{
     BackgroundRequest, BootProblem, GuestLauncher, GuestPower, GuestStall, Session, SessionConfig,
     SessionError, SessionEvent, SessionState, StopReason,
@@ -4367,4 +4368,138 @@ fn fr26_a_guest_that_stops_withdraws_the_jobs_the_watcher_has() {
         PrintEvent::Withdrawn { job_id: job.job_id }
     );
     drop(agent);
+}
+
+/// The run mode "As needed" with a wait short enough for a test.
+fn as_needed(stop_after: Duration) -> RunModePolicy {
+    RunModePolicy {
+        mode: RunMode::AsNeeded,
+        stop_after,
+        keep_for_notifications: false,
+    }
+}
+
+const RUN_MODE_WAIT: Duration = Duration::from_millis(300);
+
+#[test]
+fn fr31_as_needed_stops_the_session_once_nothing_has_used_it_for_the_wait() {
+    let (session, _agent, _launcher) = active_session();
+    session.set_run_mode(as_needed(RUN_MODE_WAIT));
+    assert!(
+        session.wait_for(SessionState::Stopped, WAIT),
+        "the session stops once no window, background app or widget has used it"
+    );
+    assert_eq!(
+        session.last_reason(),
+        Some(StopReason::Unused(RUN_MODE_WAIT))
+    );
+}
+
+#[test]
+fn fr31_opening_an_app_during_the_wait_keeps_the_session_running() {
+    let (session, _agent, _launcher) = active_session();
+    session.windows_shown(true).unwrap();
+    session.set_run_mode(as_needed(RUN_MODE_WAIT));
+    // The last window closes, and an app opens again before the wait is over.
+    session.windows_shown(false).unwrap();
+    thread::sleep(RUN_MODE_WAIT / 2);
+    session.windows_shown(true).unwrap();
+    thread::sleep(RUN_MODE_WAIT * 3);
+    assert_eq!(session.state(), SessionState::Active);
+    // Closed for good, it stops after the whole wait from the second close.
+    session.windows_shown(false).unwrap();
+    assert!(session.wait_for(SessionState::Stopped, WAIT));
+}
+
+#[test]
+fn fr31_continuous_never_stops_the_session_and_keeps_doze() {
+    let (session, mut agent, _launcher) = lifecycle_session(None);
+    session.set_run_mode(RunModePolicy {
+        mode: RunMode::Continuous,
+        stop_after: RUN_MODE_WAIT,
+        keep_for_notifications: false,
+    });
+    dozing(&session, &mut agent);
+    thread::sleep(RUN_MODE_WAIT * 4);
+    assert_eq!(
+        session.state(),
+        SessionState::Dozing,
+        "continuous keeps Android in Doze"
+    );
+}
+
+#[test]
+fn fr31_as_needed_stops_a_dozing_session_and_never_freezes_it_instead() {
+    let (session, mut agent, launcher) = lifecycle_session(None);
+    dozing(&session, &mut agent);
+    session.set_run_mode(as_needed(RUN_MODE_WAIT));
+    assert!(session.wait_for(SessionState::Stopped, WAIT));
+    assert!(
+        launcher.0.lock().unwrap().freezes == 0,
+        "stopping comes after Doze, not a freeze"
+    );
+}
+
+#[test]
+fn fr31_a_background_app_or_a_widget_keeps_the_session_running() {
+    let (session, mut agent, _launcher) = active_session();
+    send_body(&mut agent, music_app("Song"));
+    wait_until("the background app is known", || {
+        !session.background_apps().0.is_empty()
+    });
+    session.set_run_mode(as_needed(RUN_MODE_WAIT));
+    thread::sleep(RUN_MODE_WAIT * 3);
+    assert_eq!(
+        session.state(),
+        SessionState::Active,
+        "a music app keeps it"
+    );
+
+    let (session, mut agent, _launcher) = active_session();
+    send_body(&mut agent, widget_updated(12));
+    wait_until("the widget is known", || !session.widgets().is_empty());
+    session.set_run_mode(as_needed(RUN_MODE_WAIT));
+    thread::sleep(RUN_MODE_WAIT * 3);
+    assert_eq!(
+        session.state(),
+        SessionState::Active,
+        "a widget keeps it"
+    );
+}
+
+#[test]
+fn fr31_notifications_keep_the_session_running_only_when_the_user_chose_so() {
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_notifications();
+    send_body(
+        &mut agent,
+        Body::Notification(guest_notification(CHAT, "Ann")),
+    );
+    assert!(watch.recv_timeout(WAIT).is_ok());
+    session.set_run_mode(RunModePolicy {
+        keep_for_notifications: true,
+        ..as_needed(RUN_MODE_WAIT)
+    });
+    thread::sleep(RUN_MODE_WAIT * 3);
+    assert_eq!(session.state(), SessionState::Active);
+    session.set_run_mode(as_needed(RUN_MODE_WAIT));
+    assert!(
+        session.wait_for(SessionState::Stopped, WAIT),
+        "without the choice a notification does not keep Android running"
+    );
+}
+
+#[test]
+fn fr31_a_session_stopped_as_needed_starts_again_on_the_next_start() {
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.set_run_mode(as_needed(RUN_MODE_WAIT));
+    session.start();
+    let _agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    assert!(session.wait_for(SessionState::Stopped, WAIT));
+    // The next app launch starts Android first, as a start does.
+    session.start();
+    let _again = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
 }

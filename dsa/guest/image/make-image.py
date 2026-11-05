@@ -948,13 +948,14 @@ def image_identity(system_props):
     }
 
 
-def edit_props(text, codec2=False, vendor=False, build_tag=None, product=False):
+def edit_props(text, codec2=False, vendor=False, build_tag=None, product=False, network=False):
     """Returns a build.prop with DSA's properties and device identity. With `vendor`, it is one
     init reads as vendor_init, which gets only the properties vendor_init may set. With
     `build_tag`, the incremental version and the fingerprints carry it. With `product`, it ends
-    with the imports of the identity the user chose."""
+    with the imports of the identity the user chose. With `network`, it is the vendor build.prop
+    that chooses how the VM's network adapter reaches Android (NETWORK_PROPS)."""
     props_to_apply = {**USER_PROPS, **ADB_PROPS, **GRAPHICS_PROPS, **MEMORY_PROPS, **LOADER_PROPS, **FRP_PROPS,
-                      **LOG_PROPS, **(CODEC2_PROPS if codec2 else {})}
+                      **LOG_PROPS, **(CODEC2_PROPS if codec2 else {}), **(NETWORK_PROPS if network else {})}
     if vendor:
         props_to_apply = {k: v for k, v in props_to_apply.items() if k not in VENDOR_FORBIDDEN_PROPS}
     out = []
@@ -975,9 +976,69 @@ def edit_props(text, codec2=False, vendor=False, build_tag=None, product=False):
     return identity_imports(text) if product else text
 
 
+# The network. The host attaches one Hyper-V synthetic adapter (hv_netvsc), eth0, to a NAT
+# network it makes for the VM, or to the LAN in advanced networking. Android shows it as
+# Wi-Fi, the way Cuttlefish shows its virtio adapter: Cuttlefish's setup_wifi renames eth0
+# to buried_eth0 and puts a virt_wifi link, wlan0, on top, which the Wi-Fi HAL and
+# wpa_supplicant see as a radio joined to the open network "VirtWifi". Apps then get an
+# unmetered Wi-Fi network that NetworkMonitor validates, and ConnectivityManager reports it
+# and each change of it. The address, the route and the DNS servers come by DHCP from the
+# host (Android's IpClient asks), so nothing here is static: a host network change reaches
+# the guest through its next lease, and the NAT gateway's DNS proxy follows the host's own
+# DNS and VPN. Cuttlefish's rename_eth0 would hand eth0 to the radio as rmnet0, and DSA has no
+# modem, so it is turned off. setup_wifi derives wlan0's MAC address from the boot property
+# wifi_mac_prefix, a number it fails without (see kernel_cmdline).
+NETWORK_PROPS_FILE = "VENDOR/build.prop"
+NETWORK_INTERFACE = "eth0"
+NETWORK_PROPS = {
+    "ro.vendor.wifi_impl": "virt_wifi",
+    "ro.vendor.virtwifi.port": NETWORK_INTERFACE,
+    "ro.vendor.disable_rename_eth0": "1",
+}
+WIFI_MAC_PREFIX = "5554"
+SETUP_WIFI = "VENDOR/bin/setup_wifi"
+# Kernel command line arguments that would give the guest a static address in place of DHCP.
+STATIC_NETWORK_ARGS = ["androidboot.auto_eth_guest_addr=", "ip="]
+
+
+def network_problems(names, read, cmdline):
+    """What keeps the guest from reaching the network through DHCP and DNS from the host, as
+    lines for check-image.py. `names` lists the target files, `read` returns one's bytes and
+    `cmdline` is the image's kernel command line."""
+    problems = []
+    if NETWORK_PROPS_FILE not in names:
+        problems.append(f"{NETWORK_PROPS_FILE} is missing, so nothing turns the network adapter into Wi-Fi")
+    else:
+        props = {}
+        for line in read(NETWORK_PROPS_FILE).decode(errors="replace").splitlines():
+            if "=" in line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                props[key.strip()] = value.strip()
+        for key, value in NETWORK_PROPS.items():
+            if props.get(key) != value:
+                problems.append(f"{NETWORK_PROPS_FILE} sets {key} to {props.get(key)!r}, not {value!r}, so "
+                                "Android does not show the VM's network adapter as Wi-Fi")
+        for key in props:
+            if key.startswith("net.dns") or key.startswith("ro.vendor.net.dns"):
+                problems.append(f"{NETWORK_PROPS_FILE} pins the DNS server ({key}); the guest must use the "
+                                "servers DHCP gives it")
+    if SETUP_WIFI not in names:
+        problems.append(f"{SETUP_WIFI} is missing, so eth0 never becomes wlan0 and apps have no network")
+    if not any(name.startswith("VENDOR/etc/init/") and b"setup_wifi" in read(name)
+               for name in names if name.endswith(".rc") and name.startswith("VENDOR/etc/init/")):
+        problems.append("no vendor init script starts setup_wifi")
+    if f"androidboot.wifi_mac_prefix={WIFI_MAC_PREFIX}" not in cmdline.split():
+        problems.append("the kernel command line has no androidboot.wifi_mac_prefix, and setup_wifi "
+                        "exits without it")
+    for arg in STATIC_NETWORK_ARGS:
+        if any(part.startswith(arg) for part in cmdline.split()):
+            problems.append(f"the kernel command line sets {arg}, a static address in place of DHCP")
+    return problems
+
+
 # Wi-Fi's init script makes a kernel trace instance when boot completes, for WifiService to
-# record connection attempts into. The VM has no Wi-Fi device, so nothing ever records into
-# it, and on Hyper-V each of its tracefs writes takes up to two seconds of kernel time. At
+# record connection attempts into. Its wlan0 is a virt_wifi link with nothing to trace for a
+# desktop user, and on Hyper-V each of its tracefs writes takes up to two seconds of kernel time. At
 # the same moment lmkd attaches its BPF memory event programs to tracepoints, which waits
 # behind those writes, inside the two seconds its watchdog gives its main loop. When the
 # watchdog fires it kills the process lmkd last saw with the highest oom_score_adj, and lmkd
@@ -1793,7 +1854,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = edit_props(data.decode(), codec2=has_codec2,
                                       vendor=name in VENDOR_PROP_FILES,
                                       build_tag=build_tag,
-                                      product=name == PRODUCT_PROP_FILE).encode()
+                                      product=name == PRODUCT_PROP_FILE,
+                                      network=name == NETWORK_PROPS_FILE).encode()
                     if name == ARM_TRANSLATION_PRODUCT_PROPS:
                         data = add_arm_translation_import(data.decode()).encode()
                 elif name in IDENTITY_PROP_FILES:
@@ -2536,6 +2598,8 @@ def kernel_cmdline(partition_cmdline, hwcomposer=False, arch=DEFAULT_ARCH, camer
         # one it binds port 0, which only privileged processes may, and aborts. No host
         # client connects; DSA's own ports are 5000-5001, 5555 (adb) and 5566-5567.
         "androidboot.vsock_lights_port=6900",
+        # setup_wifi makes wlan0's MAC address from this number and exits without it.
+        f"androidboot.wifi_mac_prefix={WIFI_MAC_PREFIX}",
         *(f"androidboot.vendor.apex.{module}={apex}"
           for module, apex in apexes.items()),
     ])

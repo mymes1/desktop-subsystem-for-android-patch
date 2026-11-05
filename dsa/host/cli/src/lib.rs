@@ -24,6 +24,7 @@
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
 //! dsa arm-translation [status | install <folder> | remove]
+//! dsa reset-data --yes
 //! ```
 //!
 //! It acts on the Android of the user who runs it: the service learns that user from the
@@ -152,9 +153,20 @@
 //! user's Android: while it is on, `adb connect 127.0.0.1:58526` connects, with no prompt to
 //! accept in Android. `adb-port` picks another loopback port than 58526. `stop-without-asking` (off by default)
 //! is whether stopping an app that runs in the background skips the question that confirms it.
+//! `advanced-networking` (off by default) puts the user's Android on this computer's network as
+//! a device of its own, so other devices there reach it, instead of behind a NAT network of its
+//! own; it applies the next time Android starts.
+//! `run-mode` is `as-needed` (the default) or `continuous`: as needed, Android stops once the
+//! last app window has closed and no app runs in the background and no widget is placed, after
+//! `stop-after` (seconds, or a time such as `5m` or `1h`; five minutes by default), and starts
+//! again with the next app; continuous, it stays running in Doze. `keep-for-notifications`
+//! (off by default) is whether an app with a notification shown keeps it running as needed.
 //! `dsa settings set <name> <value>` changes one;
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
-//! takes, on the host and inside Android. `dsa gpus` lists the GPUs of this machine, for
+//! takes, on the host and inside Android. `dsa network` shows how the user's Android reaches
+//! the network: NAT, advanced or none while it is not running, its addresses (a program on this
+//! computer reaches a server in Android at any of them), its DNS servers and its gateway. With
+//! `--json` it prints `mode`, `addresses`, `dns_servers`, `gateway` and `problem`. `dsa gpus` lists the GPUs of this machine, for
 //! choosing the render GPU.
 //!
 //! `dsa arm-translation status` (or `dsa arm-translation`) says whether apps built only for
@@ -179,6 +191,12 @@
 //! and `dsa settings reset device.<field>` one. Android reads them when it starts, so a change
 //! applies from its next start. With `--json` it prints `chosen` and `effective`, each with the
 //! fields above (`fingerprint_release` and so on for the parts).
+//!
+//! `dsa reset-data --yes` erases the user's Android data: the apps they installed, their
+//! accounts and every app's data. It stops Android, puts a fresh data disk in place of theirs,
+//! and the next start boots Android as it was first installed. The Android image and DSA's
+//! settings stay. Without `--yes` it only says what would be lost. With `--json` it prints
+//! `reset`.
 //!
 //! `dsa status` says `Active` only once Android has finished booting and its agent is connected.
 //! An Android that runs but has taken too long is `Stalled`, and a line after the state says why
@@ -208,7 +226,8 @@ use dsa_host_core::arm_translation;
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
 use dsa_host_core::host_api::{
-    ArmTranslationStatus, ClientError, HostApiClient, SettingsReport, Status, TaskList,
+    ArmTranslationStatus, ClientError, HostApiClient, NetworkStatus, SettingsReport, Status,
+    TaskList,
 };
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::session::SessionState;
@@ -221,12 +240,13 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      launch <package> [--wait-first-frame] | tap <package> <x> <y> | stop-app <package> | \
      install <file.apk> [--progress] | apk-info <file.apk> | open <file> | share <file> | \
      tasks | settings [set <name> <value> | device | reset device[.<field>]] | memory | \
-     gpus | \
+     network | gpus | \
      widgets [list | add <provider> | remove <id> | watch] | \
      apps [list | info <package> | uninstall <package> | settings [<package>]] | \
      background [list | open <package> | stop <package>] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | remove] | files [open]> \
+     arm-translation [status | install <folder> | remove] | reset-data --yes> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
 pub mod device;
@@ -261,6 +281,8 @@ pub enum Command {
     Settings,
     /// Show how much memory the user's Android takes.
     Memory,
+    /// Show how the user's Android reaches the network: the mode, its addresses and DNS.
+    Network,
     /// List this machine's GPUs.
     Gpus,
     /// List, place or remove widgets ([`Invocation::widgets`]).
@@ -284,6 +306,8 @@ pub enum Command {
     Files,
     /// Open Android's shared storage in the host's file manager.
     FilesOpen,
+    /// Erase the user's Android data, once [`Invocation::yes`] confirms it.
+    ResetData,
 }
 
 /// What `dsa apps` does.
@@ -349,6 +373,42 @@ pub enum Change {
     FileSharing(bool),
     /// The folders to share, in the order the service keeps them.
     SharedFolders(Vec<String>),
+    AdvancedNetworking(bool),
+    RunMode(dsa_host_core::run_mode::RunMode),
+    /// The wait before Android stops in "As needed", in seconds.
+    StopAfter(u32),
+    KeepForNotifications(bool),
+}
+
+/// A wait in seconds, or with a unit: `90`, `90s`, `5m`, `1h`.
+fn parse_stop_after(value: &str) -> Result<u32, String> {
+    let text = value.trim().to_ascii_lowercase();
+    let (number, scale) = if let Some(n) = text.strip_suffix('h') {
+        (n, 3600)
+    } else if let Some(n) = text.strip_suffix('m') {
+        (n, 60)
+    } else if let Some(n) = text.strip_suffix('s') {
+        (n, 1)
+    } else {
+        (text.as_str(), 1)
+    };
+    let secs = number
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .and_then(|n| n.checked_mul(scale))
+        .ok_or_else(|| format!("stop-after is a time such as 300, 90s, 5m or 1h, not {value:?}"))?;
+    let (min, max) = (
+        dsa_host_core::run_mode::MIN_STOP_AFTER.as_secs() as u32,
+        dsa_host_core::run_mode::MAX_STOP_AFTER.as_secs() as u32,
+    );
+    if !(min..=max).contains(&secs) {
+        return Err(format!(
+            "stop-after is from {min} seconds to {} hours, not {value:?}",
+            max / 3600
+        ));
+    }
+    Ok(secs)
 }
 
 impl Change {
@@ -376,6 +436,10 @@ impl Change {
             "stop-without-asking" => switch().map(Change::StopWithoutAsking),
             "file-sharing" => switch().map(Change::FileSharing),
             "shared-folders" => parse_shared_folders(value).map(Change::SharedFolders),
+            "advanced-networking" => switch().map(Change::AdvancedNetworking),
+            "run-mode" => dsa_host_core::run_mode::RunMode::parse(value).map(Change::RunMode),
+            "stop-after" => parse_stop_after(value).map(Change::StopAfter),
+            "keep-for-notifications" => switch().map(Change::KeepForNotifications),
             "adb-port" => match value.parse::<u16>() {
                 Ok(port) if port > 0 => Ok(Change::AdbPort(port)),
                 _ => Err(format!(
@@ -386,7 +450,8 @@ impl Change {
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, image-updates, input-trace, \
                  resize-trace, memory-limit, developer-mode, adb-port, arm-translation, \
-                 stop-without-asking, file-sharing, shared-folders and device.<field>"
+                 stop-without-asking, file-sharing, shared-folders, run-mode, stop-after, \
+                 keep-for-notifications, advanced-networking and device.<field>"
             )),
         }
     }
@@ -512,6 +577,8 @@ pub struct Invocation {
     pub wait_first_frame: bool,
     /// Where `dsa tap` presses, in Android display pixels from the task's top left corner.
     pub point: Option<(u32, u32)>,
+    /// `dsa reset-data --yes`: the user confirmed that their Android data goes.
+    pub yes: bool,
 }
 
 /// Whether `name` can be an Android package name: dot-separated parts of letters, digits
@@ -536,6 +603,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut apps = None;
     let mut background = None;
     let mut json = false;
+    let mut yes = false;
     let mut progress = false;
     let mut buffers: u32 = 0;
     let mut tags = Vec::new();
@@ -634,7 +702,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             }
             "status" | "start" | "stop" | "freeze" | "update" | "launch" | "tap" | "stop-app"
             | "install" | "apk-info" | "open" | "share" | "tasks" | "settings" | "memory"
-            | "gpus" | "widgets" | "background"
+            | "gpus" | "widgets" | "background" | "network"
                 if command.is_none() =>
             {
                 command = Some(match arg.as_str() {
@@ -652,6 +720,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     "tasks" => Command::Tasks,
                     "settings" => Command::Settings,
                     "memory" => Command::Memory,
+                    "network" => Command::Network,
                     "gpus" => Command::Gpus,
                     "widgets" => Command::Widgets,
                     "background" => Command::Background,
@@ -730,6 +799,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 });
             }
             "--json" => json = true,
+            "--yes" if command == Some(Command::ResetData) => yes = true,
+            "reset-data" if command.is_none() => command = Some(Command::ResetData),
             "--progress" if command == Some(Command::Install) => progress = true,
             "--wait-first-frame" if command == Some(Command::Launch) => wait_first_frame = true,
             number
@@ -865,6 +936,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
         output,
         wait_first_frame,
         point,
+        yes,
     })
 }
 
@@ -1427,12 +1499,74 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "stop_without_asking": report.settings.stop_without_asking,
         "file_sharing": report.settings.file_sharing,
         "shared_folders": report.settings.shared_folders,
+        "advanced_networking": report.settings.advanced_networking,
+        "network": network_json(report.network.as_ref()),
+        "run_mode": report.settings.run_mode.as_str(),
+        "stop_after_secs": report.settings.stop_after_secs,
+        "keep_for_notifications": report.settings.keep_for_notifications,
         "program_updates_available": report.facts.program_updates_available,
         "image_updates_available": report.facts.image_updates_available,
         "version": report.facts.version,
         "log_dir": report.facts.log_dir,
         "android_version": report.facts.android_version,
     })
+}
+
+/// The network as one JSON object (`mode`, `addresses`, `dns_servers`, `gateway`, `problem`),
+/// or null from a service that does not report it.
+pub fn network_json(network: Option<&NetworkStatus>) -> Value {
+    match network {
+        Some(network) => json!({
+            "mode": network.mode,
+            "addresses": network.addresses,
+            "dns_servers": network.dns_servers,
+            "gateway": network.gateway,
+            "problem": network.problem,
+        }),
+        None => Value::Null,
+    }
+}
+
+/// The network, one fact per line, with the advanced networking setting.
+pub fn describe_network(report: &SettingsReport) -> String {
+    let setting = format!(
+        "Advanced networking: {}",
+        on_off(report.settings.advanced_networking)
+    );
+    let Some(network) = &report.network else {
+        return format!("{setting}\nThis service does not report the network; update it.");
+    };
+    let mode = match network.mode.as_str() {
+        NetworkStatus::NAT => "NAT (behind this computer)",
+        NetworkStatus::ADVANCED => "advanced (on this computer's network)",
+        NetworkStatus::OFF => "none (Android is not running)",
+        other => other,
+    };
+    let list = |items: &[String]| {
+        if items.is_empty() {
+            "none".to_string()
+        } else {
+            items.join(", ")
+        }
+    };
+    let mut lines = vec![setting, format!("Network: {mode}")];
+    if network.mode != NetworkStatus::OFF {
+        lines.push(format!("Addresses: {}", list(&network.addresses)));
+        lines.push(format!("DNS servers: {}", list(&network.dns_servers)));
+        if !network.gateway.is_empty() {
+            lines.push(format!("Gateway: {}", network.gateway));
+        }
+    }
+    if let Some(problem) = &network.problem {
+        lines.push(format!("Problem: {problem}"));
+    }
+    if report.settings.advanced_networking != (network.mode == NetworkStatus::ADVANCED)
+        && network.mode != NetworkStatus::OFF
+        && network.problem.is_none()
+    {
+        lines.push("The change applies the next time Android starts.".into());
+    }
+    lines.join("\n")
 }
 
 /// The address `adb connect` takes in developer mode.
@@ -1446,6 +1580,40 @@ fn on_off(value: bool) -> &'static str {
     } else {
         "off"
     }
+}
+
+/// A wait in words: `5 minutes`, `90 seconds`, `1 hour`.
+fn describe_wait(secs: u32) -> String {
+    let plural = |n: u32, unit: &str| format!("{n} {unit}{}", if n == 1 { "" } else { "s" });
+    if secs % 3600 == 0 {
+        plural(secs / 3600, "hour")
+    } else if secs % 60 == 0 {
+        plural(secs / 60, "minute")
+    } else {
+        plural(secs, "second")
+    }
+}
+
+/// What a data reset erases, as the command line and the settings app say it.
+pub const RESET_DATA_WARNING: &str = "Resetting erases every app you installed in Android, \
+     the accounts you signed in to and the data of every app. Android stops, and its next \
+     start is as it was first installed. The Android image and DSA's settings stay. This \
+     cannot be undone.";
+
+/// `dsa reset-data`.
+fn reset_data(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
+    if !invocation.yes {
+        return Err(format!(
+            "{RESET_DATA_WARNING}\nRun dsa reset-data --yes to reset."
+        ));
+    }
+    client.reset_data().map_err(|e| e.to_string())?;
+    Ok(if invocation.json {
+        json!({ "reset": true }).to_string()
+    } else {
+        "Android's data was reset; the next start boots Android as it was first installed"
+            .to_string()
+    })
 }
 
 /// The settings, one per line.
@@ -1509,6 +1677,23 @@ pub fn describe_settings(report: &SettingsReport) -> String {
             } else {
                 format!(" ({})", settings.shared_folders.join(", "))
             }
+        ),
+        format!(
+            "Advanced networking: {} (dsa network shows the addresses)",
+            on_off(settings.advanced_networking)
+        ),
+        match settings.run_mode {
+            dsa_host_core::run_mode::RunMode::AsNeeded => format!(
+                "Run mode: as needed (stops {} after the last app closes)",
+                describe_wait(settings.stop_after_secs)
+            ),
+            dsa_host_core::run_mode::RunMode::Continuous => {
+                "Run mode: continuous (stays running in Doze)".to_string()
+            }
+        },
+        format!(
+            "Apps with notifications keep Android running: {}",
+            on_off(settings.keep_for_notifications)
         ),
         format!("Service version: {}", facts.version),
     ];
@@ -1680,6 +1865,10 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::StopWithoutAsking(on) => wanted.stop_without_asking = *on,
             Change::FileSharing(on) => wanted.file_sharing = *on,
             Change::SharedFolders(folders) => wanted.shared_folders = folders.clone(),
+            Change::AdvancedNetworking(on) => wanted.advanced_networking = *on,
+            Change::RunMode(mode) => wanted.run_mode = *mode,
+            Change::StopAfter(secs) => wanted.stop_after_secs = *secs,
+            Change::KeepForNotifications(on) => wanted.keep_for_notifications = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
     }
@@ -2584,6 +2773,15 @@ pub fn run_with_starter(
         }
         Command::Settings => return settings(invocation, &mut client),
         Command::Files | Command::FilesOpen => return android_files(invocation, &mut client),
+        Command::Network => {
+            let report = client.settings().map_err(|e| e.to_string())?;
+            return Ok(if invocation.json {
+                network_json(report.network.as_ref()).to_string()
+            } else {
+                describe_network(&report)
+            });
+        }
+        Command::ResetData => return reset_data(invocation, &mut client),
         Command::Memory => {
             let memory = client.memory().map_err(|e| e.to_string())?;
             return Ok(if invocation.json {

@@ -221,6 +221,18 @@ impl MemorySizing {
     }
 }
 
+/// The network of each user's VM, by SID, which the settings report.
+fn user_network(sid: &str) -> crate::hcn::SharedNetwork {
+    static NETWORKS: std::sync::OnceLock<
+        Mutex<std::collections::HashMap<String, crate::hcn::SharedNetwork>>,
+    > = std::sync::OnceLock::new();
+    let mut networks = NETWORKS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    Arc::clone(networks.entry(sid.to_string()).or_default())
+}
+
 /// The user's Android: their data disk, VM and session, created on their first request.
 /// With `power`, the session hears the computer's power from it.
 pub fn create_user_android(
@@ -317,6 +329,20 @@ pub fn create_user_android(
         }
     }
     .with_console_log(console_log)
+    .with_networking({
+        // NAT unless the user turned advanced networking on; read at each start.
+        let store = settings_store(config);
+        let user = sid.to_string();
+        crate::hcn::VmNetworking::new(
+            Box::new(move || {
+                store
+                    .get(&user)
+                    .map(|settings| settings.advanced_networking)
+                    .unwrap_or(false)
+            }),
+            user_network(sid),
+        )
+    })
     .with_memory_max(memory_max)
     .with_boot_dir(config.machine_root().tmp())
     .with_bootconfig({
@@ -821,6 +847,8 @@ where
         }
     };
     let identity_images = updates.as_ref().map(|updates| Arc::clone(&updates.store));
+    // A data reset makes the fresh disk from the image the next start boots.
+    let reset_images = updates.as_ref().map(|updates| Arc::clone(&updates.store));
     let factory_config = config.clone();
     let factory_build = build.to_string();
     let factory_status = program.as_ref().map(|_| Arc::clone(&program_status));
@@ -855,6 +883,14 @@ where
             Ok(android) => {
                 let settings = factory_store.get(sid).ok();
                 android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
+                // So is the run mode: "As needed" after five minutes unless they chose otherwise.
+                let defaults = dsa_host_core::settings::Settings::default();
+                let chosen = settings.as_ref().unwrap_or(&defaults);
+                android.run_mode(dsa_host_core::run_mode::RunModePolicy::of(
+                    chosen.run_mode,
+                    chosen.stop_after_secs,
+                    chosen.keep_for_notifications,
+                ));
                 android.share_clipboard(settings.as_ref().is_none_or(|s| s.clipboard));
                 android.links_in_android(settings.as_ref().is_some_and(|s| s.links_in_android));
                 // So is file sharing, on with every folder unless they chose otherwise.
@@ -888,8 +924,16 @@ where
     take_old_trace_markers(&config, &*store, build);
     let host_memory: Arc<dyn HostMemory> = Arc::new(WindowsHostMemory);
     let mut service = HostApiService::new(androids.clone(), build)
+        .with_data_reset(Arc::new(crate::data_reset::windows_data_reset(
+            config.clone(),
+            reset_images,
+        )))
         .with_settings(Arc::clone(&store), facts)
         .with_host_memory(Arc::clone(&host_memory))
+        // The network of each user's running Android: its mode, addresses and DNS servers.
+        .with_network(Arc::new(|sid: &str, _: &dsa_host_core::settings::Settings| {
+            crate::hcn::shared_status(&user_network(sid))
+        }))
         .with_widget_placements(Arc::new(dsa_host_core::widgets::FileWidgetPlacements::new(
             config.settings_dir(),
         )))

@@ -91,6 +91,16 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIn("CONFIG_NET_9P_FD=y", config)
         self.assertIn("CONFIG_9P_FS=y", config)
 
+    def test_fr28_the_synthetic_network_adapter_and_virt_wifi_are_built_in(self):
+        # The host attaches a Hyper-V synthetic adapter; hv_netvsc drives it, and virt_wifi
+        # shows it to Android as Wi-Fi. Both architectures need them, and the arm64 fragment
+        # names hv_netvsc as well.
+        config = CONFIG.read_text().splitlines()
+        for option in ["CONFIG_HYPERV_NET=y", "CONFIG_WIRELESS=y", "CONFIG_CFG80211=y",
+                       "CONFIG_WLAN=y", "CONFIG_VIRT_WIFI=y"]:
+            self.assertIn(option, config)
+        self.assertIn("CONFIG_HYPERV_NET=y", ARM64_CONFIG.read_text().splitlines())
+
     def test_pr3_vgem_is_built_into_the_guest_kernel(self):
         config = CONFIG.read_text()
         self.assertIn("CONFIG_DRM=y", config)

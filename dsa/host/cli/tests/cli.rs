@@ -1500,6 +1500,57 @@ fn fr9_dsa_open_refuses_a_file_larger_than_the_limit() {
 }
 
 #[test]
+fn fr28_dsa_turns_advanced_networking_on_and_dsa_network_shows_the_address_and_dns() {
+    use dsa_cli::Change;
+    use dsa_host_core::host_api::{HostApiService, NetworkSource, NetworkStatus, ServiceFacts};
+    use dsa_host_core::settings::{MemorySettings, Settings};
+    assert_eq!(
+        parse(&args("settings set advanced-networking on"))
+            .unwrap()
+            .change,
+        Some(Change::AdvancedNetworking(true))
+    );
+    assert_eq!(parse(&args("network --json")).unwrap().command, Cmd::Network);
+    let ((listener, _, _), endpoint) = local_pair();
+    let network: NetworkSource = Arc::new(|_: &str, settings: &Settings| {
+        Some(NetworkStatus {
+            mode: if settings.advanced_networking {
+                NetworkStatus::ADVANCED.into()
+            } else {
+                NetworkStatus::NAT.into()
+            },
+            addresses: vec!["172.28.16.2".into(), "fd5a:d5a:0:1::2".into()],
+            dns_servers: vec!["172.28.16.1".into()],
+            gateway: "172.28.16.1".into(),
+            problem: None,
+        })
+    });
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
+        .with_network(network);
+    let _service = RunningService::start_service(listener, service);
+
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["advanced_networking"], false);
+    assert_eq!(settings["network"]["mode"], "nat");
+    let status = json_of(&dsa(&endpoint, "network --json"));
+    assert_eq!(status["addresses"][0], "172.28.16.2");
+    assert_eq!(status["addresses"][1], "fd5a:d5a:0:1::2");
+    assert_eq!(status["dns_servers"][0], "172.28.16.1");
+    assert_eq!(status["gateway"], "172.28.16.1");
+    let text = stdout(&dsa(&endpoint, "network"));
+    assert!(text.contains("Network: NAT"), "{text}");
+    assert!(text.contains("Addresses: 172.28.16.2, fd5a:d5a:0:1::2"), "{text}");
+    assert!(text.contains("DNS servers: 172.28.16.1"), "{text}");
+
+    let changed = json_of(&dsa(&endpoint, "settings set advanced-networking on --json"));
+    assert_eq!(changed["advanced_networking"], true);
+    assert_eq!(changed["network"]["mode"], "advanced");
+    let text = stdout(&dsa(&endpoint, "settings"));
+    assert!(text.contains("Advanced networking: on"), "{text}");
+}
+
+#[test]
 fn fr9_dsa_settings_turns_links_in_android_on_and_off() {
     let ((listener, _, _), endpoint) = local_pair();
     let _service = settings_service(listener);
@@ -2048,4 +2099,76 @@ fn fr24_stopping_without_asking_is_a_setting_off_by_default() {
         "settings set stop-without-asking on --json",
     ));
     assert_eq!(changed["stop_without_asking"], true);
+}
+
+#[test]
+fn fr31_the_run_mode_is_as_needed_after_five_minutes_and_changed_with_dsa_settings() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["run_mode"], "as-needed");
+    assert_eq!(settings["stop_after_secs"], 300);
+    assert_eq!(settings["keep_for_notifications"], false);
+    let changed = json_of(&dsa(&endpoint, "settings set run-mode continuous --json"));
+    assert_eq!(changed["run_mode"], "continuous");
+    let changed = json_of(&dsa(&endpoint, "settings set stop-after 10m --json"));
+    assert_eq!(changed["stop_after_secs"], 600);
+    assert_eq!(
+        changed["run_mode"], "continuous",
+        "one change keeps the others"
+    );
+    let changed = json_of(&dsa(
+        &endpoint,
+        "settings set keep-for-notifications on --json",
+    ));
+    assert_eq!(changed["keep_for_notifications"], true);
+    let shown = stdout(&dsa(&endpoint, "settings"));
+    assert!(shown.contains("Run mode: continuous"), "{shown}");
+    assert!(parse(&args("settings set stop-after 1s")).is_err());
+    assert!(parse(&args("settings set run-mode sometimes")).is_err());
+}
+
+#[test]
+fn fr31_dsa_reset_data_says_what_is_lost_and_resets_only_with_yes() {
+    use dsa_host_core::data_reset::TemplateDataDisk;
+    use dsa_host_core::host_api::HostApiService;
+    let ((listener, _, user), endpoint) = local_pair();
+    let dir = std::env::temp_dir().join(format!("dsa-cli-reset-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let disk = dir.join(format!("{}.vhdx", user.replace([':', '\\', '/'], "_")));
+    std::fs::write(&disk, b"old data").unwrap();
+    let reset = {
+        let disk = disk.clone();
+        TemplateDataDisk::new(
+            Box::new(move |_: &str| Ok(disk.clone())),
+            Box::new(|fresh: &std::path::Path| {
+                std::fs::write(fresh, b"fresh").map_err(|e| e.to_string())
+            }),
+        )
+    };
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_data_reset(Arc::new(reset));
+    let _service = RunningService::start_service(listener, service);
+
+    let asked = dsa(&endpoint, "reset-data");
+    assert!(!asked.status.success());
+    let warning = stderr(&asked);
+    assert!(warning.contains("every app you installed"), "{warning}");
+    assert!(warning.contains("accounts"), "{warning}");
+    assert!(warning.contains("--yes"), "{warning}");
+    assert_eq!(
+        std::fs::read(&disk).unwrap(),
+        b"old data",
+        "nothing was reset"
+    );
+
+    let json = json_of(&dsa(&endpoint, "reset-data --yes --json"));
+    assert_eq!(json["reset"], true);
+    assert_eq!(std::fs::read(&disk).unwrap(), b"fresh");
+    assert_eq!(
+        parse(&args("reset-data --yes")).unwrap().command,
+        Cmd::ResetData
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

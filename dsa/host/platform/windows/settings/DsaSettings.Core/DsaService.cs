@@ -109,18 +109,48 @@ public sealed class DsaService
         Int(json, "memory_limit_mb"),
         Bool(json, "arm_translation", missing: true),
         Bool(json, "stop_without_asking"),
+        OptionalString(json, "run_mode") == SettingsInfo.Continuous ? SettingsInfo.Continuous : SettingsInfo.AsNeeded,
+        Int(json, "stop_after_secs") is > 0 and var wait ? wait : SettingsInfo.DefaultStopAfterSecs,
+        Bool(json, "keep_for_notifications"),
+        Bool(json, "advanced_networking"),
+        json.TryGetProperty("network", out var network) && network.ValueKind == JsonValueKind.Object
+            ? ReadNetwork(network)
+            : null,
         Bool(json, "file_sharing", missing: true),
-        Strings(json, "shared_folders"));
+        json.TryGetProperty("shared_folders", out var shared) && shared.ValueKind == JsonValueKind.Array
+            ? Strings(json, "shared_folders")
+            : null);
 
-    /// <summary>The strings of the array <paramref name="name"/>, or null when a service from
-    /// before it existed does not report it.</summary>
-    private static IReadOnlyList<string>? Strings(JsonElement element, string name) =>
+    private static IReadOnlyList<string> Strings(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array
             ? value.EnumerateArray()
                 .Where(item => item.ValueKind == JsonValueKind.String)
                 .Select(item => item.GetString() ?? "")
                 .ToList()
-            : null;
+            : Array.Empty<string>();
+
+    /// <summary>The network as <c>dsa network --json</c> and the settings print it.</summary>
+    public static NetworkInfo ReadNetwork(JsonElement json) => new(
+        OptionalString(json, "mode") switch
+        {
+            "nat" => NetworkMode.Nat,
+            "advanced" => NetworkMode.Advanced,
+            "off" => NetworkMode.Off,
+            _ => NetworkMode.Unknown,
+        },
+        Strings(json, "addresses"),
+        Strings(json, "dns_servers"),
+        String(json, "gateway"),
+        OptionalString(json, "problem") is { Length: > 0 } problem ? problem : null);
+
+    /// <summary>Android's network as it stands now.</summary>
+    public async Task<NetworkInfo> NetworkAsync() =>
+        ReadNetwork(await RunJsonAsync("network").ConfigureAwait(true));
+
+    /// <summary>Puts Android on this computer's network, or back behind NAT, from its next
+    /// start.</summary>
+    public Task<SettingsInfo> SetAdvancedNetworkingAsync(bool on) =>
+        SetAsync("advanced-networking", on ? "on" : "off");
 
     public async Task<SettingsInfo> SettingsAsync() =>
         ReadSettings(await RunJsonAsync("settings").ConfigureAwait(true));
@@ -142,6 +172,23 @@ public sealed class DsaService
     /// confirms it.</summary>
     public Task<SettingsInfo> SetStopWithoutAskingAsync(bool on) =>
         SetAsync("stop-without-asking", on ? "on" : "off");
+
+    /// <summary>Whether Android stops once nothing uses it (<see cref="SettingsInfo.AsNeeded"/>)
+    /// or keeps running in Doze (<see cref="SettingsInfo.Continuous"/>).</summary>
+    public Task<SettingsInfo> SetRunModeAsync(string mode) => SetAsync("run-mode", mode);
+
+    /// <summary>How long nothing may use Android as needed before it stops, in seconds.</summary>
+    public Task<SettingsInfo> SetStopAfterAsync(int secs) =>
+        SetAsync("stop-after", secs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>Whether an app with a notification shown keeps Android running as needed.</summary>
+    public Task<SettingsInfo> SetKeepForNotificationsAsync(bool on) =>
+        SetAsync("keep-for-notifications", on ? "on" : "off");
+
+    /// <summary>Erases the user's Android data: the service stops Android and puts a fresh data
+    /// disk in place of theirs. The Android image and the settings stay.</summary>
+    public async Task ResetDataAsync() =>
+        await RunJsonAsync("reset-data", "--yes").ConfigureAwait(true);
 
     public Task<SettingsInfo> SetAdbPortAsync(int port) =>
         SetAsync("adb-port", port.ToString(System.Globalization.CultureInfo.InvariantCulture));

@@ -92,9 +92,98 @@ pub fn uniform_colour(pixels: &[[u8; 4]]) -> Option<[u8; 4]> {
     pixels.iter().all(|pixel| *pixel == first).then_some(first)
 }
 
+/// Whether a task window's swapchain is held, by whether the window is shown.
+///
+/// A minimized window shows nothing, but its swapchain still holds [`swapchain_buffers`]
+/// buffers of the task's full size, on the GPU or, on a GPU that shares the computer's memory,
+/// in it: tens of MiB a window. While the window is hidden they are let go, and frames that
+/// arrive are not copied anywhere; the shared texture keeps the newest. When the window is
+/// shown again the swapchain is made again and the newest frame shown from the texture at once,
+/// so the window never comes back empty.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct HiddenBuffers {
+    hidden: bool,
+    /// A frame has come since the window was made, so there is one to show again.
+    seen: bool,
+}
+
+/// What to do with a frame that arrives.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HiddenFrame {
+    /// The window is shown: present it.
+    Present,
+    /// The window is hidden: leave it in the texture, present nothing.
+    Hold,
+}
+
+impl HiddenBuffers {
+    pub fn new() -> HiddenBuffers {
+        HiddenBuffers::default()
+    }
+
+    /// Whether the window is hidden now.
+    pub fn hidden(&self) -> bool {
+        self.hidden
+    }
+
+    /// The window was hidden. Returns whether its swapchain is to be let go now: only the
+    /// first time, while it was shown.
+    pub fn hide(&mut self) -> bool {
+        !std::mem::replace(&mut self.hidden, true)
+    }
+
+    /// A frame arrived.
+    pub fn frame(&mut self) -> HiddenFrame {
+        self.seen = true;
+        if self.hidden {
+            HiddenFrame::Hold
+        } else {
+            HiddenFrame::Present
+        }
+    }
+
+    /// The window is shown again. Returns whether the newest frame is to be shown again from
+    /// the texture: when the window was hidden and a frame has ever come.
+    pub fn show(&mut self) -> bool {
+        std::mem::replace(&mut self.hidden, false) && self.seen
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nfr1_a_minimized_window_lets_its_buffers_go_once_and_holds_its_frames() {
+        let mut buffers = HiddenBuffers::new();
+        assert_eq!(buffers.frame(), HiddenFrame::Present);
+        assert!(buffers.hide());
+        assert!(buffers.hidden());
+        // A second minimize message lets nothing go twice.
+        assert!(!buffers.hide());
+        assert_eq!(buffers.frame(), HiddenFrame::Hold);
+        assert_eq!(buffers.frame(), HiddenFrame::Hold);
+    }
+
+    #[test]
+    fn nfr1_a_restored_window_shows_its_newest_frame_again_at_once() {
+        let mut buffers = HiddenBuffers::new();
+        buffers.frame();
+        buffers.hide();
+        assert!(buffers.show());
+        assert!(!buffers.hidden());
+        assert_eq!(buffers.frame(), HiddenFrame::Present);
+        // A restore message for a window that was not hidden shows nothing again.
+        assert!(!buffers.show());
+    }
+
+    #[test]
+    fn nfr1_a_window_hidden_before_its_first_frame_waits_for_one() {
+        let mut buffers = HiddenBuffers::new();
+        assert!(buffers.hide());
+        assert!(!buffers.show());
+        assert_eq!(buffers.frame(), HiddenFrame::Present);
+    }
 
     #[test]
     fn fr4_the_samples_of_a_frame_spread_over_it_and_stay_inside() {

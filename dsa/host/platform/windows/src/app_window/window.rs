@@ -463,6 +463,15 @@ unsafe extern "system" fn task_window_proc(
             // lets Android sleep once no window is shown.
             if let Some(data) = window_data(hwnd) {
                 let minimized = wparam as u32 == SIZE_MINIMIZED;
+                // A minimized window lets its swapchain go, and a restored one shows its
+                // newest frame again before the frame of its size goes up below.
+                if let Some(presenter) = data.presenter.borrow().clone() {
+                    if minimized {
+                        presenter.hide();
+                    } else {
+                        presenter.show();
+                    }
+                }
                 if data.reporting.get() && data.minimized.replace(minimized) != minimized {
                     (data.report)(FromHost::Shown {
                         task_id: data.task_id,

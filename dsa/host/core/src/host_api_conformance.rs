@@ -80,6 +80,8 @@ pub struct FakeAndroid {
     pub shown: Mutex<Vec<bool>>,
     /// Each word on whether it may be frozen when idle, in order.
     pub freeze_when_idle: Mutex<Vec<bool>>,
+    /// Each run mode it was given, in order.
+    pub run_modes: Mutex<Vec<crate::run_mode::RunModePolicy>>,
     /// Each word on whether web links open in it, in order.
     pub links_in_android: Mutex<Vec<bool>>,
     /// Each word on developer mode (on, and the adb port), in order.
@@ -205,6 +207,7 @@ impl FakeAndroid {
             text: Mutex::new(Vec::new()),
             shown: Mutex::new(Vec::new()),
             freeze_when_idle: Mutex::new(Vec::new()),
+            run_modes: Mutex::new(Vec::new()),
             links_in_android: Mutex::new(Vec::new()),
             developer_mode: Mutex::new(Vec::new()),
             refuse_developer_mode: Mutex::new(None),
@@ -366,6 +369,9 @@ impl UserAndroid for FakeAndroid {
     }
     fn freeze_when_idle(&self, on: bool) {
         self.freeze_when_idle.lock().unwrap().push(on);
+    }
+    fn run_mode(&self, policy: crate::run_mode::RunModePolicy) {
+        self.run_modes.lock().unwrap().push(policy);
     }
     fn links_in_android(&self, on: bool) {
         self.links_in_android.lock().unwrap().push(on);

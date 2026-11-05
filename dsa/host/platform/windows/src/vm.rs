@@ -131,6 +131,32 @@ pub struct AndroidVmConfig {
     /// close to what the guest uses. Only for builds where
     /// [`fine_grained_memory_supported`] says so.
     pub fine_grained_memory: bool,
+    /// The synthetic network adapter, connected to the HCN endpoint the host made for this
+    /// VM (see `network`). `None` gives the VM no network.
+    pub network_adapter: Option<NetworkAdapter>,
+}
+
+/// A synthetic network adapter of the VM, which the guest's hv_netvsc drives as eth0.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NetworkAdapter {
+    /// The HCN endpoint the adapter is connected to.
+    pub endpoint_id: Guid,
+    /// The adapter's MAC address, as HCN gave it to the endpoint (`00-15-5D-...`).
+    pub mac_address: String,
+}
+
+/// The name of the VM's network adapter in the HCS document.
+pub const NETWORK_ADAPTER_NAME: &str = "eth0";
+
+impl NetworkAdapter {
+    /// The adapter as the HCS document's `Devices.NetworkAdapters` entry, and as the settings
+    /// of the modify request that adds it to a running VM.
+    pub fn to_hcs(&self) -> Value {
+        json!({
+            "EndpointId": self.endpoint_id.to_string(),
+            "MacAddress": self.mac_address,
+        })
+    }
 }
 
 /// The fault cluster for fine-grained memory, as a power of two of 4 KiB pages: 64 KiB. Free
@@ -412,6 +438,10 @@ impl AndroidVmConfig {
             });
         }
         devices["Scsi"]["0"]["Attachments"] = attachments;
+        if let Some(adapter) = &self.network_adapter {
+            devices["NetworkAdapters"] = json!({});
+            devices["NetworkAdapters"][NETWORK_ADAPTER_NAME] = adapter.to_hcs();
+        }
         let mut memory = json!({
             "SizeInMB": memory_mb,
             "AllowOvercommit": true,

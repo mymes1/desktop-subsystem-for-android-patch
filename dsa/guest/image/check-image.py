@@ -10,7 +10,8 @@ Settings still has the preferences or code that crash it without Bluetooth, when
 app users open is not compiled for the guest's boot image and its own dex, when the files
 do not match image.json, when the kernel or a DSA guest binary is built for another
 architecture than the image's, when the ramdisk lacks the directories and links Android's
-first stage init needs, or when the kernel command line, a mount table or an init script
+first stage init needs, when the network adapter is not shown to Android as Wi-Fi with its
+address and DNS servers from DHCP, or when the kernel command line, a mount table or an init script
 names a disk by its kernel name (/dev/block/sda), which follows the order the disks were
 probed in.
 
@@ -281,6 +282,9 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "SYSTEM_EXT/etc/permissions/privapp-permissions-dsa-agent.xml" not in names:
         problems.append("SYSTEM_EXT/etc/permissions/privapp-permissions-dsa-agent.xml is missing, so the "
                         "framework refuses to boot with the agent")
+
+    # The network: eth0 shown as Wi-Fi, with its address and DNS servers from DHCP.
+    problems.extend(make_image.network_problems(names, z.read, manifest["kernel_cmdline"]))
 
     # The framework overlay, without which every list row shows a mouse press 100 ms late.
     if "VENDOR/overlay/DsaFrameworkOverlay.apk" not in names:

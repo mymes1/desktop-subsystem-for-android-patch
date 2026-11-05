@@ -1,0 +1,73 @@
+<Page
+    x:Class="Dsa.Settings.Pages.NetworkPage"
+    ScrollViewer.CanContentScroll="False"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:l="clr-namespace:Dsa.Settings">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="36,8,36,24" MaxWidth="1000">
+            <TextBlock Text="{l:Text NetworkTitle.Text}" Style="{StaticResource PageTitle}" />
+
+            <ui:InfoBar Title="{l:Text SettingsErrorBar.Title}" Severity="Error" IsClosable="False"
+                        IsOpen="{Binding HasError, Mode=OneWay}" Message="{Binding Error, Mode=OneWay}" />
+
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Globe24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text NetworkStatusCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{Binding NetworkModeText, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:Button Content="{l:Text NetworkRefreshButton.Content}" Icon="{ui:SymbolIcon ArrowClockwise24}"
+                           Click="OnRefresh" />
+            </ui:CardControl>
+            <ui:InfoBar Title="{l:Text NetworkProblemBar.Title}" Severity="Warning" IsClosable="False"
+                        IsOpen="{Binding HasNetworkProblem, Mode=OneWay}" Message="{Binding NetworkProblem, Mode=OneWay}" />
+
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Info24}"
+                            Visibility="{Binding HasNetworkDetails, Converter={StaticResource Visible}}">
+                <ui:CardControl.Header>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{l:Text NetworkAddressLabel.Text}" Margin="0,0,16,4" />
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding NetworkAddresses, Mode=OneWay}" IsReadOnly="True"
+                                 FontFamily="Consolas" BorderThickness="0" Background="Transparent" Padding="0"
+                                 Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{l:Text NetworkDnsLabel.Text}" Margin="0,0,16,4" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding NetworkDns, Mode=OneWay}" IsReadOnly="True"
+                                 FontFamily="Consolas" BorderThickness="0" Background="Transparent" Padding="0"
+                                 Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{l:Text NetworkGatewayLabel.Text}" Margin="0,0,16,0" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding NetworkGateway, Mode=OneWay}" IsReadOnly="True"
+                                 FontFamily="Consolas" BorderThickness="0" Background="Transparent" Padding="0"
+                                 Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    </Grid>
+                </ui:CardControl.Header>
+            </ui:CardControl>
+
+            <TextBlock Text="{l:Text NetworkAdvancedHeader.Text}" Style="{StaticResource SectionHeader}" />
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon PlugConnected24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text AdvancedNetworkingCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text AdvancedNetworkingCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="AdvancedNetworkingSwitch" IsChecked="{Binding AdvancedNetworking, Mode=OneWay}"
+                                 IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnAdvancedNetworkingToggled" />
+            </ui:CardControl>
+            <ui:InfoBar Title="{l:Text NetworkRestartBar.Title}" Message="{l:Text NetworkRestartBar.Message}"
+                        Severity="Informational" IsClosable="False"
+                        IsOpen="{Binding NetworkRestartNeeded, Mode=OneWay}" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

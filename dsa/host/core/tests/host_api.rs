@@ -129,6 +129,57 @@ fn fr19_the_trace_switches_are_machine_settings_only_an_administrator_changes() 
 }
 
 #[test]
+fn fr28_advanced_networking_is_the_users_and_the_network_is_reported_with_the_settings() {
+    use dsa_host_core::host_api::{HostApiService, NetworkSource, NetworkStatus, ServiceFacts};
+    use dsa_host_core::settings::{Settings, SettingsStore};
+    let (listener, connector) = local::pair();
+    let store = Arc::new(dsa_host_core::settings::MemorySettings::default());
+    // Alice's Android runs; Bob's is not running.
+    let network: NetworkSource = Arc::new(|user: &str, settings: &Settings| {
+        (user == "alice").then(|| NetworkStatus {
+            mode: if settings.advanced_networking {
+                NetworkStatus::ADVANCED.into()
+            } else {
+                NetworkStatus::NAT.into()
+            },
+            addresses: vec!["172.28.0.2".into(), "fd5a:d5a::2".into()],
+            dns_servers: vec!["172.28.0.1".into()],
+            gateway: "172.28.0.1".into(),
+            problem: None,
+        })
+    });
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(store.clone(), ServiceFacts::default())
+        .with_network(network);
+    let _service = RunningService::start_service(Box::new(listener), service);
+
+    let mut alice =
+        HostApiClient::connect(&mut AsAdmin(connector.clone(), "alice", false), "a", WAIT).unwrap();
+    let report = alice.settings().unwrap();
+    assert!(!report.settings.advanced_networking, "off by default");
+    let status = report.network.expect("the network is reported");
+    assert_eq!(status.mode, NetworkStatus::NAT);
+    assert_eq!(status.addresses, vec!["172.28.0.2", "fd5a:d5a::2"]);
+    assert_eq!(status.dns_servers, vec!["172.28.0.1"]);
+    assert_eq!(status.gateway, "172.28.0.1");
+
+    // Any user may turn it on for themselves, without being an administrator.
+    let on = alice
+        .set_settings(&Settings {
+            advanced_networking: true,
+            ..report.settings.clone()
+        })
+        .unwrap();
+    assert!(on.settings.advanced_networking);
+    assert_eq!(on.network.unwrap().mode, NetworkStatus::ADVANCED);
+    assert!(store.get("alice").unwrap().advanced_networking);
+    assert!(!store.get("bob").unwrap().advanced_networking);
+
+    let mut bob = HostApiClient::connect(&mut AsAdmin(connector, "bob", false), "b", WAIT).unwrap();
+    assert_eq!(bob.settings().unwrap().network.unwrap().mode, NetworkStatus::OFF);
+}
+
+#[test]
 fn pr5_each_user_reaches_only_their_own_android() {
     let (listener, connector) = local::pair();
     let androids = Arc::new(FakeAndroids::default());
@@ -498,4 +549,211 @@ fn fr7_an_android_that_does_not_start_says_why() {
         }
         other => panic!("expected the reason, got {other:?}"),
     }
+}
+
+/// A folder of its own for one data reset test, empty.
+fn reset_scratch(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("dsa-reset-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// A data reset over the fake paths: each user's disk is `android.vhdx` in their root, and a
+/// fresh one is a copy of `template` with the image version recorded beside it, unless
+/// `fail` says why it cannot be made.
+fn template_reset(
+    paths: dsa_host_core::host_paths::FakeHostPaths,
+    template: std::path::PathBuf,
+    fail: Option<&'static str>,
+) -> dsa_host_core::data_reset::TemplateDataDisk {
+    use dsa_host_core::host_paths::HostPaths;
+    dsa_host_core::data_reset::TemplateDataDisk::new(
+        Box::new(move |user: &str| Ok(paths.user_data(user)?.join("android.vhdx"))),
+        Box::new(move |disk: &std::path::Path| {
+            if let Some(why) = fail {
+                std::fs::write(disk, b"half a disk").unwrap();
+                return Err(why.into());
+            }
+            std::fs::copy(&template, disk).map_err(|e| e.to_string())?;
+            std::fs::write(disk.with_extension("image-version"), "2").map_err(|e| e.to_string())
+        }),
+    )
+    .with_beside("image-version")
+}
+
+#[test]
+fn fr31_a_data_reset_stops_android_and_gives_it_a_fresh_disk_keeping_the_image_and_settings() {
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::run_mode::RunMode;
+    use dsa_host_core::settings::{Settings, SettingsStore};
+    use dsa_host_core::widgets::WidgetPlacements;
+    let dir = reset_scratch("fresh");
+    let paths =
+        dsa_host_core::host_paths::FakeHostPaths::new(dir.join("machine"), dir.join("users"));
+    let images = dir.join("machine").join("images");
+    std::fs::create_dir_all(&images).unwrap();
+    let template = images.join("disk.vhdx");
+    std::fs::write(&template, b"fresh Android").unwrap();
+    let user_root = dir.join("users").join("alice");
+    std::fs::create_dir_all(&user_root).unwrap();
+    std::fs::write(
+        user_root.join("android.vhdx"),
+        b"apps, accounts and their data",
+    )
+    .unwrap();
+    std::fs::write(user_root.join("android.image-version"), "1").unwrap();
+
+    let store = Arc::new(dsa_host_core::settings::MemorySettings::default());
+    let chosen = Settings {
+        run_mode: RunMode::Continuous,
+        clipboard: false,
+        ..Settings::default()
+    };
+    store.set("alice", &chosen).unwrap();
+    let androids = Arc::new(FakeAndroids::default());
+    let placements = Arc::new(dsa_host_core::widgets::MemoryWidgetPlacements::default());
+    placements
+        .set("alice", 7, dsa_host_core::widgets::Placement::default())
+        .unwrap();
+    let (listener, connector) = local::pair();
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_settings(store.clone(), ServiceFacts::default())
+        .with_widget_placements(placements.clone())
+        .with_data_reset(Arc::new(template_reset(paths, template.clone(), None)));
+    let _service = RunningService::start_service(Box::new(listener), service);
+    let mut client = HostApiClient::connect(&mut As(connector, "alice"), "a", WAIT).unwrap();
+    client.start().unwrap();
+    assert_eq!(androids.of("alice").unwrap().state(), SessionState::Active);
+
+    client.reset_data().expect("the reset");
+    assert_eq!(
+        androids.of("alice").unwrap().state(),
+        SessionState::Stopped,
+        "Android was stopped first"
+    );
+    assert_eq!(
+        std::fs::read(user_root.join("android.vhdx")).unwrap(),
+        b"fresh Android",
+        "the disk is a fresh copy of the image's template"
+    );
+    assert_eq!(
+        std::fs::read_to_string(user_root.join("android.image-version")).unwrap(),
+        "2"
+    );
+    assert!(
+        !user_root.join("android.vhdx.before-reset").exists(),
+        "the old disk is gone"
+    );
+    assert_eq!(
+        std::fs::read(&template).unwrap(),
+        b"fresh Android",
+        "the image is untouched"
+    );
+    assert_eq!(store.get("alice").unwrap(), chosen, "the settings are kept");
+    assert!(
+        placements.all("alice").unwrap().is_empty(),
+        "the widgets of the old data are forgotten"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn fr31_a_reset_that_cannot_make_a_new_disk_keeps_the_old_one() {
+    use dsa_host_core::host_api::{ClientError, HostApiService};
+    let dir = reset_scratch("failed");
+    let paths =
+        dsa_host_core::host_paths::FakeHostPaths::new(dir.join("machine"), dir.join("users"));
+    let user_root = dir.join("users").join("alice");
+    std::fs::create_dir_all(&user_root).unwrap();
+    std::fs::write(user_root.join("android.vhdx"), b"the user's data").unwrap();
+    std::fs::write(user_root.join("android.image-version"), "1").unwrap();
+    let (listener, connector) = local::pair();
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_data_reset(Arc::new(template_reset(
+            paths,
+            dir.join("no-template"),
+            Some("the disk is full"),
+        )));
+    let _service = RunningService::start_service(Box::new(listener), service);
+    let mut client = HostApiClient::connect(&mut As(connector, "alice"), "a", WAIT).unwrap();
+    match client.reset_data() {
+        Err(ClientError::Service { detail, .. }) => {
+            assert!(detail.contains("the disk is full"), "{detail}");
+            assert!(detail.contains("old one was kept"), "{detail}");
+        }
+        other => panic!("expected the reset to fail, got {other:?}"),
+    }
+    assert_eq!(
+        std::fs::read(user_root.join("android.vhdx")).unwrap(),
+        b"the user's data"
+    );
+    assert_eq!(
+        std::fs::read_to_string(user_root.join("android.image-version")).unwrap(),
+        "1"
+    );
+    // The connection goes on serving.
+    assert_eq!(client.status().unwrap().state, SessionState::Stopped);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn fr31_a_service_that_cannot_reset_says_so() {
+    use dsa_host_core::host_api::ClientError;
+    use dsa_protocol::host_api::types::ErrorCode;
+    let (listener, connector) = local::pair();
+    let _service = RunningService::start(Box::new(listener), Arc::new(FakeAndroids::default()));
+    let mut client = HostApiClient::connect(&mut As(connector, "alice"), "a", WAIT).unwrap();
+    match client.reset_data() {
+        Err(ClientError::Service { code, detail }) => {
+            assert_eq!(code, ErrorCode::Unavailable);
+            assert!(detail.contains("cannot reset"), "{detail}");
+        }
+        other => panic!("expected the service to refuse, got {other:?}"),
+    }
+}
+
+#[test]
+fn fr31_the_run_mode_is_kept_and_reaches_the_callers_android_at_once() {
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::run_mode::{RunMode, RunModePolicy};
+    use dsa_host_core::settings::Settings;
+    let store = Arc::new(dsa_host_core::settings::MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let (listener, connector) = local::pair();
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_settings(store, ServiceFacts::default());
+    let _service = RunningService::start_service(Box::new(listener), service);
+    let mut client = HostApiClient::connect(&mut As(connector, "alice"), "a", WAIT).unwrap();
+    let fresh = client.settings().unwrap().settings;
+    assert_eq!(fresh.run_mode, RunMode::AsNeeded);
+    assert_eq!(fresh.stop_after_secs, 300);
+    assert!(!fresh.keep_for_notifications);
+
+    let changed = client
+        .set_settings(&Settings {
+            run_mode: RunMode::Continuous,
+            stop_after_secs: 900,
+            keep_for_notifications: true,
+            ..fresh
+        })
+        .unwrap()
+        .settings;
+    assert_eq!(changed.run_mode, RunMode::Continuous);
+    assert_eq!(changed.stop_after_secs, 900);
+    assert!(changed.keep_for_notifications);
+    assert_eq!(
+        androids
+            .of("alice")
+            .unwrap()
+            .run_modes
+            .lock()
+            .unwrap()
+            .last(),
+        Some(&RunModePolicy {
+            mode: RunMode::Continuous,
+            stop_after: Duration::from_secs(900),
+            keep_for_notifications: true,
+        })
+    );
 }

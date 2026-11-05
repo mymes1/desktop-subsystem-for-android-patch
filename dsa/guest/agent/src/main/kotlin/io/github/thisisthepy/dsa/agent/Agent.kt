@@ -38,6 +38,8 @@ import io.github.thisisthepy.dsa.agent.memory.AppProcesses
 import io.github.thisisthepy.dsa.agent.memory.ClosedApps
 import io.github.thisisthepy.dsa.agent.memory.MemoryReporter
 import io.github.thisisthepy.dsa.agent.memory.MemorySource
+import io.github.thisisthepy.dsa.agent.network.NetworkSetup
+import io.github.thisisthepy.dsa.agent.network.WifiPort
 import io.github.thisisthepy.dsa.agent.background.AppStopper
 import io.github.thisisthepy.dsa.agent.background.BackgroundApps
 import io.github.thisisthepy.dsa.agent.background.MediaSource
@@ -144,7 +146,9 @@ class Agent(
     clock: () -> Long = { System.nanoTime() / 1_000_000 },
     diagnostics: DiagnosticsSource = DiagnosticsSource.NONE,
     diagnosticsRunner: (Runnable) -> Unit = { Thread(it, "dsa-diagnostics").start() },
+    wifi: WifiPort = WifiPort.NONE,
 ) {
+    private val network = NetworkSetup(wifi, log)
     private val channel = ChannelClient(
         locator = locator,
         scheduler = scheduler,
@@ -276,6 +280,11 @@ class Agent(
                 inputMethods.useHostInputMethod()
             } catch (e: Exception) {
                 log.warn("could not make the agent's input method the guest's; typed text may not reach editors", e)
+            }
+            try {
+                network.joinHostNetwork()
+            } catch (e: Exception) {
+                log.warn("could not join the host's network; apps have no network until Wi-Fi joins it", e)
             }
             try {
                 touchSounds.turnOff()

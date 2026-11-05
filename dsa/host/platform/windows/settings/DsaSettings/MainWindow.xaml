@@ -62,6 +62,8 @@
                                        Icon="{ui:SymbolIcon ArrowSync24}" />
                 <ui:NavigationViewItem Content="{l:Text NavIdentity.Content}" TargetPageType="{x:Type pages:DeviceIdentityPage}"
                                        Icon="{ui:SymbolIcon Phone24}" />
+                <ui:NavigationViewItem Content="{l:Text NavNetwork.Content}" TargetPageType="{x:Type pages:NetworkPage}"
+                                       Icon="{ui:SymbolIcon Globe24}" />
                 <ui:NavigationViewItem Content="{l:Text NavAdvanced.Content}" TargetPageType="{x:Type pages:AdvancedPage}"
                                        Icon="{ui:SymbolIcon Settings24}" />
                 <ui:NavigationViewItem Content="{l:Text NavLogs.Content}" TargetPageType="{x:Type pages:LogsPage}"

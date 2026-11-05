@@ -89,6 +89,13 @@
       notification area or the settings app, as Settings' "Force stop" does.
     -->
     <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
+    <!--
+      Joining the host's network: Wi-Fi turned on and the host's network saved for every app,
+      as Settings does, because the guest has no setup wizard to do it.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.NETWORK_SETTINGS" />
 
     <application
         android:name=".platform.AgentApplication"

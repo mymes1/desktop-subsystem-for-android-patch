@@ -24,6 +24,9 @@ windows-sys = { version = "0.61", features = [
     "Win32_Globalization",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
+    # The VM's network: the host's adapters and the guest's addresses as the host sees them.
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
     "Win32_Networking_WinHttp",
     "Win32_Networking_WinSock",
     "Win32_Security",
@@ -33,6 +36,7 @@ windows-sys = { version = "0.61", features = [
     # Freeing the path of a known folder the shell gives (the shared folders).
     "Win32_System_Com",
     "Win32_System_HostComputeSystem",
+    "Win32_System_Com",
     "Win32_System_Console",
     "Win32_System_DataExchange",
     "Win32_System_Diagnostics_ToolHelp",

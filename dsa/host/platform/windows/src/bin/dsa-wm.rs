@@ -37,6 +37,20 @@ fn main() {
         return;
     }
 
+    // The same for the cameras: Media Foundation and the camera drivers load only into this
+    // child until an app opens a camera.
+    let args: Vec<String> = std::env::args().collect();
+    if args
+        .iter()
+        .any(|arg| arg == dsa_host_windows::camera_capture::LIST_ARGUMENT)
+    {
+        use std::io::Write;
+        let known = dsa_host_windows::camera_capture::known_links(&args);
+        let report = dsa_host_windows::camera_capture::list_here(&known);
+        let _ = std::io::stdout().write_all(report.as_bytes());
+        return;
+    }
+
     let log_file = default_log_file();
     let logger = CompositorLogger::open(&log_file).ok().map(Arc::new);
 

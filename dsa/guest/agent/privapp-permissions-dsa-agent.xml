@@ -30,5 +30,8 @@
         <permission name="android.permission.BIND_APPWIDGET" />
         <permission name="android.permission.SET_TIME" />
         <permission name="android.permission.FORCE_STOP_PACKAGES" />
+        <permission name="android.permission.ACCESS_WIFI_STATE" />
+        <permission name="android.permission.CHANGE_WIFI_STATE" />
+        <permission name="android.permission.NETWORK_SETTINGS" />
     </privapp-permissions>
 </permissions>
