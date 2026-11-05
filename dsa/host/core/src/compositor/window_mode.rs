@@ -107,7 +107,10 @@ mod tests {
             mode.app_asks(WindowMode::of(true, false)),
             WindowMode::Fullscreen
         );
-        assert_eq!(mode.app_asks(WindowMode::of(false, false)), WindowMode::Normal);
+        assert_eq!(
+            mode.app_asks(WindowMode::of(false, false)),
+            WindowMode::Normal
+        );
     }
 
     #[test]
@@ -122,7 +125,10 @@ mod tests {
         assert_eq!(mode.app_asks(WindowMode::Fullscreen), WindowMode::Normal);
         // A new request from the app ends the user's choice.
         assert_eq!(mode.app_asks(WindowMode::Normal), WindowMode::Normal);
-        assert_eq!(mode.app_asks(WindowMode::Fullscreen), WindowMode::Fullscreen);
+        assert_eq!(
+            mode.app_asks(WindowMode::Fullscreen),
+            WindowMode::Fullscreen
+        );
     }
 
     #[test]
@@ -137,8 +143,7 @@ mod tests {
 
     #[test]
     fn fr30_a_picture_in_picture_window_is_small_and_sits_in_the_bottom_right_corner() {
-        let (x, y, width, height) =
-            picture_in_picture_place((1280, 720), (0, 0, 1920, 1040), 16);
+        let (x, y, width, height) = picture_in_picture_place((1280, 720), (0, 0, 1920, 1040), 16);
         assert_eq!((width, height), (480, 270));
         assert_eq!((x, y), (1920 - 16 - 480, 1040 - 16 - 270));
         // A task smaller than that keeps its size.

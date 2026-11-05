@@ -75,9 +75,9 @@ pub mod console_log;
 pub mod console_pipe;
 #[cfg(windows)]
 pub mod data_reset;
-pub mod gpt;
 #[cfg(windows)]
 pub mod file_share;
+pub mod gpt;
 #[cfg(windows)]
 pub mod guest_communication_services;
 pub mod guest_performance;

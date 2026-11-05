@@ -61,7 +61,12 @@ pub fn property_value(sharing: &FileSharing) -> String {
     {
         return "off".into();
     }
-    format!("{} {} {}", sharing.port, sharing.location, folders.join(","))
+    format!(
+        "{} {} {}",
+        sharing.port,
+        sharing.location,
+        folders.join(",")
+    )
 }
 
 /// What a property value asks for; `None` for `off` or a value that is not well formed.
@@ -270,7 +275,8 @@ mod sys {
         stream.read_exact(&mut nonce)?;
         stream.write_all(&dsa_host_proof(secret, &nonce))?;
         drop(stream);
-        let source = CString::new(format!("dsa-{folder}")).map_err(|_| io::ErrorKind::InvalidInput)?;
+        let source =
+            CString::new(format!("dsa-{folder}")).map_err(|_| io::ErrorKind::InvalidInput)?;
         let target_c = CString::new(target).map_err(|_| io::ErrorKind::InvalidInput)?;
         let kind = CString::new("9p").expect("no NUL");
         let options = CString::new(super::mount_options(socket.as_raw_fd(), folder))
@@ -356,10 +362,16 @@ mod tests {
 
         let wanted = parse("5590 Windows Pictures,Music").unwrap();
         let changed = plan(Some(&wanted), &now, STORAGE);
-        assert_eq!(changed.unmount, vec!["/data/media/0/Windows/Documents".to_string()]);
+        assert_eq!(
+            changed.unmount,
+            vec!["/data/media/0/Windows/Documents".to_string()]
+        );
         assert_eq!(
             changed.mount,
-            vec![("Music".to_string(), "/data/media/0/Windows/Music".to_string())]
+            vec![(
+                "Music".to_string(),
+                "/data/media/0/Windows/Music".to_string()
+            )]
         );
     }
 

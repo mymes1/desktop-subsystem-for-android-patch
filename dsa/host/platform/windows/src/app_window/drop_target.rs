@@ -184,7 +184,9 @@ fn deliver(package: &str, api: &ApiConnect, note: &dyn Fn(&str), task_id: i32, p
         match outcome {
             Ok(done) => note(&format!("task {task_id}: {done}")),
             Err(why) => {
-                note(&format!("task {task_id}: a dropped file was not sent: {why}"));
+                note(&format!(
+                    "task {task_id}: a dropped file was not sent: {why}"
+                ));
                 super::launch::tell_user(
                     "Desktop Subsystem for Android",
                     &format!("A dropped file could not be sent to the app. {why}."),

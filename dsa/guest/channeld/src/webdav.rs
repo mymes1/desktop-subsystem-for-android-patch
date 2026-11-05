@@ -93,7 +93,10 @@ pub fn read_head(stream: &mut impl BufRead) -> io::Result<Option<Request>> {
         }
         head.extend_from_slice(&line);
         if head.len() > MAX_HEAD {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "request head too long"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "request head too long",
+            ));
         }
         if line == b"\r\n" || line == b"\n" {
             break;
@@ -104,7 +107,10 @@ pub fn read_head(stream: &mut impl BufRead) -> io::Result<Option<Request>> {
     let first = lines.next().unwrap_or_default();
     let mut parts = first.split_whitespace();
     let (Some(method), Some(target)) = (parts.next(), parts.next()) else {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "no request line"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "no request line",
+        ));
     };
     let headers = lines
         .filter_map(|line| line.split_once(':'))
@@ -413,14 +419,14 @@ fn resolve(config: &Config, names: &[String]) -> Result<PathBuf, u16> {
         Ok(resolved) if resolved.starts_with(&root) => Ok(resolved),
         Ok(_) => Err(403),
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            let parent = path.parent().ok_or(403)?;
+            let parent = path.parent().ok_or(403u16)?;
             match fs::canonicalize(parent) {
                 Ok(folder) if folder.starts_with(&root) => {
                     // A dangling link that points outside is still outside.
                     if fs::symlink_metadata(&path).is_ok() {
                         return Err(403);
                     }
-                    Ok(folder.join(path.file_name().ok_or(403)?))
+                    Ok(folder.join(path.file_name().ok_or(403u16)?))
                 }
                 Ok(_) => Err(403),
                 Err(error) => Err(match error.kind() {
@@ -517,9 +523,8 @@ fn propfind(
     path: &Path,
 ) -> io::Result<Response> {
     let _ = body.text()?;
-    let mut xml = String::from(
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?><D:multistatus xmlns:D=\"DAV:\">",
-    );
+    let mut xml =
+        String::from("<?xml version=\"1.0\" encoding=\"utf-8\"?><D:multistatus xmlns:D=\"DAV:\">");
     xml.push_str(&entry_xml(config, names, path)?);
     let depth = request.header("Depth").unwrap_or("1");
     if depth != "0" && path.is_dir() {
@@ -561,10 +566,7 @@ fn proppatch(
     fs::metadata(path)?;
     let mut props = String::new();
     for (namespace, local) in set_properties(&text) {
-        props.push_str(&format!(
-            "<{local} xmlns=\"{}\"/>",
-            xml_escape(&namespace)
-        ));
+        props.push_str(&format!("<{local} xmlns=\"{}\"/>", xml_escape(&namespace)));
     }
     let folder = path.is_dir();
     Ok(Response::xml(
@@ -774,11 +776,18 @@ fn lock(config: &Config, names: &[String], path: &Path) -> io::Result<Response> 
          </D:lockroot></D:activelock></D:lockdiscovery></D:prop>",
         xml_escape(&href(config, names, path.is_dir()))
     );
-    Ok(Response::xml(if created { 201 } else { 200 }, xml).with("Lock-Token", format!("<{token}>")))
+    Ok(
+        Response::xml(if created { 201 } else { 200 }, xml)
+            .with("Lock-Token", format!("<{token}>")),
+    )
 }
 
 fn content_type(name: &str) -> &'static str {
-    let extension = name.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
+    let extension = name
+        .rsplit('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     match extension.as_str() {
         "jpg" | "jpeg" => "image/jpeg",
         "png" => "image/png",
@@ -817,7 +826,15 @@ fn parts_of(time: SystemTime) -> (i64, u32, u32, u64, u64, u64, usize) {
     let in_day = seconds % 86_400;
     // 1970-01-01 was a Thursday.
     let weekday = ((days + 4).rem_euclid(7)) as usize;
-    (year, month, day, in_day / 3600, in_day / 60 % 60, in_day % 60, weekday)
+    (
+        year,
+        month,
+        day,
+        in_day / 3600,
+        in_day / 60 % 60,
+        in_day % 60,
+        weekday,
+    )
 }
 
 /// `time` as HTTP writes dates: `Tue, 15 Nov 1994 08:12:31 GMT`.
@@ -875,8 +892,14 @@ mod tests {
         assert_eq!(
             set_properties(xml),
             vec![
-                ("urn:schemas-microsoft-com:".to_string(), "Win32LastModifiedTime".to_string()),
-                ("urn:schemas-microsoft-com:".to_string(), "Win32FileAttributes".to_string()),
+                (
+                    "urn:schemas-microsoft-com:".to_string(),
+                    "Win32LastModifiedTime".to_string()
+                ),
+                (
+                    "urn:schemas-microsoft-com:".to_string(),
+                    "Win32FileAttributes".to_string()
+                ),
             ]
         );
     }

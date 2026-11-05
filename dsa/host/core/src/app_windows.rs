@@ -41,7 +41,10 @@ impl AppWindowSettings {
     /// name, and a start size at least the smallest window and at most [`MAX_START_DP`].
     pub fn checked(self) -> Result<AppWindowSettings, String> {
         if !crate::compositor::window_hosts::is_valid_package(&self.package_name) {
-            return Err(format!("{:?} is not an Android package name", self.package_name));
+            return Err(format!(
+                "{:?} is not an Android package name",
+                self.package_name
+            ));
         }
         if let Some((width, height)) = self.start_size_dp {
             let fits = |length: u32| (MIN_CLIENT_DP..=MAX_START_DP).contains(&length);

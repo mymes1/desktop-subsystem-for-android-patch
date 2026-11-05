@@ -1155,7 +1155,11 @@ impl Compositor {
                     settings_logger,
                 )
             })
-            .map_err(|e| log(&format!("could not start the watch of app window settings: {e}")))
+            .map_err(|e| {
+                log(&format!(
+                    "could not start the watch of app window settings: {e}"
+                ))
+            })
             .ok();
 
         let request_events = events_tx;
@@ -1185,9 +1189,9 @@ impl Compositor {
                 start_menu,
                 app_windows,
             ]
-                .into_iter()
-                .flatten()
-                .collect(),
+            .into_iter()
+            .flatten()
+            .collect(),
         }
     }
 }

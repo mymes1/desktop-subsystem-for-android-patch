@@ -185,7 +185,10 @@ fn fr30_the_local_api_carries_controllers_and_their_rumble_and_ends_them_with_th
     };
     android.rumble(effect);
     // A rumble for a controller this connection does not carry is not its to play.
-    android.rumble(GamepadRumble { pad_id: 9, ..effect });
+    android.rumble(GamepadRumble {
+        pad_id: 9,
+        ..effect
+    });
     assert_eq!(stream.next(WAIT).unwrap(), Some(effect));
     assert_eq!(stream.next(Duration::from_millis(200)).unwrap(), None);
 
