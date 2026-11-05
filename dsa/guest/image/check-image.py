@@ -206,6 +206,9 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
                              plat_sepolicy):
                 problems.append(f"the SELinux policy does not label sysfs {path} sysfs_wakeup, so the "
                                 "suspend service cannot read the wakeup sources")
+        if not re.search(r"\(allow\s+vendor_init\s+gpu_device\s+\(\s*chr_file\s*\([^)]*getattr", plat_sepolicy):
+            problems.append("the SELinux policy does not let vendor_init check the gpu_device DRM cards, so "
+                            "init's wait for /dev/dri/card0 times out and holds up boot")
 
     # One declaration of each HAL instance across the vendor manifest, its fragments and the
     # active vendor APEXes, and one for every instance a DSA service registers.

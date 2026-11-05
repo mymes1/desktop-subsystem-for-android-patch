@@ -286,6 +286,13 @@ class ImageLayoutTests(unittest.TestCase):
         for perm in ("open", "read", "write", "ioctl"):
             self.assertIn(perm, rule)
 
+    def test_pr3_vendor_init_may_check_the_drm_cards(self):
+        # The cards are relabelled gpu_device; Cuttlefish's init script waits for card0 as
+        # vendor_init, and a refused stat makes the wait time out after five seconds.
+        patched = make_image.patch_plat_sepolicy("(type vendor_init)\n(type gpu_device)\n",
+                                                 make_image.SEPOLICY_FRAGMENT.read_text())
+        self.assertIn("(allow vendor_init gpu_device (chr_file (getattr)))", patched)
+
     def test_pr3_neverallow_is_narrowed_only_for_vsock_socket(self):
         cil = (
             "(neverallow all_untrusted_apps base_typeattr_1 (vsock_socket (ioctl read write create getattr "

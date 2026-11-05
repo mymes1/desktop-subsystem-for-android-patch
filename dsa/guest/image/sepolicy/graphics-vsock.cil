@@ -13,3 +13,8 @@
 ; Cuttlefish policy grants it.
 (allow hal_graphics_allocator_server graphics_device (dir (search)))
 (allow hal_graphics_allocator_server graphics_device (chr_file (open read write ioctl getattr map)))
+
+; The DRM cards are relabelled gpu_device so every graphics client may open them. Cuttlefish's
+; init script waits for /dev/dri/card0 as vendor_init, which may check only graphics_device.
+; Refused, the wait times out after five seconds and holds up early boot.
+(allow vendor_init gpu_device (chr_file (getattr)))
