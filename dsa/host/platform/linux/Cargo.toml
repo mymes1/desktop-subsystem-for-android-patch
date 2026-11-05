@@ -39,9 +39,6 @@ dsa-host-unix = { path = "../unix" }
 libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-# The vsock listener the device ports are served on; the guest's own socket code works the
-# same on the host's side.
-dsa-guest-transport = { path = "../../../guest/transport" }
 # The session bus and the system bus: GeoClue2, UPower, logind, iio-sensor-proxy, the
 # desktop portals and the notification service. Pure Rust, so the host links no D-Bus C
 # library.
@@ -50,7 +47,7 @@ zbus = { version = "5", default-features = false, features = ["blocking-api", "a
 zune-jpeg = "0.4"
 zune-core = "0.4"
 # Still pictures for the guest's camera, encoded from the newest picture.
-jpeg-encoder = "0.6"
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 # The compositor's Wayland client, pure Rust, and the protocols it speaks (xdg-shell,
 # decorations, text-input-v3, tablet-v2, cursor-shape).
 wayland-client = "0.31"
