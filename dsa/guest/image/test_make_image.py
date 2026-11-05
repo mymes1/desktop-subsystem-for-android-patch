@@ -1430,7 +1430,9 @@ class ImageLayoutTests(unittest.TestCase):
             camera = root / "dsa-camera"
             camera.write_bytes(b"\x7fELF camera")
             emulated = "VENDOR/apex/com.google.emulated.camera.provider.hal.apex"
+            variant = "VENDOR/apex/com.google.emulated.camera.provider.hal.fastscenecycle.apex"
             with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr(variant, b"apex")
                 archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
                 archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
                 archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
@@ -1445,6 +1447,9 @@ class ImageLayoutTests(unittest.TestCase):
             with zipfile.ZipFile(modified) as archive:
                 names = archive.namelist()
                 self.assertNotIn(emulated, names)
+                # The other variant declares the same provider instance; left in, apexd
+                # activates it and the vendor VINTF manifest fails.
+                self.assertNotIn(variant, names)
                 self.assertNotIn(b"emulated.camera", archive.read("META/apexkeys.txt"))
                 self.assertEqual(archive.read("VENDOR/bin/hw/dsa-camera"), b"\x7fELF camera")
                 self.assertIn("service vendor.dsa-camera /vendor/bin/hw/dsa-camera",

@@ -1222,8 +1222,11 @@ CAMERA_CONTEXT = "/vendor/bin/hw/dsa-camera u:object_r:hal_camera_default_exec:s
 CAMERA_INSTANCE = "android.hardware.camera.provider.ICameraProvider/internal/0"
 CAMERA_SERVICE_CONTEXT = f"{CAMERA_INSTANCE} u:object_r:hal_camera_service:s0"
 CAMERA_APEX_MODULE = "com.google.emulated.camera.provider.hal"
+# Both variants: apexd activates whichever is left, and either declares the same provider
+# instance as DSA's camera HAL, which fails the whole vendor VINTF manifest.
 CUTTLEFISH_CAMERA_APEXES = [
     "com.google.emulated.camera.provider.hal",
+    "com.google.emulated.camera.provider.hal.fastscenecycle",
 ]
 # The freeform display every task window lives on, as the hwcomposer reads it from
 # ro.boot.dsa.*. The host shows windows, not this display, so its size bounds a window's.
