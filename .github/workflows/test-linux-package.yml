@@ -50,6 +50,7 @@ jobs:
       # The lock file the build resolved, so a dependency added without one can be checked
       # in from here.
       - name: Keep the resolved lock file
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cargo-lock-${{ matrix.arch }}
