@@ -17,11 +17,11 @@ use dsa_host_core::notifications::{Notification, NotificationAction, Notificatio
 use dsa_host_core::power::{PowerHub, PowerState};
 use dsa_host_core::power_hints::{mode, PowerHint};
 use dsa_host_core::print::{PrintEvent, PrintJob, PrintOutcome};
+use dsa_host_core::run_mode::{RunMode, RunModePolicy};
 use dsa_host_core::session::{
     BackgroundRequest, BootProblem, GuestLauncher, GuestPower, GuestStall, Session, SessionConfig,
     SessionError, SessionEvent, SessionState, StopReason,
 };
-use dsa_host_core::run_mode::{RunMode, RunModePolicy};
 use dsa_host_core::tasks::{Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest};
 use dsa_host_core::widgets::{self, Placement, Widget, WidgetEvent, WidgetSize};
 use dsa_protocol::auth::BootSecret;
@@ -4272,7 +4272,10 @@ fn fr31_as_needed_stops_the_session_once_nothing_has_used_it_for_the_wait() {
         session.wait_for(SessionState::Stopped, WAIT),
         "the session stops once no window, background app or widget has used it"
     );
-    assert_eq!(session.last_reason(), Some(StopReason::Unused(RUN_MODE_WAIT)));
+    assert_eq!(
+        session.last_reason(),
+        Some(StopReason::Unused(RUN_MODE_WAIT))
+    );
 }
 
 #[test]
@@ -4329,14 +4332,22 @@ fn fr31_a_background_app_or_a_widget_keeps_the_session_running() {
     });
     session.set_run_mode(as_needed(RUN_MODE_WAIT));
     thread::sleep(RUN_MODE_WAIT * 3);
-    assert_eq!(session.state(), SessionState::Active, "a music app keeps it");
+    assert_eq!(
+        session.state(),
+        SessionState::Active,
+        "a music app keeps it"
+    );
 
     let (session, mut agent, _launcher) = active_session();
     send_body(&mut agent, widget_updated(12));
     wait_until("the widget is known", || !session.widgets().is_empty());
     session.set_run_mode(as_needed(RUN_MODE_WAIT));
     thread::sleep(RUN_MODE_WAIT * 3);
-    assert_eq!(session.state(), SessionState::Active, "a widget keeps it");
+    assert_eq!(
+        session.state(),
+        SessionState::Active,
+        "a widget keeps it"
+    );
 }
 
 #[test]
