@@ -16,10 +16,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Each push to develop is checked on its own: several workers push in a row, and a
-  # newer push cancelling an older run left commits no run ever finished.
-  group: test-graphics-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}-${{ github.event_name == 'push' && github.sha || '' }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  # A newer push to develop holds every older one, so only the newest is checked. Runs
+  # that never finish are avoided by checking compile and lint before each push.
+  group: test-graphics-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
