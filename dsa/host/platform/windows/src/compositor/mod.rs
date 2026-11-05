@@ -1067,6 +1067,7 @@ impl Compositor {
         let manager_stop = Arc::new(AtomicBool::new(false));
         let idle = Arc::new(Mutex::new(IdleTrim::new(IDLE_TRIM_DELAY, Instant::now())));
         let trim_gpu = gpu.clone();
+        let quiet_router = Arc::clone(&router);
         let setup = ManagerSetup {
             events: events_rx,
             requests: requests_tx,
@@ -1114,7 +1115,10 @@ impl Compositor {
         let trim_logger = self.logger.clone();
         let trimmer = thread::Builder::new()
             .name("dsa-wm-trim".into())
-            .spawn(move || trim::run(trim_idle, trim_gpu, trim_stop, trim_logger))
+            .spawn(move || {
+                let quiet_for = Box::new(move || quiet_router.quiet_for());
+                trim::run(trim_idle, trim_gpu, quiet_for, trim_stop, trim_logger)
+            })
             .map_err(|e| log(&format!("could not start the idle memory trim: {e}")))
             .ok();
 

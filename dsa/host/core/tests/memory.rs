@@ -472,6 +472,27 @@ fn nfr1_the_window_manager_gives_memory_back_once_every_window_is_minimized() {
 }
 
 #[test]
+fn nfr1_a_shown_window_with_a_still_screen_gets_the_gpu_driver_trim_once_per_quiet_stretch() {
+    use dsa_host_core::memory::QUIET_TRIM_DELAY;
+    let start = Instant::now();
+    let mut trim = IdleTrim::new(Duration::from_secs(30), start);
+    // No window shown: the idle trim owns that case, not this one.
+    assert!(!trim.quiet_due(QUIET_TRIM_DELAY));
+    trim.sync(&[opened(1)], start);
+    // Frames are arriving: nothing.
+    assert!(!trim.quiet_due(Duration::from_secs(1)));
+    // A still screen: once.
+    assert!(trim.quiet_due(QUIET_TRIM_DELAY));
+    assert!(!trim.quiet_due(QUIET_TRIM_DELAY * 2));
+    // A frame starts a new quiet stretch.
+    assert!(!trim.quiet_due(Duration::ZERO));
+    assert!(trim.quiet_due(QUIET_TRIM_DELAY));
+    // Minimized: not this trim's.
+    trim.windows_shown(false, start);
+    assert!(!trim.quiet_due(QUIET_TRIM_DELAY * 3));
+}
+
+#[test]
 fn nfr2_the_window_manager_gives_memory_back_once_no_window_has_been_open_a_while() {
     let start = Instant::now();
     let delay = Duration::from_secs(30);

@@ -6,7 +6,9 @@
 //! dropped before they are copied anywhere.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use super::adapter::DisplaySink;
 
@@ -37,6 +39,10 @@ pub struct FrameRouter<T: FrameTarget> {
     /// kept open while the renderer may still write it: until it is given something else for
     /// that display.
     given: Mutex<HashMap<u32, Given<T>>>,
+    /// When the last frame arrived, in milliseconds after `start`: the idle memory trim
+    /// gives the GPU driver's spare memory back while shown windows have nothing new to show.
+    start: Instant,
+    last_frame_ms: AtomicU64,
 }
 
 impl<T: FrameTarget> Default for FrameRouter<T> {
@@ -44,6 +50,8 @@ impl<T: FrameTarget> Default for FrameRouter<T> {
         FrameRouter {
             routes: Mutex::new(HashMap::new()),
             given: Mutex::new(HashMap::new()),
+            start: Instant::now(),
+            last_frame_ms: AtomicU64::new(0),
         }
     }
 }
@@ -51,6 +59,12 @@ impl<T: FrameTarget> Default for FrameRouter<T> {
 impl<T: FrameTarget> FrameRouter<T> {
     pub fn new() -> FrameRouter<T> {
         FrameRouter::default()
+    }
+
+    /// How long ago the last frame arrived (since the router was made, before any frame).
+    pub fn quiet_for(&self) -> Duration {
+        let last = Duration::from_millis(self.last_frame_ms.load(Ordering::Relaxed));
+        self.start.elapsed().saturating_sub(last)
     }
 
     /// Replaces the routes: from now on each display's frames go to its window, and the
@@ -99,6 +113,8 @@ impl<T: FrameTarget + 'static> DisplaySink for FrameRouter<T> {
     }
 
     fn frame(&self, display_id: u32, content: (u32, u32)) {
+        self.last_frame_ms
+            .store(self.start.elapsed().as_millis() as u64, Ordering::Relaxed);
         let given = self
             .given
             .lock()
