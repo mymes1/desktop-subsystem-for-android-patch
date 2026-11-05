@@ -28,6 +28,16 @@ impl ShmBuffer {
         qh: &QueueHandle<State>,
         size: (u32, u32),
     ) -> io::Result<ShmBuffer> {
+        ShmBuffer::with_format(shm, qh, size, wl_shm::Format::Xrgb8888)
+    }
+
+    /// A buffer of `format`: `Argb8888` for one with transparent pixels, as a cursor.
+    pub fn with_format(
+        shm: &wl_shm::WlShm,
+        qh: &QueueHandle<State>,
+        size: (u32, u32),
+        format: wl_shm::Format,
+    ) -> io::Result<ShmBuffer> {
         let (width, height) = (size.0.max(1), size.1.max(1));
         let stride = width as usize * 4;
         let len = stride * height as usize;
@@ -65,7 +75,7 @@ impl ShmBuffer {
             width as i32,
             height as i32,
             stride as i32,
-            wl_shm::Format::Xrgb8888,
+            format,
             qh,
             busy.clone(),
         );
