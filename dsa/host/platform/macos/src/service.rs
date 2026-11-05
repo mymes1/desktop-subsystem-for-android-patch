@@ -5,11 +5,12 @@
 //! other user ID is refused all the same.
 //!
 //! The agent reaches the guest through the VM's vsock device. The control channel, the log
-//! port and the file server are served here, as the Windows service serves them. The ports
-//! the window manager speaks with the guest on (graphics, audio, video, sensors, camera)
-//! can only be accepted by the process that owns the VM, so the agent relays each such
-//! connection to a Unix socket the window manager listens on,
-//! `<user folder>/vsock/<port>.sock` ([`relay_socket`]).
+//! port and the file server are served here, as the Windows service serves them. The other
+//! ports the guest connects to can only be accepted by the process that owns the VM, so the
+//! agent relays each such connection to a Unix socket, `<user folder>/vsock/<port>.sock`
+//! ([`relay_socket`]): the graphics ports to the window manager (`dsa-wm`), and the device
+//! ports (sound, video, sensors, cameras) to the user's device lender (`dsa-devices`). A
+//! connection goes only to a socket the user owns, in a folder the user owns.
 
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -45,20 +46,7 @@ use crate::vm_config::{image_files, kernel_fits, mac_address_for, Disk, GuestArc
 use crate::vsock::{Framing, VsockListener, VsockStream};
 use crate::vz::PortChannels;
 
-/// The ports the window manager serves, which the agent relays to it.
-pub const RELAYED_PORTS: [u32; 6] = [
-    dsa_host_core::compositor::GRAPHICS_COMMAND_PORT,
-    dsa_host_core::compositor::GRAPHICS_PROCESS_PIPE_PORT,
-    dsa_host_core::audio::AUDIO_PORT,
-    dsa_host_core::video::VIDEO_PORT,
-    dsa_host_core::sensors::SENSOR_PORT,
-    dsa_host_core::camera::CAMERA_PORT,
-];
-
-/// The Unix socket the window manager listens on for the guest's connections to `port`.
-pub fn relay_socket(user: &UserFolders, port: u32) -> PathBuf {
-    user.root.join("vsock").join(format!("{port}.sock"))
-}
+pub use crate::host_config::{relay_socket, DEVICE_PORTS, GRAPHICS_PORTS, RELAYED_PORTS};
 
 /// The user this agent runs as, as the local API names its callers.
 pub fn local_user() -> String {
@@ -282,8 +270,13 @@ fn arm_translation_bootconfig(store: &dyn SettingsStore, user: &str) -> String {
     dsa_host_core::arm_translation::bootconfig(package.as_ref(), enabled).to_string()
 }
 
-/// Relays each of the guest's connections to `port` to the window manager's socket for it.
+/// Relays each of the guest's connections to `port` to the socket of the user's program that
+/// serves it: the window manager for graphics, the device lender for the devices. A socket
+/// that is missing, or that is not the user's own, takes nothing: the guest's connection is
+/// closed, which its HAL reads as a device that is not there.
 fn relay_port(listener: VsockListenerRaw, socket: PathBuf, stop: Arc<AtomicBool>) {
+    let owner = dsa_host_unix::socket::current_uid();
+    let mut warned = false;
     while !stop.load(Ordering::Relaxed) {
         let fd = {
             let rx = listener.lock().unwrap_or_else(|e| e.into_inner());
@@ -294,14 +287,22 @@ fn relay_port(listener: VsockListenerRaw, socket: PathBuf, stop: Arc<AtomicBool>
             }
         };
         let guest = UnixStream::from(fd);
-        let host = match UnixStream::connect(&socket) {
-            Ok(host) => host,
+        let host = dsa_host_unix::device_socket::owned_by(&socket, owner)
+            .and_then(|()| UnixStream::connect(&socket).map_err(|e| e.to_string()));
+        let host = match host {
+            Ok(host) => {
+                warned = false;
+                host
+            }
             Err(why) => {
-                eprintln!(
-                    "relay: the guest's connection is dropped, the window manager is not \
-                     listening on {} ({why})",
-                    socket.display()
-                );
+                // Said once until it works again: a HAL that retries must not fill the log.
+                if !warned {
+                    eprintln!(
+                        "relay: the guest's connection is dropped, nothing of this user's                          listens on {} ({why})",
+                        socket.display()
+                    );
+                    warned = true;
+                }
                 continue;
             }
         };
@@ -512,29 +513,11 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
 
 /// The user's own folders, shared with their Android. The agent runs as the user, so the
 /// file system checks each access against the user's own rights.
-fn user_folders() -> dsa_host_core::file_share::PlainShareHost {
+fn user_folders() -> crate::devices::shared_folders::MacFolders {
     let home = std::env::var_os("HOME")
         .map(PathBuf::from)
         .unwrap_or_default();
-    let folders = [
-        "Documents",
-        "Downloads",
-        "Pictures",
-        "Music",
-        "Movies",
-        "Desktop",
-    ]
-    .iter()
-    .map(|name| {
-        // Android's names for them: macOS keeps videos in Movies.
-        let shared = if *name == "Movies" { "Videos" } else { name };
-        (shared.to_string(), home.join(name))
-    })
-    .collect();
-    dsa_host_core::file_share::PlainShareHost {
-        folders,
-        location: "Mac".into(),
-    }
+    crate::devices::shared_folders::MacFolders { home }
 }
 
 /// Applies the user's saved choices to their Android, as the Windows service does when it

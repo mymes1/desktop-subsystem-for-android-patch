@@ -13,6 +13,10 @@
 //! session and launchd gives it a Mach service ([`WM_LABEL`]), through which it hands each
 //! task's frame surfaces to the app window hosts. `dsa-hostd` starts it through launchd when
 //! Android needs its renderer, and launchd starts it again if it ends with an error.
+//!
+//! The device lender (`dsa-devices`) has an agent of its own too ([`DEVICES_LABEL`]), started
+//! at login: it lends the Mac's sound, cameras, location, controllers and printers to the
+//! user's Android from inside the login session, where macOS asks the user for each of them.
 
 use std::path::{Path, PathBuf};
 
@@ -21,6 +25,34 @@ pub const LABEL: &str = "io.github.thisisthepy.dsa.hostd";
 
 /// The window manager agent's launchd label, which is also the name of its Mach service.
 pub const WM_LABEL: &str = "io.github.thisisthepy.dsa.wm";
+
+/// The device lender agent's launchd label.
+pub const DEVICES_LABEL: &str = "io.github.thisisthepy.dsa.devices";
+
+/// The device lender's program in an installation: `dsa-devices` beside `dsa-hostd`.
+pub fn devices_beside(hostd: &Path) -> Option<PathBuf> {
+    let program = hostd.parent()?.join("dsa-devices");
+    program.is_file().then_some(program)
+}
+
+/// Where the device lender agent's property list goes, below the user's home.
+pub fn devices_plist_path(home: &Path) -> PathBuf {
+    home.join("Library")
+        .join("LaunchAgents")
+        .join(format!("{DEVICES_LABEL}.plist"))
+}
+
+/// The device lender agent's service target, for `launchctl kickstart` and `bootout`.
+pub fn devices_service_target(uid: u32) -> String {
+    format!("{}/{DEVICES_LABEL}", domain(uid))
+}
+
+/// The device lender agent's property list: `program`, started at login and restarted when
+/// it ends with an error, its output appended to `log`.
+pub fn devices_plist(program: &Path, log: &Path) -> String {
+    let arguments = [program.to_string_lossy().into_owned()];
+    agent_plist(DEVICES_LABEL, &arguments, None, log)
+}
 
 /// The window manager's program in an installation: `dsa-wm` beside `dsa-hostd`.
 pub fn window_manager_beside(hostd: &Path) -> Option<PathBuf> {
@@ -192,6 +224,29 @@ pub fn install(
     if let Some(window_manager) = window_manager_beside(program) {
         install_window_manager(home, uid, &window_manager)?;
     }
+    if let Some(devices) = devices_beside(program) {
+        install_devices(home, uid, &devices)?;
+    }
+    Ok(path)
+}
+
+/// Writes the device lender agent's property list for the user whose home is `home` and
+/// loads it, which starts the lender.
+#[cfg(target_os = "macos")]
+pub fn install_devices(home: &Path, uid: u32, program: &Path) -> Result<PathBuf, String> {
+    let path = devices_plist_path(home);
+    let log = crate::host_config::user_root_in(home)
+        .join("logs")
+        .join("dsa-devices.log");
+    for dir in [path.parent(), log.parent()].into_iter().flatten() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+    }
+    std::fs::write(&path, devices_plist(program, &log))
+        .map_err(|e| format!("writing {}: {e}", path.display()))?;
+    // There may be no earlier copy to unload.
+    let _ = launchctl(&["bootout".to_string(), devices_service_target(uid)]);
+    let plist = path.to_string_lossy().into_owned();
+    launchctl(&["bootstrap".to_string(), domain(uid), plist])?;
     Ok(path)
 }
 
@@ -223,7 +278,8 @@ pub fn uninstall(home: &Path, uid: u32) -> Result<(), String> {
         let _ = launchctl(&command);
     }
     let _ = launchctl(&["bootout".to_string(), wm_service_target(uid)]);
-    for path in [plist_path(home), wm_plist_path(home)] {
+    let _ = launchctl(&["bootout".to_string(), devices_service_target(uid)]);
+    for path in [plist_path(home), wm_plist_path(home), devices_plist_path(home)] {
         match std::fs::remove_file(&path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
