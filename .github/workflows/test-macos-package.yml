@@ -82,7 +82,8 @@ jobs:
           done
           codesign --verify --strict DSA.app
           codesign -d --entitlements - --xml DSA.app > entitlements.plist
-          plutil -extract com.apple.security.virtualization raw entitlements.plist | grep -Fxq true
+          tr -d ' \t\n' < entitlements.plist \
+            | grep -Fq '<key>com.apple.security.virtualization</key><true/>'
           lipo -archs DSA.app/Contents/MacOS/dsa-app-window | grep -Fq arm64
 
       - name: Check the installer package installs DSA.app into Applications
