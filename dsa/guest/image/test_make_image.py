@@ -594,13 +594,22 @@ class ImageLayoutTests(unittest.TestCase):
 
     NETWORK_FILES = {
         "VENDOR/build.prop": b"ro.vendor.wifi_impl=mac80211_hwsim_virtio\nro.product.vendor.name=cf\n",
-        "VENDOR/bin/setup_wifi": b"\x7fELF",
         "VENDOR/etc/init/hw/init.vendor.rc":
             b"on post-fs-data && property:ro.vendor.wifi_impl=virt_wifi\n    start setup_wifi\n",
     }
 
+    @staticmethod
+    def wifi_apex(service):
+        # Cuttlefish's Wi-Fi APEX: setup_wifi and its init service are in the payload image.
+        out = io.BytesIO()
+        with zipfile.ZipFile(out, "w") as apex:
+            apex.writestr("apex_payload.img", b"\0" * 64 + service + b"\0" * 64)
+        return out.getvalue()
+
     def network_files(self):
         files = dict(self.NETWORK_FILES)
+        files["VENDOR/apex/com.google.cf.wifi.apex"] = self.wifi_apex(
+            b"service setup_wifi /apex/com.google.cf.wifi/bin/setup_wifi --interface=${ro.vendor.virtwifi.port}")
         files["VENDOR/build.prop"] = make_image.edit_props(
             files["VENDOR/build.prop"].decode(), vendor=True, network=True).encode()
         return files
@@ -639,10 +648,15 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertTrue(any("net.dns1" in p for p in problems), problems)
         self.assertTrue(any("static address" in p for p in problems), problems)
         # No setup_wifi, and no prefix for it.
-        del files["VENDOR/bin/setup_wifi"]
+        del files["VENDOR/apex/com.google.cf.wifi.apex"]
         problems = make_image.network_problems(list(files), files.__getitem__, "console=ttyS0")
-        self.assertTrue(any("setup_wifi is missing" in p for p in problems), problems)
+        self.assertTrue(any("com.google.cf.wifi.apex is missing" in p for p in problems), problems)
         self.assertTrue(any("wifi_mac_prefix" in p for p in problems), problems)
+        # An APEX without the setup_wifi service.
+        files = self.network_files()
+        files["VENDOR/apex/com.google.cf.wifi.apex"] = self.wifi_apex(b"service other /bin/other")
+        problems = make_image.network_problems(list(files), files.__getitem__, cmdline)
+        self.assertTrue(any("no setup_wifi service" in p for p in problems), problems)
 
     def test_fr3_an_unrecognised_wifi_rc_is_not_passed_through(self):
         # A new build that set the trace instance up some other way would bring the stall
