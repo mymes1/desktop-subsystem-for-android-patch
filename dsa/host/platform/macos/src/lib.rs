@@ -22,6 +22,8 @@
 //!   drag and drop, and opening links and files on the host.
 //! - [`devices`]: sound, cameras, location, printing, shared folders, game controllers, and
 //!   the system settings each user's Android follows.
+//! - [`wm`]: the window manager (`dsa-wm`): the renderer, the guest's graphics streams, and
+//!   one window host per app, each given its tasks' frames.
 //!
 //! What can be checked anywhere (the kernel command line, the disk formats, the
 //! configuration, the launchd agent, key tables, sizes, bundle layouts, value conversions) is
@@ -38,6 +40,7 @@ pub mod shell;
 pub mod user_disk;
 pub mod vhdx;
 pub mod vm_config;
+pub mod wm;
 
 /// GUID partition tables, shared with the Windows host: the same disks, read the same way.
 #[allow(dead_code)]

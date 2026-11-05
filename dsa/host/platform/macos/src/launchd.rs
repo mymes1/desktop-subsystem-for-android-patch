@@ -8,11 +8,37 @@
 //!
 //! The agent is a property list in `~/Library/LaunchAgents`, loaded into the user's GUI
 //! domain (`gui/<uid>`), so it runs in their login session with access to their windows.
+//!
+//! The window manager (`dsa-wm`) has an agent of its own beside it, so it runs in the same
+//! session and launchd gives it a Mach service ([`WM_LABEL`]), through which it hands each
+//! task's frame surfaces to the app window hosts. `dsa-hostd` starts it through launchd when
+//! Android needs its renderer, and launchd starts it again if it ends with an error.
 
 use std::path::{Path, PathBuf};
 
 /// The agent's launchd label.
 pub const LABEL: &str = "io.github.thisisthepy.dsa.hostd";
+
+/// The window manager agent's launchd label, which is also the name of its Mach service.
+pub const WM_LABEL: &str = "io.github.thisisthepy.dsa.wm";
+
+/// The window manager's program in an installation: `dsa-wm` beside `dsa-hostd`.
+pub fn window_manager_beside(hostd: &Path) -> Option<PathBuf> {
+    let program = hostd.parent()?.join("dsa-wm");
+    program.is_file().then_some(program)
+}
+
+/// Where the window manager agent's property list goes, below the user's home.
+pub fn wm_plist_path(home: &Path) -> PathBuf {
+    home.join("Library")
+        .join("LaunchAgents")
+        .join(format!("{WM_LABEL}.plist"))
+}
+
+/// The window manager agent's service target, for `launchctl kickstart` and `bootout`.
+pub fn wm_service_target(uid: u32) -> String {
+    format!("{}/{WM_LABEL}", domain(uid))
+}
 
 /// Where the agent's property list goes, below the user's home.
 pub fn plist_path(home: &Path) -> PathBuf {
@@ -45,11 +71,31 @@ pub fn plist(program: &Path, config: Option<&Path>, log: &Path) -> String {
     if let Some(config) = config {
         arguments.push(config.to_string_lossy().into_owned());
     }
+    agent_plist(LABEL, &arguments, None, log)
+}
+
+/// The window manager agent's property list: `program`, started at login and restarted when
+/// it ends with an error, with the Mach service [`WM_LABEL`], its output appended to `log`.
+pub fn wm_plist(program: &Path, log: &Path) -> String {
+    let arguments = [program.to_string_lossy().into_owned()];
+    agent_plist(WM_LABEL, &arguments, Some(WM_LABEL), log)
+}
+
+fn agent_plist(label: &str, arguments: &[String], mach: Option<&str>, log: &Path) -> String {
     let arguments: String = arguments
         .iter()
         .map(|a| format!("\t\t<string>{}</string>\n", xml_escape(a)))
         .collect();
     let log = xml_escape(&log.to_string_lossy());
+    let label = xml_escape(label);
+    // A Mach service launchd keeps for the program, which it checks in to.
+    let mach = match mach {
+        Some(name) => format!(
+            "\t<key>MachServices</key>\n\t<dict>\n\t\t<key>{}</key>\n\t\t<true/>\n\t</dict>\n",
+            xml_escape(name)
+        ),
+        None => String::new(),
+    };
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
          <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
@@ -57,7 +103,7 @@ pub fn plist(program: &Path, config: Option<&Path>, log: &Path) -> String {
          <plist version=\"1.0\">\n\
          <dict>\n\
          \t<key>Label</key>\n\
-         \t<string>{LABEL}</string>\n\
+         \t<string>{label}</string>\n\
          \t<key>ProgramArguments</key>\n\
          \t<array>\n\
          {arguments}\
@@ -77,6 +123,7 @@ pub fn plist(program: &Path, config: Option<&Path>, log: &Path) -> String {
          \t<string>{log}</string>\n\
          \t<key>StandardErrorPath</key>\n\
          \t<string>{log}</string>\n\
+         {mach}\
          </dict>\n\
          </plist>\n"
     )
@@ -120,7 +167,8 @@ pub fn launchctl(arguments: &[String]) -> Result<(), String> {
     }
 }
 
-/// Writes the agent's property list for the user whose home is `home` and loads it.
+/// Writes the agent's property list for the user whose home is `home` and loads it. A window
+/// manager installed beside `program` gets its own agent too.
 #[cfg(target_os = "macos")]
 pub fn install(
     home: &Path,
@@ -141,20 +189,46 @@ pub fn install(
     // There may be no earlier copy to unload.
     let _ = launchctl(&commands[0]);
     launchctl(&commands[1])?;
+    if let Some(window_manager) = window_manager_beside(program) {
+        install_window_manager(home, uid, &window_manager)?;
+    }
     Ok(path)
 }
 
-/// Unloads the agent and removes its property list.
+/// Writes the window manager agent's property list for the user whose home is `home` and
+/// loads it, which starts the window manager.
+#[cfg(target_os = "macos")]
+pub fn install_window_manager(home: &Path, uid: u32, program: &Path) -> Result<PathBuf, String> {
+    let path = wm_plist_path(home);
+    let log = crate::host_config::user_root_in(home)
+        .join("logs")
+        .join("dsa-wm.log");
+    for dir in [path.parent(), log.parent()].into_iter().flatten() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+    }
+    std::fs::write(&path, wm_plist(program, &log))
+        .map_err(|e| format!("writing {}: {e}", path.display()))?;
+    // There may be no earlier copy to unload.
+    let _ = launchctl(&["bootout".to_string(), wm_service_target(uid)]);
+    let plist = path.to_string_lossy().into_owned();
+    launchctl(&["bootstrap".to_string(), domain(uid), plist])?;
+    Ok(path)
+}
+
+/// Unloads the agents and removes their property lists.
 #[cfg(target_os = "macos")]
 pub fn uninstall(home: &Path, uid: u32) -> Result<(), String> {
     for command in uninstall_commands(uid) {
         // Not loaded is as good as unloaded.
         let _ = launchctl(&command);
     }
-    let path = plist_path(home);
-    match std::fs::remove_file(&path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(format!("removing {}: {e}", path.display())),
+    let _ = launchctl(&["bootout".to_string(), wm_service_target(uid)]);
+    for path in [plist_path(home), wm_plist_path(home)] {
+        match std::fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("removing {}: {e}", path.display())),
+        }
     }
+    Ok(())
 }

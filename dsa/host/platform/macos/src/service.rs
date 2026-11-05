@@ -83,30 +83,63 @@ fn total_memory_mb() -> Option<u64> {
     (result == 0).then_some(bytes / (1024 * 1024))
 }
 
-/// Keeps the window manager running: a program of the user's own, started as a child.
+/// Keeps the window manager running. Installed, it has a launchd agent of its own, which is
+/// asked to start it (`launchctl kickstart`), so it runs with its Mach service; run by hand,
+/// it is started as a child of the agent. It runs when its socket answers.
 struct ProgramWindowManager {
     program: PathBuf,
+    /// The window manager's launchd service target, when its agent is installed.
+    launchd: Option<String>,
+    /// The socket the window hosts dial, which the window manager answers on.
+    socket: PathBuf,
     child: Option<Child>,
 }
 
 impl WindowManagerHost for ProgramWindowManager {
     fn running(&mut self) -> bool {
-        match &mut self.child {
-            Some(child) => matches!(child.try_wait(), Ok(None)),
-            None => false,
+        if let Some(child) = &mut self.child {
+            if matches!(child.try_wait(), Ok(None)) {
+                return true;
+            }
+            self.child = None;
         }
+        UnixStream::connect(&self.socket).is_ok()
     }
 
     fn start(&mut self) -> Result<(), String> {
+        if let Some(target) = &self.launchd {
+            let kickstart = ["kickstart".to_string(), target.clone()];
+            return crate::launchd::launchctl(&kickstart);
+        }
         let child = Command::new(&self.program).spawn().map_err(|e| {
-            format!(
-                "the window manager {} could not start: {e}",
-                self.program.display()
-            )
+            let program = self.program.display();
+            format!("the window manager {program} could not start: {e}")
         })?;
         self.child = Some(child);
         Ok(())
     }
+}
+
+/// The window manager to keep running: the one the configuration names, else the one
+/// installed beside this program. `None` runs Android without windows.
+fn window_manager(config: &MacHostConfig) -> Option<ProgramWindowManager> {
+    let program = config.window_manager.clone().or_else(|| {
+        let this = std::env::current_exe().ok()?;
+        crate::launchd::window_manager_beside(&this)
+    })?;
+    let home = PathBuf::from(std::env::var_os("HOME")?);
+    let uid = dsa_host_unix::socket::current_uid();
+    // The agent runs the installed program, so a program the configuration names is run
+    // directly.
+    let agent = config.window_manager.is_none() && crate::launchd::wm_plist_path(&home).exists();
+    let launchd = agent.then(|| crate::launchd::wm_service_target(uid));
+    let support = crate::host_config::user_root_in(&home);
+    Some(ProgramWindowManager {
+        program,
+        launchd,
+        socket: crate::compositor::window_host::window_manager_socket(&support),
+        child: None,
+    })
 }
 
 /// The image the next boot uses: its folder and version.
@@ -414,12 +447,9 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
         Some(shared.user.console_log()),
     )
     .with_process(shared.process.clone());
-    let launcher = match &config.window_manager {
-        Some(program) => {
-            let mut keeper = WindowManagerKeeper::new(ProgramWindowManager {
-                program: program.clone(),
-                child: None,
-            });
+    let launcher = match window_manager(config) {
+        Some(window_manager) => {
+            let mut keeper = WindowManagerKeeper::new(window_manager);
             launcher.with_prerequisite(Box::new(move || keeper.check(Instant::now())))
         }
         None => launcher,

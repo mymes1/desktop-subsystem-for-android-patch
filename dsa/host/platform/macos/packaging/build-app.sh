@@ -38,7 +38,44 @@ for program in dsa dsa-hostd dsa-wm; do
     fi
 done
 if [[ -n "$renderer" ]]; then
-    cp "$renderer" "$app/Contents/Frameworks/libgfxstream_backend.dylib"
+    frameworks="$app/Contents/Frameworks"
+    cp "$renderer" "$frameworks/libgfxstream_backend.dylib"
+    # The renderer links the Vulkan loader from where it was built (Homebrew). The loader
+    # comes along into Frameworks and the renderer is pointed at that copy, so DSA.app runs
+    # on a Mac without Homebrew.
+    while read -r dependency; do
+        case "$dependency" in
+            /usr/lib/* | /System/* | @*) continue ;;
+        esac
+        name="$(basename "$dependency")"
+        cp "$dependency" "$frameworks/$name"
+        chmod u+w "$frameworks/$name"
+        install_name_tool -id "@rpath/$name" "$frameworks/$name"
+        install_name_tool -change "$dependency" "@loader_path/$name" \
+            "$frameworks/libgfxstream_backend.dylib"
+    done < <(otool -L "$renderer" | tail -n +2 | awk '{print $1}')
+    # MoltenVK is the Vulkan driver the loader opens; its description sits in Resources,
+    # where the window manager points the loader (VK_ICD_FILENAMES).
+    moltenvk="${DSA_MOLTENVK:-}"
+    if [[ -z "$moltenvk" ]] && command -v brew >/dev/null; then
+        moltenvk="$(brew --prefix molten-vk 2>/dev/null)/lib/libMoltenVK.dylib"
+    fi
+    if [[ -n "$moltenvk" && -f "$moltenvk" ]]; then
+        cp "$moltenvk" "$frameworks/libMoltenVK.dylib"
+        mkdir -p "$app/Contents/Resources/vulkan/icd.d"
+        cat > "$app/Contents/Resources/vulkan/icd.d/MoltenVK_icd.json" <<'JSON'
+{
+    "file_format_version": "1.0.0",
+    "ICD": {
+        "library_path": "../../../Frameworks/libMoltenVK.dylib",
+        "api_version": "1.2.0",
+        "is_portability_driver": true
+    }
+}
+JSON
+    else
+        echo "MoltenVK was not found (set DSA_MOLTENVK); the renderer needs it installed" >&2
+    fi
 fi
 cp "$root/LICENSE" "$app/Contents/Resources/licenses/DSA.txt"
 
@@ -65,6 +102,7 @@ if [[ -n "${DSA_INSTALLER_IDENTITY:-}" ]]; then
     installer_identity=(--sign "$DSA_INSTALLER_IDENTITY")
 fi
 pkgbuild --component "$app" --install-location /Applications \
+    --scripts "$here/scripts" \
     --identifier org.thisisthepy.dsa --version "$version" \
     ${installer_identity[@]+"${installer_identity[@]}"} "$package"
 

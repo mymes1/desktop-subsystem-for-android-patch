@@ -1,9 +1,11 @@
-//! A task's frames shared between the window manager and the app's window host: one
-//! `IOSurface` per task, which the window manager writes and the window host reads.
+//! A task's frames shared between the window manager and the app's window host: `IOSurface`s
+//! the window manager writes (or has the renderer write on the GPU) and the window host shows.
 //!
-//! The surface is made global, so the window host finds it by its ID, which the window
-//! manager sends as the texture's handle. The window manager writes a frame only after the
-//! window host said it copied the last one out, so nothing reads a half-written frame.
+//! A surface reaches the window host as a Mach port ([`super::surface_port`]). Only where
+//! that cannot be done (the window manager was started by hand, outside its launchd agent)
+//! is the surface made global, so the window host finds it by its ID, which macOS keeps for
+//! compatibility. The window manager never writes a surface the window host still reads, so
+//! nothing shows a half-written frame.
 
 use std::ffi::c_void;
 
@@ -17,6 +19,8 @@ use crate::objc::{class, ns_string};
 extern "C" {
     fn IOSurfaceCreate(properties: *const AnyObject) -> *mut c_void;
     fn IOSurfaceLookup(id: u32) -> *mut c_void;
+    fn IOSurfaceCreateMachPort(surface: *mut c_void) -> u32;
+    fn IOSurfaceLookupFromMachPort(port: u32) -> *mut c_void;
     fn IOSurfaceGetID(surface: *mut c_void) -> u32;
     fn IOSurfaceLock(surface: *mut c_void, options: u32, seed: *mut u32) -> i32;
     fn IOSurfaceUnlock(surface: *mut c_void, options: u32, seed: *mut u32) -> i32;
@@ -45,8 +49,9 @@ pub struct Surface {
 unsafe impl Send for Surface {}
 
 impl Surface {
-    /// A new BGRA surface of `width` by `height`, which other processes can find by its ID.
-    pub fn create(width: u32, height: u32) -> Result<Surface, String> {
+    /// A new BGRA surface of `width` by `height`. A `global` one can be found by its ID from
+    /// any process; any other is handed over as a Mach port.
+    pub fn create(width: u32, height: u32, global: bool) -> Result<Surface, String> {
         unsafe {
             let dict_class = class(c"NSMutableDictionary")?;
             let number_class = class(c"NSNumber")?;
@@ -62,9 +67,10 @@ impl Surface {
             set("IOSurfaceHeight", number(height));
             set("IOSurfaceBytesPerElement", number(4));
             set("IOSurfacePixelFormat", number(BGRA));
-            let yes: *mut AnyObject = msg_send![number_class, numberWithBool: true];
-            // Global so the window host's process can look it up by ID.
-            set("IOSurfaceIsGlobal", yes);
+            if global {
+                let yes: *mut AnyObject = msg_send![number_class, numberWithBool: true];
+                set("IOSurfaceIsGlobal", yes);
+            }
             let surface = IOSurfaceCreate(Retained::as_ptr(&properties));
             if surface.is_null() {
                 return Err(format!("no {width}x{height} frame surface could be made"));
@@ -81,6 +87,26 @@ impl Surface {
         } else {
             Ok(Surface { surface })
         }
+    }
+
+    /// The surface a Mach port another process sent names. The port is left to the caller.
+    pub fn from_mach_port(port: u32) -> Result<Surface, String> {
+        let surface = unsafe { IOSurfaceLookupFromMachPort(port) };
+        if surface.is_null() {
+            Err("the frame surface sent by the window manager is gone".into())
+        } else {
+            Ok(Surface { surface })
+        }
+    }
+
+    /// A send right to the surface, for another process. The caller owns the right.
+    pub fn mach_port(&self) -> u32 {
+        unsafe { IOSurfaceCreateMachPort(self.surface) }
+    }
+
+    /// The `IOSurfaceRef`, valid while this value lives.
+    pub fn as_raw(&self) -> *mut c_void {
+        self.surface
     }
 
     pub fn id(&self) -> u32 {
@@ -115,11 +141,33 @@ impl Surface {
             let base = IOSurfaceGetBaseAddress(self.surface) as *mut u8;
             let stride = IOSurfaceGetBytesPerRow(self.surface);
             for y in 0..h {
-                std::ptr::copy_nonoverlapping(
-                    pixels.as_ptr().add(y * row),
-                    base.add(y * stride),
-                    w * 4,
-                );
+                let from = pixels.as_ptr().add(y * row);
+                std::ptr::copy_nonoverlapping(from, base.add(y * stride), w * 4);
+            }
+            IOSurfaceUnlock(self.surface, 0, std::ptr::null_mut());
+        }
+        Ok(())
+    }
+
+    /// Writes `rgba` (RGBA, `width * 4` bytes a row, as the renderer reads frames back) into
+    /// the top-left `width` by `height` region as BGRA, cut to the surface's size.
+    pub fn write_rgba(&self, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
+        let (surface_w, surface_h) = self.size();
+        let (w, h) = (width.min(surface_w) as usize, height.min(surface_h) as usize);
+        let row = width as usize * 4;
+        if rgba.len() < row * height as usize {
+            return Err("the frame is shorter than its size".into());
+        }
+        unsafe {
+            if IOSurfaceLock(self.surface, 0, std::ptr::null_mut()) != 0 {
+                return Err("the frame surface could not be locked".into());
+            }
+            let base = IOSurfaceGetBaseAddress(self.surface) as *mut u8;
+            let stride = IOSurfaceGetBytesPerRow(self.surface);
+            for y in 0..h {
+                let to = std::slice::from_raw_parts_mut(base.add(y * stride), w * 4);
+                let from = &rgba[y * row..y * row + w * 4];
+                super::frames::swap_red_blue(from, to);
             }
             IOSurfaceUnlock(self.surface, 0, std::ptr::null_mut());
         }

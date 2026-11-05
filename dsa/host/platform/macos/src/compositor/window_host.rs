@@ -3,7 +3,8 @@
 //! Each Android app's bundle in `~/Applications/DSA Apps` runs a copy of this program, so
 //! the Dock shows the app as itself, with its own icon, apart from every other app. The
 //! window host connects to the window manager over a Unix socket and is told which windows
-//! to show; each task's frames arrive in an `IOSurface` the window manager writes. The
+//! to show; each task's frames arrive in an `IOSurface` the window manager writes, handed
+//! over as a Mach port ([`super::surface_port`]), and are shown from it on the GPU. The
 //! windows' input goes straight to the service's local API.
 
 use std::cell::RefCell;
@@ -28,8 +29,8 @@ use dsa_transport::{Connector, FrameSender};
 use objc2::msg_send;
 use objc2::runtime::AnyObject;
 
-use super::metal::FrameRef;
 use super::surface::Surface;
+use super::surface_port::receive_surfaces;
 use super::window::{TaskWindow, WindowEvents};
 use crate::input::view::InputSink;
 use crate::objc::{class, on_main, string_of};
@@ -171,6 +172,38 @@ impl WindowEvents for Events {
             }
         });
     }
+
+    fn shown(&mut self, shown: bool) {
+        if !shown {
+            // A window in the Dock shows no frames: its surfaces go, and the window manager
+            // stops sending frames until it comes back.
+            let task_id = self.task_id;
+            on_main(move || {
+                STATE.with(|state| {
+                    if let Ok(mut state) = state.try_borrow_mut() {
+                        state.textures.retain(|_, (task, _)| *task != task_id);
+                    }
+                })
+            });
+        }
+        report(
+            &self.reports,
+            FromHost::Shown {
+                task_id: self.task_id,
+                shown,
+            },
+        );
+    }
+
+    fn dragging(&mut self, dragging: bool) {
+        report(
+            &self.reports,
+            FromHost::Dragging {
+                task_id: self.task_id,
+                dragging,
+            },
+        );
+    }
 }
 
 type Cursors = Arc<Mutex<HashMap<i32, ImeCursor>>>;
@@ -203,6 +236,10 @@ struct State {
     windows: HashMap<i32, TaskWindow>,
     /// Each frame texture, by its ID: the task it is for and its surface.
     textures: HashMap<u64, (i32, Surface)>,
+    /// Surfaces that came as Mach ports before their `FrameTexture`, by texture ID.
+    arrived: HashMap<u64, Surface>,
+    /// Textures announced before their surface's Mach port came: the task of each.
+    awaited: HashMap<u64, i32>,
     reports: Option<Reports>,
     input: Option<Sender<InputEvent>>,
     files: Option<Sender<PathBuf>>,
@@ -278,6 +315,7 @@ fn handle(message: ToHost) {
             let mut state = state.borrow_mut();
             state.windows.remove(&task_id);
             state.textures.retain(|_, (task, _)| *task != task_id);
+            state.awaited.retain(|_, task| *task != task_id);
             if state.windows.is_empty() {
                 // The app has no window left: its Dock icon goes with this process.
                 quit();
@@ -311,19 +349,68 @@ fn handle(message: ToHost) {
     }
 }
 
+/// How many surfaces a task's frames use at once; older ones are let go.
+const SURFACES_PER_TASK: usize = 2;
+
+/// Takes `surface` as texture `texture_id` of task `task_id`, letting go of the task's
+/// surfaces the window manager no longer uses.
+fn keep_texture(state: &mut State, task_id: i32, texture_id: u64, surface: Surface) {
+    state.textures.insert(texture_id, (task_id, surface));
+    let mut ids: Vec<u64> = state
+        .textures
+        .iter()
+        .filter(|(_, (task, _))| *task == task_id)
+        .map(|(id, _)| *id)
+        .collect();
+    ids.sort_unstable();
+    let extra = ids.len().saturating_sub(SURFACES_PER_TASK);
+    for id in &ids[..extra] {
+        state.textures.remove(id);
+    }
+}
+
+/// From now on task `task_id`'s frames may arrive in texture `texture_id`: the surface with
+/// global ID `handle`, or, when `handle` is 0, the surface sent as a Mach port.
 fn texture(task_id: i32, texture_id: u64, handle: u64) {
+    if handle == 0 {
+        STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            match state.arrived.remove(&texture_id) {
+                Some(surface) => keep_texture(&mut state, task_id, texture_id, surface),
+                None => {
+                    state.awaited.insert(texture_id, task_id);
+                }
+            }
+        });
+        return;
+    }
     match u32::try_from(handle)
         .map_err(|_| format!("{handle} is not a frame surface ID"))
         .and_then(Surface::lookup)
     {
         Ok(surface) => STATE.with(|state| {
-            state
-                .borrow_mut()
-                .textures
-                .insert(texture_id, (task_id, surface));
+            keep_texture(&mut state.borrow_mut(), task_id, texture_id, surface);
         }),
         Err(why) => eprintln!("dsa-app-window: task {task_id}'s frames cannot be shown: {why}"),
     }
+}
+
+/// A surface came as a Mach port for texture `texture_id`.
+fn surface_arrived(texture_id: u64, surface: Surface) {
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        match state.awaited.remove(&texture_id) {
+            Some(task_id) => keep_texture(&mut state, task_id, texture_id, surface),
+            None => {
+                // Its FrameTexture is still on the way. Only the newest few are kept, so a
+                // surface whose announcement never comes is not held for long.
+                if state.arrived.len() >= 2 * SURFACES_PER_TASK {
+                    state.arrived.clear();
+                }
+                state.arrived.insert(texture_id, surface);
+            }
+        }
+    });
 }
 
 fn frame(task_id: i32, texture_id: u64, sequence: u64, content: (u32, u32)) {
@@ -338,21 +425,8 @@ fn frame(task_id: i32, texture_id: u64, sequence: u64, content: (u32, u32)) {
         if let (Some(window), Some((_, surface))) =
             (windows.get_mut(&task_id), textures.get(&texture_id))
         {
-            let (width, height) = surface.size();
-            let shown = surface.read(|pixels, stride| {
-                window.present(FrameRef {
-                    pixels,
-                    width,
-                    height,
-                    stride: stride as u32,
-                    content,
-                })
-            });
-            match shown {
-                Ok(Ok(())) => {}
-                Ok(Err(why)) | Err(why) => {
-                    eprintln!("dsa-app-window: a frame of task {task_id} was not shown: {why}")
-                }
+            if let Err(why) = window.present_surface(texture_id, surface, content) {
+                eprintln!("dsa-app-window: a frame of task {task_id} was not shown: {why}");
             }
         }
         // Answered whether or not it was shown, so the window manager is never held up.
@@ -410,6 +484,15 @@ pub fn run(setup: HostSetup) -> Result<(), String> {
         .try_clone_sender()
         .ok_or("the window manager's connection cannot be shared")?;
     let reports: Reports = Arc::new(Mutex::new(sender));
+
+    // The frame surfaces come as Mach ports where the window manager has its Mach service;
+    // otherwise by their global IDs, and nothing more is needed here.
+    let surfaces = receive_surfaces(crate::launchd::WM_LABEL, |texture_id, surface| {
+        on_main(move || surface_arrived(texture_id, surface))
+    });
+    if let Err(why) = surfaces {
+        eprintln!("dsa-app-window: {why}; frames come by their global surface IDs");
+    }
 
     let (input, input_events) = channel();
     let host_api = UnixLocalConnector {

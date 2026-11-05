@@ -5,7 +5,8 @@ use std::path::Path;
 
 use dsa_host_macos::host_config::{memory_range_mb, MacHostConfig, AUTOMATIC_GROWTH_CAP_MB};
 use dsa_host_macos::launchd::{
-    domain, install_commands, plist, plist_path, service_target, start_command, LABEL,
+    domain, install_commands, plist, plist_path, service_target, start_command, wm_plist,
+    wm_plist_path, wm_service_target, LABEL, WM_LABEL,
 };
 
 #[test]
@@ -85,4 +86,25 @@ fn fr2_the_agent_is_loaded_into_the_users_login_session() {
         vec!["bootstrap".to_string(), "gui/501".into(), "/p.plist".into()]
     );
     assert_eq!(start_command(501)[0], "kickstart");
+}
+
+#[test]
+fn fr3_the_window_manager_runs_from_its_own_agent_with_its_mach_service() {
+    let text = wm_plist(
+        Path::new("/Applications/DSA.app/Contents/MacOS/dsa-wm"),
+        Path::new("/Users/ann/Library/Application Support/DSA/logs/dsa-wm.log"),
+    );
+    assert!(text.contains(&format!("<string>{WM_LABEL}</string>")));
+    assert!(text.contains("<string>/Applications/DSA.app/Contents/MacOS/dsa-wm</string>"));
+    // The Mach service the frame surfaces go through, named as the window hosts look it up.
+    let service = format!("<key>MachServices</key>\n\t<dict>\n\t\t<key>{WM_LABEL}</key>");
+    assert!(text.contains(&service));
+    assert!(text.contains("<key>SuccessfulExit</key>\n\t\t<false/>"));
+    assert!(text.contains("<string>Aqua</string>"));
+    // The service's own agent has no Mach service.
+    let hostd = plist(Path::new("/d/dsa-hostd"), None, Path::new("/l"));
+    assert!(!hostd.contains("MachServices"));
+    assert_eq!(wm_service_target(501), format!("gui/501/{WM_LABEL}"));
+    let path = wm_plist_path(Path::new("/Users/ann"));
+    assert!(path.ends_with(format!("{WM_LABEL}.plist")));
 }

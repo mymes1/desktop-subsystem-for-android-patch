@@ -1,9 +1,11 @@
 //! Presenting a task's frames through a `CAMetalLayer`.
 //!
-//! A frame arrives as BGRA pixels (what the gfxstream renderer reads back from the task's
-//! ColorBuffer). It is written into a staging texture, copied into the layer's next drawable
-//! by a blit, and presented. The drawable takes the size of the frame's content
-//! ([`super::sizing::place`]), and the layer pins it to the top left without scaling.
+//! A frame arrives in a shared `IOSurface`. The surface is made a Metal texture once, and
+//! each frame is copied from it into the layer's next drawable by a blit on the GPU and
+//! presented, without passing through memory. Where the surface cannot be made a texture,
+//! its BGRA pixels are read and written into a staging texture instead. The drawable takes
+//! the size of the frame's content ([`super::sizing::place`]), and the layer pins it to the
+//! top left without scaling.
 
 use std::ffi::c_void;
 
@@ -13,6 +15,7 @@ use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 
 use super::sizing::place;
+use super::surface::Surface;
 use crate::objc::{class, ns_string, CGSize};
 
 extern "C" {
@@ -75,6 +78,15 @@ unsafe impl RefEncode for MTLRegion {
     const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
 }
 
+/// An `IOSurfaceRef`, encoded as the Metal method that takes one declares it.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+struct IOSurfaceRef(*mut c_void);
+
+unsafe impl Encode for IOSurfaceRef {
+    const ENCODING: Encoding = Encoding::Pointer(&Encoding::Struct("__IOSurface", &[]));
+}
+
 /// One frame of a task: BGRA pixels, `stride` bytes a row, of which `content` pixels from the
 /// top left are the task.
 #[derive(Debug, Clone, Copy)]
@@ -92,6 +104,8 @@ pub struct Presenter {
     queue: Retained<AnyObject>,
     layer: Retained<AnyObject>,
     staging: Option<(Retained<AnyObject>, (u32, u32))>,
+    /// The texture over the frame surface last shown, by its texture ID.
+    surface_texture: Option<(u64, Retained<AnyObject>)>,
     drawable: (u32, u32),
 }
 
@@ -125,6 +139,7 @@ impl Presenter {
                 queue,
                 layer,
                 staging: None,
+                surface_texture: None,
                 drawable: (0, 0),
             })
         }
@@ -166,6 +181,126 @@ impl Presenter {
             }
         }
         Ok(&self.staging.as_ref().expect("made above").0)
+    }
+
+    /// The Metal texture over `surface`, made once for texture `texture_id`.
+    fn surface_texture(
+        &mut self,
+        texture_id: u64,
+        surface: &Surface,
+    ) -> Result<*const AnyObject, String> {
+        if let Some((id, texture)) = &self.surface_texture {
+            if *id == texture_id {
+                return Ok(Retained::as_ptr(texture));
+            }
+        }
+        self.surface_texture = None;
+        let (width, height) = surface.size();
+        unsafe {
+            let descriptor_class = class(c"MTLTextureDescriptor")?;
+            let descriptor: Option<Retained<AnyObject>> = msg_send![
+                descriptor_class,
+                texture2DDescriptorWithPixelFormat: BGRA8_UNORM,
+                width: width as usize,
+                height: height as usize,
+                mipmapped: false
+            ];
+            let descriptor = descriptor.ok_or("no texture descriptor")?;
+            let _: () = msg_send![&*descriptor, setUsage: USAGE_SHADER_READ];
+            let texture: Option<Retained<AnyObject>> = msg_send![
+                &*self.device,
+                newTextureWithDescriptor: &*descriptor,
+                iosurface: IOSurfaceRef(surface.as_raw()),
+                plane: 0usize
+            ];
+            let texture = texture.ok_or("the GPU cannot show the frame surface directly")?;
+            let pointer = Retained::as_ptr(&texture);
+            self.surface_texture = Some((texture_id, texture));
+            Ok(pointer)
+        }
+    }
+
+    /// Shows the frame in `surface` on the GPU: `content` pixels from its top left. Where the
+    /// GPU cannot take the surface as a texture, its pixels are read instead.
+    pub fn present_surface(
+        &mut self,
+        texture_id: u64,
+        surface: &Surface,
+        content: (u32, u32),
+    ) -> Result<(), String> {
+        let buffer = surface.size();
+        let source = match self.surface_texture(texture_id, surface) {
+            Ok(source) => source,
+            Err(_) => {
+                return surface.read(|pixels, stride| {
+                    self.present(FrameRef {
+                        pixels,
+                        width: buffer.0,
+                        height: buffer.1,
+                        stride: stride as u32,
+                        content,
+                    })
+                })?;
+            }
+        };
+        let Some(placement) = place(content, buffer) else {
+            return Ok(());
+        };
+        let (width, height) = placement.copy;
+        let size = MTLSize {
+            width: width as usize,
+            height: height as usize,
+            depth: 1,
+        };
+        unsafe { self.blit(source, size, placement.drawable) }
+    }
+
+    /// Copies `size` from the top left of `source` into the next drawable, made `drawable`
+    /// big, and presents it.
+    unsafe fn blit(
+        &mut self,
+        source: *const AnyObject,
+        size: MTLSize,
+        drawable_size: (u32, u32),
+    ) -> Result<(), String> {
+        if self.drawable != drawable_size {
+            let size = CGSize {
+                width: f64::from(drawable_size.0),
+                height: f64::from(drawable_size.1),
+            };
+            let _: () = msg_send![&*self.layer, setDrawableSize: size];
+            self.drawable = drawable_size;
+        }
+        let drawable: Option<Retained<AnyObject>> = msg_send![&*self.layer, nextDrawable];
+        let Some(drawable) = drawable else {
+            // The window is hidden or off screen: nothing to show into.
+            return Ok(());
+        };
+        let target: *mut AnyObject = msg_send![&*drawable, texture];
+        let buffer: Option<Retained<AnyObject>> = msg_send![&*self.queue, commandBuffer];
+        let buffer = buffer.ok_or("the GPU gave no command buffer")?;
+        let blit: Option<Retained<AnyObject>> = msg_send![&*buffer, blitCommandEncoder];
+        let blit = blit.ok_or("the GPU gave no blit encoder")?;
+        let _: () = msg_send![
+            &*blit,
+            copyFromTexture: source,
+            sourceSlice: 0usize,
+            sourceLevel: 0usize,
+            sourceOrigin: MTLOrigin::default(),
+            sourceSize: size,
+            toTexture: target,
+            destinationSlice: 0usize,
+            destinationLevel: 0usize,
+            destinationOrigin: MTLOrigin::default()
+        ];
+        let _: () = msg_send![&*blit, endEncoding];
+        let _: () = msg_send![&*buffer, presentDrawable: &*drawable];
+        let _: () = msg_send![&*buffer, commit];
+        // The window manager writes the surface again once the window host answers, so the
+        // copy out of it must be done by then. A copy of one frame takes well under a
+        // millisecond.
+        let _: () = msg_send![&*buffer, waitUntilCompleted];
+        Ok(())
     }
 
     /// Shows `frame`. A frame that is not whole (its pixels are fewer than its size says) is
