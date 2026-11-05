@@ -996,7 +996,10 @@ NETWORK_PROPS = {
     "ro.vendor.disable_rename_eth0": "1",
 }
 WIFI_MAC_PREFIX = "5554"
-SETUP_WIFI = "VENDOR/bin/setup_wifi"
+# setup_wifi and its init service ship in Cuttlefish's Wi-Fi APEX, not in /vendor/bin, with
+# their SELinux label (setup_wifi_exec) in the vendor policy.
+SETUP_WIFI_APEX = "VENDOR/apex/com.google.cf.wifi.apex"
+SETUP_WIFI_SERVICE = b"/bin/setup_wifi --interface=${ro.vendor.virtwifi.port}"
 # Kernel command line arguments that would give the guest a static address in place of DHCP.
 STATIC_NETWORK_ARGS = ["androidboot.auto_eth_guest_addr=", "ip="]
 
@@ -1022,8 +1025,13 @@ def network_problems(names, read, cmdline):
             if key.startswith("net.dns") or key.startswith("ro.vendor.net.dns"):
                 problems.append(f"{NETWORK_PROPS_FILE} pins the DNS server ({key}); the guest must use the "
                                 "servers DHCP gives it")
-    if SETUP_WIFI not in names:
-        problems.append(f"{SETUP_WIFI} is missing, so eth0 never becomes wlan0 and apps have no network")
+    if SETUP_WIFI_APEX not in names:
+        problems.append(f"{SETUP_WIFI_APEX} is missing, so nothing makes eth0 into wlan0 and apps have no network")
+    else:
+        payload = zipfile.ZipFile(io.BytesIO(read(SETUP_WIFI_APEX))).read("apex_payload.img")
+        if SETUP_WIFI_SERVICE not in payload:
+            problems.append(f"{SETUP_WIFI_APEX} has no setup_wifi service on ro.vendor.virtwifi.port, so "
+                            "eth0 never becomes wlan0 and apps have no network")
     if not any(name.startswith("VENDOR/etc/init/") and b"setup_wifi" in read(name)
                for name in names if name.endswith(".rc") and name.startswith("VENDOR/etc/init/")):
         problems.append("no vendor init script starts setup_wifi")
