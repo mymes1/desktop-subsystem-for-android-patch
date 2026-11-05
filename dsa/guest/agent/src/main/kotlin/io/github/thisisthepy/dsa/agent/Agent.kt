@@ -481,6 +481,11 @@ class Agent(
             } catch (e: Exception) {
                 log.warn("typing committed text failed", e)
             }
+            Envelope.BodyCase.IME_DELETE_SURROUNDING -> try {
+                text.handle(envelope.imeDeleteSurrounding)
+            } catch (e: Exception) {
+                log.warn("deleting text around the cursor failed", e)
+            }
             else -> return false
         }
         return true

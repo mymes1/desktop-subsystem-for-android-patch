@@ -4967,6 +4967,7 @@ impl Worker {
             | Some(Body::KeyEvent(_))
             | Some(Body::ImeComposition(_))
             | Some(Body::ImeCommit(_))
+            | Some(Body::ImeDeleteSurrounding(_))
             | Some(Body::LinkHandling(_))
             | Some(Body::OpenFile(_))
             | Some(Body::FileChunk(_))

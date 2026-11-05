@@ -6,6 +6,7 @@ import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.ImeCommit
 import io.github.thisisthepy.dsa.control.v1.ImeComposition
 import io.github.thisisthepy.dsa.control.v1.ImeCursor
+import io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding
 import io.github.thisisthepy.dsa.control.v1.Rect
 
 /**
@@ -23,11 +24,18 @@ interface EditorConnection {
     /** Types [text] in place of the composition, which ends. False when no editor takes text now. */
     fun commit(text: String): Boolean
 
+    /**
+     * Deletes [before] UTF-16 code units before the cursor and [after] after it, keeping the
+     * composition. False when no editor takes text now.
+     */
+    fun deleteSurrounding(before: Int, after: Int): Boolean
+
     companion object {
         /** No editor, as before the input method starts. */
         val NONE = object : EditorConnection {
             override fun setComposing(text: String, cursor: Int) = false
             override fun commit(text: String) = false
+            override fun deleteSurrounding(before: Int, after: Int) = false
         }
     }
 }
@@ -103,6 +111,18 @@ class TextInput(
             return
         }
         for (key in typed) inject(key)
+    }
+
+    /** Deletes text around the editor's cursor, as the host's input method asks. */
+    fun handle(delete: ImeDeleteSurrounding) {
+        val taskId = delete.taskId
+        if (!reach(taskId)) return
+        val before = delete.beforeLength.coerceAtLeast(0)
+        val after = delete.afterLength.coerceAtLeast(0)
+        if (before == 0 && after == 0) return
+        if (!editor().deleteSurrounding(before, after)) {
+            log.warn("dropped a deletion for task $taskId: no editor there takes text")
+        }
     }
 
     /**

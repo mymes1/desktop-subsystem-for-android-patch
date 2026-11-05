@@ -437,6 +437,16 @@ message ImeCommit {
   string text = 2;
 }
 
+// Host to guest: the host's input method deletes text around the cursor of the focused editor
+// in a task, as an input method does when it reconverts or corrects what was typed:
+// `before_length` UTF-16 code units before the cursor (or the selection) and `after_length`
+// after it. The agent deletes them in the editor, keeping any composition.
+message ImeDeleteSurrounding {
+  int32 task_id = 1;
+  uint32 before_length = 2;
+  uint32 after_length = 3;
+}
+
 // Guest to host, from the agent: where the cursor of the editor focused in a task is, in the
 // task's own pixels from its top left corner (where a pointer event's place is measured from),
 // so the host can put its input method's windows (the candidate list, say) beside it. Sent
@@ -1934,6 +1944,7 @@ message Envelope {
     KeyEvent key_event = 16;
     ImeComposition ime_composition = 17;
     ImeCommit ime_commit = 18;
+    ImeDeleteSurrounding ime_delete_surrounding = 377;
     ImeCursor ime_cursor = 19;
     RequestGuestMemory request_guest_memory = 20;
     GuestMemory guest_memory = 21;
