@@ -15,7 +15,7 @@ use wayland_client::protocol::{
     wl_data_offer::{self, WlDataOffer},
     wl_data_source::{self, WlDataSource},
 };
-use wayland_client::{event_created_child, Connection, Dispatch, QueueHandle};
+use wayland_client::{event_created_child, Connection, Dispatch, Proxy, QueueHandle};
 
 use super::{task_of, Event, State};
 use crate::shell::clipboard::{host_text, text_type, TEXT_TYPES};
