@@ -49,7 +49,7 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::frame_buffers::{
     content_region, frame_scale, sample_points, swapchain_buffers, swapchain_change,
-    uniform_colour, SwapchainChange, SAMPLE_GRID,
+    uniform_colour, HiddenBuffers, HiddenFrame, SwapchainChange, SAMPLE_GRID,
 };
 use dsa_host_core::compositor::frame_follow::{Arrival, FrameFollow};
 use dsa_host_core::compositor::present_watch::{FrameStatistics, PresentWatch};
@@ -358,6 +358,9 @@ impl Drop for SharedTexture {
     }
 }
 
+/// A texture a frame came in, the texture's size, and the region the frame fills.
+type Newest = (ID3D11Texture2D, (u32, u32), (u32, u32));
+
 struct State {
     target: IDCompositionTarget,
     /// The frame's visual, under the caption's.
@@ -398,6 +401,11 @@ struct State {
     readback: Option<ID3D11Texture2D>,
     /// The press being watched for its first visible change, and when it came.
     watch: Option<(PressWatch, Duration)>,
+    /// Whether the window is minimized, when its swapchain is let go.
+    hidden: HiddenBuffers,
+    /// The texture the newest frame came in, its size and the region the frame fills: what is
+    /// shown again when a minimized window is restored.
+    newest: Option<Newest>,
 }
 
 /// A press a window has to watch: the point in guest pixels and when it came on the host clock.
@@ -526,6 +534,8 @@ impl WindowPresenter {
                 last_frame: None,
                 readback: None,
                 watch: None,
+                hidden: HiddenBuffers::new(),
+                newest: None,
             }),
             claim_released: Condvar::new(),
             frame_ready: Mutex::new(None),
@@ -740,6 +750,55 @@ impl WindowPresenter {
         Ok(())
     }
 
+    /// The window was minimized. Its swapchain's buffers, and the trace's copies, are let go:
+    /// a minimized window shows nothing, and they hold tens of MiB of the task's full size.
+    /// Frames that arrive meanwhile stay in the shared texture.
+    pub fn hide(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed || !state.hidden.hide() {
+            return;
+        }
+        if let Ok(dcomp) = self.gpu.dcomp() {
+            let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
+            // SAFETY: plain COM calls on objects this presenter owns.
+            unsafe {
+                let _ = state.visual.SetContent(None::<&windows::core::IUnknown>);
+                let _ = dcomp.Commit();
+            }
+        }
+        state.swapchain = None;
+        state.buffers = None;
+        state.committed = None;
+        state.frame = (0, 0);
+        state.presents.forget();
+        state.last_frame = None;
+        state.readback = None;
+        state.samples = None;
+        if !state.first_shown && state.first_frame.is_some() {
+            // The first frame's present went with the swapchain: the next one shown stands in.
+            state.first_frame = Some(0);
+        }
+        drop(state);
+        // A frame waiting for the window to take a size would wait for nothing now.
+        self.claim_released.notify_all();
+    }
+
+    /// The window was restored. The swapchain is made again and the newest frame shown at
+    /// once from the shared texture, so the window does not come back empty while the app
+    /// draws its next one.
+    pub fn show(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed || !state.hidden.show() {
+            return;
+        }
+        let Some((texture, size, region)) = state.newest.clone() else {
+            return;
+        };
+        if let Err(why) = self.present_locked(&mut state, &texture, size, region, false) {
+            note(self.logger.as_deref(), &why);
+        }
+    }
+
     /// The window is closing: nothing more is shown in it.
     pub fn close(&self) {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
@@ -752,6 +811,7 @@ impl WindowPresenter {
             }
         }
         state.closed = true;
+        state.newest = None;
         let Ok(dcomp) = self.gpu.dcomp() else {
             return;
         };
@@ -772,6 +832,11 @@ impl WindowPresenter {
             return Ok(());
         }
         let region = content_region(content, texture.size);
+        state.newest = Some((texture.texture.clone(), texture.size, region));
+        if state.hidden.frame() == HiddenFrame::Hold {
+            // Nothing is shown in a minimized window; the frame waits in the texture.
+            return Ok(());
+        }
         let started = Instant::now();
         // A frame that arrives while the window is taking the size of the one kept before it
         // waits, so that frame is not lost from the back buffer.

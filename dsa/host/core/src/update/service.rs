@@ -283,6 +283,9 @@ impl UserAndroid for UpdatingAndroid {
     fn freeze_when_idle(&self, on: bool) {
         UserAndroid::freeze_when_idle(&*self.session, on)
     }
+    fn run_mode(&self, policy: crate::run_mode::RunModePolicy) {
+        UserAndroid::run_mode(&*self.session, policy)
+    }
     fn links_in_android(&self, on: bool) {
         UserAndroid::links_in_android(&*self.session, on)
     }

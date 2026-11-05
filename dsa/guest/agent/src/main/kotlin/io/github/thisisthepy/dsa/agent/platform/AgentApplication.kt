@@ -81,6 +81,7 @@ class AgentApplication : Application() {
             widgetStore = AndroidWidgetStore(this),
             accessibility = AndroidAccessibilitySource(this, log),
             diagnostics = AndroidDiagnostics(this),
+            wifi = AndroidWifi(this),
         )
         AgentApplication.agent = agent
         HostInputMethod.onCursor = { rect -> agent.cursorMoved(rect.left, rect.top, rect.right, rect.bottom) }
