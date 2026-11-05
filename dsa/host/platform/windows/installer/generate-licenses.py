@@ -850,7 +850,10 @@ it. Every Android image release that carries this kernel has the same asset.
 
 def get_packages_metadata(workspace_dir: Path):
     cmd = ["cargo", "metadata", "--format-version", "1"]
-    res = subprocess.run(cmd, cwd=workspace_dir, capture_output=True, text=True, check=True)
+    # cargo writes UTF-8; the console code page (cp949 on a Korean Windows) cannot decode
+    # every crate's description, and the read then fails.
+    res = subprocess.run(cmd, cwd=workspace_dir, capture_output=True, encoding="utf-8",
+                         check=True)
     return json.loads(res.stdout)
 
 
