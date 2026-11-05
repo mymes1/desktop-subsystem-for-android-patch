@@ -720,9 +720,19 @@ fn task_at_monitor_density(task_id: i32, width: i32, height: i32) -> Task {
     task
 }
 
-/// The DPI a new top-level window gets on this machine.
+/// The DPI a new top-level window gets on this machine. The window hosts are per-monitor
+/// aware, so the DPI is read as such a thread sees it: a test thread that is not aware is
+/// told 96 whatever the monitor's scale.
 fn dpi_of_new_windows() -> u32 {
-    unsafe { windows_sys::Win32::UI::HiDpi::GetDpiForSystem() }.max(96)
+    use windows_sys::Win32::UI::HiDpi::{
+        GetDpiForSystem, SetThreadDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
+    };
+    unsafe {
+        let previous = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let dpi = GetDpiForSystem();
+        SetThreadDpiAwarenessContext(previous);
+        dpi.max(96)
+    }
 }
 
 #[test]
