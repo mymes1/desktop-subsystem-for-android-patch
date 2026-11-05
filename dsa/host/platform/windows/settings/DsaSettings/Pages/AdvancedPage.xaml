@@ -23,6 +23,53 @@
                                  IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnClipboardToggled" />
             </ui:CardControl>
 
+            <TextBlock Text="{l:Text FilesHeader.Text}" Style="{StaticResource SectionHeader}" />
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderLink24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text FileSharingCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text FileSharingCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="FileSharingSwitch" IsChecked="{Binding FileSharing, Mode=OneWay}"
+                                 IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnFileSharingToggled" />
+            </ui:CardControl>
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderOpen24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text SharedFoldersCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text SharedFoldersCard.Description}" Style="{StaticResource CardDescription}" />
+                        <WrapPanel Margin="0,6,0,0">
+                            <CheckBox x:Name="ShareDocumentsBox" Tag="Documents" Content="{l:Text Folder_Documents}" Margin="0,0,16,4"
+                                      IsChecked="{Binding ShareDocuments, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                      Click="OnFolderToggled" />
+                            <CheckBox x:Name="ShareDownloadsBox" Tag="Downloads" Content="{l:Text Folder_Downloads}" Margin="0,0,16,4"
+                                      IsChecked="{Binding ShareDownloads, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                      Click="OnFolderToggled" />
+                            <CheckBox x:Name="SharePicturesBox" Tag="Pictures" Content="{l:Text Folder_Pictures}" Margin="0,0,16,4"
+                                      IsChecked="{Binding SharePictures, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                      Click="OnFolderToggled" />
+                            <CheckBox x:Name="ShareMusicBox" Tag="Music" Content="{l:Text Folder_Music}" Margin="0,0,16,4"
+                                      IsChecked="{Binding ShareMusic, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                      Click="OnFolderToggled" />
+                            <CheckBox x:Name="ShareVideosBox" Tag="Videos" Content="{l:Text Folder_Videos}" Margin="0,0,16,4"
+                                      IsChecked="{Binding ShareVideos, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                      Click="OnFolderToggled" />
+                            <CheckBox x:Name="ShareDesktopBox" Tag="Desktop" Content="{l:Text Folder_Desktop}" Margin="0,0,16,4"
+                                      IsChecked="{Binding ShareDesktop, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                      Click="OnFolderToggled" />
+                        </WrapPanel>
+                    </StackPanel>
+                </ui:CardControl.Header>
+            </ui:CardControl>
+            <ui:CardAction Icon="{ui:SymbolIcon FolderPeople24}" Click="OnOpenAndroidFiles" Margin="0,0,0,4">
+                <StackPanel>
+                    <TextBlock Text="{l:Text AndroidFilesCard.Header}" Style="{StaticResource CardTitle}" />
+                    <TextBlock Text="{l:Text AndroidFilesCard.Description}" Style="{StaticResource CardDescription}" />
+                </StackPanel>
+            </ui:CardAction>
+            <TextBlock Text="{l:Text FilesNote.Text}" Style="{StaticResource Note}" />
+
             <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Snooze24}">
                 <ui:CardControl.Header>
                     <StackPanel>

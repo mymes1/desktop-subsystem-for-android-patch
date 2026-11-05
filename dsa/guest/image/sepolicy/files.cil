@@ -1,0 +1,72 @@
+; Desktop Subsystem for Android (DSA)
+; File sharing. The user's host folders are mounted in Android's shared storage
+; (/data/media/0/<location>/<folder>) with the kernel's 9p file system, and the shared storage
+; is served to the host as WebDAV. Both are dsa-channeld run by init for one job each
+; (dsa-channeld.rc), in a domain of its own: dsa_sharemount mounts, as root; dsa_files
+; serves, as media_rw. dsa-channeld only sets the two properties that start them.
+
+; vendor.dsa.shares and vendor.dsa.files (vendor_property_contexts): what the host shares, and
+; the port and token the shared storage is served on. Only the daemon sets them.
+(type dsa_shares_prop)
+(roletype object_r dsa_shares_prop)
+(typeattributeset property_type (dsa_shares_prop))
+(typeattributeset vendor_property_type (dsa_shares_prop))
+(type dsa_files_prop)
+(roletype object_r dsa_files_prop)
+(typeattributeset property_type (dsa_files_prop))
+(typeattributeset vendor_property_type (dsa_files_prop))
+(allow dsa_channeld dsa_shares_prop (property_service (set)))
+(allow dsa_channeld dsa_shares_prop (file (read open getattr map)))
+(allow dsa_channeld dsa_files_prop (property_service (set)))
+(allow dsa_channeld dsa_files_prop (file (read open getattr map)))
+(allow vendor_init dsa_shares_prop (file (read open getattr map)))
+(allow vendor_init dsa_files_prop (file (read open getattr map)))
+
+; The mounts.
+(type dsa_sharemount)
+(roletype object_r dsa_sharemount)
+(typeattributeset domain (dsa_sharemount))
+(allow init dsa_sharemount (process (transition siginh rlimitinh)))
+(dontaudit init dsa_sharemount (process (noatsecure)))
+(allow dsa_sharemount dsa_channeld_exec (file (entrypoint read getattr map execute open)))
+(allow dsa_sharemount init (fd (use)))
+(allow dsa_sharemount kmsg_device (chr_file (write append getattr)))
+(allow dsa_sharemount kmsg_debug_device (chr_file (write append getattr)))
+(allow dsa_sharemount dsa_shares_prop (file (read open getattr map)))
+; The boot's secret, which the host's file server asks it to prove it knows.
+(allow dsa_sharemount proc_bootconfig (file (read open getattr)))
+; Its own mount table, to see which folders are mounted.
+(allow dsa_sharemount self (dir (search)))
+(allow dsa_sharemount self (file (read open getattr)))
+(allow dsa_sharemount proc (file (read open getattr)))
+; The connection to the host's file server, which it hands to the kernel.
+(allow dsa_sharemount self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+; The kernel's 9p client reads and writes that socket from its own threads.
+(allow kernel dsa_sharemount (fd (use)))
+(allow kernel dsa_sharemount (vsock_socket (read write getattr)))
+; The mount points under the shared storage, owned by media_rw, and the mounts.
+(allow dsa_sharemount self (capability (sys_admin chown fowner dac_override dac_read_search)))
+(allow dsa_sharemount system_data_file (dir (search getattr)))
+(allow dsa_sharemount media_rw_data_file (dir (search getattr read open create write add_name remove_name rmdir setattr mounton)))
+; The host's folders carry the shared storage's own label, so the media provider and the apps
+; it serves reach them under the same rules as the rest of the storage.
+(genfscon 9p "/" (u object_r media_rw_data_file ((s0) (s0))))
+(allow media_rw_data_file media_rw_data_file (filesystem (associate)))
+(allow dsa_sharemount media_rw_data_file (filesystem (mount unmount)))
+
+; Serving the shared storage to the host.
+(type dsa_files)
+(roletype object_r dsa_files)
+(typeattributeset domain (dsa_files))
+(allow init dsa_files (process (transition siginh rlimitinh)))
+(dontaudit init dsa_files (process (noatsecure)))
+(allow dsa_files dsa_channeld_exec (file (entrypoint read getattr map execute open)))
+(allow dsa_files init (fd (use)))
+(allow dsa_files kmsg_device (chr_file (write append getattr)))
+(allow dsa_files kmsg_debug_device (chr_file (write append getattr)))
+(allow dsa_files dsa_files_prop (file (read open getattr map)))
+(allow dsa_files dsa_shares_prop (file (read open getattr map)))
+(allow dsa_files self (vsock_socket (create bind listen accept read write getattr setattr getopt setopt shutdown)))
+(allow dsa_files system_data_file (dir (search getattr)))
+(allow dsa_files media_rw_data_file (dir (search getattr read open create write add_name remove_name rmdir rename reparent setattr)))
+(allow dsa_files media_rw_data_file (file (create read write open getattr setattr unlink rename append map)))

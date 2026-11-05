@@ -88,6 +88,8 @@ pub struct FakeAndroid {
     pub developer_mode: Mutex<Vec<(bool, u16)>>,
     /// Set to refuse developer mode, as when the port is taken.
     pub refuse_developer_mode: Mutex<Option<String>>,
+    /// Each word on file sharing (on, and the folders), in order.
+    pub shared_folders: Mutex<Vec<(bool, Vec<String>)>>,
     link_watchers: Mutex<Vec<Sender<String>>>,
     /// The files it was given, in order.
     pub files: Mutex<Vec<FileTransfer>>,
@@ -209,6 +211,7 @@ impl FakeAndroid {
             links_in_android: Mutex::new(Vec::new()),
             developer_mode: Mutex::new(Vec::new()),
             refuse_developer_mode: Mutex::new(None),
+            shared_folders: Mutex::new(Vec::new()),
             link_watchers: Mutex::new(Vec::new()),
             files: Mutex::new(Vec::new()),
             clipboard_shared: Mutex::new(Vec::new()),
@@ -384,6 +387,13 @@ impl UserAndroid for FakeAndroid {
         let (tx, rx) = mpsc::channel();
         self.link_watchers.lock().unwrap().push(tx);
         Some(rx)
+    }
+    fn share_folders(&self, on: bool, folders: Vec<String>) {
+        self.shared_folders.lock().unwrap().push((on, folders));
+    }
+    fn android_files(&self) -> Result<String, String> {
+        self.start();
+        Ok("http://127.0.0.1:50000/token/".into())
     }
     fn open_file(&self, file: &FileTransfer) -> Result<(), TaskRequestError> {
         if self.state() != SessionState::Active {
@@ -1020,6 +1030,14 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr9_a_link_opened_in_the_callers_android_reaches_the_client() {
             $crate::host_api_conformance::link_reaches_the_client(&mut || $make);
+        }
+        #[test]
+        fn fr29_the_file_sharing_setting_reaches_the_callers_android() {
+            $crate::host_api_conformance::file_sharing_setting_reaches_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr29_the_caller_learns_where_their_android_files_are() {
+            $crate::host_api_conformance::android_files_reach_the_caller(&mut || $make);
         }
         #[test]
         fn fr9_the_link_setting_reaches_the_callers_android() {
@@ -2618,6 +2636,59 @@ pub fn link_setting_reaches_the_caller(make: MakeLocal<'_>) {
     );
 }
 
+pub fn file_sharing_setting_reaches_the_caller(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    let read = client.settings().unwrap().settings;
+    assert!(read.file_sharing, "folders are shared by default");
+    assert_eq!(read.shared_folders, crate::file_share::all_folders());
+    let changed = client
+        .set_settings(&Settings {
+            shared_folders: vec!["Pictures".into(), "Documents".into()],
+            ..Settings::default()
+        })
+        .expect("choosing the shared folders");
+    assert_eq!(changed.settings.shared_folders, ["Documents", "Pictures"]);
+    client
+        .set_settings(&Settings {
+            file_sharing: false,
+            ..Settings::default()
+        })
+        .expect("turning file sharing off");
+    assert!(!store.get(&user).unwrap().file_sharing);
+    assert!(client
+        .set_settings(&Settings {
+            shared_folders: vec!["..".into()],
+            ..Settings::default()
+        })
+        .is_err());
+    assert_eq!(
+        *androids.of(&user).unwrap().shared_folders.lock().unwrap(),
+        vec![
+            (true, vec!["Documents".to_string(), "Pictures".to_string()]),
+            (false, crate::file_share::all_folders()),
+        ]
+    );
+}
+
+pub fn android_files_reach_the_caller(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let location = connect(&mut *connector).android_files().unwrap();
+    assert_eq!(location, "http://127.0.0.1:50000/token/");
+    assert_eq!(
+        androids.of(&user).unwrap().state(),
+        SessionState::Active,
+        "asking for the files starts Android"
+    );
+}
+
 pub fn link_client_that_sends_is_disconnected(make: MakeLocal<'_>) {
     use dsa_protocol::host_api::types as wire;
     let (listener, mut connector, _) = make();
@@ -2661,6 +2732,7 @@ pub fn file_reaches_the_caller(make: MakeLocal<'_>) {
         name: "\u{c0ac}\u{c9c4} photo.jpg".into(),
         content,
         action: FileAction::Send,
+        package: String::new(),
     };
     connect(&mut *connector)
         .open_file(&file)
@@ -2669,6 +2741,7 @@ pub fn file_reaches_the_caller(make: MakeLocal<'_>) {
         name: "empty.txt".into(),
         content: Vec::new(),
         action: FileAction::View,
+        package: String::new(),
     };
     connect(&mut *connector)
         .open_file(&empty)
@@ -2736,6 +2809,7 @@ pub fn oversized_file_is_refused(make: MakeLocal<'_>) {
             name: "movie.mp4".into(),
             size: MAX_FILE_BYTES + 1,
             action: wire::FileAction::View as i32,
+            package: String::new(),
         },
     );
     let (code, detail) = refusal(&answer).expect("the file is refused");
@@ -2747,6 +2821,7 @@ pub fn oversized_file_is_refused(make: MakeLocal<'_>) {
             name: "..\\secret".into(),
             size: 3,
             action: wire::FileAction::View as i32,
+            package: String::new(),
         },
     );
     assert_eq!(
@@ -2764,6 +2839,7 @@ pub fn file_for_stopped_android_is_refused(make: MakeLocal<'_>) {
         name: "a.txt".into(),
         content: b"abc".to_vec(),
         action: FileAction::View,
+        package: String::new(),
     };
     match connect(&mut *connector).open_file(&file) {
         Err(ClientError::Service { code, detail }) => {
@@ -2784,6 +2860,7 @@ pub fn malformed_file_is_refused(make: MakeLocal<'_>) {
         name: "a.txt".into(),
         size: 4,
         action: wire::FileAction::View as i32,
+        package: String::new(),
     };
 
     // More bytes than announced.

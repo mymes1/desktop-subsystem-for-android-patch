@@ -68,6 +68,7 @@ class AgentApplication : Application() {
             guestBrowser = AndroidGuestBrowser(this, log),
             fileStore = io.github.thisisthepy.dsa.agent.files.TransferStore(hostFilesDir(this)),
             fileOpener = AndroidFileOpener(this),
+            mediaScan = AndroidMediaScan(this),
             clipboard = AndroidClipboard(this, log),
             notifications = AndroidNotifications(this, log),
             media = AndroidMediaSessions(this, log, android.os.Handler(thread.looper)),

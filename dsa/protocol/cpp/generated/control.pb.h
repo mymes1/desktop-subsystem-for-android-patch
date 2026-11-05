@@ -66,6 +66,9 @@ extern AddWidgetDefaultTypeInternal _AddWidget_default_instance_;
 class AgentConnected;
 struct AgentConnectedDefaultTypeInternal;
 extern AgentConnectedDefaultTypeInternal _AgentConnected_default_instance_;
+class AndroidFiles;
+struct AndroidFilesDefaultTypeInternal;
+extern AndroidFilesDefaultTypeInternal _AndroidFiles_default_instance_;
 class ApkChunk;
 struct ApkChunkDefaultTypeInternal;
 extern ApkChunkDefaultTypeInternal _ApkChunk_default_instance_;
@@ -192,6 +195,9 @@ extern FileChunkDefaultTypeInternal _FileChunk_default_instance_;
 class FileProgress;
 struct FileProgressDefaultTypeInternal;
 extern FileProgressDefaultTypeInternal _FileProgress_default_instance_;
+class FileSharing;
+struct FileSharingDefaultTypeInternal;
+extern FileSharingDefaultTypeInternal _FileSharing_default_instance_;
 class GuestBoot;
 struct GuestBootDefaultTypeInternal;
 extern GuestBootDefaultTypeInternal _GuestBoot_default_instance_;
@@ -458,6 +464,7 @@ template<> ::dsa::control::v1::AccessibilityTree* Arena::CreateMaybeMessage<::ds
 template<> ::dsa::control::v1::AccessibilityWatch* Arena::CreateMaybeMessage<::dsa::control::v1::AccessibilityWatch>(Arena*);
 template<> ::dsa::control::v1::AddWidget* Arena::CreateMaybeMessage<::dsa::control::v1::AddWidget>(Arena*);
 template<> ::dsa::control::v1::AgentConnected* Arena::CreateMaybeMessage<::dsa::control::v1::AgentConnected>(Arena*);
+template<> ::dsa::control::v1::AndroidFiles* Arena::CreateMaybeMessage<::dsa::control::v1::AndroidFiles>(Arena*);
 template<> ::dsa::control::v1::ApkChunk* Arena::CreateMaybeMessage<::dsa::control::v1::ApkChunk>(Arena*);
 template<> ::dsa::control::v1::AppInfo* Arena::CreateMaybeMessage<::dsa::control::v1::AppInfo>(Arena*);
 template<> ::dsa::control::v1::ArmTranslationChunk* Arena::CreateMaybeMessage<::dsa::control::v1::ArmTranslationChunk>(Arena*);
@@ -500,6 +507,7 @@ template<> ::dsa::control::v1::DiagnosticsFile* Arena::CreateMaybeMessage<::dsa:
 template<> ::dsa::control::v1::Envelope* Arena::CreateMaybeMessage<::dsa::control::v1::Envelope>(Arena*);
 template<> ::dsa::control::v1::FileChunk* Arena::CreateMaybeMessage<::dsa::control::v1::FileChunk>(Arena*);
 template<> ::dsa::control::v1::FileProgress* Arena::CreateMaybeMessage<::dsa::control::v1::FileProgress>(Arena*);
+template<> ::dsa::control::v1::FileSharing* Arena::CreateMaybeMessage<::dsa::control::v1::FileSharing>(Arena*);
 template<> ::dsa::control::v1::GuestBoot* Arena::CreateMaybeMessage<::dsa::control::v1::GuestBoot>(Arena*);
 template<> ::dsa::control::v1::GuestMemory* Arena::CreateMaybeMessage<::dsa::control::v1::GuestMemory>(Arena*);
 template<> ::dsa::control::v1::GuestMemoryPressure* Arena::CreateMaybeMessage<::dsa::control::v1::GuestMemoryPressure>(Arena*);
@@ -11944,6 +11952,7 @@ class OpenFile final :
 
   enum : int {
     kNameFieldNumber = 2,
+    kPackageFieldNumber = 5,
     kTransferIdFieldNumber = 1,
     kActionFieldNumber = 4,
     kSizeFieldNumber = 3,
@@ -11960,6 +11969,20 @@ class OpenFile final :
   const std::string& _internal_name() const;
   inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
   std::string* _internal_mutable_name();
+  public:
+
+  // string package = 5;
+  void clear_package();
+  const std::string& package() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_package(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_package();
+  PROTOBUF_NODISCARD std::string* release_package();
+  void set_allocated_package(std::string* package);
+  private:
+  const std::string& _internal_package() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_package(const std::string& value);
+  std::string* _internal_mutable_package();
   public:
 
   // uint32 transfer_id = 1;
@@ -11998,6 +12021,7 @@ class OpenFile final :
   typedef void DestructorSkippable_;
   struct Impl_ {
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_;
     uint32_t transfer_id_;
     int action_;
     uint64_t size_;
@@ -12766,6 +12790,335 @@ class FileProgress final :
 };
 // -------------------------------------------------------------------
 
+class FileSharing final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.FileSharing) */ {
+ public:
+  inline FileSharing() : FileSharing(nullptr) {}
+  ~FileSharing() override;
+  explicit PROTOBUF_CONSTEXPR FileSharing(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  FileSharing(const FileSharing& from);
+  FileSharing(FileSharing&& from) noexcept
+    : FileSharing() {
+    *this = ::std::move(from);
+  }
+
+  inline FileSharing& operator=(const FileSharing& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline FileSharing& operator=(FileSharing&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const FileSharing& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const FileSharing* internal_default_instance() {
+    return reinterpret_cast<const FileSharing*>(
+               &_FileSharing_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    73;
+
+  friend void swap(FileSharing& a, FileSharing& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(FileSharing* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(FileSharing* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  FileSharing* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<FileSharing>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const FileSharing& from);
+  void MergeFrom(const FileSharing& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(FileSharing* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.FileSharing";
+  }
+  protected:
+  explicit FileSharing(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kFoldersFieldNumber = 4,
+    kLocationFieldNumber = 3,
+    kOnFieldNumber = 1,
+    kPortFieldNumber = 2,
+  };
+  // repeated string folders = 4;
+  int folders_size() const;
+  private:
+  int _internal_folders_size() const;
+  public:
+  void clear_folders();
+  const std::string& folders(int index) const;
+  std::string* mutable_folders(int index);
+  void set_folders(int index, const std::string& value);
+  void set_folders(int index, std::string&& value);
+  void set_folders(int index, const char* value);
+  void set_folders(int index, const char* value, size_t size);
+  std::string* add_folders();
+  void add_folders(const std::string& value);
+  void add_folders(std::string&& value);
+  void add_folders(const char* value);
+  void add_folders(const char* value, size_t size);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& folders() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_folders();
+  private:
+  const std::string& _internal_folders(int index) const;
+  std::string* _internal_add_folders();
+  public:
+
+  // string location = 3;
+  void clear_location();
+  const std::string& location() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_location(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_location();
+  PROTOBUF_NODISCARD std::string* release_location();
+  void set_allocated_location(std::string* location);
+  private:
+  const std::string& _internal_location() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_location(const std::string& value);
+  std::string* _internal_mutable_location();
+  public:
+
+  // bool on = 1;
+  void clear_on();
+  bool on() const;
+  void set_on(bool value);
+  private:
+  bool _internal_on() const;
+  void _internal_set_on(bool value);
+  public:
+
+  // uint32 port = 2;
+  void clear_port();
+  uint32_t port() const;
+  void set_port(uint32_t value);
+  private:
+  uint32_t _internal_port() const;
+  void _internal_set_port(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.FileSharing)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> folders_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr location_;
+    bool on_;
+    uint32_t port_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class AndroidFiles final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.AndroidFiles) */ {
+ public:
+  inline AndroidFiles() : AndroidFiles(nullptr) {}
+  ~AndroidFiles() override;
+  explicit PROTOBUF_CONSTEXPR AndroidFiles(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  AndroidFiles(const AndroidFiles& from);
+  AndroidFiles(AndroidFiles&& from) noexcept
+    : AndroidFiles() {
+    *this = ::std::move(from);
+  }
+
+  inline AndroidFiles& operator=(const AndroidFiles& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AndroidFiles& operator=(AndroidFiles&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const AndroidFiles& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const AndroidFiles* internal_default_instance() {
+    return reinterpret_cast<const AndroidFiles*>(
+               &_AndroidFiles_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    74;
+
+  friend void swap(AndroidFiles& a, AndroidFiles& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(AndroidFiles* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AndroidFiles* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  AndroidFiles* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<AndroidFiles>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const AndroidFiles& from);
+  void MergeFrom(const AndroidFiles& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(AndroidFiles* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.AndroidFiles";
+  }
+  protected:
+  explicit AndroidFiles(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTokenFieldNumber = 2,
+    kPortFieldNumber = 1,
+  };
+  // string token = 2;
+  void clear_token();
+  const std::string& token() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_token(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_token();
+  PROTOBUF_NODISCARD std::string* release_token();
+  void set_allocated_token(std::string* token);
+  private:
+  const std::string& _internal_token() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_token(const std::string& value);
+  std::string* _internal_mutable_token();
+  public:
+
+  // uint32 port = 1;
+  void clear_port();
+  uint32_t port() const;
+  void set_port(uint32_t value);
+  private:
+  uint32_t _internal_port() const;
+  void _internal_set_port(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.AndroidFiles)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr token_;
+    uint32_t port_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ClockProbe final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ClockProbe) */ {
  public:
@@ -12805,7 +13158,7 @@ class ClockProbe final :
                &_ClockProbe_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    75;
 
   friend void swap(ClockProbe& a, ClockProbe& b) {
     a.Swap(&b);
@@ -12935,7 +13288,7 @@ class VideoCodecSupport final :
                &_VideoCodecSupport_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    76;
 
   friend void swap(VideoCodecSupport& a, VideoCodecSupport& b) {
     a.Swap(&b);
@@ -13087,7 +13440,7 @@ class VideoCapabilities final :
                &_VideoCapabilities_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    77;
 
   friend void swap(VideoCapabilities& a, VideoCapabilities& b) {
     a.Swap(&b);
@@ -13226,7 +13579,7 @@ class VideoDecoderOpen final :
                &_VideoDecoderOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    78;
 
   friend void swap(VideoDecoderOpen& a, VideoDecoderOpen& b) {
     a.Swap(&b);
@@ -13378,7 +13731,7 @@ class VideoDecoderOpened final :
                &_VideoDecoderOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    79;
 
   friend void swap(VideoDecoderOpened& a, VideoDecoderOpened& b) {
     a.Swap(&b);
@@ -13524,7 +13877,7 @@ class VideoPacket final :
                &_VideoPacket_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    80;
 
   friend void swap(VideoPacket& a, VideoPacket& b) {
     a.Swap(&b);
@@ -13703,7 +14056,7 @@ class VideoFrame final :
                &_VideoFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    81;
 
   friend void swap(VideoFrame& a, VideoFrame& b) {
     a.Swap(&b);
@@ -13904,7 +14257,7 @@ class VideoFlush final :
                &_VideoFlush_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    82;
 
   friend void swap(VideoFlush& a, VideoFlush& b) {
     a.Swap(&b);
@@ -14021,7 +14374,7 @@ class VideoFlushed final :
                &_VideoFlushed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    83;
 
   friend void swap(VideoFlushed& a, VideoFlushed& b) {
     a.Swap(&b);
@@ -14138,7 +14491,7 @@ class VideoError final :
                &_VideoError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    84;
 
   friend void swap(VideoError& a, VideoError& b) {
     a.Swap(&b);
@@ -14273,7 +14626,7 @@ class SensorDescription final :
                &_SensorDescription_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    85;
 
   friend void swap(SensorDescription& a, SensorDescription& b) {
     a.Swap(&b);
@@ -14468,7 +14821,7 @@ class SensorList final :
                &_SensorList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    86;
 
   friend void swap(SensorList& a, SensorList& b) {
     a.Swap(&b);
@@ -14607,7 +14960,7 @@ class SensorActivate final :
                &_SensorActivate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    87;
 
   friend void swap(SensorActivate& a, SensorActivate& b) {
     a.Swap(&b);
@@ -14759,7 +15112,7 @@ class SensorReading final :
                &_SensorReading_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    88;
 
   friend void swap(SensorReading& a, SensorReading& b) {
     a.Swap(&b);
@@ -14924,7 +15277,7 @@ class SensorReadings final :
                &_SensorReadings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    89;
 
   friend void swap(SensorReadings& a, SensorReadings& b) {
     a.Swap(&b);
@@ -15063,7 +15416,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    90;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -15204,7 +15557,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    89;
+    91;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -15334,7 +15687,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    90;
+    92;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -15621,7 +15974,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    91;
+    93;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -15782,7 +16135,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    92;
+    94;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -15928,7 +16281,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    93;
+    95;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -16085,7 +16438,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    94;
+    96;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -16235,7 +16588,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    95;
+    97;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -16379,7 +16732,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    96;
+    98;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -16509,7 +16862,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    97;
+    99;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -16694,7 +17047,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    98;
+    100;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -16862,7 +17215,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    99;
+    101;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -17036,7 +17389,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    100;
+    102;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -17177,7 +17530,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    101;
+    103;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -17329,7 +17682,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    102;
+    104;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -17772,7 +18125,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    103;
+    105;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -18005,7 +18358,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    104;
+    106;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -18195,7 +18548,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    105;
+    107;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -18363,7 +18716,7 @@ class AudioOutputOpen final :
                &_AudioOutputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    106;
+    108;
 
   friend void swap(AudioOutputOpen& a, AudioOutputOpen& b) {
     a.Swap(&b);
@@ -18542,7 +18895,7 @@ class AudioOutputReady final :
                &_AudioOutputReady_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    107;
+    109;
 
   friend void swap(AudioOutputReady& a, AudioOutputReady& b) {
     a.Swap(&b);
@@ -18683,7 +19036,7 @@ class AudioPcm final :
                &_AudioPcm_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    108;
+    110;
 
   friend void swap(AudioPcm& a, AudioPcm& b) {
     a.Swap(&b);
@@ -18829,7 +19182,7 @@ class AudioInputOpen final :
                &_AudioInputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    109;
+    111;
 
   friend void swap(AudioInputOpen& a, AudioInputOpen& b) {
     a.Swap(&b);
@@ -19008,7 +19361,7 @@ class AudioInputOpened final :
                &_AudioInputOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    110;
+    112;
 
   friend void swap(AudioInputOpened& a, AudioInputOpened& b) {
     a.Swap(&b);
@@ -19154,7 +19507,7 @@ class AudioOutputControl final :
                &_AudioOutputControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    111;
+    113;
 
   friend void swap(AudioOutputControl& a, AudioOutputControl& b) {
     a.Swap(&b);
@@ -19284,7 +19637,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    112;
+    114;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -19447,7 +19800,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    113;
+    115;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -19599,7 +19952,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    114;
+    116;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -19827,7 +20180,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    115;
+    117;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -20004,7 +20357,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    116;
+    118;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -20134,7 +20487,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    117;
+    119;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -20307,7 +20660,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    118;
+    120;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -20453,7 +20806,7 @@ class PrintJob final :
                &_PrintJob_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    119;
+    121;
 
   friend void swap(PrintJob& a, PrintJob& b) {
     a.Swap(&b);
@@ -20719,7 +21072,7 @@ class PrintJobChunk final :
                &_PrintJobChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    120;
+    122;
 
   friend void swap(PrintJobChunk& a, PrintJobChunk& b) {
     a.Swap(&b);
@@ -20876,7 +21229,7 @@ class PrintJobCancel final :
                &_PrintJobCancel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    121;
+    123;
 
   friend void swap(PrintJobCancel& a, PrintJobCancel& b) {
     a.Swap(&b);
@@ -21006,7 +21359,7 @@ class PrintJobResult final :
                &_PrintJobResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    122;
+    124;
 
   friend void swap(PrintJobResult& a, PrintJobResult& b) {
     a.Swap(&b);
@@ -21163,7 +21516,7 @@ class CameraMode final :
                &_CameraMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    123;
+    125;
 
   friend void swap(CameraMode& a, CameraMode& b) {
     a.Swap(&b);
@@ -21326,7 +21679,7 @@ class CameraDevice final :
                &_CameraDevice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    124;
+    126;
 
   friend void swap(CameraDevice& a, CameraDevice& b) {
     a.Swap(&b);
@@ -21519,7 +21872,7 @@ class CameraList final :
                &_CameraList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    125;
+    127;
 
   friend void swap(CameraList& a, CameraList& b) {
     a.Swap(&b);
@@ -21658,7 +22011,7 @@ class CameraOpen final :
                &_CameraOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    126;
+    128;
 
   friend void swap(CameraOpen& a, CameraOpen& b) {
     a.Swap(&b);
@@ -21826,7 +22179,7 @@ class CameraOpened final :
                &_CameraOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    127;
+    129;
 
   friend void swap(CameraOpened& a, CameraOpened& b) {
     a.Swap(&b);
@@ -22005,7 +22358,7 @@ class CameraFrame final :
                &_CameraFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    128;
+    130;
 
   friend void swap(CameraFrame& a, CameraFrame& b) {
     a.Swap(&b);
@@ -22195,7 +22548,7 @@ class CameraStop final :
                &_CameraStop_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    129;
+    131;
 
   friend void swap(CameraStop& a, CameraStop& b) {
     a.Swap(&b);
@@ -22312,7 +22665,7 @@ class CameraStill final :
                &_CameraStill_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    130;
+    132;
 
   friend void swap(CameraStill& a, CameraStill& b) {
     a.Swap(&b);
@@ -22475,7 +22828,7 @@ class CameraStillTaken final :
                &_CameraStillTaken_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    131;
+    133;
 
   friend void swap(CameraStillTaken& a, CameraStillTaken& b) {
     a.Swap(&b);
@@ -22637,7 +22990,7 @@ class CameraError final :
                &_CameraError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    132;
+    134;
 
   friend void swap(CameraError& a, CameraError& b) {
     a.Swap(&b);
@@ -22890,6 +23243,8 @@ class Envelope final :
     kCameraStillTaken = 266,
     kCameraError = 267,
     kSetTaskCaption = 155,
+    kFileSharing = 290,
+    kAndroidFiles = 291,
     BODY_NOT_SET = 0,
   };
 
@@ -22898,7 +23253,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    133;
+    135;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -23084,6 +23439,8 @@ class Envelope final :
     kCameraStillTakenFieldNumber = 266,
     kCameraErrorFieldNumber = 267,
     kSetTaskCaptionFieldNumber = 155,
+    kFileSharingFieldNumber = 290,
+    kAndroidFilesFieldNumber = 291,
   };
   // .dsa.control.v1.Hello hello = 1;
   bool has_hello() const;
@@ -25281,6 +25638,42 @@ class Envelope final :
       ::dsa::control::v1::SetTaskCaption* set_task_caption);
   ::dsa::control::v1::SetTaskCaption* unsafe_arena_release_set_task_caption();
 
+  // .dsa.control.v1.FileSharing file_sharing = 290;
+  bool has_file_sharing() const;
+  private:
+  bool _internal_has_file_sharing() const;
+  public:
+  void clear_file_sharing();
+  const ::dsa::control::v1::FileSharing& file_sharing() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::FileSharing* release_file_sharing();
+  ::dsa::control::v1::FileSharing* mutable_file_sharing();
+  void set_allocated_file_sharing(::dsa::control::v1::FileSharing* file_sharing);
+  private:
+  const ::dsa::control::v1::FileSharing& _internal_file_sharing() const;
+  ::dsa::control::v1::FileSharing* _internal_mutable_file_sharing();
+  public:
+  void unsafe_arena_set_allocated_file_sharing(
+      ::dsa::control::v1::FileSharing* file_sharing);
+  ::dsa::control::v1::FileSharing* unsafe_arena_release_file_sharing();
+
+  // .dsa.control.v1.AndroidFiles android_files = 291;
+  bool has_android_files() const;
+  private:
+  bool _internal_has_android_files() const;
+  public:
+  void clear_android_files();
+  const ::dsa::control::v1::AndroidFiles& android_files() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::AndroidFiles* release_android_files();
+  ::dsa::control::v1::AndroidFiles* mutable_android_files();
+  void set_allocated_android_files(::dsa::control::v1::AndroidFiles* android_files);
+  private:
+  const ::dsa::control::v1::AndroidFiles& _internal_android_files() const;
+  ::dsa::control::v1::AndroidFiles* _internal_mutable_android_files();
+  public:
+  void unsafe_arena_set_allocated_android_files(
+      ::dsa::control::v1::AndroidFiles* android_files);
+  ::dsa::control::v1::AndroidFiles* unsafe_arena_release_android_files();
+
   void clear_body();
   BodyCase body_case() const;
   // @@protoc_insertion_point(class_scope:dsa.control.v1.Envelope)
@@ -25408,6 +25801,8 @@ class Envelope final :
   void set_has_camera_still_taken();
   void set_has_camera_error();
   void set_has_set_task_caption();
+  void set_has_file_sharing();
+  void set_has_android_files();
 
   inline bool has_body() const;
   inline void clear_has_body();
@@ -25541,6 +25936,8 @@ class Envelope final :
       ::dsa::control::v1::CameraStillTaken* camera_still_taken_;
       ::dsa::control::v1::CameraError* camera_error_;
       ::dsa::control::v1::SetTaskCaption* set_task_caption_;
+      ::dsa::control::v1::FileSharing* file_sharing_;
+      ::dsa::control::v1::AndroidFiles* android_files_;
     } body_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     uint32_t _oneof_case_[1];
@@ -32423,6 +32820,56 @@ inline void OpenFile::set_action(::dsa::control::v1::FileAction value) {
   // @@protoc_insertion_point(field_set:dsa.control.v1.OpenFile.action)
 }
 
+// string package = 5;
+inline void OpenFile::clear_package() {
+  _impl_.package_.ClearToEmpty();
+}
+inline const std::string& OpenFile::package() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.OpenFile.package)
+  return _internal_package();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void OpenFile::set_package(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.package_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.OpenFile.package)
+}
+inline std::string* OpenFile::mutable_package() {
+  std::string* _s = _internal_mutable_package();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.OpenFile.package)
+  return _s;
+}
+inline const std::string& OpenFile::_internal_package() const {
+  return _impl_.package_.Get();
+}
+inline void OpenFile::_internal_set_package(const std::string& value) {
+  
+  _impl_.package_.Set(value, GetArenaForAllocation());
+}
+inline std::string* OpenFile::_internal_mutable_package() {
+  
+  return _impl_.package_.Mutable(GetArenaForAllocation());
+}
+inline std::string* OpenFile::release_package() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.OpenFile.package)
+  return _impl_.package_.Release();
+}
+inline void OpenFile::set_allocated_package(std::string* package) {
+  if (package != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.package_.SetAllocated(package, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.package_.IsDefault()) {
+    _impl_.package_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.OpenFile.package)
+}
+
 // -------------------------------------------------------------------
 
 // FileChunk
@@ -32821,6 +33268,249 @@ inline void FileProgress::set_allocated_error(std::string* error) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.FileProgress.error)
+}
+
+// -------------------------------------------------------------------
+
+// FileSharing
+
+// bool on = 1;
+inline void FileSharing::clear_on() {
+  _impl_.on_ = false;
+}
+inline bool FileSharing::_internal_on() const {
+  return _impl_.on_;
+}
+inline bool FileSharing::on() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.FileSharing.on)
+  return _internal_on();
+}
+inline void FileSharing::_internal_set_on(bool value) {
+  
+  _impl_.on_ = value;
+}
+inline void FileSharing::set_on(bool value) {
+  _internal_set_on(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.FileSharing.on)
+}
+
+// uint32 port = 2;
+inline void FileSharing::clear_port() {
+  _impl_.port_ = 0u;
+}
+inline uint32_t FileSharing::_internal_port() const {
+  return _impl_.port_;
+}
+inline uint32_t FileSharing::port() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.FileSharing.port)
+  return _internal_port();
+}
+inline void FileSharing::_internal_set_port(uint32_t value) {
+  
+  _impl_.port_ = value;
+}
+inline void FileSharing::set_port(uint32_t value) {
+  _internal_set_port(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.FileSharing.port)
+}
+
+// string location = 3;
+inline void FileSharing::clear_location() {
+  _impl_.location_.ClearToEmpty();
+}
+inline const std::string& FileSharing::location() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.FileSharing.location)
+  return _internal_location();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void FileSharing::set_location(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.location_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.FileSharing.location)
+}
+inline std::string* FileSharing::mutable_location() {
+  std::string* _s = _internal_mutable_location();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.FileSharing.location)
+  return _s;
+}
+inline const std::string& FileSharing::_internal_location() const {
+  return _impl_.location_.Get();
+}
+inline void FileSharing::_internal_set_location(const std::string& value) {
+  
+  _impl_.location_.Set(value, GetArenaForAllocation());
+}
+inline std::string* FileSharing::_internal_mutable_location() {
+  
+  return _impl_.location_.Mutable(GetArenaForAllocation());
+}
+inline std::string* FileSharing::release_location() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.FileSharing.location)
+  return _impl_.location_.Release();
+}
+inline void FileSharing::set_allocated_location(std::string* location) {
+  if (location != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.location_.SetAllocated(location, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.location_.IsDefault()) {
+    _impl_.location_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.FileSharing.location)
+}
+
+// repeated string folders = 4;
+inline int FileSharing::_internal_folders_size() const {
+  return _impl_.folders_.size();
+}
+inline int FileSharing::folders_size() const {
+  return _internal_folders_size();
+}
+inline void FileSharing::clear_folders() {
+  _impl_.folders_.Clear();
+}
+inline std::string* FileSharing::add_folders() {
+  std::string* _s = _internal_add_folders();
+  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.FileSharing.folders)
+  return _s;
+}
+inline const std::string& FileSharing::_internal_folders(int index) const {
+  return _impl_.folders_.Get(index);
+}
+inline const std::string& FileSharing::folders(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.FileSharing.folders)
+  return _internal_folders(index);
+}
+inline std::string* FileSharing::mutable_folders(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.FileSharing.folders)
+  return _impl_.folders_.Mutable(index);
+}
+inline void FileSharing::set_folders(int index, const std::string& value) {
+  _impl_.folders_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.FileSharing.folders)
+}
+inline void FileSharing::set_folders(int index, std::string&& value) {
+  _impl_.folders_.Mutable(index)->assign(std::move(value));
+  // @@protoc_insertion_point(field_set:dsa.control.v1.FileSharing.folders)
+}
+inline void FileSharing::set_folders(int index, const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.folders_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set_char:dsa.control.v1.FileSharing.folders)
+}
+inline void FileSharing::set_folders(int index, const char* value, size_t size) {
+  _impl_.folders_.Mutable(index)->assign(
+    reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.FileSharing.folders)
+}
+inline std::string* FileSharing::_internal_add_folders() {
+  return _impl_.folders_.Add();
+}
+inline void FileSharing::add_folders(const std::string& value) {
+  _impl_.folders_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.FileSharing.folders)
+}
+inline void FileSharing::add_folders(std::string&& value) {
+  _impl_.folders_.Add(std::move(value));
+  // @@protoc_insertion_point(field_add:dsa.control.v1.FileSharing.folders)
+}
+inline void FileSharing::add_folders(const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.folders_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add_char:dsa.control.v1.FileSharing.folders)
+}
+inline void FileSharing::add_folders(const char* value, size_t size) {
+  _impl_.folders_.Add()->assign(reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.FileSharing.folders)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
+FileSharing::folders() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.FileSharing.folders)
+  return _impl_.folders_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
+FileSharing::mutable_folders() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.FileSharing.folders)
+  return &_impl_.folders_;
+}
+
+// -------------------------------------------------------------------
+
+// AndroidFiles
+
+// uint32 port = 1;
+inline void AndroidFiles::clear_port() {
+  _impl_.port_ = 0u;
+}
+inline uint32_t AndroidFiles::_internal_port() const {
+  return _impl_.port_;
+}
+inline uint32_t AndroidFiles::port() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AndroidFiles.port)
+  return _internal_port();
+}
+inline void AndroidFiles::_internal_set_port(uint32_t value) {
+  
+  _impl_.port_ = value;
+}
+inline void AndroidFiles::set_port(uint32_t value) {
+  _internal_set_port(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AndroidFiles.port)
+}
+
+// string token = 2;
+inline void AndroidFiles::clear_token() {
+  _impl_.token_.ClearToEmpty();
+}
+inline const std::string& AndroidFiles::token() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AndroidFiles.token)
+  return _internal_token();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AndroidFiles::set_token(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.token_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AndroidFiles.token)
+}
+inline std::string* AndroidFiles::mutable_token() {
+  std::string* _s = _internal_mutable_token();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AndroidFiles.token)
+  return _s;
+}
+inline const std::string& AndroidFiles::_internal_token() const {
+  return _impl_.token_.Get();
+}
+inline void AndroidFiles::_internal_set_token(const std::string& value) {
+  
+  _impl_.token_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AndroidFiles::_internal_mutable_token() {
+  
+  return _impl_.token_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AndroidFiles::release_token() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.AndroidFiles.token)
+  return _impl_.token_.Release();
+}
+inline void AndroidFiles::set_allocated_token(std::string* token) {
+  if (token != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.token_.SetAllocated(token, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.token_.IsDefault()) {
+    _impl_.token_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AndroidFiles.token)
 }
 
 // -------------------------------------------------------------------
@@ -48393,6 +49083,154 @@ inline ::dsa::control::v1::SetTaskCaption* Envelope::mutable_set_task_caption() 
   return _msg;
 }
 
+// .dsa.control.v1.FileSharing file_sharing = 290;
+inline bool Envelope::_internal_has_file_sharing() const {
+  return body_case() == kFileSharing;
+}
+inline bool Envelope::has_file_sharing() const {
+  return _internal_has_file_sharing();
+}
+inline void Envelope::set_has_file_sharing() {
+  _impl_._oneof_case_[0] = kFileSharing;
+}
+inline void Envelope::clear_file_sharing() {
+  if (_internal_has_file_sharing()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.file_sharing_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::FileSharing* Envelope::release_file_sharing() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.file_sharing)
+  if (_internal_has_file_sharing()) {
+    clear_has_body();
+    ::dsa::control::v1::FileSharing* temp = _impl_.body_.file_sharing_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.file_sharing_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::FileSharing& Envelope::_internal_file_sharing() const {
+  return _internal_has_file_sharing()
+      ? *_impl_.body_.file_sharing_
+      : reinterpret_cast< ::dsa::control::v1::FileSharing&>(::dsa::control::v1::_FileSharing_default_instance_);
+}
+inline const ::dsa::control::v1::FileSharing& Envelope::file_sharing() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.file_sharing)
+  return _internal_file_sharing();
+}
+inline ::dsa::control::v1::FileSharing* Envelope::unsafe_arena_release_file_sharing() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.file_sharing)
+  if (_internal_has_file_sharing()) {
+    clear_has_body();
+    ::dsa::control::v1::FileSharing* temp = _impl_.body_.file_sharing_;
+    _impl_.body_.file_sharing_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_file_sharing(::dsa::control::v1::FileSharing* file_sharing) {
+  clear_body();
+  if (file_sharing) {
+    set_has_file_sharing();
+    _impl_.body_.file_sharing_ = file_sharing;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.file_sharing)
+}
+inline ::dsa::control::v1::FileSharing* Envelope::_internal_mutable_file_sharing() {
+  if (!_internal_has_file_sharing()) {
+    clear_body();
+    set_has_file_sharing();
+    _impl_.body_.file_sharing_ = CreateMaybeMessage< ::dsa::control::v1::FileSharing >(GetArenaForAllocation());
+  }
+  return _impl_.body_.file_sharing_;
+}
+inline ::dsa::control::v1::FileSharing* Envelope::mutable_file_sharing() {
+  ::dsa::control::v1::FileSharing* _msg = _internal_mutable_file_sharing();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.file_sharing)
+  return _msg;
+}
+
+// .dsa.control.v1.AndroidFiles android_files = 291;
+inline bool Envelope::_internal_has_android_files() const {
+  return body_case() == kAndroidFiles;
+}
+inline bool Envelope::has_android_files() const {
+  return _internal_has_android_files();
+}
+inline void Envelope::set_has_android_files() {
+  _impl_._oneof_case_[0] = kAndroidFiles;
+}
+inline void Envelope::clear_android_files() {
+  if (_internal_has_android_files()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.android_files_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::AndroidFiles* Envelope::release_android_files() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.android_files)
+  if (_internal_has_android_files()) {
+    clear_has_body();
+    ::dsa::control::v1::AndroidFiles* temp = _impl_.body_.android_files_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.android_files_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::AndroidFiles& Envelope::_internal_android_files() const {
+  return _internal_has_android_files()
+      ? *_impl_.body_.android_files_
+      : reinterpret_cast< ::dsa::control::v1::AndroidFiles&>(::dsa::control::v1::_AndroidFiles_default_instance_);
+}
+inline const ::dsa::control::v1::AndroidFiles& Envelope::android_files() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.android_files)
+  return _internal_android_files();
+}
+inline ::dsa::control::v1::AndroidFiles* Envelope::unsafe_arena_release_android_files() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.android_files)
+  if (_internal_has_android_files()) {
+    clear_has_body();
+    ::dsa::control::v1::AndroidFiles* temp = _impl_.body_.android_files_;
+    _impl_.body_.android_files_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_android_files(::dsa::control::v1::AndroidFiles* android_files) {
+  clear_body();
+  if (android_files) {
+    set_has_android_files();
+    _impl_.body_.android_files_ = android_files;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.android_files)
+}
+inline ::dsa::control::v1::AndroidFiles* Envelope::_internal_mutable_android_files() {
+  if (!_internal_has_android_files()) {
+    clear_body();
+    set_has_android_files();
+    _impl_.body_.android_files_ = CreateMaybeMessage< ::dsa::control::v1::AndroidFiles >(GetArenaForAllocation());
+  }
+  return _impl_.body_.android_files_;
+}
+inline ::dsa::control::v1::AndroidFiles* Envelope::mutable_android_files() {
+  ::dsa::control::v1::AndroidFiles* _msg = _internal_mutable_android_files();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.android_files)
+  return _msg;
+}
+
 inline bool Envelope::has_body() const {
   return body_case() != BODY_NOT_SET;
 }
@@ -48405,6 +49243,10 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

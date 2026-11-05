@@ -1349,5 +1349,27 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.SetTaskCaption getSetTaskCaption();
 
+  /**
+   * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+   * @return Whether the fileSharing field is set.
+   */
+  boolean hasFileSharing();
+  /**
+   * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+   * @return The fileSharing.
+   */
+  io.github.thisisthepy.dsa.control.v1.FileSharing getFileSharing();
+
+  /**
+   * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+   * @return Whether the androidFiles field is set.
+   */
+  boolean hasAndroidFiles();
+  /**
+   * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+   * @return The androidFiles.
+   */
+  io.github.thisisthepy.dsa.control.v1.AndroidFiles getAndroidFiles();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

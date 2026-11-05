@@ -49,8 +49,19 @@ public sealed record SettingsInfo(
     int StopAfterSecs = SettingsInfo.DefaultStopAfterSecs,
     bool KeepForNotifications = false,
     bool AdvancedNetworking = false,
-    NetworkInfo? Network = null)
+    NetworkInfo? Network = null,
+    bool FileSharing = true,
+    IReadOnlyList<string>? SharedFolders = null)
 {
+    /// <summary>The Windows folders that can be shared with Android, in the order the service
+    /// keeps them.</summary>
+    public static readonly IReadOnlyList<string> AllFolders =
+        new[] { "Documents", "Downloads", "Pictures", "Music", "Videos", "Desktop" };
+
+    /// <summary>The folders shared while file sharing is on: every one unless the user chose
+    /// fewer.</summary>
+    public IReadOnlyList<string> Folders => SharedFolders ?? AllFolders;
+
     /// <summary>The run mode that stops Android once nothing uses it: the default.</summary>
     public const string AsNeeded = "as-needed";
 

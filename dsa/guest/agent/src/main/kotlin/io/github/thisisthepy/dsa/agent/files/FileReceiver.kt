@@ -22,6 +22,12 @@ data class StoredFile(
 fun interface FileOpener {
     fun open(file: StoredFile, action: FileAction)
 
+    /**
+     * Shares a file with the app [packageName], as when the user dropped it on that app's
+     * window. Without a way to send it to one app, the user is asked as for any other file.
+     */
+    fun shareWith(file: StoredFile, packageName: String) = open(file, FileAction.FILE_ACTION_SEND)
+
     companion object {
         val NONE = FileOpener { _, _ -> throw IllegalStateException("this agent opens no files") }
     }
@@ -88,7 +94,13 @@ class FileReceiver(
     private val send: (ByteArray) -> Boolean,
     private val log: Log,
 ) {
-    private class Transfer(val file: StoredFile, val size: Long, val action: FileAction) {
+    private class Transfer(
+        val file: StoredFile,
+        val size: Long,
+        val action: FileAction,
+        /** The app to share it with, when the user dropped it on that app's window. */
+        val packageName: String,
+    ) {
         var received = 0L
     }
 
@@ -127,7 +139,7 @@ class FileReceiver(
             log.warn("could not make room for a file from the host", e)
             return fail(id, null, "Android could not store the file")
         }
-        val transfer = Transfer(file, open.size, open.action)
+        val transfer = Transfer(file, open.size, open.action, open.`package`)
         transfers[id] = transfer
         log.info("receiving ${open.name} (${open.size} bytes) from the host")
         if (open.size == 0L) finish(id, transfer)
@@ -159,7 +171,11 @@ class FileReceiver(
     private fun finish(id: Int, transfer: Transfer) {
         transfers.remove(id)
         try {
-            opener.open(transfer.file, transfer.action)
+            if (transfer.action == FileAction.FILE_ACTION_SEND && transfer.packageName.isNotEmpty()) {
+                opener.shareWith(transfer.file, transfer.packageName)
+            } else {
+                opener.open(transfer.file, transfer.action)
+            }
         } catch (e: Exception) {
             log.warn("could not ask which app opens ${transfer.file.name}", e)
             store?.discard(transfer.file)

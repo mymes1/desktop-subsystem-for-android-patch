@@ -187,7 +187,16 @@
             <!-- The app window host. The window manager copies it for each Android app into
                  the user's profile (%LOCALAPPDATA%\DSA\apps\<package>\<Label>.exe), named and drawn as the app. -->
             <Component Id="AppWindowExe" Guid="*">
-                <File Id="AppWindowExe" Source="$(SourceDir)\dsa-app-window.exe" KeyPath="yes" />
+                <!-- The "DSA Files" shortcut opens the shared storage of the user's Android in
+                     Explorer, starting Android when it is not running. -->
+                <File Id="AppWindowExe" Source="$(SourceDir)\dsa-app-window.exe" KeyPath="yes">
+                    <Shortcut Id="AndroidFilesShortcut"
+                              Directory="ProgramMenuFolder"
+                              Name="DSA Files"
+                              Description="Files of your Android, in Explorer"
+                              Arguments="--android-files"
+                              WorkingDirectory="INSTALLFOLDER" />
+                </File>
             </Component>
             <!-- Opening an .apk file in Explorer opens the APK install window of the settings
                  app, which shows what the file is (its name, icon, version, permissions and

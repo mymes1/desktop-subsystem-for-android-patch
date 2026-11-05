@@ -165,6 +165,19 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool LinksInAndroid => _settings?.LinksInAndroid ?? false;
     /// <summary>Whether text copied on Windows can be pasted in Android, and the reverse.</summary>
     public bool Clipboard => _settings?.Clipboard ?? true;
+    /// <summary>Whether the chosen Windows folders show in Android's shared storage.</summary>
+    public bool FileSharing => _settings?.FileSharing ?? true;
+    /// <summary>Whether the folder choices can be changed: only while sharing is on.</summary>
+    public bool CanChooseFolders => CanChange && FileSharing;
+    /// <summary>Whether <paramref name="folder"/> is shared while file sharing is on.</summary>
+    public bool IsFolderShared(string folder) =>
+        (_settings?.Folders ?? SettingsInfo.AllFolders).Contains(folder);
+    public bool ShareDocuments => IsFolderShared("Documents");
+    public bool ShareDownloads => IsFolderShared("Downloads");
+    public bool SharePictures => IsFolderShared("Pictures");
+    public bool ShareMusic => IsFolderShared("Music");
+    public bool ShareVideos => IsFolderShared("Videos");
+    public bool ShareDesktop => IsFolderShared("Desktop");
     /// <summary>Whether adb reaches Android through the loopback port.</summary>
     public bool DeveloperMode => _settings?.DeveloperMode ?? false;
     public int AdbPort => _settings?.AdbPort ?? SettingsInfo.DefaultAdbPort;
@@ -379,6 +392,41 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public Task SetClipboardAsync(bool on) =>
         on == Clipboard && Loaded ? Task.CompletedTask : ChangeAsync(() => _service.SetClipboardAsync(on));
+
+    public Task SetFileSharingAsync(bool on) =>
+        on == FileSharing && Loaded ? Task.CompletedTask : ChangeAsync(() => _service.SetFileSharingAsync(on));
+
+    /// <summary>Shares <paramref name="folder"/> or stops sharing it, keeping the other
+    /// choices. A folder that cannot be shared changes nothing.</summary>
+    public Task SetFolderSharedAsync(string folder, bool shared)
+    {
+        if (!SettingsInfo.AllFolders.Contains(folder) || (shared == IsFolderShared(folder) && Loaded))
+        {
+            ChangedAll();
+            return Task.CompletedTask;
+        }
+        var wanted = SettingsInfo.AllFolders
+            .Where(name => name == folder ? shared : IsFolderShared(name))
+            .ToList();
+        return ChangeAsync(() => _service.SetSharedFoldersAsync(wanted));
+    }
+
+    /// <summary>Opens Android's shared storage in Explorer. A failure shows as the page's
+    /// error.</summary>
+    public async Task OpenAndroidFilesAsync()
+    {
+        _error = null;
+        ChangedAll();
+        try
+        {
+            await _service.OpenAndroidFilesAsync().ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            _error = Format.Problem(_text, e);
+        }
+        ChangedAll();
+    }
 
     public Task SetDeveloperModeAsync(bool on) =>
         on == DeveloperMode && Loaded ? Task.CompletedTask : ChangeAsync(() => _service.SetDeveloperModeAsync(on));

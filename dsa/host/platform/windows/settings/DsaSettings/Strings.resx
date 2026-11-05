@@ -316,6 +316,48 @@
   <data name="AdvancedTitle.Text" xml:space="preserve">
     <value>Advanced</value>
   </data>
+  <data name="FilesHeader.Text" xml:space="preserve">
+    <value>Files</value>
+  </data>
+  <data name="FileSharingCard.Header" xml:space="preserve">
+    <value>Share Windows folders with Android</value>
+  </data>
+  <data name="FileSharingCard.Description" xml:space="preserve">
+    <value>On by default: the folders chosen below show in Android's shared storage, in the Windows folder, so Android apps can open and save files there. Android apps reach them only with Android's storage permission, and Windows lets them do only what your own account may do.</value>
+  </data>
+  <data name="SharedFoldersCard.Header" xml:space="preserve">
+    <value>Shared folders</value>
+  </data>
+  <data name="SharedFoldersCard.Description" xml:space="preserve">
+    <value>A folder you clear is taken away from Android at once.</value>
+  </data>
+  <data name="Folder_Documents" xml:space="preserve">
+    <value>Documents</value>
+  </data>
+  <data name="Folder_Downloads" xml:space="preserve">
+    <value>Downloads</value>
+  </data>
+  <data name="Folder_Pictures" xml:space="preserve">
+    <value>Pictures</value>
+  </data>
+  <data name="Folder_Music" xml:space="preserve">
+    <value>Music</value>
+  </data>
+  <data name="Folder_Videos" xml:space="preserve">
+    <value>Videos</value>
+  </data>
+  <data name="Folder_Desktop" xml:space="preserve">
+    <value>Desktop</value>
+  </data>
+  <data name="AndroidFilesCard.Header" xml:space="preserve">
+    <value>Android files</value>
+  </data>
+  <data name="AndroidFilesCard.Description" xml:space="preserve">
+    <value>Opens Android's shared storage in File Explorer: the files Android apps saved, such as photos and downloads. Android starts if it is not running. The DSA Files entry in the Start menu does the same.</value>
+  </data>
+  <data name="FilesNote.Text" xml:space="preserve">
+    <value>To send a file to an Android app, drag it from File Explorer onto the app's window. An APK you drop is installed.</value>
+  </data>
   <data name="LinksCard.Header" xml:space="preserve">
     <value>Open web links in Android apps</value>
   </data>

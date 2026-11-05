@@ -190,6 +190,47 @@ fn main() -> std::process::ExitCode {
             }
         };
     }
+    // Opened from the "DSA Files" Start menu shortcut: Android's shared storage opens in
+    // Explorer, Android starting first when it is not running.
+    if args
+        .iter()
+        .any(|arg| arg == dsa_host_windows::android_files::ANDROID_FILES_ARGUMENT)
+    {
+        use dsa_host_windows::android_files;
+        const TITLE: &str = "Desktop Subsystem for Android";
+        let api_pipe = dsa_host_windows::host_config::DEFAULT_PIPE_NAME;
+        let mut starting = None;
+        let opened = ensure_android(
+            &mut NamedPipeConnector {
+                name: api_pipe.into(),
+            },
+            || starting = Some(StartingWindow::show(TITLE)),
+        )
+        .and_then(|()| {
+            android_files::locate(&mut NamedPipeConnector {
+                name: api_pipe.into(),
+            })
+        })
+        .and_then(|path| android_files::open_in_explorer(&path).map(|()| path));
+        drop(starting);
+        return match opened {
+            Ok(path) => {
+                note(logger.as_deref(), &format!("opened Android's files at {path}"));
+                std::process::ExitCode::SUCCESS
+            }
+            Err(why) => {
+                note(
+                    logger.as_deref(),
+                    &format!("Android's files were not opened: {why}"),
+                );
+                tell_user(
+                    TITLE,
+                    &format!("Android's files could not be opened. {why}."),
+                );
+                std::process::ExitCode::FAILURE
+            }
+        };
+    }
     let Some(package) = package_of(&program, &args) else {
         note(
             logger.as_deref(),

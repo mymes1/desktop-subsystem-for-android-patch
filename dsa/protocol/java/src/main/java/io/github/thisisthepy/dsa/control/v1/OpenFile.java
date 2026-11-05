@@ -21,6 +21,7 @@ public  final class OpenFile extends
     OpenFileOrBuilder {
   private OpenFile() {
     name_ = "";
+    package_ = "";
   }
   public static final int TRANSFER_ID_FIELD_NUMBER = 1;
   private int transferId_;
@@ -205,6 +206,83 @@ public  final class OpenFile extends
   private void clearAction() {
     
     action_ = 0;
+  }
+
+  public static final int PACKAGE_FIELD_NUMBER = 5;
+  private java.lang.String package_;
+  /**
+   * <pre>
+   * The app to share the file with, when the user dropped it on that app's window: the agent
+   * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+   * only when that app does not take it. Empty to let the user pick.
+   * </pre>
+   *
+   * <code>string package = 5;</code>
+   * @return The package.
+   */
+  @java.lang.Override
+  public java.lang.String getPackage() {
+    return package_;
+  }
+  /**
+   * <pre>
+   * The app to share the file with, when the user dropped it on that app's window: the agent
+   * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+   * only when that app does not take it. Empty to let the user pick.
+   * </pre>
+   *
+   * <code>string package = 5;</code>
+   * @return The bytes for package.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPackageBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(package_);
+  }
+  /**
+   * <pre>
+   * The app to share the file with, when the user dropped it on that app's window: the agent
+   * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+   * only when that app does not take it. Empty to let the user pick.
+   * </pre>
+   *
+   * <code>string package = 5;</code>
+   * @param value The package to set.
+   */
+  private void setPackage(
+      java.lang.String value) {
+    java.lang.Class<?> valueClass = value.getClass();
+  
+    package_ = value;
+  }
+  /**
+   * <pre>
+   * The app to share the file with, when the user dropped it on that app's window: the agent
+   * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+   * only when that app does not take it. Empty to let the user pick.
+   * </pre>
+   *
+   * <code>string package = 5;</code>
+   */
+  private void clearPackage() {
+    
+    package_ = getDefaultInstance().getPackage();
+  }
+  /**
+   * <pre>
+   * The app to share the file with, when the user dropped it on that app's window: the agent
+   * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+   * only when that app does not take it. Empty to let the user pick.
+   * </pre>
+   *
+   * <code>string package = 5;</code>
+   * @param value The bytes for package to set.
+   */
+  private void setPackageBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    package_ = value.toStringUtf8();
+    
   }
 
   public static io.github.thisisthepy.dsa.control.v1.OpenFile parseFrom(
@@ -505,6 +583,85 @@ public  final class OpenFile extends
       return this;
     }
 
+    /**
+     * <pre>
+     * The app to share the file with, when the user dropped it on that app's window: the agent
+     * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+     * only when that app does not take it. Empty to let the user pick.
+     * </pre>
+     *
+     * <code>string package = 5;</code>
+     * @return The package.
+     */
+    @java.lang.Override
+    public java.lang.String getPackage() {
+      return instance.getPackage();
+    }
+    /**
+     * <pre>
+     * The app to share the file with, when the user dropped it on that app's window: the agent
+     * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+     * only when that app does not take it. Empty to let the user pick.
+     * </pre>
+     *
+     * <code>string package = 5;</code>
+     * @return The bytes for package.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getPackageBytes() {
+      return instance.getPackageBytes();
+    }
+    /**
+     * <pre>
+     * The app to share the file with, when the user dropped it on that app's window: the agent
+     * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+     * only when that app does not take it. Empty to let the user pick.
+     * </pre>
+     *
+     * <code>string package = 5;</code>
+     * @param value The package to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPackage(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setPackage(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The app to share the file with, when the user dropped it on that app's window: the agent
+     * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+     * only when that app does not take it. Empty to let the user pick.
+     * </pre>
+     *
+     * <code>string package = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPackage() {
+      copyOnWrite();
+      instance.clearPackage();
+      return this;
+    }
+    /**
+     * <pre>
+     * The app to share the file with, when the user dropped it on that app's window: the agent
+     * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+     * only when that app does not take it. Empty to let the user pick.
+     * </pre>
+     *
+     * <code>string package = 5;</code>
+     * @param value The bytes for package to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPackageBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setPackageBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.OpenFile)
   }
   @java.lang.Override
@@ -525,10 +682,11 @@ public  final class OpenFile extends
             "name_",
             "size_",
             "action_",
+            "package_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u000b\u0002\u0208" +
-              "\u0003\u0003\u0004\f";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u000b\u0002\u0208" +
+              "\u0003\u0003\u0004\f\u0005\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

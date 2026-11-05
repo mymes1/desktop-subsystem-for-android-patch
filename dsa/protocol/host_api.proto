@@ -253,6 +253,20 @@ message OpenFile {
   // The file's length in bytes.
   uint64 size = 2;
   FileAction action = 3;
+  // The app to share the file with, as when the user drops the file on that app's window.
+  // Empty to let the user pick.
+  string package = 4;
+}
+
+// Asks where the host's file manager shows the caller's Android shared storage. The service
+// starts the caller's Android when it is not running, has it serve its shared storage, and
+// answers with AndroidFilesLocation.
+message GetAndroidFiles {}
+
+// Where the caller's Android shared storage can be opened, such as
+// "\localhost@52714f9a...". It changes when the service or Android restarts.
+message AndroidFilesLocation {
+  string location = 1;
 }
 
 // Part of a file's content, on a connection that sends a file (OpenFile).
@@ -1174,6 +1188,13 @@ message Settings {
   // Whether stopping an app that runs in the background skips the question that confirms
   // it. Off by default: the first stop asks, and the user may tick "do not ask again".
   bool stop_without_asking = 18;
+  // Whether the caller's host folders show in their Android's shared storage. On unless the
+  // user turned it off; a client sends back the value it read. It applies at once.
+  bool file_sharing = 30;
+  // The folders shared while file sharing is on, by name: any of "Documents", "Downloads",
+  // "Pictures", "Music", "Videos" and "Desktop". All of them unless the user chose fewer; a
+  // client sends back the list it read. A name the service does not know is refused.
+  repeated string shared_folders = 31;
   // Whether the caller's Android joins the host's LAN as a device of its own (advanced
   // networking), so other devices on the LAN reach it and it reaches them directly. Off by
   // default: Android is behind a NAT network the service makes for its VM. It applies from the
@@ -1501,6 +1522,7 @@ message Request {
     WatchBackgroundApps watch_background_apps = 42;
     ActOnBackgroundApp act_on_background_app = 43;
     ControlMedia control_media = 44;
+    GetAndroidFiles get_android_files = 90;
     ResetData reset_data = 310;
   }
 }
@@ -1526,6 +1548,7 @@ message Response {
     DeviceIdentityReport device_identity = 80;
     UninstallResult uninstall_result = 17;
     BackgroundApps background_apps = 18;
+    AndroidFilesLocation android_files = 90;
   }
 }
 

@@ -65,6 +65,7 @@ use crate::compositor::present::{self, Gpu, WindowPresenter};
 use crate::compositor::window_marks;
 
 use super::accessibility::{AccessibilityWindow, ApiConnect, WM_APP_ACCESSIBILITY};
+use super::drop_target::{self, DropHandler};
 use super::caption::{task_frame, CaptionWindow};
 use super::ime::ImeWindow;
 use super::keys::KeyWindow;
@@ -167,6 +168,8 @@ pub struct UiSetup {
     /// Dials the service's local API to watch a task's accessibility tree, while a UI
     /// Automation client reads its window. `None` answers clients with an empty tree.
     pub accessibility: Option<ApiConnect>,
+    /// What happens to files dropped on a task window. `None` takes no drops.
+    pub drops: Option<DropHandler>,
 }
 
 /// Starts the UI thread. Returns once its message window exists.
@@ -311,6 +314,21 @@ fn run(setup: UiSetup, commands: Receiver<ToHost>, ready: Sender<Result<isize, S
         });
         let _ = ready.send(Ok(message_window as isize));
         SetTimer(message_window, TICK_TIMER, TICK_MILLIS, None);
+        let takes_drops = UI.with(|ui| {
+            ui.borrow()
+                .as_ref()
+                .is_some_and(|ui| ui.setup.drops.is_some())
+        });
+        if takes_drops {
+            if let Err(why) = drop_target::prepare_thread() {
+                UI.with(|ui| {
+                    if let Some(ui) = ui.borrow_mut().as_mut() {
+                        ui.setup.drops = None;
+                        ui.log(&why);
+                    }
+                });
+            }
+        }
 
         let mut message: MSG = std::mem::zeroed();
         while GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) > 0 {
@@ -680,6 +698,7 @@ unsafe extern "system" fn task_window_proc(
             0
         }
         WM_NCDESTROY => {
+            drop_target::revoke(hwnd as isize);
             if let Some(data) = window_data(hwnd) {
                 if let Ok(mut tree) = data.accessibility.try_borrow_mut() {
                     tree.close(hwnd as isize);
@@ -1034,6 +1053,12 @@ impl Ui {
         }
         super::pointer::deliver_contacts_at_once(hwnd);
         window_marks::mark_task(hwnd as isize, task_id);
+        // Files dropped from Explorer go to the task's app.
+        if let Some(handler) = &self.setup.drops {
+            if let Err(why) = drop_target::register(hwnd as isize, task_id, Arc::clone(handler)) {
+                self.log(&why);
+            }
+        }
         let client = apply_size(hwnd, size);
         let presenter = match &self.setup.gpu {
             Some(gpu) => match WindowPresenter::new(

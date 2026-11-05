@@ -115,6 +115,10 @@ public sealed class DsaService
         Bool(json, "advanced_networking"),
         json.TryGetProperty("network", out var network) && network.ValueKind == JsonValueKind.Object
             ? ReadNetwork(network)
+            : null,
+        Bool(json, "file_sharing", missing: true),
+        json.TryGetProperty("shared_folders", out var shared) && shared.ValueKind == JsonValueKind.Array
+            ? Strings(json, "shared_folders")
             : null);
 
     private static IReadOnlyList<string> Strings(JsonElement element, string name) =>
@@ -190,6 +194,24 @@ public sealed class DsaService
         SetAsync("adb-port", port.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
     public Task<SettingsInfo> SetArmTranslationAsync(bool on) => SetAsync("arm-translation", on ? "on" : "off");
+
+    /// <summary>Whether the chosen Windows folders show in Android's shared storage.</summary>
+    public Task<SettingsInfo> SetFileSharingAsync(bool on) => SetAsync("file-sharing", on ? "on" : "off");
+
+    /// <summary>Which Windows folders are shared, in the order the service keeps them.</summary>
+    public Task<SettingsInfo> SetSharedFoldersAsync(IEnumerable<string> folders)
+    {
+        var list = string.Join(",", folders);
+        return SetAsync("shared-folders", list.Length == 0 ? "none" : list);
+    }
+
+    /// <summary>Opens Android's shared storage in Explorer, starting Android when it is not
+    /// running, and returns the path Explorer opened.</summary>
+    public async Task<string> OpenAndroidFilesAsync()
+    {
+        var json = await RunJsonAsync("files", "open").ConfigureAwait(true);
+        return String(json, "path");
+    }
 
     private static ArmTranslationInfo ReadArmTranslation(JsonElement json)
     {

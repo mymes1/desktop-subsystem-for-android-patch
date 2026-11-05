@@ -194,6 +194,22 @@ pub struct OpenFile {
     pub size: u64,
     #[prost(enumeration = "FileAction", tag = "3")]
     pub action: i32,
+    /// The app to share the file with, as when the user drops the file on that app's window.
+    /// Empty to let the user pick.
+    #[prost(string, tag = "4")]
+    pub package: ::prost::alloc::string::String,
+}
+/// Asks where the host's file manager shows the caller's Android shared storage. The service
+/// starts the caller's Android when it is not running, has it serve its shared storage, and
+/// answers with AndroidFilesLocation.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetAndroidFiles {}
+/// Where the caller's Android shared storage can be opened, such as
+/// "\localhost@52714f9a...". It changes when the service or Android restarts.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AndroidFilesLocation {
+    #[prost(string, tag = "1")]
+    pub location: ::prost::alloc::string::String,
 }
 /// Part of a file's content, on a connection that sends a file (OpenFile).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1288,6 +1304,15 @@ pub struct Settings {
     /// it. Off by default: the first stop asks, and the user may tick "do not ask again".
     #[prost(bool, tag = "18")]
     pub stop_without_asking: bool,
+    /// Whether the caller's host folders show in their Android's shared storage. On unless the
+    /// user turned it off; a client sends back the value it read. It applies at once.
+    #[prost(bool, tag = "30")]
+    pub file_sharing: bool,
+    /// The folders shared while file sharing is on, by name: any of "Documents", "Downloads",
+    /// "Pictures", "Music", "Videos" and "Desktop". All of them unless the user chose fewer; a
+    /// client sends back the list it read. A name the service does not know is refused.
+    #[prost(string, repeated, tag = "31")]
+    pub shared_folders: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     /// Whether the caller's Android joins the host's LAN as a device of its own (advanced
     /// networking), so other devices on the LAN reach it and it reaches them directly. Off by
     /// default: Android is behind a NAT network the service makes for its VM. It applies from the
@@ -1601,7 +1626,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 310"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 90, 310"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1711,6 +1736,8 @@ pub mod request {
         ActOnBackgroundApp(super::ActOnBackgroundApp),
         #[prost(message, tag = "44")]
         ControlMedia(super::ControlMedia),
+        #[prost(message, tag = "90")]
+        GetAndroidFiles(super::GetAndroidFiles),
         #[prost(message, tag = "310")]
         ResetData(super::ResetData),
     }
@@ -1721,7 +1748,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 90"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -1765,6 +1792,8 @@ pub mod response {
         UninstallResult(super::UninstallResult),
         #[prost(message, tag = "18")]
         BackgroundApps(super::BackgroundApps),
+        #[prost(message, tag = "90")]
+        AndroidFiles(super::AndroidFilesLocation),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
