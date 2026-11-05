@@ -2063,7 +2063,8 @@ class GuestMemoryTests(unittest.TestCase):
             self.assertIn("vendor.dsa.memory.trim u:object_r:dsa_memory_prop:s0 exact bool", contexts)
             rc = archive.read("VENDOR/etc/init/dsa-channeld.rc").decode()
             trigger = rc[rc.index("on property:vendor.dsa.memory.trim=1"):]
-            self.assertIn("write /sys/fs/cgroup/memory.reclaim 64M", trigger)
+            self.assertIn("vendor.dsa.memory.trim_size u:object_r:dsa_memory_prop:s0 exact int", contexts)
+            self.assertIn('write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.trim_size}M swappiness=0"', trigger)
             self.assertNotIn("drop_caches", trigger)
             self.assertNotIn("compact_memory", trigger)
             self.assertIn("(allow vendor_init cgroup_v2 (file (write open getattr)))", archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())

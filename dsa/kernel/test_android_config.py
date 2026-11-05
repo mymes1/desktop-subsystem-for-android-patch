@@ -35,6 +35,13 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIn(".unlocked_ioctl\t= shmem_file_ioctl,", patch)
         self.assertIn("config MEMFD_ASHMEM_SHIM", patch)
 
+    def test_nfr1_reclaim_ages_pages_with_the_multi_generational_lru(self):
+        # The guest's gradual trim reclaims a bounded amount of the coldest cache; without
+        # MGLRU it cannot tell cold cache from the visible app's working set as well.
+        config = CONFIG.read_text()
+        self.assertIn("CONFIG_LRU_GEN=y", config)
+        self.assertIn("CONFIG_LRU_GEN_ENABLED=y", config)
+
     def test_pr6_the_kernel_reads_the_bootconfig_that_carries_the_boot_secret(self):
         # Without it the kernel ignores the bootconfig the host appends to the initrd, the
         # guest's control daemon finds no secret, and the session never becomes active.

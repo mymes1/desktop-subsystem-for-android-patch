@@ -1465,6 +1465,9 @@ RECLAIM_PROPERTY_CONTEXT = f"{RECLAIM_PROPERTY} u:object_r:dsa_memory_prop:s0 ex
 # The gentler property for the gradual trim while apps are open: init drops only the page cache.
 TRIM_PROPERTY = "vendor.dsa.memory.trim"
 TRIM_PROPERTY_CONTEXT = f"{TRIM_PROPERTY} u:object_r:dsa_memory_prop:s0 exact bool"
+# How many MiB the next gradual trim takes; the daemon sets it before the trim property.
+TRIM_SIZE_PROPERTY = "vendor.dsa.memory.trim_size"
+TRIM_SIZE_PROPERTY_CONTEXT = f"{TRIM_SIZE_PROPERTY} u:object_r:dsa_memory_prop:s0 exact int"
 # init sets this when Android has finished booting, and the daemon tells the host.
 BOOT_PROPERTY = "vendor.dsa.boot_completed"
 BOOT_PROPERTY_CONTEXT = f"{BOOT_PROPERTY} u:object_r:dsa_boot_prop:s0 exact bool"
@@ -1596,6 +1599,8 @@ def update_vendor_property_contexts(text):
         lines.append(RECLAIM_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [TRIM_PROPERTY] for line in lines):
         lines.append(TRIM_PROPERTY_CONTEXT)
+    if not any(line.split()[:1] == [TRIM_SIZE_PROPERTY] for line in lines):
+        lines.append(TRIM_SIZE_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [BOOT_PROPERTY] for line in lines):
         lines.append(BOOT_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [ADB_PROPERTY] for line in lines):

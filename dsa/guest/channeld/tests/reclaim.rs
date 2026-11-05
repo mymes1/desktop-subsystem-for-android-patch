@@ -290,3 +290,108 @@ fn nfr2_the_router_remembers_whether_the_host_is_short_of_memory() {
     router.host_connected();
     assert!(!router.host_memory_low());
 }
+
+#[test]
+fn nfr1_cache_beyond_the_working_set_goes_back_without_host_pressure_in_bounded_steps() {
+    use dsa_guest_channeld::reclaim::TRIM_SIZE_PROPERTY;
+    assert!(TRIM_SIZE_PROPERTY.starts_with("vendor."));
+    let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
+    reclaimer.host_short(false);
+    // One app open, 1100 MiB of page cache, the host not short: the cache is trimmed anyway,
+    // at most 128 MiB at a time.
+    let busy = memory(1200, 1100);
+    assert_eq!(
+        reclaimer.decide_under(secs(0), 1, &busy, false),
+        Some(Reason::Gradual)
+    );
+    assert_eq!(reclaimer.trim_mib(), 128);
+    assert_eq!(reclaimer.decide_under(secs(30), 1, &busy, false), None);
+    assert_eq!(
+        reclaimer.decide_under(secs(45), 1, &busy, false),
+        Some(Reason::Gradual)
+    );
+    // Just above the target: only the excess, in whole MiB.
+    assert_eq!(
+        reclaimer.decide_under(secs(90), 1, &memory(3000, 256 + 80), false),
+        Some(Reason::Gradual)
+    );
+    assert_eq!(reclaimer.trim_mib(), 80);
+    // At the target: nothing.
+    assert_eq!(
+        reclaimer.decide_under(secs(135), 1, &memory(3000, 300), false),
+        None
+    );
+}
+
+#[test]
+fn nfr1_an_idle_guest_keeps_its_cache_at_the_working_set_between_full_reclaims() {
+    let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
+    reclaimer.decide_under(secs(0), 0, &memory(3000, 400), false);
+    assert_eq!(
+        reclaimer.decide_under(secs(60), 0, &memory(3000, 400), false),
+        Some(Reason::Idle)
+    );
+    // Background work reads files again long before the next full reclaim is due.
+    assert_eq!(
+        reclaimer.decide_under(secs(120), 0, &memory(3000, 600), false),
+        Some(Reason::Gradual)
+    );
+}
+
+#[test]
+fn nfr1_a_trim_waits_until_the_open_tasks_have_settled() {
+    let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
+    let cache = memory(2600, 600);
+    assert_eq!(
+        reclaimer.decide_under(secs(0), 0, &memory(3500, 100), false),
+        None
+    );
+    // An app opens: it is reading its files, so nothing is trimmed yet.
+    assert_eq!(reclaimer.decide_under(secs(10), 1, &cache, false), None);
+    assert_eq!(reclaimer.decide_under(secs(30), 1, &cache, false), None);
+    assert_eq!(
+        reclaimer.decide_under(secs(40), 1, &cache, false),
+        Some(Reason::Gradual)
+    );
+}
+
+#[test]
+fn nfr1_file_refaults_raise_the_working_set_target_and_hold_the_trim() {
+    let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
+    let cache = memory(2600, 600);
+    reclaimer.refaults(0);
+    assert_eq!(reclaimer.working_set_target_kb(), 256 * MIB);
+    // 40 MiB of evicted cache came back: an app still uses it.
+    reclaimer.refaults(40 * MIB);
+    assert_eq!(reclaimer.working_set_target_kb(), 320 * MIB);
+    assert_eq!(reclaimer.decide_under(secs(0), 1, &cache, false), None);
+    // Quiet again: the target falls back and the trim resumes.
+    reclaimer.refaults(41 * MIB);
+    assert_eq!(reclaimer.working_set_target_kb(), 256 * MIB);
+    assert_eq!(
+        reclaimer.decide_under(secs(30), 1, &cache, false),
+        Some(Reason::Gradual)
+    );
+}
+
+#[test]
+fn nfr1_quiet_refaults_let_the_target_fall_back_but_never_below_its_floor() {
+    let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
+    reclaimer.refaults(0);
+    for step in 1..=20 {
+        reclaimer.refaults(step * 20 * MIB);
+    }
+    assert_eq!(reclaimer.working_set_target_kb(), 1024 * MIB);
+    for _ in 0..30 {
+        reclaimer.refaults(400 * MIB);
+    }
+    assert_eq!(reclaimer.working_set_target_kb(), 256 * MIB);
+}
+
+#[test]
+fn nfr1_vmstat_file_refaults_are_read_in_kib() {
+    use dsa_guest_channeld::reclaim::file_refaults_kb;
+    let vmstat = "nr_free_pages 1000\nworkingset_refault_anon 7\nworkingset_refault_file 2560\n";
+    assert_eq!(file_refaults_kb(vmstat, 4), Some(10240));
+    assert_eq!(file_refaults_kb("nr_free_pages 1\n", 4), None);
+}
