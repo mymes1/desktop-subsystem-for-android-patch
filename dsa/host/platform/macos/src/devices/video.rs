@@ -72,7 +72,11 @@ pub fn nal_units(data: &[u8]) -> Vec<&[u8]> {
         if let Some(units) = length_prefixed_units(data) {
             return units;
         }
-        return if data.is_empty() { Vec::new() } else { vec![data] };
+        return if data.is_empty() {
+            Vec::new()
+        } else {
+            vec![data]
+        };
     }
     let mut units = Vec::new();
     let mut start = None;
@@ -182,9 +186,7 @@ mod toolbox {
     use std::ffi::c_void;
     use std::sync::Mutex;
 
-    use dsa_host_core::video::{
-        Codec, CodecSupport, Packet, Picture, VideoDecoder, VideoDecoders,
-    };
+    use dsa_host_core::video::{Codec, CodecSupport, Packet, Picture, VideoDecoder, VideoDecoders};
 
     use super::{length_prefixed, nal_units, ParameterSets};
     use crate::devices::camera::{pack_nv12, Plane};
@@ -721,7 +723,10 @@ mod toolbox {
             _height: u32,
         ) -> Result<Box<dyn VideoDecoder>, String> {
             if !matches!(codec, Codec::H264 | Codec::Hevc) {
-                return Err(format!("the Mac does not decode {} for Android", codec.name()));
+                return Err(format!(
+                    "the Mac does not decode {} for Android",
+                    codec.name()
+                ));
             }
             Ok(Box::new(ToolboxDecoder {
                 codec,

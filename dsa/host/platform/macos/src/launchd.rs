@@ -279,7 +279,11 @@ pub fn uninstall(home: &Path, uid: u32) -> Result<(), String> {
     }
     let _ = launchctl(&["bootout".to_string(), wm_service_target(uid)]);
     let _ = launchctl(&["bootout".to_string(), devices_service_target(uid)]);
-    for path in [plist_path(home), wm_plist_path(home), devices_plist_path(home)] {
+    for path in [
+        plist_path(home),
+        wm_plist_path(home),
+        devices_plist_path(home),
+    ] {
         match std::fs::remove_file(&path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

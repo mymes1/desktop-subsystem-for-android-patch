@@ -189,7 +189,11 @@ mod tests {
         let listener = DeviceSocketListener::bind(&port_socket(&dir, 5572)).unwrap();
         let mode = fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o700);
-        let mode = fs::symlink_metadata(listener.path()).unwrap().permissions().mode() & 0o777;
+        let mode = fs::symlink_metadata(listener.path())
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
         assert_eq!(mode, 0o600);
         drop(listener);
         let _ = fs::remove_dir_all(dir);

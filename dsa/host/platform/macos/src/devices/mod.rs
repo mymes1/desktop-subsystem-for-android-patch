@@ -169,8 +169,7 @@ mod lender {
             }));
         }
 
-        if let Some(listener) =
-            listen(user, dsa_host_core::camera::CAMERA_PORT, "the cameras", log)
+        if let Some(listener) = listen(user, dsa_host_core::camera::CAMERA_PORT, "the cameras", log)
         {
             let (stop, log) = (Arc::clone(stop), Arc::clone(log));
             let cameras = Arc::new(super::camera::MacCameras::new());
@@ -179,9 +178,12 @@ mod lender {
             }));
         }
 
-        if let Some(listener) =
-            listen(user, dsa_host_core::sensors::SENSOR_PORT, "the sensors", log)
-        {
+        if let Some(listener) = listen(
+            user,
+            dsa_host_core::sensors::SENSOR_PORT,
+            "the sensors",
+            log,
+        ) {
             let (stop, log) = (Arc::clone(stop), Arc::clone(log));
             let sensors = Arc::new(super::sensors::MacSensors);
             threads.extend(spawn("dsa-sensors", &Arc::clone(&log), move || {
