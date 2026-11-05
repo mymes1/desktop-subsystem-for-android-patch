@@ -874,6 +874,19 @@ message Task {
   // The status bar color the app set, as 0xAARRGGBB; 0 when none. Used only while the
   // appearance is unspecified.
   fixed32 status_bar_color = 12;
+  // The orientation the task's top activity is locked to, if any.
+  TaskOrientation orientation = 20;
+  // Whether the task's app asked to fill the screen.
+  bool fullscreen = 21;
+  // Whether the task's app went into picture-in-picture.
+  bool picture_in_picture = 22;
+}
+
+// The orientation a task's top activity asks for.
+enum TaskOrientation {
+  TASK_ORIENTATION_UNSPECIFIED = 0;
+  TASK_ORIENTATION_PORTRAIT = 1;
+  TASK_ORIENTATION_LANDSCAPE = 2;
 }
 
 // Whether an app asked for dark status bar icons (a light status bar) or light ones.
@@ -1468,6 +1481,115 @@ message Error {
 
 // A request from the client. The service answers each with one Response carrying the same
 // id, in the order the requests arrived.
+// Gives the caller's Android the system settings of the caller's host session: its time zone,
+// languages, regional format, app theme and accent color. The caller's window manager sends
+// them when it starts and whenever the user changes one; the Android takes them at once when
+// it runs, and when it next starts otherwise. The service answers Done.
+message SetSystemSettings {
+  SystemSettings settings = 1;
+}
+
+// The system settings of a user's host session, which their Android follows.
+message SystemSettings {
+  // The time zone as an IANA name, such as "Asia/Seoul"; empty when unknown.
+  string time_zone = 1;
+  // The display languages as BCP 47 tags, preferred first.
+  repeated string locales = 2;
+  // The locale dates, times and numbers are formatted by; empty when it is the first language.
+  string regional_format = 3;
+  bool time_24_hour = 4;
+  // 1 is Monday through 7, Sunday; 0 when unknown.
+  uint32 first_day_of_week = 5;
+  // Whether apps use the dark theme.
+  bool dark_mode = 6;
+  // The accent color as 0xAARRGGBB; 0 when there is none.
+  fixed32 accent_color = 7;
+}
+
+// Turns the connection into the caller's game controllers: after the answer (Done), the client
+// sends a GamepadEvent each time a controller is connected, disconnected or changes state, and
+// the service sends a GamepadRumble each time an app in the caller's Android plays a rumble
+// effect on one. Neither is answered. The service keeps the controllers that are connected and
+// gives them to the Android each time it is ready, so a controller connected before Android
+// started is there too. When the connection ends, its controllers are disconnected.
+message WatchGamepads {}
+
+// A controller changed, on a connection that carries the controllers (WatchGamepads).
+message GamepadEvent {
+  oneof event {
+    GamepadConnected connected = 1;
+    GamepadDisconnected disconnected = 2;
+    GamepadState state = 3;
+  }
+}
+
+// A controller was connected.
+message GamepadConnected {
+  uint32 pad_id = 1;
+  string name = 2;
+  uint32 vendor_id = 3;
+  uint32 product_id = 4;
+  bool rumble = 5;
+}
+
+// A controller was disconnected.
+message GamepadDisconnected {
+  uint32 pad_id = 1;
+}
+
+// The state of a controller's buttons (the bits of the control protocol's GamepadButton),
+// sticks (-32768 to 32767) and triggers (0 to 255).
+message GamepadState {
+  uint32 pad_id = 1;
+  uint32 buttons = 2;
+  sint32 left_x = 3;
+  sint32 left_y = 4;
+  sint32 right_x = 5;
+  sint32 right_y = 6;
+  uint32 left_trigger = 7;
+  uint32 right_trigger = 8;
+}
+
+// An app plays a rumble effect on a controller (both strengths 0 stops it), on a connection
+// that carries the controllers.
+message GamepadRumble {
+  uint32 pad_id = 1;
+  // From 0 to 65535.
+  uint32 strong = 2;
+  uint32 weak = 3;
+  // How long it lasts, in milliseconds; 0 until the next one.
+  uint32 duration_ms = 4;
+}
+
+// The user's window settings for one app.
+message AppWindowSettings {
+  string package_name = 1;
+  // Whether the app's windows keep the size they open at: the user cannot resize or maximise
+  // them. Off by default.
+  bool fixed_size = 2;
+  // The size the app's windows open at, in density-independent pixels. 0 by 0, the default,
+  // opens them at the size Android gives the task.
+  uint32 start_width_dp = 3;
+  uint32 start_height_dp = 4;
+}
+
+// Lists the caller's window settings for every app that has any. The service answers
+// AppWindowSettingsList.
+message ListAppWindowSettings {}
+
+// Replaces the caller's window settings for one app; the defaults (resizable, opening at
+// Android's size) remove the app's entry. The service answers AppWindowSettingsList with
+// every app's settings as they are now, or ERROR_CODE_INVALID_SETTING for a package name or
+// size it cannot take. Windows that open from now on follow the new settings.
+message SetAppWindowSettings {
+  AppWindowSettings app = 1;
+}
+
+// The caller's window settings for every app that has any, by package name.
+message AppWindowSettingsList {
+  repeated AppWindowSettings apps = 1;
+}
+
 message Request {
   uint64 id = 1;
   oneof body {
@@ -1522,6 +1644,10 @@ message Request {
     WatchBackgroundApps watch_background_apps = 42;
     ActOnBackgroundApp act_on_background_app = 43;
     ControlMedia control_media = 44;
+    SetSystemSettings set_system_settings = 300;
+    WatchGamepads watch_gamepads = 301;
+    ListAppWindowSettings list_app_window_settings = 302;
+    SetAppWindowSettings set_app_window_settings = 303;
     GetAndroidFiles get_android_files = 90;
     ResetData reset_data = 310;
   }
@@ -1548,6 +1674,7 @@ message Response {
     DeviceIdentityReport device_identity = 80;
     UninstallResult uninstall_result = 17;
     BackgroundApps background_apps = 18;
+    AppWindowSettingsList app_window_settings = 300;
     AndroidFilesLocation android_files = 90;
   }
 }
@@ -1584,5 +1711,7 @@ message Envelope {
     LocationStatus location_status = 201;
     LocationFix location_fix = 202;
     BackgroundAppEvent background_app_event = 21;
+    GamepadEvent gamepad_event = 300;
+    GamepadRumble gamepad_rumble = 301;
   }
 }

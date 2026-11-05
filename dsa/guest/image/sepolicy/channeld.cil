@@ -122,3 +122,7 @@
 ; boot (arm-translation.cil).
 (allow dsa_channeld vendor_data_file (dir (search read open getattr write add_name remove_name)))
 (allow dsa_channeld vendor_data_file (file (create read write open getattr setattr unlink rename)))
+
+; The host's game controllers: the daemon makes each one a gamepad on /dev/uinput, reports its
+; buttons, sticks and triggers there, and reads the rumble effects apps play on it.
+(allow dsa_channeld uhid_device (chr_file (ioctl read write open getattr)))

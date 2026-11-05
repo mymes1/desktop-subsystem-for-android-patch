@@ -21,11 +21,19 @@
 //! dsa widgets [list | add <provider> | remove <id> | watch]
 //! dsa apps [list | info <package> | uninstall <package> | settings [<package>]]
 //! dsa background [list | open <package> | stop <package>]
+//! dsa app-window [<package> [--fixed-size on|off] [--start-size <width>x<height>|auto] | <package> reset]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
 //! dsa arm-translation [status | install <folder> | remove]
 //! dsa reset-data --yes
 //! ```
+//!
+//! `dsa app-window` lists the user's window settings for each app that has any; with a package
+//! it shows that app's, and with `--fixed-size` or `--start-size` changes them: a fixed-size
+//! app's windows cannot be resized or maximized, and an app with a start size opens its windows
+//! at that size, in density-independent pixels. `reset` puts the app back to the defaults.
+//! With `--json` it prints `apps`, each with `package`, `fixed_size` and `start_size` (null
+//! for none, else `[width, height]`).
 //!
 //! It acts on the Android of the user who runs it: the service learns that user from the
 //! operating system, so there is no option to name another one.
@@ -221,6 +229,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::apk::{ApkFile, InstallKind, InstallOutcome, InstalledPackage};
+use dsa_host_core::app_windows::AppWindowSettings;
 use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer};
 use dsa_host_core::arm_translation;
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
@@ -244,6 +253,7 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      widgets [list | add <provider> | remove <id> | watch] | \
      apps [list | info <package> | uninstall <package> | settings [<package>]] | \
      background [list | open <package> | stop <package>] | \
+     app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | remove] | files [open]> \
      arm-translation [status | install <folder> | remove] | reset-data --yes> \
@@ -302,12 +312,48 @@ pub enum Command {
     /// List, describe or uninstall the installed apps, or open their settings in Android
     /// ([`Invocation::apps`]).
     Apps,
+    /// Show or change the window settings of apps ([`Invocation::app_window`]).
+    AppWindow,
     /// Say where the host's file manager shows Android's shared storage.
     Files,
     /// Open Android's shared storage in the host's file manager.
     FilesOpen,
     /// Erase the user's Android data, once [`Invocation::yes`] confirms it.
     ResetData,
+}
+
+/// What `dsa app-window` does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppWindowAction {
+    /// List every app's settings.
+    List,
+    /// Show one app's.
+    Show(String),
+    /// Change one app's: whether its windows keep their size, and the size they open at
+    /// (`Some(None)` for the size Android gives the task).
+    Set {
+        package: String,
+        fixed_size: Option<bool>,
+        start_size: Option<Option<(u32, u32)>>,
+    },
+    /// Put one app's back to the defaults.
+    Reset(String),
+}
+
+/// A start size as `dsa app-window --start-size` takes it: `auto`, or `<width>x<height>` in
+/// density-independent pixels.
+pub fn parse_start_size(value: &str) -> Result<Option<(u32, u32)>, String> {
+    let lower = value.trim().to_ascii_lowercase();
+    if lower == "auto" {
+        return Ok(None);
+    }
+    let size = lower.split_once('x').and_then(|(width, height)| {
+        Some((width.trim().parse().ok()?, height.trim().parse().ok()?))
+    });
+    match size {
+        Some(size) => Ok(Some(size)),
+        None => Err(format!("--start-size is auto or a size such as 400x700, not {value:?}")),
+    }
 }
 
 /// What `dsa apps` does.
@@ -562,6 +608,8 @@ pub struct Invocation {
     pub apps: Option<AppsAction>,
     /// What to do with the apps that run in the background, for `dsa background`.
     pub background: Option<BackgroundAction>,
+    /// What to do with the window settings of apps, for `dsa app-window`.
+    pub app_window: Option<AppWindowAction>,
     /// Print the answer as JSON.
     pub json: bool,
     /// Print each step of `dsa install` as it happens.
@@ -602,6 +650,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut widgets = None;
     let mut apps = None;
     let mut background = None;
+    let mut app_window: Option<AppWindowAction> = None;
     let mut json = false;
     let mut yes = false;
     let mut progress = false;
@@ -615,6 +664,51 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "logcat" if command.is_none() => command = Some(Command::Logcat),
+            "app-window" if command.is_none() => command = Some(Command::AppWindow),
+            name if command == Some(Command::AppWindow)
+                && app_window.is_none()
+                && !name.starts_with('-') =>
+            {
+                if !is_package_name(name) {
+                    return Err(format!(
+                        "{name:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                app_window = Some(AppWindowAction::Show(name.to_string()));
+            }
+            "reset" if command == Some(Command::AppWindow) => match app_window.take() {
+                Some(AppWindowAction::Show(package)) => {
+                    app_window = Some(AppWindowAction::Reset(package));
+                }
+                _ => return Err("dsa app-window reset follows the app's package".into()),
+            },
+            flag @ ("--fixed-size" | "--start-size") if command == Some(Command::AppWindow) => {
+                let value = args.next().ok_or_else(|| format!("{flag} needs a value"))?;
+                let (package, mut fixed_size, mut start_size) = match app_window.take() {
+                    Some(AppWindowAction::Show(package)) => (package, None, None),
+                    Some(AppWindowAction::Set {
+                        package,
+                        fixed_size,
+                        start_size,
+                    }) => (package, fixed_size, start_size),
+                    _ => return Err(format!("dsa app-window {flag} follows the app's package")),
+                };
+                if flag == "--fixed-size" {
+                    fixed_size = Some(match value.to_ascii_lowercase().as_str() {
+                        "on" | "true" | "yes" | "1" => true,
+                        "off" | "false" | "no" | "0" => false,
+                        _ => return Err(format!("--fixed-size is on or off, not {value:?}")),
+                    });
+                } else {
+                    start_size = Some(parse_start_size(value)?);
+                }
+                app_window = Some(AppWindowAction::Set {
+                    package,
+                    fixed_size,
+                    start_size,
+                });
+            }
             "apps" if command.is_none() => command = Some(Command::Apps),
             "files" if command.is_none() => command = Some(Command::Files),
             "open" if command == Some(Command::Files) => command = Some(Command::FilesOpen),
@@ -858,6 +952,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let command = command.ok_or(USAGE)?;
     let widgets = (command == Command::Widgets).then(|| widgets.unwrap_or(WidgetAction::List));
     let apps = (command == Command::Apps).then(|| apps.unwrap_or(AppsAction::List));
+    let app_window =
+        (command == Command::AppWindow).then(|| app_window.unwrap_or(AppWindowAction::List));
     let background =
         (command == Command::Background).then(|| background.unwrap_or(BackgroundAction::List));
     if command == Command::Install && file.is_none() {
@@ -929,6 +1025,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
         widgets,
         apps,
         background,
+        app_window,
         json,
         progress,
         log_filter,
@@ -1366,6 +1463,86 @@ fn apps(
 
 /// `dsa background`: lists the apps that run in the background, or opens or stops one. It
 /// never starts Android: an app runs in the background only in an Android that runs.
+/// What `dsa app-window` prints of one app's window settings.
+fn app_window_json(app: &AppWindowSettings) -> Value {
+    json!({
+        "package": app.package_name,
+        "fixed_size": app.fixed_size,
+        "start_size": app.start_size_dp.map(|(width, height)| json!([width, height])),
+    })
+}
+
+fn describe_app_window(app: &AppWindowSettings) -> String {
+    let size = match app.start_size_dp {
+        Some((width, height)) => format!("opens at {width} x {height} dp"),
+        None => "opens at the size Android gives it".to_string(),
+    };
+    let resizable = if app.fixed_size {
+        "fixed size"
+    } else {
+        "resizable"
+    };
+    format!("{}: {resizable}, {size}", app.package_name)
+}
+
+fn app_window(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
+    let action = invocation
+        .app_window
+        .clone()
+        .unwrap_or(AppWindowAction::List);
+    let apps = client.app_window_settings().map_err(|e| e.to_string())?;
+    let defaults = |package: &str| AppWindowSettings {
+        package_name: package.to_string(),
+        ..AppWindowSettings::default()
+    };
+    let shown: Vec<AppWindowSettings> = match action {
+        AppWindowAction::List => apps,
+        AppWindowAction::Show(package) => vec![apps
+            .into_iter()
+            .find(|app| app.package_name == package)
+            .unwrap_or_else(|| defaults(&package))],
+        AppWindowAction::Reset(package) => {
+            client
+                .set_app_window_settings(&defaults(&package))
+                .map_err(|e| e.to_string())?;
+            vec![defaults(&package)]
+        }
+        AppWindowAction::Set {
+            package,
+            fixed_size,
+            start_size,
+        } => {
+            let current = apps
+                .into_iter()
+                .find(|app| app.package_name == package)
+                .unwrap_or_else(|| defaults(&package));
+            let wanted = AppWindowSettings {
+                fixed_size: fixed_size.unwrap_or(current.fixed_size),
+                start_size_dp: start_size.unwrap_or(current.start_size_dp),
+                ..current
+            };
+            let now = client
+                .set_app_window_settings(&wanted)
+                .map_err(|e| e.to_string())?;
+            vec![now
+                .into_iter()
+                .find(|app| app.package_name == package)
+                .unwrap_or_else(|| defaults(&package))]
+        }
+    };
+    Ok(if invocation.json {
+        json!({ "apps": shown.iter().map(app_window_json).collect::<Vec<_>>() }).to_string()
+    } else if shown.is_empty() {
+        "No app has window settings of its own".to_string()
+    } else {
+        shown
+            .iter()
+            .map(describe_app_window)
+            .collect::<Vec<_>>()
+            .join("\n")
+    })
+}
+
 fn background(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
     match invocation
         .background
@@ -2764,6 +2941,7 @@ pub fn run_with_starter(
         Command::Widgets => return widgets(invocation, client, connector),
         Command::Apps => return apps(invocation, client, connector),
         Command::Background => return background(invocation, client),
+        Command::AppWindow => return app_window(invocation, client),
         Command::Open | Command::Share => {
             return open_file(invocation, client, connector);
         }

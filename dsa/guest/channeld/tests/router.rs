@@ -637,3 +637,58 @@ fn fr26_the_host_hears_no_location_is_wanted_when_the_gnss_hal_dies() {
     router.host_connected();
     assert!(apart_from_boot(&host).is_empty());
 }
+
+#[test]
+fn fr30_the_hosts_controllers_stop_at_the_daemon_and_the_system_settings_reach_the_agent() {
+    use dsa_guest_channeld::gamepad::{GamepadDevices, InputEvent, PadMaker, VirtualPad};
+    use dsa_protocol::control::{GamepadConnected, GamepadState, SystemSettings};
+
+    #[derive(Clone, Default)]
+    struct Pads(Arc<Mutex<Vec<Vec<InputEvent>>>>);
+    struct Pad(Pads);
+    impl VirtualPad for Pad {
+        fn write(&mut self, events: &[InputEvent]) -> Result<(), String> {
+            (self.0).0.lock().unwrap().push(events.to_vec());
+            Ok(())
+        }
+    }
+    impl PadMaker for Pads {
+        fn make(
+            &self,
+            _: &GamepadConnected,
+            _: mpsc::Sender<Vec<u8>>,
+        ) -> Result<Box<dyn VirtualPad>, String> {
+            Ok(Box::new(Pad(self.clone())))
+        }
+    }
+
+    let (router, _host) = router();
+    let (to_host, _) = mpsc::channel();
+    let pads = Pads::default();
+    let router = router.on_gamepads(Arc::new(GamepadDevices::new(
+        Box::new(pads.clone()),
+        to_host,
+    )));
+    let agent = Arc::new(Recorder::default());
+    router.subscribe(AGENT, agent.clone());
+    router.from_host(&frame(Body::GamepadConnected(GamepadConnected {
+        pad_id: 0,
+        name: "Xbox Controller".into(),
+        vendor_id: 0x045e,
+        product_id: 0x028e,
+        rumble: true,
+    })));
+    router.from_host(&frame(Body::GamepadState(GamepadState {
+        pad_id: 0,
+        buttons: 1,
+        ..GamepadState::default()
+    })));
+    let settings = frame(Body::SystemSettings(SystemSettings {
+        time_zone: "Asia/Seoul".into(),
+        dark_mode: true,
+        ..SystemSettings::default()
+    }));
+    router.from_host(&settings);
+    assert_eq!(pads.0.lock().unwrap().len(), 1);
+    assert_eq!(agent.frames(), vec![settings]);
+}

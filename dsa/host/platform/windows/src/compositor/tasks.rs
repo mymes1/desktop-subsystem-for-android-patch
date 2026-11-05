@@ -287,3 +287,53 @@ pub fn serve_input(
         }
     }
 }
+
+/// How often the window manager reads the user's window settings for apps, so a change made
+/// in the settings app applies to the next window that opens.
+const APP_WINDOWS_POLL: Duration = Duration::from_secs(2);
+
+/// Reads the user's window settings for apps until `stop` is set, handing them to `deliver`
+/// when they start and whenever they change. It ends early when `deliver` returns false.
+pub fn follow_app_windows(
+    mut connector: Box<dyn Connector>,
+    mut deliver: impl FnMut(Vec<dsa_host_core::app_windows::AppWindowSettings>) -> bool,
+    stop: Arc<AtomicBool>,
+    logger: Option<Arc<CompositorLogger>>,
+) {
+    let mut client: Option<HostApiClient> = None;
+    let mut last = None;
+    let mut last_error = String::new();
+    while !stop.load(Ordering::Relaxed) {
+        if client.is_none() {
+            client = HostApiClient::connect(&mut *connector, BUILD, ANSWER).ok();
+        }
+        if let Some(connected) = client.as_mut() {
+            match connected.app_window_settings() {
+                Ok(apps) => {
+                    last_error.clear();
+                    if last.as_ref() != Some(&apps) {
+                        last = Some(apps.clone());
+                        if !deliver(apps) {
+                            return;
+                        }
+                    }
+                }
+                Err(error) => {
+                    let error = error.to_string();
+                    if error != last_error {
+                        note(
+                            logger.as_deref(),
+                            &format!("cannot read the window settings of apps: {error}"),
+                        );
+                        last_error = error;
+                    }
+                    client = None;
+                }
+            }
+        }
+        let deadline = Instant::now() + APP_WINDOWS_POLL;
+        while !stop.load(Ordering::Relaxed) && Instant::now() < deadline {
+            thread::sleep(POLL);
+        }
+    }
+}

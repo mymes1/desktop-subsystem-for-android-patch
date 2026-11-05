@@ -58,6 +58,22 @@ pub struct Task {
     pub status_bar: StatusBarAppearance,
     /// The status bar color the app set, as 0xAARRGGBB; 0 when none.
     pub status_bar_color: u32,
+    /// The orientation the task's top activity is locked to, if any.
+    pub orientation: TaskOrientation,
+    /// Whether the task's app asked to fill the screen.
+    pub fullscreen: bool,
+    /// Whether the task's app went into picture-in-picture.
+    pub picture_in_picture: bool,
+}
+
+/// The orientation a task's top activity asks for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum TaskOrientation {
+    /// Not locked, or unknown.
+    #[default]
+    Unspecified,
+    Portrait,
+    Landscape,
 }
 
 /// What an app told the system about its status bar's icons.

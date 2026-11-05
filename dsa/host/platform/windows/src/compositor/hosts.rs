@@ -81,6 +81,17 @@ pub enum ManagerEvent {
     Report { host: HostId, report: FromHost },
     /// A window host's connection ended.
     Gone { host: HostId },
+    /// The user's window settings for each app, as the service has them now.
+    AppWindows(Vec<dsa_host_core::app_windows::AppWindowSettings>),
+}
+
+/// How many task windows are the active window now: the game controllers reach Android only
+/// while one is, as they reach any program only while it is in front.
+static FOCUSED_WINDOWS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Whether a task window is the active window.
+pub fn any_window_focused() -> bool {
+    FOCUSED_WINDOWS.load(Ordering::Relaxed) > 0
 }
 
 /// Starts each app's window program.
@@ -527,6 +538,8 @@ struct Manager {
     links: HashMap<HostId, Arc<HostLink>>,
     remotes: HashMap<i32, Arc<RemoteWindow>>,
     shown: ShownWindows,
+    /// The task windows that are the active window.
+    focused: std::collections::BTreeSet<i32>,
     setup: ManagerSetup,
 }
 
@@ -539,6 +552,7 @@ pub fn manage(setup: ManagerSetup) {
         links: HashMap::new(),
         remotes: HashMap::new(),
         shown: ShownWindows::new(),
+        focused: std::collections::BTreeSet::new(),
         setup,
     };
     let mut last_tick = Instant::now();
@@ -623,6 +637,10 @@ impl Manager {
                     self.reported(report, now);
                 }
             }
+            ManagerEvent::AppWindows(apps) => {
+                let changes = self.windows.set_app_windows(&apps);
+                self.change(changes, now);
+            }
             ManagerEvent::Gone { host } => {
                 self.links.remove(&host);
                 for task_id in self.hosts.detached(host) {
@@ -671,7 +689,14 @@ impl Manager {
                 let requests = self.windows.window_caption(task_id, height);
                 self.request(requests);
             }
-            FromHost::Focus { .. } => {}
+            FromHost::Focus { task_id, focused } => {
+                if focused {
+                    self.focused.insert(task_id);
+                } else {
+                    self.focused.remove(&task_id);
+                }
+                FOCUSED_WINDOWS.store(self.focused.len(), Ordering::Relaxed);
+            }
             FromHost::Shown { task_id, shown } => self.shown.reported(task_id, shown),
         }
     }
@@ -757,12 +782,17 @@ impl Manager {
                                 }
                             }
                         }
-                        ToHost::Close { task_id } => self.drop_remote(*task_id),
+                        ToHost::Close { task_id } => {
+                            self.focused.remove(task_id);
+                            FOCUSED_WINDOWS.store(self.focused.len(), Ordering::Relaxed);
+                            self.drop_remote(*task_id)
+                        }
                         ToHost::Retitle { .. }
                         | ToHost::Resize { .. }
                         | ToHost::TaskSize { .. }
                         | ToHost::ImeCursor { .. }
-                        | ToHost::CaptionTone { .. } => {}
+                        | ToHost::CaptionTone { .. }
+                        | ToHost::Mode { .. } => {}
                     }
                     link.send(to_wire(&message));
                 }
