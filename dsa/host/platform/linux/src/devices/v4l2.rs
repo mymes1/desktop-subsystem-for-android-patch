@@ -33,7 +33,7 @@ pub const CID_CAMERA_SENSOR_ROTATION: u32 = 0x009a_0923;
 
 /// A pixel format's four characters as V4L2 numbers them.
 pub const fn fourcc(code: &[u8; 4]) -> u32 {
-    (code[0] as u32) | (code[1] as u32) << 8 | (code[2] as u32) << 16 | (code[3] as u32) << 24
+    (code[0] as u32) | ((code[1] as u32) << 8) | ((code[2] as u32) << 16) | ((code[3] as u32) << 24)
 }
 
 pub const PIX_YUYV: u32 = fourcc(b"YUYV");

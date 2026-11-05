@@ -320,7 +320,7 @@ pub fn accent_from_rgb(channels: &[f64]) -> Option<u32> {
         return None;
     }
     let byte = |c: f64| (c * 255.0).round() as u32;
-    Some(0xff00_0000 | byte(r) << 16 | byte(g) << 8 | byte(b))
+    Some(0xff00_0000 | (byte(r) << 16) | (byte(g) << 8) | byte(b))
 }
 
 #[cfg(test)]
