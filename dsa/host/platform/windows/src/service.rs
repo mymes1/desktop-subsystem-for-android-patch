@@ -931,9 +931,11 @@ where
         .with_settings(Arc::clone(&store), facts)
         .with_host_memory(Arc::clone(&host_memory))
         // The network of each user's running Android: its mode, addresses and DNS servers.
-        .with_network(Arc::new(|sid: &str, _: &dsa_host_core::settings::Settings| {
-            crate::hcn::shared_status(&user_network(sid))
-        }))
+        .with_network(Arc::new(
+            |sid: &str, _: &dsa_host_core::settings::Settings| {
+                crate::hcn::shared_status(&user_network(sid))
+            },
+        ))
         .with_widget_placements(Arc::new(dsa_host_core::widgets::FileWidgetPlacements::new(
             config.settings_dir(),
         )))

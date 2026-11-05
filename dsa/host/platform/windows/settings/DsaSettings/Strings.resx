@@ -1299,6 +1299,7 @@
   </data>
   <data name="NetworkRestartBar.Message" xml:space="preserve">
     <value>The change applies the next time Android starts. Stop Android on the General page, then open an app.</value>
+  </data>
   <data name="RunModeHeader.Text" xml:space="preserve">
     <value>When nothing uses Android</value>
   </data>

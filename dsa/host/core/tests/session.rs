@@ -4460,11 +4460,7 @@ fn fr31_a_background_app_or_a_widget_keeps_the_session_running() {
     wait_until("the widget is known", || !session.widgets().is_empty());
     session.set_run_mode(as_needed(RUN_MODE_WAIT));
     thread::sleep(RUN_MODE_WAIT * 3);
-    assert_eq!(
-        session.state(),
-        SessionState::Active,
-        "a widget keeps it"
-    );
+    assert_eq!(session.state(), SessionState::Active, "a widget keeps it");
 }
 
 #[test]

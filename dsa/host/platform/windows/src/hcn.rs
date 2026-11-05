@@ -31,9 +31,9 @@ use crate::guid::Guid;
 use crate::network::{
     advanced_adapter, advanced_problem, choose_nat_subnet, endpoint_document, endpoint_facts,
     endpoint_name, guid_from, host_has_ipv6, ids_from_enumeration, mac_bytes, name_query,
-    nat_ipv6_subnet, nat_network_document, network_facts, network_name, reusable,
-    subnets_in_use, transparent_network_document, EndpointFacts, HostAdapter, Ipv4Subnet,
-    NetworkMode, NetworkStatusFacts,
+    nat_ipv6_subnet, nat_network_document, network_facts, network_name, reusable, subnets_in_use,
+    transparent_network_document, EndpointFacts, HostAdapter, Ipv4Subnet, NetworkMode,
+    NetworkStatusFacts,
 };
 use crate::vm::NetworkAdapter;
 
@@ -216,7 +216,13 @@ fn create_endpoint(
     let (mut handle, mut record) = (std::ptr::null_mut(), std::ptr::null_mut());
     // SAFETY: a live network handle, GUID, NUL-terminated document and out pointers.
     let hresult = unsafe {
-        (api.create_endpoint)(network, guid_ptr(id), settings.as_ptr(), &mut handle, &mut record)
+        (api.create_endpoint)(
+            network,
+            guid_ptr(id),
+            settings.as_ptr(),
+            &mut handle,
+            &mut record,
+        )
     };
     check("HcnCreateEndpoint", hresult, record)?;
     let query = wide("");
@@ -228,8 +234,9 @@ fn create_endpoint(
     // SAFETY: closed once; the endpoint stays until it is deleted.
     unsafe { (api.close_endpoint)(handle) };
     check("HcnQueryEndpointProperties", hresult, record)?;
-    endpoint_facts(&properties)
-        .ok_or_else(|| format!("HCN described the new endpoint in a way DSA cannot read: {properties}"))
+    endpoint_facts(&properties).ok_or_else(|| {
+        format!("HCN described the new endpoint in a way DSA cannot read: {properties}")
+    })
 }
 
 /// The network a VM's adapter is connected to, made for that VM.
@@ -292,13 +299,18 @@ impl VmNetwork {
                 eprintln!("network: using the network {name} left from before");
                 network_id = Some(existing);
             } else if let Err(why) = delete(api.delete_network, "HcnDeleteNetwork", &existing) {
-                eprintln!("network: the network {name} left from before could not be removed: {why}");
+                eprintln!(
+                    "network: the network {name} left from before could not be removed: {why}"
+                );
             }
         }
         let network_id = match network_id {
             Some(id) => id,
             None => {
-                let id = guid_from(&format!("{name} network {:?}", std::time::SystemTime::now()));
+                let id = guid_from(&format!(
+                    "{name} network {:?}",
+                    std::time::SystemTime::now()
+                ));
                 let made = match (mode, host_adapter.as_deref()) {
                     (NetworkMode::Advanced, Some(adapter)) => {
                         let document = transparent_network_document(&name, adapter).to_string();
@@ -320,7 +332,8 @@ impl VmNetwork {
                             mode = NetworkMode::Nat;
                             host_adapter = None;
                         }
-                        let (handle, ipv6_problem) = create_nat(api, &id, vm_name, &name, &adapters)?;
+                        let (handle, ipv6_problem) =
+                            create_nat(api, &id, vm_name, &name, &adapters)?;
                         // SAFETY: closed once.
                         unsafe { (api.close_network)(handle) };
                         if problem.is_none() {
@@ -409,10 +422,16 @@ impl VmNetwork {
     pub fn remove(self) {
         let Ok(api) = api() else { return };
         if let Err(why) = delete(api.delete_endpoint, "HcnDeleteEndpoint", &self.endpoint_id) {
-            eprintln!("network: {}'s endpoint could not be removed: {why}", self.vm_name);
+            eprintln!(
+                "network: {}'s endpoint could not be removed: {why}",
+                self.vm_name
+            );
         }
         if let Err(why) = delete(api.delete_network, "HcnDeleteNetwork", &self.network_id) {
-            eprintln!("network: {}'s network could not be removed: {why}", self.vm_name);
+            eprintln!(
+                "network: {}'s network could not be removed: {why}",
+                self.vm_name
+            );
         } else {
             eprintln!("network: removed {}", self.name);
         }
@@ -488,7 +507,10 @@ impl VmNetworking {
                 }
             }
         }
-        if self.checked.is_some_and(|at| at.elapsed() < FOLLOW_INTERVAL) {
+        if self
+            .checked
+            .is_some_and(|at| at.elapsed() < FOLLOW_INTERVAL)
+        {
             return;
         }
         self.checked = Some(Instant::now());
@@ -519,9 +541,15 @@ impl VmNetworking {
         }
     }
 
-    fn move_to(&mut self, vm_name: &str, next: VmNetwork, modify: &dyn Fn(&str) -> Result<(), String>) {
+    fn move_to(
+        &mut self,
+        vm_name: &str,
+        next: VmNetwork,
+        modify: &dyn Fn(&str) -> Result<(), String>,
+    ) {
         let removed = modify(&crate::network::remove_adapter_request());
-        let added = removed.and_then(|()| modify(&crate::network::add_adapter_request(&next.adapter())));
+        let added =
+            removed.and_then(|()| modify(&crate::network::add_adapter_request(&next.adapter())));
         match added {
             Ok(()) => {
                 let old = self
@@ -551,7 +579,11 @@ impl VmNetworking {
     pub fn detach(&mut self) {
         self.moving = None;
         self.checked = None;
-        let current = self.current.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let current = self
+            .current
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
         if let Some(network) = current {
             network.remove();
         }
@@ -607,7 +639,9 @@ unsafe fn ip_of(address: *const SOCKADDR) -> Option<IpAddr> {
     match (*address).sa_family {
         AF_INET => {
             let v4 = &*(address as *const SOCKADDR_IN);
-            Some(IpAddr::V4(Ipv4Addr::from(u32::from_be(v4.sin_addr.S_un.S_addr))))
+            Some(IpAddr::V4(Ipv4Addr::from(u32::from_be(
+                v4.sin_addr.S_un.S_addr,
+            ))))
         }
         AF_INET6 => {
             let v6 = &*(address as *const SOCKADDR_IN6);
@@ -629,7 +663,11 @@ fn from_wide(text: PWSTR) -> String {
 }
 
 fn subnet_of(address: Ipv4Addr, length: u8) -> Ipv4Subnet {
-    let mask = if length == 0 { 0 } else { u32::MAX << (32 - u32::from(length.min(32))) };
+    let mask = if length == 0 {
+        0
+    } else {
+        u32::MAX << (32 - u32::from(length.min(32)))
+    };
     Ipv4Subnet {
         prefix: Ipv4Addr::from(u32::from(address) & mask),
         length,
@@ -659,7 +697,11 @@ pub fn host_adapters() -> Result<Vec<HostAdapter>, String> {
             111 => continue,
             // ERROR_NO_DATA: no adapters.
             232 => return Ok(Vec::new()),
-            error => return Err(format!("the host's network adapters could not be read (error {error})")),
+            error => {
+                return Err(format!(
+                    "the host's network adapters could not be read (error {error})"
+                ))
+            }
         }
     }
     let mut adapters = Vec::new();
@@ -697,8 +739,8 @@ pub fn host_adapters() -> Result<Vec<HostAdapter>, String> {
             }
             gateway = entry.Next;
         }
-        let virtual_switch = name.starts_with("vEthernet")
-            || description.contains("Hyper-V Virtual Ethernet");
+        let virtual_switch =
+            name.starts_with("vEthernet") || description.contains("Hyper-V Virtual Ethernet");
         adapters.push(HostAdapter {
             up: adapter.OperStatus == IfOperStatusUp,
             name,
@@ -724,15 +766,14 @@ pub fn neighbour_addresses(mac: &[u8; 6]) -> Vec<IpAddr> {
     let mut found = Vec::new();
     // SAFETY: the table GetIpNetTable2 returned, with NumEntries rows after its header.
     unsafe {
-        let rows = std::slice::from_raw_parts(
-            (*table).Table.as_ptr(),
-            (*table).NumEntries as usize,
-        );
+        let rows =
+            std::slice::from_raw_parts((*table).Table.as_ptr(), (*table).NumEntries as usize);
         for row in rows {
             if row.PhysicalAddressLength as usize == 6 && row.PhysicalAddress[..6] == mac[..] {
                 let address = &row.Address as *const _ as *const SOCKADDR;
                 if let Some(ip) = ip_of(address) {
-                    let link_local = matches!(ip, IpAddr::V6(v6) if (v6.segments()[0] & 0xffc0) == 0xfe80);
+                    let link_local =
+                        matches!(ip, IpAddr::V6(v6) if (v6.segments()[0] & 0xffc0) == 0xfe80);
                     if !link_local && !found.contains(&ip) {
                         found.push(ip);
                     }

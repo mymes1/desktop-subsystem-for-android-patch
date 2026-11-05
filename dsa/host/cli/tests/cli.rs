@@ -1510,7 +1510,10 @@ fn fr28_dsa_turns_advanced_networking_on_and_dsa_network_shows_the_address_and_d
             .change,
         Some(Change::AdvancedNetworking(true))
     );
-    assert_eq!(parse(&args("network --json")).unwrap().command, Cmd::Network);
+    assert_eq!(
+        parse(&args("network --json")).unwrap().command,
+        Cmd::Network
+    );
     let ((listener, _, _), endpoint) = local_pair();
     let network: NetworkSource = Arc::new(|_: &str, settings: &Settings| {
         Some(NetworkStatus {
@@ -1540,10 +1543,16 @@ fn fr28_dsa_turns_advanced_networking_on_and_dsa_network_shows_the_address_and_d
     assert_eq!(status["gateway"], "172.28.16.1");
     let text = stdout(&dsa(&endpoint, "network"));
     assert!(text.contains("Network: NAT"), "{text}");
-    assert!(text.contains("Addresses: 172.28.16.2, fd5a:d5a:0:1::2"), "{text}");
+    assert!(
+        text.contains("Addresses: 172.28.16.2, fd5a:d5a:0:1::2"),
+        "{text}"
+    );
     assert!(text.contains("DNS servers: 172.28.16.1"), "{text}");
 
-    let changed = json_of(&dsa(&endpoint, "settings set advanced-networking on --json"));
+    let changed = json_of(&dsa(
+        &endpoint,
+        "settings set advanced-networking on --json",
+    ));
     assert_eq!(changed["advanced_networking"], true);
     assert_eq!(changed["network"]["mode"], "advanced");
     let text = stdout(&dsa(&endpoint, "settings"));

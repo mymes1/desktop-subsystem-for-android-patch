@@ -176,7 +176,10 @@ fn fr28_advanced_networking_is_the_users_and_the_network_is_reported_with_the_se
     assert!(!store.get("bob").unwrap().advanced_networking);
 
     let mut bob = HostApiClient::connect(&mut AsAdmin(connector, "bob", false), "b", WAIT).unwrap();
-    assert_eq!(bob.settings().unwrap().network.unwrap().mode, NetworkStatus::OFF);
+    assert_eq!(
+        bob.settings().unwrap().network.unwrap().mode,
+        NetworkStatus::OFF
+    );
 }
 
 #[test]

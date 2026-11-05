@@ -1041,6 +1041,7 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORIT
 PROTOBUF_CONSTEXPR OpenFile::OpenFile(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.package_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.transfer_id_)*/0u
   , /*decltype(_impl_.action_)*/0
   , /*decltype(_impl_.size_)*/uint64_t{0u}
@@ -1127,6 +1128,36 @@ struct FileProgressDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 FileProgressDefaultTypeInternal _FileProgress_default_instance_;
+PROTOBUF_CONSTEXPR FileSharing::FileSharing(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.folders_)*/{}
+  , /*decltype(_impl_.location_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.on_)*/false
+  , /*decltype(_impl_.port_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct FileSharingDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR FileSharingDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~FileSharingDefaultTypeInternal() {}
+  union {
+    FileSharing _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 FileSharingDefaultTypeInternal _FileSharing_default_instance_;
+PROTOBUF_CONSTEXPR AndroidFiles::AndroidFiles(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.token_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.port_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct AndroidFilesDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR AndroidFilesDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~AndroidFilesDefaultTypeInternal() {}
+  union {
+    AndroidFiles _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 AndroidFilesDefaultTypeInternal _AndroidFiles_default_instance_;
 PROTOBUF_CONSTEXPR ClockProbe::ClockProbe(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.host_sent_ns_)*/uint64_t{0u}
@@ -21172,6 +21203,7 @@ OpenFile::OpenFile(const OpenFile& from)
   OpenFile* const _this = this; (void)_this;
   new (&_impl_) Impl_{
       decltype(_impl_.name_){}
+    , decltype(_impl_.package_){}
     , decltype(_impl_.transfer_id_){}
     , decltype(_impl_.action_){}
     , decltype(_impl_.size_){}
@@ -21186,6 +21218,14 @@ OpenFile::OpenFile(const OpenFile& from)
     _this->_impl_.name_.Set(from._internal_name(), 
       _this->GetArenaForAllocation());
   }
+  _impl_.package_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_package().empty()) {
+    _this->_impl_.package_.Set(from._internal_package(), 
+      _this->GetArenaForAllocation());
+  }
   ::memcpy(&_impl_.transfer_id_, &from._impl_.transfer_id_,
     static_cast<size_t>(reinterpret_cast<char*>(&_impl_.size_) -
     reinterpret_cast<char*>(&_impl_.transfer_id_)) + sizeof(_impl_.size_));
@@ -21198,6 +21238,7 @@ inline void OpenFile::SharedCtor(
   (void)is_message_owned;
   new (&_impl_) Impl_{
       decltype(_impl_.name_){}
+    , decltype(_impl_.package_){}
     , decltype(_impl_.transfer_id_){0u}
     , decltype(_impl_.action_){0}
     , decltype(_impl_.size_){uint64_t{0u}}
@@ -21206,6 +21247,10 @@ inline void OpenFile::SharedCtor(
   _impl_.name_.InitDefault();
   #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
     _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.package_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.package_.Set("", GetArenaForAllocation());
   #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
@@ -21221,6 +21266,7 @@ OpenFile::~OpenFile() {
 inline void OpenFile::SharedDtor() {
   GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
   _impl_.name_.Destroy();
+  _impl_.package_.Destroy();
 }
 
 void OpenFile::SetCachedSize(int size) const {
@@ -21234,6 +21280,7 @@ void OpenFile::Clear() {
   (void) cached_has_bits;
 
   _impl_.name_.ClearToEmpty();
+  _impl_.package_.ClearToEmpty();
   ::memset(&_impl_.transfer_id_, 0, static_cast<size_t>(
       reinterpret_cast<char*>(&_impl_.size_) -
       reinterpret_cast<char*>(&_impl_.transfer_id_)) + sizeof(_impl_.size_));
@@ -21278,6 +21325,16 @@ const char* OpenFile::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
           CHK_(ptr);
           _internal_set_action(static_cast<::dsa::control::v1::FileAction>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // string package = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          auto str = _internal_mutable_package();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
         } else
           goto handle_unusual;
         continue;
@@ -21339,6 +21396,16 @@ uint8_t* OpenFile::_InternalSerialize(
       4, this->_internal_action(), target);
   }
 
+  // string package = 5;
+  if (!this->_internal_package().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_package().data(), static_cast<int>(this->_internal_package().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.OpenFile.package");
+    target = stream->WriteStringMaybeAliased(
+        5, this->_internal_package(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -21360,6 +21427,13 @@ size_t OpenFile::ByteSizeLong() const {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_name());
+  }
+
+  // string package = 5;
+  if (!this->_internal_package().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_package());
   }
 
   // uint32 transfer_id = 1;
@@ -21402,6 +21476,9 @@ void OpenFile::MergeFrom(const OpenFile& from) {
   if (!from._internal_name().empty()) {
     _this->_internal_set_name(from._internal_name());
   }
+  if (!from._internal_package().empty()) {
+    _this->_internal_set_package(from._internal_package());
+  }
   if (from._internal_transfer_id() != 0) {
     _this->_internal_set_transfer_id(from._internal_transfer_id());
   }
@@ -21433,6 +21510,10 @@ void OpenFile::InternalSwap(OpenFile* other) {
   ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
       &_impl_.name_, lhs_arena,
       &other->_impl_.name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.package_, lhs_arena,
+      &other->_impl_.package_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
       PROTOBUF_FIELD_OFFSET(OpenFile, _impl_.size_)
@@ -22680,6 +22761,542 @@ void FileProgress::InternalSwap(FileProgress* other) {
 
 std::string FileProgress::GetTypeName() const {
   return "dsa.control.v1.FileProgress";
+}
+
+
+// ===================================================================
+
+class FileSharing::_Internal {
+ public:
+};
+
+FileSharing::FileSharing(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.FileSharing)
+}
+FileSharing::FileSharing(const FileSharing& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  FileSharing* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.folders_){from._impl_.folders_}
+    , decltype(_impl_.location_){}
+    , decltype(_impl_.on_){}
+    , decltype(_impl_.port_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.location_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.location_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_location().empty()) {
+    _this->_impl_.location_.Set(from._internal_location(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.on_, &from._impl_.on_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.port_) -
+    reinterpret_cast<char*>(&_impl_.on_)) + sizeof(_impl_.port_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.FileSharing)
+}
+
+inline void FileSharing::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.folders_){arena}
+    , decltype(_impl_.location_){}
+    , decltype(_impl_.on_){false}
+    , decltype(_impl_.port_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.location_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.location_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+FileSharing::~FileSharing() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.FileSharing)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void FileSharing::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.folders_.~RepeatedPtrField();
+  _impl_.location_.Destroy();
+}
+
+void FileSharing::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void FileSharing::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.FileSharing)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.folders_.Clear();
+  _impl_.location_.ClearToEmpty();
+  ::memset(&_impl_.on_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.port_) -
+      reinterpret_cast<char*>(&_impl_.on_)) + sizeof(_impl_.port_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* FileSharing::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // bool on = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.on_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 port = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.port_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string location = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_location();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated string folders = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            auto str = _internal_add_folders();
+            ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+            CHK_(ptr);
+            CHK_(::_pbi::VerifyUTF8(str, nullptr));
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<34>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* FileSharing::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.FileSharing)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // bool on = 1;
+  if (this->_internal_on() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(1, this->_internal_on(), target);
+  }
+
+  // uint32 port = 2;
+  if (this->_internal_port() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_port(), target);
+  }
+
+  // string location = 3;
+  if (!this->_internal_location().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_location().data(), static_cast<int>(this->_internal_location().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.FileSharing.location");
+    target = stream->WriteStringMaybeAliased(
+        3, this->_internal_location(), target);
+  }
+
+  // repeated string folders = 4;
+  for (int i = 0, n = this->_internal_folders_size(); i < n; i++) {
+    const auto& s = this->_internal_folders(i);
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      s.data(), static_cast<int>(s.length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.FileSharing.folders");
+    target = stream->WriteString(4, s, target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.FileSharing)
+  return target;
+}
+
+size_t FileSharing::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.FileSharing)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated string folders = 4;
+  total_size += 1 *
+      ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(_impl_.folders_.size());
+  for (int i = 0, n = _impl_.folders_.size(); i < n; i++) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+      _impl_.folders_.Get(i));
+  }
+
+  // string location = 3;
+  if (!this->_internal_location().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_location());
+  }
+
+  // bool on = 1;
+  if (this->_internal_on() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // uint32 port = 2;
+  if (this->_internal_port() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_port());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void FileSharing::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const FileSharing*>(
+      &from));
+}
+
+void FileSharing::MergeFrom(const FileSharing& from) {
+  FileSharing* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.FileSharing)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.folders_.MergeFrom(from._impl_.folders_);
+  if (!from._internal_location().empty()) {
+    _this->_internal_set_location(from._internal_location());
+  }
+  if (from._internal_on() != 0) {
+    _this->_internal_set_on(from._internal_on());
+  }
+  if (from._internal_port() != 0) {
+    _this->_internal_set_port(from._internal_port());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void FileSharing::CopyFrom(const FileSharing& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.FileSharing)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool FileSharing::IsInitialized() const {
+  return true;
+}
+
+void FileSharing::InternalSwap(FileSharing* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.folders_.InternalSwap(&other->_impl_.folders_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.location_, lhs_arena,
+      &other->_impl_.location_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(FileSharing, _impl_.port_)
+      + sizeof(FileSharing::_impl_.port_)
+      - PROTOBUF_FIELD_OFFSET(FileSharing, _impl_.on_)>(
+          reinterpret_cast<char*>(&_impl_.on_),
+          reinterpret_cast<char*>(&other->_impl_.on_));
+}
+
+std::string FileSharing::GetTypeName() const {
+  return "dsa.control.v1.FileSharing";
+}
+
+
+// ===================================================================
+
+class AndroidFiles::_Internal {
+ public:
+};
+
+AndroidFiles::AndroidFiles(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.AndroidFiles)
+}
+AndroidFiles::AndroidFiles(const AndroidFiles& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  AndroidFiles* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.token_){}
+    , decltype(_impl_.port_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.token_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.token_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_token().empty()) {
+    _this->_impl_.token_.Set(from._internal_token(), 
+      _this->GetArenaForAllocation());
+  }
+  _this->_impl_.port_ = from._impl_.port_;
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.AndroidFiles)
+}
+
+inline void AndroidFiles::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.token_){}
+    , decltype(_impl_.port_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.token_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.token_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+AndroidFiles::~AndroidFiles() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.AndroidFiles)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void AndroidFiles::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.token_.Destroy();
+}
+
+void AndroidFiles::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void AndroidFiles::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.AndroidFiles)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.token_.ClearToEmpty();
+  _impl_.port_ = 0u;
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* AndroidFiles::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 port = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.port_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string token = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_token();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* AndroidFiles::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.AndroidFiles)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 port = 1;
+  if (this->_internal_port() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_port(), target);
+  }
+
+  // string token = 2;
+  if (!this->_internal_token().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_token().data(), static_cast<int>(this->_internal_token().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.AndroidFiles.token");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_token(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.AndroidFiles)
+  return target;
+}
+
+size_t AndroidFiles::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.AndroidFiles)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string token = 2;
+  if (!this->_internal_token().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_token());
+  }
+
+  // uint32 port = 1;
+  if (this->_internal_port() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_port());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void AndroidFiles::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const AndroidFiles*>(
+      &from));
+}
+
+void AndroidFiles::MergeFrom(const AndroidFiles& from) {
+  AndroidFiles* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.AndroidFiles)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_token().empty()) {
+    _this->_internal_set_token(from._internal_token());
+  }
+  if (from._internal_port() != 0) {
+    _this->_internal_set_port(from._internal_port());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void AndroidFiles::CopyFrom(const AndroidFiles& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.AndroidFiles)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool AndroidFiles::IsInitialized() const {
+  return true;
+}
+
+void AndroidFiles::InternalSwap(AndroidFiles* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.token_, lhs_arena,
+      &other->_impl_.token_, rhs_arena
+  );
+  swap(_impl_.port_, other->_impl_.port_);
+}
+
+std::string AndroidFiles::GetTypeName() const {
+  return "dsa.control.v1.AndroidFiles";
 }
 
 
@@ -39306,6 +39923,8 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::CameraStillTaken& camera_still_taken(const Envelope* msg);
   static const ::dsa::control::v1::CameraError& camera_error(const Envelope* msg);
   static const ::dsa::control::v1::SetTaskCaption& set_task_caption(const Envelope* msg);
+  static const ::dsa::control::v1::FileSharing& file_sharing(const Envelope* msg);
+  static const ::dsa::control::v1::AndroidFiles& android_files(const Envelope* msg);
 };
 
 const ::dsa::control::v1::Hello&
@@ -39795,6 +40414,14 @@ Envelope::_Internal::camera_error(const Envelope* msg) {
 const ::dsa::control::v1::SetTaskCaption&
 Envelope::_Internal::set_task_caption(const Envelope* msg) {
   return *msg->_impl_.body_.set_task_caption_;
+}
+const ::dsa::control::v1::FileSharing&
+Envelope::_Internal::file_sharing(const Envelope* msg) {
+  return *msg->_impl_.body_.file_sharing_;
+}
+const ::dsa::control::v1::AndroidFiles&
+Envelope::_Internal::android_files(const Envelope* msg) {
+  return *msg->_impl_.body_.android_files_;
 }
 void Envelope::set_allocated_hello(::dsa::control::v1::Hello* hello) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -41626,6 +42253,36 @@ void Envelope::set_allocated_set_task_caption(::dsa::control::v1::SetTaskCaption
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.set_task_caption)
 }
+void Envelope::set_allocated_file_sharing(::dsa::control::v1::FileSharing* file_sharing) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (file_sharing) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(file_sharing);
+    if (message_arena != submessage_arena) {
+      file_sharing = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, file_sharing, submessage_arena);
+    }
+    set_has_file_sharing();
+    _impl_.body_.file_sharing_ = file_sharing;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.file_sharing)
+}
+void Envelope::set_allocated_android_files(::dsa::control::v1::AndroidFiles* android_files) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (android_files) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(android_files);
+    if (message_arena != submessage_arena) {
+      android_files = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, android_files, submessage_arena);
+    }
+    set_has_android_files();
+    _impl_.body_.android_files_ = android_files;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.android_files)
+}
 Envelope::Envelope(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
@@ -42251,6 +42908,16 @@ Envelope::Envelope(const Envelope& from)
     case kSetTaskCaption: {
       _this->_internal_mutable_set_task_caption()->::dsa::control::v1::SetTaskCaption::MergeFrom(
           from._internal_set_task_caption());
+      break;
+    }
+    case kFileSharing: {
+      _this->_internal_mutable_file_sharing()->::dsa::control::v1::FileSharing::MergeFrom(
+          from._internal_file_sharing());
+      break;
+    }
+    case kAndroidFiles: {
+      _this->_internal_mutable_android_files()->::dsa::control::v1::AndroidFiles::MergeFrom(
+          from._internal_android_files());
       break;
     }
     case BODY_NOT_SET: {
@@ -43024,6 +43691,18 @@ void Envelope::clear_body() {
     case kSetTaskCaption: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.set_task_caption_;
+      }
+      break;
+    }
+    case kFileSharing: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.file_sharing_;
+      }
+      break;
+    }
+    case kAndroidFiles: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.android_files_;
       }
       break;
     }
@@ -44027,6 +44706,22 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.FileSharing file_sharing = 290;
+      case 290:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr = ctx->ParseMessage(_internal_mutable_file_sharing(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.AndroidFiles android_files = 291;
+      case 291:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          ptr = ctx->ParseMessage(_internal_mutable_android_files(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -44910,6 +45605,20 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::camera_error(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.FileSharing file_sharing = 290;
+  if (_internal_has_file_sharing()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(290, _Internal::file_sharing(this),
+        _Internal::file_sharing(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.AndroidFiles android_files = 291;
+  if (_internal_has_android_files()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(291, _Internal::android_files(this),
+        _Internal::android_files(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -45781,6 +46490,20 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.set_task_caption_);
       break;
     }
+    // .dsa.control.v1.FileSharing file_sharing = 290;
+    case kFileSharing: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.file_sharing_);
+      break;
+    }
+    // .dsa.control.v1.AndroidFiles android_files = 291;
+    case kAndroidFiles: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.android_files_);
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -46417,6 +47140,16 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_set_task_caption());
       break;
     }
+    case kFileSharing: {
+      _this->_internal_mutable_file_sharing()->::dsa::control::v1::FileSharing::MergeFrom(
+          from._internal_file_sharing());
+      break;
+    }
+    case kAndroidFiles: {
+      _this->_internal_mutable_android_files()->::dsa::control::v1::AndroidFiles::MergeFrom(
+          from._internal_android_files());
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -46743,6 +47476,14 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::InstallResult >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::FileProgress*
 Arena::CreateMaybeMessage< ::dsa::control::v1::FileProgress >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::FileProgress >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::FileSharing*
+Arena::CreateMaybeMessage< ::dsa::control::v1::FileSharing >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::FileSharing >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::AndroidFiles*
+Arena::CreateMaybeMessage< ::dsa::control::v1::AndroidFiles >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::AndroidFiles >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::ClockProbe*
 Arena::CreateMaybeMessage< ::dsa::control::v1::ClockProbe >(Arena* arena) {
