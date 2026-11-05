@@ -258,6 +258,23 @@ Not everything can be automated. IME behaviour, resizing and the clean install a
 checklists (SPEC §6). When a requirement can only be checked by hand, say so in the SPEC item
 instead of leaving it untested silently.
 
+## WSA as the baseline
+
+WSA's user experience is the floor, not the model. Everything WSA offered is provided, and
+DSA improves on it.
+
+1. **Never drop or restrict a WSA capability on your own judgement.** If WSA had it, DSA has
+   it, at least as well.
+2. **Take only what WSA did better.** Where WSA was worse than DSA's design, keep DSA's
+   design. Copying a WSA weakness is a regression, not parity. Example: WSA's "as needed"
+   mode stopped Android after the last window closed, so the next app waited for a cold boot.
+   DSA already returns idle memory while Android dozes and opens apps at once, so that mode
+   was removed rather than copied.
+3. **Check every default against INTENT before it goes into SPEC.** A WSA behaviour that
+   works against a DSA goal (apps open without waiting for a boot, Doze as the idle state,
+   small memory) is never a default. Propose it to the owner as an option first, with what it
+   costs.
+
 ## Hard constraints (INTENT §2)
 
 Never introduce anything that violates these. If a task seems to require it, stop and ask.
