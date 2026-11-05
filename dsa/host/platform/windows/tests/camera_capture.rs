@@ -3,7 +3,7 @@
 
 use dsa_host_core::camera::{facing_of, Facing, Panel};
 use dsa_host_windows::camera_capture::{
-    consent_blocks, device_key, frame_rate, panel_from_windows,
+    consent_blocks, device_key, frame_rate, known_links, panel_from_windows, LIST_ARGUMENT,
 };
 
 #[test]
@@ -55,4 +55,18 @@ fn fr26_frame_rates_round_to_whole_frames() {
     assert_eq!(frame_rate(30000, 1001), 30);
     assert_eq!(frame_rate(15, 2), 8);
     assert_eq!(frame_rate(30, 0), 0);
+}
+
+#[test]
+fn nfr1_the_window_manager_lists_cameras_in_a_child_and_names_the_ones_it_knows() {
+    // The child is the window manager run with this argument, never the window manager
+    // itself, so Media Foundation stays out of the long-running process.
+    assert_eq!(LIST_ARGUMENT, "--list-cameras");
+    let args: Vec<String> = ["dsa-wm.exe", LIST_ARGUMENT, r"\\?\usb#a#{x}", "usb#b"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(known_links(&args), vec![r"\\?\usb#a#{x}".to_string(), "usb#b".into()]);
+    let plain: Vec<String> = vec!["dsa-wm.exe".into()];
+    assert!(known_links(&plain).is_empty());
 }
