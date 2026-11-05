@@ -73,6 +73,9 @@ pub struct AndroidVmLauncher {
     bootconfig: Option<BootconfigSource>,
     /// The properties each boot hands Android in its initrd, if any.
     boot_properties: Option<BootProperties>,
+    /// The VM's network, made at each start and removed at each stop. Without it the VM has
+    /// no network adapter.
+    networking: Option<crate::hcn::VmNetworking>,
 }
 
 /// Supplies more bootconfig lines (`key = "value"`) for each boot. See
@@ -241,7 +244,14 @@ impl AndroidVmLauncher {
             memory_base: None,
             bootconfig: None,
             boot_properties: None,
+            networking: None,
         }
+    }
+
+    /// Gives each boot a network adapter on the network `networking` makes for it.
+    pub fn with_networking(mut self, networking: crate::hcn::VmNetworking) -> AndroidVmLauncher {
+        self.networking = Some(networking);
+        self
     }
 
     /// Lets the running VM grow to the size in `max`, which the configuration source sets
@@ -415,6 +425,9 @@ impl GuestLauncher for AndroidVmLauncher {
                 config.pstore_disk = None;
             }
         }
+        if let Some(networking) = &mut self.networking {
+            config.network_adapter = networking.attach(&self.id);
+        }
         let document = config
             .to_hcs_document()
             .map_err(|e| e.to_string())?
@@ -450,8 +463,12 @@ impl GuestLauncher for AndroidVmLauncher {
 
     fn stop(&mut self, timeout: Duration) -> Result<(), String> {
         let Some(system) = self.system.as_ref() else {
-            // A start that failed part of the way may have served the console already.
+            // A start that failed part of the way may have served the console already, and
+            // made the network.
             self.end_console(CONSOLE_DRAIN);
+            if let Some(networking) = &mut self.networking {
+                networking.detach();
+            }
             return Ok(());
         };
         // A VM that has already exited (it died during boot) only needs its handle closed.
@@ -474,6 +491,10 @@ impl GuestLauncher for AndroidVmLauncher {
         *self.vm_id.lock().unwrap_or_else(|e| e.into_inner()) = None;
         // The VM is gone, so its end of the console pipe closes and the rest is read.
         self.end_console(CONSOLE_DRAIN);
+        // Its network goes with it.
+        if let Some(networking) = &mut self.networking {
+            networking.detach();
+        }
         Ok(())
     }
 
@@ -495,6 +516,15 @@ impl GuestLauncher for AndroidVmLauncher {
     }
 
     fn prerequisite(&mut self) -> Option<String> {
+        // Asked about once a second while the VM runs: the time to keep an advanced network
+        // on the adapter the host uses now.
+        if let (Some(networking), Some(system)) = (&mut self.networking, &self.system) {
+            networking.follow(&self.id, &|request: &str| {
+                system
+                    .modify(request, CALL_TIMEOUT)
+                    .map_err(|e| e.to_string())
+            });
+        }
         self.prerequisite.as_mut().and_then(|check| check())
     }
 

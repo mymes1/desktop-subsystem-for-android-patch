@@ -592,6 +592,58 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertIn("on fs\n   setprop sys.wifitracing.started 0\n", rc)
         self.assertIn("property:sys.wifitracing.started=1\n", rc)
 
+    NETWORK_FILES = {
+        "VENDOR/build.prop": b"ro.vendor.wifi_impl=mac80211_hwsim_virtio\nro.product.vendor.name=cf\n",
+        "VENDOR/bin/setup_wifi": b"\x7fELF",
+        "VENDOR/etc/init/hw/init.vendor.rc":
+            b"on post-fs-data && property:ro.vendor.wifi_impl=virt_wifi\n    start setup_wifi\n",
+    }
+
+    def network_files(self):
+        files = dict(self.NETWORK_FILES)
+        files["VENDOR/build.prop"] = make_image.edit_props(
+            files["VENDOR/build.prop"].decode(), vendor=True, network=True).encode()
+        return files
+
+    def test_fr28_the_vendor_props_make_eth0_android_wifi(self):
+        props = make_image.edit_props(self.NETWORK_FILES["VENDOR/build.prop"].decode(),
+                                      vendor=True, network=True)
+        self.assertIn("ro.vendor.wifi_impl=virt_wifi\n", props)
+        self.assertIn("ro.vendor.virtwifi.port=eth0\n", props)
+        self.assertIn("ro.vendor.disable_rename_eth0=1\n", props)
+        self.assertNotIn("mac80211_hwsim_virtio", props)
+        # Other prop files do not take vendor properties.
+        self.assertNotIn("ro.vendor.wifi_impl", make_image.edit_props("ro.x=1\n"))
+
+    def test_fr28_the_kernel_cmdline_gives_setup_wifi_its_mac_prefix_and_no_static_address(self):
+        cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
+        self.assertIn(f"androidboot.wifi_mac_prefix={make_image.WIFI_MAC_PREFIX}", cmdline.split())
+        self.assertNotIn("auto_eth_guest_addr", cmdline)
+
+    def test_fr28_the_image_checker_accepts_dhcp_wifi(self):
+        files = self.network_files()
+        cmdline = make_image.kernel_cmdline("blkdevparts=x:1@0(misc)")
+        self.assertEqual([], make_image.network_problems(list(files), files.__getitem__, cmdline))
+
+    def test_fr28_the_image_checker_finds_what_breaks_dhcp_and_dns(self):
+        cmdline = make_image.kernel_cmdline("blkdevparts=x:1@0(misc)")
+        # The Cuttlefish properties as they came: no virt_wifi.
+        raw = dict(self.NETWORK_FILES)
+        problems = make_image.network_problems(list(raw), raw.__getitem__, cmdline)
+        self.assertTrue(any("ro.vendor.wifi_impl" in p for p in problems), problems)
+        # A pinned DNS server and a static address.
+        files = self.network_files()
+        files["VENDOR/build.prop"] += b"net.dns1=8.8.8.8\n"
+        problems = make_image.network_problems(
+            list(files), files.__getitem__, cmdline + " androidboot.auto_eth_guest_addr=192.168.98.2")
+        self.assertTrue(any("net.dns1" in p for p in problems), problems)
+        self.assertTrue(any("static address" in p for p in problems), problems)
+        # No setup_wifi, and no prefix for it.
+        del files["VENDOR/bin/setup_wifi"]
+        problems = make_image.network_problems(list(files), files.__getitem__, "console=ttyS0")
+        self.assertTrue(any("setup_wifi is missing" in p for p in problems), problems)
+        self.assertTrue(any("wifi_mac_prefix" in p for p in problems), problems)
+
     def test_fr3_an_unrecognised_wifi_rc_is_not_passed_through(self):
         # A new build that set the trace instance up some other way would bring the stall
         # back unnoticed, so the image is not made until this edit is looked at again.

@@ -9,6 +9,35 @@ use dsa_host_windows::vm::{
 };
 
 #[test]
+fn fr28_the_hcs_document_has_a_network_adapter_on_the_vms_endpoint() {
+    use dsa_host_windows::vm::NetworkAdapter;
+    let mut vm = config();
+    // Without an endpoint the VM has no network adapter at all.
+    assert!(document(&vm)["VirtualMachine"]["Devices"]
+        .get("NetworkAdapters")
+        .is_none());
+    let endpoint: Guid = "6d5a0d5a-0000-4d5a-8d5a-00000000e0e0".parse().unwrap();
+    vm.network_adapter = Some(NetworkAdapter {
+        endpoint_id: endpoint,
+        mac_address: "00-15-5D-12-34-56".into(),
+    });
+    for arch in [GuestArch::X86_64, GuestArch::Arm64] {
+        let config = match arch {
+            GuestArch::X86_64 => vm.clone(),
+            GuestArch::Arm64 => {
+                let mut arm = arm64_config();
+                arm.network_adapter = vm.network_adapter.clone();
+                arm
+            }
+        };
+        let doc = config.to_hcs_document_for(arch).unwrap();
+        let adapter = &doc["VirtualMachine"]["Devices"]["NetworkAdapters"]["eth0"];
+        assert_eq!(adapter["EndpointId"], endpoint.to_string());
+        assert_eq!(adapter["MacAddress"], "00-15-5D-12-34-56");
+    }
+}
+
+#[test]
 fn nfr2_the_memory_resize_request_names_the_vm_memory_size() {
     let request: Value = serde_json::from_str(&memory_resize_request(4609)).unwrap();
     assert_eq!(
@@ -39,6 +68,7 @@ fn config() -> AndroidVmConfig {
         image_version: Some("17.0.0-1".into()),
         hosting_process_name_suffix: None,
         fine_grained_memory: false,
+        network_adapter: None,
     }
 }
 

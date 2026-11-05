@@ -1500,6 +1500,57 @@ fn fr9_dsa_open_refuses_a_file_larger_than_the_limit() {
 }
 
 #[test]
+fn fr28_dsa_turns_advanced_networking_on_and_dsa_network_shows_the_address_and_dns() {
+    use dsa_cli::Change;
+    use dsa_host_core::host_api::{HostApiService, NetworkSource, NetworkStatus, ServiceFacts};
+    use dsa_host_core::settings::{MemorySettings, Settings};
+    assert_eq!(
+        parse(&args("settings set advanced-networking on"))
+            .unwrap()
+            .change,
+        Some(Change::AdvancedNetworking(true))
+    );
+    assert_eq!(parse(&args("network --json")).unwrap().command, Cmd::Network);
+    let ((listener, _, _), endpoint) = local_pair();
+    let network: NetworkSource = Arc::new(|_: &str, settings: &Settings| {
+        Some(NetworkStatus {
+            mode: if settings.advanced_networking {
+                NetworkStatus::ADVANCED.into()
+            } else {
+                NetworkStatus::NAT.into()
+            },
+            addresses: vec!["172.28.16.2".into(), "fd5a:d5a:0:1::2".into()],
+            dns_servers: vec!["172.28.16.1".into()],
+            gateway: "172.28.16.1".into(),
+            problem: None,
+        })
+    });
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
+        .with_network(network);
+    let _service = RunningService::start_service(listener, service);
+
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["advanced_networking"], false);
+    assert_eq!(settings["network"]["mode"], "nat");
+    let status = json_of(&dsa(&endpoint, "network --json"));
+    assert_eq!(status["addresses"][0], "172.28.16.2");
+    assert_eq!(status["addresses"][1], "fd5a:d5a:0:1::2");
+    assert_eq!(status["dns_servers"][0], "172.28.16.1");
+    assert_eq!(status["gateway"], "172.28.16.1");
+    let text = stdout(&dsa(&endpoint, "network"));
+    assert!(text.contains("Network: NAT"), "{text}");
+    assert!(text.contains("Addresses: 172.28.16.2, fd5a:d5a:0:1::2"), "{text}");
+    assert!(text.contains("DNS servers: 172.28.16.1"), "{text}");
+
+    let changed = json_of(&dsa(&endpoint, "settings set advanced-networking on --json"));
+    assert_eq!(changed["advanced_networking"], true);
+    assert_eq!(changed["network"]["mode"], "advanced");
+    let text = stdout(&dsa(&endpoint, "settings"));
+    assert!(text.contains("Advanced networking: on"), "{text}");
+}
+
+#[test]
 fn fr9_dsa_settings_turns_links_in_android_on_and_off() {
     let ((listener, _, _), endpoint) = local_pair();
     let _service = settings_service(listener);

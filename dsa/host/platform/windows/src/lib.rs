@@ -2,6 +2,8 @@
 //!
 //! - [`vm`]: the Android VM's configuration, as the HCS document that creates it.
 //! - [`hcs`] and [`android_vm`]: creating, starting and stopping that VM (Windows only).
+//! - [`network`] and `hcn`: the VM's network, NAT or on the host's LAN, through the Host
+//!   Compute Network (`hcn` is Windows only).
 //! - [`console_log`]: the VM's serial console, kept in a log per user, and the end of it
 //!   that a failed start reports.
 //! - [`console_pipe`]: the named pipe that console arrives on (Windows only).
@@ -79,6 +81,8 @@ pub mod guest_performance;
 pub mod guid;
 #[cfg(windows)]
 pub mod hcs;
+#[cfg(windows)]
+pub mod hcn;
 pub mod host_config;
 pub mod host_memory;
 #[cfg(windows)]
@@ -89,6 +93,7 @@ pub mod hvsocket;
 pub mod installed_apps;
 pub mod installer_actions;
 pub mod monitors;
+pub mod network;
 pub mod paths;
 #[cfg(windows)]
 pub mod pipe;

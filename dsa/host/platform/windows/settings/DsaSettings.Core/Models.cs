@@ -47,7 +47,9 @@ public sealed record SettingsInfo(
     bool StopWithoutAsking = false,
     string RunMode = SettingsInfo.AsNeeded,
     int StopAfterSecs = SettingsInfo.DefaultStopAfterSecs,
-    bool KeepForNotifications = false)
+    bool KeepForNotifications = false,
+    bool AdvancedNetworking = false,
+    NetworkInfo? Network = null)
 {
     /// <summary>The run mode that stops Android once nothing uses it: the default.</summary>
     public const string AsNeeded = "as-needed";
@@ -74,6 +76,29 @@ public sealed record SettingsInfo(
         _ => RenderGpuKind.Named,
     };
 }
+
+/// <summary>How Android reaches the network.</summary>
+public enum NetworkMode
+{
+    /// <summary>The service did not say.</summary>
+    Unknown,
+    /// <summary>Behind a NAT network of its own.</summary>
+    Nat,
+    /// <summary>On this computer's network as a device of its own.</summary>
+    Advanced,
+    /// <summary>Android is not running, so it has no network yet.</summary>
+    Off,
+}
+
+/// <summary>Android's network as the service reports it: the mode, the addresses (IPv4
+/// first), the DNS servers, the gateway, and a problem when the network is not what the
+/// setting asks for.</summary>
+public sealed record NetworkInfo(
+    NetworkMode Mode,
+    IReadOnlyList<string> Addresses,
+    IReadOnlyList<string> DnsServers,
+    string Gateway,
+    string? Problem);
 
 /// <summary>An ARM translation package, as it describes itself.</summary>
 public sealed record ArmPackageInfo(string Name, string Version, string Library, string License);

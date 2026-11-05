@@ -1204,6 +1204,59 @@
   <data name="Background_Stopped" xml:space="preserve">
     <value>{0} was stopped.</value>
   </data>
+  <data name="NavNetwork.Content" xml:space="preserve">
+    <value>Network</value>
+  </data>
+  <data name="NetworkTitle.Text" xml:space="preserve">
+    <value>Network</value>
+  </data>
+  <data name="NetworkStatusCard.Header" xml:space="preserve">
+    <value>Android's network</value>
+  </data>
+  <data name="NetworkRefreshButton.Content" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Network_ModeNat" xml:space="preserve">
+    <value>Connected through this PC (NAT). Android apps see it as Wi-Fi, with no data charges.</value>
+  </data>
+  <data name="Network_ModeAdvanced" xml:space="preserve">
+    <value>Connected to this PC's network as a device of its own (advanced networking).</value>
+  </data>
+  <data name="Network_ModeOff" xml:space="preserve">
+    <value>Android is not running, so it has no network yet.</value>
+  </data>
+  <data name="Network_ModeUnknown" xml:space="preserve">
+    <value>The DSA service does not report the network. Update DSA to see it.</value>
+  </data>
+  <data name="Network_None" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="NetworkAddressLabel.Text" xml:space="preserve">
+    <value>Address</value>
+  </data>
+  <data name="NetworkDnsLabel.Text" xml:space="preserve">
+    <value>DNS servers</value>
+  </data>
+  <data name="NetworkGatewayLabel.Text" xml:space="preserve">
+    <value>Gateway</value>
+  </data>
+  <data name="NetworkProblemBar.Title" xml:space="preserve">
+    <value>Advanced networking is not in use</value>
+  </data>
+  <data name="NetworkAdvancedHeader.Text" xml:space="preserve">
+    <value>Advanced</value>
+  </data>
+  <data name="AdvancedNetworkingCard.Header" xml:space="preserve">
+    <value>Advanced networking</value>
+  </data>
+  <data name="AdvancedNetworkingCard.Description" xml:space="preserve">
+    <value>Off by default. When on, Android joins this PC's network as a device of its own: other devices on the network can reach Android apps, and Android apps can reach them directly. Programs on this PC can always reach a server in Android at the address above.</value>
+  </data>
+  <data name="NetworkRestartBar.Title" xml:space="preserve">
+    <value>Restart Android to apply</value>
+  </data>
+  <data name="NetworkRestartBar.Message" xml:space="preserve">
+    <value>The change applies the next time Android starts. Stop Android on the General page, then open an app.</value>
   <data name="RunModeHeader.Text" xml:space="preserve">
     <value>When nothing uses Android</value>
   </data>
