@@ -125,7 +125,7 @@ PATH="$mesa_bin:$PATH" ninja -C "$mesa_build/out" \
 "$cmake_bin" -B "$out_dir" -S "$root/dsa/graphics/cmake" \
     "${generator[@]}" \
     -DCMAKE_TOOLCHAIN_FILE="$ndk_dir/build/cmake/android.toolchain.cmake" \
-    -DANDROID_ABI=x86_64 \
+    -DANDROID_ABI="$android_abi" \
     -DANDROID_PLATFORM=android-34 \
     -DSCRATCH_DIR="$scratch" \
     -DMESA_BUILD_DIR="$mesa_build/out"
