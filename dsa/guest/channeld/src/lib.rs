@@ -12,6 +12,7 @@
 //! transport and over vsock. The binder service (`binder`, Android only) is the thin layer
 //! that lets those users in; [`aidl`] holds the values it shares with their generated code.
 //! [`arm_translation`] keeps the ARM translation package the host installs.
+//! [`gamepad`] makes the host's game controllers gamepad devices of the guest.
 //! [`reclaim`] decides when the guest drops its caches so the host gets the memory back.
 //! [`pressure`] tells the host how much memory the guest has, so the VM grows and shrinks.
 //! [`logbridge`] sends the guest's log on the log port, only while the host asks for it, and
@@ -25,6 +26,7 @@ pub mod aidl;
 pub mod arm_translation;
 #[cfg(target_os = "android")]
 pub mod binder;
+pub mod gamepad;
 pub mod logbridge;
 pub mod logd;
 pub mod pressure;

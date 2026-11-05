@@ -29,6 +29,8 @@
 //!   with it off; the host says when it is on.
 //! - The host's ARM translation messages stop here as well: the package's image is the
 //!   daemon's to keep ([`Router::on_arm_translation`]), and the daemon answers each one.
+//! - So do the host's game controllers: each becomes a gamepad device of the daemon's
+//!   ([`Router::on_gamepads`]), whose rumble goes back to the host.
 //! - The diagnostics the agent gathers go to the log port ([`Router::divert_diagnostics`]),
 //!   never on the control channel, and only the agent may send them. The guest's log is the
 //!   daemon's own to send; no client may.
@@ -48,6 +50,7 @@ use dsa_protocol::control::{
 };
 
 use crate::arm_translation::ArmTranslation;
+use crate::gamepad::GamepadDevices;
 
 /// The agent's package, which is the name of its process.
 pub const AGENT_PROCESS: &str = "io.github.thisisthepy.dsa.agent";
@@ -221,6 +224,8 @@ pub struct Router {
     developer_mode: Option<DeveloperModeSwitch>,
     /// The ARM translation package on the user's disk, which the host installs and removes.
     arm_translation: Option<Arc<ArmTranslation>>,
+    /// The gamepad devices of the host's controllers.
+    gamepads: Option<Arc<GamepadDevices>>,
     /// Where the agent's diagnostics go instead of the host's control channel.
     diagnostics: Mutex<Option<Sender<Vec<u8>>>>,
     /// How many times an app's last task has ended, and the wake-up for whoever waits on it.
@@ -246,6 +251,7 @@ impl Router {
             agent_check: Box::new(agent_check),
             developer_mode: None,
             arm_translation: None,
+            gamepads: None,
             diagnostics: Mutex::new(None),
             apps_closed: (Mutex::new(0), Condvar::new()),
         }
@@ -290,6 +296,25 @@ impl Router {
     pub fn on_arm_translation(mut self, package: Arc<ArmTranslation>) -> Router {
         self.arm_translation = Some(package);
         self
+    }
+
+    /// Hands the host's game controller messages to `devices`.
+    pub fn on_gamepads(mut self, devices: Arc<GamepadDevices>) -> Router {
+        self.gamepads = Some(devices);
+        self
+    }
+
+    /// Acts on the host's game controller message `body`, and says whether it was one. A guest
+    /// without gamepad devices drops them: no client of the channel acts on them.
+    fn gamepad_message(&self, body: &Body) -> bool {
+        let controller = matches!(
+            body,
+            Body::GamepadConnected(_) | Body::GamepadDisconnected(_) | Body::GamepadState(_)
+        );
+        if let Some(devices) = &self.gamepads {
+            devices.handle(body);
+        }
+        controller
     }
 
     /// Answers the host's ARM translation message `body`, and says whether it was one. A guest
@@ -430,6 +455,9 @@ impl Router {
             if self.arm_translation_message(body) {
                 return;
             }
+            if self.gamepad_message(body) {
+                return;
+            }
         }
         let mut state = self.lock();
         match body {
@@ -445,6 +473,10 @@ impl Router {
     /// Tells a host that has just connected the state of every live task. Frames that were
     /// waiting for the connection go first, so the host ends with the latest state.
     pub fn host_connected(&self) {
+        // A host that connects again gives its controllers anew.
+        if let Some(devices) = &self.gamepads {
+            devices.reset();
+        }
         let mut state = self.lock();
         // The host takes the screen to be on when it connects, and says so if not; it says
         // again if it is short of memory.

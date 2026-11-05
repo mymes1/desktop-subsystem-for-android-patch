@@ -39,6 +39,7 @@ mod daemon {
     use std::thread;
 
     use dsa_guest_channeld::arm_translation::{self, ArmTranslation, BootFacts};
+    use dsa_guest_channeld::gamepad::{uinput::Uinput, GamepadDevices};
     use dsa_guest_channeld::logbridge::{
         files_in, DiagnosticFiles, LogBridge, LogPackets, LogSource, PortConnector,
     };
@@ -405,13 +406,16 @@ mod daemon {
         // The guest's clients (the agent and the hwcomposer) reach the daemon over binder.
         // Frames they send go to the host through `to_host`; the host's frames go to them.
         let (to_host, from_guest) = mpsc::channel::<Vec<u8>>();
+        // The host's game controllers become uinput gamepads, whose rumble goes to the host.
+        let gamepads = Arc::new(GamepadDevices::new(Box::new(Uinput), to_host.clone()));
         let router = Arc::new(
             Router::new(to_host, check_agent)
                 .on_developer_mode(switch_adb)
                 .on_arm_translation(Arc::new(ArmTranslation::new(
                     arm_translation::DIR,
                     BootFacts::of_system(|| read_property("ro.product.cpu.abilist")),
-                ))),
+                )))
+                .on_gamepads(gamepads),
         );
         let (to_guest, from_host) = mpsc::channel::<Vec<u8>>();
         // The guest's log goes on a port of its own, past the same handshake as the control

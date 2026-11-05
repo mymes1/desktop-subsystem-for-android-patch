@@ -89,6 +89,16 @@
       notification area or the settings app, as Settings' "Force stop" does.
     -->
     <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
+    <!--
+      Following the host's system settings: its time zone (SET_TIME_ZONE), its display
+      languages and regional format (CHANGE_CONFIGURATION), its dark theme
+      (MODIFY_DAY_NIGHT_MODE) and its accent color as the seed of the dynamic colors
+      (CHANGE_OVERLAY_PACKAGES, for the overlay that carries the palette).
+    -->
+    <uses-permission android:name="android.permission.SET_TIME_ZONE" />
+    <uses-permission android:name="android.permission.CHANGE_CONFIGURATION" />
+    <uses-permission android:name="android.permission.MODIFY_DAY_NIGHT_MODE" />
+    <uses-permission android:name="android.permission.CHANGE_OVERLAY_PACKAGES" />
 
     <application
         android:name=".platform.AgentApplication"

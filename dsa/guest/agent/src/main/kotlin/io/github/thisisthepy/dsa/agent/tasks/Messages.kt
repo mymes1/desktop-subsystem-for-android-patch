@@ -38,6 +38,15 @@ object Messages {
             },
         )
         update.setStatusBarColor(task.statusBarColor)
+        update.setOrientation(
+            when (task.orientation) {
+                TaskOrientation.PORTRAIT -> io.github.thisisthepy.dsa.control.v1.TaskOrientation.TASK_ORIENTATION_PORTRAIT
+                TaskOrientation.LANDSCAPE -> io.github.thisisthepy.dsa.control.v1.TaskOrientation.TASK_ORIENTATION_LANDSCAPE
+                TaskOrientation.UNSPECIFIED -> io.github.thisisthepy.dsa.control.v1.TaskOrientation.TASK_ORIENTATION_UNSPECIFIED
+            },
+        )
+        update.setFullscreen(task.fullscreen)
+        update.setPictureInPicture(task.pictureInPicture)
         return Envelope.newBuilder().setTaskUpdated(update).build().toByteArray()
     }
 

@@ -12,6 +12,7 @@ import io.github.thisisthepy.dsa.agent.tasks.ScreenDp
 import io.github.thisisthepy.dsa.agent.tasks.StatusBarAppearance
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
 import io.github.thisisthepy.dsa.agent.tasks.TaskKind
+import io.github.thisisthepy.dsa.agent.tasks.TaskOrientation
 import io.github.thisisthepy.dsa.agent.tasks.TaskSnapshot
 import io.github.thisisthepy.dsa.agent.tasks.TaskSource
 
@@ -72,6 +73,9 @@ class AndroidTaskSource(
             minHeight = smallest?.second ?: 0,
             statusBar = fields.statusBar(info),
             statusBarColor = fields.statusBarColor(info),
+            orientation = fields.orientation(info),
+            fullscreen = fields.windowingMode(info) == WINDOWING_MODE_FULLSCREEN,
+            pictureInPicture = fields.windowingMode(info) == WINDOWING_MODE_PINNED,
         )
     }
 
@@ -96,6 +100,11 @@ class AndroidTaskSource(
 
         // WindowConfiguration.ACTIVITY_TYPE_STANDARD: an app's own task, not home or recents.
         const val ACTIVITY_TYPE_STANDARD = 1
+
+        // WindowConfiguration.WINDOWING_MODE_FULLSCREEN and WINDOWING_MODE_PINNED: on the
+        // freeform display, a task the app took to full screen, and one in picture-in-picture.
+        const val WINDOWING_MODE_FULLSCREEN = 1
+        const val WINDOWING_MODE_PINNED = 2
     }
 }
 
@@ -111,6 +120,8 @@ private class TaskFields(private val log: Log) {
     private val windowConfiguration = field { android.content.res.Configuration::class.java.getField("windowConfiguration") }
     private val getBounds = field { Class.forName("android.app.WindowConfiguration").getMethod("getBounds") }
     private val getActivityType = field { Class.forName("android.app.WindowConfiguration").getMethod("getActivityType") }
+    private val getWindowingMode = field { Class.forName("android.app.WindowConfiguration").getMethod("getWindowingMode") }
+    private val topActivityInfo = optional { taskInfo.getField("topActivityInfo") }
     private val isFocused = field { taskInfo.getField("isFocused") }
     private val minWidth = field { taskInfo.getField("minWidth") }
     private val minHeight = field { taskInfo.getField("minHeight") }
@@ -184,6 +195,17 @@ private class TaskFields(private val log: Log) {
     fun statusBarColor(info: ActivityManager.RunningTaskInfo): Int {
         val description = info.taskDescription ?: return 0
         return read("status bar color") { getStatusBarColor!!.invoke(description) as Int } ?: 0
+    }
+
+    /** The windowing mode the task is in (WindowConfiguration.WINDOWING_MODE_*); null when unknown. */
+    fun windowingMode(info: ActivityManager.RunningTaskInfo): Int? =
+        read("windowing mode") { getWindowingMode!!.invoke(windowConfiguration(info)) as Int }
+
+    /** The orientation the task's top activity locks, from its screenOrientation. */
+    fun orientation(info: ActivityManager.RunningTaskInfo): TaskOrientation {
+        val activity = read("top activity") { topActivityInfo?.get(info) as android.content.pm.ActivityInfo? }
+            ?: return TaskOrientation.UNSPECIFIED
+        return TaskOrientation.of(activity.screenOrientation)
     }
 
     fun focused(info: ActivityManager.RunningTaskInfo): Boolean =

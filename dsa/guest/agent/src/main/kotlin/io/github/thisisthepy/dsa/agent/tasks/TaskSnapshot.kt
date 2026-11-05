@@ -49,7 +49,37 @@ data class TaskSnapshot(
     val statusBar: StatusBarAppearance = StatusBarAppearance.UNKNOWN,
     /** The status bar color the app set, as ARGB; 0 when it set none. */
     val statusBarColor: Int = 0,
+    /** The orientation the task's top activity is locked to, which the host's window keeps. */
+    val orientation: TaskOrientation = TaskOrientation.UNSPECIFIED,
+    /** Whether the task's app asked to fill the screen: it left the freeform windowing mode. */
+    val fullscreen: Boolean = false,
+    /** Whether the task's app went into picture-in-picture. */
+    val pictureInPicture: Boolean = false,
 )
+
+/** The orientation a task's top activity asks for. */
+enum class TaskOrientation {
+    /** It does not lock its orientation, or the agent could not read it. */
+    UNSPECIFIED,
+
+    /** Portrait, reverse portrait, sensor portrait or user portrait. */
+    PORTRAIT,
+
+    /** Landscape, reverse landscape, sensor landscape or user landscape. */
+    LANDSCAPE,
+    ;
+
+    companion object {
+        /** The orientation an activity's screenOrientation (ActivityInfo.SCREEN_ORIENTATION_*) locks. */
+        fun of(screenOrientation: Int): TaskOrientation = when (screenOrientation) {
+            // PORTRAIT, SENSOR_PORTRAIT, REVERSE_PORTRAIT, USER_PORTRAIT.
+            1, 7, 9, 12 -> PORTRAIT
+            // LANDSCAPE, SENSOR_LANDSCAPE, REVERSE_LANDSCAPE, USER_LANDSCAPE.
+            0, 6, 8, 11 -> LANDSCAPE
+            else -> UNSPECIFIED
+        }
+    }
+}
 
 /** Whether an app asked for dark status bar icons (a light status bar) or light ones. */
 enum class StatusBarAppearance {
