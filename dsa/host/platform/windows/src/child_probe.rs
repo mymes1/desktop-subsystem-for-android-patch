@@ -41,8 +41,14 @@ mod system {
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| format!("the child process did not start: {e}"))?;
-        let mut stdout = child.stdout.take().ok_or("the child process has no output")?;
-        let mut stderr = child.stderr.take().ok_or("the child process has no output")?;
+        let mut stdout = child
+            .stdout
+            .take()
+            .ok_or("the child process has no output")?;
+        let mut stderr = child
+            .stderr
+            .take()
+            .ok_or("the child process has no output")?;
         // Both pipes are drained while the child runs, so neither fills and stalls it.
         let out = std::thread::spawn(move || {
             let mut text = String::new();

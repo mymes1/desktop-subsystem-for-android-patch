@@ -66,7 +66,10 @@ fn nfr1_the_window_manager_lists_cameras_in_a_child_and_names_the_ones_it_knows(
         .iter()
         .map(|s| s.to_string())
         .collect();
-    assert_eq!(known_links(&args), vec![r"\\?\usb#a#{x}".to_string(), "usb#b".into()]);
+    assert_eq!(
+        known_links(&args),
+        vec![r"\\?\usb#a#{x}".to_string(), "usb#b".into()]
+    );
     let plain: Vec<String> = vec!["dsa-wm.exe".into()];
     assert!(known_links(&plain).is_empty());
 }
