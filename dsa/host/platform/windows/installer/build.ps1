@@ -131,7 +131,7 @@ $imageManifest = $ImageDir -and (Test-Path (Join-Path $ImageDir "image.json"))
 if ($imageManifest) {
     $image = Get-Content -Raw (Join-Path $ImageDir "image.json") | ConvertFrom-Json
     foreach ($name in @($image.files.PSObject.Properties.Name)) {
-        if ($name -notin @("disk.vhdx", "initrd.img", $kernelName, "NOTICE.html.gz", "NOTICE.xml.gz", "NOTICE.txt")) {
+        if ($name -notin @("disk.vhdx", "system.vhdx", "data.vhdx", "initrd.img", $kernelName, "NOTICE.html.gz", "NOTICE.xml.gz", "NOTICE.txt")) {
             throw "image.json names $name, which this package does not know how to install"
         }
         if (-not (Test-Path (Join-Path $ImageDir $name))) { throw "$ImageDir has no $name" }
@@ -214,6 +214,8 @@ $defines = @("-d", "Arch=$Arch", "-d", "KernelName=$kernelName", "-d", "Version=
 if ($ImageDir) { $defines += @("-d", "ImageDir=$ImageDir", "-d", "ImageVersion=$ImageVersion") }
 if ($imageManifest) {
     $defines += @("-d", "ImageManifest=1")
+    # An image of one disk (disk.vhdx), or of a system image and a data disk template.
+    if ($image.files.PSObject.Properties.Name -contains "system.vhdx") { $defines += @("-d", "ImageSplitDisks=1") }
     if ($image.files.PSObject.Properties.Name -contains $kernelName) { $defines += @("-d", "ImageKernel=$kernelName") }
     foreach ($noticeCandidate in @("NOTICE.html.gz", "NOTICE.xml.gz", "NOTICE.txt")) {
         if (Test-Path (Join-Path $ImageDir $noticeCandidate)) {
