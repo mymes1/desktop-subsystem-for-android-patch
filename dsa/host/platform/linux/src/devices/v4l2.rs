@@ -410,13 +410,13 @@ impl Capture {
         let fd = device.fd();
         let mut fmt: Format = zeroed_value();
         fmt.kind = BUF_TYPE_VIDEO_CAPTURE;
-        // SAFETY: writing the pix member of a zeroed union.
-        unsafe {
-            fmt.fmt.pix.width = width;
-            fmt.fmt.pix.height = height;
-            fmt.fmt.pix.pixelformat = format;
-            fmt.fmt.pix.field = FIELD_ANY;
-        }
+        fmt.fmt.pix = PixFormat {
+            width,
+            height,
+            pixelformat: format,
+            field: FIELD_ANY,
+            ..zeroed_value()
+        };
         // SAFETY: VIDIOC_S_FMT takes a v4l2_format.
         unsafe { xioctl(fd, VIDIOC_S_FMT, &mut fmt) }?;
         // SAFETY: the driver filled the pix member.
@@ -428,8 +428,10 @@ impl Capture {
         if fps > 0 {
             let mut parm: StreamParm = zeroed_value();
             parm.kind = BUF_TYPE_VIDEO_CAPTURE;
-            // SAFETY: writing the capture member of a zeroed union.
-            unsafe { parm.parm.capture.timeperframe = [1, fps] };
+            parm.parm.capture = CaptureParm {
+                timeperframe: [1, fps],
+                ..zeroed_value()
+            };
             // SAFETY: VIDIOC_S_PARM takes a v4l2_streamparm. A device that cannot set its
             // rate runs at its own.
             let _ = unsafe { xioctl(fd, VIDIOC_S_PARM, &mut parm) };
