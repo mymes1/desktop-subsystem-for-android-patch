@@ -7,6 +7,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Insets
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Binder
@@ -18,6 +19,7 @@ import io.github.thisisthepy.dsa.agent.requests.ResizeOutcome
 import io.github.thisisthepy.dsa.agent.requests.TaskActions
 import io.github.thisisthepy.dsa.agent.tasks.ScreenDp
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
+import io.github.thisisthepy.dsa.agent.windowing.InsetsSourceForm
 import io.github.thisisthepy.dsa.agent.windowing.WINDOWING_MODE_FREEFORM
 import java.lang.reflect.InvocationTargetException
 
@@ -283,18 +285,24 @@ class AndroidTaskActions(
         type: Int,
         frame: TaskBounds,
     ) {
-        val rect = Rect(frame.left, frame.top, frame.right, frame.bottom)
-        val method = transactionClass.methods
-            .filter { it.name == "addInsetsSource" }
-            .maxByOrNull { it.parameterCount }
+        val methods = transactionClass.methods.filter { it.name == "addInsetsSource" }
+        val form = InsetsSourceForm.choose(methods.map { m -> m.parameterTypes.map { it.name } })
             ?: throw NoSuchMethodException("WindowContainerTransaction.addInsetsSource")
-        val args: Array<Any?> = when (method.parameterCount) {
-            7 -> arrayOf(token, insetsOwner, index, type, rect, null, 0)
-            6 -> arrayOf(token, insetsOwner, index, type, rect, null)
-            5 -> arrayOf(token, insetsOwner, index, type, rect)
-            else -> throw NoSuchMethodException("WindowContainerTransaction.addInsetsSource with ${method.parameterCount} parameters")
+        // A frame in display pixels, or the same band as a size from the task's top edge.
+        val area: Any = when (form) {
+            is InsetsSourceForm.Frame -> Rect(frame.left, frame.top, frame.right, frame.bottom)
+            is InsetsSourceForm.Size -> Insets.of(0, frame.bottom - frame.top, 0, 0)
         }
-        method.invoke(transaction, *args)
+        val count = when (form) {
+            is InsetsSourceForm.Frame -> form.parameterCount
+            is InsetsSourceForm.Size -> form.parameterCount
+        }
+        val args: Array<Any?> = when (count) {
+            7 -> arrayOf(token, insetsOwner, index, type, area, null, 0)
+            6 -> arrayOf(token, insetsOwner, index, type, area, null)
+            else -> arrayOf(token, insetsOwner, index, type, area)
+        }
+        methods[form.index].invoke(transaction, *args)
     }
 
     private fun warnNoInsets(error: Throwable) {
