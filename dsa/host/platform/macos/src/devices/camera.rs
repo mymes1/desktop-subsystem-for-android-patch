@@ -388,6 +388,8 @@ mod avfoundation {
         }
 
         fn open(&self, id: &str, mode: Mode, fps: u32) -> Result<Box<dyn CameraStream>, String> {
+            // The first open asks the user, and waits for the answer.
+            crate::devices::permissions::ask(crate::devices::permissions::Device::Camera)?;
             autoreleasepool(|_| unsafe { open(id, mode, fps) })
         }
 
