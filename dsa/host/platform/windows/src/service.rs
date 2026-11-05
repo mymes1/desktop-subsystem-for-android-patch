@@ -818,6 +818,8 @@ where
         }
     };
     let identity_images = updates.as_ref().map(|updates| Arc::clone(&updates.store));
+    // A data reset makes the fresh disk from the image the next start boots.
+    let reset_images = updates.as_ref().map(|updates| Arc::clone(&updates.store));
     let factory_config = config.clone();
     let factory_build = build.to_string();
     let factory_status = program.as_ref().map(|_| Arc::clone(&program_status));
@@ -852,6 +854,14 @@ where
             Ok(android) => {
                 let settings = factory_store.get(sid).ok();
                 android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
+                // So is the run mode: "As needed" after five minutes unless they chose otherwise.
+                let defaults = dsa_host_core::settings::Settings::default();
+                let chosen = settings.as_ref().unwrap_or(&defaults);
+                android.run_mode(dsa_host_core::run_mode::RunModePolicy::of(
+                    chosen.run_mode,
+                    chosen.stop_after_secs,
+                    chosen.keep_for_notifications,
+                ));
                 android.share_clipboard(settings.as_ref().is_none_or(|s| s.clipboard));
                 android.links_in_android(settings.as_ref().is_some_and(|s| s.links_in_android));
                 // So is developer mode, off unless they turned it on, and its adb port.
@@ -877,6 +887,10 @@ where
     take_old_trace_markers(&config, &*store, build);
     let host_memory: Arc<dyn HostMemory> = Arc::new(WindowsHostMemory);
     let mut service = HostApiService::new(androids.clone(), build)
+        .with_data_reset(Arc::new(crate::data_reset::windows_data_reset(
+            config.clone(),
+            reset_images,
+        )))
         .with_settings(Arc::clone(&store), facts)
         .with_host_memory(Arc::clone(&host_memory))
         // The network of each user's running Android: its mode, addresses and DNS servers.

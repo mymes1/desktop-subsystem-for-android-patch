@@ -109,6 +109,9 @@ public sealed class DsaService
         Int(json, "memory_limit_mb"),
         Bool(json, "arm_translation", missing: true),
         Bool(json, "stop_without_asking"),
+        OptionalString(json, "run_mode") == SettingsInfo.Continuous ? SettingsInfo.Continuous : SettingsInfo.AsNeeded,
+        Int(json, "stop_after_secs") is > 0 and var wait ? wait : SettingsInfo.DefaultStopAfterSecs,
+        Bool(json, "keep_for_notifications"),
         Bool(json, "advanced_networking"),
         json.TryGetProperty("network", out var network) && network.ValueKind == JsonValueKind.Object
             ? ReadNetwork(network)
@@ -165,6 +168,23 @@ public sealed class DsaService
     /// confirms it.</summary>
     public Task<SettingsInfo> SetStopWithoutAskingAsync(bool on) =>
         SetAsync("stop-without-asking", on ? "on" : "off");
+
+    /// <summary>Whether Android stops once nothing uses it (<see cref="SettingsInfo.AsNeeded"/>)
+    /// or keeps running in Doze (<see cref="SettingsInfo.Continuous"/>).</summary>
+    public Task<SettingsInfo> SetRunModeAsync(string mode) => SetAsync("run-mode", mode);
+
+    /// <summary>How long nothing may use Android as needed before it stops, in seconds.</summary>
+    public Task<SettingsInfo> SetStopAfterAsync(int secs) =>
+        SetAsync("stop-after", secs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>Whether an app with a notification shown keeps Android running as needed.</summary>
+    public Task<SettingsInfo> SetKeepForNotificationsAsync(bool on) =>
+        SetAsync("keep-for-notifications", on ? "on" : "off");
+
+    /// <summary>Erases the user's Android data: the service stops Android and puts a fresh data
+    /// disk in place of theirs. The Android image and the settings stay.</summary>
+    public async Task ResetDataAsync() =>
+        await RunJsonAsync("reset-data", "--yes").ConfigureAwait(true);
 
     public Task<SettingsInfo> SetAdbPortAsync(int port) =>
         SetAsync("adb-port", port.ToString(System.Globalization.CultureInfo.InvariantCulture));

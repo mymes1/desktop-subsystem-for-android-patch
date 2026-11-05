@@ -127,6 +127,78 @@ pub struct Camera {
     pub blocked: bool,
 }
 
+/// The cameras as one line each, for a platform that lists them in a child process so the
+/// camera stack never loads into the long-running one: the id, the name, the facing, the
+/// sensor orientation, whether it is blocked, and the modes (`WxH@MIN-MAX`, comma
+/// separated), split by tabs. Tabs and line breaks in an id or name become spaces.
+pub fn list_text(cameras: &[Camera]) -> String {
+    let clean = |text: &str| text.replace(['\t', '\r', '\n'], " ");
+    let mut out = String::new();
+    for camera in cameras {
+        let facing = match camera.facing {
+            Facing::Front => "front",
+            Facing::Back => "back",
+            Facing::External => "external",
+        };
+        let modes: Vec<String> = camera
+            .modes
+            .iter()
+            .map(|m| format!("{}x{}@{}-{}", m.width, m.height, m.min_fps, m.max_fps))
+            .collect();
+        out.push_str(&format!(
+            "{}\t{}\t{}\t{}\t{}\t{}\n",
+            clean(&camera.id),
+            clean(&camera.name),
+            facing,
+            camera.sensor_orientation,
+            u8::from(camera.blocked),
+            modes.join(",")
+        ));
+    }
+    out
+}
+
+/// The cameras [`list_text`] wrote. A line that does not read as a camera is left out, and so
+/// is a mode that does not read as one.
+pub fn parse_list_text(text: &str) -> Vec<Camera> {
+    let mode = |text: &str| -> Option<Mode> {
+        let (size, rates) = text.split_once('@')?;
+        let (width, height) = size.split_once('x')?;
+        let (min_fps, max_fps) = rates.split_once('-')?;
+        Some(Mode {
+            width: width.parse().ok()?,
+            height: height.parse().ok()?,
+            min_fps: min_fps.parse().ok()?,
+            max_fps: max_fps.parse().ok()?,
+        })
+    };
+    text.lines()
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split('\t').collect();
+            let [id, name, facing, orientation, blocked, modes] = fields[..] else {
+                return None;
+            };
+            if id.is_empty() {
+                return None;
+            }
+            let facing = match facing {
+                "front" => Facing::Front,
+                "back" => Facing::Back,
+                "external" => Facing::External,
+                _ => return None,
+            };
+            Some(Camera {
+                id: id.to_string(),
+                name: name.to_string(),
+                facing,
+                sensor_orientation: orientation.parse().ok()?,
+                modes: modes.split(',').filter_map(mode).collect(),
+                blocked: blocked == "1",
+            })
+        })
+        .collect()
+}
+
 /// One picture: NV12, `stride * height` bytes of luma, then `stride * ceil(height / 2)` of
 /// interleaved chroma.
 #[derive(Debug, Clone, PartialEq, Eq)]

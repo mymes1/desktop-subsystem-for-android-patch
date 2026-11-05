@@ -1257,5 +1257,61 @@
   </data>
   <data name="NetworkRestartBar.Message" xml:space="preserve">
     <value>The change applies the next time Android starts. Stop Android on the General page, then open an app.</value>
+  <data name="RunModeHeader.Text" xml:space="preserve">
+    <value>When nothing uses Android</value>
+  </data>
+  <data name="ContinuousCard.Header" xml:space="preserve">
+    <value>Keep Android running</value>
+  </data>
+  <data name="ContinuousCard.Description" xml:space="preserve">
+    <value>Off by default: Android runs as needed. Once the last app window closes and no app runs in the background and no widget is on the desktop, Android stops after the time below, which gives its memory back to Windows. The next app you open starts it again, which takes longer than opening an app in Android that runs. On, Android keeps running in Doze, so apps open at once.</value>
+  </data>
+  <data name="StopAfterCard.Header" xml:space="preserve">
+    <value>Stop Android after</value>
+  </data>
+  <data name="StopAfterCard.Description" xml:space="preserve">
+    <value>How long Android waits with nothing using it before it stops. Opening an app in that time keeps it running.</value>
+  </data>
+  <data name="KeepForNotificationsCard.Header" xml:space="preserve">
+    <value>Keep running for notifications</value>
+  </data>
+  <data name="KeepForNotificationsCard.Description" xml:space="preserve">
+    <value>Off by default. On, Android keeps running while an app has a notification shown, so it can update it. Off, Android stops anyway, and notifications come again once it runs.</value>
+  </data>
+  <data name="StopAfter_Minute" xml:space="preserve">
+    <value>{0} minute</value>
+  </data>
+  <data name="StopAfter_Minutes" xml:space="preserve">
+    <value>{0} minutes</value>
+  </data>
+  <data name="StopAfter_Seconds" xml:space="preserve">
+    <value>{0} seconds</value>
+  </data>
+  <data name="ResetDataHeader.Text" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="ResetDataCard.Header" xml:space="preserve">
+    <value>Reset Android's data</value>
+  </data>
+  <data name="ResetDataCard.Description" xml:space="preserve">
+    <value>Erases every app you installed, your accounts and the data of every app, so Android starts as it was first installed. The Android image and these settings stay.</value>
+  </data>
+  <data name="ResetDataButton.Content" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="ResetDataConfirm.Title" xml:space="preserve">
+    <value>Reset Android's data?</value>
+  </data>
+  <data name="ResetDataConfirm.Action" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="ResetData_Warning" xml:space="preserve">
+    <value>This erases every app you installed in Android, the accounts you signed in to and the data of every app. Android stops now, and its next start is as it was first installed. The Android image and DSA's settings stay. This cannot be undone.</value>
+  </data>
+  <data name="ResetDoneBar.Title" xml:space="preserve">
+    <value>Android's data was reset</value>
+  </data>
+  <data name="ResetDoneBar.Message" xml:space="preserve">
+    <value>The next app you open starts Android as it was first installed.</value>
   </data>
 </root>

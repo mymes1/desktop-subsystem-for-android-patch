@@ -1740,6 +1740,16 @@ class GuestMemoryTests(unittest.TestCase):
             for directory in make_image.FSTAB_DIRS:
                 self.assertIn(b"zramsize=50%", archive.read(directory + "fstab.dsa"))
 
+    def test_nfr1_free_memory_is_compacted_sooner_so_page_reporting_hands_it_back(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            rc = archive.read("VENDOR/etc/init/dsa-memory.rc").decode()
+            self.assertIn("write /proc/sys/vm/compaction_proactiveness 40", rc)
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertIn(
+                '(genfscon proc "/sys/vm/compaction_proactiveness" (u object_r dsa_proc_vm_tunable',
+                policy,
+            )
+
     def test_nfr1_swapon_all_does_not_stop_at_the_missing_max_comp_streams(self):
         # fs_mgr opens /sys/block/zram0/max_comp_streams for any value of 0 or more, its
         # default, and skips the device when the file is missing, as it is on the guest's

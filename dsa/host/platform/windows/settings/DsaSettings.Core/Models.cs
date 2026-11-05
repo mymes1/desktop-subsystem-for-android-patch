@@ -45,9 +45,22 @@ public sealed record SettingsInfo(
     int MemoryLimitMb = 0,
     bool ArmTranslation = true,
     bool StopWithoutAsking = false,
+    string RunMode = SettingsInfo.AsNeeded,
+    int StopAfterSecs = SettingsInfo.DefaultStopAfterSecs,
+    bool KeepForNotifications = false,
     bool AdvancedNetworking = false,
     NetworkInfo? Network = null)
 {
+    /// <summary>The run mode that stops Android once nothing uses it: the default.</summary>
+    public const string AsNeeded = "as-needed";
+
+    /// <summary>The run mode that keeps Android running in Doze.</summary>
+    public const string Continuous = "continuous";
+
+    /// <summary>How long nothing may use Android as needed before it stops, unless the user
+    /// picks another time: five minutes.</summary>
+    public const int DefaultStopAfterSecs = 300;
+
     /// <summary>The loopback port adb connects to in developer mode unless the user picks
     /// another.</summary>
     public const int DefaultAdbPort = 58526;

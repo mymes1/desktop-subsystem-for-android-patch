@@ -33,6 +33,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::arm_translation::Package;
+use crate::run_mode::{normalise_stop_after_secs, RunMode, DEFAULT_STOP_AFTER};
 
 /// The longest render GPU value accepted, in characters.
 const MAX_RENDER_GPU: usize = 128;
@@ -83,6 +84,15 @@ pub struct Settings {
     /// Whether the user's Android uses an installed ARM translation package, from its next
     /// start. On by default; it does nothing while no package is installed.
     pub arm_translation: bool,
+    /// Whether the user's Android stops once nothing uses it ("As needed", the default) or
+    /// keeps running in Doze ("Continuous").
+    pub run_mode: RunMode,
+    /// How long nothing may use the user's Android in "As needed" before it stops, in
+    /// seconds. Five minutes by default; 0 from a client means the default.
+    pub stop_after_secs: u32,
+    /// Whether an app with a notification shown keeps the user's Android running in "As
+    /// needed". Off by default.
+    pub keep_for_notifications: bool,
 }
 
 impl Default for Settings {
@@ -102,6 +112,9 @@ impl Default for Settings {
             developer_mode: false,
             adb_port: DEFAULT_ADB_PORT,
             arm_translation: true,
+            run_mode: RunMode::AsNeeded,
+            stop_after_secs: DEFAULT_STOP_AFTER.as_secs() as u32,
+            keep_for_notifications: false,
         }
     }
 }
@@ -142,6 +155,10 @@ fn default_adb_port() -> u16 {
     DEFAULT_ADB_PORT
 }
 
+fn default_stop_after_secs() -> u32 {
+    DEFAULT_STOP_AFTER.as_secs() as u32
+}
+
 /// The adb port as kept: 0, which a client sends for "the default", becomes
 /// [`DEFAULT_ADB_PORT`].
 pub fn normalise_adb_port(port: u16) -> u16 {
@@ -175,6 +192,12 @@ pub struct UserSettings {
     pub stop_without_asking: bool,
     #[serde(default)]
     pub advanced_networking: bool,
+    #[serde(default)]
+    pub run_mode: RunMode,
+    #[serde(default = "default_stop_after_secs")]
+    pub stop_after_secs: u32,
+    #[serde(default)]
+    pub keep_for_notifications: bool,
 }
 
 impl Default for UserSettings {
@@ -190,6 +213,9 @@ impl Default for UserSettings {
             arm_translation: true,
             stop_without_asking: false,
             advanced_networking: false,
+            run_mode: RunMode::AsNeeded,
+            stop_after_secs: default_stop_after_secs(),
+            keep_for_notifications: false,
         }
     }
 }
@@ -208,6 +234,9 @@ impl UserSettings {
             arm_translation: settings.arm_translation,
             stop_without_asking: settings.stop_without_asking,
             advanced_networking: settings.advanced_networking,
+            run_mode: settings.run_mode,
+            stop_after_secs: normalise_stop_after_secs(settings.stop_after_secs),
+            keep_for_notifications: settings.keep_for_notifications,
         }
     }
 }
@@ -372,6 +401,9 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         developer_mode: mine.developer_mode,
         adb_port: normalise_adb_port(mine.adb_port),
         arm_translation: mine.arm_translation,
+        run_mode: mine.run_mode,
+        stop_after_secs: normalise_stop_after_secs(mine.stop_after_secs),
+        keep_for_notifications: mine.keep_for_notifications,
     }
 }
 
@@ -405,6 +437,7 @@ impl SettingsStore for FileSettings {
         Ok(Settings {
             render_gpu,
             adb_port: normalise_adb_port(settings.adb_port),
+            stop_after_secs: normalise_stop_after_secs(settings.stop_after_secs),
             ..settings.clone()
         })
     }
@@ -472,6 +505,7 @@ impl SettingsStore for MemorySettings {
         Ok(Settings {
             render_gpu,
             adb_port: normalise_adb_port(settings.adb_port),
+            stop_after_secs: normalise_stop_after_secs(settings.stop_after_secs),
             ..settings.clone()
         })
     }
@@ -554,6 +588,9 @@ mod tests {
                     developer_mode: true,
                     adb_port: 5037,
                     arm_translation: false,
+                    run_mode: RunMode::Continuous,
+                    stop_after_secs: 600,
+                    keep_for_notifications: true,
                 },
             )
             .unwrap();
@@ -868,6 +905,60 @@ mod tests {
         let store = FileSettings::new(&dir);
         assert!(store.get("uid:1000").unwrap_err().contains("not usable"));
         assert_eq!(store.machine(), MachineSettings::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr31_run_mode_is_as_needed_after_five_minutes_by_default_and_kept_per_user() {
+        let dir = scratch("run-mode");
+        let store = FileSettings::new(&dir);
+        let fresh = store.get("uid:1000").unwrap();
+        assert_eq!(fresh.run_mode, RunMode::AsNeeded);
+        assert_eq!(fresh.stop_after_secs, 300);
+        assert!(!fresh.keep_for_notifications);
+        // A file saved before the settings existed is "As needed" after five minutes.
+        std::fs::create_dir_all(dir.join("users")).unwrap();
+        std::fs::write(
+            dir.join("users").join("uid_1001.json"),
+            r#"{"render_gpu": "display", "freeze": true}"#,
+        )
+        .unwrap();
+        let old = store.get("uid:1001").unwrap();
+        assert_eq!(old.run_mode, RunMode::AsNeeded);
+        assert_eq!(old.stop_after_secs, 300);
+        let saved = store
+            .set(
+                "uid:1000",
+                &Settings {
+                    run_mode: RunMode::Continuous,
+                    stop_after_secs: 0,
+                    keep_for_notifications: true,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(saved.stop_after_secs, 300, "0 means the default wait");
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    run_mode: RunMode::Continuous,
+                    stop_after_secs: 1,
+                    keep_for_notifications: true,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        let mine = again.get("uid:1000").unwrap();
+        assert_eq!(mine.run_mode, RunMode::Continuous);
+        assert_eq!(mine.stop_after_secs, 10, "kept to the shortest wait");
+        assert!(mine.keep_for_notifications);
+        assert_eq!(
+            again.get("uid:1001").unwrap().run_mode,
+            RunMode::AsNeeded,
+            "the user's own"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -87,6 +87,8 @@ use crate::notifications::{self, Notification, NotificationAction, NotificationE
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
 use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
+use crate::data_reset::{UserDataReset, RESET_STOP_WAIT};
+use crate::run_mode::{RunMode, RunModePolicy};
 use crate::settings::{Settings, SettingsStore};
 use crate::tasks::{
     AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskRequestError, TaskWatch,
@@ -161,6 +163,10 @@ pub trait UserAndroid: Send + Sync {
     /// user's freeze setting says.
     fn freeze_when_idle(&self, on: bool) {
         let _ = on;
+    }
+    /// Applies the user's run mode: whether this Android stops once nothing uses it.
+    fn run_mode(&self, policy: RunModePolicy) {
+        let _ = policy;
     }
     /// Freezes this Android until a task window is shown again.
     fn freeze(&self) -> Result<(), TaskRequestError> {
@@ -485,6 +491,9 @@ impl UserAndroid for Session {
     }
     fn freeze_when_idle(&self, on: bool) {
         Session::freeze_when_idle(self, on)
+    }
+    fn run_mode(&self, policy: RunModePolicy) {
+        Session::set_run_mode(self, policy)
     }
     fn guest_memory(&self) -> Option<GuestMemoryReport> {
         Session::guest_memory(self)
@@ -1171,6 +1180,10 @@ pub struct HostApiService {
     host_logs: Option<HostLogs>,
     /// Where each user's device identity is kept, and what the image's build says.
     identities: Option<(Arc<dyn DeviceIdentityStore>, ImageBuildSource)>,
+    /// What puts a fresh data disk in place of a user's, for a data reset.
+    data_reset: Option<Arc<dyn UserDataReset>>,
+    /// How long a data reset waits for the user's Android to stop.
+    data_reset_wait: Duration,
 }
 
 /// Says what the build of the image a user's Android starts from is, by user.
@@ -1199,7 +1212,22 @@ impl HostApiService {
             placements: Arc::new(MemoryWidgetPlacements::default()),
             host_logs: None,
             identities: None,
+            data_reset: None,
+            data_reset_wait: RESET_STOP_WAIT,
         }
+    }
+
+    /// Resets a user's Android data with `reset`, which puts a fresh data disk in place of
+    /// theirs once their Android has stopped.
+    pub fn with_data_reset(mut self, reset: Arc<dyn UserDataReset>) -> HostApiService {
+        self.data_reset = Some(reset);
+        self
+    }
+
+    /// Waits at most `wait` for a user's Android to stop before a data reset gives up.
+    pub fn with_data_reset_wait(mut self, wait: Duration) -> HostApiService {
+        self.data_reset_wait = wait;
+        self
     }
 
     /// Keeps each user's device identity in `store`; `build` says what the image's own build
@@ -2938,6 +2966,7 @@ impl HostApiService {
             ),
             Some(request::Body::UpdateProgram(_)) => self.update_program(peer),
             Some(request::Body::GetSettings(_)) => self.get_settings(peer),
+            Some(request::Body::ResetData(_)) => self.reset_data(peer),
             Some(request::Body::SetSettings(set)) => self.set_settings(peer, set),
             Some(request::Body::GetDeviceIdentity(_)) => self.device_identity(peer, None),
             Some(request::Body::SetDeviceIdentity(set)) => {
@@ -3114,7 +3143,8 @@ impl HostApiService {
                         | request::Body::WatchLog(_)
                         | request::Body::CollectDiagnostics(_)
                         | request::Body::StopApp(_)
-                        | request::Body::WatchLocation(_) => unreachable!("answered above"),
+                        | request::Body::WatchLocation(_)
+                        | request::Body::ResetData(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -3421,6 +3451,46 @@ impl HostApiService {
         )
     }
 
+    /// Erases the caller's Android data: stops their Android and has the platform put a fresh
+    /// data disk in place of theirs.
+    fn reset_data(&self, peer: &Peer) -> response::Body {
+        let Some(reset) = &self.data_reset else {
+            return error(
+                ErrorCode::Unavailable,
+                "this service cannot reset Android's data; update the service".into(),
+            );
+        };
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match crate::data_reset::reset_user_data(
+            android.as_ref(),
+            reset.as_ref(),
+            &peer.user,
+            self.data_reset_wait,
+        ) {
+            Ok(()) => {
+                // The widgets placed on the desktop were in the old data, so where their
+                // windows were is forgotten too.
+                if let Ok(placed) = self.placements.all(&peer.user) {
+                    for widget_id in placed.keys() {
+                        let _ = self.placements.remove(&peer.user, *widget_id);
+                    }
+                }
+                eprintln!(
+                    "local API: {} reset their Android data; the next start boots a new disk",
+                    peer.user
+                );
+                response::Body::Done(types::Done {})
+            }
+            Err(why) => {
+                eprintln!("local API: resetting the Android data of {}: {why}", peer.user);
+                error(ErrorCode::Unavailable, why)
+            }
+        }
+    }
+
     fn get_settings(&self, peer: &Peer) -> response::Body {
         let Some((store, facts)) = &self.settings else {
             return Self::no_settings();
@@ -3467,6 +3537,9 @@ impl HostApiService {
             developer_mode: wanted.developer_mode,
             arm_translation: wanted.arm_translation,
             advanced_networking: wanted.advanced_networking,
+            run_mode: run_mode_from_wire(wanted.run_mode),
+            stop_after_secs: wanted.stop_after_secs,
+            keep_for_notifications: wanted.keep_for_notifications,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -3514,6 +3587,11 @@ impl HostApiService {
                 // settings at once.
                 if let Ok(android) = self.androids.android(&peer.user) {
                     android.freeze_when_idle(settings.freeze);
+                    android.run_mode(RunModePolicy::of(
+                        settings.run_mode,
+                        settings.stop_after_secs,
+                        settings.keep_for_notifications,
+                    ));
                     android.share_clipboard(settings.clipboard);
                     android.links_in_android(settings.links_in_android);
                     if let Err(why) =
@@ -3594,11 +3672,29 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         arm_translation: settings.arm_translation,
         advanced_networking: settings.advanced_networking,
         network: None,
+        run_mode: run_mode_to_wire(settings.run_mode) as i32,
+        stop_after_secs: settings.stop_after_secs,
+        keep_for_notifications: settings.keep_for_notifications,
         program_updates_available: facts.program_updates_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
         log_dir: facts.log_dir.clone().unwrap_or_default(),
         android_version: facts.android_version.clone().unwrap_or_default(),
+    }
+}
+
+fn run_mode_to_wire(mode: RunMode) -> types::RunMode {
+    match mode {
+        RunMode::AsNeeded => types::RunMode::AsNeeded,
+        RunMode::Continuous => types::RunMode::Continuous,
+    }
+}
+
+/// A run mode from the wire. One this side does not know is "As needed", the default.
+fn run_mode_from_wire(mode: i32) -> RunMode {
+    match types::RunMode::try_from(mode) {
+        Ok(types::RunMode::Continuous) => RunMode::Continuous,
+        _ => RunMode::AsNeeded,
     }
 }
 
@@ -3621,6 +3717,9 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             ),
             arm_translation: settings.arm_translation,
             advanced_networking: settings.advanced_networking,
+            run_mode: run_mode_from_wire(settings.run_mode),
+            stop_after_secs: crate::run_mode::normalise_stop_after_secs(settings.stop_after_secs),
+            keep_for_notifications: settings.keep_for_notifications,
         },
         facts: ServiceFacts {
             version: settings.version,
@@ -3770,6 +3869,21 @@ impl HostApiClient {
     /// Asks for the caller's Android to stop. Returns the state right after the request.
     pub fn stop(&mut self) -> Result<Status, ClientError> {
         self.call(request::Body::StopSession(types::StopSession {}))
+    }
+
+    /// Erases the caller's Android data (installed apps, accounts and app data) and puts a
+    /// fresh data disk in its place. Android is stopped first; the system image and the
+    /// settings stay. Waits as long as stopping Android and making the disk take.
+    pub fn reset_data(&mut self) -> Result<(), ClientError> {
+        match self.exchange(
+            request::Body::ResetData(types::ResetData {}),
+            crate::data_reset::RESET_ANSWER_WAIT,
+        )? {
+            response::Body::Done(_) => Ok(()),
+            _ => Err(ClientError::Malformed(
+                "expected the answer that the data was reset".into(),
+            )),
+        }
     }
 
     /// Freezes the caller's Android until a task window is shown again. Returns the state
