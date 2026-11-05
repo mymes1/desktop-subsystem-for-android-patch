@@ -198,6 +198,11 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         plat_sepolicy = z.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
         if not re.search(r"\(allow\s+appdomain\s+self\s+\(\s*vsock_socket\s*\(.*connect", plat_sepolicy):
             problems.append("the SELinux policy does not allow appdomain to connect vsock_socket")
+        # system_server renders its own overlays and dialogs through the same ANGLE and Vulkan
+        # driver. Without the socket its RenderThread aborts and takes the framework down.
+        if not re.search(r"\(allow\s+system_server\s+self\s+\(\s*vsock_socket\s*\(.*connect", plat_sepolicy):
+            problems.append("the SELinux policy does not allow system_server to connect vsock_socket, "
+                            "so any window system_server draws aborts it")
         # The guest kernel puts every wakeup source under /sys/devices/virtual/wakeup. The
         # suspend service may read them only there and through /sys/class/wakeup, as
         # sysfs_wakeup; anywhere else they are plain sysfs and each read is refused.
