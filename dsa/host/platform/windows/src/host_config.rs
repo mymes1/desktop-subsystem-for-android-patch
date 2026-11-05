@@ -288,6 +288,47 @@ pub struct HostConfig {
     /// fills in when it reads the file. Not a key of the file.
     #[serde(skip)]
     pub machine_root: Option<PathBuf>,
+    /// The image the package installed last put in `images_dir`, from
+    /// [`INSTALLED_PACKAGE_FILE`]. Not a key of the file.
+    #[serde(skip)]
+    pub bundled_image: Option<InstalledImage>,
+    /// What [`HostConfig::apply_package`] changed or found, for the service's log. Not a key
+    /// of the file.
+    #[serde(skip)]
+    pub package_notes: Vec<String>,
+}
+
+/// The file, beside the configuration, in which every installation records what its package
+/// carries. The configuration itself is kept across upgrades, since a user may have edited
+/// it, so it goes on naming the first installation's image and update lists; this file is
+/// replaced by every installation.
+pub const INSTALLED_PACKAGE_FILE: &str = "installed-package.json";
+
+/// What [`INSTALLED_PACKAGE_FILE`] says about the package installed last.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InstalledPackage {
+    /// The image the package put in the image store (`"none"` when it bundled none).
+    pub first_image: InstalledImage,
+    /// Whether the package was built only to test the installer.
+    #[serde(default)]
+    pub test_package: bool,
+    /// The release lists the package was built to use.
+    #[serde(default)]
+    pub update: Option<UpdateSettings>,
+}
+
+impl InstalledPackage {
+    pub fn parse(json: &str) -> Result<InstalledPackage, HostConfigError> {
+        serde_json::from_str(json).map_err(|e| HostConfigError(e.to_string()))
+    }
+}
+
+/// Whether `location` is a web address rather than a file or a folder on some computer,
+/// such as the `D:\a\...` mirror a test package is built with.
+fn is_web_address(location: &str) -> bool {
+    let lower = location.to_ascii_lowercase();
+    lower.starts_with("https://") || lower.starts_with("http://")
 }
 
 impl HostConfig {
@@ -302,6 +343,71 @@ impl HostConfig {
             config.update.as_ref(),
         )?;
         Ok(config)
+    }
+
+    /// Brings in what the package installed last carries, which a configuration kept from an
+    /// earlier installation does not know: the image it bundled (booted when newer than the
+    /// store's current one), whether it is a test package, and its release lists when the
+    /// configuration's are not web addresses (a test package's local mirror, left behind by
+    /// an earlier installation). The user's own choices in the configuration (how often to
+    /// check, how long a first boot may take, updating DSA itself or not) stay. Returns what
+    /// it changed or found, one line each, also kept in `package_notes`.
+    pub fn apply_package(&mut self, package: &InstalledPackage) -> Vec<String> {
+        let mut notes = Vec::new();
+        if package.first_image.version != "none" {
+            self.bundled_image = Some(package.first_image.clone());
+        }
+        if self.test_package != package.test_package {
+            notes.push(if package.test_package {
+                "the installed package is a test package; the configuration did not say so".into()
+            } else {
+                "the configuration was written by a test package; the installed package is a \
+                 real one, so it is no longer treated as a test package"
+                    .into()
+            });
+            self.test_package = package.test_package;
+        }
+        let has_store = self.images_dir.is_some();
+        match (&mut self.update, &package.update) {
+            (Some(ours), Some(theirs)) => {
+                let differs = ours.list_url != theirs.list_url
+                    || ours.program_list_url != theirs.program_list_url
+                    || ours.trusted_keys != theirs.trusted_keys;
+                let stale = !is_web_address(&ours.list_url)
+                    || ours
+                        .program_list_url
+                        .as_deref()
+                        .is_some_and(|url| !is_web_address(url));
+                if differs && stale && is_web_address(&theirs.list_url) {
+                    notes.push(format!(
+                        "the configuration names the release list {:?}, which is not a web \
+                         address (left by an earlier test installation); using the installed \
+                         package's {:?} instead",
+                        ours.list_url, theirs.list_url
+                    ));
+                    ours.list_url = theirs.list_url.clone();
+                    ours.trusted_keys = theirs.trusted_keys.clone();
+                    ours.program_list_url = theirs.program_list_url.clone();
+                    ours.program_dir = theirs.program_dir.clone();
+                } else if differs {
+                    notes.push(format!(
+                        "the configuration names the release list {:?}, not the installed \
+                         package's {:?}; keeping the configuration's",
+                        ours.list_url, theirs.list_url
+                    ));
+                }
+            }
+            (None, Some(theirs)) if has_store => {
+                notes.push(format!(
+                    "the configuration names no release list; using the installed package's {:?}",
+                    theirs.list_url
+                ));
+                self.update = Some(theirs.clone());
+            }
+            _ => {}
+        }
+        self.package_notes.extend(notes.iter().cloned());
+        notes
     }
 
     /// The machine's DSA folder: where the configuration file is, or `%ProgramData%\DSA` for

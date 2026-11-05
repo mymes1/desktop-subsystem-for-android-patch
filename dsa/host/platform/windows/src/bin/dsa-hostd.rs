@@ -97,6 +97,27 @@ mod windows_host {
             .unwrap_or_default();
         let mut config = HostConfig::parse(&expand_locations(&text, &data, &program))
             .map_err(|e| e.to_string())?;
+        // Every installation records what its package carries beside the configuration,
+        // which upgrades keep as the user left it.
+        let package_path = data.join(dsa_host_windows::host_config::INSTALLED_PACKAGE_FILE);
+        match std::fs::read_to_string(&package_path) {
+            Ok(text) => match dsa_host_windows::host_config::InstalledPackage::parse(
+                &expand_locations(&text, &data, &program),
+            ) {
+                Ok(package) => {
+                    config.apply_package(&package);
+                }
+                Err(error) => config.package_notes.push(format!(
+                    "ignoring {}: {error}",
+                    package_path.display()
+                )),
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => config.package_notes.push(format!(
+                "reading {}: {error}",
+                package_path.display()
+            )),
+        }
         config.machine_root = Some(data);
         Ok(config)
     }

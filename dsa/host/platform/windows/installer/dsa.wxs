@@ -318,6 +318,12 @@
                     <PermissionEx Sddl="D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;S-1-5-83-0)" />
                 </CreateFolder>
             </Component>
+            <!-- What this package carries (its bundled image, its release lists), replaced by
+                 every installation, while the configuration above keeps the user's edits. -->
+            <Component Id="InstalledPackage" Guid="*">
+                <File Id="InstalledPackage" Source="$(SourceDir)\installed-package.json" KeyPath="yes" />
+                <RemoveFile Id="InstalledPackageOld" Name="installed-package.json" On="install" />
+            </Component>
             <!-- Where both folders are, for the next version to install into. -->
             <Component Id="InstalledFolders" Guid="5e6764b9-ac6a-419f-ad0e-f69724d05a5a">
                 <RegistryValue Root="HKLM" Key="SOFTWARE\thisisthepy\DSA" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />

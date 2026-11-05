@@ -587,3 +587,150 @@ fn fr1_a_test_package_says_what_it_is_and_a_real_one_does_not() {
     let test = MINIMAL.replace("\"kernel\":", "\"test_package\": true,\n  \"kernel\":");
     assert!(HostConfig::parse(&test).unwrap().test_package);
 }
+
+/// A configuration a test package left behind: a local mirror for its release lists and the
+/// image that package bundled. The user then raised the check interval by hand.
+const LEFT_BY_A_TEST_PACKAGE: &str = r#"{
+  "kernel": "C:\\Program Files\\DSA\\vm\\bzImage",
+  "images_dir": "C:\\ProgramData\\DSA\\images",
+  "first_image": {"version": "17.0.0-1", "android_major": 17, "build": 1},
+  "test_package": true,
+  "update": {
+    "list_url": "D:\\a\\dsa\\mirror\\images.json",
+    "program_list_url": "D:\\a\\dsa\\mirror\\program.json",
+    "program_dir": "C:\\ProgramData\\DSA\\updates",
+    "check_interval_hours": 48,
+    "trusted_keys": ["17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce"]
+  }
+}"#;
+
+const REAL_PACKAGE: &str = r#"{
+  "first_image": {"version": "17.0.0-5", "android_major": 17, "build": 5},
+  "update": {
+    "list_url": "https://example.invalid/dsa/images.json",
+    "program_list_url": "https://example.invalid/dsa/program.json",
+    "program_dir": "C:\\ProgramData\\DSA\\updates",
+    "trusted_keys": ["8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"]
+  }
+}"#;
+
+#[test]
+fn fr15_an_upgrade_names_the_image_its_package_bundled() {
+    use dsa_host_windows::host_config::InstalledPackage;
+    let mut config = HostConfig::parse(UPDATING).unwrap();
+    let package = InstalledPackage::parse(REAL_PACKAGE).unwrap();
+    config.apply_package(&package);
+    assert_eq!(
+        config.bundled_image.as_ref().map(|i| i.version.as_str()),
+        Some("17.0.0-5")
+    );
+    // The kept configuration still names the first installation's image.
+    assert_eq!(config.first_image.as_ref().unwrap().version, "16.0.1");
+
+    // A package that bundles no image names none.
+    let mut config = HostConfig::parse(UPDATING).unwrap();
+    let none = REAL_PACKAGE.replace(
+        r#""version": "17.0.0-5", "android_major": 17, "build": 5"#,
+        r#""version": "none", "android_major": 0, "build": 0"#,
+    );
+    config.apply_package(&InstalledPackage::parse(&none).unwrap());
+    assert_eq!(config.bundled_image, None);
+}
+
+#[test]
+fn fr15_a_test_packages_configuration_does_not_survive_a_real_upgrade_silently() {
+    use dsa_host_windows::host_config::InstalledPackage;
+    let mut config = HostConfig::parse(LEFT_BY_A_TEST_PACKAGE).unwrap();
+    let notes = config.apply_package(&InstalledPackage::parse(REAL_PACKAGE).unwrap());
+    let update = config.update.as_ref().unwrap();
+    assert_eq!(update.list_url, "https://example.invalid/dsa/images.json");
+    assert_eq!(
+        update.program_list_url.as_deref(),
+        Some("https://example.invalid/dsa/program.json")
+    );
+    assert_eq!(
+        update.trusted_keys,
+        vec!["8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c".to_string()]
+    );
+    assert_eq!(update.check_interval_hours, 48, "the user's own choice stays");
+    assert!(!config.test_package);
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    assert!(notes.iter().any(|n| n.contains(r"D:\\a\\dsa\\mirror\\images.json")), "{notes:?}");
+    assert_eq!(config.package_notes, notes);
+}
+
+#[test]
+fn fr15_a_release_list_the_user_chose_is_kept_and_reported() {
+    use dsa_host_windows::host_config::InstalledPackage;
+    let mut config = HostConfig::parse(SELF_UPDATING).unwrap();
+    let notes = config.apply_package(&InstalledPackage::parse(REAL_PACKAGE).unwrap());
+    assert_eq!(
+        config.update.as_ref().unwrap().trusted_keys,
+        vec!["17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce".to_string()],
+        "a web address the configuration names is the user's choice"
+    );
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    // The same lists: nothing to say.
+    let mut config = HostConfig::parse(SELF_UPDATING).unwrap();
+    let same = SELF_UPDATING.replace(
+        r#""kernel": "C:\\Program Files\\DSA\\vm\\bzImage",
+  "images_dir": "C:\\ProgramData\\DSA\\images",
+"#,
+        "",
+    );
+    let same = same.replace(
+        r#"  "log_file": "C:\\ProgramData\\DSA\\logs\\dsa-hostd.log",
+"#,
+        "",
+    );
+    assert!(config
+        .apply_package(&InstalledPackage::parse(&same).unwrap())
+        .is_empty());
+}
+
+#[cfg(windows)]
+#[test]
+fn fr15_the_service_boots_the_newer_image_an_upgrade_bundled() {
+    use dsa_host_windows::host_config::InstalledPackage;
+    use dsa_host_windows::service::open_updates;
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("fr15-bundled-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let images = dir.join("images");
+    for (version, build) in [("17.0.0-1", 1), ("17.0.0-5", 5)] {
+        let folder = images.join("images").join(version);
+        std::fs::create_dir_all(&folder).unwrap();
+        let disk = b"vhdxfile and the rest of a disk";
+        std::fs::write(folder.join("disk.vhdx"), disk).unwrap();
+        let manifest = serde_json::json!({
+            "version": version, "android_major": 17, "build": build,
+            "files": {"disk.vhdx": {"size": disk.len()}},
+        });
+        std::fs::write(folder.join("image.json"), manifest.to_string()).unwrap();
+    }
+    // The state the first installation left: its own image, booted and confirmed.
+    std::fs::write(
+        images.join("state.json"),
+        r#"{"current": {"version": "17.0.0-1", "android_major": 17, "build": 1}}"#,
+    )
+    .unwrap();
+    let mut config = HostConfig::parse(
+        &serde_json::json!({
+            "kernel": dir.join("bzImage"),
+            "images_dir": images,
+            "first_image": {"version": "17.0.0-1", "android_major": 17, "build": 1},
+        })
+        .to_string(),
+    )
+    .unwrap();
+    config.apply_package(&InstalledPackage::parse(REAL_PACKAGE).unwrap());
+
+    let updates = open_updates(&config, "test").unwrap().unwrap();
+    let state = updates.store.state().unwrap();
+    assert_eq!(state.current.version, "17.0.0-5");
+    assert_eq!(state.previous.unwrap().version, "17.0.0-1");
+    assert!(state.on_trial);
+    // The next start keeps it.
+    let updates = open_updates(&config, "test").unwrap().unwrap();
+    assert_eq!(updates.store.state().unwrap().current.version, "17.0.0-5");
+}

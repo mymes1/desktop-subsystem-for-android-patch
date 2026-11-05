@@ -859,10 +859,19 @@ jobs:
       # makes the installed service download it, run its setup.exe and restart as it. The
       # list is staged beside the mirror and put in place just before dsa update, so the
       # service's own first check (a minute after it started) cannot find it first.
+      # 0.0.10 bundles a newer stand-in image, 17.0.0-2, whose disk has a disk's signature, so
+      # the service takes its files as complete and must boot it in place of 17.0.0-1.
       - name: Build version 0.0.10 and offer it in the program list
         run: |
+          $newer = (New-Item -ItemType Directory -Force .scratch\stand-in-image-2).FullName
+          Copy-Item .scratch\stand-in-image\* $newer
+          Set-Content -Path "$newer\disk.vhdx" -Value "vhdxfile, a newer stand-in disk" -NoNewline
+          $manifest = Get-Content -Raw "$newer\image.json" | ConvertFrom-Json
+          $manifest.version = "17.0.0-2"
+          $manifest.build = 2
+          $manifest | ConvertTo-Json -Depth 4 | Set-Content -Path "$newer\image.json"
           dsa/host/platform/windows/installer/build.ps1 -Version 0.0.10 -PlaceholderKernel -Arch $env:DSA_ARCH `
-            -ImageDir .scratch\stand-in-image -AndroidMajor 17 `
+            -ImageDir .scratch\stand-in-image-2 -AndroidMajor 17 `
             -PipeSddl "D:P(A;;GA;;;SY)(A;;GRGW;;;IU)(A;;GRGW;;;AU)" `
             -ListUrl "$env:MIRROR\images.json" -TrustedKey $env:TEST_PUBLIC_KEY `
             -ProgramListUrl "$env:MIRROR\program.json"
@@ -935,6 +944,19 @@ jobs:
           if (Test-Path "$env:DATA_DIR\updates\0.0.10") { throw "the setup file was not removed after the update" }
           if ((Get-Content -Raw $configPath | ConvertFrom-Json).update.check_interval_hours -ne 48) {
             throw "the upgrade replaced the edited configuration"
+          }
+          # fr15: the kept configuration still names 17.0.0-1, but the upgrade's own record
+          # names the image it bundled, and the service boots that one, on trial.
+          $package = Get-Content -Raw "$env:DATA_DIR\installed-package.json" | ConvertFrom-Json
+          if ($package.first_image.version -ne '17.0.0-2') { throw "the upgrade did not record the image it bundled" }
+          if (-not (Test-Path "$env:DATA_DIR\images\images\17.0.0-2\image.json")) { throw "the upgrade did not install its image" }
+          $state = Get-Content -Raw "$env:DATA_DIR\images\state.json" | ConvertFrom-Json
+          Write-Host ($state | ConvertTo-Json -Depth 4)
+          if ($state.current.version -ne '17.0.0-2' -or -not $state.on_trial) {
+            throw "the service did not switch to the image the upgrade bundled"
+          }
+          if (-not ((Get-Content "$env:DATA_DIR\logs\dsa-hostd.log") -match 'this installation brought the image 17\.0\.0-2')) {
+            throw "the service did not say it switched to the bundled image"
           }
           $status = & "$env:PROGRAM_DIR\dsa.exe" status 2>&1
           $status

@@ -327,6 +327,38 @@ impl ImageStore {
         Ok(state.current)
     }
 
+    /// Makes the image an installer just put in the store current, when it is newer than the
+    /// current one and has all its files. An upgrade bundles a newer image beside the ones
+    /// already here, and nothing else would ever boot it. It boots on trial like a
+    /// downloaded image: the image before it stays as previous (or, when the current image
+    /// is itself still on trial, the previous one stays), and one that fails is not adopted
+    /// again by the same build. Returns whether it was adopted.
+    pub fn adopt_bundled(&self, bundled: &InstalledImage) -> Result<bool, UpdateError> {
+        let mut state = self.state()?;
+        let newer = (bundled.android_major, bundled.build)
+            > (state.current.android_major, state.current.build);
+        if !newer
+            || bundled.version == state.current.version
+            || !is_plain_name(&bundled.version)
+            || state.failed.contains(&bundled.version)
+            || !image_is_usable(&self.image_dir(&bundled.version))
+        {
+            return Ok(false);
+        }
+        let before = std::mem::replace(&mut state.current, bundled.clone());
+        // Only an image that still has its files can be gone back to: removing the older
+        // package can take the image it installed with it.
+        let usable = |image: &InstalledImage| {
+            is_plain_name(&image.version) && image_is_usable(&self.image_dir(&image.version))
+        };
+        if !state.on_trial || !state.previous.as_ref().is_some_and(usable) {
+            state.previous = Some(before).filter(usable);
+        }
+        state.on_trial = true;
+        self.write_state(&state)?;
+        Ok(true)
+    }
+
     /// Makes sure the current image is one that can boot. When the state names an image whose
     /// files are missing or broken (a test package's stand-in, a folder emptied by hand), it
     /// moves to a usable image instead: the previous one, another complete image in the store
