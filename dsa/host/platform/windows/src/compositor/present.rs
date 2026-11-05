@@ -400,10 +400,13 @@ struct State {
     watch: Option<(PressWatch, Duration)>,
 }
 
-/// The presses each task's window has to watch, by task: the point in guest pixels and when
-/// the press came on the host clock. Filled from the window's thread, taken by the presenter.
-fn presses() -> &'static Mutex<HashMap<i32, ((f32, f32), Duration)>> {
-    static PRESSES: OnceLock<Mutex<HashMap<i32, ((f32, f32), Duration)>>> = OnceLock::new();
+/// A press a window has to watch: the point in guest pixels and when it came on the host clock.
+type Press = ((f32, f32), Duration);
+
+/// The presses each task's window has to watch, by task. Filled from the window's thread, taken
+/// by the presenter.
+fn presses() -> &'static Mutex<HashMap<i32, Press>> {
+    static PRESSES: OnceLock<Mutex<HashMap<i32, Press>>> = OnceLock::new();
     PRESSES.get_or_init(Mutex::default)
 }
 

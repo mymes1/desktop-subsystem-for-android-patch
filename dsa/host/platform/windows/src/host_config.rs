@@ -131,7 +131,7 @@ pub fn profile_disk(local_app_data: &std::path::Path) -> PathBuf {
 pub fn host_sized_memory_mb(limit_mb: u32) -> u32 {
     match limit_mb {
         0 => DEFAULT_MEMORY_MB,
-        limit => limit.min(DEFAULT_MEMORY_MB).max(2048),
+        limit => limit.clamp(2048, DEFAULT_MEMORY_MB),
     }
 }
 
