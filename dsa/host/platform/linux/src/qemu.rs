@@ -499,7 +499,8 @@ pub fn plugged_bytes(mb: u64) -> u64 {
     mb * 1024 * 1024
 }
 
-#[cfg(test)]
+// Linux paths: "/a" is not absolute on Windows, where the workspace is also tested.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
