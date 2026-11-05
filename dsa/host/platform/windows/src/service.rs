@@ -484,11 +484,31 @@ pub fn create_user_android(
 }
 
 /// Opens the update store when the configuration names one.
-fn open_updates(config: &HostConfig, build: &str) -> Result<Option<Updates>, String> {
-    let (Some(root), Some(first)) = (&config.images_dir, &config.first_image) else {
+/// An image that the package installed last bundled, newer than the store's current one,
+/// becomes current on trial first: the configuration kept from an earlier installation still
+/// names that installation's image, and nothing else would boot the new one.
+pub fn open_updates(config: &HostConfig, build: &str) -> Result<Option<Updates>, String> {
+    let (Some(root), Some(configured)) = (&config.images_dir, &config.first_image) else {
         return Ok(None);
     };
+    let first = config.bundled_image.as_ref().unwrap_or(configured);
     let store = ImageStore::open_as(root, first, build).map_err(|e| e.to_string())?;
+    if let Some(bundled) = &config.bundled_image {
+        let before = store.state().map(|state| state.current.version).ok();
+        match store.adopt_bundled(bundled) {
+            Ok(true) => eprintln!(
+                "{build}: this installation brought the image {}; booting it in place of {} \
+                 (which is kept until the new one has booted)",
+                bundled.version,
+                before.as_deref().unwrap_or("the previous image")
+            ),
+            Ok(false) => {}
+            Err(why) => eprintln!(
+                "{build}: switching to the bundled image {}: {why}",
+                bundled.version
+            ),
+        }
+    }
     // An installation can find a state that names an image it cannot boot, such as a test
     // package's stand-in, and Android would then never start.
     match store.recover(first) {
@@ -773,6 +793,9 @@ where
              the real package instead"
         );
     }
+    for note in &config.package_notes {
+        eprintln!("{build}: {note}");
+    }
     prepare_machine_tmp(&config, build);
     let grace = Duration::from_secs(config.stop_timeout_secs + 15);
     let store = settings_store(&config);
@@ -814,8 +837,9 @@ where
         program_updates_available: program.is_some() && config.program_updates_available(),
         image_updates_available,
         android_version: config
-            .first_image
+            .bundled_image
             .as_ref()
+            .or(config.first_image.as_ref())
             .map(|image| image.version.clone()),
     };
     // With an update store the image the next start boots is the store's current one, which

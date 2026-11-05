@@ -171,6 +171,14 @@ if ($ProgramListUrl) {
     $config.update.program_dir = "{data}\updates"
 }
 $config | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8NoBOM (Join-Path $stage "dsa-hostd.json")
+# An upgrade keeps dsa-hostd.json as the user left it, so it goes on naming the first
+# installation's image and release lists. This file is replaced by every installation and
+# tells the service what this package carries: the image it bundled (booted when newer than
+# the current one) and the lists it was built for.
+$package = [ordered]@{ first_image = $first }
+if ($testPackage) { $package.test_package = $true }
+if ($config.Contains("update")) { $package.update = $config.update }
+$package | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8NoBOM (Join-Path $stage "installed-package.json")
 
 # The setup screens: a .NET Framework 4.7.2 program that setup.exe carries and starts.
 $setupUi = Join-Path $out "setup-ui"

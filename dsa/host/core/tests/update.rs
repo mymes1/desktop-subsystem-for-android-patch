@@ -514,3 +514,80 @@ fn fr14_with_no_usable_image_the_installed_image_is_current_again() {
         Recovery::NothingBetter { broken: first }
     );
 }
+
+#[test]
+fn fr15_an_upgrade_that_bundles_a_newer_image_boots_it_on_trial() {
+    // An older installation's state names its own image; the newer installer put a newer
+    // one beside it.
+    let old = installed("17.0.0-1", 17, 1);
+    let (store, root) = fresh_store(&old);
+    put_image(&root, "17.0.0-1", 17, 1, true);
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    let bundled = installed("17.0.0-5", 17, 5);
+
+    assert!(store.adopt_bundled(&bundled).unwrap());
+    let state = store.state().unwrap();
+    assert_eq!(state.current, bundled);
+    assert_eq!(state.previous, Some(old.clone()));
+    assert!(state.on_trial, "the bundled image has not booted here yet");
+    // Adopted once: starting again changes nothing.
+    assert!(!store.adopt_bundled(&bundled).unwrap());
+
+    // A bundled image that does not boot goes back to the one before it and is not adopted
+    // again by the same build, even with its files put back.
+    assert_eq!(store.roll_back().unwrap(), old);
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    assert!(!store.adopt_bundled(&bundled).unwrap());
+    assert_eq!(store.state().unwrap().current, old);
+}
+
+#[test]
+fn fr15_a_bundled_image_that_is_older_or_incomplete_is_not_adopted() {
+    let current = installed("17.0.0-7", 17, 7);
+    let (store, root) = fresh_store(&current);
+    put_image(&root, "17.0.0-7", 17, 7, true);
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    put_image(&root, "17.0.0-9", 17, 9, false);
+    // Older than what the updates already brought.
+    assert!(!store.adopt_bundled(&installed("17.0.0-5", 17, 5)).unwrap());
+    // Newer, but its files are not complete.
+    assert!(!store.adopt_bundled(&installed("17.0.0-9", 17, 9)).unwrap());
+    // No image at all (a package that bundles none).
+    assert!(!store.adopt_bundled(&installed("none", 0, 0)).unwrap());
+    let state = store.state().unwrap();
+    assert_eq!(state.current, current);
+    assert!(!state.on_trial);
+}
+
+#[test]
+fn fr15_an_old_image_the_upgrade_removed_is_not_kept_as_previous() {
+    // Removing the older package took the image it installed with it.
+    let old = installed("17.0.0-1", 17, 1);
+    let (store, root) = fresh_store(&old);
+    std::fs::remove_dir_all(root.join("images").join("17.0.0-1")).unwrap();
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    assert!(store.adopt_bundled(&installed("17.0.0-5", 17, 5)).unwrap());
+    let state = store.state().unwrap();
+    assert_eq!(state.current, installed("17.0.0-5", 17, 5));
+    assert_eq!(state.previous, None);
+}
+
+#[test]
+fn fr15_a_bundled_image_replaces_an_update_still_on_trial_keeping_the_good_one() {
+    let good = installed("17.0.0-1", 17, 1);
+    let (store, root) = fresh_store(&good);
+    put_image(&root, "17.0.0-1", 17, 1, true);
+    put_image(&root, "17.0.0-2", 17, 2, true);
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    let mut state = store.state().unwrap();
+    state.current = installed("17.0.0-2", 17, 2);
+    state.previous = Some(good.clone());
+    state.on_trial = true;
+    std::fs::write(root.join("state.json"), serde_json::to_vec(&state).unwrap()).unwrap();
+
+    assert!(store.adopt_bundled(&installed("17.0.0-5", 17, 5)).unwrap());
+    let state = store.state().unwrap();
+    assert_eq!(state.current, installed("17.0.0-5", 17, 5));
+    assert_eq!(state.previous, Some(good), "the last image known to boot stays");
+    assert!(state.on_trial);
+}
