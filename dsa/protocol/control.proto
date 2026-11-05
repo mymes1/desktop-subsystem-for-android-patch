@@ -978,6 +978,10 @@ message OpenFile {
   // The file's length in bytes.
   uint64 size = 3;
   FileAction action = 4;
+  // The app to share the file with, when the user dropped it on that app's window: the agent
+  // sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+  // only when that app does not take it. Empty to let the user pick.
+  string package = 5;
 }
 
 // Host to guest: part of the content of a file an OpenFile announced.
@@ -1020,6 +1024,37 @@ message FileProgress {
   uint32 transfer_id = 1;
   uint64 received = 2;
   string error = 3;
+}
+
+// Host to guest: which of the user's host folders their Android shows in its shared storage.
+// The control daemon has the guest mount each one at `<location>/<folder>` under shared
+// storage (/storage/emulated/0), over a file server (9P2000.L) on the host's vsock `port`; it
+// takes them all away when `on` is false, or a folder when it is no longer named. The agent
+// gets it too, and has the media scanner look at the folders once they are there. The host
+// sends it each time the agent connects, and on every change after that. A guest boots with
+// no folders shared.
+//
+// Each connection to `port` starts with the host's 32-byte nonce; the guest answers with the
+// 32-byte HMAC-SHA256 of "file-share:" and the nonce, keyed with the boot's secret, so only the
+// guest's own daemon reaches the user's files. The 9P conversation follows on the same stream,
+// and its attach names the folder (`aname`).
+message FileSharing {
+  bool on = 1;
+  uint32 port = 2;
+  // The folder in shared storage the host's folders go under, such as "Windows".
+  string location = 3;
+  // The folders, by the names the host gives them: "Documents", "Downloads", "Pictures",
+  // "Music", "Videos", "Desktop".
+  repeated string folders = 4;
+}
+
+// Host to guest, to the control daemon: serve Android's shared storage to the host, so the
+// user can see it in the host's file manager. The daemon listens on the vsock `port` for the
+// host and answers WebDAV requests whose path starts with "/<token>/", and no others. A new
+// AndroidFiles replaces the last one; a `port` of 0 stops the server.
+message AndroidFiles {
+  uint32 port = 1;
+  string token = 2;
 }
 
 // Host to guest, to the control daemon: a probe that pairs the host's clock with the guest's,
@@ -1890,5 +1925,7 @@ message Envelope {
     CameraStillTaken camera_still_taken = 266;
     CameraError camera_error = 267;
     SetTaskCaption set_task_caption = 155;
+    FileSharing file_sharing = 290;
+    AndroidFiles android_files = 291;
   }
 }

@@ -687,6 +687,7 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
                 name: "photo.jpg".into(),
                 size: 1000,
                 action: FileAction::Send as i32,
+                package: String::new(),
             })),
         ),
         (
