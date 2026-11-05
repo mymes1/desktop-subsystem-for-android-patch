@@ -98,6 +98,12 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   click's ripple started 100 ms late. A touch that becomes a scroll now shows the row pressed
   until it moves past the touch slop. `make-image.py` builds the overlay with aapt2 from the
   Android SDK (`--aapt2`, or found under `ANDROID_HOME`) against the image's own framework.
+- A second static overlay (`/vendor/overlay/DsaSettingsOverlay.apk`) replaces Settings'
+  toolbar back icon (`settingslib_expressive_icon_back`). SettingsLib draws its 40 dp circle
+  16 dp into the 56 dp button, so the circle's centre is 8 dp right of the button's. The
+  framework draws the button's hover layer and ripple around the button's centre, and they
+  showed 8 dp left of the circle at every density. The replacement keeps the 56 dp and puts
+  8 dp on each side of the circle. aapt2 builds it the same way as the framework overlay.
 - With the input trace on (`androidboot.hardware.dsa_input_trace=1`), `dsa-trace.rc` makes every
   app's main thread log each message it takes 16 ms or more to handle, or starts 16 ms or more
   late.

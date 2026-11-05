@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+import xml.etree.ElementTree as ET
 import zlib
 from pathlib import Path
 from unittest.mock import patch
@@ -2627,6 +2628,51 @@ class TouchLatencyTests(unittest.TestCase):
             self.assertEqual(link_call[link_call.index("-o") + 1], apk)
             self.assertEqual(link_call[-1], compile_call[compile_call.index("-o") + 1])
 
+    def test_fr5_settings_back_button_circle_is_centred_on_the_button_its_hover_is_drawn_around(self):
+        # SettingsLib's icon puts a 40 dp circle 16 dp into a 56 dp drawable; the framework
+        # centres the navigation button's hover layer and ripple on the 56 dp button.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.settings_overlay_sources(root / "src")
+            manifest = (root / "src/AndroidManifest.xml").read_text()
+            self.assertIn('android:targetPackage="com.android.settings"', manifest)
+            self.assertIn('android:isStatic="true"', manifest)
+            self.assertIn('android:hasCode="false"', manifest)
+            for folder, theme in [("drawable", "light"), ("drawable-night", "dark")]:
+                icon = ET.fromstring((root / "src/res" / folder / "settingslib_expressive_icon_back.xml").read_text())
+                ns = "{http://schemas.android.com/apk/res/android}"
+                circle, arrow = icon.findall("item")
+                size = circle.find("shape/size")
+                width = int(size.get(ns + "width").removesuffix("dp"))
+                start = int(circle.get(ns + "start").removesuffix("dp"))
+                end = int(circle.get(ns + "end").removesuffix("dp"))
+                # The same 56 dp as the button, with the circle's centre on the button's centre.
+                self.assertEqual(start + width + end, 56)
+                self.assertEqual(start, end)
+                self.assertEqual(arrow.get(ns + "start"), arrow.get(ns + "end"))
+                self.assertEqual(arrow.get(ns + "gravity"), "center")
+                self.assertIn(theme, circle.find("shape/solid").get(ns + "color"))
+                self.assertIn(theme, arrow.find("vector").get(ns + "tint"))
+
+            overlay = root / "DsaSettingsOverlay.apk"
+            overlay.write_bytes(b"settings")
+            with self._modify(root, settings_overlay=overlay) as archive:
+                self.assertEqual(archive.read("VENDOR/overlay/DsaSettingsOverlay.apk"), b"settings")
+                certs = archive.read("META/apkcerts.txt").decode()
+                fs_config = archive.read("META/vendor_filesystem_config.txt").decode()
+            self.assertEqual(certs.count('name="DsaSettingsOverlay.apk"'), 1)
+            self.assertIn("vendor/overlay/DsaSettingsOverlay.apk 0 0 644 capabilities=0x0", fs_config)
+            self.assertEqual(fs_config.count("vendor/overlay 0 0 755"), 1)
+
+    def test_fr5_the_settings_overlay_is_built_against_the_images_own_framework(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(make_image, "run") as run:
+            root = Path(tmp)
+            apk = make_image.build_settings_overlay(Path("/sdk/aapt2"), root / "framework-res.apk", root)
+            compile_call, link_call = (call.args for call in run.call_args_list)
+            self.assertEqual(compile_call[:2], (Path("/sdk/aapt2"), "compile"))
+            self.assertIn(root / "framework-res.apk", link_call)
+            self.assertEqual(link_call[link_call.index("-o") + 1], apk)
+
     def test_fr5_without_aapt2_the_image_has_no_overlay(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertNotIn("VENDOR/overlay/DsaFrameworkOverlay.apk", archive.namelist())
@@ -2668,13 +2714,15 @@ class TouchLatencyTests(unittest.TestCase):
                     archive.writestr("META/apkcerts.txt", "")
                     if complete:
                         archive.writestr("VENDOR/overlay/DsaFrameworkOverlay.apk", b"overlay")
+                        archive.writestr("VENDOR/overlay/DsaSettingsOverlay.apk", b"overlay")
                         archive.writestr("SYSTEM/etc/init/dsa-trace.rc", b"rc")
                     archive.writestr("SYSTEM/build.prop", props)
                 outputs.append(subprocess.run(
                     [sys.executable, str(check_script), str(img_dir), str(keys_dir)],
                     capture_output=True, text=True,
                 ).stdout)
-        for missing in ["DsaFrameworkOverlay.apk is missing", "dsa-trace.rc is missing"]:
+        for missing in ["DsaFrameworkOverlay.apk is missing", "DsaSettingsOverlay.apk is missing",
+                        "dsa-trace.rc is missing"]:
             self.assertIn(missing, outputs[0])
             self.assertNotIn(missing, outputs[1])
 
