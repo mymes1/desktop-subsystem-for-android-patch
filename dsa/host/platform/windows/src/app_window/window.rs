@@ -1411,6 +1411,13 @@ impl Ui {
             data.caption.extend_frame(hwnd);
             data.caption.report_height(hwnd, &*self.setup.report);
             data.caption.paint(hwnd, data.presenter.borrow().as_deref());
+            // Until the app's first frame the window shows the app's icon on a splash
+            // background, never the desktop through an empty window. It is on the screen
+            // before the window is shown.
+            if let Some(presenter) = data.presenter.borrow().as_deref() {
+                let dpi = GetDpiForWindow(hwnd).max(96);
+                presenter.show_splash(super::splash::image(ICON_ID, dpi));
+            }
         }
         (self.setup.report)(FromHost::Resized {
             task_id,
