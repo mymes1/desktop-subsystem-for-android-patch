@@ -215,7 +215,10 @@ fn main() -> std::process::ExitCode {
         drop(starting);
         return match opened {
             Ok(path) => {
-                note(logger.as_deref(), &format!("opened Android's files at {path}"));
+                note(
+                    logger.as_deref(),
+                    &format!("opened Android's files at {path}"),
+                );
                 std::process::ExitCode::SUCCESS
             }
             Err(why) => {

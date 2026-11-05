@@ -213,7 +213,10 @@ impl<'a> Server<'a> {
             kind::TREADDIR => self.readdir(input),
             kind::TCLUNK => {
                 let fid = input.u32()?;
-                self.fids.remove(&fid).map(|_| Vec::new()).ok_or(errno::EBADF)
+                self.fids
+                    .remove(&fid)
+                    .map(|_| Vec::new())
+                    .ok_or(errno::EBADF)
             }
             kind::TREMOVE => {
                 let fid = input.u32()?;
@@ -229,7 +232,8 @@ impl<'a> Server<'a> {
             kind::TSTATFS => self.statfs(input),
             kind::TFSYNC => {
                 let fid = input.u32()?;
-                if let Some(Open::File(file)) = self.fids.get(&fid).ok_or(errno::EBADF)?.open.as_ref()
+                if let Some(Open::File(file)) =
+                    self.fids.get(&fid).ok_or(errno::EBADF)?.open.as_ref()
                 {
                     file.sync_all().map_err(errno_of)?;
                 }
@@ -364,7 +368,11 @@ impl<'a> Server<'a> {
         out.u32(GUEST_OWNER);
         out.u64(1);
         out.u64(0);
-        let size = if metadata.is_dir() { 4096 } else { metadata.len() };
+        let size = if metadata.is_dir() {
+            4096
+        } else {
+            metadata.len()
+        };
         out.u64(size);
         out.u64(4096);
         out.u64(size.div_ceil(512));
@@ -592,7 +600,13 @@ impl<'a> Server<'a> {
         Ok(Vec::new())
     }
 
-    fn rename_paths(&self, from_fid: u32, from: &Path, to_fid: u32, to: &Path) -> Result<(), Errno> {
+    fn rename_paths(
+        &self,
+        from_fid: u32,
+        from: &Path,
+        to_fid: u32,
+        to: &Path,
+    ) -> Result<(), Errno> {
         let (from_root, to_root) = (&self.known(from_fid)?.root, &self.known(to_fid)?.root);
         // Both ends stay in one folder: a file never moves from one shared folder to another
         // behind the guest's back.
@@ -939,12 +953,30 @@ mod tests {
     #[test]
     fn fr29_names_that_leave_a_folder_are_refused() {
         for bad in [
-            "", ".", "..", "a/b", "..\\x", "C:", "file:stream", "con", "NUL.txt", "com1", "a.",
-            "a ", "a\nb", "a*b",
+            "",
+            ".",
+            "..",
+            "a/b",
+            "..\\x",
+            "C:",
+            "file:stream",
+            "con",
+            "NUL.txt",
+            "com1",
+            "a.",
+            "a ",
+            "a\nb",
+            "a*b",
         ] {
             assert!(check_name(bad).is_err(), "{bad:?} was accepted");
         }
-        for good in ["photo.jpg", "..hidden", "\u{d55c}\u{ae00}.txt", "console.log", "com10"] {
+        for good in [
+            "photo.jpg",
+            "..hidden",
+            "\u{d55c}\u{ae00}.txt",
+            "console.log",
+            "com10",
+        ] {
             assert!(check_name(good).is_ok(), "{good:?} was refused");
         }
         assert_eq!(check_name(&"a".repeat(256)), Err(errno::ENAMETOOLONG));

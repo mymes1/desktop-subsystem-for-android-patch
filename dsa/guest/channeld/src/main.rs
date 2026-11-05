@@ -308,7 +308,11 @@ mod daemon {
         match set_property(PROPERTY, &value) {
             Ok(()) => say!(
                 "Android's files are {}",
-                if value == "off" { "not served" } else { "served to the host" }
+                if value == "off" {
+                    "not served"
+                } else {
+                    "served to the host"
+                }
             ),
             Err(why) => say!("could not serve Android's files: {why}"),
         }

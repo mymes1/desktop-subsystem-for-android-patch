@@ -78,7 +78,9 @@ pub fn run(read_property: &dyn Fn(&str) -> String, say: &(dyn Fn(&str) + Sync)) 
         }
         socket
     };
-    say(&format!("serving Android's files to the host on vsock port {port}"));
+    say(&format!(
+        "serving Android's files to the host on vsock port {port}"
+    ));
     loop {
         // SAFETY: an out address of the size given.
         let (fd, peer) = unsafe {

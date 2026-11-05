@@ -1585,13 +1585,23 @@ fn fr29_dsa_settings_turns_file_sharing_off_and_chooses_the_folders() {
     assert_eq!(settings["file_sharing"], true);
     assert_eq!(
         settings["shared_folders"],
-        serde_json::json!(["Documents", "Downloads", "Pictures", "Music", "Videos", "Desktop"])
+        serde_json::json!([
+            "Documents",
+            "Downloads",
+            "Pictures",
+            "Music",
+            "Videos",
+            "Desktop"
+        ])
     );
     let changed = json_of(&dsa(
         &endpoint,
         "settings set shared-folders pictures,Documents --json",
     ));
-    assert_eq!(changed["shared_folders"], serde_json::json!(["Documents", "Pictures"]));
+    assert_eq!(
+        changed["shared_folders"],
+        serde_json::json!(["Documents", "Pictures"])
+    );
     let changed = json_of(&dsa(&endpoint, "settings set file-sharing off --json"));
     assert_eq!(changed["file_sharing"], false);
     let text = dsa(&endpoint, "settings");
@@ -1606,7 +1616,6 @@ fn fr29_dsa_settings_turns_file_sharing_off_and_chooses_the_folders() {
 
 #[test]
 fn fr29_dsa_settings_refuses_a_folder_it_cannot_share() {
-
     assert!(parse(&args("settings set shared-folders C:\\Windows")).is_err());
     assert_eq!(
         parse(&args("settings set shared-folders all"))
@@ -1620,12 +1629,8 @@ fn fr29_dsa_settings_refuses_a_folder_it_cannot_share() {
 
 #[test]
 fn fr29_dsa_files_is_parsed() {
-
     assert_eq!(parse(&args("files")).unwrap().command, Cmd::Files);
-    assert_eq!(
-        parse(&args("files open")).unwrap().command,
-        Cmd::FilesOpen
-    );
+    assert_eq!(parse(&args("files open")).unwrap().command, Cmd::FilesOpen);
 }
 
 #[test]

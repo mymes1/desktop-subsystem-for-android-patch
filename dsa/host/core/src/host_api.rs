@@ -3211,9 +3211,9 @@ impl HostApiService {
             Some(request::Body::GetAndroidFiles(_)) => match self.androids.android(&peer.user) {
                 Err(why) => error(ErrorCode::Unavailable, why),
                 Ok(android) => match android.android_files() {
-                    Ok(url) => response::Body::AndroidFiles(types::AndroidFilesLocation {
-                        location: url,
-                    }),
+                    Ok(url) => {
+                        response::Body::AndroidFiles(types::AndroidFilesLocation { location: url })
+                    }
                     Err(why) => {
                         eprintln!("files: Android's files for {}: {why}", peer.user);
                         error(ErrorCode::Unavailable, why)
