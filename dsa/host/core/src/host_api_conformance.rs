@@ -1351,6 +1351,7 @@ pub fn sample_task(task_id: i32, label: &str) -> Task {
         min_height: 500,
         status_bar: StatusBarAppearance::Dark,
         status_bar_color: 0xFF20_2124,
+        ..Task::default()
     }
 }
 

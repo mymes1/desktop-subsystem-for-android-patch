@@ -2116,6 +2116,88 @@ fn fr24_stopping_without_asking_is_a_setting_off_by_default() {
 }
 
 #[test]
+fn fr30_dsa_app_window_is_parsed() {
+    use dsa_cli::AppWindowAction;
+    let list = parse(&args("app-window --json")).unwrap();
+    assert_eq!(list.command, Cmd::AppWindow);
+    assert_eq!(list.app_window, Some(AppWindowAction::List));
+    assert_eq!(
+        parse(&args("app-window com.example.notes")).unwrap().app_window,
+        Some(AppWindowAction::Show("com.example.notes".into()))
+    );
+    assert_eq!(
+        parse(&args(
+            "app-window com.example.notes --fixed-size on --start-size 400x700"
+        ))
+        .unwrap()
+        .app_window,
+        Some(AppWindowAction::Set {
+            package: "com.example.notes".into(),
+            fixed_size: Some(true),
+            start_size: Some(Some((400, 700))),
+        })
+    );
+    assert_eq!(
+        parse(&args("app-window com.example.notes --start-size auto"))
+            .unwrap()
+            .app_window,
+        Some(AppWindowAction::Set {
+            package: "com.example.notes".into(),
+            fixed_size: None,
+            start_size: Some(None),
+        })
+    );
+    assert_eq!(
+        parse(&args("app-window com.example.notes reset"))
+            .unwrap()
+            .app_window,
+        Some(AppWindowAction::Reset("com.example.notes".into()))
+    );
+    assert!(parse(&args("app-window com.example.notes --fixed-size maybe")).is_err());
+    assert!(parse(&args("app-window com.example.notes --start-size big")).is_err());
+    assert!(parse(&args("app-window --fixed-size on")).is_err());
+}
+
+#[test]
+fn fr30_dsa_app_window_changes_and_resets_an_apps_window_settings() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let none = json_of(&dsa(&endpoint, "app-window --json"));
+    assert_eq!(none["apps"], serde_json::json!([]));
+    let set = json_of(&dsa(
+        &endpoint,
+        "app-window com.example.notes --fixed-size on --start-size 400x700 --json",
+    ));
+    assert_eq!(set["apps"][0]["package"], "com.example.notes");
+    assert_eq!(set["apps"][0]["fixed_size"], true);
+    assert_eq!(set["apps"][0]["start_size"], serde_json::json!([400, 700]));
+    // Changing one setting keeps the other.
+    let resizable = json_of(&dsa(
+        &endpoint,
+        "app-window com.example.notes --fixed-size off --json",
+    ));
+    assert_eq!(resizable["apps"][0]["fixed_size"], false);
+    assert_eq!(
+        resizable["apps"][0]["start_size"],
+        serde_json::json!([400, 700])
+    );
+    let listed = json_of(&dsa(&endpoint, "app-window --json"));
+    assert_eq!(listed["apps"].as_array().unwrap().len(), 1);
+    let output = dsa(&endpoint, "app-window com.example.notes");
+    assert_eq!(
+        stdout(&output).trim(),
+        "com.example.notes: resizable, opens at 400 x 700 dp"
+    );
+    let reset = json_of(&dsa(&endpoint, "app-window com.example.notes reset --json"));
+    assert_eq!(reset["apps"][0]["start_size"], serde_json::Value::Null);
+    let none = json_of(&dsa(&endpoint, "app-window --json"));
+    assert_eq!(none["apps"], serde_json::json!([]));
+    let refused = dsa(&endpoint, "app-window com.example.notes --start-size 10x10");
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains("start size"), "{}", stderr(&refused));
+}
+
+#[test]
 fn fr31_the_run_mode_is_as_needed_after_five_minutes_and_changed_with_dsa_settings() {
     let ((listener, _, _), endpoint) = local_pair();
     let _service = settings_service(listener);

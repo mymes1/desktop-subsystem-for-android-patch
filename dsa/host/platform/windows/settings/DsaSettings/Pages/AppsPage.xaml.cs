@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using Dsa.Settings.Core;
 
 namespace Dsa.Settings.Pages;
@@ -16,7 +17,30 @@ public partial class AppsPage : Page
     {
         InitializeComponent();
         DataContext = ViewModel;
-        Loaded += async (_, _) => await ViewModel.RefreshAsync();
+        Loaded += async (_, _) =>
+        {
+            await ViewModel.RefreshAsync();
+            await ViewModel.LoadWindowSettingsAsync();
+        };
+    }
+
+    private async void OnResizable(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton { Tag: string package } toggle)
+        {
+            await ViewModel.SetResizableAsync(package, toggle.IsChecked == true);
+        }
+    }
+
+    private async void OnStartSize(object sender, SelectionChangedEventArgs e)
+    {
+        // The list takes the app's size when it fills in; only a choice the user makes counts.
+        var chosen = e.RemovedItems.Count > 0 || sender is ComboBox { IsDropDownOpen: true }
+            || sender is ComboBox { IsKeyboardFocusWithin: true };
+        if (sender is ComboBox { Tag: string package, SelectedIndex: >= 0 } box && chosen)
+        {
+            await ViewModel.SetStartSizeAsync(package, box.SelectedIndex);
+        }
     }
 
     private static string? PackageOf(object sender) =>

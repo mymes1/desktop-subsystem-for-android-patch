@@ -10,8 +10,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 use super::caption::{caption_tone, CaptionTone};
-use super::window_sizing::WindowSizing;
-use crate::tasks::{Bounds, Task, TaskEvent, TaskRequest};
+use super::window_mode::WindowMode;
+use super::window_sizing::{WindowSizing, BASE_DENSITY, SETTLE};
+use crate::app_windows::AppWindowSettings;
+use crate::tasks::{Bounds, Task, TaskEvent, TaskOrientation, TaskRequest};
 
 /// The display the guest's whole freeform screen is posted to. Its frames are never shown,
 /// whatever the guest says about it.
@@ -65,6 +67,14 @@ pub enum WindowChange {
     /// bar. Comes with every window that opens, and whenever the app's status bar changes
     /// tone.
     CaptionTone { task_id: i32, tone: CaptionTone },
+    /// How the window is shown (as the app asks), and whether the user may resize it (as the
+    /// user's settings for the app say). Comes with a window that opens unless it is an
+    /// ordinary resizable one, and with every change.
+    Mode {
+        task_id: i32,
+        mode: WindowMode,
+        resizable: bool,
+    },
 }
 
 /// The title of a task's window: its label, else its package, else its ID.
@@ -124,6 +134,49 @@ fn open(task: &Task) -> WindowChange {
 /// A task's size in the guest, and the largest client area its window may have.
 use super::window_sizing::TaskSize;
 
+/// The size, in the guest's pixels, that `task` is first given before its window opens, when
+/// it is to open at another size than the guest gave it: the start size the user chose for
+/// the app, else the task's size turned on its side when its app is locked to an orientation
+/// the size does not have (a portrait app opens taller than it is wide). Kept within what the
+/// guest can draw. `None` when the window opens at the task's size.
+pub fn start_size(task: &Task, app: Option<&AppWindowSettings>) -> Option<(u32, u32)> {
+    let current = window_size(&task.bounds);
+    let density = if task.density_dpi == 0 {
+        BASE_DENSITY
+    } else {
+        task.density_dpi
+    };
+    let wanted = match app.and_then(|app| app.start_size_dp) {
+        Some((width, height)) => {
+            let px = |dp: u32| {
+                (u64::from(dp) * u64::from(density) / u64::from(BASE_DENSITY)).max(1) as u32
+            };
+            (px(width), px(height))
+        }
+        None => {
+            let (width, height) = current;
+            match task.orientation {
+                TaskOrientation::Portrait if width > height => (height, width),
+                TaskOrientation::Landscape if height > width => (height, width),
+                _ => return None,
+            }
+        }
+    };
+    let wanted = match task.max_size() {
+        Some(max) => fit_within(wanted, max),
+        None => wanted,
+    };
+    (wanted != current).then_some(wanted)
+}
+
+/// A task whose window waits for the guest to give it its start size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PendingOpen {
+    size: (u32, u32),
+    /// When the guest was asked for it; `None` until it is.
+    asked: Option<Instant>,
+}
+
 /// The compositor's tasks and their windows.
 #[derive(Debug, Default)]
 pub struct TaskWindows {
@@ -137,6 +190,12 @@ pub struct TaskWindows {
     sizes: BTreeMap<i32, WindowSizing>,
     /// The task size and limit each window was last told.
     told_sizes: BTreeMap<i32, TaskSize>,
+    /// The user's window settings for each app, by package.
+    app_windows: BTreeMap<String, AppWindowSettings>,
+    /// Tasks whose window opens once the guest has given them their start size.
+    pending: BTreeMap<i32, PendingOpen>,
+    /// The mode and resizability each window was last told.
+    told_modes: BTreeMap<i32, (WindowMode, bool)>,
 }
 
 impl TaskWindows {
@@ -146,7 +205,9 @@ impl TaskWindows {
 
     /// Whether the task has a window now.
     pub fn has_window(&self, task_id: i32) -> bool {
-        self.tasks.contains_key(&task_id) && !self.closing.contains(&task_id)
+        self.tasks.contains_key(&task_id)
+            && !self.closing.contains(&task_id)
+            && !self.pending.contains_key(&task_id)
     }
 
     /// The tasks that have a window, in task ID order.
@@ -154,8 +215,74 @@ impl TaskWindows {
         self.tasks
             .keys()
             .copied()
-            .filter(|task_id| !self.closing.contains(task_id))
+            .filter(|task_id| !self.closing.contains(task_id) && !self.pending.contains_key(task_id))
             .collect()
+    }
+
+    /// Takes the user's window settings for every app, which the windows that open from now
+    /// on follow. A window open already keeps its size, and its resizability follows at once.
+    pub fn set_app_windows(&mut self, apps: &[AppWindowSettings]) -> Vec<WindowChange> {
+        self.app_windows = apps
+            .iter()
+            .map(|app| (app.package_name.clone(), app.clone()))
+            .collect();
+        let open = self.windows();
+        open.into_iter()
+            .filter_map(|task_id| self.mode_change(task_id, false))
+            .collect()
+    }
+
+    /// The mode and resizability `task`'s window has.
+    fn mode_of(&self, task: &Task) -> (WindowMode, bool) {
+        let fixed = self
+            .app_windows
+            .get(&task.package_name)
+            .is_some_and(|app| app.fixed_size);
+        (
+            WindowMode::of(task.fullscreen, task.picture_in_picture),
+            !fixed,
+        )
+    }
+
+    /// The change that tells the task's window its mode, when it differs from what it was
+    /// last told; a window that has just opened is taken to be an ordinary resizable one.
+    fn mode_change(&mut self, task_id: i32, opened: bool) -> Option<WindowChange> {
+        let task = self.tasks.get(&task_id)?;
+        let now = self.mode_of(task);
+        if opened {
+            self.told_modes.remove(&task_id);
+        }
+        let told = self
+            .told_modes
+            .get(&task_id)
+            .copied()
+            .unwrap_or((WindowMode::Normal, true));
+        self.told_modes.insert(task_id, now);
+        (told != now).then_some(WindowChange::Mode {
+            task_id,
+            mode: now.0,
+            resizable: now.1,
+        })
+    }
+
+    /// What a window that opens for `task` must do: open, take its caption tone, its mode and
+    /// its task's size and limits.
+    fn open_window(&mut self, task_id: i32) -> Vec<WindowChange> {
+        let Some(task) = self.tasks.get(&task_id).cloned() else {
+            return Vec::new();
+        };
+        self.sizes.insert(task_id, WindowSizing::new(&task));
+        self.told_sizes.remove(&task_id);
+        let mut changes = vec![
+            open(&task),
+            WindowChange::CaptionTone {
+                task_id,
+                tone: tone_of(&task),
+            },
+        ];
+        changes.extend(self.mode_change(task_id, true));
+        changes.extend(self.task_size_change(task_id));
+        changes
     }
 
     /// Records a change to the guest's tasks, and returns what the windows must do.
@@ -164,6 +291,35 @@ impl TaskWindows {
             // An app's name and icon belong to its program, not to a window, and the installed
             // apps to the start menu.
             TaskEvent::App(_) | TaskEvent::Installed(_) => Vec::new(),
+            TaskEvent::Updated(task) if self.pending.contains_key(&task.task_id) => {
+                self.tasks.insert(task.task_id, task.clone());
+                if self.closing.contains(&task.task_id) {
+                    return Vec::new();
+                }
+                let wanted = self.pending[&task.task_id].size;
+                if window_size(&task.bounds) != wanted {
+                    return Vec::new();
+                }
+                // The guest gave the task its start size: the window opens at it, with the
+                // frames the app draws at it.
+                self.pending.remove(&task.task_id);
+                self.open_window(task.task_id)
+            }
+            TaskEvent::Updated(task) if !self.tasks.contains_key(&task.task_id) => {
+                self.tasks.insert(task.task_id, task.clone());
+                if self.closing.contains(&task.task_id) {
+                    self.sizes.insert(task.task_id, WindowSizing::new(task));
+                    return Vec::new();
+                }
+                match start_size(task, self.app_windows.get(&task.package_name)) {
+                    Some(size) => {
+                        self.pending
+                            .insert(task.task_id, PendingOpen { size, asked: None });
+                        Vec::new()
+                    }
+                    None => self.open_window(task.task_id),
+                }
+            }
             TaskEvent::Updated(task) => {
                 let previous = self.tasks.insert(task.task_id, task.clone());
                 let follow = match self.sizes.get_mut(&task.task_id) {
@@ -206,6 +362,7 @@ impl TaskWindows {
                                 height,
                             });
                         }
+                        changes.extend(self.mode_change(task.task_id, false));
                         changes
                     }
                 };
@@ -216,6 +373,12 @@ impl TaskWindows {
                 self.displays.remove(task_id);
                 self.sizes.remove(task_id);
                 self.told_sizes.remove(task_id);
+                self.told_modes.remove(task_id);
+                if self.pending.remove(task_id).is_some() {
+                    self.closing.remove(task_id);
+                    self.tasks.remove(task_id);
+                    return Vec::new();
+                }
                 let was_closing = self.closing.remove(task_id);
                 if self.tasks.remove(task_id).is_some() && !was_closing {
                     vec![WindowChange::Close { task_id: *task_id }]
@@ -296,20 +459,10 @@ impl TaskWindows {
         if !self.closing.remove(&task_id) {
             return Vec::new();
         }
-        let Some(task) = self.tasks.get(&task_id) else {
+        if !self.tasks.contains_key(&task_id) {
             return Vec::new();
-        };
-        self.sizes.insert(task_id, WindowSizing::new(task));
-        self.told_sizes.remove(&task_id);
-        let mut changes = vec![
-            open(task),
-            WindowChange::CaptionTone {
-                task_id,
-                tone: tone_of(task),
-            },
-        ];
-        changes.extend(self.task_size_change(task_id));
-        changes
+        }
+        self.open_window(task_id)
     }
 
     /// The change that tells the task's window its task size and limit, when they differ
@@ -453,6 +606,24 @@ impl TaskWindows {
     /// task's size instead.
     pub fn tick(&mut self, now: Instant) -> Vec<WindowChange> {
         let mut changes = Vec::new();
+        // A guest that did not give a task its start size in time: its window opens at the
+        // size the task has, rather than not at all.
+        let late: Vec<i32> = self
+            .pending
+            .iter()
+            .filter(|(_, pending)| {
+                pending
+                    .asked
+                    .is_some_and(|asked| now.saturating_duration_since(asked) >= SETTLE)
+            })
+            .map(|(task_id, _)| *task_id)
+            .collect();
+        for task_id in late {
+            self.pending.remove(&task_id);
+            if !self.closing.contains(&task_id) {
+                changes.extend(self.open_window(task_id));
+            }
+        }
         for (task_id, sizing) in &mut self.sizes {
             if self.closing.contains(task_id) || !self.tasks.contains_key(task_id) {
                 continue;
@@ -473,6 +644,17 @@ impl TaskWindows {
     /// to the tasks and at every tick.
     pub fn reconfigures(&mut self, now: Instant) -> Vec<TaskRequest> {
         let mut requests = Vec::new();
+        for (task_id, pending) in &mut self.pending {
+            if pending.asked.is_none() && !self.closing.contains(task_id) {
+                pending.asked = Some(now);
+                requests.push(TaskRequest::Resize {
+                    task_id: *task_id,
+                    width: pending.size.0,
+                    height: pending.size.1,
+                    live: false,
+                });
+            }
+        }
         for (task_id, sizing) in &mut self.sizes {
             if self.closing.contains(task_id) || !self.tasks.contains_key(task_id) {
                 continue;
@@ -494,6 +676,8 @@ impl TaskWindows {
         self.closing.clear();
         self.sizes.clear();
         self.told_sizes.clear();
+        self.pending.clear();
+        self.told_modes.clear();
         changes
     }
 
@@ -519,6 +703,8 @@ impl TaskWindows {
         self.sizes.retain(|task_id, _| present.contains(task_id));
         self.told_sizes
             .retain(|task_id, _| present.contains(task_id));
+        self.pending.retain(|task_id, _| present.contains(task_id));
+        self.told_modes.retain(|task_id, _| present.contains(task_id));
         self.displays.clear();
         for event in current {
             changes.extend(self.apply(event));
@@ -1054,5 +1240,146 @@ mod tests {
         assert_eq!(fit_within((800, 600), (1920, 1040)), (800, 600));
         assert_eq!(fit_within((4000, 100), (1000, 1000)), (1000, 25));
         assert_eq!(fit_within((10, 10), (0, 0)), (1, 1));
+    }
+
+    fn portrait_app(task_id: i32, width: i32, height: i32) -> Task {
+        Task {
+            orientation: TaskOrientation::Portrait,
+            density_dpi: 160,
+            max_width: 1920,
+            max_height: 1080,
+            ..task(task_id, "Reader", width, height)
+        }
+    }
+
+    #[test]
+    fn fr30_a_portrait_locked_task_opens_as_a_window_taller_than_it_is_wide() {
+        let mut windows = TaskWindows::new();
+        let now = Instant::now();
+        // The guest gave the task a landscape size: the window waits while the task is given
+        // the portrait one, so it opens with frames of its own size.
+        assert!(windows
+            .apply(&TaskEvent::Updated(portrait_app(1, 1000, 600)))
+            .is_empty());
+        assert!(!windows.has_window(1));
+        assert_eq!(
+            windows.reconfigures(now),
+            vec![TaskRequest::Resize {
+                task_id: 1,
+                width: 600,
+                height: 1000,
+                live: false,
+            }]
+        );
+        assert!(windows.reconfigures(now).is_empty());
+        let changes = windows.apply(&TaskEvent::Updated(portrait_app(1, 600, 1000)));
+        let Some(WindowChange::Open { width, height, .. }) = changes.first() else {
+            panic!("expected the window to open, got {changes:?}");
+        };
+        assert!(height > width, "{width} x {height}");
+        assert!(windows.has_window(1));
+    }
+
+    #[test]
+    fn fr30_a_portrait_task_that_is_portrait_already_opens_at_once() {
+        let mut windows = TaskWindows::new();
+        let changes = windows.apply(&TaskEvent::Updated(portrait_app(1, 600, 1000)));
+        assert!(matches!(changes[0], WindowChange::Open { .. }));
+        assert!(windows.reconfigures(Instant::now()).is_empty());
+    }
+
+    #[test]
+    fn fr30_a_window_whose_task_does_not_take_its_start_size_opens_anyway() {
+        let mut windows = TaskWindows::new();
+        let now = Instant::now();
+        windows.apply(&TaskEvent::Updated(portrait_app(1, 1000, 600)));
+        windows.reconfigures(now);
+        assert!(windows.tick(now).is_empty());
+        let changes = windows.tick(now + SETTLE);
+        assert!(
+            matches!(changes[0], WindowChange::Open { width: 1000, height: 600, .. }),
+            "{changes:?}"
+        );
+    }
+
+    #[test]
+    fn fr30_an_apps_start_size_and_fixed_size_come_from_the_users_settings() {
+        let mut windows = TaskWindows::new();
+        windows.set_app_windows(&[AppWindowSettings {
+            package_name: "com.example.app1".into(),
+            fixed_size: true,
+            start_size_dp: Some((400, 300)),
+        }]);
+        let app = Task {
+            density_dpi: 320,
+            ..task(1, "Notes", 720, 1280)
+        };
+        windows.apply(&TaskEvent::Updated(app.clone()));
+        // 400 x 300 dp at 320 dpi.
+        assert_eq!(
+            windows.reconfigures(Instant::now()),
+            vec![TaskRequest::Resize {
+                task_id: 1,
+                width: 800,
+                height: 600,
+                live: false,
+            }]
+        );
+        let changes = windows.apply(&TaskEvent::Updated(Task {
+            density_dpi: 320,
+            ..task(1, "Notes", 800, 600)
+        }));
+        assert!(changes.contains(&WindowChange::Mode {
+            task_id: 1,
+            mode: WindowMode::Normal,
+            resizable: false,
+        }));
+        // Resetting the app's settings lets its window be resized again at once.
+        assert_eq!(
+            windows.set_app_windows(&[]),
+            vec![WindowChange::Mode {
+                task_id: 1,
+                mode: WindowMode::Normal,
+                resizable: true,
+            }]
+        );
+    }
+
+    #[test]
+    fn fr30_full_screen_and_picture_in_picture_requests_reach_the_window() {
+        let mut windows = TaskWindows::new();
+        windows.apply(&updated(1, "Video"));
+        let full = Task {
+            fullscreen: true,
+            ..task(1, "Video", 720, 1280)
+        };
+        assert_eq!(
+            windows.apply(&TaskEvent::Updated(full)),
+            vec![WindowChange::Mode {
+                task_id: 1,
+                mode: WindowMode::Fullscreen,
+                resizable: true,
+            }]
+        );
+        let pip = Task {
+            picture_in_picture: true,
+            ..task(1, "Video", 720, 1280)
+        };
+        assert_eq!(
+            windows.apply(&TaskEvent::Updated(pip)),
+            vec![WindowChange::Mode {
+                task_id: 1,
+                mode: WindowMode::PictureInPicture,
+                resizable: true,
+            }]
+        );
+        assert_eq!(
+            windows.apply(&updated(1, "Video")),
+            vec![WindowChange::Mode {
+                task_id: 1,
+                mode: WindowMode::Normal,
+                resizable: true,
+            }]
+        );
     }
 }

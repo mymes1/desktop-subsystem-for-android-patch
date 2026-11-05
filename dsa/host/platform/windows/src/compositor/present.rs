@@ -664,6 +664,24 @@ impl WindowPresenter {
         }
     }
 
+    /// Takes the caption buttons out of sight until the next [`show_caption`](Self::show_caption),
+    /// as in a window that fills its monitor and has no title bar.
+    pub fn hide_caption(&self) {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed {
+            return;
+        }
+        let Ok(dcomp) = self.gpu.dcomp() else {
+            return;
+        };
+        let dcomp = dcomp.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: plain COM calls on objects this presenter owns.
+        unsafe {
+            let _ = state.caption.SetOffsetY2(-1.0e6);
+            let _ = dcomp.Commit();
+        }
+    }
+
     /// Shows the caption buttons: `pixels`, rows of premultiplied BGRA `size` pixels
     /// large, with their left edge `left` client pixels from the window's. They stay until
     /// the next call, over every frame.

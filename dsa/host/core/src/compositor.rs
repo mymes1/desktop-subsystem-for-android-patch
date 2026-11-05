@@ -12,6 +12,7 @@
 //! [`shown_windows`] says whether any window is shown, which lets the guest sleep, and
 //! [`visible_change`] when a press first visibly changes a window;
 //! [`caption`] lays out and draws the title bar a window draws over its app;
+//! [`window_mode`] says whether a window fills its monitor or floats as picture-in-picture;
 //! the platform only carries it out.
 
 pub mod caption;
@@ -24,6 +25,7 @@ pub mod shown_windows;
 pub mod task_windows;
 pub mod visible_change;
 pub mod window_hosts;
+pub mod window_mode;
 pub mod window_sizing;
 
 use std::sync::atomic::{AtomicUsize, Ordering};

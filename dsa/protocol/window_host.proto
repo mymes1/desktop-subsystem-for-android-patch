@@ -248,6 +248,27 @@ message SetCaptionTone {
   CaptionTone tone = 2;
 }
 
+// How a task's window is shown.
+enum WindowMode {
+  // An ordinary window with a title bar, which the user moves and resizes.
+  WINDOW_MODE_NORMAL = 0;
+  // The app asked to fill the screen: the window covers its whole monitor, with no title bar.
+  WINDOW_MODE_FULLSCREEN = 1;
+  // The app went into picture-in-picture: a small window that stays above the others.
+  WINDOW_MODE_PICTURE_IN_PICTURE = 2;
+}
+
+// Window manager to window host: how the task's window is shown, as the app asks and the
+// user's settings for the app say. Sent when the window opens unless the window is an
+// ordinary resizable one, and on each change. The user's F11 turns full screen on or off
+// over what the app asked for, until the app asks again.
+message SetWindowMode {
+  int32 task_id = 1;
+  WindowMode mode = 2;
+  // Whether the user may resize the window: off when the user's settings for the app say so.
+  bool resizable = 3;
+}
+
 // The one message type on the wire. Each frame carries exactly one.
 message Envelope {
   oneof body {
@@ -273,5 +294,6 @@ message Envelope {
     WindowShown window_shown = 30;
     WindowCaption window_caption = 31;
     SetCaptionTone set_caption_tone = 32;
+    SetWindowMode set_window_mode = 60;
   }
 }

@@ -136,12 +136,15 @@ use crate::links::{self, LinkGate};
 use crate::location::{LocationEvent, LocationHub, Wanted};
 use crate::memory::{GrowthAction, GuestMemory, GuestMemoryReport, GuestPressure, MemoryGrowth};
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent, RateLimit};
+use crate::gamepads::{GamepadEvent, GamepadRumble, GamepadTable};
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
 use crate::run_mode::{IdleStop, RunModePolicy, Usage};
+use crate::system_settings::SystemSettings;
 use crate::tasks::{
-    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskTable, TaskWatch,
+    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation, TaskRequest, TaskTable,
+    TaskWatch,
 };
 use crate::widgets::{
     self, Placement, Widget, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
@@ -537,6 +540,12 @@ impl fmt::Display for SessionError {
 
 impl std::error::Error for SessionError {}
 
+/// What the host's system says that the guest follows.
+enum SystemInput {
+    Settings(SystemSettings),
+    Gamepad(GamepadEvent),
+}
+
 enum Command {
     Start,
     Stop,
@@ -548,6 +557,8 @@ enum Command {
     Power(PowerState),
     /// Whether the host is short of memory changed.
     HostMemoryLow(bool),
+    /// The host's system settings or one of its game controllers changed.
+    System(SystemInput),
     /// Freeze the guest after this long in Doze, or never.
     FreezeAfter(Option<Duration>),
     /// Freeze the guest now.
@@ -598,6 +609,8 @@ struct Shared {
     clock_trace: Mutex<Option<ClockTrace>>,
     /// Who hears of the text the guest copies.
     clipboard_watchers: Mutex<Vec<Sender<String>>>,
+    /// Who plays the rumble effects the guest's apps play on the host's controllers.
+    rumble_watchers: Mutex<Vec<Sender<GamepadRumble>>>,
     /// Who hears of the guest's notifications.
     notification_watchers: Mutex<Vec<Sender<NotificationEvent>>>,
     /// Who prints the documents the guest prints.
@@ -951,6 +964,13 @@ impl Shared {
     }
 
     /// Hands text the guest copied to every clipboard watcher still listening.
+    fn publish_rumble(&self, rumble: GamepadRumble) {
+        self.rumble_watchers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|watcher| watcher.send(rumble).is_ok());
+    }
+
     fn publish_clipboard(&self, text: &str) {
         self.clipboard_watchers
             .lock()
@@ -1076,6 +1096,7 @@ impl Session {
             last_transfer: AtomicU32::new(0),
             clock_trace: Mutex::new(None),
             clipboard_watchers: Mutex::new(Vec::new()),
+            rumble_watchers: Mutex::new(Vec::new()),
             notification_watchers: Mutex::new(Vec::new()),
             print_watchers: Mutex::new(Vec::new()),
             prints: Mutex::new(print::Assembler::new()),
@@ -1126,6 +1147,9 @@ impl Session {
             power_pending: false,
             host_memory_low: false,
             host_memory_pending: false,
+            system_settings: None,
+            gamepads: GamepadTable::new(),
+            system_pending: false,
             memory_growth: None,
             started_at: Instant::now(),
             boot_completed_at: None,
@@ -1898,6 +1922,33 @@ impl Session {
     /// when its agent connects while the host is short, so it gives back what it can spare.
     pub fn host_memory_low(&self, low: bool) {
         let _ = self.commands.send(Command::HostMemoryLow(low));
+    }
+
+    /// Records the host's system settings (time zone, languages, regional format, theme and
+    /// accent color). The guest's agent is told now if it is there, and each time it connects.
+    pub fn set_system_settings(&self, settings: SystemSettings) {
+        let input = SystemInput::Settings(settings.checked());
+        let _ = self.commands.send(Command::System(input));
+    }
+
+    /// Passes a change to the host's game controllers on. The session keeps the controllers
+    /// connected, so a guest that boots later, or whose control daemon restarts, gets them too.
+    pub fn gamepad(&self, event: GamepadEvent) {
+        let _ = self
+            .commands
+            .send(Command::System(SystemInput::Gamepad(event)));
+    }
+
+    /// The rumble effects the guest's apps play on the host's controllers, from now on. The
+    /// watch lasts across restarts of the guest.
+    pub fn watch_gamepad_rumble(&self) -> Receiver<GamepadRumble> {
+        let (tx, rx) = mpsc::channel();
+        self.shared
+            .rumble_watchers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(tx);
+        rx
     }
 
     /// Says that the host is about to sleep (sleep, hibernate or modern standby). A running
@@ -2962,6 +3013,13 @@ struct Worker {
     host_memory_low: bool,
     /// Set when that changed while the guest was frozen, so it is told after the thaw.
     host_memory_pending: bool,
+    /// The host's system settings, as last recorded.
+    system_settings: Option<SystemSettings>,
+    /// The host's game controllers that are connected, and the latest state of each.
+    gamepads: GamepadTable,
+    /// Set when the system settings or a controller changed while the guest was frozen, so
+    /// it is given them all after the thaw.
+    system_pending: bool,
     /// Grows and shrinks the guest's memory while it runs, when the launcher can.
     memory_growth: Option<MemoryGrowth>,
     /// When the guest was started.
@@ -3044,6 +3102,7 @@ impl Worker {
                         Ok(Command::WindowsShown(shown)) => self.set_shown(shown),
                         Ok(Command::Power(state)) => self.set_power(state),
                         Ok(Command::HostMemoryLow(low)) => self.set_host_memory_low(low),
+                        Ok(Command::System(input)) => self.system_input(input),
                         Ok(Command::FreezeAfter(after)) => self.config.freeze_after = after,
                         Ok(Command::RunMode(policy)) => self.run_mode = policy,
                         Ok(Command::LinksInAndroid(on)) => self.set_links_in_android(on),
@@ -3075,6 +3134,7 @@ impl Worker {
                         Ok(Command::WindowsShown(shown)) => self.set_shown(shown),
                         Ok(Command::Power(state)) => self.set_power(state),
                         Ok(Command::HostMemoryLow(low)) => self.set_host_memory_low(low),
+                        Ok(Command::System(input)) => self.system_input(input),
                         Ok(Command::FreezeAfter(after)) => self.config.freeze_after = after,
                         Ok(Command::RunMode(policy)) => self.run_mode = policy,
                         Ok(Command::LinksInAndroid(on)) => self.set_links_in_android(on),
@@ -3149,6 +3209,10 @@ impl Worker {
             }
             Command::HostMemoryLow(low) => {
                 self.set_host_memory_low(low);
+                true
+            }
+            Command::System(input) => {
+                self.system_input(input);
                 true
             }
             Command::LinksInAndroid(on) => {
@@ -3860,6 +3924,10 @@ impl Worker {
             let low = self.host_memory_low;
             self.send_body(Body::HostMemory(control::HostMemory { low }));
         }
+        if std::mem::take(&mut self.system_pending) {
+            self.replay_system_settings();
+            self.replay_gamepads();
+        }
         true
     }
 
@@ -3893,6 +3961,50 @@ impl Worker {
             | SessionState::Dozing => self.send_body(Body::PowerState(state.to_control())),
             SessionState::Frozen => self.power_pending = true,
             _ => {}
+        }
+    }
+
+    /// Records a change to the host's system settings or controllers, and tells a guest that
+    /// can hear it.
+    fn system_input(&mut self, input: SystemInput) {
+        let body = match input {
+            SystemInput::Settings(settings) => {
+                if self.system_settings.as_ref() == Some(&settings) {
+                    return;
+                }
+                let body = Body::SystemSettings(settings.to_control());
+                self.system_settings = Some(settings);
+                body
+            }
+            SystemInput::Gamepad(event) => {
+                if !self.gamepads.apply(&event) {
+                    return;
+                }
+                event.to_control()
+            }
+        };
+        match self.state() {
+            SessionState::Starting
+            | SessionState::Stalled
+            | SessionState::Active
+            | SessionState::Dozing => self.send_body(body),
+            SessionState::Frozen => self.system_pending = true,
+            _ => {}
+        }
+    }
+
+    /// Gives a guest that has just come every connected controller and its state.
+    fn replay_gamepads(&mut self) {
+        for event in self.gamepads.replay() {
+            self.send_body(event.to_control());
+        }
+    }
+
+    /// Gives an agent that has just come the host's system settings.
+    fn replay_system_settings(&mut self) {
+        if let Some(settings) = &self.system_settings {
+            let body = Body::SystemSettings(settings.to_control());
+            self.send_body(body);
         }
     }
 
@@ -4090,6 +4202,9 @@ impl Worker {
             if self.host_memory_low {
                 self.send_body(Body::HostMemory(control::HostMemory { low: true }));
             }
+            // The host's system settings become the guest's, and its controllers are there.
+            self.replay_system_settings();
+            self.replay_gamepads();
             if !self.screen_on {
                 self.send_body(Body::ScreenState(control::ScreenState { on: false }));
             }
@@ -4415,6 +4530,9 @@ impl Worker {
                             self.dozing_since = None;
                             self.power_pending = false;
                             self.host_memory_pending = false;
+                            // A new boot's control daemon has no controller yet.
+                            self.system_pending = false;
+                            self.replay_gamepads();
                             return;
                         }
                         Err(Refusal::NotTheGuest(why)) => {
@@ -4466,6 +4584,10 @@ impl Worker {
             }
             Command::HostMemoryLow(low) => {
                 self.set_host_memory_low(low);
+                true
+            }
+            Command::System(input) => {
+                self.system_input(input);
                 true
             }
             Command::LinksInAndroid(on) => {
@@ -4633,6 +4755,13 @@ impl Worker {
                     min_height: update.min_height,
                     status_bar,
                     status_bar_color: update.status_bar_color,
+                    orientation: match update.orientation() {
+                        control::TaskOrientation::Portrait => TaskOrientation::Portrait,
+                        control::TaskOrientation::Landscape => TaskOrientation::Landscape,
+                        control::TaskOrientation::Unspecified => TaskOrientation::Unspecified,
+                    },
+                    fullscreen: update.fullscreen,
+                    picture_in_picture: update.picture_in_picture,
                 }));
             }
             Some(Body::TaskRemoved(removed)) => {
@@ -4716,6 +4845,9 @@ impl Worker {
             Some(Body::OpenLink(link)) => self.guest_link(link.url),
             Some(Body::FileProgress(progress)) => self.shared.file_progress(progress),
             Some(Body::ClipboardText(clip)) => self.guest_clipboard(clip.text),
+            Some(Body::GamepadRumble(rumble)) => {
+                self.shared.publish_rumble(GamepadRumble::from_control(&rumble))
+            }
             Some(Body::Notification(notification)) => self.guest_notification(notification),
             Some(Body::NotificationRemoved(removed)) => {
                 self.guest_notification_removed(removed.key)
@@ -4885,7 +5017,11 @@ impl Worker {
             | Some(Body::VideoFlushed(_))
             | Some(Body::VideoError(_))
             | Some(Body::LocationStatus(_))
-            | Some(Body::LocationFix(_)) => {
+            | Some(Body::LocationFix(_))
+            | Some(Body::SystemSettings(_))
+            | Some(Body::GamepadConnected(_))
+            | Some(Body::GamepadDisconnected(_))
+            | Some(Body::GamepadState(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }
             Some(Body::SensorList(_))

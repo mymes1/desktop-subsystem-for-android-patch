@@ -27,6 +27,7 @@ pub mod background;
 pub mod clipboard;
 pub mod display_gpu;
 pub mod frames;
+pub mod gamepads;
 pub mod hosts;
 pub mod links;
 pub mod location;
@@ -37,6 +38,7 @@ pub mod present;
 pub mod print;
 pub mod shutdown;
 pub mod single_instance;
+pub mod system_settings;
 pub mod tasks;
 pub mod trim;
 pub mod widget_menu;
@@ -398,6 +400,8 @@ impl Compositor {
         let audio_thread = self.start_audio(&stop);
         let sensors_thread = self.start_sensors(&stop);
         let camera_thread = self.start_camera(&stop);
+        let system_settings_thread = self.start_system_settings(&stop);
+        let gamepads_thread = self.start_gamepads(&stop);
 
         // 1. Monitor thread that tracks the VM ID and state via the local API.
         let monitor_stop = Arc::clone(&stop);
@@ -611,6 +615,12 @@ impl Compositor {
         if let Some(thread) = camera_thread {
             let _ = thread.join();
         }
+        if let Some(thread) = system_settings_thread {
+            let _ = thread.join();
+        }
+        if let Some(thread) = gamepads_thread {
+            let _ = thread.join();
+        }
 
         if let Some(logger) = &self.logger {
             logger.log("dsa-wm stopped cleanly");
@@ -773,6 +783,44 @@ impl Compositor {
                 note(
                     failed.as_deref(),
                     &format!("could not start the clipboard's thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts giving the user's Android the user's time zone, languages, regional format, theme
+    /// and accent color, on a thread of its own that ends with `stop`.
+    fn start_system_settings(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-system-settings".into())
+            .spawn(move || system_settings::follow(connector, stop, logger))
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the system settings' thread: {e}"),
+                )
+            })
+            .ok()
+    }
+
+    /// Starts carrying the user's game controllers to their Android, on a thread of its own
+    /// that ends with `stop`.
+    fn start_gamepads(&self, stop: &Arc<AtomicBool>) -> Option<thread::JoinHandle<()>> {
+        let connector = (self.local_api_connector)();
+        let stop = Arc::clone(stop);
+        let logger = self.logger.clone();
+        let failed = self.logger.clone();
+        thread::Builder::new()
+            .name("dsa-wm-gamepads".into())
+            .spawn(move || gamepads::follow(connector, stop, logger))
+            .map_err(|e| {
+                note(
+                    failed.as_deref(),
+                    &format!("could not start the game controllers' thread: {e}"),
                 )
             })
             .ok()
@@ -1093,6 +1141,23 @@ impl Compositor {
             .map_err(|e| log(&format!("could not start the watch of tasks: {e}")))
             .ok();
 
+        let settings_events = events_tx.clone();
+        let settings_connector = (self.local_api_connector)();
+        let settings_stop = Arc::clone(&manager_stop);
+        let settings_logger = self.logger.clone();
+        let app_windows = thread::Builder::new()
+            .name("dsa-wm-app-windows".into())
+            .spawn(move || {
+                tasks::follow_app_windows(
+                    settings_connector,
+                    |apps| settings_events.send(ManagerEvent::AppWindows(apps)).is_ok(),
+                    settings_stop,
+                    settings_logger,
+                )
+            })
+            .map_err(|e| log(&format!("could not start the watch of app window settings: {e}")))
+            .ok();
+
         let request_events = events_tx;
         let request_connector = (self.local_api_connector)();
         let request_logger = self.logger.clone();
@@ -1111,7 +1176,15 @@ impl Compositor {
 
         TaskWindowThreads {
             stop: Some(manager_stop),
-            threads: [manager, acceptor, watcher, requester, trimmer, start_menu]
+            threads: [
+                manager,
+                acceptor,
+                watcher,
+                requester,
+                trimmer,
+                start_menu,
+                app_windows,
+            ]
                 .into_iter()
                 .flatten()
                 .collect(),

@@ -838,6 +838,17 @@ impl UserAndroid for WithProgramStatus {
     fn host_location(&self, event: crate::location::LocationEvent) {
         self.android.host_location(event)
     }
+    fn set_system_settings(&self, settings: crate::system_settings::SystemSettings) {
+        self.android.set_system_settings(settings)
+    }
+    fn gamepad(&self, event: crate::gamepads::GamepadEvent) {
+        self.android.gamepad(event)
+    }
+    fn watch_gamepad_rumble(
+        &self,
+    ) -> Option<std::sync::mpsc::Receiver<crate::gamepads::GamepadRumble>> {
+        self.android.watch_gamepad_rumble()
+    }
     fn notification_action(
         &self,
         action: crate::notifications::NotificationAction,

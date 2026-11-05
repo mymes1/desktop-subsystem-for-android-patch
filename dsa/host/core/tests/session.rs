@@ -1103,6 +1103,7 @@ fn task_updated(task_id: i32, label: &str) -> Body {
         min_height: 500,
         status_bar_appearance: dsa_protocol::control::StatusBarAppearance::Light as i32,
         status_bar_color: 0xFFFA_FAFA,
+        ..Default::default()
     })
 }
 
@@ -1125,6 +1126,7 @@ fn clock(task_id: i32, label: &str) -> Task {
         min_height: 500,
         status_bar: StatusBarAppearance::Light,
         status_bar_color: 0xFFFA_FAFA,
+        ..Task::default()
     }
 }
 
@@ -4371,6 +4373,117 @@ fn fr26_a_guest_that_stops_withdraws_the_jobs_the_watcher_has() {
         PrintEvent::Withdrawn { job_id: job.job_id }
     );
     drop(agent);
+}
+
+fn seoul_settings(dark_mode: bool) -> dsa_host_core::system_settings::SystemSettings {
+    dsa_host_core::system_settings::SystemSettings {
+        time_zone: "Asia/Seoul".into(),
+        locales: vec!["ko-KR".into(), "en-US".into()],
+        regional_format: "ko-KR".into(),
+        time_24_hour: false,
+        first_day_of_week: 7,
+        dark_mode,
+        accent_color: 0xFF00_78D4,
+    }
+}
+
+#[test]
+fn fr30_the_hosts_system_settings_reach_the_agent_when_it_connects_and_on_each_change() {
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.windows_shown(true).unwrap();
+    session.set_system_settings(seoul_settings(true));
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    assert_eq!(
+        next_body(&mut agent),
+        Body::SystemSettings(seoul_settings(true).to_control())
+    );
+    // The user switches the host to the light theme: the guest hears of it at once.
+    session.set_system_settings(seoul_settings(false));
+    assert_eq!(
+        next_body(&mut agent),
+        Body::SystemSettings(seoul_settings(false).to_control())
+    );
+    // The same settings again are no news.
+    session.set_system_settings(seoul_settings(false));
+    session.set_system_settings(dsa_host_core::system_settings::SystemSettings {
+        time_zone: "Europe/Berlin".into(),
+        ..seoul_settings(false)
+    });
+    let Body::SystemSettings(berlin) = next_body(&mut agent) else {
+        panic!("expected the system settings");
+    };
+    assert_eq!(berlin.time_zone, "Europe/Berlin");
+}
+
+#[test]
+fn fr30_a_controller_connected_before_the_guest_reaches_it_and_its_rumble_comes_back() {
+    use dsa_host_core::gamepads::{
+        buttons, GamepadEvent, GamepadInfo, GamepadRumble, GamepadState,
+    };
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.windows_shown(true).unwrap();
+    let rumble = session.watch_gamepad_rumble();
+    let pad = GamepadInfo {
+        pad_id: 1,
+        name: "Xbox Controller".into(),
+        vendor_id: 0x045e,
+        product_id: 0x028e,
+        rumble: true,
+    };
+    session.gamepad(GamepadEvent::Connected(pad.clone()));
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    assert_eq!(
+        next_body(&mut agent),
+        GamepadEvent::Connected(pad.clone()).to_control()
+    );
+    // The control daemon is told again once the agent is there; it takes the same controller
+    // once.
+    assert_eq!(
+        next_body(&mut agent),
+        GamepadEvent::Connected(pad).to_control()
+    );
+    let state = GamepadState {
+        pad_id: 1,
+        buttons: buttons::A | buttons::DPAD_UP,
+        left_x: -12000,
+        left_y: 32767,
+        right_trigger: 200,
+        ..GamepadState::default()
+    };
+    session.gamepad(GamepadEvent::State(state));
+    assert_eq!(
+        next_body(&mut agent),
+        GamepadEvent::State(state).to_control()
+    );
+    send_body(
+        &mut agent,
+        Body::GamepadRumble(dsa_protocol::control::GamepadRumble {
+            pad_id: 1,
+            strong: 40000,
+            weak: 1000,
+            duration_ms: 300,
+        }),
+    );
+    assert_eq!(
+        rumble.recv_timeout(WAIT).unwrap(),
+        GamepadRumble {
+            pad_id: 1,
+            strong: 40000,
+            weak: 1000,
+            duration_ms: 300
+        }
+    );
+    session.gamepad(GamepadEvent::Disconnected { pad_id: 1 });
+    assert_eq!(
+        next_body(&mut agent),
+        GamepadEvent::Disconnected { pad_id: 1 }.to_control()
+    );
 }
 
 /// The run mode "As needed" with a wait short enough for a test.
