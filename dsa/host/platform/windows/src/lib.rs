@@ -80,9 +80,9 @@ pub mod guest_communication_services;
 pub mod guest_performance;
 pub mod guid;
 #[cfg(windows)]
-pub mod hcs;
-#[cfg(windows)]
 pub mod hcn;
+#[cfg(windows)]
+pub mod hcs;
 pub mod host_config;
 pub mod host_memory;
 #[cfg(windows)]

@@ -173,11 +173,7 @@ pub fn guid_from(seed: &str) -> Guid {
 
 /// The document that creates the NAT network `name` on `subnet`, with the unique local IPv6
 /// subnet `ipv6` as well when it is given.
-pub fn nat_network_document(
-    name: &str,
-    subnet: Ipv4Subnet,
-    ipv6: Option<(Ipv6Addr, u8)>,
-) -> Value {
+pub fn nat_network_document(name: &str, subnet: Ipv4Subnet, ipv6: Option<(Ipv6Addr, u8)>) -> Value {
     let mut subnets = vec![json!({
         "IpAddressPrefix": subnet.to_string(),
         "Routes": [{ "NextHop": subnet.gateway().to_string(), "DestinationPrefix": "0.0.0.0/0" }],
@@ -396,7 +392,10 @@ pub fn host_has_ipv6(adapters: &[HostAdapter]) -> bool {
 /// The IPv4 subnets the host's adapters use, which the NAT subnet must stay clear of. The VM's
 /// own network (its `vEthernet` adapter) is left out by the caller when it is being reused.
 pub fn subnets_in_use(adapters: &[HostAdapter]) -> Vec<Ipv4Subnet> {
-    adapters.iter().flat_map(|a| a.ipv4.iter().copied()).collect()
+    adapters
+        .iter()
+        .flat_map(|a| a.ipv4.iter().copied())
+        .collect()
 }
 
 /// Why advanced networking cannot be used now, if it cannot.
