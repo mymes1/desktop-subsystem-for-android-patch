@@ -207,6 +207,10 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
                 problems.append(f"the SELinux policy does not label sysfs {path} sysfs_wakeup, so the "
                                 "suspend service cannot read the wakeup sources")
 
+    # One declaration of each HAL instance across the vendor manifest, its fragments and the
+    # active vendor APEXes, and one for every instance a DSA service registers.
+    problems += make_image.vendor_vintf_problems(names, z.read, manifest["kernel_cmdline"])
+
     if "VENDOR/lib64/hw/vulkan.ranchu.so" not in names:
         problems.append("VENDOR/lib64/hw/vulkan.ranchu.so is missing from the image")
     if "VENDOR/lib64/libOpenglSystemCommon.so" not in names:
