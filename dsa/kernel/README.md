@@ -8,6 +8,7 @@ kernel, and the user's WSL kernel is not touched.
 | `wsl-kernel.tag` | The WSL kernel tag the source comes from |
 | `android.config` | The options merged on top of that tag's `Microsoft/config-wsl` (x86_64) or `Microsoft/config-wsl-arm64` (arm64) |
 | `android-arm64.config` | The options the arm64 kernel adds after `android.config` |
+| `virtio.config` | The virtio drivers the macOS host's VM needs, merged last for both architectures |
 | `patches/` | Small patches applied to the pinned source before configuration, the same for both architectures |
 | `build.sh` | Fetches the source into `.scratch/`, merges the configuration, checks it and builds `bzImage` (x86_64) or `Image` (arm64) |
 
@@ -21,6 +22,13 @@ The kernel is built for two hosts:
   its command line, as WSL does on the same hosts. The machine is described by ACPI, and the
   console is a PL011 UART (`ttyAMA0`). `android-arm64.config` names what that boot, VMBus
   and free page reporting need, so the build fails if a WSL tag ever drops one.
+
+The same two kernels boot on macOS. Apple's Virtualization framework loads the kernel
+itself: the uncompressed arm64 `Image` on Apple silicon, the `bzImage` on Intel Macs. Its
+devices are virtio devices on PCI (block, network, console `hvc0`, sockets, balloon,
+entropy), which `virtio.config` builds in. Only one guest-to-host socket transport may
+register, so `patches/vsock-hyperv-first.patch` links Hyper-V's first: it registers only
+when VMBus is there and otherwise leaves the place to virtio's.
 
 The patches touch only architecture-neutral code (VMBus's ACPI probe, which Hyper-V uses on
 both architectures, the command-line partition parser, cgroup v1, wakeup sources, shmem),

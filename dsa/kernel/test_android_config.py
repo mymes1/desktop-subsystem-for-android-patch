@@ -8,6 +8,7 @@ from pathlib import Path
 
 CONFIG = Path(__file__).with_name("android.config")
 ARM64_CONFIG = Path(__file__).with_name("android-arm64.config")
+VIRTIO_CONFIG = Path(__file__).with_name("virtio.config")
 PATCHES = Path(__file__).with_name("patches")
 BUILD = Path(__file__).with_name("build.sh")
 
@@ -251,6 +252,38 @@ class AndroidKernelConfigTests(unittest.TestCase):
                 # Allowed only when it says the same thing.
                 self.assertIn(line, CONFIG.read_text().splitlines(), name)
 
+    def test_fr2_the_kernel_drives_the_virtio_devices_of_the_macos_vm(self):
+        # Apple's Virtualization framework gives the VM virtio devices on PCI: the disks,
+        # the network adapter, the console, the sockets, the balloon and entropy. The VM
+        # loads no modules, so each driver is built in, for both architectures.
+        config = VIRTIO_CONFIG.read_text().splitlines()
+        for option in ["CONFIG_VIRTIO_PCI=y", "CONFIG_VIRTIO_BLK=y", "CONFIG_VIRTIO_NET=y",
+                       "CONFIG_VIRTIO_CONSOLE=y", "CONFIG_VIRTIO_VSOCKETS=y",
+                       "CONFIG_VIRTIO_BALLOON=y", "CONFIG_HW_RANDOM_VIRTIO=y"]:
+            self.assertIn(option, config)
+        script = BUILD.read_text()
+        self.assertEqual(script.count('"$kernel_dir/virtio.config"'), 2)
+
+    def test_fr2_the_arm64_kernel_finds_the_devices_of_an_apple_silicon_vm(self):
+        # The framework describes an arm64 VM with a device tree and a generic ECAM PCI
+        # bridge, and keeps the time in a PL031 clock.
+        config = ARM64_CONFIG.read_text().splitlines()
+        for option in ["CONFIG_OF=y", "CONFIG_PCI_HOST_GENERIC=y", "CONFIG_RTC_DRV_PL031=y"]:
+            self.assertIn(option, config)
+
+    def test_pr1_hyper_v_sockets_register_before_virtio_sockets(self):
+        # Only one guest-to-host transport registers; built in, they register in link order.
+        # Hyper-V's steps aside without VMBus, so it must come first for one kernel to reach
+        # the host on Hyper-V and on Apple's framework.
+        patch = (PATCHES / "vsock-hyperv-first.patch").read_text().splitlines()
+        added = [line for line in patch if line.startswith("+obj-")]
+        removed = [line for line in patch if line.startswith("-obj-")]
+        self.assertEqual(added, ["+obj-$(CONFIG_HYPERV_VSOCKETS) += hv_sock.o"])
+        self.assertEqual(removed, ["-obj-$(CONFIG_HYPERV_VSOCKETS) += hv_sock.o"])
+        body = [line[1:] for line in patch if line[:1] in (" ", "+") and "obj-" in line]
+        self.assertLess(body.index("obj-$(CONFIG_HYPERV_VSOCKETS) += hv_sock.o"),
+                        body.index("obj-$(CONFIG_VIRTIO_VSOCKETS) += vmw_vsock_virtio_transport.o"))
+
     def test_fr27_no_patch_touches_x86_only_code(self):
         # The same patches apply to both architectures' builds.
         for patch in PATCHES.glob("*.patch"):
@@ -265,7 +298,7 @@ class AndroidKernelConfigTests(unittest.TestCase):
             self.skipTest("DSA_KERNEL_MERGED_CONFIG names no merged configuration")
         arch = os.environ.get("DSA_KERNEL_ARCH", "x86_64")
         lines = Path(merged).read_text().splitlines()
-        fragments = [CONFIG] + ([ARM64_CONFIG] if arch == "arm64" else [])
+        fragments = [CONFIG] + ([ARM64_CONFIG] if arch == "arm64" else []) + [VIRTIO_CONFIG]
         for fragment in fragments:
             for line in fragment_lines(fragment):
                 self.assertIn(line, lines, f"{fragment.name} for {arch}")
