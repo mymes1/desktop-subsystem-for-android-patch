@@ -21,6 +21,20 @@ public partial class AdvancedPage : Page
     private async void OnClipboardToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetClipboardAsync(ClipboardSwitch.IsChecked == true);
 
+    private async void OnFileSharingToggled(object sender, RoutedEventArgs e) =>
+        await ViewModel.SetFileSharingAsync(FileSharingSwitch.IsChecked == true);
+
+    private async void OnFolderToggled(object sender, RoutedEventArgs e)
+    {
+        if (sender is CheckBox { Tag: string folder } box)
+        {
+            await ViewModel.SetFolderSharedAsync(folder, box.IsChecked == true);
+        }
+    }
+
+    private async void OnOpenAndroidFiles(object sender, RoutedEventArgs e) =>
+        await ViewModel.OpenAndroidFilesAsync();
+
     private async void OnArmTranslationToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetArmTranslationAsync(ArmTranslationSwitch.IsChecked == true);
 

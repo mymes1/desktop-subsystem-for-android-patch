@@ -108,7 +108,19 @@ public sealed class DsaService
         Bool(json, "resize_trace"),
         Int(json, "memory_limit_mb"),
         Bool(json, "arm_translation", missing: true),
-        Bool(json, "stop_without_asking"));
+        Bool(json, "stop_without_asking"),
+        Bool(json, "file_sharing", missing: true),
+        Strings(json, "shared_folders"));
+
+    /// <summary>The strings of the array <paramref name="name"/>, or null when a service from
+    /// before it existed does not report it.</summary>
+    private static IReadOnlyList<string>? Strings(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array
+            ? value.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString() ?? "")
+                .ToList()
+            : null;
 
     public async Task<SettingsInfo> SettingsAsync() =>
         ReadSettings(await RunJsonAsync("settings").ConfigureAwait(true));
@@ -135,6 +147,24 @@ public sealed class DsaService
         SetAsync("adb-port", port.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
     public Task<SettingsInfo> SetArmTranslationAsync(bool on) => SetAsync("arm-translation", on ? "on" : "off");
+
+    /// <summary>Whether the chosen Windows folders show in Android's shared storage.</summary>
+    public Task<SettingsInfo> SetFileSharingAsync(bool on) => SetAsync("file-sharing", on ? "on" : "off");
+
+    /// <summary>Which Windows folders are shared, in the order the service keeps them.</summary>
+    public Task<SettingsInfo> SetSharedFoldersAsync(IEnumerable<string> folders)
+    {
+        var list = string.Join(",", folders);
+        return SetAsync("shared-folders", list.Length == 0 ? "none" : list);
+    }
+
+    /// <summary>Opens Android's shared storage in Explorer, starting Android when it is not
+    /// running, and returns the path Explorer opened.</summary>
+    public async Task<string> OpenAndroidFilesAsync()
+    {
+        var json = await RunJsonAsync("files", "open").ConfigureAwait(true);
+        return String(json, "path");
+    }
 
     private static ArmTranslationInfo ReadArmTranslation(JsonElement json)
     {

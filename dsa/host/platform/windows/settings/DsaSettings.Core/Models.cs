@@ -44,8 +44,19 @@ public sealed record SettingsInfo(
     bool ResizeTrace = false,
     int MemoryLimitMb = 0,
     bool ArmTranslation = true,
-    bool StopWithoutAsking = false)
+    bool StopWithoutAsking = false,
+    bool FileSharing = true,
+    IReadOnlyList<string>? SharedFolders = null)
 {
+    /// <summary>The Windows folders that can be shared with Android, in the order the service
+    /// keeps them.</summary>
+    public static readonly IReadOnlyList<string> AllFolders =
+        new[] { "Documents", "Downloads", "Pictures", "Music", "Videos", "Desktop" };
+
+    /// <summary>The folders shared while file sharing is on: every one unless the user chose
+    /// fewer.</summary>
+    public IReadOnlyList<string> Folders => SharedFolders ?? AllFolders;
+
     /// <summary>The loopback port adb connects to in developer mode unless the user picks
     /// another.</summary>
     public const int DefaultAdbPort = 58526;
