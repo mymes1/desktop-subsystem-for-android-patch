@@ -388,9 +388,18 @@
             <Component Id="FirstImageManifest" Guid="*">
                 <File Id="FirstImageManifest" Source="$(ImageDir)\image.json" KeyPath="yes" DiskId="2" />
             </Component>
+            <?ifdef ImageSplitDisks ?>
+            <Component Id="FirstImageSystem" Guid="*">
+                <File Id="FirstImageSystem" Source="$(ImageDir)\system.vhdx" KeyPath="yes" DiskId="2" />
+            </Component>
+            <Component Id="FirstImageData" Guid="*">
+                <File Id="FirstImageData" Source="$(ImageDir)\data.vhdx" KeyPath="yes" DiskId="2" />
+            </Component>
+            <?else?>
             <Component Id="FirstImageDisk" Guid="*">
                 <File Id="FirstImageDisk" Source="$(ImageDir)\disk.vhdx" KeyPath="yes" DiskId="2" />
             </Component>
+            <?endif?>
             <Component Id="FirstImageInitrd" Guid="*">
                 <File Id="FirstImageInitrd" Source="$(ImageDir)\initrd.img" KeyPath="yes" DiskId="2" />
             </Component>
