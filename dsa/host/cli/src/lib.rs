@@ -573,9 +573,53 @@ pub fn default_starter(endpoint: Option<&str>) -> Option<Box<dyn ServiceStarter>
             Duration::from_secs(30),
         )))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        Some(Box::new(LaunchAgentStarter {
+            wait: Duration::from_secs(30),
+        }))
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         None
+    }
+}
+
+/// Starts the user's launchd agent on macOS when its socket is not there, and waits for the
+/// socket.
+#[cfg(target_os = "macos")]
+pub struct LaunchAgentStarter {
+    pub wait: Duration,
+}
+
+#[cfg(target_os = "macos")]
+impl ServiceStarter for LaunchAgentStarter {
+    fn start_service(&self) -> Result<(), String> {
+        let socket = default_socket()?;
+        if std::os::unix::net::UnixStream::connect(&socket).is_ok() {
+            return Ok(());
+        }
+        let uid = dsa_host_unix::socket::current_uid();
+        dsa_host_macos::launchd::launchctl(&dsa_host_macos::launchd::start_command(uid)).map_err(
+            |why| {
+                format!(
+                    "{why}; install the agent with `dsa-hostd install-agent` if it is not \
+                     installed"
+                )
+            },
+        )?;
+        let deadline = Instant::now() + self.wait;
+        while Instant::now() < deadline {
+            if std::os::unix::net::UnixStream::connect(&socket).is_ok() {
+                return Ok(());
+            }
+            thread::sleep(Duration::from_millis(200));
+        }
+        Err(format!(
+            "the DSA agent did not open {} within {} seconds",
+            socket.display(),
+            self.wait.as_secs()
+        ))
     }
 }
 
@@ -1995,6 +2039,25 @@ pub fn files_path(url: &str) -> String {
     }
 }
 
+/// Mounts the WebDAV `url` of Android's shared storage in Finder, as Finder's "Connect to
+/// Server" does.
+#[cfg(target_os = "macos")]
+fn open_in_finder(url: &str) -> Result<(), String> {
+    let script = format!("mount volume \"{}\"", url.replace(['\\', '"'], ""));
+    let output = std::process::Command::new("/usr/bin/osascript")
+        .args(["-e", &script])
+        .output()
+        .map_err(|e| format!("running osascript: {e}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Finder could not open {url}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))
+    }
+}
+
 /// `dsa files`, and `dsa files open`.
 fn android_files(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
     let url = client.android_files().map_err(|e| e.to_string())?;
@@ -2002,7 +2065,9 @@ fn android_files(invocation: &Invocation, client: &mut HostApiClient) -> Result<
     if invocation.command == Command::FilesOpen {
         #[cfg(windows)]
         dsa_host_windows::android_files::open_in_explorer(&path)?;
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        open_in_finder(&url)?;
+        #[cfg(not(any(windows, target_os = "macos")))]
         return Err(format!(
             "open {url} in a file manager that speaks WebDAV; this host opens none itself"
         ));
