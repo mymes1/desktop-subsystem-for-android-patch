@@ -711,6 +711,8 @@ mod tests {
                     run_mode: RunMode::Continuous,
                     stop_after_secs: 600,
                     keep_for_notifications: true,
+                    file_sharing: false,
+                    shared_folders: vec!["Pictures".into()],
                 },
             )
             .unwrap();

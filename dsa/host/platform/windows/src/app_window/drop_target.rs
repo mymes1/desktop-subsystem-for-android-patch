@@ -14,10 +14,11 @@ use dsa_host_core::files::{dropped, Dropped, FileAction, FileTransfer};
 use dsa_host_core::host_api::HostApiClient;
 use windows::core::{implement, Ref, Result as ComResult};
 use windows::Win32::Foundation::{HWND, POINTL};
-use windows::Win32::System::Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
+use windows::Win32::System::Com::{
+    IDataObject, ReleaseStgMedium, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL,
+};
 use windows::Win32::System::Ole::{
-    IDropTarget, IDropTarget_Impl, OleInitialize, RegisterDragDrop, ReleaseStgMedium,
-    RevokeDragDrop, CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE,
+    IDropTarget, IDropTarget_Impl, OleInitialize, RegisterDragDrop, RevokeDragDrop, CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE,
 };
 use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
 use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
@@ -163,10 +164,11 @@ pub fn handler(
     note: Arc<dyn Fn(&str) + Send + Sync>,
 ) -> DropHandler {
     Arc::new(move |task_id, paths| {
-        let (package, api, note) = (package.clone(), Arc::clone(&api), Arc::clone(&note));
+        let (package, api, worker_note) =
+            (package.clone(), Arc::clone(&api), Arc::clone(&note));
         let spawned = std::thread::Builder::new()
             .name("dsa-app-window-drop".into())
-            .spawn(move || deliver(&package, &api, &*note, task_id, &paths));
+            .spawn(move || deliver(&package, &api, &*worker_note, task_id, &paths));
         if let Err(error) = spawned {
             note(&format!("dropped files cannot be sent: {error}"));
         }
