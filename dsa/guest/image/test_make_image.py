@@ -2079,6 +2079,7 @@ class GuestMemoryTests(unittest.TestCase):
         all_of_them = (
             make_image.RECLAIM_PROPERTY_CONTEXT + "\n"
             + make_image.TRIM_PROPERTY_CONTEXT + "\n"
+            + make_image.TRIM_SIZE_PROPERTY_CONTEXT + "\n"
             + make_image.BOOT_PROPERTY_CONTEXT + "\n"
             + make_image.ADB_PROPERTY_CONTEXT + "\n"
             + make_image.SHARES_PROPERTY_CONTEXT + "\n"
