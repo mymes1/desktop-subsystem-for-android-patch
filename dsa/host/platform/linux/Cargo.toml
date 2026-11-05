@@ -1,0 +1,37 @@
+[package]
+name = "dsa-host-linux"
+version = "0.1.0"
+description = "The Linux host: the Android VM over KVM, vsock, and the host's devices"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "dsa-devices"
+path = "src/bin/dsa-devices.rs"
+
+[dependencies]
+dsa-transport.workspace = true
+dsa-host-core.workspace = true
+dsa-protocol.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+dsa-host-unix = { path = "../unix" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+# The vsock listener the device ports are served on; the guest's own socket code works the
+# same on the host's side.
+dsa-guest-transport = { path = "../../../guest/transport" }
+# The session bus and the system bus: GeoClue2, UPower, logind, iio-sensor-proxy and the
+# desktop portals. Pure Rust, so the host links no D-Bus C library.
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+# Camera pictures that come as Motion JPEG, decoded to pixels.
+zune-jpeg = "0.4"
+zune-core = "0.4"
+# Still pictures for the guest's camera, encoded from the newest picture.
+jpeg-encoder = "0.6"
+
+[dev-dependencies]
+dsa-transport = { workspace = true, features = ["conformance"] }

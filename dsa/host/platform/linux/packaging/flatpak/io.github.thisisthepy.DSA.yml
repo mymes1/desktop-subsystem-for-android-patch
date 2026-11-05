@@ -1,0 +1,50 @@
+# The user's half of DSA as a Flatpak: the dsa command and the device lender, which follows
+# the local API of the installed service for the location, printing, web links and the
+# desktop's settings.
+#
+# The service (the VM, /dev/kvm, the systemd units, the udev rules) cannot live in a sandbox,
+# so it comes from the .deb or .rpm. The guest's device ports (sound, cameras, sensors) are
+# served by the package's own dsa-devices too: a Flatpak sandbox cannot open vsock sockets.
+#
+# Built with network access for cargo, as a local build:
+#   flatpak-builder --user --install --force-clean \
+#     .scratch/flatpak dsa/host/platform/linux/packaging/flatpak/io.github.thisisthepy.DSA.yml
+app-id: io.github.thisisthepy.DSA
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: dsa
+finish-args:
+  # The service's local API.
+  - --filesystem=/run/dsa
+  # The desktop's portals (print, settings) and the location service.
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --system-talk-name=org.freedesktop.GeoClue2
+  - --system-talk-name=org.freedesktop.timedate1
+  # Files the user opens or shares in an app in their Android.
+  - --filesystem=home:ro
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/dsa/cargo
+modules:
+  - name: dsa
+    buildsystem: simple
+    build-options:
+      build-args:
+        - --share=network
+    build-commands:
+      - cd dsa && cargo build --release --locked -p dsa-cli -p dsa-host-linux --bin dsa --bin dsa-devices || cargo build --release -p dsa-cli -p dsa-host-linux --bin dsa --bin dsa-devices
+      - install -Dm755 dsa/target/release/dsa /app/bin/dsa
+      - install -Dm755 dsa/target/release/dsa-devices /app/bin/dsa-devices
+      - install -Dm644 dsa/host/platform/linux/packaging/flatpak/io.github.thisisthepy.DSA.desktop /app/share/applications/io.github.thisisthepy.DSA.desktop
+      - install -Dm644 dsa/host/platform/linux/packaging/flatpak/io.github.thisisthepy.DSA.metainfo.xml /app/share/metainfo/io.github.thisisthepy.DSA.metainfo.xml
+    sources:
+      - type: dir
+        path: ../../../../../..
+        skip:
+          - .scratch
+          - .claude
+          - dsa/target
