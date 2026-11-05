@@ -16,9 +16,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: test-graphics-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
-  # A source build consumes the whole runner. A newer revision supersedes it.
-  cancel-in-progress: true
+  # Each push to develop is checked on its own: several workers push in a row, and a
+  # newer push cancelling an older run left commits no run ever finished.
+  group: test-graphics-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}-${{ github.event_name == 'push' && github.sha || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
   contents: read

@@ -16,8 +16,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: test-linux-package-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  # Each push to develop is checked on its own: several workers push in a row, and a
+  # newer push cancelling an older run left commits no run ever finished.
+  group: test-linux-package-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
   contents: read
