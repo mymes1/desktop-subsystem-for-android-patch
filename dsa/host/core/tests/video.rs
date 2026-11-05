@@ -297,3 +297,68 @@ fn pr4_an_nv12_picture_is_a_luma_plane_and_half_as_many_chroma_rows() {
     assert_eq!(Picture::nv12_len(8, 4, 4), None);
     assert_eq!(Picture::nv12_len(0, 4, 4), None);
 }
+
+/// Records the presentation time each packet reaches the decoder with.
+struct TimedDecoders {
+    times: Arc<Mutex<Vec<(u64, i64)>>>,
+}
+
+struct TimedDecoder {
+    times: Arc<Mutex<Vec<(u64, i64)>>>,
+}
+
+impl VideoDecoder for TimedDecoder {
+    fn decode(&mut self, packet: Packet) -> Result<Vec<Picture>, String> {
+        self.times
+            .lock()
+            .unwrap()
+            .push((packet.id, packet.timestamp_us));
+        Ok(Vec::new())
+    }
+    fn drain(&mut self) -> Result<Vec<Picture>, String> {
+        Ok(Vec::new())
+    }
+    fn flush(&mut self) {}
+}
+
+impl VideoDecoders for TimedDecoders {
+    fn capabilities(&self) -> Vec<CodecSupport> {
+        FakeDecoders {
+            log: Arc::default(),
+        }
+        .capabilities()
+    }
+    fn open(&self, _: Codec, _: u32, _: u32) -> Result<Box<dyn VideoDecoder>, String> {
+        Ok(Box::new(TimedDecoder {
+            times: Arc::clone(&self.times),
+        }))
+    }
+}
+
+#[test]
+fn pr4_each_packet_reaches_the_decoder_with_its_presentation_time() {
+    let (mut listener, mut connector) = memory::pair();
+    let times = Arc::new(Mutex::new(Vec::new()));
+    let decoders = TimedDecoders {
+        times: Arc::clone(&times),
+    };
+    let host = thread::spawn(move || {
+        let connection = listener.accept(WAIT).expect("accepts");
+        serve_connection(connection, &decoders, "dsa-host test")
+    });
+    let mut guest = connector.connect(WAIT).expect("connects");
+    send(
+        guest.as_mut(),
+        Body::Hello(local_hello(Role::GuestVideo, "dsa-codec2 test")),
+    );
+    open(guest.as_mut(), VideoCodec::H264, 1280, 720);
+    assert!(matches!(next(guest.as_mut()), Body::VideoDecoderOpened(o) if o.ok));
+    // Decode order is not presentation order: a B frame comes after the frame it precedes.
+    send(guest.as_mut(), packet(1, &[10]));
+    send(guest.as_mut(), packet(3, &[30]));
+    send(guest.as_mut(), packet(2, &[20]));
+    guest.close();
+    assert_eq!(host.join().unwrap(), VideoEnd::Closed);
+    let times: Vec<i64> = times.lock().unwrap().iter().map(|(_, t)| *t).collect();
+    assert_eq!(times, [33_333, 99_999, 66_666]);
+}
