@@ -26,13 +26,13 @@ use dsa_host_core::tasks::{AppInfo, TaskEvent, TaskRequest};
 use dsa_host_unix::socket::UnixLocalConnector;
 use dsa_transport::Connector;
 
-use super::frames::{GpuImage, LatestFrames, Shown};
+use super::frames::{LatestFrames, Shown};
 use super::gfxstream::{self, FrameSink, Listen, Renderer};
 use super::wayland::{Desktop, Event, Events, Wake};
 use crate::input::evdev::EvdevGamepads;
 use crate::shell::dbus::{Notifier, Signal};
 use crate::shell::desktop_entry::{self, Folders};
-use crate::shell::notifications::Shown;
+use crate::shell::notifications::Shown as ShownNotifications;
 
 /// The build this program reports to the service.
 pub const BUILD: &str = env!("CARGO_PKG_VERSION");
@@ -273,7 +273,7 @@ fn sync_clipboard(to_main: ToMain, outgoing: Receiver<String>) {
 }
 
 fn show_notifications(requests: Sender<Request>, icons: PathBuf) {
-    let shown = Arc::new(Mutex::new(Shown::new()));
+    let shown = Arc::new(Mutex::new(ShownNotifications::new()));
     {
         let shown = shown.clone();
         let icons = icons.clone();
@@ -378,7 +378,7 @@ fn follow_gamepads(active: Arc<AtomicBool>) {
 
 fn start_graphics(
     frames: Arc<Mutex<LatestFrames>>,
-    images: Option<Arc<Mutex<Vec<(GpuImage, OwnedFd)>>>>,
+    images: Option<gfxstream::GpuImages>,
     waker: Arc<PipeWaker>,
 ) {
     let path = gfxstream::backend_path();
@@ -411,7 +411,7 @@ struct Main {
     input: Sender<InputEvent>,
     clipboard: Sender<String>,
     frames: Arc<Mutex<LatestFrames>>,
-    images: Option<Arc<Mutex<Vec<(GpuImage, OwnedFd)>>>>,
+    images: Option<gfxstream::GpuImages>,
     active: Arc<AtomicBool>,
     /// The apps the guest told of, for the launcher entries.
     apps: BTreeMap<String, AppInfo>,

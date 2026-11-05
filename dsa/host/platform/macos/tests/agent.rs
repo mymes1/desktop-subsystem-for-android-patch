@@ -108,3 +108,58 @@ fn fr3_the_window_manager_runs_from_its_own_agent_with_its_mach_service() {
     let path = wm_plist_path(Path::new("/Users/ann"));
     assert!(path.ends_with(format!("{WM_LABEL}.plist")));
 }
+
+#[test]
+fn fr26_the_device_lender_runs_from_its_own_agent_at_login() {
+    use dsa_host_macos::launchd::{
+        devices_plist, devices_plist_path, devices_service_target, DEVICES_LABEL,
+    };
+    let text = devices_plist(
+        Path::new("/Applications/DSA.app/Contents/MacOS/dsa-devices"),
+        Path::new("/Users/ann/Library/Application Support/DSA/logs/dsa-devices.log"),
+    );
+    assert!(text.contains(&format!("<string>{DEVICES_LABEL}</string>")));
+    assert!(text.contains("<string>/Applications/DSA.app/Contents/MacOS/dsa-devices</string>"));
+    assert!(text.contains("<key>RunAtLoad</key>\n\t<true/>"));
+    assert!(text.contains("<key>SuccessfulExit</key>\n\t\t<false/>"));
+    // In the login session, where macOS asks the user for the camera, microphone and location.
+    assert!(text.contains("<string>Aqua</string>"));
+    assert!(!text.contains("MachServices"));
+    assert_ne!(DEVICES_LABEL, LABEL);
+    assert_ne!(DEVICES_LABEL, WM_LABEL);
+    assert_eq!(
+        devices_service_target(501),
+        format!("gui/501/{DEVICES_LABEL}")
+    );
+    assert_eq!(
+        devices_plist_path(Path::new("/Users/ann")),
+        Path::new("/Users/ann/Library/LaunchAgents").join(format!("{DEVICES_LABEL}.plist"))
+    );
+}
+
+#[test]
+fn fr26_every_device_port_of_the_guest_is_relayed_to_the_users_own_folder() {
+    use dsa_host_macos::host_config::{relay_socket, DEVICE_PORTS, GRAPHICS_PORTS, RELAYED_PORTS};
+    for port in [
+        dsa_host_core::audio::AUDIO_PORT,
+        dsa_host_core::video::VIDEO_PORT,
+        dsa_host_core::sensors::SENSOR_PORT,
+        dsa_host_core::camera::CAMERA_PORT,
+    ] {
+        assert!(DEVICE_PORTS.contains(&port));
+        assert!(RELAYED_PORTS.contains(&port));
+    }
+    for port in GRAPHICS_PORTS {
+        assert!(RELAYED_PORTS.contains(&port));
+        assert!(!DEVICE_PORTS.contains(&port));
+    }
+    let config = MacHostConfig::parse(r#"{"image_dir": "/images/16"}"#).unwrap();
+    let ann = config.user(Path::new("/Users/ann"));
+    let bob = config.user(Path::new("/Users/bob"));
+    let camera = dsa_host_core::camera::CAMERA_PORT;
+    assert_eq!(
+        relay_socket(&ann, camera),
+        Path::new("/Users/ann/Library/Application Support/DSA/vsock/5572.sock")
+    );
+    assert_ne!(relay_socket(&ann, camera), relay_socket(&bob, camera));
+}

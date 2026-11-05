@@ -232,6 +232,36 @@ pub fn memory_range_mb(limit_mb: u32, total_mb: Option<u64>) -> (u64, u64) {
     (start.min(max), max.max(start.min(max)))
 }
 
+/// The ports of the guest the window manager (`dsa-wm`) serves: its graphics streams.
+pub const GRAPHICS_PORTS: [u32; 2] = [
+    dsa_host_core::compositor::GRAPHICS_COMMAND_PORT,
+    dsa_host_core::compositor::GRAPHICS_PROCESS_PIPE_PORT,
+];
+
+/// The ports of the guest the user's device lender (`dsa-devices`) serves: sound, video,
+/// the sensors and the cameras.
+pub const DEVICE_PORTS: [u32; 4] = [
+    dsa_host_core::audio::AUDIO_PORT,
+    dsa_host_core::video::VIDEO_PORT,
+    dsa_host_core::sensors::SENSOR_PORT,
+    dsa_host_core::camera::CAMERA_PORT,
+];
+
+/// Every port the agent relays from the VM to a program of the user's.
+pub const RELAYED_PORTS: [u32; 6] = [
+    GRAPHICS_PORTS[0],
+    GRAPHICS_PORTS[1],
+    DEVICE_PORTS[0],
+    DEVICE_PORTS[1],
+    DEVICE_PORTS[2],
+    DEVICE_PORTS[3],
+];
+
+/// The Unix socket the agent hands the guest's connections to `port` to.
+pub fn relay_socket(user: &UserFolders, port: u32) -> PathBuf {
+    user.relay_dir().join(format!("{port}.sock"))
+}
+
 /// One user's DSA folder and what is in it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserFolders {
@@ -268,5 +298,13 @@ impl UserFolders {
     }
     pub fn socket(&self) -> PathBuf {
         self.root.join("host.sock")
+    }
+    /// The folder of the sockets the agent relays the guest's ports to.
+    pub fn relay_dir(&self) -> PathBuf {
+        self.root.join("vsock")
+    }
+    /// The device lender's own log.
+    pub fn devices_log(&self) -> PathBuf {
+        self.logs().join("dsa-devices.log")
     }
 }

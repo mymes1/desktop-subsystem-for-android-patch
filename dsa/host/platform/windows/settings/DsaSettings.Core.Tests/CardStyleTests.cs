@@ -1,3 +1,4 @@
+using Xunit;
 using System.Xml.Linq;
 
 namespace Dsa.Settings.Core.Tests;
@@ -11,13 +12,17 @@ public class CardStyleTests
 
     private static XDocument AppXaml()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "DsaSettings", "App.xaml")))
+        // The tests run from dsa/target/settings/..., outside the source tree, so each folder
+        // above is tried both as the settings folder and as the repository's dsa folder.
+        string[] relative = { Path.Combine("DsaSettings", "App.xaml"),
+            Path.Combine("host", "platform", "windows", "settings", "DsaSettings", "App.xaml") };
+        string? found = null;
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null && found is null; dir = dir.Parent)
         {
-            dir = dir.Parent;
+            found = relative.Select(r => Path.Combine(dir.FullName, r)).FirstOrDefault(File.Exists);
         }
-        Assert.True(dir is not null, "App.xaml was not found above " + AppContext.BaseDirectory);
-        return XDocument.Load(Path.Combine(dir!.FullName, "DsaSettings", "App.xaml"));
+        Assert.True(found is not null, "App.xaml was not found above " + AppContext.BaseDirectory);
+        return XDocument.Load(found!);
     }
 
     [Theory]

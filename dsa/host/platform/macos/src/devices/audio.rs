@@ -239,6 +239,8 @@ impl AudioDevice for CoreAudio {
     }
 
     fn record(&self, _name: &str, sink: CaptureSink) -> Result<Box<dyn Recording>, String> {
+        // The first recording asks the user, and waits for the answer.
+        crate::devices::permissions::ask(crate::devices::permissions::Device::Microphone)?;
         let format = DeviceFormat {
             sample_rate: 48_000,
             channels: 2,

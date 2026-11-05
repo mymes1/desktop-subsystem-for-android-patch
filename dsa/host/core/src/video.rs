@@ -106,6 +106,9 @@ pub struct Packet {
     pub data: Vec<u8>,
     /// Codec configuration (parameter sets) rather than a picture.
     pub codec_config: bool,
+    /// When the guest presents the picture, in microseconds, as it gave it. A decoder that
+    /// puts its pictures in presentation order by time (VideoToolbox) is given it.
+    pub timestamp_us: i64,
 }
 
 /// One decoded picture, NV12: `stride * height` bytes of luma, then `stride * ceil(height/2)`
@@ -335,6 +338,7 @@ pub fn serve_connection(
                         id,
                         data: packet.data,
                         codec_config: packet.codec_config,
+                        timestamp_us: packet.timestamp_us,
                     });
                     result = match decoded {
                         Ok(pictures) => send_pictures(connection.as_mut(), &mut pending, pictures),

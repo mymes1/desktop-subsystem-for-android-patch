@@ -20,8 +20,9 @@
 //!   `NSTextInputClient`) of a task window, turned into what the guest receives.
 //! - [`shell`]: the clipboard, notifications, Dock and Launchpad entries for Android apps,
 //!   drag and drop, and opening links and files on the host.
-//! - [`devices`]: sound, cameras, location, printing, shared folders, game controllers, and
-//!   the system settings each user's Android follows.
+//! - [`devices`]: sound, video decoding, cameras, location, printing, web links, shared
+//!   folders, game controllers, and the system settings each user's Android follows, lent by
+//!   the user's device lender (`dsa-devices`).
 //! - [`wm`]: the window manager (`dsa-wm`): the renderer, the guest's graphics streams, and
 //!   one window host per app, each given its tasks' frames.
 //!

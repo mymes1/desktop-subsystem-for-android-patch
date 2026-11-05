@@ -100,14 +100,19 @@ pub fn listen(
                     Ok(accepted) => accepted,
                     Err(TransportError::Timeout) => continue,
                     Err(error) => {
-                        log(&format!("could not take an app window's connection: {error}"));
+                        log(&format!(
+                            "could not take an app window's connection: {error}"
+                        ));
                         thread::sleep(Duration::from_millis(200));
                         continue;
                     }
                 };
                 // The socket is the user's alone; anyone else is refused all the same.
                 if peer.user != own {
-                    log(&format!("refused a window host of another user ({})", peer.user));
+                    log(&format!(
+                        "refused a window host of another user ({})",
+                        peer.user
+                    ));
                     continue;
                 }
                 let id = HostId(next);
@@ -205,7 +210,10 @@ fn read(
         if let Body::FramePresented(presented) = &body {
             presenter.presented(id, presented.task_id, presented.sequence, Instant::now());
         } else if let Some(report) = report_from_wire(&body) {
-            if events.send(ManagerEvent::Report { host: id, report }).is_err() {
+            if events
+                .send(ManagerEvent::Report { host: id, report })
+                .is_err()
+            {
                 return;
             }
         }

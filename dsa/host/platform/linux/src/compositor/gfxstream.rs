@@ -30,12 +30,15 @@ type DmabufFn =
 type DmabufFrameFn = unsafe extern "C" fn(*mut c_void, u32, u32, u32, u32);
 
 /// Where the frames go.
+/// The GPU images the renderer exports, each with the dmabuf that carries it.
+pub type GpuImages = Arc<Mutex<Vec<(GpuImage, OwnedFd)>>>;
+
 pub struct FrameSink {
     pub frames: Arc<Mutex<LatestFrames>>,
     pub waker: Arc<dyn Wake>,
     /// Where the GPU images go, when the desktop takes dmabufs; `None` reads every frame
     /// back.
-    pub images: Option<Arc<Mutex<Vec<(GpuImage, OwnedFd)>>>>,
+    pub images: Option<GpuImages>,
 }
 
 // The backend's C callback names every property of the image.

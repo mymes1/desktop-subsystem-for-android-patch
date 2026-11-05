@@ -4,8 +4,8 @@
 #
 # Usage: build-app.sh <version> <programs folder> <output folder> [renderer dylib]
 #
-# The programs folder holds the release builds (dsa-app-window, dsa, and the service and
-# window manager programs when they are built). DSA_SIGN_IDENTITY names the Developer ID
+# The programs folder holds the release builds (dsa-app-window, dsa, and the service, window
+# manager and device lender programs when they are built). DSA_SIGN_IDENTITY names the Developer ID
 # to sign with; without it the bundle is signed ad hoc, which runs on the machine that
 # built it and is ready to be signed for distribution. DSA_INSTALLER_IDENTITY signs the
 # package the same way.
@@ -32,7 +32,7 @@ printf 'APPL????' > "$app/Contents/PkgInfo"
 # The window host is required: it is the bundle's executable and the template each app's
 # own bundle copies. The others are taken when they were built.
 cp "$programs/dsa-app-window" "$app/Contents/MacOS/"
-for program in dsa dsa-hostd dsa-wm; do
+for program in dsa dsa-hostd dsa-wm dsa-devices; do
     if [[ -f "$programs/$program" ]]; then
         cp "$programs/$program" "$app/Contents/MacOS/"
     fi

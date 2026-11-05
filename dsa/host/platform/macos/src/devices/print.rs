@@ -61,6 +61,12 @@ unsafe fn print_on_main(job: &PrintJob) -> PrintOutcome {
         let _: () = msg_send![operation, setJobTitle: &*ns_string(&job.title())];
         let _: () = msg_send![operation, setShowsPrintPanel: true];
         let _: () = msg_send![operation, setShowsProgressPanel: true];
+        // The device lender runs in the background; its panel comes to the front.
+        let app_class = class(c"NSApplication")?;
+        let app: *mut AnyObject = msg_send![app_class, sharedApplication];
+        if !app.is_null() {
+            let _: () = msg_send![app, activateIgnoringOtherApps: true];
+        }
         let printed: bool = msg_send![operation, runOperation];
         Ok(printed)
     };

@@ -299,7 +299,8 @@ impl<P: Platform> Manager<P> {
                     });
                 }
                 HostAction::Disconnect { host, why } => {
-                    self.platform.log(&format!("closing an app window program: {why}"));
+                    self.platform
+                        .log(&format!("closing an app window program: {why}"));
                     self.platform.disconnect(host);
                 }
             }

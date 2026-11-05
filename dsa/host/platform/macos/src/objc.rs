@@ -111,6 +111,9 @@ pub fn ns_string(text: &str) -> Retained<AnyObject> {
 }
 
 /// The text of an `NSString`, or of an `NSAttributedString` (its `string`). Empty for nil.
+// The pointer is an Objective-C object Cocoa handed to a callback, or nil, which is checked;
+// messaging it is how every caller reads it, so the callers are not made unsafe.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn string_of(object: *mut AnyObject) -> String {
     if object.is_null() {
         return String::new();
@@ -152,6 +155,9 @@ pub fn ns_data(bytes: &[u8]) -> Result<Retained<AnyObject>, String> {
 }
 
 /// The bytes an `NSData` holds.
+// The pointer is an Objective-C object Cocoa handed to a callback, or nil, which is checked;
+// messaging it is how every caller reads it, so the callers are not made unsafe.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn bytes_of(data: *mut AnyObject) -> Vec<u8> {
     if data.is_null() {
         return Vec::new();
