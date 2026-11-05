@@ -150,6 +150,11 @@ public  final class Envelope extends
     GAMEPAD_RUMBLE(344),
     FILE_SHARING(290),
     ANDROID_FILES(291),
+    DRAG_OUT(350),
+    DRAG_OFFER(351),
+    DRAG_READ(352),
+    DRAG_DATA(353),
+    DRAG_END(354),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -295,6 +300,11 @@ public  final class Envelope extends
         case 344: return GAMEPAD_RUMBLE;
         case 290: return FILE_SHARING;
         case 291: return ANDROID_FILES;
+        case 350: return DRAG_OUT;
+        case 351: return DRAG_OFFER;
+        case 352: return DRAG_READ;
+        case 353: return DRAG_DATA;
+        case 354: return DRAG_END;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -6816,6 +6826,256 @@ public  final class Envelope extends
     }
   }
 
+  public static final int DRAG_OUT_FIELD_NUMBER = 350;
+  /**
+   * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+   */
+  @java.lang.Override
+  public boolean hasDragOut() {
+    return bodyCase_ == 350;
+  }
+  /**
+   * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DragOut getDragOut() {
+    if (bodyCase_ == 350) {
+       return (io.github.thisisthepy.dsa.control.v1.DragOut) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DragOut.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+   */
+  private void setDragOut(io.github.thisisthepy.dsa.control.v1.DragOut value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 350;
+  }
+  /**
+   * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+   */
+  private void mergeDragOut(io.github.thisisthepy.dsa.control.v1.DragOut value) {
+    value.getClass();
+  if (bodyCase_ == 350 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DragOut.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DragOut.newBuilder((io.github.thisisthepy.dsa.control.v1.DragOut) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 350;
+  }
+  /**
+   * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+   */
+  private void clearDragOut() {
+    if (bodyCase_ == 350) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DRAG_OFFER_FIELD_NUMBER = 351;
+  /**
+   * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+   */
+  @java.lang.Override
+  public boolean hasDragOffer() {
+    return bodyCase_ == 351;
+  }
+  /**
+   * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DragOffer getDragOffer() {
+    if (bodyCase_ == 351) {
+       return (io.github.thisisthepy.dsa.control.v1.DragOffer) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DragOffer.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+   */
+  private void setDragOffer(io.github.thisisthepy.dsa.control.v1.DragOffer value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 351;
+  }
+  /**
+   * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+   */
+  private void mergeDragOffer(io.github.thisisthepy.dsa.control.v1.DragOffer value) {
+    value.getClass();
+  if (bodyCase_ == 351 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DragOffer.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DragOffer.newBuilder((io.github.thisisthepy.dsa.control.v1.DragOffer) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 351;
+  }
+  /**
+   * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+   */
+  private void clearDragOffer() {
+    if (bodyCase_ == 351) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DRAG_READ_FIELD_NUMBER = 352;
+  /**
+   * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+   */
+  @java.lang.Override
+  public boolean hasDragRead() {
+    return bodyCase_ == 352;
+  }
+  /**
+   * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DragRead getDragRead() {
+    if (bodyCase_ == 352) {
+       return (io.github.thisisthepy.dsa.control.v1.DragRead) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DragRead.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+   */
+  private void setDragRead(io.github.thisisthepy.dsa.control.v1.DragRead value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 352;
+  }
+  /**
+   * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+   */
+  private void mergeDragRead(io.github.thisisthepy.dsa.control.v1.DragRead value) {
+    value.getClass();
+  if (bodyCase_ == 352 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DragRead.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DragRead.newBuilder((io.github.thisisthepy.dsa.control.v1.DragRead) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 352;
+  }
+  /**
+   * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+   */
+  private void clearDragRead() {
+    if (bodyCase_ == 352) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DRAG_DATA_FIELD_NUMBER = 353;
+  /**
+   * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+   */
+  @java.lang.Override
+  public boolean hasDragData() {
+    return bodyCase_ == 353;
+  }
+  /**
+   * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DragData getDragData() {
+    if (bodyCase_ == 353) {
+       return (io.github.thisisthepy.dsa.control.v1.DragData) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DragData.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+   */
+  private void setDragData(io.github.thisisthepy.dsa.control.v1.DragData value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 353;
+  }
+  /**
+   * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+   */
+  private void mergeDragData(io.github.thisisthepy.dsa.control.v1.DragData value) {
+    value.getClass();
+  if (bodyCase_ == 353 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DragData.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DragData.newBuilder((io.github.thisisthepy.dsa.control.v1.DragData) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 353;
+  }
+  /**
+   * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+   */
+  private void clearDragData() {
+    if (bodyCase_ == 353) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DRAG_END_FIELD_NUMBER = 354;
+  /**
+   * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+   */
+  @java.lang.Override
+  public boolean hasDragEnd() {
+    return bodyCase_ == 354;
+  }
+  /**
+   * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DragEnd getDragEnd() {
+    if (bodyCase_ == 354) {
+       return (io.github.thisisthepy.dsa.control.v1.DragEnd) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DragEnd.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+   */
+  private void setDragEnd(io.github.thisisthepy.dsa.control.v1.DragEnd value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 354;
+  }
+  /**
+   * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+   */
+  private void mergeDragEnd(io.github.thisisthepy.dsa.control.v1.DragEnd value) {
+    value.getClass();
+  if (bodyCase_ == 354 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DragEnd.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DragEnd.newBuilder((io.github.thisisthepy.dsa.control.v1.DragEnd) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 354;
+  }
+  /**
+   * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+   */
+  private void clearDragEnd() {
+    if (bodyCase_ == 354) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -13167,6 +13427,246 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+     */
+    @java.lang.Override
+    public boolean hasDragOut() {
+      return instance.hasDragOut();
+    }
+    /**
+     * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DragOut getDragOut() {
+      return instance.getDragOut();
+    }
+    /**
+     * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+     */
+    public Builder setDragOut(io.github.thisisthepy.dsa.control.v1.DragOut value) {
+      copyOnWrite();
+      instance.setDragOut(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+     */
+    public Builder setDragOut(
+        io.github.thisisthepy.dsa.control.v1.DragOut.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDragOut(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+     */
+    public Builder mergeDragOut(io.github.thisisthepy.dsa.control.v1.DragOut value) {
+      copyOnWrite();
+      instance.mergeDragOut(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+     */
+    public Builder clearDragOut() {
+      copyOnWrite();
+      instance.clearDragOut();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+     */
+    @java.lang.Override
+    public boolean hasDragOffer() {
+      return instance.hasDragOffer();
+    }
+    /**
+     * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DragOffer getDragOffer() {
+      return instance.getDragOffer();
+    }
+    /**
+     * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+     */
+    public Builder setDragOffer(io.github.thisisthepy.dsa.control.v1.DragOffer value) {
+      copyOnWrite();
+      instance.setDragOffer(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+     */
+    public Builder setDragOffer(
+        io.github.thisisthepy.dsa.control.v1.DragOffer.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDragOffer(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+     */
+    public Builder mergeDragOffer(io.github.thisisthepy.dsa.control.v1.DragOffer value) {
+      copyOnWrite();
+      instance.mergeDragOffer(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+     */
+    public Builder clearDragOffer() {
+      copyOnWrite();
+      instance.clearDragOffer();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+     */
+    @java.lang.Override
+    public boolean hasDragRead() {
+      return instance.hasDragRead();
+    }
+    /**
+     * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DragRead getDragRead() {
+      return instance.getDragRead();
+    }
+    /**
+     * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+     */
+    public Builder setDragRead(io.github.thisisthepy.dsa.control.v1.DragRead value) {
+      copyOnWrite();
+      instance.setDragRead(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+     */
+    public Builder setDragRead(
+        io.github.thisisthepy.dsa.control.v1.DragRead.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDragRead(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+     */
+    public Builder mergeDragRead(io.github.thisisthepy.dsa.control.v1.DragRead value) {
+      copyOnWrite();
+      instance.mergeDragRead(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+     */
+    public Builder clearDragRead() {
+      copyOnWrite();
+      instance.clearDragRead();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+     */
+    @java.lang.Override
+    public boolean hasDragData() {
+      return instance.hasDragData();
+    }
+    /**
+     * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DragData getDragData() {
+      return instance.getDragData();
+    }
+    /**
+     * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+     */
+    public Builder setDragData(io.github.thisisthepy.dsa.control.v1.DragData value) {
+      copyOnWrite();
+      instance.setDragData(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+     */
+    public Builder setDragData(
+        io.github.thisisthepy.dsa.control.v1.DragData.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDragData(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+     */
+    public Builder mergeDragData(io.github.thisisthepy.dsa.control.v1.DragData value) {
+      copyOnWrite();
+      instance.mergeDragData(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+     */
+    public Builder clearDragData() {
+      copyOnWrite();
+      instance.clearDragData();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+     */
+    @java.lang.Override
+    public boolean hasDragEnd() {
+      return instance.hasDragEnd();
+    }
+    /**
+     * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DragEnd getDragEnd() {
+      return instance.getDragEnd();
+    }
+    /**
+     * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+     */
+    public Builder setDragEnd(io.github.thisisthepy.dsa.control.v1.DragEnd value) {
+      copyOnWrite();
+      instance.setDragEnd(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+     */
+    public Builder setDragEnd(
+        io.github.thisisthepy.dsa.control.v1.DragEnd.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDragEnd(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+     */
+    public Builder mergeDragEnd(io.github.thisisthepy.dsa.control.v1.DragEnd value) {
+      copyOnWrite();
+      instance.mergeDragEnd(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+     */
+    public Builder clearDragEnd() {
+      copyOnWrite();
+      instance.clearDragEnd();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -13314,10 +13814,15 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.GamepadDisconnected.class,
             io.github.thisisthepy.dsa.control.v1.GamepadState.class,
             io.github.thisisthepy.dsa.control.v1.GamepadRumble.class,
+            io.github.thisisthepy.dsa.control.v1.DragOut.class,
+            io.github.thisisthepy.dsa.control.v1.DragOffer.class,
+            io.github.thisisthepy.dsa.control.v1.DragRead.class,
+            io.github.thisisthepy.dsa.control.v1.DragData.class,
+            io.github.thisisthepy.dsa.control.v1.DragEnd.class,
             io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding.class,
           };
           java.lang.String info =
-              "\u0000\u0082\u0001\u0000\u0001\u0179\u0082\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u0087\u0001\u0000\u0001\u0179\u0087\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -13334,7 +13839,8 @@ public  final class Envelope extends
               "<\u0000\u00dd<\u0000\u00de<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000" +
               "\u0104<\u0000\u0105<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a" +
               "<\u0000\u010b<\u0000\u0122<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000" +
-              "\u0157<\u0000\u0158<\u0000\u0179<\u0000";
+              "\u0157<\u0000\u0158<\u0000\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162" +
+              "<\u0000\u0179<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

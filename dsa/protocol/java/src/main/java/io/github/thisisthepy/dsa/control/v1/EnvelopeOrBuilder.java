@@ -1437,5 +1437,60 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.AndroidFiles getAndroidFiles();
 
+  /**
+   * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+   * @return Whether the dragOut field is set.
+   */
+  boolean hasDragOut();
+  /**
+   * <code>.dsa.control.v1.DragOut drag_out = 350;</code>
+   * @return The dragOut.
+   */
+  io.github.thisisthepy.dsa.control.v1.DragOut getDragOut();
+
+  /**
+   * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+   * @return Whether the dragOffer field is set.
+   */
+  boolean hasDragOffer();
+  /**
+   * <code>.dsa.control.v1.DragOffer drag_offer = 351;</code>
+   * @return The dragOffer.
+   */
+  io.github.thisisthepy.dsa.control.v1.DragOffer getDragOffer();
+
+  /**
+   * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+   * @return Whether the dragRead field is set.
+   */
+  boolean hasDragRead();
+  /**
+   * <code>.dsa.control.v1.DragRead drag_read = 352;</code>
+   * @return The dragRead.
+   */
+  io.github.thisisthepy.dsa.control.v1.DragRead getDragRead();
+
+  /**
+   * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+   * @return Whether the dragData field is set.
+   */
+  boolean hasDragData();
+  /**
+   * <code>.dsa.control.v1.DragData drag_data = 353;</code>
+   * @return The dragData.
+   */
+  io.github.thisisthepy.dsa.control.v1.DragData getDragData();
+
+  /**
+   * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+   * @return Whether the dragEnd field is set.
+   */
+  boolean hasDragEnd();
+  /**
+   * <code>.dsa.control.v1.DragEnd drag_end = 354;</code>
+   * @return The dragEnd.
+   */
+  io.github.thisisthepy.dsa.control.v1.DragEnd getDragEnd();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }
