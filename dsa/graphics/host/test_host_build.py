@@ -163,5 +163,22 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn('+        setIcdPaths("lvp_icd.aarch64.json");', gfx)
 
 
+    def test_pr3_renderer_frees_only_what_a_failed_vulkan_start_made(self):
+        # Without a usable Vulkan driver the emulation is dropped half built, and its
+        # destructor used to call through the device dispatch it never got.
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0012", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0012-survive-a-host-without-a-vulkan-driver.patch").read_text(encoding="utf-8")
+        self.assertIn("+    if (mDvk && mDevice != VK_NULL_HANDLE) {", patch)
+        self.assertIn("+    if (mGvk && mInstance != VK_NULL_HANDLE) {", patch)
+
+    def test_pr3_gpu_preference_names_clear_x11_macros(self):
+        # X11/X.h, which EGL pulls in on Linux, defines None as a macro.
+        patch = (HERE.parent / "patches" /
+                 "0007-select-the-gpu-the-embedder-asks-for.patch").read_text(encoding="utf-8")
+        self.assertNotIn("Rule::None", patch)
+        self.assertNotIn("Rule::None", (HERE / "dsa_gfx_backend.cpp").read_text(encoding="utf-8"))
+
 if __name__ == "__main__":
     unittest.main()
