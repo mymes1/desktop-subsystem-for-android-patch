@@ -18,6 +18,8 @@
 //! <dir>/users/<user>.json     {"render_gpu": "display", "freeze": false, "clipboard": true,
 //!                              "links_in_android": false, "developer_mode": false,
 //!                              "adb_port": 58526, "arm_translation": true}
+//! <dir>/users/<user>.app-windows.json
+//!                             the user's window settings for each app
 //! <dir>/users/<user>.arm-translation.json
 //!                             the ARM translation package the user installed, if any
 //! ```
@@ -31,6 +33,7 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+use crate::app_windows::AppWindowSettings;
 use crate::arm_translation::Package;
 
 /// The longest render GPU value accepted, in characters.
@@ -259,6 +262,16 @@ pub trait SettingsStore: Send + Sync {
     fn arm_translation(&self, user: &str) -> Result<Option<Package>, String>;
     /// Records the ARM translation package `user` has installed, or that there is none.
     fn set_arm_translation(&self, user: &str, package: Option<&Package>) -> Result<(), String>;
+    /// The window settings of `user` for every app that has any, by package name.
+    fn app_windows(&self, user: &str) -> Result<Vec<AppWindowSettings>, String> {
+        let _ = user;
+        Ok(Vec::new())
+    }
+    /// Replaces the window settings of `user` for every app.
+    fn set_app_windows(&self, user: &str, apps: &[AppWindowSettings]) -> Result<(), String> {
+        let _ = (user, apps);
+        Err("this service keeps no window settings for apps".into())
+    }
 }
 
 /// Finds the render GPU a user chose before they first saved settings, if any.
@@ -295,6 +308,13 @@ impl FileSettings {
             .dir
             .join("users")
             .join(format!("{}.json", user_file_stem(user)?)))
+    }
+
+    fn app_windows_file(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self
+            .dir
+            .join("users")
+            .join(format!("{}.app-windows.json", user_file_stem(user)?)))
     }
 
     fn arm_translation_file(&self, user: &str) -> Result<PathBuf, String> {
@@ -429,6 +449,18 @@ impl SettingsStore for FileSettings {
             },
         }
     }
+
+    fn app_windows(&self, user: &str) -> Result<Vec<AppWindowSettings>, String> {
+        let file = self.app_windows_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        read_json(&file).map(Option::unwrap_or_default)
+    }
+
+    fn set_app_windows(&self, user: &str, apps: &[AppWindowSettings]) -> Result<(), String> {
+        let file = self.app_windows_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        write_json(&file, &apps)
+    }
 }
 
 /// Settings kept in memory, for tests and for a service that keeps no folder.
@@ -437,6 +469,7 @@ pub struct MemorySettings {
     users: Mutex<std::collections::HashMap<String, UserSettings>>,
     machine: Mutex<MachineSettings>,
     arm_translation: Mutex<std::collections::HashMap<String, Package>>,
+    app_windows: Mutex<std::collections::HashMap<String, Vec<AppWindowSettings>>>,
 }
 
 impl SettingsStore for MemorySettings {
@@ -492,6 +525,24 @@ impl SettingsStore for MemorySettings {
             Some(package) => packages.insert(user.to_string(), package.clone()),
             None => packages.remove(user),
         };
+        Ok(())
+    }
+
+    fn app_windows(&self, user: &str) -> Result<Vec<AppWindowSettings>, String> {
+        Ok(self
+            .app_windows
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(user)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn set_app_windows(&self, user: &str, apps: &[AppWindowSettings]) -> Result<(), String> {
+        self.app_windows
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(user.to_string(), apps.to_vec());
         Ok(())
     }
 }

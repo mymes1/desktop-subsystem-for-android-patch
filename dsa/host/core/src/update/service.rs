@@ -346,6 +346,17 @@ impl UserAndroid for UpdatingAndroid {
     fn host_location(&self, event: crate::location::LocationEvent) {
         UserAndroid::host_location(&*self.session, event)
     }
+    fn set_system_settings(&self, settings: crate::system_settings::SystemSettings) {
+        UserAndroid::set_system_settings(&*self.session, settings)
+    }
+    fn gamepad(&self, event: crate::gamepads::GamepadEvent) {
+        UserAndroid::gamepad(&*self.session, event)
+    }
+    fn watch_gamepad_rumble(
+        &self,
+    ) -> Option<std::sync::mpsc::Receiver<crate::gamepads::GamepadRumble>> {
+        UserAndroid::watch_gamepad_rumble(&*self.session)
+    }
     fn notification_action(
         &self,
         action: crate::notifications::NotificationAction,

@@ -25,6 +25,7 @@ use dsa_transport::Connection;
 
 use super::caption::CaptionTone;
 use super::task_windows::WindowChange;
+use super::window_mode::WindowMode;
 use crate::tasks::AppInfo;
 
 /// Whether `name` is an Android package name: two or more dot-separated parts, each an ASCII
@@ -93,6 +94,12 @@ pub enum ToHost {
         task_id: i32,
         tone: CaptionTone,
     },
+    /// How the window is shown, and whether the user may resize it.
+    Mode {
+        task_id: i32,
+        mode: WindowMode,
+        resizable: bool,
+    },
 }
 
 impl ToHost {
@@ -104,6 +111,7 @@ impl ToHost {
             | ToHost::TaskSize { task_id, .. }
             | ToHost::ImeCursor { task_id, .. }
             | ToHost::CaptionTone { task_id, .. }
+            | ToHost::Mode { task_id, .. }
             | ToHost::Close { task_id } => *task_id,
         }
     }
@@ -358,6 +366,15 @@ impl WindowHosts {
             WindowChange::CaptionTone { task_id, tone } => self.forward(ToHost::CaptionTone {
                 task_id: *task_id,
                 tone: *tone,
+            }),
+            WindowChange::Mode {
+                task_id,
+                mode,
+                resizable,
+            } => self.forward(ToHost::Mode {
+                task_id: *task_id,
+                mode: *mode,
+                resizable: *resizable,
             }),
         }
     }
@@ -695,6 +712,23 @@ pub fn to_wire(message: &ToHost) -> Body {
                 tone: tone as i32,
             })
         }
+        ToHost::Mode {
+            task_id,
+            mode,
+            resizable,
+        } => {
+            use dsa_protocol::window_host::types::{SetWindowMode, WindowMode as WireMode};
+            let mode = match mode {
+                WindowMode::Normal => WireMode::Normal,
+                WindowMode::Fullscreen => WireMode::Fullscreen,
+                WindowMode::PictureInPicture => WireMode::PictureInPicture,
+            };
+            Body::SetWindowMode(SetWindowMode {
+                task_id,
+                mode: mode as i32,
+                resizable,
+            })
+        }
     }
 }
 
@@ -747,6 +781,19 @@ pub fn to_host_from_wire(body: &Body) -> Option<ToHost> {
                     WireTone::LightGlyphs => CaptionTone::LightGlyphs,
                     WireTone::DarkGlyphs | WireTone::Unspecified => CaptionTone::DarkGlyphs,
                 },
+            }
+        }
+        Body::SetWindowMode(set) => {
+            use dsa_protocol::window_host::types::WindowMode as WireMode;
+            ToHost::Mode {
+                task_id: set.task_id,
+                // A mode this build does not know reads as an ordinary window.
+                mode: match set.mode() {
+                    WireMode::Fullscreen => WindowMode::Fullscreen,
+                    WireMode::PictureInPicture => WindowMode::PictureInPicture,
+                    WireMode::Normal => WindowMode::Normal,
+                },
+                resizable: set.resizable,
             }
         }
         _ => return None,

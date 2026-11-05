@@ -37,6 +37,10 @@
 //! - [`camera`]: the host's cameras, used by the apps in the guest.
 //! - [`ime`]: text input through the host's input method in a task's window.
 //! - [`settings`]: the settings a user changes from the settings app, kept by the service.
+//! - [`system_settings`]: the host's time zone, languages, regional format, theme and accent
+//!   color, which each user's Android follows.
+//! - [`gamepads`]: the host's game controllers, shown to the guest as gamepads.
+//! - [`app_windows`]: a user's window settings for each app.
 //! - [`memory`]: how much memory a user's Android takes, in the guest and on the host.
 //! - [`window_manager`]: keeping a user's window manager running while their Android runs.
 //! - [`compositor`]: platform-neutral graphics stream bookkeeping, renderer interfaces, and
@@ -46,6 +50,7 @@ pub mod accessibility;
 pub mod adb_bridge;
 pub mod apk;
 pub mod apk_info;
+pub mod app_windows;
 pub mod apps;
 pub mod arm_translation;
 pub mod audio;
@@ -58,6 +63,7 @@ pub mod compositor;
 pub mod device_identity;
 pub mod diagnostics;
 pub mod files;
+pub mod gamepads;
 pub mod guest_display;
 pub mod guest_log;
 pub mod guest_log_api;
@@ -82,6 +88,7 @@ pub mod resize_trace;
 pub mod sensors;
 pub mod session;
 pub mod settings;
+pub mod system_settings;
 pub mod tasks;
 pub mod update;
 pub mod video;

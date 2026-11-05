@@ -87,9 +87,13 @@ use crate::notifications::{self, Notification, NotificationAction, NotificationE
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
 use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
+use crate::app_windows::{self, AppWindowSettings};
+use crate::gamepads::{GamepadEvent, GamepadInfo, GamepadRumble, GamepadState};
 use crate::settings::{Settings, SettingsStore};
+use crate::system_settings::SystemSettings;
 use crate::tasks::{
-    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskRequestError, TaskWatch,
+    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation, TaskRequest,
+    TaskRequestError, TaskWatch,
 };
 use crate::widgets::{
     self, MemoryWidgetPlacements, Placement, Widget, WidgetError, WidgetEvent, WidgetFrame,
@@ -228,6 +232,20 @@ pub trait UserAndroid: Send + Sync {
     /// What the host's location service reported, for this Android while it wants a location.
     fn host_location(&self, event: LocationEvent) {
         let _ = event;
+    }
+    /// The user's host system settings, which this Android follows: its time zone, languages,
+    /// regional format, theme and accent color.
+    fn set_system_settings(&self, settings: SystemSettings) {
+        let _ = settings;
+    }
+    /// A change to the user's game controllers, which this Android shows its apps as gamepads.
+    fn gamepad(&self, event: GamepadEvent) {
+        let _ = event;
+    }
+    /// The rumble effects apps in this Android play on the user's controllers, from now on.
+    /// `None` when this Android takes no controllers.
+    fn watch_gamepad_rumble(&self) -> Option<Receiver<GamepadRumble>> {
+        None
     }
     /// The apps that run in the background in this Android and every change to them.
     /// `None` when it does not report them.
@@ -507,6 +525,15 @@ impl UserAndroid for Session {
     fn host_location(&self, event: LocationEvent) {
         Session::host_location(self, event)
     }
+    fn set_system_settings(&self, settings: SystemSettings) {
+        Session::set_system_settings(self, settings)
+    }
+    fn gamepad(&self, event: GamepadEvent) {
+        Session::gamepad(self, event)
+    }
+    fn watch_gamepad_rumble(&self) -> Option<Receiver<GamepadRumble>> {
+        Some(Session::watch_gamepad_rumble(self))
+    }
     fn links_in_android(&self, on: bool) {
         Session::links_in_android(self, on)
     }
@@ -780,6 +807,13 @@ fn task_to_wire(task: Task) -> types::Task {
             StatusBarAppearance::Dark => types::StatusBarAppearance::Dark,
         } as i32,
         status_bar_color: task.status_bar_color,
+        orientation: match task.orientation {
+            TaskOrientation::Unspecified => types::TaskOrientation::Unspecified,
+            TaskOrientation::Portrait => types::TaskOrientation::Portrait,
+            TaskOrientation::Landscape => types::TaskOrientation::Landscape,
+        } as i32,
+        fullscreen: task.fullscreen,
+        picture_in_picture: task.picture_in_picture,
     }
 }
 
@@ -788,6 +822,11 @@ fn task_from_wire(task: types::Task) -> Task {
         types::StatusBarAppearance::Unspecified => StatusBarAppearance::Unspecified,
         types::StatusBarAppearance::Light => StatusBarAppearance::Light,
         types::StatusBarAppearance::Dark => StatusBarAppearance::Dark,
+    };
+    let orientation = match task.orientation() {
+        types::TaskOrientation::Unspecified => TaskOrientation::Unspecified,
+        types::TaskOrientation::Portrait => TaskOrientation::Portrait,
+        types::TaskOrientation::Landscape => TaskOrientation::Landscape,
     };
     let bounds = task.bounds.unwrap_or_default();
     Task {
@@ -808,7 +847,66 @@ fn task_from_wire(task: types::Task) -> Task {
         min_height: task.min_height,
         status_bar,
         status_bar_color: task.status_bar_color,
+        orientation,
+        fullscreen: task.fullscreen,
+        picture_in_picture: task.picture_in_picture,
     }
+}
+
+/// The controller change a local API message carries; `None` when it carries none.
+fn gamepad_from_wire(event: types::GamepadEvent) -> Option<GamepadEvent> {
+    use types::gamepad_event::Event;
+    let clamp = |value: i32| value.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16;
+    let trigger = |value: u32| value.min(255) as u8;
+    let id = |value: u32| value.min(u32::from(u16::MAX)) as u16;
+    Some(match event.event? {
+        Event::Connected(pad) => GamepadEvent::Connected(GamepadInfo {
+            pad_id: pad.pad_id,
+            name: pad.name,
+            vendor_id: id(pad.vendor_id),
+            product_id: id(pad.product_id),
+            rumble: pad.rumble,
+        }),
+        Event::Disconnected(pad) => GamepadEvent::Disconnected { pad_id: pad.pad_id },
+        Event::State(state) => GamepadEvent::State(GamepadState {
+            pad_id: state.pad_id,
+            buttons: state.buttons & crate::gamepads::buttons::ALL,
+            left_x: clamp(state.left_x),
+            left_y: clamp(state.left_y),
+            right_x: clamp(state.right_x),
+            right_y: clamp(state.right_y),
+            left_trigger: trigger(state.left_trigger),
+            right_trigger: trigger(state.right_trigger),
+        }),
+    })
+}
+
+/// The local API message that carries a controller change.
+fn gamepad_to_wire(event: &GamepadEvent) -> types::GamepadEvent {
+    use types::gamepad_event::Event;
+    let event = match event {
+        GamepadEvent::Connected(info) => Event::Connected(types::GamepadConnected {
+            pad_id: info.pad_id,
+            name: info.name.clone(),
+            vendor_id: u32::from(info.vendor_id),
+            product_id: u32::from(info.product_id),
+            rumble: info.rumble,
+        }),
+        GamepadEvent::Disconnected { pad_id } => {
+            Event::Disconnected(types::GamepadDisconnected { pad_id: *pad_id })
+        }
+        GamepadEvent::State(state) => Event::State(types::GamepadState {
+            pad_id: state.pad_id,
+            buttons: state.buttons,
+            left_x: i32::from(state.left_x),
+            left_y: i32::from(state.left_y),
+            right_x: i32::from(state.right_x),
+            right_y: i32::from(state.right_y),
+            left_trigger: u32::from(state.left_trigger),
+            right_trigger: u32::from(state.right_trigger),
+        }),
+    };
+    types::GamepadEvent { event: Some(event) }
 }
 
 fn app_to_wire(app: AppInfo) -> types::AppInfo {
@@ -1321,6 +1419,9 @@ impl HostApiService {
             if let Some(request::Body::WatchClipboard(_)) = request.body {
                 return self.watch_clipboard(connection, &peer, request.id);
             }
+            if let Some(request::Body::WatchGamepads(_)) = request.body {
+                return self.watch_gamepads(connection, &peer, request.id);
+            }
             if let Some(request::Body::WatchNotifications(_)) = request.body {
                 return self.watch_notifications(connection, &peer, request.id);
             }
@@ -1822,6 +1923,105 @@ impl HostApiService {
                     failing = true;
                 }
             }
+        }
+    }
+
+    /// Answers a WatchGamepads request, then passes the changes to the client's controllers to
+    /// its Android, and the rumble its Android plays to the client, until the client goes
+    /// away. The controllers it connected are disconnected then. What the client sends that is
+    /// not a controller change closes the connection; a frame that cannot be read is dropped.
+    fn watch_gamepads(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let watched = match self.androids.android(&peer.user) {
+            Err(why) => Err(error(ErrorCode::Unavailable, why)),
+            Ok(android) => match android.watch_gamepad_rumble() {
+                Some(rumble) => Ok((android, rumble)),
+                None => Err(error(
+                    ErrorCode::Unavailable,
+                    "this Android takes no game controllers".into(),
+                )),
+            },
+        };
+        let (android, rumble) = match watched {
+            Ok(watched) => watched,
+            Err(body) => {
+                let _ = send(
+                    &mut *connection,
+                    Body::Response(Response {
+                        id,
+                        body: Some(body),
+                    }),
+                );
+                return;
+            }
+        };
+        let answer = Response {
+            id,
+            body: Some(response::Body::Done(types::Done {})),
+        };
+        if send(&mut *connection, Body::Response(answer)).is_err() {
+            return;
+        }
+        let mut connected: Vec<u32> = Vec::new();
+        loop {
+            while let Ok(effect) = rumble.try_recv() {
+                if !connected.contains(&effect.pad_id) {
+                    continue;
+                }
+                let frame = Body::GamepadRumble(types::GamepadRumble {
+                    pad_id: effect.pad_id,
+                    strong: u32::from(effect.strong),
+                    weak: u32::from(effect.weak),
+                    duration_ms: effect.duration_ms,
+                });
+                if send(&mut *connection, frame).is_err() {
+                    break;
+                }
+            }
+            let frame = match connection.recv(Some(CLIPBOARD_POLL)) {
+                Ok(frame) => frame,
+                Err(TransportError::Timeout) => continue,
+                Err(_) => break,
+            };
+            match decode(&frame) {
+                Ok(Envelope {
+                    body: Some(Body::GamepadEvent(event)),
+                }) => {
+                    let Some(event) = gamepad_from_wire(event) else {
+                        continue;
+                    };
+                    match &event {
+                        GamepadEvent::Connected(info) if !connected.contains(&info.pad_id) => {
+                            connected.push(info.pad_id)
+                        }
+                        GamepadEvent::Disconnected { pad_id } => {
+                            connected.retain(|known| known != pad_id)
+                        }
+                        _ => {}
+                    }
+                    android.gamepad(event);
+                }
+                Ok(_) => {
+                    eprintln!(
+                        "local API: a client of {} sent something other than a controller \
+                         change on a connection that carries the controllers; closing its \
+                         connection",
+                        peer.user
+                    );
+                    connection.close();
+                    break;
+                }
+                Err(error) => {
+                    eprintln!(
+                        "local API: a client of {} sent an unreadable frame on a connection \
+                         that carries the controllers ({error}); dropping it",
+                        peer.user
+                    );
+                }
+            }
+        }
+        // The controllers go with the window manager that read them.
+        for pad_id in connected {
+            android.gamepad(GamepadEvent::Disconnected { pad_id });
         }
     }
 
@@ -2874,6 +3074,18 @@ impl HostApiService {
             ),
             Some(request::Body::UpdateProgram(_)) => self.update_program(peer),
             Some(request::Body::GetSettings(_)) => self.get_settings(peer),
+            Some(request::Body::ListAppWindowSettings(_)) => self.app_window_settings(peer, None),
+            Some(request::Body::SetAppWindowSettings(set)) => {
+                self.app_window_settings(peer, Some(set.app.unwrap_or_default()))
+            }
+            Some(request::Body::SetSystemSettings(set)) => match self.androids.android(&peer.user) {
+                Err(why) => error(ErrorCode::Unavailable, why),
+                Ok(android) => {
+                    let settings = SystemSettings::from_wire(&set.settings.unwrap_or_default());
+                    android.set_system_settings(settings);
+                    response::Body::Done(types::Done {})
+                }
+            },
             Some(request::Body::SetSettings(set)) => self.set_settings(peer, set),
             Some(request::Body::GetDeviceIdentity(_)) => self.device_identity(peer, None),
             Some(request::Body::SetDeviceIdentity(set)) => {
@@ -3050,7 +3262,11 @@ impl HostApiService {
                         | request::Body::WatchLog(_)
                         | request::Body::CollectDiagnostics(_)
                         | request::Body::StopApp(_)
-                        | request::Body::WatchLocation(_) => unreachable!("answered above"),
+                        | request::Body::WatchLocation(_)
+                        | request::Body::SetSystemSettings(_)
+                        | request::Body::WatchGamepads(_)
+                        | request::Body::ListAppWindowSettings(_)
+                        | request::Body::SetAppWindowSettings(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -3347,6 +3563,42 @@ impl HostApiService {
         response::Body::DeviceIdentity(types::DeviceIdentityReport {
             chosen: Some(crate::device_identity::to_wire(&chosen)),
             effective: Some(crate::device_identity::to_wire(&effective)),
+        })
+    }
+
+    /// Answers with the caller's window settings for every app, after replacing one app's
+    /// when `set` carries them.
+    fn app_window_settings(
+        &self,
+        peer: &Peer,
+        set: Option<types::AppWindowSettings>,
+    ) -> response::Body {
+        let Some((store, _)) = &self.settings else {
+            return Self::no_settings();
+        };
+        let mut apps = match store.app_windows(&peer.user) {
+            Ok(apps) => apps,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        if let Some(set) = set {
+            let checked = AppWindowSettings::from_wire(&set)
+                .checked()
+                .and_then(|app| app_windows::replace(&apps, app));
+            let replaced = match checked {
+                Ok(replaced) => replaced,
+                Err(why) => return error(ErrorCode::InvalidSetting, why),
+            };
+            if let Err(why) = store.set_app_windows(&peer.user, &replaced) {
+                return error(ErrorCode::Unavailable, why);
+            }
+            eprintln!(
+                "local API: {} changed the window settings of {}",
+                peer.user, set.package_name
+            );
+            apps = replaced;
+        }
+        response::Body::AppWindowSettings(types::AppWindowSettingsList {
+            apps: apps.iter().map(AppWindowSettings::to_wire).collect(),
         })
     }
 
@@ -4153,6 +4405,47 @@ impl HostApiClient {
         }
     }
 
+    /// Gives the caller's Android the system settings of the caller's host session.
+    pub fn set_system_settings(&mut self, settings: &SystemSettings) -> Result<(), ClientError> {
+        self.done(request::Body::SetSystemSettings(types::SetSystemSettings {
+            settings: Some(settings.to_wire()),
+        }))
+    }
+
+    /// Carries the caller's game controllers to its Android, and their rumble back. The
+    /// connection carries nothing else from here on, so the client is used up.
+    pub fn watch_gamepads(mut self) -> Result<GamepadStream, ClientError> {
+        match self.exchange(
+            request::Body::WatchGamepads(types::WatchGamepads {}),
+            self.timeout,
+        )? {
+            response::Body::Done(_) => Ok(GamepadStream {
+                connection: self.connection,
+            }),
+            _ => Err(ClientError::Malformed(
+                "expected the answer that the controllers are carried".into(),
+            )),
+        }
+    }
+
+    /// The caller's window settings for every app that has any.
+    pub fn app_window_settings(&mut self) -> Result<Vec<AppWindowSettings>, ClientError> {
+        let body = request::Body::ListAppWindowSettings(types::ListAppWindowSettings {});
+        app_windows_report(self.exchange(body, self.timeout)?)
+    }
+
+    /// Replaces the caller's window settings for one app, and returns every app's as they are
+    /// now.
+    pub fn set_app_window_settings(
+        &mut self,
+        app: &AppWindowSettings,
+    ) -> Result<Vec<AppWindowSettings>, ClientError> {
+        let body = request::Body::SetAppWindowSettings(types::SetAppWindowSettings {
+            app: Some(app.to_wire()),
+        });
+        app_windows_report(self.exchange(body, self.timeout)?)
+    }
+
     /// Installs the APK called `name`, of `size` bytes read from `content`, in the caller's
     /// Android, and returns how the install ended: a refusal by Android is an outcome, not an
     /// error. An error means the APK did not get there. The connection ends with the install,
@@ -4770,6 +5063,55 @@ impl ClipboardStream {
             Ok(_) => Err(ClientError::Malformed("expected clipboard text".into())),
             Err(error) => Err(ClientError::Malformed(error.to_string())),
         }
+    }
+}
+
+/// A connection that carries the caller's game controllers to its Android, from
+/// [`HostApiClient::watch_gamepads`].
+pub struct GamepadStream {
+    connection: Box<dyn Connection>,
+}
+
+impl GamepadStream {
+    /// Passes a change to a controller on. Nothing is awaited. An error means the connection
+    /// has ended, and a new one is needed.
+    pub fn send(&mut self, event: &GamepadEvent) -> Result<(), ClientError> {
+        send(&mut *self.connection, Body::GamepadEvent(gamepad_to_wire(event)))
+            .map_err(ClientError::Transport)
+    }
+
+    /// The next rumble effect an app in the caller's Android played, waiting at most
+    /// `timeout`. `Ok(None)` means none came in time; an error means the connection has ended.
+    pub fn next(&mut self, timeout: Duration) -> Result<Option<GamepadRumble>, ClientError> {
+        let frame = match self.connection.recv(Some(timeout)) {
+            Ok(frame) => frame,
+            Err(TransportError::Timeout) => return Ok(None),
+            Err(error) => return Err(ClientError::Transport(error)),
+        };
+        match decode(&frame) {
+            Ok(Envelope {
+                body: Some(Body::GamepadRumble(rumble)),
+            }) => Ok(Some(GamepadRumble {
+                pad_id: rumble.pad_id,
+                strong: rumble.strong.min(u32::from(u16::MAX)) as u16,
+                weak: rumble.weak.min(u32::from(u16::MAX)) as u16,
+                duration_ms: rumble.duration_ms,
+            })),
+            Ok(_) => Err(ClientError::Malformed("expected a rumble effect".into())),
+            Err(error) => Err(ClientError::Malformed(error.to_string())),
+        }
+    }
+}
+
+/// The app window settings an answer carries.
+fn app_windows_report(body: response::Body) -> Result<Vec<AppWindowSettings>, ClientError> {
+    match body {
+        response::Body::AppWindowSettings(list) => {
+            Ok(list.apps.iter().map(AppWindowSettings::from_wire).collect())
+        }
+        _ => Err(ClientError::Malformed(
+            "expected the window settings of the apps".into(),
+        )),
     }
 }
 
