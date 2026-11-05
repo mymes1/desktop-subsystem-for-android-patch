@@ -112,6 +112,8 @@ windows = { version = "0.62", features = [
     # The cameras the apps in the guest use: where each camera's enclosure places it.
     "Devices_Enumeration",
     "Foundation_Collections",
+    # Game controllers that are not Xbox controllers, for the user's Android.
+    "Gaming_Input",
     # Decoding the PNG frames of the widgets on the desktop.
     "Win32_Graphics_Imaging",
     # Printing the documents of the user's Android: Windows' PDF renderer reads them.

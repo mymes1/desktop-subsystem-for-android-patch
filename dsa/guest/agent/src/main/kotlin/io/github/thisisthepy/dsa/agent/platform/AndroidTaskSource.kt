@@ -13,6 +13,7 @@ import io.github.thisisthepy.dsa.agent.tasks.StatusBarAppearance
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
 import io.github.thisisthepy.dsa.agent.tasks.TaskKind
 import io.github.thisisthepy.dsa.agent.tasks.TaskOrientation
+import io.github.thisisthepy.dsa.agent.tasks.hidesBothSystemBars
 import io.github.thisisthepy.dsa.agent.tasks.TaskSnapshot
 import io.github.thisisthepy.dsa.agent.tasks.TaskSource
 
@@ -74,7 +75,10 @@ class AndroidTaskSource(
             statusBar = fields.statusBar(info),
             statusBarColor = fields.statusBarColor(info),
             orientation = fields.orientation(info),
-            fullscreen = fields.windowingMode(info) == WINDOWING_MODE_FULLSCREEN,
+            // Full screen either way an app asks for it: leaving freeform for the fullscreen
+            // windowing mode, or hiding both its status and navigation bars.
+            fullscreen = fields.windowingMode(info) == WINDOWING_MODE_FULLSCREEN ||
+                hidesBothSystemBars(fields.requestedVisibleTypes(info)),
             pictureInPicture = fields.windowingMode(info) == WINDOWING_MODE_PINNED,
         )
     }
@@ -122,6 +126,9 @@ private class TaskFields(private val log: Log) {
     private val getActivityType = field { Class.forName("android.app.WindowConfiguration").getMethod("getActivityType") }
     private val getWindowingMode = field { Class.forName("android.app.WindowConfiguration").getMethod("getWindowingMode") }
     private val topActivityInfo = optional { taskInfo.getField("topActivityInfo") }
+    // The insets types the task's top window asks to be visible (TaskInfo, Android 14 and
+    // later; not in the SDK).
+    private val requestedVisibleTypes = optional { taskInfo.getField("requestedVisibleTypes") }
     private val isFocused = field { taskInfo.getField("isFocused") }
     private val minWidth = field { taskInfo.getField("minWidth") }
     private val minHeight = field { taskInfo.getField("minHeight") }
@@ -200,6 +207,12 @@ private class TaskFields(private val log: Log) {
     /** The windowing mode the task is in (WindowConfiguration.WINDOWING_MODE_*); null when unknown. */
     fun windowingMode(info: ActivityManager.RunningTaskInfo): Int? =
         read("windowing mode") { getWindowingMode!!.invoke(windowConfiguration(info)) as Int }
+
+    /** The insets types the task asks to be visible; null when the framework does not say. */
+    fun requestedVisibleTypes(info: ActivityManager.RunningTaskInfo): Int? {
+        val field = requestedVisibleTypes ?: return null
+        return read("visible insets") { field.getInt(info) }
+    }
 
     /** The orientation the task's top activity locks, from its screenOrientation. */
     fun orientation(info: ActivityManager.RunningTaskInfo): TaskOrientation {
