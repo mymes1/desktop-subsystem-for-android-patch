@@ -721,7 +721,14 @@ pub struct IdleTrim {
     all_hidden: bool,
     idle_since: Option<Instant>,
     trimmed: bool,
+    /// The current quiet stretch (windows shown, no new frame) has had its trim.
+    quiet_trimmed: bool,
 }
+
+/// How long shown windows must go without a new frame before the window manager gives back the
+/// GPU driver's spare memory. An app that shows a still screen draws nothing; one that is
+/// animating never reaches it, so nothing it renders waits for memory the driver let go.
+pub const QUIET_TRIM_DELAY: Duration = Duration::from_secs(60);
 
 impl IdleTrim {
     /// Starts idle, as at start-up, when no window is open yet.
@@ -732,6 +739,7 @@ impl IdleTrim {
             all_hidden: false,
             idle_since: Some(now),
             trimmed: false,
+            quiet_trimmed: false,
         }
     }
 
@@ -776,6 +784,20 @@ impl IdleTrim {
         } else if self.idle_since.is_none() {
             self.idle_since = Some(now);
         }
+    }
+
+    /// Whether windows are shown but have shown no new frame for `quiet_for`, at least
+    /// [`QUIET_TRIM_DELAY`]: the GPU driver's spare memory can go back then without touching
+    /// what the next frame needs. True once per quiet stretch; a frame starts a new one.
+    pub fn quiet_due(&mut self, quiet_for: Duration) -> bool {
+        let shown = !self.open.is_empty() && !self.all_hidden;
+        if !shown || quiet_for < QUIET_TRIM_DELAY {
+            self.quiet_trimmed = false;
+            return false;
+        }
+        let due = !self.quiet_trimmed;
+        self.quiet_trimmed = true;
+        due
     }
 
     /// Whether to give memory back now. True once per idle stretch.

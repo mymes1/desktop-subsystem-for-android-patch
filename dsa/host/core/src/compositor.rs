@@ -12,16 +12,20 @@
 //! [`shown_windows`] says whether any window is shown, which lets the guest sleep, and
 //! [`visible_change`] when a press first visibly changes a window;
 //! [`caption`] lays out and draws the title bar a window draws over its app;
+//! [`early_frames`] keeps a task's first frames until its window host connects, and
+//! [`splash`] draws what a window shows before its first frame;
 //! [`window_mode`] says whether a window fills its monitor or floats as picture-in-picture;
 //! the platform only carries it out.
 
 pub mod caption;
+pub mod early_frames;
 pub mod frame_buffers;
 pub mod frame_follow;
 pub mod present_watch;
 pub mod resize_latency;
 pub mod resize_pacing;
 pub mod shown_windows;
+pub mod splash;
 pub mod task_windows;
 pub mod visible_change;
 pub mod window_hosts;

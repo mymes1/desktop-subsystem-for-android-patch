@@ -13,6 +13,11 @@
 //! passes through the CPU. The texture has the size of the guest's buffers, the largest a
 //! frame of the task can be, so resizing the window does not remake it: each frame fills its
 //! top-left region and says how large that region is.
+//!
+//! A task's [`RemoteWindow`] is there from the moment the task has a window, before its window
+//! host has connected. The frames drawn meanwhile land in its texture, and the newest is shown
+//! as soon as the window host connects: an app's splash screen is drawn once, right after
+//! launch, and would otherwise be lost, leaving the window empty until the app draws.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -21,6 +26,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use dsa_host_core::compositor::early_frames::EarlyFrames;
 use dsa_host_core::compositor::frame_buffers::texture_fits;
 use dsa_host_core::compositor::shown_windows::ShownWindows;
 use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
@@ -225,38 +231,128 @@ pub struct HostTexture {
 }
 
 struct RemoteState {
+    /// The window host's connection; `None` until it connects.
+    link: Option<Arc<HostLink>>,
     texture: Option<Arc<HostTexture>>,
+    /// What has reached the window host of the texture and the frames in it.
+    early: EarlyFrames,
     sequence: u64,
     closed: bool,
 }
 
 /// A task window in a window host, as the renderer's frame target.
+///
+/// It exists from the moment the task has a window, before the window's host has connected,
+/// so the frames the task draws meanwhile (its splash screen) are copied into its texture
+/// rather than dropped, and the newest is shown as soon as the window is there.
 pub struct RemoteWindow {
     task_id: i32,
-    link: Arc<HostLink>,
     gpu: Arc<Gpu>,
     state: Mutex<RemoteState>,
     logger: Option<Arc<CompositorLogger>>,
 }
 
 impl RemoteWindow {
+    /// The frame target of a task whose window host is connected on `link`.
     pub fn new(
         task_id: i32,
         link: Arc<HostLink>,
         gpu: Arc<Gpu>,
         logger: Option<Arc<CompositorLogger>>,
     ) -> Arc<RemoteWindow> {
+        Self::make(task_id, Some(link), EarlyFrames::linked(), gpu, logger)
+    }
+
+    /// The frame target of a task whose window host has not connected yet.
+    pub fn waiting(
+        task_id: i32,
+        gpu: Arc<Gpu>,
+        logger: Option<Arc<CompositorLogger>>,
+    ) -> Arc<RemoteWindow> {
+        Self::make(task_id, None, EarlyFrames::waiting(), gpu, logger)
+    }
+
+    fn make(
+        task_id: i32,
+        link: Option<Arc<HostLink>>,
+        early: EarlyFrames,
+        gpu: Arc<Gpu>,
+        logger: Option<Arc<CompositorLogger>>,
+    ) -> Arc<RemoteWindow> {
         Arc::new(RemoteWindow {
             task_id,
-            link,
             gpu,
             state: Mutex::new(RemoteState {
+                link,
                 texture: None,
+                early,
                 sequence: 0,
                 closed: false,
             }),
             logger,
         })
+    }
+
+    /// Whether the window host has not connected yet.
+    fn is_waiting(&self) -> bool {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.link.is_none() && !state.closed
+    }
+
+    /// Whether the window host on `host` shows this window.
+    fn is_on(&self, host: HostId) -> bool {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.link.as_ref().is_some_and(|link| link.id() == host)
+    }
+
+    /// The window host connected on `link` and was sent the window. It is told of the texture
+    /// the task's frames are in and shown the newest frame the task drew before it connected.
+    /// The window is sent first, so the frame has a window to go to.
+    pub fn attach(&self, link: Arc<HostLink>) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed || state.early.is_linked() {
+            return;
+        }
+        let texture = state.texture.clone();
+        let handover = state.early.link(texture.is_some());
+        state.link = Some(Arc::clone(&link));
+        let Some(texture) = texture else {
+            return;
+        };
+        if handover.texture && !announce(&link, self.task_id, &texture) {
+            // The window host cannot open it: the next frame makes a texture it can.
+            state.texture = None;
+            note(
+                self.logger.as_deref(),
+                &format!(
+                    "could not hand task {}'s first frames to its window: {}",
+                    self.task_id,
+                    std::io::Error::last_os_error()
+                ),
+            );
+            return;
+        }
+        if let Some((width, height)) = handover.frame {
+            state.sequence += 1;
+            let sequence = state.sequence;
+            drop(state);
+            // Not waited for: the renderer waits for the window host only before it writes
+            // the texture again, and its next frame does.
+            let sent = link.send(Body::Frame(Frame {
+                task_id: self.task_id,
+                texture_id: texture.id,
+                sequence,
+                width,
+                height,
+            }));
+            trace_stage(
+                self.logger.as_deref(),
+                self.task_id,
+                "wm.early_frame",
+                (width, height),
+                &format!("texture={} sequence={sequence} sent={sent}", texture.id),
+            );
+        }
     }
 
     /// The window is gone: nothing more is sent for it.
@@ -268,12 +364,32 @@ impl RemoteWindow {
     }
 }
 
+/// Places `texture`'s handle in the window host's process and tells it of the texture.
+/// Returns whether that went.
+fn announce(link: &HostLink, task_id: i32, texture: &HostTexture) -> bool {
+    let Some(handle) = link.place(texture.shared.handle()) else {
+        return false;
+    };
+    let (width, height) = texture.shared.size();
+    link.send(Body::FrameTexture(FrameTexture {
+        task_id,
+        texture_id: texture.id,
+        handle,
+        width,
+        height,
+    }))
+}
+
+/// The textures of task windows whose window host has not connected yet are numbered from
+/// here, apart from those a connected window host numbers from 1.
+static EARLY_TEXTURE: AtomicU64 = AtomicU64::new(1 << 48);
+
 impl FrameTarget for RemoteWindow {
     type Texture = HostTexture;
 
     fn texture(&self, width: u32, height: u32) -> Option<Arc<HostTexture>> {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if state.closed || self.link.is_closed() {
+        if state.closed || state.link.as_ref().is_some_and(|link| link.is_closed()) {
             return None;
         }
         if let Some(texture) = &state.texture {
@@ -293,36 +409,42 @@ impl FrameTarget for RemoteWindow {
             }
         };
         let created = Instant::now();
-        let placed = self.link.place(shared.handle());
-        let duplicated = Instant::now();
-        let Some(handle) = placed else {
-            note(
-                self.logger.as_deref(),
-                &format!(
-                    "could not hand task {}'s frames to its window: {}",
-                    self.task_id,
-                    std::io::Error::last_os_error()
-                ),
-            );
-            return None;
+        let link = state.link.clone();
+        let id = match &link {
+            Some(link) => link.next_texture.fetch_add(1, Ordering::Relaxed),
+            None => EARLY_TEXTURE.fetch_add(1, Ordering::Relaxed),
         };
-        let id = self.link.next_texture.fetch_add(1, Ordering::Relaxed);
-        let announced = self.link.send(Body::FrameTexture(FrameTexture {
-            task_id: self.task_id,
-            texture_id: id,
-            handle,
-            width,
-            height,
-        }));
+        let texture = Arc::new(HostTexture { shared, id });
+        let now = state.early.texture_made();
+        let announced = match (&link, now) {
+            (Some(link), true) => {
+                let announced = announce(link, self.task_id, &texture);
+                if !announced {
+                    note(
+                        self.logger.as_deref(),
+                        &format!(
+                            "could not hand task {}'s frames to its window: {}",
+                            self.task_id,
+                            std::io::Error::last_os_error()
+                        ),
+                    );
+                }
+                announced
+            }
+            // Kept for the window host, which is told of it when it connects.
+            _ => true,
+        };
+        let done = Instant::now();
         trace_stage(
             self.logger.as_deref(),
             self.task_id,
             "wm.texture",
             (width, height),
             &format!(
-                "texture={id} create={} duplicate={} announced={announced}",
+                "texture={id} create={} announce={} linked={} announced={announced}",
                 millis(created.saturating_duration_since(started)),
-                millis(duplicated.saturating_duration_since(created))
+                millis(done.saturating_duration_since(created)),
+                link.is_some()
             ),
         );
         trace_summary(
@@ -331,15 +453,14 @@ impl FrameTarget for RemoteWindow {
             "wm.summary",
             (width, height),
             &format!(
-                "texture={id} create={} duplicate={}",
+                "texture={id} create={} announce={}",
                 millis(created.saturating_duration_since(started)),
-                millis(duplicated.saturating_duration_since(created))
+                millis(done.saturating_duration_since(created))
             ),
         );
         if !announced {
             return None;
         }
-        let texture = Arc::new(HostTexture { shared, id });
         state.texture = Some(Arc::clone(&texture));
         Some(texture)
     }
@@ -349,18 +470,25 @@ impl FrameTarget for RemoteWindow {
     }
 
     fn present(&self, texture: &HostTexture, (width, height): (u32, u32)) {
-        let sequence = {
+        let (link, sequence) = {
             let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
             if state.closed {
                 return;
             }
+            if !state.early.frame((width, height)) {
+                // No window host yet: the frame stays in the texture until one connects.
+                return;
+            }
+            let Some(link) = state.link.clone() else {
+                return;
+            };
             state.sequence += 1;
-            state.sequence
+            (link, state.sequence)
         };
         // The app has drawn this size: the next size of a drag may go to it.
         super::tasks::frame_drawn(self.task_id, (width, height));
         let started = Instant::now();
-        let sent = self.link.send(Body::Frame(Frame {
+        let sent = link.send(Body::Frame(Frame {
             task_id: self.task_id,
             texture_id: texture.id,
             sequence,
@@ -369,10 +497,7 @@ impl FrameTarget for RemoteWindow {
         }));
         // The renderer writes the texture again once this returns, so the window host must
         // have copied the frame out by then.
-        let shown = sent
-            && self
-                .link
-                .wait_presented(self.task_id, sequence, PRESENT_WAIT);
+        let shown = sent && link.wait_presented(self.task_id, sequence, PRESENT_WAIT);
         if input_trace_on() {
             input_trace(
                 "wm.frame",
@@ -768,17 +893,27 @@ impl Manager {
                     let Some(link) = self.links.get(&host).cloned() else {
                         continue;
                     };
+                    // A window whose task drew before its window host connected: its frames
+                    // are handed over once the window host has the window.
+                    let mut waiting = None;
                     match &message {
                         ToHost::Show { task_id, .. } => {
-                            if let Some(gpu) = &self.setup.gpu {
-                                let remote = RemoteWindow::new(
-                                    *task_id,
-                                    Arc::clone(&link),
-                                    Arc::clone(gpu),
-                                    self.setup.logger.clone(),
-                                );
-                                if let Some(old) = self.remotes.insert(*task_id, remote) {
-                                    old.close();
+                            match self.remotes.get(task_id) {
+                                Some(remote) if remote.is_waiting() => {
+                                    waiting = Some(Arc::clone(remote));
+                                }
+                                _ => {
+                                    if let Some(gpu) = &self.setup.gpu {
+                                        let remote = RemoteWindow::new(
+                                            *task_id,
+                                            Arc::clone(&link),
+                                            Arc::clone(gpu),
+                                            self.setup.logger.clone(),
+                                        );
+                                        if let Some(old) = self.remotes.insert(*task_id, remote) {
+                                            old.close();
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -795,6 +930,9 @@ impl Manager {
                         | ToHost::Mode { .. } => {}
                     }
                     link.send(to_wire(&message));
+                    if let Some(remote) = waiting {
+                        remote.attach(link);
+                    }
                 }
                 HostAction::Launch { package } => {
                     let request = TaskRequest::Launch {
@@ -810,7 +948,7 @@ impl Manager {
                         link.close();
                     }
                     self.remotes.retain(|_, remote| {
-                        let keep = remote.link.id() != host;
+                        let keep = !remote.is_on(host);
                         if !keep {
                             remote.close();
                         }
@@ -835,9 +973,26 @@ impl Manager {
             }
             self.request(vec![request]);
         }
-        let routes: Vec<(u32, Arc<RemoteWindow>)> = self
-            .windows
-            .routes()
+        let routed = self.windows.routes();
+        // Every task with a window takes its frames from now on, whether or not its window
+        // host has connected: the first ones are often its splash screen, drawn once.
+        if let Some(gpu) = &self.setup.gpu {
+            let logger = self.setup.logger.clone();
+            for (_, task_id) in &routed {
+                self.remotes.entry(*task_id).or_insert_with(|| {
+                    RemoteWindow::waiting(*task_id, Arc::clone(gpu), logger.clone())
+                });
+            }
+        }
+        // A task whose window went before its window host connected lets its texture go.
+        self.remotes.retain(|task_id, remote| {
+            let keep = !remote.is_waiting() || routed.iter().any(|(_, routed)| routed == task_id);
+            if !keep {
+                remote.close();
+            }
+            keep
+        });
+        let routes: Vec<(u32, Arc<RemoteWindow>)> = routed
             .into_iter()
             .filter_map(|(display_id, task_id)| {
                 let remote = self.remotes.get(&task_id)?;

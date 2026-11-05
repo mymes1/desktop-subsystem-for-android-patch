@@ -54,6 +54,7 @@ use dsa_host_core::compositor::frame_buffers::{
 use dsa_host_core::compositor::frame_follow::{Arrival, FrameFollow};
 use dsa_host_core::compositor::present_watch::{FrameStatistics, PresentWatch};
 use dsa_host_core::compositor::resize_latency::ResizeLatency;
+use dsa_host_core::compositor::splash;
 use dsa_host_core::compositor::visible_change::{self, area_around, Area, PressWatch, Verdict};
 use windows::core::{Interface, BOOL, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HMODULE, HWND, LUID, POINT};
@@ -368,6 +369,12 @@ struct State {
     /// The caption buttons' visual, above the frame's, and its surface and the surface's size.
     caption: IDCompositionVisual,
     caption_surface: Option<(IDCompositionSurface, (u32, u32))>,
+    /// The splash's visual, under the frame's: what the window shows until its first frame.
+    splash: IDCompositionVisual,
+    /// The splash's surface and the surface's size, while it is shown.
+    splash_surface: Option<(IDCompositionSurface, (u32, u32))>,
+    /// What the splash is drawn from, while it is shown.
+    splash_image: Option<SplashImage>,
     swapchain: Option<IDXGISwapChain2>,
     /// The size of the swapchain's buffers: the texture's, not a frame's.
     buffers: Option<(u32, u32)>,
@@ -406,6 +413,14 @@ struct State {
     /// The texture the newest frame came in, its size and the region the frame fills: what is
     /// shown again when a minimized window is restored.
     newest: Option<Newest>,
+}
+
+/// What a window's splash is drawn from: its background as `0xAARRGGBB`, the app's icon as
+/// rows of premultiplied BGRA pixels and their size, and the monitor's dots per inch.
+pub struct SplashImage {
+    pub background: u32,
+    pub icon: Option<(Vec<u8>, (u32, u32))>,
+    pub dpi: u32,
 }
 
 /// A press a window has to watch: the point in guest pixels and when it came on the host clock.
@@ -481,7 +496,7 @@ impl WindowPresenter {
     ) -> Result<Arc<Self>, String> {
         let dcomp = gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: `hwnd` is a live window of this thread; the rest are plain COM calls.
-        let (target, visual, caption) = unsafe {
+        let (target, visual, caption, splash) = unsafe {
             let target = dcomp
                 .CreateTargetForHwnd(HWND(hwnd as *mut c_void), true)
                 .map_err(|e| failed("attaching DirectComposition to a task window", e))?;
@@ -499,13 +514,19 @@ impl WindowPresenter {
                 .map_err(|e| failed("adding a task window's frame visual", e))?;
             root.AddVisual(&caption, true, &visual)
                 .map_err(|e| failed("adding a task window's caption visual", e))?;
+            // Until the first frame the window shows a splash under where the frame goes.
+            let splash = dcomp
+                .CreateVisual()
+                .map_err(|e| failed("creating a task window's splash visual", e))?;
+            root.AddVisual(&splash, false, &visual)
+                .map_err(|e| failed("adding a task window's splash visual", e))?;
             target
                 .SetRoot(&root)
                 .map_err(|e| failed("setting a task window's visual", e))?;
             dcomp
                 .Commit()
                 .map_err(|e| failed("committing a task window's visual", e))?;
-            (target, visual, caption)
+            (target, visual, caption, splash)
         };
         drop(dcomp);
         Ok(Arc::new(WindowPresenter {
@@ -517,6 +538,9 @@ impl WindowPresenter {
                 visual,
                 caption,
                 caption_surface: None,
+                splash,
+                splash_surface: None,
+                splash_image: None,
                 swapchain: None,
                 buffers: None,
                 frame: (0, 0),
@@ -580,6 +604,11 @@ impl WindowPresenter {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         if state.closed {
             return;
+        }
+        if state.first_frame.is_none() && state.splash_image.is_some() {
+            if let Err(why) = self.draw_splash(&mut state, view) {
+                note(self.logger.as_deref(), &why);
+            }
         }
         let took_frame = state.follow.view_taken(view);
         if took_frame {
@@ -1286,10 +1315,110 @@ impl WindowPresenter {
         // SAFETY: plain COM calls on objects this presenter owns.
         unsafe {
             let _ = state.visual.SetTransform2(&matrix);
+            if state.splash_surface.is_some() && state.first_frame.is_some() {
+                // The first frame is presented, and this commit shows it: the splash under it
+                // goes in the same commit, so nothing shows between the two.
+                let _ = state.splash.SetContent(None::<&windows::core::IUnknown>);
+            }
             let _ = dcomp.Commit();
+        }
+        if state.first_frame.is_some() {
+            state.splash_surface = None;
+            state.splash_image = None;
         }
         state.committed = Some(wanted);
         true
+    }
+
+    /// Shows `image` as the window's splash until its first frame: the window never shows the
+    /// desktop through it while the app starts. Returns once the compositor has taken it, so
+    /// the window can be shown with it.
+    pub fn show_splash(&self, image: SplashImage) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed || state.first_frame.is_some() {
+            return;
+        }
+        state.splash_image = Some(image);
+        let view = state.asked;
+        let drawn = self.draw_splash(&mut state, view);
+        drop(state);
+        match drawn {
+            Ok(()) => self.wait_for_commit(),
+            Err(why) => note(self.logger.as_deref(), &why),
+        }
+    }
+
+    /// Draws the splash at the size of a `view` pixel client area, and commits it.
+    fn draw_splash(&self, state: &mut State, view: (u32, u32)) -> Result<(), String> {
+        let Some(image) = state.splash_image.as_ref() else {
+            return Ok(());
+        };
+        if view.0 == 0 || view.1 == 0 {
+            return Ok(());
+        }
+        let icon = image.icon.as_ref().map(|(pixels, size)| splash::Icon {
+            size: *size,
+            pixels,
+        });
+        let pixels = splash::compose(
+            view,
+            image.background,
+            icon,
+            splash::icon_edge(view, image.dpi),
+        );
+        let dcomp = self.gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: plain COM calls on objects this presenter owns; the update reads only
+        // `pixels`, which holds the whole image.
+        unsafe {
+            if state.splash_surface.as_ref().map(|(_, at)| *at) != Some(view) {
+                let surface = dcomp
+                    .CreateSurface(
+                        view.0,
+                        view.1,
+                        DXGI_FORMAT_B8G8R8A8_UNORM,
+                        DXGI_ALPHA_MODE_PREMULTIPLIED,
+                    )
+                    .map_err(|e| failed("creating a task window's splash surface", e))?;
+                state
+                    .splash
+                    .SetContent(&surface)
+                    .map_err(|e| failed("showing a task window's splash", e))?;
+                state.splash_surface = Some((surface, view));
+            }
+            let Some((surface, _)) = state.splash_surface.as_ref() else {
+                return Ok(());
+            };
+            let mut offset = POINT::default();
+            let texture: ID3D11Texture2D = surface
+                .BeginDraw(None, &mut offset)
+                .map_err(|e| failed("drawing a task window's splash", e))?;
+            let place = D3D11_BOX {
+                left: offset.x as u32,
+                top: offset.y as u32,
+                front: 0,
+                right: offset.x as u32 + view.0,
+                bottom: offset.y as u32 + view.1,
+                back: 1,
+            };
+            {
+                let context = self.gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+                context.UpdateSubresource(
+                    &texture,
+                    0,
+                    Some(&place as *const D3D11_BOX),
+                    pixels.as_ptr() as *const c_void,
+                    view.0 * 4,
+                    0,
+                );
+            }
+            surface
+                .EndDraw()
+                .map_err(|e| failed("drawing a task window's splash", e))?;
+            dcomp
+                .Commit()
+                .map_err(|e| failed("committing a task window's splash", e))?;
+        }
+        Ok(())
     }
 
     /// Presents what is in the back buffer, of `size` pixels. Returns whether that size

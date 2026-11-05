@@ -538,15 +538,15 @@ pub fn run(setup: HostSetup) -> Result<(), String> {
     std::thread::Builder::new()
         .name("dsa-app-window-messages".into())
         .spawn(move || loop {
-            let frame = match connection.recv(None) {
-                Ok(frame) => frame,
+            let received = match connection.recv(None) {
+                Ok(received) => received,
                 Err(_) => {
                     // The window manager went away: so do the windows.
                     on_main(quit);
                     return;
                 }
             };
-            let Ok(envelope) = decode(&frame) else {
+            let Ok(envelope) = decode(&received) else {
                 continue;
             };
             let Some(body) = envelope.body else { continue };

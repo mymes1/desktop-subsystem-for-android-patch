@@ -327,9 +327,11 @@ mod daemon {
     #[cfg(target_os = "android")]
     fn reclaim_idle_memory(router: Arc<Router>) {
         use dsa_guest_channeld::reclaim::{
-            memory_pressure, MemInfo, Reason, ReclaimPolicy, Reclaimer, CHECK_INTERVAL,
-            RECLAIM_PROPERTY, TRIM_PROPERTY,
+            file_refaults_kb, memory_pressure, MemInfo, Reason, ReclaimPolicy, Reclaimer,
+            CHECK_INTERVAL, RECLAIM_PROPERTY, TRIM_PROPERTY, TRIM_SIZE_PROPERTY,
         };
+        // SAFETY: sysconf has no preconditions.
+        let page_kb = (unsafe { libc::sysconf(libc::_SC_PAGESIZE) }.max(4096) as u64) / 1024;
         let start = std::time::Instant::now();
         let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
         let mut closed = router.apps_closed();
@@ -360,9 +362,25 @@ mod daemon {
             let pressure = std::fs::read_to_string("/proc/pressure/memory")
                 .map(|text| memory_pressure(&text, 5.0))
                 .unwrap_or(true);
+            // Evicted cache read back says the working set is larger than the trim assumed.
+            if let Some(refaults) = std::fs::read_to_string("/proc/vmstat")
+                .ok()
+                .and_then(|text| file_refaults_kb(&text, page_kb))
+            {
+                reclaimer.refaults(refaults);
+            }
             if let Some(reason) = reclaimer.decide_under(start.elapsed(), tasks, &memory, pressure)
             {
                 let property = if reason == Reason::Gradual {
+                    let size = reclaimer.trim_mib().to_string();
+                    say!(
+                        "trimming {size} MiB of cold page cache (working set target {} MiB)",
+                        reclaimer.working_set_target_kb() / 1024
+                    );
+                    if let Err(why) = set_property(TRIM_SIZE_PROPERTY, &size) {
+                        say!("could not size the trim: {why}");
+                        continue;
+                    }
                     TRIM_PROPERTY
                 } else {
                     RECLAIM_PROPERTY

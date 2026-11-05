@@ -100,20 +100,37 @@ pub fn give_back(gpu: Option<&Gpu>, logger: Option<&CompositorLogger>) {
 }
 
 /// Checks `idle` every second until `stop` is set, and gives memory back when it says so.
+/// `quiet_for` says how long ago the last frame arrived: while windows are shown but still,
+/// only the GPU driver's spare memory goes back, and the working set stays, so the next frame
+/// finds its pages resident.
 pub fn run(
     idle: Arc<Mutex<IdleTrim>>,
     gpu: Option<Arc<Gpu>>,
+    quiet_for: Box<dyn Fn() -> Duration + Send>,
     stop: Arc<AtomicBool>,
     logger: Option<Arc<CompositorLogger>>,
 ) {
     while !stop.load(Ordering::Relaxed) {
         thread::sleep(POLL);
-        let due = idle
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .due(Instant::now());
+        let (due, quiet_due) = {
+            let mut idle = idle.lock().unwrap_or_else(|e| e.into_inner());
+            (idle.due(Instant::now()), idle.quiet_due(quiet_for()))
+        };
         if due {
             give_back(gpu.as_deref(), logger.as_deref());
+        } else if quiet_due {
+            if let Some(gpu) = gpu.as_deref() {
+                let before = held(Some(gpu));
+                gpu.trim();
+                let after = held(Some(gpu));
+                note(
+                    logger.as_deref(),
+                    &format!(
+                        "the shown windows are still: gave back the GPU driver's spare memory; {}",
+                        held_line(&before, &after)
+                    ),
+                );
+            }
         }
     }
 }

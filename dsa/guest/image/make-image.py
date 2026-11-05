@@ -717,6 +717,66 @@ def build_framework_overlay(aapt2, framework_res, work):
     return apk
 
 
+def settings_overlay_sources(dest):
+    """Writes the Settings overlay's manifest and its back button drawables into `dest`."""
+    (dest / "res").mkdir(parents=True, exist_ok=True)
+    (dest / "AndroidManifest.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n'
+        f'    package="{SETTINGS_OVERLAY_PACKAGE}">\n'
+        '    <uses-sdk android:minSdkVersion="34" android:targetSdkVersion="35" />\n'
+        '    <application android:hasCode="false" />\n'
+        f'    <overlay android:targetPackage="{SETTINGS_OVERLAY_TARGET}" android:isStatic="true" '
+        'android:priority="100" />\n'
+        '</manifest>\n'
+    )
+    for folder, theme in (("drawable", "light"), ("drawable-night", "dark")):
+        (dest / "res" / folder).mkdir(exist_ok=True)
+        (dest / "res" / folder / f"{SETTINGS_BACK_ICON}.xml").write_text(settings_back_icon(theme))
+
+
+def settings_back_icon(theme):
+    """The toolbar back icon with its circle centred in the 56 dp navigation button.
+
+    SettingsLib's own icon is a 56 dp layer list whose 40 dp circle starts 16 dp in, so the
+    circle's centre sits 8 dp right of the button's. The framework draws the button's hover
+    layer and ripple around the button's centre, 8 dp left of the circle. Here the circle has
+    8 dp on each side: the same 56 dp, so the button and the title keep their places."""
+    inset = f'android:start="{SETTINGS_BACK_INSET_DP}dp" android:end="{SETTINGS_BACK_INSET_DP}dp"'
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<layer-list xmlns:android="http://schemas.android.com/apk/res/android">\n'
+        f'    <item {inset}>\n'
+        '        <shape>\n'
+        '            <size android:width="40dp" android:height="40dp" />\n'
+        f'            <solid android:color="@*android:color/system_surface_container_highest_{theme}" />\n'
+        '            <corners android:radius="100dp" />\n'
+        '        </shape>\n'
+        '    </item>\n'
+        f'    <item android:width="16dp" android:height="16dp" android:gravity="center" {inset}>\n'
+        '        <vector android:width="16dp" android:height="16dp"\n'
+        '            android:viewportWidth="16" android:viewportHeight="16"\n'
+        f'            android:tint="@*android:color/system_on_surface_variant_{theme}"\n'
+        '            android:autoMirrored="true">\n'
+        f'            <path android:fillColor="@android:color/white" android:pathData="{SETTINGS_BACK_ARROW}" />\n'
+        '        </vector>\n'
+        '    </item>\n'
+        '</layer-list>\n'
+    )
+
+
+def build_settings_overlay(aapt2, framework_res, work):
+    """Builds the Settings overlay APK (unsigned; signing gives it the platform key)."""
+    sources = work / "settings-overlay"
+    shutil.rmtree(sources, ignore_errors=True)
+    settings_overlay_sources(sources)
+    compiled = sources / "compiled.zip"
+    apk = sources / "DsaSettingsOverlay.apk"
+    run(aapt2, "compile", "--dir", sources / "res", "-o", compiled)
+    run(aapt2, "link", "-o", apk, "--manifest", sources / "AndroidManifest.xml", "-I", framework_res, compiled)
+    return apk
+
+
 def find_aapt2():
     """aapt2 from the Android SDK's newest build-tools, or None."""
     for variable in ("ANDROID_HOME", "ANDROID_SDK_ROOT"):
@@ -1465,6 +1525,9 @@ RECLAIM_PROPERTY_CONTEXT = f"{RECLAIM_PROPERTY} u:object_r:dsa_memory_prop:s0 ex
 # The gentler property for the gradual trim while apps are open: init drops only the page cache.
 TRIM_PROPERTY = "vendor.dsa.memory.trim"
 TRIM_PROPERTY_CONTEXT = f"{TRIM_PROPERTY} u:object_r:dsa_memory_prop:s0 exact bool"
+# How many MiB the next gradual trim takes; the daemon sets it before the trim property.
+TRIM_SIZE_PROPERTY = "vendor.dsa.memory.trim_size"
+TRIM_SIZE_PROPERTY_CONTEXT = f"{TRIM_SIZE_PROPERTY} u:object_r:dsa_memory_prop:s0 exact int"
 # init sets this when Android has finished booting, and the daemon tells the host.
 BOOT_PROPERTY = "vendor.dsa.boot_completed"
 BOOT_PROPERTY_CONTEXT = f"{BOOT_PROPERTY} u:object_r:dsa_boot_prop:s0 exact bool"
@@ -1522,6 +1585,34 @@ FRAMEWORK_OVERLAY_FS_CONFIG = [
     "vendor/overlay/DsaFrameworkOverlay.apk 0 0 644 capabilities=0x0",
 ]
 VENDOR_OVERLAY_CONTEXT = "/vendor/overlay(/.*)? u:object_r:vendor_overlay_file:s0"
+# A static overlay of Settings, built the same way. It replaces SettingsLib's toolbar back
+# icon, whose circle is drawn 8 dp right of the centre of the button that holds it. The
+# framework centres the button's hover layer and ripple on the button, so both showed left of
+# the circle, at every density. The replacement centres the circle in the same 56 dp.
+SETTINGS_OVERLAY_APK = "VENDOR/overlay/DsaSettingsOverlay.apk"
+SETTINGS_OVERLAY_PACKAGE = "io.github.thisisthepy.dsa.overlay.settings"
+SETTINGS_OVERLAY_TARGET = "com.android.settings"
+SETTINGS_BACK_ICON = "settingslib_expressive_icon_back"
+SETTINGS_BACK_INSET_DP = 8
+# SettingsLib's arrow (packages/SettingsLib/CollapsingToolbarBaseActivity, Android 16).
+SETTINGS_BACK_ARROW = (
+    "M3.626,9L8.526,13.9C8.726,14.1 8.817,14.333 8.801,14.6C8.801,14.867 8.701,15.1 8.501,15.3"
+    "C8.301,15.483 8.067,15.583 7.801,15.6C7.534,15.6 7.301,15.5 7.101,15.3L0.501,8.7"
+    "C0.401,8.6 0.326,8.492 0.276,8.375C0.242,8.258 0.226,8.133 0.226,8"
+    "C0.226,7.867 0.242,7.742 0.276,7.625C0.326,7.508 0.401,7.4 0.501,7.3L7.101,0.7"
+    "C7.284,0.517 7.509,0.425 7.776,0.425C8.059,0.425 8.301,0.517 8.501,0.7"
+    "C8.701,0.9 8.801,1.142 8.801,1.425C8.801,1.692 8.701,1.925 8.501,2.125L3.626,7H14.801"
+    "C15.084,7 15.317,7.1 15.501,7.3C15.701,7.483 15.801,7.717 15.801,8"
+    "C15.801,8.283 15.701,8.525 15.501,8.725C15.317,8.908 15.084,9 14.801,9H3.626Z"
+)
+SETTINGS_OVERLAY_APKCERTS = (
+    'name="DsaSettingsOverlay.apk" certificate="build/make/target/product/security/platform.x509.pem" '
+    'private_key="build/make/target/product/security/platform.pk8" partition="vendor"'
+)
+SETTINGS_OVERLAY_FS_CONFIG = [
+    "vendor/overlay 0 0 755 capabilities=0x0",
+    "vendor/overlay/DsaSettingsOverlay.apk 0 0 644 capabilities=0x0",
+]
 
 SYSTEM_EXT_FS_CONFIG = "META/system_ext_filesystem_config.txt"
 AGENT_FS_CONFIG = [
@@ -1596,6 +1687,8 @@ def update_vendor_property_contexts(text):
         lines.append(RECLAIM_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [TRIM_PROPERTY] for line in lines):
         lines.append(TRIM_PROPERTY_CONTEXT)
+    if not any(line.split()[:1] == [TRIM_SIZE_PROPERTY] for line in lines):
+        lines.append(TRIM_SIZE_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [BOOT_PROPERTY] for line in lines):
         lines.append(BOOT_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [ADB_PROPERTY] for line in lines):
@@ -1839,14 +1932,15 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 
 
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
-           agent=None, hwcomposer=None, framework_overlay=None, power_hal=None,
+           agent=None, hwcomposer=None, framework_overlay=None, settings_overlay=None, power_hal=None,
            codec2=None, audio=None, gnss_hal=None,
            sensors=None, camera=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
     composer in place of Cuttlefish's when `hwcomposer` names one, the framework overlay
-    when `framework_overlay` names its APK, and DSA's power and health HALs in place of
+    when `framework_overlay` names its APK, the Settings overlay when `settings_overlay`
+    names its APK, and DSA's power and health HALs in place of
     Cuttlefish's when `power_hal` names the folder that holds dsa-power and dsa-health, and
     DSA's codec HAL, whose video decoders decode on the host's GPU, when `codec2` names it,
     and DSA's GNSS HAL, which gives the guest the host's location, in place of Cuttlefish's
@@ -1860,6 +1954,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     agent_payload = Path(agent).read_bytes() if agent else None
     hwcomposer_payload = Path(hwcomposer).read_bytes() if hwcomposer else None
     overlay_payload = Path(framework_overlay).read_bytes() if framework_overlay else None
+    settings_overlay_payload = Path(settings_overlay).read_bytes() if settings_overlay else None
     has_hwcomposer = hwcomposer_payload is not None
     power_payloads = None
     if power_hal is not None:
@@ -1905,7 +2000,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     has_camera = camera_payloads is not None
     build_tag = image_build_tag([
         graphics_payload, vulkan_payload, channeld_payload, agent_payload, hwcomposer_payload,
-        overlay_payload, *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
+        overlay_payload, settings_overlay_payload, *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
         audio_payload, *(gnss_payloads or {}).values(), *(sensors_payloads or {}).values(),
         *(camera_payloads or {}).values(),
     ])
@@ -2075,12 +2170,15 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = b"".join(
                         line + b"\n" for line in data.splitlines()
                         if not any(f'name="{a}.apk"' in line.decode()
-                                   for a in REMOVED_APPS + ["DsaAgent", "DsaFrameworkOverlay"])
+                                   for a in REMOVED_APPS + ["DsaAgent", "DsaFrameworkOverlay",
+                                                    "DsaSettingsOverlay"])
                     )
                     if agent_payload is not None:
                         data += AGENT_APKCERTS.encode() + b"\n"
                     if overlay_payload is not None:
                         data += FRAMEWORK_OVERLAY_APKCERTS.encode() + b"\n"
+                    if settings_overlay_payload is not None:
+                        data += SETTINGS_OVERLAY_APKCERTS.encode() + b"\n"
                 elif name == SYSTEM_FS_CONFIG:
                     data = add_filesystem_config(data.decode(),
                                                  TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG).encode()
@@ -2101,6 +2199,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                                                has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera)
                         if overlay_payload is not None:
                             text = add_filesystem_config(text, FRAMEWORK_OVERLAY_FS_CONFIG)
+                        if settings_overlay_payload is not None:
+                            text = add_filesystem_config(text, SETTINGS_OVERLAY_FS_CONFIG)
                     data = text.encode()
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
@@ -2159,6 +2259,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 "", codec2=has_codec2, channeld=channeld_payload is not None, camera=has_camera))
         if overlay_payload is not None:
             zout.writestr(FRAMEWORK_OVERLAY_APK, overlay_payload)
+        if settings_overlay_payload is not None:
+            zout.writestr(SETTINGS_OVERLAY_APK, settings_overlay_payload)
         if agent_payload is not None:
             zout.writestr(AGENT_APK, agent_payload)
             zout.writestr(AGENT_PERMISSIONS, AGENT_PERMISSIONS_SOURCE.read_bytes())
@@ -2885,19 +2987,21 @@ def main():
             vulkan_driver = sibling
 
     framework_overlay = None
+    settings_overlay = None
     aapt2 = args.aapt2 or find_aapt2()
     if aapt2:
         framework_res = work / "framework-res.apk"
         with zipfile.ZipFile(target_files) as z:
             framework_res.write_bytes(z.read("SYSTEM/framework/framework-res.apk"))
         framework_overlay = build_framework_overlay(aapt2, framework_res, work)
+        settings_overlay = build_settings_overlay(aapt2, framework_res, work)
     else:
-        print("no aapt2, so the image has no framework overlay", flush=True)
+        print("no aapt2, so the image has neither the framework overlay nor the Settings overlay", flush=True)
 
     modified = work / "modified.zip"
     modify(target_files, modified, graphics_library=graphics_library, vulkan_driver=vulkan_driver,
            otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
-           framework_overlay=framework_overlay, power_hal=args.power_hal,
+           framework_overlay=framework_overlay, settings_overlay=settings_overlay, power_hal=args.power_hal,
            codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
            sensors=args.sensors, camera=args.camera)
 

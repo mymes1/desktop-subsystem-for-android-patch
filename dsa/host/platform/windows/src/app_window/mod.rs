@@ -21,11 +21,12 @@ pub mod ime;
 pub mod keys;
 pub mod launch;
 pub mod pointer;
+pub mod splash;
 pub mod window;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::window_hosts::{
     connect_window_host, report_to_wire, to_host_from_wire, FromHost,
@@ -121,6 +122,11 @@ pub fn this_process_app_user_model_id() -> Option<String> {
 
 /// How long connecting and the handshake may take.
 const CONNECT: Duration = Duration::from_secs(5);
+
+/// How long a frame for a window that is being opened waits for the window to be there. The
+/// window manager sends the frames a task drew before this window host connected (its splash
+/// screen) right after the window, and the window opens on another thread.
+const WINDOW_OPENING: Duration = Duration::from_secs(1);
 
 /// What a window host is given to run.
 pub struct HostSetup {
@@ -224,6 +230,8 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
     // This thread shows each frame, and the renderer waits for it.
     crate::scheduling::raise_this_thread();
     let mut textures = Textures::new();
+    // The windows asked for whose presenter may not be there yet.
+    let mut opening: HashSet<i32> = HashSet::new();
     loop {
         let frame = match connection.recv(None) {
             Ok(frame) => frame,
@@ -251,9 +259,16 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
             continue;
         };
         if let Some(command) = to_host_from_wire(&body) {
-            if let dsa_host_core::compositor::window_hosts::ToHost::Close { task_id } = &command {
-                textures.remove(task_id);
-                trace_forget(*task_id);
+            match &command {
+                dsa_host_core::compositor::window_hosts::ToHost::Close { task_id } => {
+                    textures.remove(task_id);
+                    opening.remove(task_id);
+                    trace_forget(*task_id);
+                }
+                dsa_host_core::compositor::window_hosts::ToHost::Show { task_id, .. } => {
+                    opening.insert(*task_id);
+                }
+                _ => {}
             }
             if !ui.send(command) {
                 break;
@@ -297,11 +312,15 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
                 }
             }
             Body::Frame(frame) => {
-                let presenter = presenters
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .get(&frame.task_id)
-                    .cloned();
+                let presenter = if opening.remove(&frame.task_id) {
+                    wait_for_presenter(&presenters, frame.task_id, WINDOW_OPENING)
+                } else {
+                    presenters
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(&frame.task_id)
+                        .cloned()
+                };
                 if let (Some(presenter), Some((id, texture))) =
                     (presenter, textures.get(&frame.task_id))
                 {
@@ -343,6 +362,27 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
     ui.stop();
     let _ = input.join();
     Ok(())
+}
+
+/// The presenter of task `task_id`'s window, waiting at most `timeout` for the window, which
+/// opens on the UI thread, to make it.
+fn wait_for_presenter(
+    presenters: &Presenters,
+    task_id: i32,
+    timeout: Duration,
+) -> Option<Arc<crate::compositor::present::WindowPresenter>> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let presenter = presenters
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&task_id)
+            .cloned();
+        if presenter.is_some() || Instant::now() >= deadline {
+            return presenter;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
 }
 
 /// Stands in for the input connector once it has been handed to its thread.

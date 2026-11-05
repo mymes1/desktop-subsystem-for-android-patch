@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text.Json;
@@ -63,6 +64,9 @@ public sealed class LogViewModel : ObservableObject
     /// <summary>The most lines the page keeps. Older ones are dropped.</summary>
     public const int MaxLines = 5000;
 
+    /// <summary>How often lines read from Android are shown.</summary>
+    public static readonly TimeSpan FlushInterval = TimeSpan.FromMilliseconds(100);
+
     /// <summary>The priorities the page offers, least first, as logcat's letters.</summary>
     public static readonly IReadOnlyList<string> Priorities = new[] { "V", "D", "I", "W", "E", "F" };
 
@@ -88,7 +92,7 @@ public sealed class LogViewModel : ObservableObject
 
     /// <summary>The lines shown: those that pass the filter, as of the last time the page was
     /// not paused.</summary>
-    public ObservableCollection<LogLine> Lines { get; } = new();
+    public LogLines Lines { get; } = new();
 
     public bool IsReading => _reading is not null;
     public string Error => _error ?? "";
@@ -172,45 +176,50 @@ public sealed class LogViewModel : ObservableObject
         || line.Tag.Contains(_filter, StringComparison.OrdinalIgnoreCase)
         || line.Message.Contains(_filter, StringComparison.OrdinalIgnoreCase);
 
-    private void Rebuild()
-    {
-        Lines.Clear();
-        foreach (var line in _all)
-        {
-            if (Passes(line))
-            {
-                Lines.Add(line);
-            }
-        }
-    }
+    private void Rebuild() => Lines.ReplaceAll(_all.Where(Passes));
 
     /// <summary>Takes one line of dsa's output.</summary>
-    public void Add(string output)
+    public void Add(string output) => AddMany(new[] { output });
+
+    /// <summary>Takes several lines of dsa's output and shows them in one change of the list.
+    /// Android sends its log in bursts of hundreds of lines; adding and scrolling to each one
+    /// laid the page out hundreds of times a second and made it crawl.</summary>
+    public void AddMany(IReadOnlyCollection<string> outputs)
     {
-        var line = LogLine.Parse(output);
-        if (line is null)
+        var added = 0;
+        foreach (var output in outputs)
+        {
+            var line = LogLine.Parse(output);
+            if (line is null)
+            {
+                continue;
+            }
+            _all.Add(line);
+            added++;
+        }
+        if (added == 0)
         {
             return;
         }
-        _all.Add(line);
-        if (_all.Count > MaxLines)
+        var trimmed = _all.Count > MaxLines;
+        if (trimmed)
         {
-            var gone = _all[0];
-            _all.RemoveAt(0);
-            if (!_paused && Lines.Count > 0 && ReferenceEquals(Lines[0], gone))
-            {
-                Lines.RemoveAt(0);
-            }
+            _all.RemoveRange(0, _all.Count - MaxLines);
         }
         if (_paused)
         {
-            _waiting++;
+            _waiting += added;
             Changed(nameof(Waiting));
             Changed(nameof(PausedText));
+            return;
         }
-        else if (Passes(line))
+        if (trimmed || added > 1)
         {
-            Lines.Add(line);
+            Rebuild();
+        }
+        else if (Passes(_all[^1]))
+        {
+            Lines.Add(_all[^1]);
         }
     }
 
@@ -227,13 +236,38 @@ public sealed class LogViewModel : ObservableObject
         ChangedAll();
         try
         {
-            await foreach (var output in _stream.LinesAsync(Arguments(_priority), reading.Token).ConfigureAwait(true))
+            // The log is read off the page's thread and shown at most ten times a second, one
+            // change of the list each time, so a burst costs one layout instead of one a line.
+            var queue = new ConcurrentQueue<string>();
+            var stream = _stream;
+            var priority = _priority;
+            var pump = Task.Run(async () =>
             {
+                await foreach (var output in stream.LinesAsync(Arguments(priority), reading.Token).ConfigureAwait(false))
+                {
+                    queue.Enqueue(output);
+                }
+            });
+            var batch = new List<string>();
+            while (true)
+            {
+                var finished = pump.IsCompleted;
+                batch.Clear();
+                while (queue.TryDequeue(out var output))
+                {
+                    batch.Add(output);
+                }
                 if (reading.IsCancellationRequested)
                 {
                     break;
                 }
-                Add(output);
+                AddMany(batch);
+                if (finished)
+                {
+                    await pump.ConfigureAwait(true);
+                    break;
+                }
+                await Task.WhenAny(pump, Task.Delay(FlushInterval, reading.Token)).ConfigureAwait(true);
             }
         }
         catch (OperationCanceledException)
@@ -298,5 +332,24 @@ public sealed class LogViewModel : ObservableObject
             _saving = false;
             ChangedAll();
         }
+    }
+}
+
+/// <summary>The lines a log page shows. Replacing them all is one change of the list, so the
+/// list lays itself out once, not once a line.</summary>
+public sealed class LogLines : ObservableCollection<LogLine>
+{
+    public void ReplaceAll(IEnumerable<LogLine> lines)
+    {
+        CheckReentrancy();
+        Items.Clear();
+        foreach (var line in lines)
+        {
+            Items.Add(line);
+        }
+        OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new System.Collections.Specialized.NotifyCollectionChangedEventArgs(
+            System.Collections.Specialized.NotifyCollectionChangedAction.Reset));
     }
 }

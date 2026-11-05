@@ -24,7 +24,7 @@ use std::time::Duration;
 use block2::RcBlock;
 use dispatch2::{DispatchQueue, DispatchRetained};
 use objc2::rc::Retained;
-use objc2::runtime::{NSObject, NSObjectProtocol, ProtocolObject};
+use objc2::runtime::{Bool, NSObject, NSObjectProtocol, ProtocolObject};
 use objc2::{define_class, msg_send, AllocAnyThread, DefinedClass};
 use objc2_foundation::{NSArray, NSError, NSString, NSURL};
 use objc2_virtualization::{
@@ -134,12 +134,12 @@ define_class!(
             _listener: &VZVirtioSocketListener,
             connection: &VZVirtioSocketConnection,
             _device: &VZVirtioSocketDevice,
-        ) -> bool {
+        ) -> Bool {
             // SAFETY: the connection's descriptor is open while the connection exists; the
             // duplicate is this process's own.
             let fd = unsafe { libc::dup(connection.fileDescriptor()) };
             if fd < 0 {
-                return false;
+                return Bool::NO;
             }
             // SAFETY: a descriptor just duplicated, owned by nothing else.
             let fd = unsafe { OwnedFd::from_raw_fd(fd) };
@@ -148,7 +148,7 @@ define_class!(
                 .connections
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
-            sender.send(fd).is_ok()
+            Bool::new(sender.send(fd).is_ok())
         }
     }
 );

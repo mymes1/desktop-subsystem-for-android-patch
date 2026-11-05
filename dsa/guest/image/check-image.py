@@ -302,6 +302,9 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "VENDOR/overlay/DsaFrameworkOverlay.apk" not in names:
         problems.append("VENDOR/overlay/DsaFrameworkOverlay.apk is missing, so a press on a list row "
                         "shows only after the 100 ms tap timeout")
+    if "VENDOR/overlay/DsaSettingsOverlay.apk" not in names:
+        problems.append("VENDOR/overlay/DsaSettingsOverlay.apk is missing, so Settings' back button shows "
+                        "its hover and ripple 8 dp left of its circle")
     if "SYSTEM/etc/init/dsa-trace.rc" not in names:
         problems.append("SYSTEM/etc/init/dsa-trace.rc is missing, so the input trace has no main thread timing")
 
