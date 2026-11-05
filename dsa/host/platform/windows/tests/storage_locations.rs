@@ -44,7 +44,12 @@ fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
             // Tests may use temporary folders; build outputs are not sources. A Rust crate's
             // `src\bin` holds programs, so only a .NET project's `bin` is skipped.
             let rust_programs = name == "bin" && dir.file_name().is_some_and(|d| d == "src");
+            // The Linux and macOS hosts keep their files where those systems put them (XDG
+            // folders, ~/Library); this rule is about the Windows host's two folders.
+            let other_host = matches!(name.as_str(), "linux" | "macos")
+                && dir.file_name().is_some_and(|d| d == "platform");
             let skipped = matches!(name.as_str(), "tests" | "target" | "obj")
+                || other_host
                 || (name == "bin" && !rust_programs)
                 || name.ends_with(".Tests");
             if !skipped {
