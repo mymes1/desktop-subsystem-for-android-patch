@@ -60,6 +60,12 @@ pub struct Window {
     pub last_caption_click: Option<Instant>,
     /// Whether the window was reported to the window rules as opened (with its DPI).
     pub dpi_told: bool,
+    /// Crops a GPU image to the frame in it, when frames come as dmabufs.
+    pub(crate) viewport: Option<wayland_protocols::wp::viewporter::client::wp_viewport::WpViewport>,
+    /// The title bar's buttons over a GPU frame, which the CPU cannot draw into.
+    pub(crate) caption_layer: Option<super::gpu::CaptionLayer>,
+    /// The GPU frame shown last, drawn again when the title bar changes.
+    pub(crate) last_gpu: Option<(u32, crate::compositor::frames::GpuFrame)>,
 }
 
 impl State {
@@ -109,6 +115,9 @@ impl State {
                 ime_cursor: None,
                 last_caption_click: None,
                 dpi_told: false,
+                viewport: None,
+                caption_layer: None,
+                last_gpu: None,
             },
         );
     }
@@ -230,6 +239,12 @@ impl State {
 
     pub(crate) fn close_window(&mut self, task_id: i32) {
         if let Some(window) = self.windows.remove(&task_id) {
+            if let Some(viewport) = &window.viewport {
+                viewport.destroy();
+            }
+            if let Some(layer) = window.caption_layer {
+                layer.destroy();
+            }
             if let Some(decoration) = &window.decoration {
                 decoration.destroy();
             }
@@ -259,6 +274,11 @@ impl State {
     pub(crate) fn redraw(&mut self, task_id: i32) {
         let shm = self.shm.clone();
         let qh = self.qh.clone();
+        if let Some((display_id, frame)) = self.windows.get(&task_id).and_then(|w| w.last_gpu)
+        {
+            self.present_gpu(task_id, display_id, frame);
+            return;
+        }
         if let Some(window) = self.windows.get_mut(&task_id) {
             if window.waiting.is_none() {
                 window.waiting = window.last.clone();
@@ -325,9 +345,29 @@ impl Window {
     }
 
     /// Draws the waiting frame, with the title bar over it, into a free buffer.
+    /// Whether the first configure has been acknowledged, so the window may draw.
+    pub(crate) fn is_configured(&self) -> bool {
+        self.configured
+    }
+
+    pub(crate) fn xdg_surface(&self) -> &XdgSurface {
+        &self.xdg_surface
+    }
+
     fn draw(&mut self, shm: &wayland_client::protocol::wl_shm::WlShm, qh: &QueueHandle<State>) {
         if !self.configured {
             return;
+        }
+        if self.last_gpu.is_some() && self.waiting.is_none() {
+            return;
+        }
+        self.last_gpu = None;
+        if let Some(layer) = &mut self.caption_layer {
+            layer.hide();
+        }
+        if let Some(viewport) = &self.viewport {
+            viewport.set_source(-1.0, -1.0, -1.0, -1.0);
+            viewport.set_destination(-1, -1);
         }
         let frame = match self.waiting.take() {
             Some(frame) => frame,

@@ -89,10 +89,41 @@ impl Frame {
     }
 }
 
+/// A frame the renderer left in one of a display's GPU images (a dmabuf): which image, and
+/// the top-left region of it the frame fills.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuFrame {
+    pub slot: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// One GPU image of a display, as the renderer exported it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuImage {
+    pub display_id: u32,
+    pub slot: u32,
+    pub width: u32,
+    pub height: u32,
+    pub stride: u32,
+    pub offset: u32,
+    pub fourcc: u32,
+    pub modifier: u64,
+}
+
+/// What a display has to show next.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Shown {
+    /// A frame read back to memory.
+    Pixels(Frame),
+    /// A frame in a GPU image the window already holds.
+    Gpu(GpuFrame),
+}
+
 /// The newest frame of each display, waiting for its window.
 #[derive(Debug, Default)]
 pub struct LatestFrames {
-    frames: BTreeMap<u32, Frame>,
+    frames: BTreeMap<u32, Shown>,
 }
 
 impl LatestFrames {
@@ -102,11 +133,16 @@ impl LatestFrames {
 
     /// `display_id` has a new frame; one that was still waiting is dropped.
     pub fn put(&mut self, display_id: u32, frame: Frame) {
-        self.frames.insert(display_id, frame);
+        self.frames.insert(display_id, Shown::Pixels(frame));
+    }
+
+    /// `display_id` has a new frame in a GPU image.
+    pub fn put_gpu(&mut self, display_id: u32, frame: GpuFrame) {
+        self.frames.insert(display_id, Shown::Gpu(frame));
     }
 
     /// Every frame waiting, by display, leaving none.
-    pub fn take(&mut self) -> BTreeMap<u32, Frame> {
+    pub fn take(&mut self) -> BTreeMap<u32, Shown> {
         std::mem::take(&mut self.frames)
     }
 }
@@ -135,9 +171,18 @@ mod tests {
         frames.put(3, Frame::solid(1, 1, 0x000000));
         frames.put(3, Frame::solid(2, 2, 0xffffff));
         frames.put(5, Frame::solid(1, 1, 0x00ff00));
+        frames.put_gpu(
+            7,
+            GpuFrame {
+                slot: 1,
+                width: 4,
+                height: 4,
+            },
+        );
         let taken = frames.take();
-        assert_eq!(taken.len(), 2);
-        assert_eq!(taken[&3].width, 2);
+        assert_eq!(taken.len(), 3);
+        assert!(matches!(&taken[&3], Shown::Pixels(frame) if frame.width == 2));
+        assert!(matches!(taken[&7], Shown::Gpu(GpuFrame { slot: 1, .. })));
         assert!(frames.take().is_empty());
     }
 

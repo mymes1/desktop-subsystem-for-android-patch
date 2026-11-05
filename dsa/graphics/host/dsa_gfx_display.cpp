@@ -552,30 +552,65 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_pixels_callback(dsa_display_pi
     return -1;
 }
 
+extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_dmabuf_callbacks(dsa_display_dmabuf_fn,
+                                                                   dsa_display_dmabuf_frame_fn,
+                                                                   dsa_display_pixels_fn, void*) {
+    return -1;
+}
+
 void dsa_gfx_display_shutdown(void) { stop_presenter(); }
 
 #else /* !_WIN32 */
 
-/* On Linux and macOS there is no shared texture to copy into, so each display's newest frame
- * is read back to memory on a presentation thread and handed to the embedder, which shows it
- * in a shared-memory buffer of the window system. The hook and the pending frames work as on
- * Windows: only the newest frame of each display is kept, so a slow window never makes the
+/* On Linux there is no Direct3D texture to copy into. Each display's newest frame is copied on
+ * the GPU into a ring of linear Vulkan images the renderer exports as dmabufs, which the
+ * embedder hands to the Wayland compositor (linux-dmabuf): nothing goes through the CPU.
+ * Where the driver cannot export a dmabuf, or the embedder asks for it, the frame is read
+ * back to memory instead and handed over as pixels. The hook and the pending frames work as
+ * on Windows: only the newest frame of each display is kept, so a slow window never makes the
  * guest wait. */
 
 namespace {
 
 using gfxstream::FrameBuffer;
+using gfxstream::vk::BorrowedImageInfoVk;
+using gfxstream::vk::VkEmulation;
+using gfxstream::vk::VulkanDispatch;
 
 constexpr uint32_t kGlRgba = 0x1908;
 constexpr uint32_t kGlUnsignedByte = 0x1401;
 
-/* The largest frame read back, in pixels on a side. A size beyond it is a broken guest. */
+/* The largest frame shown, in pixels on a side. A size beyond it is a broken guest. */
 constexpr uint32_t kMaxSide = 16384;
+
+/* How long one copy may take on the GPU before the frame is given up. */
+constexpr uint64_t kCopyTimeoutNs = 1000ull * 1000ull * 1000ull;
+
+/* How many images each display cycles through, so the compositor reads one while the next
+ * frame is copied into another. */
+constexpr uint32_t kSlots = 3;
+
+/* DRM_FORMAT_ABGR8888: R, G, B, A in memory, as VK_FORMAT_R8G8B8A8_UNORM. */
+constexpr uint32_t kFourccAbgr8888 = 0x34324241;
+constexpr uint64_t kModifierLinear = 0;
 
 struct PendingFrame {
     uint32_t color_buffer = 0;
     uint32_t width = 0;
     uint32_t height = 0;
+};
+
+/* One exported image. */
+struct Slot {
+    uint32_t width = 0;
+    uint32_t height = 0;
+    VkImage image = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+};
+
+struct Display {
+    Slot slots[kSlots];
+    uint32_t next = 0;
 };
 
 struct PixelPresenter {
@@ -585,9 +620,16 @@ struct PixelPresenter {
     bool stopping = false;
     std::thread thread;
     dsa_display_pixels_fn pixels_cb = nullptr;
+    dsa_display_dmabuf_fn dmabuf_cb = nullptr;
+    dsa_display_dmabuf_frame_fn dmabuf_frame_cb = nullptr;
     void* context = nullptr;
-    /* Only the presentation thread touches this. */
+    /* Only the presentation thread touches these. */
     std::vector<uint8_t> buffer;
+    std::map<uint32_t, Display> displays;
+    bool dmabuf_failed = false;
+    VkCommandPool pool = VK_NULL_HANDLE;
+    VkCommandBuffer commands = VK_NULL_HANDLE;
+    VkFence fence = VK_NULL_HANDLE;
 };
 
 std::mutex s_presenter_mutex;
@@ -595,6 +637,27 @@ PixelPresenter* s_presenter = nullptr;
 int (*s_original_set_display_color_buffer)(uint32_t, uint32_t) = nullptr;
 int (*s_get_display_pose)(uint32_t, int32_t*, int32_t*, uint32_t*, uint32_t*) = nullptr;
 bool s_hook_installed = false;
+
+void log_once(const char* what) {
+    static std::mutex log_mutex;
+    static std::vector<std::string> said;
+    std::lock_guard<std::mutex> lock(log_mutex);
+    for (const auto& line : said) {
+        if (line == what) {
+            return;
+        }
+    }
+    said.emplace_back(what);
+    std::fprintf(stderr, "dsa_gfx: %s\n", what);
+}
+
+VkEmulation* emulation() {
+    FrameBuffer* fb = FrameBuffer::getFB();
+    if (!fb || !fb->hasEmulationVk()) {
+        return nullptr;
+    }
+    return &fb->getEmulationVk();
+}
 
 int hooked_set_display_color_buffer(uint32_t display_id, uint32_t color_buffer) {
     int result = s_original_set_display_color_buffer
@@ -637,10 +700,288 @@ bool install_hook() {
     return true;
 }
 
-void present(PixelPresenter& presenter, uint32_t display_id, const PendingFrame& frame) {
+void destroy_slot(VkEmulation& emu, Slot& slot) {
+    VulkanDispatch* vk = emu.getDeviceDispatch();
+    if (slot.image != VK_NULL_HANDLE) {
+        vk->vkDestroyImage(emu.getDevice(), slot.image, nullptr);
+    }
+    if (slot.memory != VK_NULL_HANDLE) {
+        vk->vkFreeMemory(emu.getDevice(), slot.memory, nullptr);
+    }
+    slot = Slot{};
+}
+
+/* Makes a linear image the copy can write and the compositor can read, and exports its
+ * memory as a dmabuf to the embedder. */
+bool export_slot(VkEmulation& emu, PixelPresenter& presenter, uint32_t display_id,
+                 uint32_t index, uint32_t width, uint32_t height, Slot* out) {
+    VulkanDispatch* vk = emu.getDeviceDispatch();
+    VkDevice device = emu.getDevice();
+    if (!emu.supportsDmaBuf()) {
+        log_once("the Vulkan device cannot export dmabufs (VK_EXT_external_memory_dma_buf); "
+                 "frames are read back instead");
+        return false;
+    }
+    if (!vk->vkGetMemoryFdKHR) {
+        log_once("the Vulkan driver cannot export memory (VK_KHR_external_memory_fd); "
+                 "frames are read back instead");
+        return false;
+    }
+    VkExternalMemoryImageCreateInfo external_info = {};
+    external_info.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+    external_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+
+    VkImageCreateInfo image_info = {};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.pNext = &external_info;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+    image_info.extent = {width, height, 1};
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_LINEAR;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    Slot slot;
+    slot.width = width;
+    slot.height = height;
+    if (vk->vkCreateImage(device, &image_info, nullptr, &slot.image) != VK_SUCCESS) {
+        log_once("the Vulkan driver cannot make an exportable image; frames are read back");
+        return false;
+    }
+    VkMemoryRequirements requirements = {};
+    vk->vkGetImageMemoryRequirements(device, slot.image, &requirements);
+    uint32_t type_index = UINT32_MAX;
+    VkPhysicalDeviceMemoryProperties memory = {};
+    emu.getInstanceDispatch()->vkGetPhysicalDeviceMemoryProperties(emu.getPhysicalDevice(),
+                                                                   &memory);
+    for (uint32_t i = 0; i < memory.memoryTypeCount; i++) {
+        if ((requirements.memoryTypeBits & (1u << i)) &&
+            (memory.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            type_index = i;
+            break;
+        }
+    }
+    if (type_index == UINT32_MAX) {
+        for (uint32_t i = 0; i < memory.memoryTypeCount; i++) {
+            if (requirements.memoryTypeBits & (1u << i)) {
+                type_index = i;
+                break;
+            }
+        }
+    }
+    if (type_index == UINT32_MAX) {
+        destroy_slot(emu, slot);
+        return false;
+    }
+    VkMemoryDedicatedAllocateInfo dedicated = {};
+    dedicated.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
+    dedicated.image = slot.image;
+    VkExportMemoryAllocateInfo export_info = {};
+    export_info.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO;
+    export_info.pNext = &dedicated;
+    export_info.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+    VkMemoryAllocateInfo allocate_info = {};
+    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate_info.pNext = &export_info;
+    allocate_info.allocationSize = requirements.size;
+    allocate_info.memoryTypeIndex = type_index;
+    if (vk->vkAllocateMemory(device, &allocate_info, nullptr, &slot.memory) != VK_SUCCESS ||
+        vk->vkBindImageMemory(device, slot.image, slot.memory, 0) != VK_SUCCESS) {
+        log_once("the Vulkan driver cannot export an image as a dmabuf; frames are read back");
+        destroy_slot(emu, slot);
+        return false;
+    }
+    VkMemoryGetFdInfoKHR fd_info = {};
+    fd_info.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR;
+    fd_info.memory = slot.memory;
+    fd_info.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+    int fd = -1;
+    if (vk->vkGetMemoryFdKHR(device, &fd_info, &fd) != VK_SUCCESS || fd < 0) {
+        log_once("the Vulkan driver did not export a dmabuf; frames are read back");
+        destroy_slot(emu, slot);
+        return false;
+    }
+    VkImageSubresource subresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
+    VkSubresourceLayout layout = {};
+    vk->vkGetImageSubresourceLayout(device, slot.image, &subresource, &layout);
+    /* The embedder owns the descriptor from here, whatever it answers. */
+    if (presenter.dmabuf_cb(presenter.context, display_id, index, width, height, fd,
+                            static_cast<uint32_t>(layout.rowPitch),
+                            static_cast<uint32_t>(layout.offset), kFourccAbgr8888,
+                            kModifierLinear) != 0) {
+        destroy_slot(emu, slot);
+        return false;
+    }
+    *out = slot;
+    return true;
+}
+
+bool ensure_commands(VkEmulation& emu, PixelPresenter& presenter) {
+    if (presenter.commands != VK_NULL_HANDLE) {
+        return true;
+    }
+    VulkanDispatch* vk = emu.getDeviceDispatch();
+    VkDevice device = emu.getDevice();
+    VkCommandPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    pool_info.queueFamilyIndex = emu.getQueueFamilyIndex();
+    if (vk->vkCreateCommandPool(device, &pool_info, nullptr, &presenter.pool) != VK_SUCCESS) {
+        return false;
+    }
+    VkCommandBufferAllocateInfo buffer_info = {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    buffer_info.commandPool = presenter.pool;
+    buffer_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    buffer_info.commandBufferCount = 1;
+    if (vk->vkAllocateCommandBuffers(device, &buffer_info, &presenter.commands) != VK_SUCCESS) {
+        return false;
+    }
+    VkFenceCreateInfo fence_info = {};
+    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    return vk->vkCreateFence(device, &fence_info, nullptr, &presenter.fence) == VK_SUCCESS;
+}
+
+VkImageMemoryBarrier image_barrier(VkImage image, VkAccessFlags src_access,
+                                   VkAccessFlags dst_access, VkImageLayout old_layout,
+                                   VkImageLayout new_layout, uint32_t src_family,
+                                   uint32_t dst_family) {
+    VkImageMemoryBarrier barrier = {};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.srcAccessMask = src_access;
+    barrier.dstAccessMask = dst_access;
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = new_layout;
+    barrier.srcQueueFamilyIndex = src_family;
+    barrier.dstQueueFamilyIndex = dst_family;
+    barrier.image = image;
+    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    return barrier;
+}
+
+void cmd_barriers(VulkanDispatch* vk, VkCommandBuffer commands, VkPipelineStageFlags src,
+                  VkPipelineStageFlags dst, const std::vector<VkImageMemoryBarrier>& barriers) {
+    if (barriers.empty()) {
+        return;
+    }
+    vk->vkCmdPipelineBarrier(commands, src, dst, 0, 0, nullptr, 0, nullptr,
+                             static_cast<uint32_t>(barriers.size()), barriers.data());
+}
+
+/* Copies the frame into the display's next dmabuf on the GPU. False when it cannot, and the
+ * frame is read back instead. */
+bool present_dmabuf(PixelPresenter& presenter, uint32_t display_id, const PendingFrame& frame) {
+    VkEmulation* emu = emulation();
     FrameBuffer* fb = FrameBuffer::getFB();
-    if (!fb || frame.width == 0 || frame.height == 0 || frame.width > kMaxSide ||
-        frame.height > kMaxSide) {
+    if (!emu || !fb) {
+        return false;
+    }
+    auto keep_alive = fb->findColorBuffer(frame.color_buffer);
+    if (!keep_alive) {
+        return true;
+    }
+    const uint32_t width = keep_alive->getWidth();
+    const uint32_t height = keep_alive->getHeight();
+    if (width == 0 || height == 0 || width > kMaxSide || height > kMaxSide) {
+        return true;
+    }
+    Display& display = presenter.displays[display_id];
+    const uint32_t index = display.next;
+    Slot& slot = display.slots[index];
+    if (slot.width != width || slot.height != height) {
+        destroy_slot(*emu, slot);
+        if (!export_slot(*emu, presenter, display_id, index, width, height, &slot)) {
+            return false;
+        }
+    }
+    if (!ensure_commands(*emu, presenter)) {
+        log_once("could not set up the Vulkan commands that copy frames into task windows");
+        return false;
+    }
+    std::unique_ptr<BorrowedImageInfoVk> source = emu->borrowColorBufferForDisplay(frame.color_buffer);
+    if (!source) {
+        return true;
+    }
+    uint32_t content_width = frame.width ? frame.width : width;
+    uint32_t content_height = frame.height ? frame.height : height;
+    content_width = std::min(std::min(content_width, width), source->imageCreateInfo.extent.width);
+    content_height =
+        std::min(std::min(content_height, height), source->imageCreateInfo.extent.height);
+    if (content_width == 0 || content_height == 0) {
+        return true;
+    }
+    VulkanDispatch* vk = emu->getDeviceDispatch();
+    VkDevice device = emu->getDevice();
+    const uint32_t family = emu->getQueueFamilyIndex();
+
+    std::vector<VkImageMemoryBarrier> acquire_transfers;
+    std::vector<VkImageMemoryBarrier> acquire_layouts;
+    std::vector<VkImageMemoryBarrier> release_layouts;
+    std::vector<VkImageMemoryBarrier> release_transfers;
+    gfxstream::vk::addNeededBarriersToUseBorrowedImage(
+        *source, family, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT, &acquire_transfers,
+        &acquire_layouts, &release_layouts, &release_transfers);
+    acquire_layouts.push_back(image_barrier(
+        slot.image, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED));
+    release_transfers.push_back(image_barrier(
+        slot.image, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_GENERAL, family, VK_QUEUE_FAMILY_FOREIGN_EXT));
+
+    VkCommandBufferBeginInfo begin = {};
+    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vk->vkResetCommandBuffer(presenter.commands, 0);
+    vk->vkBeginCommandBuffer(presenter.commands, &begin);
+    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                 VK_PIPELINE_STAGE_TRANSFER_BIT, acquire_transfers);
+    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                 VK_PIPELINE_STAGE_TRANSFER_BIT, acquire_layouts);
+    VkImageCopy region = {};
+    region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.extent = {content_width, content_height, 1};
+    vk->vkCmdCopyImage(presenter.commands, source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       slot.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, release_layouts);
+    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, release_transfers);
+    vk->vkEndCommandBuffer(presenter.commands);
+
+    VkSubmitInfo submit = {};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &presenter.commands;
+    VkResult submitted;
+    {
+        android::base::AutoLock lock(*emu->getQueueLock());
+        submitted = vk->vkQueueSubmit(emu->getQueue(), 1, &submit, presenter.fence);
+    }
+    if (submitted != VK_SUCCESS) {
+        log_once("submitting the copy of a frame into a task window failed");
+        return true;
+    }
+    if (vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, kCopyTimeoutNs) != VK_SUCCESS) {
+        log_once("copying a frame into a task window took longer than a second");
+        vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, UINT64_MAX);
+    }
+    vk->vkResetFences(device, 1, &presenter.fence);
+    display.next = (index + 1) % kSlots;
+    presenter.dmabuf_frame_cb(presenter.context, display_id, index, content_width,
+                              content_height);
+    return true;
+}
+
+void present_pixels(PixelPresenter& presenter, uint32_t display_id, const PendingFrame& frame) {
+    FrameBuffer* fb = FrameBuffer::getFB();
+    if (!fb || !presenter.pixels_cb || frame.width == 0 || frame.height == 0 ||
+        frame.width > kMaxSide || frame.height > kMaxSide) {
         return;
     }
     const uint64_t size = uint64_t(frame.width) * frame.height * 4;
@@ -649,6 +990,16 @@ void present(PixelPresenter& presenter, uint32_t display_id, const PendingFrame&
                         kGlUnsignedByte, presenter.buffer.data(), size);
     presenter.pixels_cb(presenter.context, display_id, frame.width, frame.height,
                         presenter.buffer.data());
+}
+
+void present(PixelPresenter& presenter, uint32_t display_id, const PendingFrame& frame) {
+    if (presenter.dmabuf_cb && presenter.dmabuf_frame_cb && !presenter.dmabuf_failed) {
+        if (present_dmabuf(presenter, display_id, frame)) {
+            return;
+        }
+        presenter.dmabuf_failed = true;
+    }
+    present_pixels(presenter, display_id, frame);
 }
 
 void run(PixelPresenter* presenter) {
@@ -667,6 +1018,22 @@ void run(PixelPresenter* presenter) {
         for (const auto& [display_id, frame] : frames) {
             present(*presenter, display_id, frame);
         }
+    }
+    VkEmulation* emu = emulation();
+    if (!emu) {
+        return;
+    }
+    for (auto& [display_id, display] : presenter->displays) {
+        for (Slot& slot : display.slots) {
+            destroy_slot(*emu, slot);
+        }
+    }
+    VulkanDispatch* vk = emu->getDeviceDispatch();
+    if (presenter->fence != VK_NULL_HANDLE) {
+        vk->vkDestroyFence(emu->getDevice(), presenter->fence, nullptr);
+    }
+    if (presenter->pool != VK_NULL_HANDLE) {
+        vk->vkDestroyCommandPool(emu->getDevice(), presenter->pool, nullptr);
     }
 }
 
@@ -691,17 +1058,10 @@ void stop_presenter() {
     delete presenter;
 }
 
-}  // namespace
-
-extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_callbacks2(dsa_display_target_fn,
-                                                             dsa_display_frame_fn, void*) {
-    return -1;
-}
-
-extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_pixels_callback(dsa_display_pixels_fn pixels,
-                                                                  void* context) {
+int start_presenter(dsa_display_pixels_fn pixels, dsa_display_dmabuf_fn dmabuf,
+                    dsa_display_dmabuf_frame_fn dmabuf_frame, void* context) {
     stop_presenter();
-    if (!pixels) {
+    if (!pixels && !(dmabuf && dmabuf_frame)) {
         return 0;
     }
     if (!FrameBuffer::getFB()) {
@@ -712,11 +1072,34 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_pixels_callback(dsa_display_pi
     }
     auto* presenter = new PixelPresenter();
     presenter->pixels_cb = pixels;
+    presenter->dmabuf_cb = dmabuf;
+    presenter->dmabuf_frame_cb = dmabuf_frame;
     presenter->context = context;
     presenter->thread = std::thread(run, presenter);
     std::lock_guard<std::mutex> lock(s_presenter_mutex);
     s_presenter = presenter;
     return 0;
+}
+
+}  // namespace
+
+extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_callbacks2(dsa_display_target_fn,
+                                                             dsa_display_frame_fn, void*) {
+    return -1;
+}
+
+extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_pixels_callback(dsa_display_pixels_fn pixels,
+                                                                  void* context) {
+    return start_presenter(pixels, nullptr, nullptr, context);
+}
+
+extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_dmabuf_callbacks(
+    dsa_display_dmabuf_fn dmabuf, dsa_display_dmabuf_frame_fn frame,
+    dsa_display_pixels_fn fallback, void* context) {
+    if (dmabuf && frame && !emulation()) {
+        return -1;
+    }
+    return start_presenter(fallback, dmabuf, frame, context);
 }
 
 extern "C" DSA_GFX_EXPORT int dsa_gfx_get_adapter_luid(uint8_t*) { return -1; }

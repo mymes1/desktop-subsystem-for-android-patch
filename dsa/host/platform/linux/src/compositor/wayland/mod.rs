@@ -8,6 +8,7 @@
 //! and dropped files.
 
 mod data;
+mod gpu;
 mod seat;
 mod shm;
 mod window;
@@ -35,7 +36,10 @@ use wayland_protocols::wp::cursor_shape::v1::client::{
     wp_cursor_shape_device_v1::WpCursorShapeDeviceV1,
     wp_cursor_shape_manager_v1::WpCursorShapeManagerV1,
 };
+use wayland_client::protocol::wl_subcompositor::WlSubcompositor;
+use wayland_protocols::wp::linux_dmabuf::zv1::client::zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1;
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
+use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
 use wayland_protocols::wp::text_input::zv3::client::{
     zwp_text_input_manager_v3::ZwpTextInputManagerV3, zwp_text_input_v3::ZwpTextInputV3,
 };
@@ -102,6 +106,11 @@ pub struct State {
     pub(crate) text_input_manager: Option<ZwpTextInputManagerV3>,
     pub(crate) cursor_shapes: Option<WpCursorShapeManagerV1>,
     pub(crate) tablet_manager: Option<ZwpTabletManagerV2>,
+    pub(crate) dmabuf: Option<ZwpLinuxDmabufV1>,
+    pub(crate) viewporter: Option<WpViewporter>,
+    pub(crate) subcompositor: Option<WlSubcompositor>,
+    /// Each display's GPU images, as the desktop's buffers, by display and slot.
+    pub(crate) gpu_buffers: HashMap<(u32, u32), gpu::GpuBuffer>,
     pub(crate) seat: Option<WlSeat>,
     pub(crate) pointer: Option<WlPointer>,
     pub(crate) cursor_device: Option<WpCursorShapeDeviceV1>,
@@ -149,6 +158,9 @@ impl Desktop {
         let text_input_manager = globals.bind(&qh, 1..=1, ()).ok();
         let cursor_shapes = globals.bind(&qh, 1..=1, ()).ok();
         let tablet_manager = globals.bind(&qh, 1..=1, ()).ok();
+        let dmabuf = globals.bind(&qh, 3..=4, ()).ok();
+        let viewporter = globals.bind(&qh, 1..=1, ()).ok();
+        let subcompositor = globals.bind(&qh, 1..=1, ()).ok();
         for global in globals.contents().clone_list() {
             if global.interface == wl_output::WlOutput::interface().name {
                 let _ = globals.registry().bind::<wl_output::WlOutput, _, _>(
@@ -171,6 +183,10 @@ impl Desktop {
             text_input_manager,
             cursor_shapes,
             tablet_manager,
+            dmabuf,
+            viewporter,
+            subcompositor,
+            gpu_buffers: HashMap::new(),
             seat: None,
             pointer: None,
             cursor_device: None,
