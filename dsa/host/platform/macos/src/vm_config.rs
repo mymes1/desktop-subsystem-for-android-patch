@@ -177,13 +177,14 @@ pub struct ImageFiles {
     pub disk_template: PathBuf,
 }
 
-/// The first of `names` in `dir` that exists, else the first name.
+/// The first of `names` in `dir` that exists, else the last name: the VHDX disk the image
+/// lists, which the host converts once it is there.
 fn first_present(dir: &Path, names: &[&str]) -> PathBuf {
     names
         .iter()
         .map(|name| dir.join(name))
         .find(|path| path.exists())
-        .unwrap_or_else(|| dir.join(names[0]))
+        .unwrap_or_else(|| dir.join(names[names.len() - 1]))
 }
 
 /// Reads the image in `dir` for a guest of `arch`. Raw disks (`system.img`, `data.img`,
