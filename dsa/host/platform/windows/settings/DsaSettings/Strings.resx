@@ -1272,6 +1272,7 @@
   </data>
   <data name="Apps_WindowChanged" xml:space="preserve">
     <value>{0}'s windows follow the new settings from the next one that opens.</value>
+  </data>
   <data name="NavNetwork.Content" xml:space="preserve">
     <value>Network</value>
   </data>

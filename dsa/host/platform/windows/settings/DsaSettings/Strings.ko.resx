@@ -1272,6 +1272,7 @@
   </data>
   <data name="Apps_WindowChanged" xml:space="preserve">
     <value>{0}의 창은 다음에 열리는 창부터 새 설정을 따릅니다.</value>
+  </data>
   <data name="NavNetwork.Content" xml:space="preserve">
     <value>네트워크</value>
   </data>
