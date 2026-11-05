@@ -419,6 +419,21 @@ struct ImeCommitDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ImeCommitDefaultTypeInternal _ImeCommit_default_instance_;
+PROTOBUF_CONSTEXPR ImeDeleteSurrounding::ImeDeleteSurrounding(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.task_id_)*/0
+  , /*decltype(_impl_.before_length_)*/0u
+  , /*decltype(_impl_.after_length_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct ImeDeleteSurroundingDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ImeDeleteSurroundingDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ImeDeleteSurroundingDefaultTypeInternal() {}
+  union {
+    ImeDeleteSurrounding _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ImeDeleteSurroundingDefaultTypeInternal _ImeDeleteSurrounding_default_instance_;
 PROTOBUF_CONSTEXPR ImeCursor::ImeCursor(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.cursor_)*/nullptr
@@ -10776,6 +10791,243 @@ void ImeCommit::InternalSwap(ImeCommit* other) {
 
 std::string ImeCommit::GetTypeName() const {
   return "dsa.control.v1.ImeCommit";
+}
+
+
+// ===================================================================
+
+class ImeDeleteSurrounding::_Internal {
+ public:
+};
+
+ImeDeleteSurrounding::ImeDeleteSurrounding(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.ImeDeleteSurrounding)
+}
+ImeDeleteSurrounding::ImeDeleteSurrounding(const ImeDeleteSurrounding& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  ImeDeleteSurrounding* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.task_id_){}
+    , decltype(_impl_.before_length_){}
+    , decltype(_impl_.after_length_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.task_id_, &from._impl_.task_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.after_length_) -
+    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.after_length_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.ImeDeleteSurrounding)
+}
+
+inline void ImeDeleteSurrounding::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.task_id_){0}
+    , decltype(_impl_.before_length_){0u}
+    , decltype(_impl_.after_length_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+ImeDeleteSurrounding::~ImeDeleteSurrounding() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.ImeDeleteSurrounding)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void ImeDeleteSurrounding::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void ImeDeleteSurrounding::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void ImeDeleteSurrounding::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.ImeDeleteSurrounding)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.task_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.after_length_) -
+      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.after_length_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* ImeDeleteSurrounding::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // int32 task_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.task_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 before_length = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.before_length_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 after_length = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.after_length_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ImeDeleteSurrounding::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.ImeDeleteSurrounding)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // int32 task_id = 1;
+  if (this->_internal_task_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(1, this->_internal_task_id(), target);
+  }
+
+  // uint32 before_length = 2;
+  if (this->_internal_before_length() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_before_length(), target);
+  }
+
+  // uint32 after_length = 3;
+  if (this->_internal_after_length() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_after_length(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.ImeDeleteSurrounding)
+  return target;
+}
+
+size_t ImeDeleteSurrounding::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.ImeDeleteSurrounding)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // int32 task_id = 1;
+  if (this->_internal_task_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_task_id());
+  }
+
+  // uint32 before_length = 2;
+  if (this->_internal_before_length() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_before_length());
+  }
+
+  // uint32 after_length = 3;
+  if (this->_internal_after_length() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_after_length());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void ImeDeleteSurrounding::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const ImeDeleteSurrounding*>(
+      &from));
+}
+
+void ImeDeleteSurrounding::MergeFrom(const ImeDeleteSurrounding& from) {
+  ImeDeleteSurrounding* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.ImeDeleteSurrounding)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_task_id() != 0) {
+    _this->_internal_set_task_id(from._internal_task_id());
+  }
+  if (from._internal_before_length() != 0) {
+    _this->_internal_set_before_length(from._internal_before_length());
+  }
+  if (from._internal_after_length() != 0) {
+    _this->_internal_set_after_length(from._internal_after_length());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void ImeDeleteSurrounding::CopyFrom(const ImeDeleteSurrounding& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.ImeDeleteSurrounding)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ImeDeleteSurrounding::IsInitialized() const {
+  return true;
+}
+
+void ImeDeleteSurrounding::InternalSwap(ImeDeleteSurrounding* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ImeDeleteSurrounding, _impl_.after_length_)
+      + sizeof(ImeDeleteSurrounding::_impl_.after_length_)
+      - PROTOBUF_FIELD_OFFSET(ImeDeleteSurrounding, _impl_.task_id_)>(
+          reinterpret_cast<char*>(&_impl_.task_id_),
+          reinterpret_cast<char*>(&other->_impl_.task_id_));
+}
+
+std::string ImeDeleteSurrounding::GetTypeName() const {
+  return "dsa.control.v1.ImeDeleteSurrounding";
 }
 
 
@@ -41656,6 +41908,7 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::KeyEvent& key_event(const Envelope* msg);
   static const ::dsa::control::v1::ImeComposition& ime_composition(const Envelope* msg);
   static const ::dsa::control::v1::ImeCommit& ime_commit(const Envelope* msg);
+  static const ::dsa::control::v1::ImeDeleteSurrounding& ime_delete_surrounding(const Envelope* msg);
   static const ::dsa::control::v1::ImeCursor& ime_cursor(const Envelope* msg);
   static const ::dsa::control::v1::RequestGuestMemory& request_guest_memory(const Envelope* msg);
   static const ::dsa::control::v1::GuestMemory& guest_memory(const Envelope* msg);
@@ -41837,6 +42090,10 @@ Envelope::_Internal::ime_composition(const Envelope* msg) {
 const ::dsa::control::v1::ImeCommit&
 Envelope::_Internal::ime_commit(const Envelope* msg) {
   return *msg->_impl_.body_.ime_commit_;
+}
+const ::dsa::control::v1::ImeDeleteSurrounding&
+Envelope::_Internal::ime_delete_surrounding(const Envelope* msg) {
+  return *msg->_impl_.body_.ime_delete_surrounding_;
 }
 const ::dsa::control::v1::ImeCursor&
 Envelope::_Internal::ime_cursor(const Envelope* msg) {
@@ -42540,6 +42797,21 @@ void Envelope::set_allocated_ime_commit(::dsa::control::v1::ImeCommit* ime_commi
     _impl_.body_.ime_commit_ = ime_commit;
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.ime_commit)
+}
+void Envelope::set_allocated_ime_delete_surrounding(::dsa::control::v1::ImeDeleteSurrounding* ime_delete_surrounding) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (ime_delete_surrounding) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(ime_delete_surrounding);
+    if (message_arena != submessage_arena) {
+      ime_delete_surrounding = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, ime_delete_surrounding, submessage_arena);
+    }
+    set_has_ime_delete_surrounding();
+    _impl_.body_.ime_delete_surrounding_ = ime_delete_surrounding;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.ime_delete_surrounding)
 }
 void Envelope::set_allocated_ime_cursor(::dsa::control::v1::ImeCursor* ime_cursor) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -44323,6 +44595,11 @@ Envelope::Envelope(const Envelope& from)
           from._internal_ime_commit());
       break;
     }
+    case kImeDeleteSurrounding: {
+      _this->_internal_mutable_ime_delete_surrounding()->::dsa::control::v1::ImeDeleteSurrounding::MergeFrom(
+          from._internal_ime_delete_surrounding());
+      break;
+    }
     case kImeCursor: {
       _this->_internal_mutable_ime_cursor()->::dsa::control::v1::ImeCursor::MergeFrom(
           from._internal_ime_cursor());
@@ -45024,6 +45301,12 @@ void Envelope::clear_body() {
     case kImeCommit: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.ime_commit_;
+      }
+      break;
+    }
+    case kImeDeleteSurrounding: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.ime_delete_surrounding_;
       }
       break;
     }
@@ -46755,6 +47038,14 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;
+      case 377:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 202)) {
+          ptr = ctx->ParseMessage(_internal_mutable_ime_delete_surrounding(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -47687,6 +47978,13 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::gamepad_rumble(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;
+  if (_internal_has_ime_delete_surrounding()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(377, _Internal::ime_delete_surrounding(this),
+        _Internal::ime_delete_surrounding(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -47821,6 +48119,13 @@ size_t Envelope::ByteSizeLong() const {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *_impl_.body_.ime_commit_);
+      break;
+    }
+    // .dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;
+    case kImeDeleteSurrounding: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.ime_delete_surrounding_);
       break;
     }
     // .dsa.control.v1.ImeCursor ime_cursor = 19;
@@ -48718,6 +49023,11 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_ime_commit());
       break;
     }
+    case kImeDeleteSurrounding: {
+      _this->_internal_mutable_ime_delete_surrounding()->::dsa::control::v1::ImeDeleteSurrounding::MergeFrom(
+          from._internal_ime_delete_surrounding());
+      break;
+    }
     case kImeCursor: {
       _this->_internal_mutable_ime_cursor()->::dsa::control::v1::ImeCursor::MergeFrom(
           from._internal_ime_cursor());
@@ -49416,6 +49726,10 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::ImeComposition >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::ImeCommit*
 Arena::CreateMaybeMessage< ::dsa::control::v1::ImeCommit >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::ImeCommit >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::ImeDeleteSurrounding*
+Arena::CreateMaybeMessage< ::dsa::control::v1::ImeDeleteSurrounding >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::ImeDeleteSurrounding >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::ImeCursor*
 Arena::CreateMaybeMessage< ::dsa::control::v1::ImeCursor >(Arena* arena) {

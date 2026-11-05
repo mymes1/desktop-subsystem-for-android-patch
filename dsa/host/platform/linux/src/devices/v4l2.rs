@@ -33,7 +33,7 @@ pub const CID_CAMERA_SENSOR_ROTATION: u32 = 0x009a_0923;
 
 /// A pixel format's four characters as V4L2 numbers them.
 pub const fn fourcc(code: &[u8; 4]) -> u32 {
-    (code[0] as u32) | (code[1] as u32) << 8 | (code[2] as u32) << 16 | (code[3] as u32) << 24
+    (code[0] as u32) | ((code[1] as u32) << 8) | ((code[2] as u32) << 16) | ((code[3] as u32) << 24)
 }
 
 pub const PIX_YUYV: u32 = fourcc(b"YUYV");
@@ -410,13 +410,13 @@ impl Capture {
         let fd = device.fd();
         let mut fmt: Format = zeroed_value();
         fmt.kind = BUF_TYPE_VIDEO_CAPTURE;
-        // SAFETY: writing the pix member of a zeroed union.
-        unsafe {
-            fmt.fmt.pix.width = width;
-            fmt.fmt.pix.height = height;
-            fmt.fmt.pix.pixelformat = format;
-            fmt.fmt.pix.field = FIELD_ANY;
-        }
+        fmt.fmt.pix = PixFormat {
+            width,
+            height,
+            pixelformat: format,
+            field: FIELD_ANY,
+            ..zeroed_value()
+        };
         // SAFETY: VIDIOC_S_FMT takes a v4l2_format.
         unsafe { xioctl(fd, VIDIOC_S_FMT, &mut fmt) }?;
         // SAFETY: the driver filled the pix member.
@@ -428,8 +428,10 @@ impl Capture {
         if fps > 0 {
             let mut parm: StreamParm = zeroed_value();
             parm.kind = BUF_TYPE_VIDEO_CAPTURE;
-            // SAFETY: writing the capture member of a zeroed union.
-            unsafe { parm.parm.capture.timeperframe = [1, fps] };
+            parm.parm.capture = CaptureParm {
+                timeperframe: [1, fps],
+                ..zeroed_value()
+            };
             // SAFETY: VIDIOC_S_PARM takes a v4l2_streamparm. A device that cannot set its
             // rate runs at its own.
             let _ = unsafe { xioctl(fd, VIDIOC_S_PARM, &mut parm) };

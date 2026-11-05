@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 
 use libloading::Library;
 
-use super::frames::{Frame, LatestFrames};
+use super::frames::{Frame, GpuFrame, GpuImage, LatestFrames};
 use crate::compositor::wayland::Wake;
 
 /// The command stream's port.
@@ -25,11 +25,84 @@ pub const PROCESS_PIPE_PORT: u32 = 5567;
 type ReadFn = unsafe extern "C" fn(*mut c_void, *mut c_void, usize) -> c_int;
 type WriteFn = unsafe extern "C" fn(*mut c_void, *const c_void, usize) -> c_int;
 type PixelsFn = unsafe extern "C" fn(*mut c_void, u32, u32, u32, *const u8);
+type DmabufFn =
+    unsafe extern "C" fn(*mut c_void, u32, u32, u32, u32, c_int, u32, u32, u32, u64) -> c_int;
+type DmabufFrameFn = unsafe extern "C" fn(*mut c_void, u32, u32, u32, u32);
 
 /// Where the frames go.
 pub struct FrameSink {
     pub frames: Arc<Mutex<LatestFrames>>,
     pub waker: Arc<dyn Wake>,
+    /// Where the GPU images go, when the desktop takes dmabufs; `None` reads every frame
+    /// back.
+    pub images: Option<Arc<Mutex<Vec<(GpuImage, OwnedFd)>>>>,
+}
+
+// The backend's C callback names every property of the image.
+#[allow(clippy::too_many_arguments)]
+unsafe extern "C" fn on_dmabuf(
+    context: *mut c_void,
+    display_id: u32,
+    slot: u32,
+    width: u32,
+    height: u32,
+    fd: c_int,
+    stride: u32,
+    offset: u32,
+    fourcc: u32,
+    modifier: u64,
+) -> c_int {
+    if context.is_null() || fd < 0 {
+        return -1;
+    }
+    // SAFETY: the backend hands over the descriptor, ours from here on.
+    let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+    // SAFETY: `context` is the sink `load` leaked, which lives as long as the process.
+    let sink = unsafe { &*(context as *const FrameSink) };
+    let Some(images) = &sink.images else {
+        return -1;
+    };
+    let image = GpuImage {
+        display_id,
+        slot,
+        width,
+        height,
+        stride,
+        offset,
+        fourcc,
+        modifier,
+    };
+    match images.lock() {
+        Ok(mut images) => images.push((image, fd)),
+        Err(_) => return -1,
+    }
+    sink.waker.wake();
+    0
+}
+
+unsafe extern "C" fn on_dmabuf_frame(
+    context: *mut c_void,
+    display_id: u32,
+    slot: u32,
+    width: u32,
+    height: u32,
+) {
+    if context.is_null() {
+        return;
+    }
+    // SAFETY: `context` is the sink `load` leaked, which lives as long as the process.
+    let sink = unsafe { &*(context as *const FrameSink) };
+    if let Ok(mut frames) = sink.frames.lock() {
+        frames.put_gpu(
+            display_id,
+            GpuFrame {
+                slot,
+                width,
+                height,
+            },
+        );
+    }
+    sink.waker.wake();
 }
 
 unsafe extern "C" fn on_pixels(
@@ -107,8 +180,28 @@ impl Renderer {
             if code != 0 {
                 return Err(format!("the renderer did not start (code {code})"));
             }
+            let set_dmabuf: Option<
+                unsafe extern "C" fn(
+                    Option<DmabufFn>,
+                    Option<DmabufFrameFn>,
+                    Option<PixelsFn>,
+                    *mut c_void,
+                ) -> c_int,
+            > = library
+                .get(b"dsa_gfx_set_display_dmabuf_callbacks\0")
+                .ok()
+                .map(|symbol| *symbol);
+            let gpu = sink.images.is_some();
             let sink = Box::into_raw(Box::new(sink));
-            let code = set_pixels(Some(on_pixels), sink.cast());
+            let code = match set_dmabuf {
+                Some(set_dmabuf) if gpu => set_dmabuf(
+                    Some(on_dmabuf),
+                    Some(on_dmabuf_frame),
+                    Some(on_pixels),
+                    sink.cast(),
+                ),
+                _ => set_pixels(Some(on_pixels), sink.cast()),
+            };
             if code != 0 {
                 drop(Box::from_raw(sink));
                 return Err(format!("the renderer cannot present frames (code {code})"));

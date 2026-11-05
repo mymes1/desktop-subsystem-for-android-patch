@@ -66,6 +66,8 @@ pub struct SeatState {
     pub keyboard_focus: Option<i32>,
     /// The pointer's position on its window, in logical units.
     position: (f64, f64),
+    /// Where the surface the pointer is on sits in its window.
+    offset: (f64, f64),
     scroll: Scroll,
     /// The caption button a press started on, while it is held.
     pressed_button: Option<CaptionButton>,
@@ -92,6 +94,7 @@ impl Default for SeatState {
             pointer_focus: None,
             keyboard_focus: None,
             position: (0.0, 0.0),
+            offset: (0.0, 0.0),
             scroll: Scroll::default(),
             pressed_button: None,
             pointer_in_app: false,
@@ -581,7 +584,13 @@ impl Dispatch<WlPointer, ()> for State {
                 surface_y,
             } => {
                 state.seat_state.pointer_focus = task_of(&surface);
-                state.seat_state.position = (surface_x, surface_y);
+                let offset = state
+                    .seat_state
+                    .pointer_focus
+                    .map(|task_id| state.surface_offset(task_id, &surface))
+                    .unwrap_or((0.0, 0.0));
+                state.seat_state.offset = offset;
+                state.seat_state.position = (surface_x + offset.0, surface_y + offset.1);
                 state.seat_state.enter_serial = serial;
                 state.seat_state.shape = None;
                 if let Some(task_id) = state.seat_state.pointer_focus {
@@ -603,7 +612,8 @@ impl Dispatch<WlPointer, ()> for State {
                 surface_y,
                 ..
             } => {
-                state.seat_state.position = (surface_x, surface_y);
+                let offset = state.seat_state.offset;
+                state.seat_state.position = (surface_x + offset.0, surface_y + offset.1);
                 if let Some(task_id) = state.seat_state.pointer_focus {
                     state.pointer_moved(task_id);
                 }

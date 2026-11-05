@@ -153,6 +153,37 @@ typedef void (*dsa_display_pixels_fn)(void* context,
  * instead (Windows). */
 DSA_GFX_EXPORT int dsa_gfx_set_display_pixels_callback(dsa_display_pixels_fn pixels,
                                                        void* context);
+/* Zero-copy presentation on Linux: each display's frames are copied on the GPU into a ring of
+ * linear images the renderer exports as dmabufs.
+ *
+ * `dmabuf` is called once for each image of the ring (`slot`, from 0) when it is made: its
+ * size, the dmabuf `fd` (the embedder owns it from then on), its row `stride` and `offset` in
+ * bytes, its DRM `fourcc` and `modifier`. It returns 0 to take the image, anything else to
+ * have the frames read back instead. `frame` is called once a frame is in image `slot`,
+ * filling its top-left `width` x `height` pixels. */
+typedef int (*dsa_display_dmabuf_fn)(void* context,
+                                     uint32_t display_id,
+                                     uint32_t slot,
+                                     uint32_t width,
+                                     uint32_t height,
+                                     int fd,
+                                     uint32_t stride,
+                                     uint32_t offset,
+                                     uint32_t fourcc,
+                                     uint64_t modifier);
+typedef void (*dsa_display_dmabuf_frame_fn)(void* context,
+                                            uint32_t display_id,
+                                            uint32_t slot,
+                                            uint32_t width,
+                                            uint32_t height);
+/* Registers the dmabuf presentation, with `fallback` taking the frames read back where the
+ * driver cannot export a dmabuf or the embedder refuses one. Returns 0 on success, -1 when the
+ * renderer is not initialised or the host presents through dsa_gfx_set_display_callbacks2
+ * instead (Windows). */
+DSA_GFX_EXPORT int dsa_gfx_set_display_dmabuf_callbacks(dsa_display_dmabuf_fn dmabuf,
+                                                        dsa_display_dmabuf_frame_fn frame,
+                                                        dsa_display_pixels_fn fallback,
+                                                        void* context);
 /* Writes the LUID of the GPU the renderer runs on (8 bytes, as a Windows LUID). Returns 0 on
  * success, -1 when the renderer is not initialised or the driver does not report one. */
 DSA_GFX_EXPORT int dsa_gfx_get_adapter_luid(uint8_t luid[8]);
