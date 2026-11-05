@@ -4,8 +4,9 @@
 //! Sound, the cameras, the location, the sensors, printing, web links and the desktop's
 //! settings all need the session: its sound server, its portals, its location agent, its
 //! browser. The service runs outside it, so this program runs as the user, started with the
-//! session by the `dsa-devices.service` user unit, and serves the guest's device ports on
-//! vsock and follows the local API at `/run/dsa/host.sock` (or `--socket <path>`).
+//! session by the `dsa-devices.service` user unit, and serves the guest's device ports (which
+//! the service relays from the user's VM to sockets in `$XDG_RUNTIME_DIR/dsa/devices`) and
+//! follows the local API at `/run/dsa/host.sock` (or `--socket <path>`).
 //!
 //! It runs until it is stopped (SIGTERM or SIGINT), and logs to standard error, which the
 //! user's journal keeps.

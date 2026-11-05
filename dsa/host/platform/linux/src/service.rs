@@ -378,6 +378,13 @@ pub fn create_user_android(
     let folders = crate::devices::file_share::UserFolders::for_uid(uid)
         .map_err(|e| format!("the folders of {user}: {e}"))?;
     session.serve_file_shares(Box::new(share_listener), Arc::new(folders));
+    // The guest's sound, cameras and sensors, passed on to the user's own device lender.
+    for port in crate::devices::relay::RELAYED_PORTS {
+        let listener = hub(port)?.listener(cid, true);
+        if let Err(error) = crate::devices::relay::relay(listener, port, uid, user.to_string()) {
+            eprintln!("{user}: vsock port {port}: cannot start its relay: {error}");
+        }
+    }
     // Android's shared storage, which the file manager opens through a loopback port.
     session.set_android_files_connect(Arc::new(|vm_id: &str| {
         connect_stream(

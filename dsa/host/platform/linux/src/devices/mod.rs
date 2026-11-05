@@ -7,7 +7,7 @@
 //!
 //! ```text
 //! sound out and in   PulseAudio's simple API (PipeWire serves it through pipewire-pulse)
-//! cameras            Video4Linux2
+//! cameras            Video4Linux2, else the camera portal through PipeWire
 //! location           GeoClue2, on the system bus
 //! sensors            the kernel's IIO devices, and iio-sensor-proxy for the light level
 //! printing           the print portal's dialog, else CUPS' lp
@@ -19,7 +19,8 @@
 //!
 //! The devices that need the user's desktop session (sound, cameras, location, sensors,
 //! printing, links and settings) run in a process of the user's: [`start_guest_ports`] serves
-//! the guest's device ports on vsock, and [`start_followers`] follows the local API. The
+//! the guest's device ports, which the service relays from the user's own VM to sockets in
+//! the user's runtime folder ([`relay`]), and [`start_followers`] follows the local API. The
 //! folders and the power belong to the service: [`file_share::UserFolders`] and
 //! [`power::follow`].
 //!
@@ -33,7 +34,9 @@ pub mod file_share;
 pub mod links;
 pub mod location;
 pub mod power;
+pub mod portal_camera;
 pub mod print;
+pub mod relay;
 pub mod sensors;
 pub mod settings;
 pub mod v4l2;
@@ -42,7 +45,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
-use dsa_guest_transport::vsock::{VsockListener, VMADDR_CID_ANY};
 use dsa_transport::{Connector, Listener};
 
 /// Where a device writes what it has to say: one line each.
@@ -58,11 +60,22 @@ fn build(device: &str) -> String {
 
 /// Listens on vsock `port` for the guest, or logs why it cannot.
 fn listen(port: u32, what: &str, log: &Log) -> Option<Box<dyn Listener>> {
-    match VsockListener::bind(VMADDR_CID_ANY, port) {
+    let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .filter(|dir| dir.is_absolute())
+    else {
+        log(&format!(
+            "{what} is not lent to Android: this session has no XDG_RUNTIME_DIR"
+        ));
+        return None;
+    };
+    let path = relay::device_socket(&runtime, port);
+    match relay::DeviceSocketListener::bind(&path) {
         Ok(listener) => Some(Box::new(listener)),
         Err(error) => {
             log(&format!(
-                "{what} is not lent to Android: vsock port {port} cannot be opened ({error})"
+                "{what} is not lent to Android: {} cannot be opened ({error})",
+                path.display()
             ));
             None
         }
@@ -94,7 +107,7 @@ pub fn start_guest_ports(stop: &Arc<AtomicBool>, log: &Log) -> Vec<JoinHandle<()
 
     if let Some(listener) = listen(dsa_host_core::camera::CAMERA_PORT, "the cameras", log) {
         let (stop, log) = (Arc::clone(stop), Arc::clone(log));
-        let cameras = Arc::new(camera::V4l2Cameras::new(Arc::clone(&log)));
+        let cameras = Arc::new(portal_camera::HostCameras::new(Arc::clone(&log)));
         threads.extend(spawn("dsa-camera", &Arc::clone(&log), move || {
             dsa_host_core::camera::serve(listener, cameras, build("camera"), stop, log)
         }));

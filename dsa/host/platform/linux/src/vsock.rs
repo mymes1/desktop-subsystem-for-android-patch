@@ -352,6 +352,18 @@ pub struct CidListener {
     receiver: Receiver<VsockStream>,
 }
 
+impl CidListener {
+    /// The next connection from this listener's guest as the plain stream, for a port the
+    /// service passes on whole (the device ports, relayed to the user's device lender).
+    pub fn accept_stream(&mut self, timeout: Duration) -> Result<VsockStream, TransportError> {
+        match self.receiver.recv_timeout(timeout) {
+            Ok(stream) => Ok(stream),
+            Err(RecvTimeoutError::Timeout) => Err(TransportError::Timeout),
+            Err(RecvTimeoutError::Disconnected) => Err(TransportError::Closed),
+        }
+    }
+}
+
 impl Listener for CidListener {
     fn accept(&mut self, timeout: Duration) -> Result<Box<dyn Connection>, TransportError> {
         match self.receiver.recv_timeout(timeout) {

@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=DSA Devices
-Comment=Lends this desktop's location, printers, links and settings to your Android
-Exec=dsa-devices --no-device-ports
+Comment=Lends this desktop's devices to your Android
+Exec=dsa-devices
 Icon=folder-remote
 Terminal=false
 NoDisplay=true
