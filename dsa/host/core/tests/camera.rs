@@ -7,8 +7,9 @@ use std::thread;
 use std::time::Duration;
 
 use dsa_host_core::camera::{
-    choose_mode, facing_of, list_text, nv12_to_bgr, offered_modes, parse_list_text, scale_nv12, sensor_orientation,
-    serve_connection, Camera, CameraEnd, CameraStream, Cameras, Facing, Frame, Mode, Panel,
+    choose_mode, facing_of, list_text, nv12_to_bgr, offered_modes, parse_list_text, scale_nv12,
+    sensor_orientation, serve_connection, Camera, CameraEnd, CameraStream, Cameras, Facing, Frame,
+    Mode, Panel,
 };
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
