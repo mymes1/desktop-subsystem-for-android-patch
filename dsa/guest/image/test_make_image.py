@@ -286,6 +286,51 @@ class ImageLayoutTests(unittest.TestCase):
         for perm in ("open", "read", "write", "ioctl"):
             self.assertIn(perm, rule)
 
+    def test_pr3_system_server_can_reach_the_host_renderer(self):
+        # system_server draws the pointer location overlay and its dialogs with HWUI, through
+        # ANGLE and the Vulkan driver. Without vsock its RenderThread aborts with
+        # EGL_NOT_INITIALIZED and the framework restarts in a loop.
+        plat_cil = "(type system_server)
+(type gpu_device)
+"
+        patched = make_image.patch_plat_sepolicy(plat_cil, make_image.SEPOLICY_FRAGMENT.read_text())
+        rule = next((l for l in patched.splitlines()
+                     if l.startswith("(allow system_server self (vsock_socket")), None)
+        self.assertIsNotNone(rule, "system_server has no vsock rule")
+        self.assertIn("connect", rule)
+        self.assertIn("(allow system_server gpu_device (chr_file (open read write ioctl getattr map)))", patched)
+
+    def test_pr3_check_image_rejects_a_system_server_without_vsock(self):
+        check_script = Path(__file__).with_name("check-image.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            img_dir = root / "image"
+            img_dir.mkdir()
+            keys_dir = root / "keys"
+            keys_dir.mkdir()
+            (keys_dir / "test.x509.pem").write_text("-----BEGIN CERTIFICATE-----
+-----END CERTIFICATE-----
+")
+            (img_dir / "image.json").write_text(json.dumps({"files": {}, "kernel_cmdline": ""}))
+            (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
+                archive.writestr("SYSTEM/build.prop", "ro.debuggable=0
+")
+                archive.writestr("META/apkcerts.txt", "")
+                archive.writestr(
+                    "SYSTEM/etc/selinux/plat_sepolicy.cil",
+                    "(allow appdomain self (vsock_socket (create connect read write)))
+",
+                )
+            proc = subprocess.run(
+                [sys.executable, str(check_script), str(img_dir), str(keys_dir)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("does not allow system_server to connect vsock_socket", proc.stdout)
+            self.assertNotIn("does not allow appdomain to connect", proc.stdout)
+
     def test_pr3_vendor_init_may_check_the_drm_cards(self):
         # The cards are relabelled gpu_device; Cuttlefish's init script waits for card0 as
         # vendor_init, and a refused stat makes the wait time out after five seconds.

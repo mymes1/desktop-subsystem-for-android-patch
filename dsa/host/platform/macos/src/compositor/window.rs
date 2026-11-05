@@ -30,6 +30,10 @@ pub trait WindowEvents {
     fn focused(&mut self, focused: bool);
     /// The window moved to a display of another backing scale.
     fn scale_changed(&mut self, scale: f64);
+    /// The window was minimized into the Dock (`shown` false), or came back from it.
+    fn shown(&mut self, _shown: bool) {}
+    /// The user started resizing the window by its edge, or let go.
+    fn dragging(&mut self, _dragging: bool) {}
 }
 
 const STYLE_TITLED: usize = 1 << 0;
@@ -104,6 +108,26 @@ unsafe extern "C-unwind" fn did_change_backing(_this: &AnyObject, _: Sel, note: 
     });
 }
 
+unsafe extern "C-unwind" fn did_miniaturize(_this: &AnyObject, _: Sel, note: *mut AnyObject) {
+    let window: *mut AnyObject = msg_send![note, object];
+    with_events(window, |events| events.shown(false));
+}
+
+unsafe extern "C-unwind" fn did_deminiaturize(_this: &AnyObject, _: Sel, note: *mut AnyObject) {
+    let window: *mut AnyObject = msg_send![note, object];
+    with_events(window, |events| events.shown(true));
+}
+
+unsafe extern "C-unwind" fn live_resize_began(_this: &AnyObject, _: Sel, note: *mut AnyObject) {
+    let window: *mut AnyObject = msg_send![note, object];
+    with_events(window, |events| events.dragging(true));
+}
+
+unsafe extern "C-unwind" fn did_end_live_resize(_this: &AnyObject, _: Sel, note: *mut AnyObject) {
+    let window: *mut AnyObject = msg_send![note, object];
+    with_events(window, |events| events.dragging(false));
+}
+
 fn delegate_class() -> Result<&'static AnyClass, String> {
     static CLASS: OnceLock<Result<&'static AnyClass, String>> = OnceLock::new();
     CLASS
@@ -130,6 +154,22 @@ fn delegate_class() -> Result<&'static AnyClass, String> {
             builder.add_method(
                 sel!(windowDidChangeBackingProperties:),
                 did_change_backing as unsafe extern "C-unwind" fn(_, _, _),
+            );
+            builder.add_method(
+                sel!(windowDidMiniaturize:),
+                did_miniaturize as unsafe extern "C-unwind" fn(_, _, _),
+            );
+            builder.add_method(
+                sel!(windowDidDeminiaturize:),
+                did_deminiaturize as unsafe extern "C-unwind" fn(_, _, _),
+            );
+            builder.add_method(
+                sel!(windowWillStartLiveResize:),
+                live_resize_began as unsafe extern "C-unwind" fn(_, _, _),
+            );
+            builder.add_method(
+                sel!(windowDidEndLiveResize:),
+                did_end_live_resize as unsafe extern "C-unwind" fn(_, _, _),
             );
             Ok(builder.register())
         })
@@ -243,6 +283,25 @@ impl TaskWindow {
             self.task = frame.content;
         }
         self.presenter.present(frame)
+    }
+
+    /// Shows the frame in `surface` (texture `texture_id`) on the GPU, without reading it to
+    /// memory: `content` pixels from its top left are the task.
+    pub fn present_surface(
+        &mut self,
+        texture_id: u64,
+        surface: &super::surface::Surface,
+        content: (u32, u32),
+    ) -> Result<(), String> {
+        if content != (0, 0) {
+            self.task = content;
+        }
+        self.presenter.present_surface(texture_id, surface, content)
+    }
+
+    /// Whether the window is minimized into the Dock.
+    pub fn is_minimized(&self) -> bool {
+        unsafe { msg_send![&*self.window, isMiniaturized] }
     }
 
     /// The display's backing scale changed.

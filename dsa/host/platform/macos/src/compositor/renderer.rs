@@ -1,40 +1,71 @@
 //! gfxstream's host renderer on macOS (`libgfxstream_backend.dylib`, on Vulkan through
 //! MoltenVK), loaded at run time from the app bundle's `Frameworks` folder.
 //!
-//! The guest's graphics streams are served through it, and each task's newest frame comes
-//! back read to memory (`dsa_gfx_set_display_pixels_callback`), which the window manager
-//! writes into the task's shared surface for its window host.
+//! The guest's graphics streams are served through it. Each task's frames reach the window
+//! manager one of two ways:
+//!
+//! - On the GPU (`dsa_gfx_set_display_iosurface_callbacks`): the renderer asks the window
+//!   manager for an `IOSurface` to put a display's frame in, imports it into Vulkan
+//!   (`VK_EXT_metal_objects`), copies the frame into it, and says when it is there. Nothing
+//!   passes through memory.
+//! - Read back (`dsa_gfx_set_display_pixels_callback`): the frame is read to memory as RGBA
+//!   and the window manager writes it into the surface. Used by a renderer built without the
+//!   GPU path, or where the GPU path cannot start.
 
-use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::io::{Read, Write};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
-
-use super::frames::{bgra_from_rgba, OwnedFrame};
+use std::sync::Arc;
 
 type StreamRead = extern "C" fn(*mut c_void, *mut c_void, usize) -> c_int;
 type StreamWrite = extern "C" fn(*mut c_void, *const c_void, usize) -> c_int;
 type PixelsCallback = extern "C" fn(*mut c_void, u32, u32, u32, *const u8);
+type TargetCallback = extern "C" fn(*mut c_void, u32, u32, u32) -> *mut c_void;
+type CopiedCallback = extern "C" fn(*mut c_void, u32, u32, u32);
+type Target = Option<TargetCallback>;
+type Copied = Option<CopiedCallback>;
+type Pixels = Option<PixelsCallback>;
+type SetIosurface = extern "C" fn(Target, Copied, Pixels, *mut c_void) -> c_int;
 
-/// Where a display's frames go.
-pub type FrameSink = Arc<dyn Fn(OwnedFrame) + Send + Sync>;
+/// Where the renderer's frames go.
+pub trait FrameSink: Send + Sync {
+    /// Display `display_id`'s newest frame, read back: `width` by `height` RGBA pixels, rows
+    /// from the top without padding.
+    fn pixels(&self, display_id: u32, width: u32, height: u32, rgba: &[u8]);
+    /// The `IOSurfaceRef` (BGRA, at least `width` by `height`) to copy display `display_id`'s
+    /// next frame into, or null to drop the frame. It must stay valid until the next call
+    /// for the display returns another one.
+    fn target(&self, display_id: u32, width: u32, height: u32) -> *mut c_void;
+    /// The frame is in the surface [`FrameSink::target`] gave, filling its top-left `width`
+    /// by `height` pixels.
+    fn copied(&self, display_id: u32, width: u32, height: u32);
+}
 
-type Sinks = Mutex<HashMap<u32, FrameSink>>;
+/// How the frames reach the window manager.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FramePath {
+    /// Copied into the window manager's surfaces on the GPU.
+    Gpu,
+    /// Read back to memory.
+    ReadBack,
+}
 
 struct Api {
     init: extern "C" fn(u32, u32) -> c_int,
     teardown: extern "C" fn(),
     serve_stream: extern "C" fn(StreamRead, StreamWrite, *mut c_void) -> c_int,
     process_pipe: extern "C" fn(StreamRead, StreamWrite, *mut c_void) -> c_int,
-    set_pixels: extern "C" fn(Option<PixelsCallback>, *mut c_void) -> c_int,
+    set_pixels: extern "C" fn(Pixels, *mut c_void) -> c_int,
+    set_iosurface: Option<SetIosurface>,
+    forget_display: Option<extern "C" fn(u32)>,
 }
 
 /// The loaded renderer.
 pub struct Renderer {
     api: Api,
-    /// Each display's sink. Boxed so the address the renderer holds stays put.
-    sinks: Box<Sinks>,
+    /// The sink, which the renderer holds as its context. Boxed so that address stays put.
+    _sink: Box<Arc<dyn FrameSink>>,
+    path: FramePath,
 }
 
 // The renderer's entry points are thread-safe; the library is never unloaded.
@@ -42,14 +73,17 @@ unsafe impl Send for Renderer {}
 unsafe impl Sync for Renderer {}
 
 unsafe fn symbol<T: Copy>(library: *mut c_void, name: &str) -> Result<T, String> {
-    let c_name = CString::new(name).expect("symbol names have no NUL");
+    optional(library, name)
+        .ok_or_else(|| format!("the graphics renderer has no {name}; it is older than this host"))
+}
+
+unsafe fn optional<T: Copy>(library: *mut c_void, name: &str) -> Option<T> {
+    let c_name = CString::new(name).ok()?;
     let found = libc::dlsym(library, c_name.as_ptr());
     if found.is_null() {
-        return Err(format!(
-            "the graphics renderer has no {name}; it is older than this host"
-        ));
+        return None;
     }
-    Ok(std::mem::transmute_copy::<*mut c_void, T>(&found))
+    Some(std::mem::transmute_copy::<*mut c_void, T>(&found))
 }
 
 extern "C" fn read_stream(user: *mut c_void, buffer: *mut c_void, count: usize) -> c_int {
@@ -70,6 +104,15 @@ extern "C" fn write_stream(user: *mut c_void, buffer: *const c_void, count: usiz
     }
 }
 
+/// The sink the renderer was given as its context.
+///
+/// # Safety
+///
+/// `context` must be the boxed sink of a live [`Renderer`].
+unsafe fn sink_of<'a>(context: *mut c_void) -> Option<&'a Arc<dyn FrameSink>> {
+    (!context.is_null()).then(|| &*(context as *const Arc<dyn FrameSink>))
+}
+
 extern "C" fn on_pixels(
     context: *mut c_void,
     display_id: u32,
@@ -77,18 +120,44 @@ extern "C" fn on_pixels(
     height: u32,
     rgba: *const u8,
 ) {
+    // A panic must not unwind into the renderer.
     let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        if context.is_null() || rgba.is_null() {
-            return;
-        }
-        let sinks = unsafe { &*(context as *const Sinks) };
-        let Some(sink) = sinks.lock().ok().and_then(|s| s.get(&display_id).cloned()) else {
+        let Some(sink) = (unsafe { sink_of(context) }) else {
             return;
         };
-        let len = width as usize * height as usize * 4;
+        let Some(len) = (width as usize)
+            .checked_mul(height as usize)
+            .and_then(|n| n.checked_mul(4))
+        else {
+            return;
+        };
+        if rgba.is_null() || len == 0 {
+            return;
+        }
         let rgba = unsafe { std::slice::from_raw_parts(rgba, len) };
-        if let Some(frame) = bgra_from_rgba(display_id, width, height, rgba) {
-            sink(frame);
+        sink.pixels(display_id, width, height, rgba);
+    }));
+}
+
+extern "C" fn on_target(
+    context: *mut c_void,
+    display_id: u32,
+    width: u32,
+    height: u32,
+) -> *mut c_void {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        match unsafe { sink_of(context) } {
+            Some(sink) => sink.target(display_id, width, height),
+            None => std::ptr::null_mut(),
+        }
+    }))
+    .unwrap_or(std::ptr::null_mut())
+}
+
+extern "C" fn on_copied(context: *mut c_void, display_id: u32, width: u32, height: u32) {
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if let Some(sink) = unsafe { sink_of(context) } {
+            sink.copied(display_id, width, height);
         }
     }));
 }
@@ -98,8 +167,13 @@ pub trait ReadWrite: Read + Write {}
 impl<T: Read + Write> ReadWrite for T {}
 
 impl Renderer {
-    /// Loads the renderer at `path` and starts it.
-    pub fn load(path: &Path) -> Result<Renderer, String> {
+    /// Loads the renderer at `path`, starts it for a guest display of `display` pixels, and
+    /// sends its frames to `sink`, on the GPU when the renderer can.
+    pub fn load(
+        path: &Path,
+        display: (u32, u32),
+        sink: Arc<dyn FrameSink>,
+    ) -> Result<Renderer, String> {
         let c_path = CString::new(path.as_os_str().to_string_lossy().as_bytes())
             .map_err(|_| "the renderer's path has a NUL in it".to_string())?;
         unsafe {
@@ -124,35 +198,47 @@ impl Renderer {
                 serve_stream: symbol(library, "dsa_gfx_serve_stream")?,
                 process_pipe: symbol(library, "dsa_gfx_process_pipe")?,
                 set_pixels: symbol(library, "dsa_gfx_set_display_pixels_callback")?,
+                set_iosurface: optional(library, "dsa_gfx_set_display_iosurface_callbacks"),
+                forget_display: optional(library, "dsa_gfx_forget_display"),
             };
-            if (api.init)(1920, 1080) != 0 {
+            if (api.init)(display.0, display.1) != 0 {
                 return Err(
                     "the graphics renderer did not start: this Mac's Vulkan (MoltenVK) may be \
                      missing"
                         .into(),
                 );
             }
-            let sinks: Box<Sinks> = Box::new(Mutex::new(HashMap::new()));
-            let context = &*sinks as *const Sinks as *mut c_void;
-            if (api.set_pixels)(Some(on_pixels), context) != 0 {
+            let sink: Box<Arc<dyn FrameSink>> = Box::new(sink);
+            let context = &*sink as *const Arc<dyn FrameSink> as *mut c_void;
+            let gpu = api.set_iosurface.is_some_and(|set| {
+                set(Some(on_target), Some(on_copied), Some(on_pixels), context) == 0
+            });
+            let path = if gpu {
+                FramePath::Gpu
+            } else if (api.set_pixels)(Some(on_pixels), context) == 0 {
+                FramePath::ReadBack
+            } else {
                 (api.teardown)();
                 return Err("the graphics renderer cannot hand frames over on this Mac".into());
-            }
-            Ok(Renderer { api, sinks })
+            };
+            Ok(Renderer {
+                api,
+                _sink: sink,
+                path,
+            })
         }
     }
 
-    /// Sends display `display_id`'s frames to `sink` until [`Renderer::unwatch`].
-    pub fn watch(&self, display_id: u32, sink: FrameSink) {
-        if let Ok(mut sinks) = self.sinks.lock() {
-            sinks.insert(display_id, sink);
-        }
+    /// How the frames reach the window manager.
+    pub fn frame_path(&self) -> FramePath {
+        self.path
     }
 
-    /// Stops display `display_id`'s frames.
-    pub fn unwatch(&self, display_id: u32) {
-        if let Ok(mut sinks) = self.sinks.lock() {
-            sinks.remove(&display_id);
+    /// Display `display_id` is shown nowhere now: the renderer lets go of the surfaces it
+    /// took for it, so their memory goes back.
+    pub fn forget_display(&self, display_id: u32) {
+        if let Some(forget) = self.api.forget_display {
+            forget(display_id);
         }
     }
 
@@ -177,6 +263,9 @@ impl Renderer {
 
 impl Drop for Renderer {
     fn drop(&mut self) {
+        if let Some(set) = self.api.set_iosurface {
+            set(None, None, None, std::ptr::null_mut());
+        }
         (self.api.set_pixels)(None, std::ptr::null_mut());
         (self.api.teardown)();
     }

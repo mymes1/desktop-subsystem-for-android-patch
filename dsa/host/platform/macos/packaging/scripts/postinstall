@@ -1,0 +1,20 @@
+#!/bin/sh
+# Runs after the installer put DSA.app in place: installs (or reloads) the launchd agents of
+# the user at the console, the service (dsa-hostd) and the window manager (dsa-wm), so DSA
+# runs without a restart or a login. Other users get theirs when they run `dsa-hostd
+# install-agent` or open DSA. A failure here leaves the installation as it is.
+#
+# $2 is where the package was installed (/Applications).
+
+app="${2:-/Applications}/DSA.app"
+hostd="$app/Contents/MacOS/dsa-hostd"
+[ -x "$hostd" ] || exit 0
+
+user="$(stat -f %Su /dev/console 2>/dev/null)"
+case "$user" in
+    "" | root | loginwindow) exit 0 ;;
+esac
+uid="$(id -u "$user" 2>/dev/null)" || exit 0
+
+/bin/launchctl asuser "$uid" /usr/bin/sudo -u "$user" "$hostd" install-agent || true
+exit 0

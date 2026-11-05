@@ -103,7 +103,8 @@ pub struct MacHostConfig {
     pub freeze_after_minutes: Option<u64>,
     /// The window manager (the compositor that draws each Android task in a window of its
     /// own), which the agent keeps running while Android runs: Android's renderer is in it.
-    /// Unset, nothing is started, for running without windows.
+    /// Unset, the `dsa-wm` installed beside `dsa-hostd` (as in DSA.app), through its launchd
+    /// agent; where there is none, nothing is started, for running without windows.
     #[serde(default)]
     pub window_manager: Option<PathBuf>,
     /// Whether the VM has a network adapter.

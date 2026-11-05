@@ -314,6 +314,8 @@ jobs:
           lipo -archs "$library" | grep -Fq arm64
           nm -gU "$library" | grep -Fq _dsa_gfx_init
           nm -gU "$library" | grep -Fq _dsa_gfx_set_display_pixels_callback
+          nm -gU "$library" | grep -Fq _dsa_gfx_set_display_iosurface_callbacks
+          nm -gU "$library" | grep -Fq _dsa_gfx_forget_display
 
       - name: Run host renderer smoke test on MoltenVK
         env:

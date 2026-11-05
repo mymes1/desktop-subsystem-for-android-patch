@@ -233,7 +233,7 @@ pub fn sync(folder: &Path, apps: &[AppEntry], window_host: &Path) -> io::Result<
             .count()
             > 1;
         let name = bundle_name(&app.label, &app.package, taken);
-        report.written.push(write_stub(folder, &name, app, dsa)?);
+        report.written.push(write_stub(folder, &name, app, window_host)?);
         names.push(name);
     }
     for entry in fs::read_dir(folder)? {

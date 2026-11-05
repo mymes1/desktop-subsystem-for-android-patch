@@ -57,6 +57,10 @@ jobs:
           test "$(plutil -extract CFBundleExecutable raw DSA.app/Contents/Info.plist)" = dsa-app-window
           test -x DSA.app/Contents/MacOS/dsa-app-window
           test -x DSA.app/Contents/MacOS/dsa
+          # The window manager ships beside the service, which starts it through its agent.
+          test -x DSA.app/Contents/MacOS/dsa-wm
+          test -x DSA.app/Contents/MacOS/dsa-hostd
+          DSA.app/Contents/MacOS/dsa-wm version | grep -Fq dsa-wm
           codesign --verify --strict DSA.app
           codesign -d --entitlements - --xml DSA.app > entitlements.plist
           plutil -extract com.apple.security.virtualization raw entitlements.plist | grep -Fxq true

@@ -184,6 +184,39 @@ DSA_GFX_EXPORT int dsa_gfx_set_display_dmabuf_callbacks(dsa_display_dmabuf_fn dm
                                                         dsa_display_dmabuf_frame_fn frame,
                                                         dsa_display_pixels_fn fallback,
                                                         void* context);
+/* Zero-copy presentation on macOS: each display's frames are copied on the GPU into an
+ * IOSurface the embedder gives, imported into Vulkan through VK_EXT_metal_objects
+ * (VkImportMetalIOSurfaceInfoEXT), with a blit that turns the RGBA color buffer into the
+ * surface's BGRA.
+ *
+ * `target` is called on the presentation thread when `display_id` has a new frame in a color
+ * buffer of `width` x `height` pixels. It returns an IOSurfaceRef of exactly that size, in
+ * 'BGRA' (kCVPixelFormatType_32BGRA), to copy the frame into, or NULL to drop the frame. The
+ * renderer holds the surface (CFRetain) while it keeps it imported, so the embedder may let go
+ * of it at any time; a surface not returned again is let go of when the display is forgotten
+ * or a newer surface takes its place. `frame` is called on the same thread once the frame is
+ * in the surface, filling its top-left `width` x `height` pixels, and the GPU has finished
+ * the copy; the surface is not written again before the next `target` call returns it.
+ * `fallback` takes the frames read back where the Vulkan device cannot import an IOSurface.
+ * Returns 0 on success, -1 when the renderer is not initialised or this host has no
+ * IOSurfaces (anything but macOS). */
+typedef void* (*dsa_display_iosurface_fn)(void* context,
+                                          uint32_t display_id,
+                                          uint32_t width,
+                                          uint32_t height);
+typedef void (*dsa_display_iosurface_frame_fn)(void* context,
+                                               uint32_t display_id,
+                                               uint32_t width,
+                                               uint32_t height);
+DSA_GFX_EXPORT int dsa_gfx_set_display_iosurface_callbacks(dsa_display_iosurface_fn target,
+                                                           dsa_display_iosurface_frame_fn frame,
+                                                           dsa_display_pixels_fn fallback,
+                                                           void* context);
+/* The display's frames are shown nowhere now: the presentation lets go of what it holds for
+ * it (on macOS, the imported IOSurfaces), so their memory goes back. Does nothing when there
+ * is nothing to let go of. */
+DSA_GFX_EXPORT void dsa_gfx_forget_display(uint32_t display_id);
+
 /* Writes the LUID of the GPU the renderer runs on (8 bytes, as a Windows LUID). Returns 0 on
  * success, -1 when the renderer is not initialised or the driver does not report one. */
 DSA_GFX_EXPORT int dsa_gfx_get_adapter_luid(uint8_t luid[8]);
