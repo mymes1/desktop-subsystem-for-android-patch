@@ -11,6 +11,8 @@ use wayland_client::protocol::{
     wl_keyboard::{self, WlKeyboard},
     wl_pointer::{self, WlPointer},
     wl_seat::{self, WlSeat},
+    wl_shm::Format,
+    wl_surface::WlSurface,
     wl_touch::{self, WlTouch},
 };
 use wayland_client::{event_created_child, Connection, Dispatch, QueueHandle, WEnum};
@@ -29,6 +31,7 @@ use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3::{
 };
 use wayland_protocols::xdg::shell::client::xdg_toplevel::ResizeEdge;
 
+use super::shm::ShmBuffer;
 use super::{task_of, State};
 use crate::input::keymap::{self, evdev_key, guest_key};
 use crate::input::pointer::{evdev_button, mouse_button, window_hit, Scroll, WindowHit};
@@ -79,6 +82,8 @@ pub struct SeatState {
     repeat: Option<(u32, Repeating, Instant)>,
     /// The time of the last key event, and when it came, to time repeats and releases.
     key_clock: (u32, Instant),
+    /// The arrow shown where the desktop has no cursor shapes to name.
+    arrow: Option<(WlSurface, ShmBuffer)>,
 }
 
 impl Default for SeatState {
@@ -99,6 +104,7 @@ impl Default for SeatState {
             repeat_delay: 0,
             repeat: None,
             key_clock: (0, Instant::now()),
+            arrow: None,
         }
     }
 }
@@ -141,6 +147,24 @@ impl State {
         self.seat_state.shape = Some(shape);
         if let Some(device) = &self.cursor_device {
             device.set_shape(self.seat_state.enter_serial, shape);
+            return;
+        }
+        // No cursor shapes: an arrow of our own, the same over the whole window.
+        if self.seat_state.arrow.is_none() {
+            let surface = self.compositor.create_surface(&self.qh, -1);
+            match ShmBuffer::with_format(&self.shm, &self.qh, ARROW_SIZE, Format::Argb8888) {
+                Ok(mut buffer) => {
+                    buffer.write(&arrow_pixels());
+                    surface.attach(Some(&buffer.buffer), 0, 0);
+                    surface.damage_buffer(0, 0, ARROW_SIZE.0 as i32, ARROW_SIZE.1 as i32);
+                    surface.commit();
+                    self.seat_state.arrow = Some((surface, buffer));
+                }
+                Err(_) => return,
+            }
+        }
+        if let (Some(pointer), Some((surface, _))) = (&self.pointer, &self.seat_state.arrow) {
+            pointer.set_cursor(self.seat_state.enter_serial, Some(surface), 0, 0);
         }
     }
 
@@ -454,6 +478,44 @@ impl State {
             },
         );
     }
+}
+
+/// The size of the fallback arrow cursor, in pixels.
+const ARROW_SIZE: (u32, u32) = (12, 19);
+
+/// The fallback arrow: black, outlined in white, pointing up and left, as premultiplied
+/// `ARGB8888` (blue, green, red, alpha in memory).
+fn arrow_pixels() -> Vec<u8> {
+    let (width, height) = (ARROW_SIZE.0 as i32, ARROW_SIZE.1 as i32);
+    // The arrow's outline: each row's last column inside it.
+    let inside = |x: i32, y: i32| -> bool {
+        if !(0..height).contains(&y) || x < 0 {
+            return false;
+        }
+        match y {
+            0..=11 => x <= y,
+            12 => x <= 7,
+            _ => {
+                let from = (y - 13) / 2 + 4;
+                (from..=from + 2).contains(&x)
+            }
+        }
+    };
+    let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+    for y in 0..height {
+        for x in 0..width {
+            let pixel: [u8; 4] = if !inside(x, y) {
+                [0, 0, 0, 0]
+            } else if !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1)
+            {
+                [0xff, 0xff, 0xff, 0xff]
+            } else {
+                [0, 0, 0, 0xff]
+            };
+            pixels.extend_from_slice(&pixel);
+        }
+    }
+    pixels
 }
 
 /// The cursor for resizing by `edge` (`xdg_toplevel` numbering).
