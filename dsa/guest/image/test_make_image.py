@@ -286,6 +286,13 @@ class ImageLayoutTests(unittest.TestCase):
         for perm in ("open", "read", "write", "ioctl"):
             self.assertIn(perm, rule)
 
+    def test_pr3_vendor_init_may_check_the_drm_cards(self):
+        # The cards are relabelled gpu_device; Cuttlefish's init script waits for card0 as
+        # vendor_init, and a refused stat makes the wait time out after five seconds.
+        patched = make_image.patch_plat_sepolicy("(type vendor_init)\n(type gpu_device)\n",
+                                                 make_image.SEPOLICY_FRAGMENT.read_text())
+        self.assertIn("(allow vendor_init gpu_device (chr_file (getattr)))", patched)
+
     def test_pr3_neverallow_is_narrowed_only_for_vsock_socket(self):
         cil = (
             "(neverallow all_untrusted_apps base_typeattr_1 (vsock_socket (ioctl read write create getattr "
@@ -1492,6 +1499,124 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertNotIn(selection, make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)", camera=True))
         self.assertNotIn(selection, make_image.kernel_cmdline("blkdevparts=sda:1@0(misc)", hwcomposer=True,
                                                               camera=True))
+
+    @staticmethod
+    def vendor_apex(module, payload=b""):
+        """A vendor APEX of `module` whose payload holds `payload`, as apexd and libvintf see it."""
+        name = module.encode()
+        manifest = b"\x0a" + bytes([len(name)]) + name + b"\x10\x01"
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, "w") as apex:
+            apex.writestr("apex_manifest.pb", manifest)
+            apex.writestr("apex_payload.img", b"\0" * 64 + payload + b"\0" * 64)
+        return data.getvalue()
+
+    CAMERA_FRAGMENT = (b'<manifest version="1.0" type="device"><hal format="aidl">'
+                       b'<name>android.hardware.camera.provider</name><version>3</version>'
+                       b'<fqname>ICameraProvider/internal/0</fqname></hal></manifest>')
+
+    def test_fr26_every_variant_of_a_replaced_apex_module_goes(self):
+        # Cuttlefish ships variants of one module under other file names. Removing the one a
+        # DSA HAL replaces made apexd activate the next, whose HAL declaration collided with
+        # DSA's and failed the vendor VINTF manifest, so no vendor HAL could register.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            camera = root / "dsa-camera"
+            camera.write_bytes(b"\x7fELF camera")
+            module = "com.google.emulated.camera.provider.hal"
+            listed = f"VENDOR/apex/{module}.apex"
+            # A variant no list names, as a later Cuttlefish build may add.
+            variant = f"VENDOR/apex/{module}.legacy.apex"
+            unrelated = "VENDOR/apex/com.google.cf.light.apex"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_service_contexts", "")
+                archive.writestr("META/apexkeys.txt",
+                                 f'name="{module}.apex" public_key="k"\n'
+                                 f'name="{module}.legacy.apex" public_key="k"\n'
+                                 'name="com.google.cf.light.apex" public_key="k"\n')
+                archive.writestr(listed, self.vendor_apex(module, self.CAMERA_FRAGMENT))
+                archive.writestr(variant, self.vendor_apex(module, self.CAMERA_FRAGMENT))
+                archive.writestr(unrelated, self.vendor_apex("com.google.cf.light"))
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, camera=camera)
+            with zipfile.ZipFile(modified) as archive:
+                names = archive.namelist()
+                self.assertNotIn(listed, names)
+                self.assertNotIn(variant, names)
+                self.assertIn(unrelated, names)
+                keys = archive.read("META/apexkeys.txt").decode()
+                self.assertNotIn("emulated.camera", keys)
+                self.assertIn("com.google.cf.light.apex", keys)
+
+    def test_fr26_a_hal_instance_declared_twice_is_a_problem(self):
+        # The first PC boot: DSA's camera fragment and the emulated cameras' fastscenecycle
+        # APEX both declared ICameraProvider/internal/0.
+        files = {
+            "VENDOR/bin/hw/dsa-camera": b"\x7fELF",
+            "VENDOR/etc/vintf/manifest/dsa-camera.xml": (make_image.CAMERA_DIR / "dsa-camera.xml").read_bytes(),
+            "VENDOR/apex/com.google.emulated.camera.provider.hal.fastscenecycle.apex":
+                self.vendor_apex("com.google.emulated.camera.provider.hal", self.CAMERA_FRAGMENT),
+        }
+        problems = make_image.vendor_vintf_problems(list(files), files.__getitem__, "console=ttyS0")
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("ICameraProvider/internal/0", problems[0])
+        self.assertIn("fastscenecycle", problems[0])
+
+    def test_fr26_only_the_selected_variant_of_an_apex_module_declares_its_hals(self):
+        keymint = (b'<manifest version="1.0" type="device"><hal format="aidl">'
+                   b'<name>android.hardware.security.keymint</name>'
+                   b'<fqname>IKeyMintDevice/default</fqname></hal></manifest>')
+        files = {
+            "VENDOR/apex/com.android.hardware.keymint.rust_nonsecure.apex":
+                self.vendor_apex("com.android.hardware.keymint", keymint),
+            "VENDOR/apex/com.android.hardware.keymint.rust_cf_remote.apex":
+                self.vendor_apex("com.android.hardware.keymint", keymint),
+        }
+        selected = "androidboot.vendor.apex.com.android.hardware.keymint=com.android.hardware.keymint.rust_nonsecure"
+        self.assertEqual(make_image.vendor_vintf_problems(list(files), files.__getitem__, selected), [])
+        # With nothing selected apexd may activate either, so the two count as declaring it twice.
+        self.assertEqual(len(make_image.vendor_vintf_problems(list(files), files.__getitem__, "")), 1)
+
+    def test_fr26_a_dsa_service_without_a_declaration_is_a_problem(self):
+        # servicemanager refuses a service no manifest declares, and the HAL exits with status 1.
+        # dsa-audio has no fragment of its own: the audio APEX declares the primary module.
+        audio = (b'<manifest version="1.0" type="device"><hal format="aidl">'
+                 b'<name>android.hardware.audio.core</name><version>3</version>'
+                 b'<fqname>IModule/default</fqname><fqname>IModule/r_submix</fqname></hal></manifest>')
+        files = {"VENDOR/bin/hw/dsa-audio": b"\x7fELF"}
+        problems = make_image.vendor_vintf_problems(list(files), files.__getitem__, "")
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("IModule/default", problems[0])
+        files["VENDOR/apex/com.android.hardware.audio.apex"] = self.vendor_apex("com.android.hardware.audio", audio)
+        self.assertEqual(make_image.vendor_vintf_problems(list(files), files.__getitem__, ""), [])
+
+    def test_fr26_every_dsa_hal_fragment_declares_the_version_its_service_is_built_from(self):
+        # A fragment's version must be the frozen AIDL version build.sh generates the service
+        # from, and the instance the service registers.
+        guest = Path(__file__).parents[1]
+        fragments = {
+            "camera/dsa-camera.xml": "camera",
+            "codec2/dsa-codec2.xml": "codec2",
+            "gnss/dsa-gnss.xml": "gnss",
+            "hwcomposer/dsa-hwcomposer.xml": "hwcomposer",
+            "power/dsa-power.xml": "power",
+            "power/dsa-health.xml": "power",
+            "sensors/dsa-sensors.xml": "sensors",
+        }
+        for fragment, component in fragments.items():
+            text = (guest / fragment).read_text()
+            package = re.search(r"<name>([^<]+)</name>", text).group(1)
+            version = re.search(r"<version>([0-9]+)</version>", text).group(1)
+            build = (guest / component / "build.sh").read_text()
+            built = re.findall(r"aidl_api/" + re.escape(package) + r"/([0-9]+)", build)
+            self.assertEqual(built, [version], f"{fragment} declares {package} {version}, build.sh uses {built}")
+            binary = "VENDOR/bin/hw/" + Path(fragment).stem
+            served = make_image.DSA_SERVED_INSTANCES[binary]
+            self.assertIn(served, make_image.vintf_instances(text.encode()), fragment)
 
     def test_fr3_without_the_dsa_hwcomposer_the_cuttlefish_composer_stays(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -506,6 +506,186 @@ def other_sensors_manifest(name, data):
     )
 
 
+VENDOR_APEX_DIR = "VENDOR/apex/"
+
+
+def _varint(data, at):
+    value = shift = 0
+    while at < len(data):
+        byte = data[at]
+        at += 1
+        value |= (byte & 0x7F) << shift
+        if not byte & 0x80:
+            return value, at
+        shift += 7
+    raise ValueError("truncated varint")
+
+
+def apex_module_name(data):
+    """The module name in an APEX's (or a compressed APEX's) apex_manifest.pb, or None.
+
+    Variants of one module share it: the nonsecure and the remote KeyMint, the emulated
+    cameras and their fastscenecycle build. apexd activates one of them, the one bootconfig
+    selects, or whichever is left when nothing selects one."""
+    try:
+        manifest = zipfile.ZipFile(io.BytesIO(data)).read("apex_manifest.pb")
+    except (zipfile.BadZipFile, KeyError):
+        return None
+    try:
+        at = 0
+        while at < len(manifest):
+            key, at = _varint(manifest, at)
+            field, wire = key >> 3, key & 7
+            if wire == 2:
+                length, at = _varint(manifest, at)
+                value = manifest[at:at + length]
+                at += length
+                if field == 1:
+                    return value.decode(errors="replace")
+            elif wire == 0:
+                _, at = _varint(manifest, at)
+            elif wire == 5:
+                at += 4
+            elif wire == 1:
+                at += 8
+            else:
+                return None
+    except ValueError:
+        return None
+    return None
+
+
+def vendor_apex_members(names):
+    """The vendor APEXes in target_files, by member name."""
+    return sorted(n for n in names if n.startswith(VENDOR_APEX_DIR) and n.endswith((".apex", ".capex")))
+
+
+def apex_file_stem(name):
+    """com.google.cf.gnss for VENDOR/apex/com.google.cf.gnss.apex."""
+    return name[len(VENDOR_APEX_DIR):].rsplit(".", 1)[0]
+
+
+def replaced_apex_variants(names, read, removed_names):
+    """The vendor APEXes that removed_names does not list but that belong to a module one of
+    them belongs to. Removing one variant of a module makes apexd activate another, which
+    declares the same HAL as the one that replaced it, and a second declaration of an instance
+    fails the whole vendor VINTF manifest: no vendor HAL can register then."""
+    removed_names = set(removed_names)
+    members = vendor_apex_members(names)
+    modules = set(removed_names)
+    for name in members:
+        if apex_file_stem(name) in removed_names:
+            modules.add(apex_module_name(read(name)))
+    modules.discard(None)
+    return [name for name in members
+            if apex_file_stem(name) not in removed_names and apex_module_name(read(name)) in modules]
+
+
+VINTF_HAL = re.compile(rb"<hal\b([^>]*)>(.*?)</hal>", re.S)
+VINTF_COMMENT = re.compile(rb"<!--.*?-->", re.S)
+
+
+def vintf_instances(data):
+    """Every HAL instance a VINTF manifest (or a raw image holding manifests) declares, as
+    (format, package, interface, instance). AIDL instances conflict whatever their version;
+    HIDL ones only within a major version, which joins the package name."""
+    found = set()
+    for attributes, body in VINTF_HAL.findall(VINTF_COMMENT.sub(b"", data)):
+        fmt = re.search(rb'format="(\w+)"', attributes)
+        fmt = fmt.group(1).decode() if fmt else "hidl"
+        if fmt not in ("aidl", "hidl"):
+            continue
+        name = re.search(rb"<name>\s*([^<\s]+)\s*</name>", body)
+        if not name:
+            continue
+        package = name.group(1).decode()
+        version = re.search(rb"<version>\s*([0-9]+)", body)
+        for fq in re.findall(rb"<fqname>\s*([^<\s]+)\s*</fqname>", body):
+            fq = fq.decode()
+            major = None
+            if fq.startswith("@"):
+                major = fq[1:].split(".", 1)[0]
+                fq = fq.split("::", 1)[1]
+            interface, _, instance = fq.partition("/")
+            if fmt == "hidl":
+                package_key = f"{package}@{major or (version.group(1).decode() if version else '?')}"
+            else:
+                package_key = package
+            found.add((fmt, package_key, interface, instance))
+        for interface_body in re.findall(rb"<interface>(.*?)</interface>", body, re.S):
+            interface = re.search(rb"<name>\s*([^<\s]+)\s*</name>", interface_body)
+            if not interface:
+                continue
+            package_key = package if fmt == "aidl" else f"{package}@{version.group(1).decode() if version else '?'}"
+            for instance in re.findall(rb"<instance>\s*([^<\s]+)\s*</instance>", interface_body):
+                found.add((fmt, package_key, interface.group(1).decode(), instance.decode()))
+    return found
+
+
+# The instance each DSA vendor service registers with servicemanager, by its binary.
+# servicemanager refuses a VINTF-stable service no manifest declares, and the service exits.
+# dsa-audio serves the primary module the image's audio APEX declares; the rest declare their
+# own.
+DSA_SERVED_INSTANCES = {
+    "VENDOR/bin/dsa-channeld": ("aidl", "io.github.thisisthepy.dsa.channel", "IChannel", "default"),
+    "VENDOR/bin/hw/dsa-hwcomposer": ("aidl", "android.hardware.graphics.composer3", "IComposer", "default"),
+    "VENDOR/bin/hw/dsa-power": ("aidl", "android.hardware.power", "IPower", "default"),
+    "VENDOR/bin/hw/dsa-health": ("aidl", "android.hardware.health", "IHealth", "default"),
+    "VENDOR/bin/hw/dsa-gnss": ("aidl", "android.hardware.gnss", "IGnss", "default"),
+    "VENDOR/bin/hw/dsa-codec2": ("aidl", "android.hardware.media.c2", "IComponentStore", "default"),
+    "VENDOR/bin/hw/dsa-sensors": ("aidl", "android.hardware.sensors", "ISensors", "default"),
+    "VENDOR/bin/hw/dsa-camera": ("aidl", "android.hardware.camera.provider", "ICameraProvider", "internal/0"),
+    "VENDOR/bin/hw/dsa-audio": ("aidl", "android.hardware.audio.core", "IModule", "default"),
+}
+
+
+def vendor_vintf_problems(names, read, cmdline):
+    """What would fail the device's VINTF manifest, or leave a DSA service undeclared, as lines
+    for check-image.py. libvintf merges the vendor manifest, its fragments and the fragments
+    of every active vendor APEX, and one instance declared twice fails the whole manifest:
+    servicemanager then has no device manifest at all, and every vendor HAL exits.
+
+    An APEX counts as active when bootconfig (`cmdline`) selects it for its module, or when
+    nothing selects one for that module, as apexd then activates whichever is there."""
+    problems = []
+    selected = {}
+    for part in cmdline.split():
+        if part.startswith("androidboot.vendor.apex.") and "=" in part:
+            module, value = part[len("androidboot.vendor.apex."):].split("=", 1)
+            selected[module] = value
+    sources = []
+    for name in sorted(names):
+        if ((name.startswith(("VENDOR/etc/vintf/", "ODM/etc/vintf/")) and name.endswith(".xml")
+             and "compatibility_matrix" not in name)):
+            sources.append((name, read(name)))
+    for name in vendor_apex_members(names):
+        data = read(name)
+        module = apex_module_name(data)
+        if module in selected and selected[module] != apex_file_stem(name):
+            continue
+        try:
+            outer = zipfile.ZipFile(io.BytesIO(data))
+            if CAPEX_ORIGINAL in outer.namelist():
+                outer = zipfile.ZipFile(io.BytesIO(outer.read(CAPEX_ORIGINAL)))
+            payload = outer.read("apex_payload.img")
+        except (zipfile.BadZipFile, KeyError):
+            continue
+        sources.append((name, payload))
+    declared = {}
+    for source, data in sources:
+        for instance in vintf_instances(data):
+            declared.setdefault(instance, []).append(source)
+    for (fmt, package, interface, instance), where in sorted(declared.items()):
+        if len(where) > 1:
+            problems.append(f"{package}.{interface}/{instance} is declared by {', '.join(where)}; two "
+                            "declarations fail the vendor VINTF manifest and no vendor HAL can register")
+    for binary, instance in DSA_SERVED_INSTANCES.items():
+        if binary in names and instance not in declared:
+            problems.append(f"no vendor manifest declares {instance[1]}.{instance[2]}/{instance[3]}, so "
+                            f"servicemanager refuses {binary.rsplit('/', 1)[-1]} and it exits")
+    return problems
+
+
 def framework_overlay_sources(dest):
     """Writes the framework overlay's manifest and values into `dest`."""
     (dest / "res/values").mkdir(parents=True, exist_ok=True)
@@ -1823,9 +2003,14 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             file_contexts.append(text if text.endswith("\n") or not text else text + "\n")
         compiled_file_contexts = compile_file_contexts(otatools, "".join(file_contexts))
 
+        # Every other variant of a module whose APEX goes: apexd would activate it instead.
+        removed_variants = set(replaced_apex_variants(
+            names, zin.read, removed_apexes(has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)))
+        removed_variant_stems = {apex_file_stem(name) for name in removed_variants}
         for info in zin.infolist():
             name = info.filename
-            if removed(name, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera):
+            if (removed(name, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)
+                    or name in removed_variants):
                 if name.endswith((".apk", ".apex", ".capex")):
                     print(f"removing {name}", flush=True)
                 continue
@@ -1882,7 +2067,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 elif name == "META/apexkeys.txt":
                     data = b"".join(
                         line + b"\n" for line in data.splitlines()
-                        if not any(f'name="{a}.apex"' in line.decode() for a in removed_apexes(has_hwcomposer, has_power, has_gnss, has_sensors, has_camera))
+                        if not any(f'name="{a}.apex"' in line.decode()
+                                   for a in removed_apexes(has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)
+                                   + sorted(removed_variant_stems))
                     )
                 elif name == "META/apkcerts.txt":
                     data = b"".join(
