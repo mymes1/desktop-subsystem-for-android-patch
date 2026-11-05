@@ -5,8 +5,8 @@ use dsa_host_windows::network::{
     add_adapter_request, advanced_adapter, advanced_problem, choose_nat_subnet, endpoint_document,
     endpoint_facts, guid_from, host_has_ipv6, ids_from_enumeration, mac_bytes, name_query,
     nat_ipv6_subnet, nat_network_document, network_facts, network_name, remove_adapter_request,
-    reusable, subnets_in_use, transparent_network_document, EndpointFacts, HostAdapter,
-    Ipv4Subnet, NetworkMode, NetworkStatusFacts,
+    reusable, subnets_in_use, transparent_network_document, EndpointFacts, HostAdapter, Ipv4Subnet,
+    NetworkMode, NetworkStatusFacts,
 };
 use dsa_host_windows::vm::NetworkAdapter;
 use serde_json::Value;
@@ -76,7 +76,11 @@ fn fr28_a_host_with_ipv6_gives_the_nat_network_an_ipv6_subnet() {
     let (prefix, length) = nat_ipv6_subnet(VM);
     assert_eq!(length, 64);
     assert_eq!(prefix.segments()[0], 0xfd5a, "a unique local prefix");
-    let doc = nat_network_document("n", choose_nat_subnet(VM, &[]).unwrap(), Some((prefix, length)));
+    let doc = nat_network_document(
+        "n",
+        choose_nat_subnet(VM, &[]).unwrap(),
+        Some((prefix, length)),
+    );
     let ipv6 = &doc["Ipams"][0]["Subnets"][1];
     assert_eq!(ipv6["IpAddressPrefix"], format!("{prefix}/64"));
     assert_eq!(ipv6["Routes"][0]["DestinationPrefix"], "::/0");
@@ -106,7 +110,10 @@ fn fr28_advanced_networking_binds_a_transparent_network_to_the_connected_adapter
     let doc = transparent_network_document(&network_name(VM), "Wi-Fi");
     assert_eq!(doc["Type"], "Transparent");
     assert_eq!(doc["Policies"][0]["Type"], "NetAdapterName");
-    assert_eq!(doc["Policies"][0]["Settings"]["NetworkAdapterName"], "Wi-Fi");
+    assert_eq!(
+        doc["Policies"][0]["Settings"]["NetworkAdapterName"],
+        "Wi-Fi"
+    );
     assert!(doc.get("Ipams").is_none(), "the LAN gives the addresses");
 }
 
@@ -117,7 +124,12 @@ fn fr28_a_network_left_with_the_same_name_is_used_again_when_it_is_of_the_kind_w
     assert_eq!(filter["Name"], format!("DSA {VM}"));
     let id = "{6D5A0D5A-0000-4D5A-8D5A-00000000E0E0}";
     let ids = ids_from_enumeration(&format!("[\"{id}\"]"));
-    assert_eq!(ids, vec!["6d5a0d5a-0000-4d5a-8d5a-00000000e0e0".parse::<Guid>().unwrap()]);
+    assert_eq!(
+        ids,
+        vec!["6d5a0d5a-0000-4d5a-8d5a-00000000e0e0"
+            .parse::<Guid>()
+            .unwrap()]
+    );
     assert!(ids_from_enumeration("not json").is_empty());
 
     let nat = network_facts(
@@ -149,7 +161,10 @@ fn fr28_the_endpoint_gives_the_adapter_its_mac_and_the_status_its_addresses() {
     )
     .unwrap();
     assert_eq!(facts.mac_address, "00-15-5D-12-34-56");
-    assert_eq!(mac_bytes(&facts.mac_address), Some([0x00, 0x15, 0x5d, 0x12, 0x34, 0x56]));
+    assert_eq!(
+        mac_bytes(&facts.mac_address),
+        Some([0x00, 0x15, 0x5d, 0x12, 0x34, 0x56])
+    );
     assert_eq!(mac_bytes("00:15:5d:12:34"), None);
     let status = NetworkStatusFacts {
         mode: NetworkMode::Nat,
@@ -184,7 +199,10 @@ fn fr28_the_endpoint_gives_the_adapter_its_mac_and_the_status_its_addresses() {
             gateway: None,
             ..quiet
         },
-        seen: vec!["2001:db8::5".parse().unwrap(), "192.168.1.50".parse().unwrap()],
+        seen: vec![
+            "2001:db8::5".parse().unwrap(),
+            "192.168.1.50".parse().unwrap(),
+        ],
         problem: None,
     }
     .to_status();
@@ -199,9 +217,15 @@ fn fr28_the_adapter_moves_to_a_new_endpoint_while_the_vm_runs() {
         mac_address: "00-15-5D-00-00-01".into(),
     };
     let add: Value = serde_json::from_str(&add_adapter_request(&adapter)).unwrap();
-    assert_eq!(add["ResourcePath"], "VirtualMachine/Devices/NetworkAdapters/eth0");
+    assert_eq!(
+        add["ResourcePath"],
+        "VirtualMachine/Devices/NetworkAdapters/eth0"
+    );
     assert_eq!(add["RequestType"], "Add");
-    assert_eq!(add["Settings"]["EndpointId"], adapter.endpoint_id.to_string());
+    assert_eq!(
+        add["Settings"]["EndpointId"],
+        adapter.endpoint_id.to_string()
+    );
     let remove: Value = serde_json::from_str(&remove_adapter_request()).unwrap();
     assert_eq!(remove["RequestType"], "Remove");
     assert_eq!(remove["ResourcePath"], add["ResourcePath"]);
