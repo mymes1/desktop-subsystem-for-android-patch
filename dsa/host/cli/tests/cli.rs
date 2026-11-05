@@ -2288,3 +2288,29 @@ fn fr29_android_files_open_as_a_dav_location_on_linux() {
         "dav://127.0.0.1:50000/token/"
     );
 }
+
+#[test]
+fn fr15_settings_say_where_program_updates_come_from() {
+    use dsa_host_core::host_api::{ServiceFacts, SettingsReport};
+    let report = SettingsReport {
+        settings: dsa_host_core::settings::Settings::default(),
+        facts: ServiceFacts {
+            version: "0.0.9".into(),
+            log_dir: None,
+            program_updates_available: false,
+            image_updates_available: true,
+            android_version: None,
+        },
+        network: None,
+    };
+    let text = dsa_cli::describe_settings(&report);
+    let line = text
+        .lines()
+        .find(|line| line.starts_with("Program updates:"))
+        .expect("a program updates line");
+    if cfg!(target_os = "linux") {
+        assert!(line.contains("package manager"), "{line}");
+    } else {
+        assert!(line.contains("does not update it"), "{line}");
+    }
+}

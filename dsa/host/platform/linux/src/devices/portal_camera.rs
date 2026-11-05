@@ -1,5 +1,5 @@
 //! The camera through the desktop's camera portal, for a lender that cannot open
-//! `/dev/video*` itself: one in a Flatpak or another sandbox, or on a desktop that gives
+//! `/dev/video*` itself: one in a sandbox (a snap, a container), or on a desktop that gives
 //! cameras only through PipeWire.
 //!
 //! The portal (`org.freedesktop.portal.Camera`) asks the user once whether DSA may use the
