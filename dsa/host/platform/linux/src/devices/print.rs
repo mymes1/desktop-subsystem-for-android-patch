@@ -167,9 +167,7 @@ fn start_job(
                 PrintOutcome::Failed(why) => {
                     log(&format!("{} was not printed: {why}", job.title()))
                 }
-                PrintOutcome::Canceled => {
-                    log(&format!("printing {} was canceled", job.title()))
-                }
+                PrintOutcome::Canceled => log(&format!("printing {} was canceled", job.title())),
                 PrintOutcome::Printed => {}
             }
             let _ = done.send((job.job_id, outcome));
@@ -298,7 +296,9 @@ pub fn lp_arguments(job: &PrintJob, document: &Path) -> Vec<String> {
         "-t".to_string(),
         job.title(),
         "-n".to_string(),
-        s.copies.clamp(1, dsa_host_core::print::MAX_COPIES).to_string(),
+        s.copies
+            .clamp(1, dsa_host_core::print::MAX_COPIES)
+            .to_string(),
         "-o".to_string(),
         format!(
             "sides={}",
@@ -333,7 +333,10 @@ pub fn lp_arguments(job: &PrintJob, document: &Path) -> Vec<String> {
 }
 
 fn lp_print(job: &PrintJob, document: &Path) -> PrintOutcome {
-    match Command::new("lp").args(lp_arguments(job, document)).output() {
+    match Command::new("lp")
+        .args(lp_arguments(job, document))
+        .output()
+    {
         Ok(output) if output.status.success() => PrintOutcome::Printed,
         Ok(output) => PrintOutcome::Failed(format!(
             "CUPS did not take the job: {}",
@@ -369,8 +372,8 @@ fn portal_request(
     let mut responses = request
         .receive_signal("Response")
         .map_err(|e| PortalError::NoPortal(e.to_string()))?;
-    let print = proxy(connection, PORTAL, PORTAL_PATH.into(), PRINT)
-        .map_err(PortalError::NoPortal)?;
+    let print =
+        proxy(connection, PORTAL, PORTAL_PATH.into(), PRINT).map_err(PortalError::NoPortal)?;
     call(&print).map_err(|e| PortalError::NoPortal(format!("{method}: {e}")))?;
     let message = responses
         .next()
@@ -386,8 +389,7 @@ fn portal_print(
     document: &Path,
     withdrawn: &AtomicBool,
 ) -> Result<PrintOutcome, PortalError> {
-    let connection =
-        Connection::session().map_err(|e| PortalError::NoPortal(e.to_string()))?;
+    let connection = Connection::session().map_err(|e| PortalError::NoPortal(e.to_string()))?;
     let title = job.title();
     let token = format!("dsa_print_{}", job.job_id);
 
@@ -399,7 +401,10 @@ fn portal_print(
     let s = &job.settings;
     if s.media_width_mils > 0 && s.media_height_mils > 0 {
         page_setup.insert("Width", Value::from(f64::from(s.media_width_mils) * 0.0254));
-        page_setup.insert("Height", Value::from(f64::from(s.media_height_mils) * 0.0254));
+        page_setup.insert(
+            "Height",
+            Value::from(f64::from(s.media_height_mils) * 0.0254),
+        );
     }
     page_setup.insert(
         "Orientation",
@@ -409,7 +414,10 @@ fn portal_print(
     options.insert("handle_token", Value::from(token.as_str()));
 
     let (code, mut results) = portal_request(&connection, "PreparePrint", &token, |print| {
-        print.call("PreparePrint", &("", title.as_str(), settings, page_setup, options))
+        print.call(
+            "PreparePrint",
+            &("", title.as_str(), settings, page_setup, options),
+        )
     })?;
     match code {
         0 => {}
@@ -431,7 +439,10 @@ fn portal_print(
     options.insert("handle_token", Value::from(token.as_str()));
     options.insert("token", Value::from(print_token));
     let (code, _) = portal_request(&connection, "Print", &token, |print| {
-        print.call("Print", &("", title.as_str(), Fd::from(file.as_fd()), options))
+        print.call(
+            "Print",
+            &("", title.as_str(), Fd::from(file.as_fd()), options),
+        )
     })?;
     Ok(match code {
         0 => PrintOutcome::Printed,
@@ -472,7 +483,10 @@ mod tests {
         assert!(line.contains("sides=two-sided-long-edge"), "{line}");
         assert!(line.contains("print-color-mode=monochrome"), "{line}");
         assert!(line.contains("media=Custom.8.50x11.00in"), "{line}");
-        assert!(line.ends_with("-- /run/user/1000/dsa/print/a.pdf"), "{line}");
+        assert!(
+            line.ends_with("-- /run/user/1000/dsa/print/a.pdf"),
+            "{line}"
+        );
     }
 
     #[test]

@@ -333,7 +333,10 @@ impl VmConfig {
             args.push(option.to_string());
             args.push(value);
         };
-        push("-name", format!("guest={},debug-threads=on", escape(&self.name)));
+        push(
+            "-name",
+            format!("guest={},debug-threads=on", escape(&self.name)),
+        );
         push("-machine", self.arch.machine().to_string());
         push("-cpu", "host".into());
         push("-smp", self.processors.to_string());
@@ -506,8 +509,8 @@ mod tests {
             arch: GuestArch::X86_64,
             kernel: "/var/lib/dsa/images/1/bzImage".into(),
             initrd: "/home/u/.local/share/dsa/tmp/boot.initrd".into(),
-            kernel_cmdline: "console=ttyS0 androidboot.boot_devices=vmbus androidboot.hardware=cutf_cvm"
-                .into(),
+            kernel_cmdline:
+                "console=ttyS0 androidboot.boot_devices=vmbus androidboot.hardware=cutf_cvm".into(),
             memory_mb: 3072,
             memory_max_mb: None,
             processors: 4,
@@ -534,7 +537,10 @@ mod tests {
     #[test]
     fn fr2_the_vm_boots_the_kernel_directly_under_kvm() {
         let args = config().qemu_args().unwrap();
-        assert_eq!(value_of(&args, "-kernel"), ["/var/lib/dsa/images/1/bzImage"]);
+        assert_eq!(
+            value_of(&args, "-kernel"),
+            ["/var/lib/dsa/images/1/bzImage"]
+        );
         assert_eq!(
             value_of(&args, "-initrd"),
             ["/home/u/.local/share/dsa/tmp/boot.initrd"]
@@ -596,7 +602,13 @@ mod tests {
             .contains("page_reporting.page_reporting_order=9"));
         // Nothing that pins or preallocates the guest's memory.
         let joined = args.join(" ");
-        for pinned in ["mem-prealloc", "prealloc=on", "mlock", "hugepages", "share=on"] {
+        for pinned in [
+            "mem-prealloc",
+            "prealloc=on",
+            "mlock",
+            "hugepages",
+            "share=on",
+        ] {
             assert!(!joined.contains(pinned), "{pinned} pins guest memory");
         }
     }
@@ -633,7 +645,10 @@ mod tests {
         );
         let mut tap = config();
         tap.network = NetworkBackend::Tap { fd: 7 };
-        assert_eq!(value_of(&tap.qemu_args().unwrap(), "-netdev"), ["tap,id=net,fd=7"]);
+        assert_eq!(
+            value_of(&tap.qemu_args().unwrap(), "-netdev"),
+            ["tap,id=net,fd=7"]
+        );
         let mut none = config();
         none.network = NetworkBackend::None;
         assert!(value_of(&none.qemu_args().unwrap(), "-netdev").is_empty());
@@ -643,7 +658,9 @@ mod tests {
     #[test]
     fn fr2_a_stop_can_ask_the_guest_to_sync_and_power_off() {
         let config = config();
-        assert!(config.full_kernel_cmdline().contains("sysrq_always_enabled=1"));
+        assert!(config
+            .full_kernel_cmdline()
+            .contains("sysrq_always_enabled=1"));
         let args = config.qemu_args().unwrap();
         assert!(value_of(&args, "-chardev")[0].contains("mux=on"));
         assert_eq!(SHUTDOWN_SEQUENCE[2], b"\x01bo");
@@ -666,8 +683,14 @@ mod tests {
 
     #[test]
     fn fr19_disk_formats_come_from_the_extension() {
-        assert_eq!(DiskFormat::of(Path::new("/a/system.vhdx")), DiskFormat::Vhdx);
-        assert_eq!(DiskFormat::of(Path::new("/a/data.QCOW2")), DiskFormat::Qcow2);
+        assert_eq!(
+            DiskFormat::of(Path::new("/a/system.vhdx")),
+            DiskFormat::Vhdx
+        );
+        assert_eq!(
+            DiskFormat::of(Path::new("/a/data.QCOW2")),
+            DiskFormat::Qcow2
+        );
         assert_eq!(DiskFormat::of(Path::new("/a/system.img")), DiskFormat::Raw);
     }
 }

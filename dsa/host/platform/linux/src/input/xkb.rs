@@ -45,7 +45,8 @@ struct Api {
     compose_state_feed: Option<unsafe extern "C" fn(*mut ComposeState, u32) -> c_int>,
     compose_state_reset: Option<unsafe extern "C" fn(*mut ComposeState)>,
     compose_state_get_status: Option<unsafe extern "C" fn(*mut ComposeState) -> c_int>,
-    compose_state_get_utf8: Option<unsafe extern "C" fn(*mut ComposeState, *mut c_char, usize) -> c_int>,
+    compose_state_get_utf8:
+        Option<unsafe extern "C" fn(*mut ComposeState, *mut c_char, usize) -> c_int>,
 }
 
 impl Api {
@@ -174,9 +175,10 @@ impl Keyboard {
         }
         // SAFETY: the map holds the keymap text, NUL-terminated within `size` bytes.
         let keymap = unsafe {
-            let text = CStr::from_bytes_until_nul(std::slice::from_raw_parts(map.cast::<u8>(), size))
-                .map(CStr::as_ptr)
-                .unwrap_or(std::ptr::null());
+            let text =
+                CStr::from_bytes_until_nul(std::slice::from_raw_parts(map.cast::<u8>(), size))
+                    .map(CStr::as_ptr)
+                    .unwrap_or(std::ptr::null());
             let keymap = if text.is_null() {
                 std::ptr::null_mut()
             } else {
@@ -201,7 +203,11 @@ impl Keyboard {
             let index = |name: &CStr| (self.api.keymap_mod_get_index)(keymap, name.as_ptr());
             let caps = index(c"Lock");
             let num = index(c"Mod2");
-            self.caps_mask = if caps == XKB_MOD_INVALID { 0 } else { 1 << caps };
+            self.caps_mask = if caps == XKB_MOD_INVALID {
+                0
+            } else {
+                1 << caps
+            };
             self.num_mask = if num == XKB_MOD_INVALID { 0 } else { 1 << num };
         }
     }

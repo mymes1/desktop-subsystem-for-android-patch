@@ -42,7 +42,11 @@ fn eviocgname(len: usize) -> u64 {
     ioc(READ, 0x06, len as u64)
 }
 fn eviocgabs(axis: u16) -> u64 {
-    ioc(READ, 0x40 + u64::from(axis), std::mem::size_of::<AbsInfo>() as u64)
+    ioc(
+        READ,
+        0x40 + u64::from(axis),
+        std::mem::size_of::<AbsInfo>() as u64,
+    )
 }
 const EVIOCGID: u64 = ioc(READ, 0x02, 8);
 const EVIOCSFF: u64 = ioc(WRITE, 0x80, std::mem::size_of::<FfEffect>() as u64);
@@ -89,7 +93,8 @@ unsafe fn ioctl(file: &File, request: u64, arg: *mut libc::c_void) -> bool {
 }
 
 fn bit(bits: &[u8], index: usize) -> bool {
-    bits.get(index / 8).is_some_and(|byte| byte & (1 << (index % 8)) != 0)
+    bits.get(index / 8)
+        .is_some_and(|byte| byte & (1 << (index % 8)) != 0)
 }
 
 fn bits(file: &File, request: u64, len: usize) -> Vec<u8> {
@@ -198,8 +203,13 @@ impl Pad {
         for (axis, range) in &self.axes {
             let mut info = AbsInfo::default();
             // SAFETY: `info` is a `struct input_absinfo`.
-            if unsafe { ioctl(&self.file, eviocgabs(*axis), (&mut info as *mut AbsInfo).cast()) }
-            {
+            if unsafe {
+                ioctl(
+                    &self.file,
+                    eviocgabs(*axis),
+                    (&mut info as *mut AbsInfo).cast(),
+                )
+            } {
                 raw.axes.push((*axis, info.value, *range));
             }
         }
@@ -257,7 +267,10 @@ impl EvdevGamepads {
 
     fn rescan(&mut self) {
         let now = Instant::now();
-        if self.scanned.is_some_and(|at| now.duration_since(at) < RESCAN) {
+        if self
+            .scanned
+            .is_some_and(|at| now.duration_since(at) < RESCAN)
+        {
             return;
         }
         self.scanned = Some(now);

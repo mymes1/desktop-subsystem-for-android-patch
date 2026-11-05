@@ -93,10 +93,7 @@ impl Toplevel {
     /// A size in logical units as pixels.
     pub fn to_pixels(&self, (width, height): (i32, i32)) -> (u32, u32) {
         let scale = self.scale.max(1);
-        (
-            width.max(0) as u32 * scale,
-            height.max(0) as u32 * scale,
-        )
+        (width.max(0) as u32 * scale, height.max(0) as u32 * scale)
     }
 
     /// A size in pixels as logical units, rounded up so no pixel is lost.
@@ -231,14 +228,22 @@ mod tests {
             ]
         );
         assert_eq!(window.configure((300, 200), states), vec![]);
-        assert_eq!(window.configure((0, 0), states), vec![], "no size: the window decides");
+        assert_eq!(
+            window.configure((0, 0), states),
+            vec![],
+            "no size: the window decides"
+        );
     }
 
     #[test]
     fn fr4_the_window_keeps_the_size_of_the_frame_it_shows_until_a_new_one_comes() {
         let mut window = window();
         window.configure((500, 700), States::default());
-        assert_eq!(window.shown, (400, 600), "nothing is stretched to the new size");
+        assert_eq!(
+            window.shown,
+            (400, 600),
+            "nothing is stretched to the new size"
+        );
         window.frame_shown((500, 700));
         assert_eq!(window.geometry().client, (500, 700));
     }
@@ -288,7 +293,10 @@ mod tests {
             suspended: true,
             ..States::default()
         };
-        assert_eq!(window.configure((0, 0), hidden), vec![Reported::Shown(false)]);
+        assert_eq!(
+            window.configure((0, 0), hidden),
+            vec![Reported::Shown(false)]
+        );
         assert_eq!(
             window.configure((0, 0), States::default()),
             vec![Reported::Shown(true)]

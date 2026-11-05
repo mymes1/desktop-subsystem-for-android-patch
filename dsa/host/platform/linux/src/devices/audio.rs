@@ -17,8 +17,7 @@ use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 
 use dsa_host_core::audio::{
-    AudioDevice, CaptureSink, DeviceFormat, Playback, Recording, Renderer, SampleType,
-    SharedBuffer,
+    AudioDevice, CaptureSink, DeviceFormat, Playback, Recording, Renderer, SampleType, SharedBuffer,
 };
 
 /// The guest's rate.
@@ -145,7 +144,9 @@ impl Pulse {
             let text = unsafe { strerror(error) };
             if !text.is_null() {
                 // SAFETY: a NUL-terminated static string.
-                return unsafe { CStr::from_ptr(text) }.to_string_lossy().into_owned();
+                return unsafe { CStr::from_ptr(text) }
+                    .to_string_lossy()
+                    .into_owned();
             }
         }
         format!("PulseAudio error {error}")

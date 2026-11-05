@@ -247,7 +247,11 @@ impl LinuxVmLauncher {
 
     /// The initrd of one boot: the image's, the boot's properties, then the bootconfig with the
     /// secret.
-    fn boot_initrd(&mut self, files: &ImageFiles, secret: &BootSecret) -> Result<TransientFile, String> {
+    fn boot_initrd(
+        &mut self,
+        files: &ImageFiles,
+        secret: &BootSecret,
+    ) -> Result<TransientFile, String> {
         let source = files.initrd.as_ref().ok_or(
             "the Android image has no initrd, which is what carries the boot's secret to the guest",
         )?;
@@ -344,7 +348,9 @@ impl LinuxVmLauncher {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let before: Option<BeforeExec> = tap.as_ref().map(|tap| Box::new(place_tap(tap)) as BeforeExec);
+        let before: Option<BeforeExec> = tap
+            .as_ref()
+            .map(|tap| Box::new(place_tap(tap)) as BeforeExec);
         self.account.run_as(&mut command, before);
         self.tail = Tail::default();
         *self.signs.lock().unwrap_or_else(|e| e.into_inner()) = BootSigns::default();
@@ -582,7 +588,9 @@ impl GuestLauncher for LinuxVmLauncher {
 
     fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
         let vm = self.vm.as_mut().ok_or("the Android VM is not running")?;
-        let (base, max) = vm.memory.ok_or("the Android VM keeps the size it started with")?;
+        let (base, max) = vm
+            .memory
+            .ok_or("the Android VM keeps the size it started with")?;
         let mb = mb.clamp(base, max);
         let qmp = vm.qmp.as_mut().ok_or("the Android VM is not running")?;
         qmp.set_plugged(plugged_bytes(mb - base))

@@ -1,10 +1,10 @@
-# The user's half of DSA as a Flatpak: the dsa command and the device lender, which follows
-# the local API of the installed service for the location, printing, web links and the
-# desktop's settings.
+# The user's half of DSA as a Flatpak: the dsa command and the device lender, which lends
+# the user's sound, cameras (through the camera portal), sensors, location, printers, web
+# links and settings to their Android.
 #
 # The service (the VM, /dev/kvm, the systemd units, the udev rules) cannot live in a sandbox,
-# so it comes from the .deb or .rpm. The guest's device ports (sound, cameras, sensors) are
-# served by the package's own dsa-devices too: a Flatpak sandbox cannot open vsock sockets.
+# so it comes from the .deb or .rpm. It relays the guest's device ports to sockets in
+# $XDG_RUNTIME_DIR/dsa/devices, which this sandbox shares with the host.
 #
 # Built with network access for cargo, as a local build:
 #   flatpak-builder --user --install --force-clean \
@@ -17,8 +17,12 @@ sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: dsa
 finish-args:
-  # The service's local API.
+  # The service's local API, and the device sockets the service relays the guest's ports to.
   - --filesystem=/run/dsa
+  - --filesystem=xdg-run/dsa:create
+  # Sound, through the sound server; the cameras come through the camera portal.
+  - --socket=pulseaudio
+  - --system-talk-name=net.hadess.SensorProxy
   # The desktop's portals (print, settings) and the location service.
   - --talk-name=org.freedesktop.portal.Desktop
   - --system-talk-name=org.freedesktop.GeoClue2

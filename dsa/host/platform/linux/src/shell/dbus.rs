@@ -82,9 +82,13 @@ impl Notifier {
 
     /// Closes the notification numbered `id`.
     pub fn close(&self, id: u32) {
-        let _ = self
-            .connection
-            .call_method(Some(SERVICE), PATH, Some(SERVICE), "CloseNotification", &(id,));
+        let _ = self.connection.call_method(
+            Some(SERVICE),
+            PATH,
+            Some(SERVICE),
+            "CloseNotification",
+            &(id,),
+        );
     }
 
     /// Calls `each` with what the user does with the notifications, until the connection

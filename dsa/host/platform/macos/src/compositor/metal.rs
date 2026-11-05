@@ -172,7 +172,8 @@ impl Presenter {
     /// refused rather than read past its end.
     pub fn present(&mut self, frame: FrameRef<'_>) -> Result<(), String> {
         let needed = (frame.stride as usize).checked_mul(frame.height as usize);
-        if frame.stride < frame.width.saturating_mul(4) || needed.is_none_or(|n| n > frame.pixels.len())
+        if frame.stride < frame.width.saturating_mul(4)
+            || needed.is_none_or(|n| n > frame.pixels.len())
         {
             return Err(format!(
                 "a {}x{} frame with {} bytes a row does not fit its {} bytes",

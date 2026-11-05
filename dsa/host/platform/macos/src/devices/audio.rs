@@ -5,8 +5,7 @@
 use std::ffi::c_void;
 
 use dsa_host_core::audio::{
-    AudioDevice, CaptureSink, DeviceFormat, Playback, Recording, Renderer, SampleType,
-    SharedBuffer,
+    AudioDevice, CaptureSink, DeviceFormat, Playback, Recording, Renderer, SampleType, SharedBuffer,
 };
 
 #[link(name = "AudioToolbox", kind = "framework")]
@@ -36,7 +35,11 @@ extern "C" {
         flags: u32,
         queue: *mut *mut c_void,
     ) -> i32;
-    fn AudioQueueAllocateBuffer(queue: *mut c_void, bytes: u32, buffer: *mut *mut QueueBuffer) -> i32;
+    fn AudioQueueAllocateBuffer(
+        queue: *mut c_void,
+        bytes: u32,
+        buffer: *mut *mut QueueBuffer,
+    ) -> i32;
     fn AudioQueueEnqueueBuffer(
         queue: *mut c_void,
         buffer: *mut QueueBuffer,
@@ -224,8 +227,13 @@ impl AudioDevice for CoreAudio {
                 user: renderer,
             };
             let bytes = BUFFER_FRAMES * OUTPUT.bytes_per_frame() as u32;
-            prime(queue, bytes, |buffer| fill(renderer as *mut c_void, queue, buffer))?;
-            check(AudioQueueStart(queue, std::ptr::null()), "starting the sound output")?;
+            prime(queue, bytes, |buffer| {
+                fill(renderer as *mut c_void, queue, buffer)
+            })?;
+            check(
+                AudioQueueStart(queue, std::ptr::null()),
+                "starting the sound output",
+            )?;
             Ok(Box::new(playing))
         }
     }
@@ -261,7 +269,10 @@ impl AudioDevice for CoreAudio {
             prime(queue, bytes, |buffer| {
                 AudioQueueEnqueueBuffer(queue, buffer, 0, std::ptr::null());
             })?;
-            check(AudioQueueStart(queue, std::ptr::null()), "starting the microphone")?;
+            check(
+                AudioQueueStart(queue, std::ptr::null()),
+                "starting the microphone",
+            )?;
             Ok(Box::new(recording))
         }
     }

@@ -80,5 +80,8 @@ fn pr1_a_newer_session_for_the_same_guest_takes_its_connections() {
     let mut connection = guest.connect(Duration::from_secs(5)).unwrap();
     connection.send(b"hello").unwrap();
     let mut accepted = new.accept(Duration::from_secs(5)).unwrap();
-    assert_eq!(&accepted.recv(Some(Duration::from_secs(5))).unwrap()[..], b"hello");
+    assert_eq!(
+        &accepted.recv(Some(Duration::from_secs(5))).unwrap()[..],
+        b"hello"
+    );
 }

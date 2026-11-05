@@ -162,11 +162,10 @@ fn read_iio(kind: SensorKind, dir: &Path, prefix: &str) -> Option<HostReading> {
             })
         }
         SensorKind::Light => {
-            let lux = read_number(&dir.join(format!("{prefix}_input")))
-                .or_else(|| {
-                    let raw = read_number(&dir.join(format!("{prefix}_raw")))?;
-                    Some(raw * read_number(&dir.join(format!("{prefix}_scale"))).unwrap_or(1.0))
-                })?;
+            let lux = read_number(&dir.join(format!("{prefix}_input"))).or_else(|| {
+                let raw = read_number(&dir.join(format!("{prefix}_raw")))?;
+                Some(raw * read_number(&dir.join(format!("{prefix}_scale"))).unwrap_or(1.0))
+            })?;
             Some(HostReading::Illuminance { lux })
         }
         SensorKind::RotationVector => {

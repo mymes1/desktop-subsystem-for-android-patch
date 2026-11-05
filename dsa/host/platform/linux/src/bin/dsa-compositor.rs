@@ -36,7 +36,10 @@ fn main() -> std::process::ExitCode {
         }
         Some("--install-autostart") => match install_autostart() {
             Ok(path) => {
-                println!("The compositor starts with every session: {}", path.display());
+                println!(
+                    "The compositor starts with every session: {}",
+                    path.display()
+                );
                 ExitCode::SUCCESS
             }
             Err(why) => {
@@ -95,7 +98,9 @@ fn install_autostart() -> Result<std::path::PathBuf, String> {
     let config = std::env::var_os("XDG_CONFIG_HOME")
         .map(std::path::PathBuf::from)
         .filter(|path| path.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".config")))
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".config"))
+        })
         .ok_or("neither XDG_CONFIG_HOME nor HOME is set")?;
     let dir = config.join("autostart");
     std::fs::create_dir_all(&dir).map_err(|error| format!("{}: {error}", dir.display()))?;

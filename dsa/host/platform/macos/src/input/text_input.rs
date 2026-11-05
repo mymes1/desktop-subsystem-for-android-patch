@@ -184,7 +184,10 @@ mod tests {
     #[test]
     fn fr6_the_cursor_is_at_the_end_of_the_input_methods_selection() {
         let mut client = TextInputClient::new(7);
-        assert_eq!(client.set_marked_text("にほんご", (0, 2)), composition("にほんご", 2));
+        assert_eq!(
+            client.set_marked_text("にほんご", (0, 2)),
+            composition("にほんご", 2)
+        );
         assert_eq!(client.selected_range(), (0, 2));
         // A selection past the text is kept inside it.
         assert_eq!(client.set_marked_text("に", (5, 3)), composition("に", 1));

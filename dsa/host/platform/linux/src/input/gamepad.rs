@@ -161,7 +161,12 @@ mod tests {
     #[test]
     fn fr30_face_buttons_and_shoulders_are_named_as_the_guest_names_them() {
         let raw = RawPad {
-            held: vec![codes::BTN_SOUTH, codes::BTN_WEST, codes::BTN_TR, codes::BTN_START],
+            held: vec![
+                codes::BTN_SOUTH,
+                codes::BTN_WEST,
+                codes::BTN_TR,
+                codes::BTN_START,
+            ],
             axes: vec![],
         };
         let state = state(2, &raw);

@@ -392,8 +392,7 @@ mod avfoundation {
         }
 
         fn encode_jpeg(&self, frame: &Frame, quality: u8) -> Result<Vec<u8>, String> {
-            if Frame::nv12_len(frame.width, frame.height, frame.stride) != Some(frame.nv12.len())
-            {
+            if Frame::nv12_len(frame.width, frame.height, frame.stride) != Some(frame.nv12.len()) {
                 return Err("the picture is not whole".into());
             }
             let mut rgb = nv12_to_rgb(frame);
@@ -479,7 +478,8 @@ mod avfoundation {
         let output: Option<Retained<AnyObject>> =
             msg_send![class(c"AVCaptureVideoDataOutput")?, new];
         let output = output.ok_or("no video output could be made")?;
-        let number: *mut AnyObject = msg_send![class(c"NSNumber")?, numberWithUnsignedInt: FORMAT_420V];
+        let number: *mut AnyObject =
+            msg_send![class(c"NSNumber")?, numberWithUnsignedInt: FORMAT_420V];
         let settings: *mut AnyObject = msg_send![
             class(c"NSDictionary")?,
             dictionaryWithObject: number,
@@ -582,7 +582,10 @@ mod tests {
             Facing::Front
         );
         assert_eq!(facing(0, "AVCaptureDeviceTypeExternal"), Facing::External);
-        assert_eq!(facing(0, "AVCaptureDeviceTypeContinuityCamera"), Facing::External);
+        assert_eq!(
+            facing(0, "AVCaptureDeviceTypeContinuityCamera"),
+            Facing::External
+        );
         assert_eq!(facing(1, ""), Facing::Back);
     }
 

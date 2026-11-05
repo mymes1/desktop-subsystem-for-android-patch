@@ -194,8 +194,9 @@ mod center {
                 let delegate: Option<Retained<AnyObject>> = msg_send![delegate_class()?, new];
                 let delegate = delegate.ok_or("no notification delegate could be made")?;
                 let _: () = msg_send![&*center, setDelegate: &*delegate];
-                *ACTIONS.lock().map_err(|_| "the notification actions lock failed")? =
-                    Some(actions);
+                *ACTIONS
+                    .lock()
+                    .map_err(|_| "the notification actions lock failed")? = Some(actions);
 
                 let category_class = class(c"UNNotificationCategory")?;
                 let array_class = class(c"NSArray")?;
@@ -272,7 +273,8 @@ mod center {
                 let level_selector = sel!(setInterruptionLevel:);
                 let can_level: bool = msg_send![&*banner, respondsToSelector: level_selector];
                 if can_level {
-                    let _: () = msg_send![&*banner, setInterruptionLevel: content.interruption.level()];
+                    let _: () =
+                        msg_send![&*banner, setInterruptionLevel: content.interruption.level()];
                 }
                 if content.interruption == super::Interruption::Active {
                     let sound_class = class(c"UNNotificationSound")?;
@@ -311,8 +313,10 @@ mod center {
                     return;
                 };
                 let ids: *mut AnyObject = msg_send![array_class, arrayWithObject: &*ns_string(key)];
-                let _: () = msg_send![&*self.center, removeDeliveredNotificationsWithIdentifiers: ids];
-                let _: () = msg_send![&*self.center, removePendingNotificationRequestsWithIdentifiers: ids];
+                let _: () =
+                    msg_send![&*self.center, removeDeliveredNotificationsWithIdentifiers: ids];
+                let _: () =
+                    msg_send![&*self.center, removePendingNotificationRequestsWithIdentifiers: ids];
             }
         }
 
@@ -364,9 +368,15 @@ mod tests {
     #[test]
     fn fr8_the_app_heads_a_titled_notification_and_titles_an_untitled_one() {
         let titled = content(&note("Meeting", 3));
-        assert_eq!((titled.title.as_str(), titled.subtitle.as_str()), ("Meeting", "Example"));
+        assert_eq!(
+            (titled.title.as_str(), titled.subtitle.as_str()),
+            ("Meeting", "Example")
+        );
         let untitled = content(&note("  ", 3));
-        assert_eq!((untitled.title.as_str(), untitled.subtitle.as_str()), ("Example", ""));
+        assert_eq!(
+            (untitled.title.as_str(), untitled.subtitle.as_str()),
+            ("Example", "")
+        );
         assert_eq!(untitled.body, "Hello");
     }
 

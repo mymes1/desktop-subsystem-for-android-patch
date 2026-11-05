@@ -107,7 +107,10 @@ impl V4l2Cameras {
                 };
                 // A size comes in the first (most direct) format that has it, unless a later
                 // one delivers it faster, as Motion JPEG often does at large sizes.
-                match by_size.iter_mut().position(|(w, h, _)| *w == width && *h == height) {
+                match by_size
+                    .iter_mut()
+                    .position(|(w, h, _)| *w == width && *h == height)
+                {
                     Some(at) => {
                         let known = modes
                             .iter_mut()
@@ -173,9 +176,15 @@ fn node_number(path: &Path) -> u32 {
 /// user, as a laptop's does; any other is external.
 pub fn facing_from_name(card: &str, bus_info: &str) -> Facing {
     let card = card.to_ascii_lowercase();
-    let built_in = ["integrated", "built-in", "internal", "facetime", "user facing"]
-        .iter()
-        .any(|word| card.contains(word));
+    let built_in = [
+        "integrated",
+        "built-in",
+        "internal",
+        "facetime",
+        "user facing",
+    ]
+    .iter()
+    .any(|word| card.contains(word));
     // Cameras on a laptop's own image processor (IPU, MIPI) are not on a USB port.
     let on_board = !bus_info.is_empty() && !bus_info.starts_with("usb");
     if built_in || on_board {
@@ -397,6 +406,19 @@ fn yuv(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
     )
 }
 
+/// The RGB of a BT.601 limited-range Y, U and V.
+fn rgb_of(y: u8, u: u8, v: u8) -> [u8; 3] {
+    let c = 298 * (i32::from(y) - 16);
+    let d = i32::from(u) - 128;
+    let e = i32::from(v) - 128;
+    let clamp = |x: i32| ((x + 128) >> 8).clamp(0, 255) as u8;
+    [
+        clamp(c + 409 * e),
+        clamp(c - 100 * d - 208 * e),
+        clamp(c + 516 * d),
+    ]
+}
+
 /// NV12 from tightly packed RGB pixels.
 pub fn nv12_from_rgb(width: u32, height: u32, rgb: &[u8]) -> Result<Frame, String> {
     let mut frame = blank(width, height)?;
@@ -454,24 +476,24 @@ pub fn encode_jpeg(frame: &Frame, quality: u8) -> Result<Vec<u8>, String> {
     if Frame::nv12_len(frame.width, frame.height, frame.stride) != Some(frame.nv12.len()) {
         return Err("the picture is not whole".into());
     }
-    let width = u16::try_from(frame.width).map_err(|_| "the picture is too wide for JPEG")?;
-    let height = u16::try_from(frame.height).map_err(|_| "the picture is too tall for JPEG")?;
+    if frame.width > 65_535 || frame.height > 65_535 {
+        return Err("the picture is too large for JPEG".into());
+    }
     let chroma = stride * h;
-    let mut ycbcr = Vec::with_capacity(w * h * 3);
+    let mut rgb = Vec::with_capacity(w * h * 3);
     for y in 0..h {
         for x in 0..w {
             let c = chroma + (y / 2) * stride + (x / 2) * 2;
-            ycbcr.extend_from_slice(&[
+            rgb.extend_from_slice(&rgb_of(
                 frame.nv12[y * stride + x],
                 frame.nv12[c],
                 frame.nv12[c + 1],
-            ]);
+            ));
         }
     }
     let mut out = Vec::new();
-    let encoder = jpeg_encoder::Encoder::new(&mut out, quality.clamp(1, 100));
-    encoder
-        .encode(&ycbcr, width, height, jpeg_encoder::ColorType::Ycbcr)
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality.clamp(1, 100))
+        .encode(&rgb, frame.width, frame.height, image::ExtendedColorType::Rgb8)
         .map_err(|e| format!("the picture cannot be encoded: {e}"))?;
     Ok(out)
 }

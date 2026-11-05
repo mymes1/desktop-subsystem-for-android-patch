@@ -70,6 +70,9 @@ mod tests {
         let args = curl_args("https://example.invalid/releases.json");
         assert!(args.windows(2).any(|w| w == ["--proto", "=https"]));
         assert!(args.windows(2).any(|w| w == ["--proto-redir", "=https"]));
-        assert_eq!(args.last().unwrap(), "https://example.invalid/releases.json");
+        assert_eq!(
+            args.last().unwrap(),
+            "https://example.invalid/releases.json"
+        );
     }
 }

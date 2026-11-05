@@ -94,7 +94,8 @@ impl Account {
             .env("USER", &self.name)
             .env("LOGNAME", &self.name)
             .env("XDG_RUNTIME_DIR", format!("/run/user/{}", self.uid));
-        let drop_to = (is_root() && self.uid != 0).then(|| (self.uid, self.gid, self.groups.clone()));
+        let drop_to =
+            (is_root() && self.uid != 0).then(|| (self.uid, self.gid, self.groups.clone()));
         let step = move || -> io::Result<()> {
             if let Some(before) = &before {
                 before()?;
@@ -184,9 +185,8 @@ fn groups_of(name: &str, gid: u32) -> Vec<u32> {
         let mut groups: Vec<libc::gid_t> = vec![0; count as usize];
         let asked = count;
         // SAFETY: the buffer holds `count` groups; getgrouplist says how many it needed.
-        let result = unsafe {
-            libc::getgrouplist(cname.as_ptr(), gid, groups.as_mut_ptr(), &mut count)
-        };
+        let result =
+            unsafe { libc::getgrouplist(cname.as_ptr(), gid, groups.as_mut_ptr(), &mut count) };
         if result >= 0 {
             groups.truncate(count as usize);
             return groups;

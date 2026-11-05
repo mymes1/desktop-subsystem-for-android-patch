@@ -194,7 +194,9 @@ impl ActingAs {
             if libc::setfsuid(u32::MAX) as u32 != user.uid
                 || libc::setfsgid(u32::MAX) as u32 != user.gid
             {
-                return Err(io::Error::other("the user's file system identity was refused"));
+                return Err(io::Error::other(
+                    "the user's file system identity was refused",
+                ));
             }
         }
         Ok(acting)

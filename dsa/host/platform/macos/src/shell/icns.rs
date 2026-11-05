@@ -63,7 +63,10 @@ pub(crate) mod tests {
         let png = png_header(192);
         let icns = from_png(&png).unwrap();
         assert_eq!(&icns[..4], b"icns");
-        assert_eq!(u32::from_be_bytes(icns[4..8].try_into().unwrap()) as usize, icns.len());
+        assert_eq!(
+            u32::from_be_bytes(icns[4..8].try_into().unwrap()) as usize,
+            icns.len()
+        );
         assert_eq!(&icns[8..12], b"ic07");
         assert_eq!(
             u32::from_be_bytes(icns[12..16].try_into().unwrap()) as usize,

@@ -75,7 +75,11 @@ unsafe extern "C-unwind" fn did_resize(_this: &AnyObject, _: Sel, note: *mut Any
     with_events(window, |events| events.resized(pixels));
 }
 
-unsafe extern "C-unwind" fn should_close(_this: &AnyObject, _: Sel, window: *mut AnyObject) -> Bool {
+unsafe extern "C-unwind" fn should_close(
+    _this: &AnyObject,
+    _: Sel,
+    window: *mut AnyObject,
+) -> Bool {
     with_events(window, |events| events.close_requested());
     // The window closes when the guest's task finishes, not before.
     Bool::NO
@@ -315,7 +319,8 @@ impl TaskWindow {
                         height: f64::from(self.task.1.max(1)),
                     };
                     let _: () = msg_send![&*self.window, setContentAspectRatio: aspect];
-                    let _: () = msg_send![&*self.window, setFrame: target, display: true, animate: true];
+                    let _: () =
+                        msg_send![&*self.window, setFrame: target, display: true, animate: true];
                     self.before_pip = Some(frame);
                 }
                 (false, Some(frame)) => {
@@ -328,7 +333,8 @@ impl TaskWindow {
                         height: 1.0,
                     };
                     let _: () = msg_send![&*self.window, setContentResizeIncrements: free];
-                    let _: () = msg_send![&*self.window, setFrame: frame, display: true, animate: true];
+                    let _: () =
+                        msg_send![&*self.window, setFrame: frame, display: true, animate: true];
                     self.before_pip = None;
                 }
                 _ => {}
@@ -388,7 +394,8 @@ impl TaskWindow {
     /// Brings the window to the front and gives it the keyboard.
     pub fn activate(&self) {
         unsafe {
-            let _: () = msg_send![&*self.window, makeKeyAndOrderFront: std::ptr::null::<AnyObject>()];
+            let _: () =
+                msg_send![&*self.window, makeKeyAndOrderFront: std::ptr::null::<AnyObject>()];
         }
     }
 

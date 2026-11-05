@@ -144,10 +144,7 @@ mod tests {
 
     #[test]
     fn nfr2_qemu_errors_and_returns_are_told_apart_from_events() {
-        assert_eq!(
-            reply_of(&json!({"return": {}})),
-            Some(Ok(json!({})))
-        );
+        assert_eq!(reply_of(&json!({"return": {}})), Some(Ok(json!({}))));
         assert_eq!(
             reply_of(&json!({"error": {"class": "GenericError", "desc": "no such device"}})),
             Some(Err("no such device".into()))

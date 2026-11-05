@@ -100,7 +100,10 @@ impl Surface {
     /// region, cut to the surface's size.
     pub fn write(&self, width: u32, height: u32, pixels: &[u8]) -> Result<(), String> {
         let (surface_w, surface_h) = self.size();
-        let (w, h) = (width.min(surface_w) as usize, height.min(surface_h) as usize);
+        let (w, h) = (
+            width.min(surface_w) as usize,
+            height.min(surface_h) as usize,
+        );
         let row = width as usize * 4;
         if pixels.len() < row * height as usize {
             return Err("the frame is shorter than its size".into());
@@ -112,7 +115,11 @@ impl Surface {
             let base = IOSurfaceGetBaseAddress(self.surface) as *mut u8;
             let stride = IOSurfaceGetBytesPerRow(self.surface);
             for y in 0..h {
-                std::ptr::copy_nonoverlapping(pixels.as_ptr().add(y * row), base.add(y * stride), w * 4);
+                std::ptr::copy_nonoverlapping(
+                    pixels.as_ptr().add(y * row),
+                    base.add(y * stride),
+                    w * 4,
+                );
             }
             IOSurfaceUnlock(self.surface, 0, std::ptr::null_mut());
         }

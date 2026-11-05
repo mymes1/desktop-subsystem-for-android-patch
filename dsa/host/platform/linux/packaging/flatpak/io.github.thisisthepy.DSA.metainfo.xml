@@ -9,8 +9,8 @@
     <p>
       Desktop Subsystem for Android™ (DSA) runs Android in a dedicated lightweight VM and
       shows each Android task as a desktop window. This is the user's half: the dsa command,
-      and the program that lends the desktop's location, printers, web links and settings to
-      the apps in Android. The service comes from the DSA package of the distribution.
+      and the program that lends the desktop's sound, cameras, sensors, location, printers, web
+      links and settings to the apps in Android. The service comes from the DSA package of the distribution.
     </p>
     <p>Android is a trademark of Google LLC.</p>
   </description>

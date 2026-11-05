@@ -272,7 +272,11 @@ impl State {
 
     /// Shows a frame of the task in its window.
     pub fn present(&mut self, task_id: i32, frame: Frame) {
-        if self.windows.get(&task_id).is_some_and(|w| matches!(w.pip, Some(super::pip::Pip::X11))) {
+        if self
+            .windows
+            .get(&task_id)
+            .is_some_and(|w| matches!(w.pip, Some(super::pip::Pip::X11)))
+        {
             if let Some(x11) = &mut self.x11 {
                 x11.show_pixels(task_id, &frame);
             }
@@ -301,8 +305,7 @@ impl State {
             // The X11 window keeps its last frame, and has no title bar to draw again.
             return;
         }
-        if let Some((display_id, frame)) = self.windows.get(&task_id).and_then(|w| w.last_gpu)
-        {
+        if let Some((display_id, frame)) = self.windows.get(&task_id).and_then(|w| w.last_gpu) {
             self.present_gpu(task_id, display_id, frame);
             return;
         }
@@ -429,7 +432,8 @@ impl Window {
             None => return,
         };
         let size = (frame.width, frame.height);
-        self.buffers.retain(|buffer| buffer.size == size || buffer.is_busy());
+        self.buffers
+            .retain(|buffer| buffer.size == size || buffer.is_busy());
         let free = self
             .buffers
             .iter()

@@ -105,7 +105,10 @@ impl MacVmConfig {
         }
         for (what, path) in paths {
             if !path.is_absolute() {
-                return Err(format!("the {what} path {} must be absolute", path.display()));
+                return Err(format!(
+                    "the {what} path {} must be absolute",
+                    path.display()
+                ));
             }
         }
         if self.memory_max_mb < MIN_MEMORY_MB {

@@ -199,7 +199,13 @@ impl State {
             );
             let size = (3 * layout.button_width, layout.height.max(1));
             let layer = window.caption_layer.get_or_insert_with(|| {
-                CaptionLayer::new(&self.compositor, subcompositor, &window.surface, task_id, &self.qh)
+                CaptionLayer::new(
+                    &self.compositor,
+                    subcompositor,
+                    &window.surface,
+                    task_id,
+                    &self.qh,
+                )
             });
             let reuse = layer
                 .buffer

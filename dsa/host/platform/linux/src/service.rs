@@ -153,11 +153,17 @@ fn arm_translation_bootconfig(store: &dyn SettingsStore, user: &str) -> String {
 }
 
 /// The image folder the next boot starts from, and its version.
-fn current_image(config: &HostConfig, updates: Option<&Updates>) -> Result<(PathBuf, Option<String>), String> {
+fn current_image(
+    config: &HostConfig,
+    updates: Option<&Updates>,
+) -> Result<(PathBuf, Option<String>), String> {
     match (updates, &config.image_dir) {
         (Some(updates), _) => {
             let current = updates.store.state().map_err(|e| e.to_string())?.current;
-            Ok((updates.store.image_dir(&current.version), Some(current.version)))
+            Ok((
+                updates.store.image_dir(&current.version),
+                Some(current.version),
+            ))
         }
         (None, Some(dir)) => {
             let version = std::fs::read_to_string(dir.join("image.json"))
@@ -317,7 +323,9 @@ pub fn create_user_android(
         let (owner, build) = (user.to_string(), build.to_string());
         Box::new(move |image: &ImageFiles| {
             let identity = identities.get(&owner).unwrap_or_else(|why| {
-                eprintln!("{owner}: {build}: {why}; Android starts with the image's device identity");
+                eprintln!(
+                    "{owner}: {build}: {why}; Android starts with the image's device identity"
+                );
                 DeviceIdentity::default()
             });
             let built = image
@@ -341,10 +349,9 @@ pub fn create_user_android(
         );
     }
     if let Some(command) = config.window_manager.clone().filter(|c| !c.is_empty()) {
-        let mut keeper = WindowManagerKeeper::new(crate::window_manager::CommandWindowManager::new(
-            account.clone(),
-            command,
-        ));
+        let mut keeper = WindowManagerKeeper::new(
+            crate::window_manager::CommandWindowManager::new(account.clone(), command),
+        );
         launcher = launcher.with_prerequisite(Box::new(move || keeper.check(Instant::now())));
     }
     let boot_signs = Arc::new(Mutex::new(BootSigns::default()));
@@ -371,6 +378,13 @@ pub fn create_user_android(
     let folders = crate::devices::file_share::UserFolders::for_uid(uid)
         .map_err(|e| format!("the folders of {user}: {e}"))?;
     session.serve_file_shares(Box::new(share_listener), Arc::new(folders));
+    // The guest's sound, cameras and sensors, passed on to the user's own device lender.
+    for port in crate::devices::relay::RELAYED_PORTS {
+        let listener = hub(port)?.listener(cid, true);
+        if let Err(error) = crate::devices::relay::relay(listener, port, uid, user.to_string()) {
+            eprintln!("{user}: vsock port {port}: cannot start its relay: {error}");
+        }
+    }
     // Android's shared storage, which the file manager opens through a loopback port.
     session.set_android_files_connect(Arc::new(|vm_id: &str| {
         connect_stream(
@@ -602,7 +616,10 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
     // Every user may connect; the service acts on each caller's own VM.
     let listener = UnixLocalListener::bind(&config.socket, 0o666)
         .map_err(|e| format!("opening the socket {}: {e}", config.socket.display()))?;
-    eprintln!("{build}: serving the local API on {}", config.socket.display());
+    eprintln!(
+        "{build}: serving the local API on {}",
+        config.socket.display()
+    );
     if !crate::users::is_root() {
         eprintln!(
             "{build}: running without root: only this user's Android can run, and advanced \
@@ -741,10 +758,9 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
                 reset_config.data_disk_size_gb,
             )?;
             match version {
-                Some(version) => account.write_private(
-                    &crate::image::version_file(disk),
-                    version.as_bytes(),
-                ),
+                Some(version) => {
+                    account.write_private(&crate::image::version_file(disk), version.as_bytes())
+                }
                 None => Ok(()),
             }
         }),
@@ -821,7 +837,10 @@ mod tests {
         assert!(max > start && max < 32 * 1024);
         // A user's limit caps both.
         assert_eq!(memory_sizing(2048, Some(32 * 1024)), (2048, None));
-        assert_eq!(memory_sizing(8192, Some(32 * 1024)), (DEFAULT_MEMORY_MB, Some(8192)));
+        assert_eq!(
+            memory_sizing(8192, Some(32 * 1024)),
+            (DEFAULT_MEMORY_MB, Some(8192))
+        );
         // Without the computer's size the VM keeps its start.
         assert_eq!(memory_sizing(0, None), (DEFAULT_MEMORY_MB, None));
     }
@@ -842,12 +861,19 @@ mod tests {
             files.console_log,
             PathBuf::from("/home/ana/.local/share/dsa/logs/android-console.log")
         );
-        assert_eq!(files.run_dir, PathBuf::from("/home/ana/.local/share/dsa/tmp"));
+        assert_eq!(
+            files.run_dir,
+            PathBuf::from("/home/ana/.local/share/dsa/tmp")
+        );
     }
 
     #[test]
     fn fr5_the_clock_is_paired_only_for_a_guest_booted_with_the_input_trace() {
-        assert!(guest_traces_input("androidboot.hardware.dsa_input_trace=1 a=b"));
-        assert!(!guest_traces_input("androidboot.hardware.dsa_input_trace=0"));
+        assert!(guest_traces_input(
+            "androidboot.hardware.dsa_input_trace=1 a=b"
+        ));
+        assert!(!guest_traces_input(
+            "androidboot.hardware.dsa_input_trace=0"
+        ));
     }
 }

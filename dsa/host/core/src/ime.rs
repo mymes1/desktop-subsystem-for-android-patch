@@ -36,7 +36,11 @@ pub enum ImeEvent {
     Commit { task_id: i32, text: String },
     /// The input method deletes `before` UTF-16 code units before the cursor and `after`
     /// after it, as it does when it reconverts or corrects what was typed.
-    DeleteSurrounding { task_id: i32, before: u32, after: u32 },
+    DeleteSurrounding {
+        task_id: i32,
+        before: u32,
+        after: u32,
+    },
 }
 
 /// The most text one deletion removes on either side of the cursor, in UTF-16 code units.

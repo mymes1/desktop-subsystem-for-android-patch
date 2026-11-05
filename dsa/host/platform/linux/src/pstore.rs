@@ -143,8 +143,12 @@ pub fn ensure(path: &Path) -> Result<(), String> {
             ))
         }
     }
-    std::fs::write(path, image())
-        .map_err(|e| format!("the pstore disk {} could not be written: {e}", path.display()))
+    std::fs::write(path, image()).map_err(|e| {
+        format!(
+            "the pstore disk {} could not be written: {e}",
+            path.display()
+        )
+    })
 }
 
 #[cfg(test)]

@@ -7,7 +7,11 @@ use dsa_host_core::gamepads::{buttons, GamepadState};
 /// A stick axis from GameController (-1 to 1, up positive) as the guest's (-32768 to 32767,
 /// down positive when `vertical`).
 pub fn stick(value: f32, vertical: bool) -> i16 {
-    let value = if value.is_finite() { value.clamp(-1.0, 1.0) } else { 0.0 };
+    let value = if value.is_finite() {
+        value.clamp(-1.0, 1.0)
+    } else {
+        0.0
+    };
     let value = if vertical { -value } else { value };
     if value >= 0.0 {
         (value * 32767.0).round() as i16
@@ -18,7 +22,11 @@ pub fn stick(value: f32, vertical: bool) -> i16 {
 
 /// A trigger from GameController (0 to 1) as the guest's (0 to 255).
 pub fn trigger(value: f32) -> u8 {
-    let value = if value.is_finite() { value.clamp(0.0, 1.0) } else { 0.0 };
+    let value = if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     (value * 255.0).round() as u8
 }
 

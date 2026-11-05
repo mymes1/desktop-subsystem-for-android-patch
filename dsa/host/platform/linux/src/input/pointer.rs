@@ -154,9 +154,15 @@ mod tests {
     fn fr5_mouse_buttons_are_named_as_the_guest_names_them() {
         assert_eq!(mouse_button(evdev_button::LEFT), Some(MouseButton::Left));
         assert_eq!(mouse_button(evdev_button::RIGHT), Some(MouseButton::Right));
-        assert_eq!(mouse_button(evdev_button::MIDDLE), Some(MouseButton::Middle));
+        assert_eq!(
+            mouse_button(evdev_button::MIDDLE),
+            Some(MouseButton::Middle)
+        );
         assert_eq!(mouse_button(evdev_button::SIDE), Some(MouseButton::Back));
-        assert_eq!(mouse_button(evdev_button::EXTRA), Some(MouseButton::Forward));
+        assert_eq!(
+            mouse_button(evdev_button::EXTRA),
+            Some(MouseButton::Forward)
+        );
         assert_eq!(mouse_button(0x120), None);
     }
 
@@ -166,7 +172,11 @@ mod tests {
         // Wayland: the wheel turned one notch towards the user is +120 vertically.
         scroll.value120(0, -120);
         scroll.continuous(0, -15.0);
-        assert_eq!(scroll.take(), Some((0.0, 1.0)), "the notch wins over the axis value");
+        assert_eq!(
+            scroll.take(),
+            Some((0.0, 1.0)),
+            "the notch wins over the axis value"
+        );
         assert_eq!(scroll.take(), None, "a frame's scroll is taken once");
     }
 
@@ -182,11 +192,26 @@ mod tests {
     fn fr22_a_window_that_draws_its_frame_resizes_by_its_edges_and_moves_by_its_title_bar() {
         let layout = CaptionLayout::new(400, 32, 96, 4);
         let size = (400, 300);
-        assert_eq!(window_hit(&layout, size, 6, 1, 150), WindowHit::Resize(Edge::Left));
-        assert_eq!(window_hit(&layout, size, 6, 398, 150), WindowHit::Resize(Edge::Right));
-        assert_eq!(window_hit(&layout, size, 6, 200, 298), WindowHit::Resize(Edge::Bottom));
-        assert_eq!(window_hit(&layout, size, 6, 1, 298), WindowHit::Resize(Edge::BottomLeft));
-        assert_eq!(window_hit(&layout, size, 6, 200, 1), WindowHit::Resize(Edge::Top));
+        assert_eq!(
+            window_hit(&layout, size, 6, 1, 150),
+            WindowHit::Resize(Edge::Left)
+        );
+        assert_eq!(
+            window_hit(&layout, size, 6, 398, 150),
+            WindowHit::Resize(Edge::Right)
+        );
+        assert_eq!(
+            window_hit(&layout, size, 6, 200, 298),
+            WindowHit::Resize(Edge::Bottom)
+        );
+        assert_eq!(
+            window_hit(&layout, size, 6, 1, 298),
+            WindowHit::Resize(Edge::BottomLeft)
+        );
+        assert_eq!(
+            window_hit(&layout, size, 6, 200, 1),
+            WindowHit::Resize(Edge::Top)
+        );
         assert_eq!(
             window_hit(&layout, size, 6, 100, 16),
             WindowHit::Caption(CaptionHit::Caption)

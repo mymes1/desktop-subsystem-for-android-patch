@@ -21,10 +21,10 @@ use dsa_host_core::files::{FileAction, FileTransfer};
 use dsa_host_core::host_api::{HostApiClient, InputStream};
 use dsa_host_core::ime::ImeCursor;
 use dsa_host_core::input::InputEvent;
+use dsa_host_unix::socket::UnixLocalConnector;
 use dsa_protocol::window_host::types::{envelope::Body, Attach, FramePresented};
 use dsa_protocol::window_host::{decode, encode_body};
 use dsa_transport::{Connector, FrameSender};
-use dsa_host_unix::socket::UnixLocalConnector;
 use objc2::msg_send;
 use objc2::runtime::AnyObject;
 
@@ -54,8 +54,7 @@ pub fn host_api_socket(support: &Path) -> PathBuf {
 
 /// The user's DSA folder: `~/Library/Application Support/DSA`.
 pub fn support_folder() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .map(|home| PathBuf::from(home).join("Library/Application Support/DSA"))
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support/DSA"))
 }
 
 /// The package this program shows: the `--package` argument, else the `DSAPackage` key of
@@ -136,7 +135,12 @@ impl WindowEvents for Events {
     }
 
     fn close_requested(&mut self) {
-        report(&self.reports, FromHost::Closed { task_id: self.task_id });
+        report(
+            &self.reports,
+            FromHost::Closed {
+                task_id: self.task_id,
+            },
+        );
     }
 
     fn focused(&mut self, focused: bool) {
@@ -240,7 +244,9 @@ fn show(task_id: i32, title: &str, size: (u32, u32), focused: bool) {
                 }
                 state.windows.insert(task_id, window);
             }
-            Err(why) => eprintln!("dsa-app-window: the window of task {task_id} did not open: {why}"),
+            Err(why) => {
+                eprintln!("dsa-app-window: the window of task {task_id} did not open: {why}")
+            }
         }
     });
 }
@@ -277,7 +283,9 @@ fn handle(message: ToHost) {
                 quit();
             }
         }),
-        ToHost::TaskSize { task_id, min, max, .. } => STATE.with(|state| {
+        ToHost::TaskSize {
+            task_id, min, max, ..
+        } => STATE.with(|state| {
             if let Some(window) = state.borrow().windows.get(&task_id) {
                 window.set_limits(min, max);
             }
@@ -463,9 +471,9 @@ pub fn run(setup: HostSetup) -> Result<(), String> {
                 Body::FrameTexture(t) => {
                     on_main(move || texture(t.task_id, t.texture_id, t.handle))
                 }
-                Body::Frame(f) => on_main(move || {
-                    frame(f.task_id, f.texture_id, f.sequence, (f.width, f.height))
-                }),
+                Body::Frame(f) => {
+                    on_main(move || frame(f.task_id, f.texture_id, f.sequence, (f.width, f.height)))
+                }
                 body => {
                     if let Some(message) = to_host_from_wire(&body) {
                         on_main(move || handle(message));

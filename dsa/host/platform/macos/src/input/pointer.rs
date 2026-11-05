@@ -6,7 +6,11 @@ use dsa_host_core::input::MouseButton;
 /// A view's point (in points, from its bottom left, as AppKit gives it) as a client pixel
 /// from the top left, which is what the task's frames and the guest measure from.
 pub fn client_pixel(point: (f64, f64), view_height: f64, scale: f64) -> (f64, f64) {
-    let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
     (point.0 * scale, (view_height - point.1) * scale)
 }
 

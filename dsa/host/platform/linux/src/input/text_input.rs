@@ -199,8 +199,16 @@ mod tests {
     fn fr6_the_cursor_is_counted_in_utf16_code_units() {
         assert_eq!(utf16_cursor("\u{d55c}a", 3), 1);
         assert_eq!(utf16_cursor("\u{1f600}x", 4), 2, "an emoji is two units");
-        assert_eq!(utf16_cursor("abc", -1), 3, "a hidden cursor stands at the end");
-        assert_eq!(utf16_cursor("\u{d55c}", 1), 1, "inside a character means the end");
+        assert_eq!(
+            utf16_cursor("abc", -1),
+            3,
+            "a hidden cursor stands at the end"
+        );
+        assert_eq!(
+            utf16_cursor("\u{d55c}", 1),
+            1,
+            "inside a character means the end"
+        );
     }
 
     #[test]

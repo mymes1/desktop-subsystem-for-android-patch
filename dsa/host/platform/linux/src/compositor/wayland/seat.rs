@@ -216,7 +216,13 @@ impl State {
         let in_app = self.seat_state.pointer_in_app;
         let hit = if window.model.has_caption() && !in_app {
             let layout = window.model.caption_layout();
-            window_hit(&layout, window.model.shown, layout.resize_border, x as i32, y as i32)
+            window_hit(
+                &layout,
+                window.model.shown,
+                layout.resize_border,
+                x as i32,
+                y as i32,
+            )
         } else {
             WindowHit::Caption(CaptionHit::Client)
         };
@@ -509,7 +515,10 @@ fn arrow_pixels() -> Vec<u8> {
         for x in 0..width {
             let pixel: [u8; 4] = if !inside(x, y) {
                 [0, 0, 0, 0]
-            } else if !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1)
+            } else if !inside(x - 1, y)
+                || !inside(x + 1, y)
+                || !inside(x, y - 1)
+                || !inside(x, y + 1)
             {
                 [0xff, 0xff, 0xff, 0xff]
             } else {
@@ -685,7 +694,9 @@ impl Dispatch<WlKeyboard, ()> for State {
                     xkb.set_keymap(fd, size);
                 }
             }
-            wl_keyboard::Event::Enter { serial, surface, .. } => {
+            wl_keyboard::Event::Enter {
+                serial, surface, ..
+            } => {
                 state.serial = serial;
                 state.seat_state.keyboard_focus = task_of(&surface);
                 state.data_focus_changed();

@@ -204,7 +204,9 @@ mod tests {
 
     #[test]
     fn fr16_every_key_on_a_mac_keyboard_the_guest_knows_reaches_it() {
-        let mapped = (0u16..0x80).filter(|code| guest_key(*code).is_some()).count();
+        let mapped = (0u16..0x80)
+            .filter(|code| guest_key(*code).is_some())
+            .count();
         // 26 letters, 10 digits, 11 punctuation, 12 function keys, 17 keypad keys, editing
         // and navigation keys, modifiers and the volume keys.
         assert!(mapped >= 100, "only {mapped} keys are mapped");
@@ -258,6 +260,9 @@ mod tests {
     #[test]
     fn fr16_caps_lock_is_reported_and_num_lock_is_always_on() {
         assert_eq!(locks(0), meta::NUM_LOCK_ON);
-        assert_eq!(locks(FLAG_CAPS_LOCK), meta::NUM_LOCK_ON | meta::CAPS_LOCK_ON);
+        assert_eq!(
+            locks(FLAG_CAPS_LOCK),
+            meta::NUM_LOCK_ON | meta::CAPS_LOCK_ON
+        );
     }
 }

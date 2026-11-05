@@ -251,9 +251,7 @@ impl SystemSettingsSource for DesktopSettings {
         };
         let week = locale_values(&["first_weekday", "week-1stday"]);
         let first_day_of_week = match week.as_slice() {
-            [first_weekday, date, ..] => first_weekday
-                .parse()
-                .map_or(0, |fw| first_day(fw, date)),
+            [first_weekday, date, ..] => first_weekday.parse().map_or(0, |fw| first_day(fw, date)),
             _ => 0,
         };
         let dark_mode = self
