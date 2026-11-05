@@ -441,7 +441,9 @@ jobs:
             $seen = @{}
             Get-ShownItems $window | ForEach-Object { $seen[$_] = $true }
             for ($i = 0; $i -lt 12; $i++) {
-              $pane = Find-Item $window ($items | Where-Object { Test-InView $window (Find-Item $window $_) } | Select-Object -First 1)
+              # The lowest item in view: an item scrolled up out of the pane still lies inside the
+              # window, under the title bar, where the wheel does not reach the pane.
+              $pane = Find-Item $window ($items | Where-Object { Test-InView $window (Find-Item $window $_) } | Select-Object -Last 1)
               Wheel-Over $pane 3
               Get-ShownItems $window | ForEach-Object { $seen[$_] = $true }
             }
