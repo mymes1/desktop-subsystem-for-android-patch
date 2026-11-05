@@ -18,7 +18,14 @@ impl Fetch for CurlFetch {
             return FileFetch.fetch(url, out);
         }
         let mut child = Command::new("/usr/bin/curl")
-            .args(["--fail", "--silent", "--show-error", "--location", "--proto", "=https,http"])
+            .args([
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--location",
+                "--proto",
+                "=https,http",
+            ])
             .arg(url)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

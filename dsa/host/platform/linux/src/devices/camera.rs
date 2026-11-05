@@ -107,7 +107,10 @@ impl V4l2Cameras {
                 };
                 // A size comes in the first (most direct) format that has it, unless a later
                 // one delivers it faster, as Motion JPEG often does at large sizes.
-                match by_size.iter_mut().position(|(w, h, _)| *w == width && *h == height) {
+                match by_size
+                    .iter_mut()
+                    .position(|(w, h, _)| *w == width && *h == height)
+                {
                     Some(at) => {
                         let known = modes
                             .iter_mut()
@@ -173,9 +176,15 @@ fn node_number(path: &Path) -> u32 {
 /// user, as a laptop's does; any other is external.
 pub fn facing_from_name(card: &str, bus_info: &str) -> Facing {
     let card = card.to_ascii_lowercase();
-    let built_in = ["integrated", "built-in", "internal", "facetime", "user facing"]
-        .iter()
-        .any(|word| card.contains(word));
+    let built_in = [
+        "integrated",
+        "built-in",
+        "internal",
+        "facetime",
+        "user facing",
+    ]
+    .iter()
+    .any(|word| card.contains(word));
     // Cameras on a laptop's own image processor (IPU, MIPI) are not on a USB port.
     let on_board = !bus_info.is_empty() && !bus_info.starts_with("usb");
     if built_in || on_board {

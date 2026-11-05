@@ -340,11 +340,18 @@ mod tests {
 
         let mut notes = app("com.example.notes", "Notes");
         notes.icon_png = crate::shell::icns::tests::png_header(128);
-        let report = sync(&folder, &[notes, app("com.example.mail", "Mail")], &window_host).unwrap();
+        let report = sync(
+            &folder,
+            &[notes, app("com.example.mail", "Mail")],
+            &window_host,
+        )
+        .unwrap();
         assert_eq!(report.written.len(), 2);
         let executable = folder.join("Notes.app/Contents/MacOS").join(EXECUTABLE);
         assert_eq!(fs::read(&executable).unwrap(), b"window host");
-        assert!(folder.join("Notes.app/Contents/Resources/icon.icns").exists());
+        assert!(folder
+            .join("Notes.app/Contents/Resources/icon.icns")
+            .exists());
         assert_eq!(
             stub_package(&folder.join("Mail.app")),
             Some("com.example.mail".into())

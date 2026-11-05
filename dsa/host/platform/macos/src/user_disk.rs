@@ -126,8 +126,8 @@ pub fn bring_disk_to(disk: &Path, template: &Path, version: &str) -> Result<(), 
     }
     let mut source = open(template, false)?;
     let mut target = open(disk, true)?;
-    let have = gpt::partitions(&mut source)
-        .map_err(|e| format!("reading {}: {e}", template.display()))?;
+    let have =
+        gpt::partitions(&mut source).map_err(|e| format!("reading {}: {e}", template.display()))?;
     let names: Vec<&str> = ANDROID_PARTITIONS
         .iter()
         .copied()
@@ -218,10 +218,7 @@ pub fn raw_disk(image_disk: &Path, cache: &Path) -> Result<PathBuf, String> {
     let partial = raw.with_extension("img.new");
     crate::vhdx::convert_to_raw(image_disk, &partial).map_err(|e| {
         let _ = std::fs::remove_file(&partial);
-        format!(
-            "converting {} to a raw disk: {e}",
-            image_disk.display()
-        )
+        format!("converting {} to a raw disk: {e}", image_disk.display())
     })?;
     std::fs::rename(&partial, &raw).map_err(|e| format!("placing {}: {e}", raw.display()))?;
     Ok(raw)

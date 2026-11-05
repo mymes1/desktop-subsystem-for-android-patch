@@ -170,12 +170,11 @@ impl Renderer {
             let process_pipe = *library
                 .get(b"dsa_gfx_process_pipe\0")
                 .map_err(|error| format!("the renderer has no dsa_gfx_process_pipe: {error}"))?;
-            let set_pixels: unsafe extern "C" fn(Option<PixelsFn>, *mut c_void) -> c_int =
-                *library
-                    .get(b"dsa_gfx_set_display_pixels_callback\0")
-                    .map_err(|error| {
-                        format!("the renderer cannot hand frames to this host: {error}")
-                    })?;
+            let set_pixels: unsafe extern "C" fn(Option<PixelsFn>, *mut c_void) -> c_int = *library
+                .get(b"dsa_gfx_set_display_pixels_callback\0")
+                .map_err(|error| {
+                    format!("the renderer cannot hand frames to this host: {error}")
+                })?;
             let code = init(1280, 720);
             if code != 0 {
                 return Err(format!("the renderer did not start (code {code})"));
@@ -283,13 +282,7 @@ unsafe extern "C" fn write_stream(user: *mut c_void, buf: *const c_void, count: 
     let mut written = 0usize;
     while written < count {
         // SAFETY: writes from within `buf`'s `count` bytes.
-        let n = unsafe {
-            libc::write(
-                fd,
-                buf.cast::<u8>().add(written).cast(),
-                count - written,
-            )
-        };
+        let n = unsafe { libc::write(fd, buf.cast::<u8>().add(written).cast(), count - written) };
         if n <= 0 {
             if n < 0 && io::Error::last_os_error().kind() == io::ErrorKind::Interrupted {
                 continue;
@@ -333,7 +326,8 @@ impl Listener {
             Listen::Vsock => {
                 // SAFETY: a new socket, owned from here on.
                 let fd = unsafe {
-                    let raw = libc::socket(libc::AF_VSOCK, libc::SOCK_STREAM | libc::SOCK_CLOEXEC, 0);
+                    let raw =
+                        libc::socket(libc::AF_VSOCK, libc::SOCK_STREAM | libc::SOCK_CLOEXEC, 0);
                     if raw < 0 {
                         return Err(io::Error::last_os_error());
                     }

@@ -77,7 +77,11 @@ impl HostMemory for ProcHostMemory {
             return found;
         };
         for entry in entries.flatten() {
-            let Some(pid) = entry.file_name().to_str().and_then(|n| n.parse::<u32>().ok()) else {
+            let Some(pid) = entry
+                .file_name()
+                .to_str()
+                .and_then(|n| n.parse::<u32>().ok())
+            else {
                 continue;
             };
             let Ok(name) = std::fs::read_to_string(entry.path().join("comm")) else {

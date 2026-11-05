@@ -238,7 +238,11 @@ mod tests {
         assert_eq!(guest_key(evdev_key::RIGHTCTRL), Some(keycode::CTRL_RIGHT));
         assert_eq!(guest_key(evdev_key::RIGHTSHIFT), Some(keycode::SHIFT_RIGHT));
         assert_eq!(guest_key(evdev_key::KP7), Some(keycode::NUMPAD_0 + 7));
-        assert_eq!(guest_key(0x2ff), None, "an unknown key stays with the desktop");
+        assert_eq!(
+            guest_key(0x2ff),
+            None,
+            "an unknown key stays with the desktop"
+        );
     }
 
     #[test]

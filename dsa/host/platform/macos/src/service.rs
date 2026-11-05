@@ -19,14 +19,18 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use dsa_host_core::device_identity::{DeviceIdentity, DeviceIdentityStore, FileDeviceIdentities, ImageBuild};
+use dsa_host_core::device_identity::{
+    DeviceIdentity, DeviceIdentityStore, FileDeviceIdentities, ImageBuild,
+};
 use dsa_host_core::diagnostics::HostFile;
 use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::host_api::{HostApiService, PerUser, ServiceFacts, UserAndroid};
 use dsa_host_core::session::Session;
 use dsa_host_core::settings::{FileSettings, SettingsStore};
-use dsa_host_core::update::service::{check_reporting, next_image_check, UpdateNotices, UpdatingAndroid};
+use dsa_host_core::update::service::{
+    check_reporting, next_image_check, UpdateNotices, UpdatingAndroid,
+};
 use dsa_host_core::update::store::{ImageStore, Recovery};
 use dsa_host_core::window_manager::{WindowManagerHost, WindowManagerKeeper};
 use dsa_host_unix::socket::UnixLocalListener;
@@ -94,16 +98,22 @@ impl WindowManagerHost for ProgramWindowManager {
     }
 
     fn start(&mut self) -> Result<(), String> {
-        let child = Command::new(&self.program)
-            .spawn()
-            .map_err(|e| format!("the window manager {} could not start: {e}", self.program.display()))?;
+        let child = Command::new(&self.program).spawn().map_err(|e| {
+            format!(
+                "the window manager {} could not start: {e}",
+                self.program.display()
+            )
+        })?;
         self.child = Some(child);
         Ok(())
     }
 }
 
 /// The image the next boot uses: its folder and version.
-fn current_image(config: &MacHostConfig, store: Option<&ImageStore>) -> Result<(PathBuf, String), String> {
+fn current_image(
+    config: &MacHostConfig,
+    store: Option<&ImageStore>,
+) -> Result<(PathBuf, String), String> {
     if let Some(store) = store {
         let current = store.state().map_err(|e| e.to_string())?.current;
         return Ok((store.image_dir(&current.version), current.version));
@@ -275,11 +285,13 @@ fn pump(a: UnixStream, b: UnixStream) {
         let (Ok(mut from), Ok(mut to)) = (from, to) else {
             continue;
         };
-        let _ = thread::Builder::new().name("dsa-relay".into()).spawn(move || {
-            let _ = std::io::copy(&mut from, &mut to);
-            let _ = to.shutdown(std::net::Shutdown::Both);
-            let _ = from.shutdown(std::net::Shutdown::Both);
-        });
+        let _ = thread::Builder::new()
+            .name("dsa-relay".into())
+            .spawn(move || {
+                let _ = std::io::copy(&mut from, &mut to);
+                let _ = to.shutdown(std::net::Shutdown::Both);
+                let _ = from.shutdown(std::net::Shutdown::Both);
+            });
     }
 }
 
@@ -362,7 +374,12 @@ fn check_for_updates(
             Ok(None) => {}
             Err(why) => eprintln!("{build}: checking for updates: {why}"),
         }
-        next = Instant::now() + if no_image() { FIRST_IMAGE_RETRY } else { interval };
+        next = Instant::now()
+            + if no_image() {
+                FIRST_IMAGE_RETRY
+            } else {
+                interval
+            };
     }
 }
 
@@ -429,14 +446,21 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
     }
     let session_config = config.session_config();
     let handshake = ControlHandshake::new(&shared.build, session_config.connect_timeout);
-    let session = Session::new(launcher, Box::new(control) as Box<dyn Listener>, handshake, session_config);
+    let session = Session::new(
+        launcher,
+        Box::new(control) as Box<dyn Listener>,
+        handshake,
+        session_config,
+    );
     session.serve_log_port(Box::new(log), &shared.build);
     session.serve_file_shares(Box::new(share), Arc::new(user_folders()));
     let dial = |port: u32| {
         let slot = slot.clone();
         Arc::new(move |_vm_id: &str| {
-            slot.connect(port, Duration::from_secs(5))
-                .map(|fd| Box::new(VsockStream::from_fd(fd)) as Box<dyn dsa_host_core::adb_bridge::BridgeStream>)
+            slot.connect(port, Duration::from_secs(5)).map(|fd| {
+                Box::new(VsockStream::from_fd(fd))
+                    as Box<dyn dsa_host_core::adb_bridge::BridgeStream>
+            })
         })
     };
     session.set_adb_connect(dial(dsa_host_core::adb_bridge::GUEST_ADB_PORT));
@@ -459,15 +483,24 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
 /// The user's own folders, shared with their Android. The agent runs as the user, so the
 /// file system checks each access against the user's own rights.
 fn user_folders() -> dsa_host_core::file_share::PlainShareHost {
-    let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
-    let folders = ["Documents", "Downloads", "Pictures", "Music", "Movies", "Desktop"]
-        .iter()
-        .map(|name| {
-            // Android's names for them: macOS keeps videos in Movies.
-            let shared = if *name == "Movies" { "Videos" } else { name };
-            (shared.to_string(), home.join(name))
-        })
-        .collect();
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default();
+    let folders = [
+        "Documents",
+        "Downloads",
+        "Pictures",
+        "Music",
+        "Movies",
+        "Desktop",
+    ]
+    .iter()
+    .map(|name| {
+        // Android's names for them: macOS keeps videos in Movies.
+        let shared = if *name == "Movies" { "Videos" } else { name };
+        (shared.to_string(), home.join(name))
+    })
+    .collect();
     dsa_host_core::file_share::PlainShareHost {
         folders,
         location: "Mac".into(),
@@ -476,7 +509,11 @@ fn user_folders() -> dsa_host_core::file_share::PlainShareHost {
 
 /// Applies the user's saved choices to their Android, as the Windows service does when it
 /// creates one.
-fn apply_settings(android: &Arc<dyn UserAndroid>, settings: Option<dsa_host_core::settings::Settings>, build: &str) {
+fn apply_settings(
+    android: &Arc<dyn UserAndroid>,
+    settings: Option<dsa_host_core::settings::Settings>,
+    build: &str,
+) {
     android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
     let defaults = dsa_host_core::settings::Settings::default();
     let chosen = settings.as_ref().unwrap_or(&defaults);
@@ -491,7 +528,9 @@ fn apply_settings(android: &Arc<dyn UserAndroid>, settings: Option<dsa_host_core
         settings.as_ref().is_none_or(|s| s.file_sharing),
         settings
             .as_ref()
-            .map_or_else(dsa_host_core::file_share::all_folders, |s| s.shared_folders.clone()),
+            .map_or_else(dsa_host_core::file_share::all_folders, |s| {
+                s.shared_folders.clone()
+            }),
     );
     if let Some(settings) = settings.as_ref().filter(|s| s.developer_mode) {
         if let Err(why) = android.developer_mode(true, settings.adb_port) {
@@ -502,9 +541,19 @@ fn apply_settings(android: &Arc<dyn UserAndroid>, settings: Option<dsa_host_core
 
 /// Serves the local API for the user whose home is `home` until `stop` is set, then stops
 /// their Android.
-pub fn serve(config: MacHostConfig, home: &Path, build: &str, stop: Arc<AtomicBool>) -> Result<(), String> {
+pub fn serve(
+    config: MacHostConfig,
+    home: &Path,
+    build: &str,
+    stop: Arc<AtomicBool>,
+) -> Result<(), String> {
     let user = config.user(home);
-    for dir in [&user.root, &user.logs(), &user.boot_dir(), &user.root.join("vsock")] {
+    for dir in [
+        &user.root,
+        &user.logs(),
+        &user.boot_dir(),
+        &user.root.join("vsock"),
+    ] {
         std::fs::create_dir_all(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
     }
     // The user's folder holds their Android and the socket: only they may enter it.

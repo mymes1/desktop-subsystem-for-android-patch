@@ -109,7 +109,9 @@ impl X11Pip {
         {
             let connection = connection.clone();
             let by_window = by_window.clone();
-            std::thread::spawn(move || read_events(&connection, &by_window, delete_window, &events));
+            std::thread::spawn(move || {
+                read_events(&connection, &by_window, delete_window, &events)
+            });
         }
         Some(X11Pip {
             connection,
@@ -193,7 +195,10 @@ impl X11Pip {
         }
         let _ = c.map_window(window);
         // Some window managers place a new window themselves; it goes to the corner again.
-        let _ = c.configure_window(window, &ConfigureWindowAux::new().x(i32::from(x)).y(i32::from(y)));
+        let _ = c.configure_window(
+            window,
+            &ConfigureWindowAux::new().x(i32::from(x)).y(i32::from(y)),
+        );
         // Ask the window manager to keep it above, for one that reads the state only then.
         let _ = c.send_event(
             false,
@@ -299,9 +304,10 @@ impl X11Pip {
         let Some(pip) = self.windows.get(&task_id) else {
             return;
         };
-        let (Some((_, source)), Some(_)) =
-            (self.images.get(&(display_id, frame.slot)), self.window_format)
-        else {
+        let (Some((_, source)), Some(_)) = (
+            self.images.get(&(display_id, frame.slot)),
+            self.window_format,
+        ) else {
             return;
         };
         self.fit(pip, (frame.width, frame.height));
@@ -329,7 +335,12 @@ fn read_events(
     delete_window: u32,
     events: &Events,
 ) {
-    let task_of = |window: u32| by_window.lock().ok().and_then(|map| map.get(&window).copied());
+    let task_of = |window: u32| {
+        by_window
+            .lock()
+            .ok()
+            .and_then(|map| map.get(&window).copied())
+    };
     let button = |detail: u8| match detail {
         1 => Some(MouseButton::Left),
         2 => Some(MouseButton::Middle),

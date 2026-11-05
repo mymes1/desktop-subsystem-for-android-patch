@@ -25,11 +25,19 @@ use std::time::{Duration, Instant};
 use dsa_host_core::compositor::window_hosts::FromHost;
 use dsa_host_core::input::InputEvent;
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
+use wayland_client::protocol::wl_subcompositor::WlSubcompositor;
 use wayland_client::protocol::{
     wl_buffer::{self, WlBuffer},
-    wl_compositor::WlCompositor, wl_data_device::WlDataDevice,
-    wl_data_device_manager::WlDataDeviceManager, wl_keyboard::WlKeyboard, wl_output,
-    wl_pointer::WlPointer, wl_registry, wl_seat::WlSeat, wl_shm::WlShm, wl_surface::WlSurface,
+    wl_compositor::WlCompositor,
+    wl_data_device::WlDataDevice,
+    wl_data_device_manager::WlDataDeviceManager,
+    wl_keyboard::WlKeyboard,
+    wl_output,
+    wl_pointer::WlPointer,
+    wl_registry,
+    wl_seat::WlSeat,
+    wl_shm::WlShm,
+    wl_surface::WlSurface,
     wl_touch::WlTouch,
 };
 use wayland_client::{delegate_noop, Connection, Dispatch, EventQueue, Proxy, QueueHandle};
@@ -37,19 +45,18 @@ use wayland_protocols::wp::cursor_shape::v1::client::{
     wp_cursor_shape_device_v1::WpCursorShapeDeviceV1,
     wp_cursor_shape_manager_v1::WpCursorShapeManagerV1,
 };
-use wayland_client::protocol::wl_subcompositor::WlSubcompositor;
 use wayland_protocols::wp::linux_dmabuf::zv1::client::zwp_linux_dmabuf_v1::ZwpLinuxDmabufV1;
 use wayland_protocols::wp::tablet::zv2::client::zwp_tablet_manager_v2::ZwpTabletManagerV2;
-use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
-use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1;
 use wayland_protocols::wp::text_input::zv3::client::{
     zwp_text_input_manager_v3::ZwpTextInputManagerV3, zwp_text_input_v3::ZwpTextInputV3,
 };
+use wayland_protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
 use wayland_protocols::xdg::decoration::zv1::client::{
     zxdg_decoration_manager_v1::ZxdgDecorationManagerV1,
     zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1,
 };
 use wayland_protocols::xdg::shell::client::xdg_wm_base::{self, XdgWmBase};
+use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1;
 
 use crate::input::xkb::Keyboard;
 
@@ -158,7 +165,9 @@ impl Desktop {
         let compositor: WlCompositor = globals
             .bind(&qh, 4..=6, ())
             .map_err(|_| missing("wl_compositor"))?;
-        let shm: WlShm = globals.bind(&qh, 1..=1, ()).map_err(|_| missing("wl_shm"))?;
+        let shm: WlShm = globals
+            .bind(&qh, 1..=1, ())
+            .map_err(|_| missing("wl_shm"))?;
         let wm_base: XdgWmBase = globals
             .bind(&qh, 1..=6, ())
             .map_err(|_| missing("xdg_wm_base (xdg-shell)"))?;

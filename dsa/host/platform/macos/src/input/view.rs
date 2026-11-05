@@ -94,10 +94,8 @@ unsafe fn view_scale(view: &AnyObject) -> f64 {
 unsafe fn geometry(view: &AnyObject) -> WindowGeometry {
     let bounds: CGRect = msg_send![view, bounds];
     let scale = view_scale(view);
-    let client = crate::compositor::sizing::task_pixels(
-        (bounds.size.width, bounds.size.height),
-        scale,
-    );
+    let client =
+        crate::compositor::sizing::task_pixels((bounds.size.width, bounds.size.height), scale);
     WindowGeometry {
         client,
         task: client,
@@ -267,7 +265,13 @@ unsafe extern "C-unwind" fn key_down(this: &AnyObject, _: Sel, event: *mut AnyOb
 unsafe extern "C-unwind" fn key_up(this: &AnyObject, _: Sel, event: *mut AnyObject) {
     let code: u16 = msg_send![event, keyCode];
     if let Some(key_code) = guest_key(code) {
-        key(this, key_code, false, modifier_flags(event), event_time_ms(event));
+        key(
+            this,
+            key_code,
+            false,
+            modifier_flags(event),
+            event_time_ms(event),
+        );
     }
 }
 
@@ -311,7 +315,11 @@ unsafe extern "C-unwind" fn yes(_this: &AnyObject, _: Sel) -> Bool {
     Bool::YES
 }
 
-unsafe extern "C-unwind" fn accepts_first_mouse(_this: &AnyObject, _: Sel, _event: *mut AnyObject) -> Bool {
+unsafe extern "C-unwind" fn accepts_first_mouse(
+    _this: &AnyObject,
+    _: Sel,
+    _event: *mut AnyObject,
+) -> Bool {
     Bool::YES
 }
 
@@ -332,7 +340,8 @@ unsafe extern "C-unwind" fn marked_range(this: &AnyObject, _: Sel) -> NSRange {
 }
 
 unsafe extern "C-unwind" fn selected_range(this: &AnyObject, _: Sel) -> NSRange {
-    let (location, length) = with_state(this, |state| state.text.selected_range()).unwrap_or((0, 0));
+    let (location, length) =
+        with_state(this, |state| state.text.selected_range()).unwrap_or((0, 0));
     NSRange { location, length }
 }
 
@@ -472,7 +481,11 @@ unsafe fn dropped_paths(info: *mut AnyObject) -> Vec<PathBuf> {
         .collect()
 }
 
-unsafe extern "C-unwind" fn dragging_entered(_this: &AnyObject, _: Sel, info: *mut AnyObject) -> usize {
+unsafe extern "C-unwind" fn dragging_entered(
+    _this: &AnyObject,
+    _: Sel,
+    info: *mut AnyObject,
+) -> usize {
     if dropped_paths(info).is_empty() {
         DRAG_NONE
     } else {

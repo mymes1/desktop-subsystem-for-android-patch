@@ -72,9 +72,16 @@ pub fn find_program(program: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH").unwrap_or_default();
     std::env::split_paths(&path)
         .chain(
-            ["/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/libexec", "/bin", "/sbin"]
-                .into_iter()
-                .map(PathBuf::from),
+            [
+                "/usr/bin",
+                "/usr/sbin",
+                "/usr/local/bin",
+                "/usr/libexec",
+                "/bin",
+                "/sbin",
+            ]
+            .into_iter()
+            .map(PathBuf::from),
         )
         .map(|dir| dir.join(program))
         .find(|candidate| is_executable(candidate))
@@ -129,7 +136,7 @@ pub fn host_status(mode: &str, problem: Option<String>) -> NetworkStatus {
 }
 
 #[cfg(target_os = "linux")]
-pub use running::{VmNetwork, NetworkChoice};
+pub use running::{NetworkChoice, VmNetwork};
 
 #[cfg(target_os = "linux")]
 mod running {

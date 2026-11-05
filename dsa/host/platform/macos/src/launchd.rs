@@ -122,7 +122,12 @@ pub fn launchctl(arguments: &[String]) -> Result<(), String> {
 
 /// Writes the agent's property list for the user whose home is `home` and loads it.
 #[cfg(target_os = "macos")]
-pub fn install(home: &Path, uid: u32, program: &Path, config: Option<&Path>) -> Result<PathBuf, String> {
+pub fn install(
+    home: &Path,
+    uid: u32,
+    program: &Path,
+    config: Option<&Path>,
+) -> Result<PathBuf, String> {
     let path = plist_path(home);
     let log = crate::host_config::user_root_in(home)
         .join("logs")

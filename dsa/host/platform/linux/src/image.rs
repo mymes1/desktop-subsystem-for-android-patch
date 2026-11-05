@@ -36,7 +36,11 @@ pub fn disk_file(dir: &Path, stem: &str) -> Option<PathBuf> {
 
 /// What to boot from the image folder `dir`, with `extra_cmdline` after the image's own
 /// kernel command line, and `kernel` when the image carries none of its own.
-pub fn image_files(dir: &Path, kernel: Option<&Path>, extra_cmdline: &str) -> Result<ImageFiles, String> {
+pub fn image_files(
+    dir: &Path,
+    kernel: Option<&Path>,
+    extra_cmdline: &str,
+) -> Result<ImageFiles, String> {
     let kernel = ["bzImage", "Image"]
         .iter()
         .map(|name| dir.join(name))
@@ -50,7 +54,9 @@ pub fn image_files(dir: &Path, kernel: Option<&Path>, extra_cmdline: &str) -> Re
         .as_ref()
         .and_then(|m| m["kernel_cmdline"].as_str())
         .unwrap_or_default();
-    let kernel_cmdline = format!("{image_cmdline} {extra_cmdline}").trim().to_string();
+    let kernel_cmdline = format!("{image_cmdline} {extra_cmdline}")
+        .trim()
+        .to_string();
     let initrd = Some(dir.join("initrd.img")).filter(|p| p.exists());
     let (system_image, disk_template) = match disk_file(dir, "system") {
         Some(system) => (Some(system), disk_file(dir, "data")),
@@ -149,7 +155,14 @@ mod making {
             }
             None => qemu_img(
                 account,
-                &["create", "-q", "-f", "qcow2", &target, &format!("{size_gb}G")],
+                &[
+                    "create",
+                    "-q",
+                    "-f",
+                    "qcow2",
+                    &target,
+                    &format!("{size_gb}G"),
+                ],
             ),
         }
     }

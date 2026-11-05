@@ -142,9 +142,8 @@ fn watch_tasks(to_main: ToMain) {
     std::thread::spawn(move || {
         let mut warned = false;
         loop {
-            let watch = connect().and_then(|client| {
-                client.watch_tasks().map_err(|error| error.to_string())
-            });
+            let watch = connect()
+                .and_then(|client| client.watch_tasks().map_err(|error| error.to_string()));
             let mut stream = match watch {
                 Ok(stream) => stream,
                 Err(why) => {
@@ -206,9 +205,8 @@ fn serve_requests(requests: Receiver<Request>) {
         let mut client: Option<HostApiClient> = None;
         for request in requests {
             if let Request::OpenFile(file) = &request {
-                let opened = connect().and_then(|client| {
-                    client.open_file(file).map_err(|error| error.to_string())
-                });
+                let opened = connect()
+                    .and_then(|client| client.open_file(file).map_err(|error| error.to_string()));
                 if let Err(why) = opened {
                     log(&format!("{} did not open in Android: {why}", file.name));
                 }
@@ -314,9 +312,11 @@ fn show_notifications(requests: Sender<Request>, icons: PathBuf) {
                 continue;
             }
         };
-        let mut stream = match connect()
-            .and_then(|client| client.watch_notifications().map_err(|error| error.to_string()))
-        {
+        let mut stream = match connect().and_then(|client| {
+            client
+                .watch_notifications()
+                .map_err(|error| error.to_string())
+        }) {
             Ok(stream) => stream,
             Err(_) => {
                 std::thread::sleep(RETRY);
@@ -349,7 +349,10 @@ fn show_notifications(requests: Sender<Request>, icons: PathBuf) {
                 Err(_) => break,
             }
         }
-        let ids = shown.lock().map(|mut shown| shown.clear()).unwrap_or_default();
+        let ids = shown
+            .lock()
+            .map(|mut shown| shown.clear())
+            .unwrap_or_default();
         for id in ids {
             notifier.close(id);
         }
@@ -535,9 +538,7 @@ impl Main {
                     let _ = self.clipboard.send(text);
                 }
             }
-            Event::Dropped {
-                package, paths, ..
-            } => {
+            Event::Dropped { package, paths, .. } => {
                 for path in paths {
                     match FileTransfer::read(&path, FileAction::Send) {
                         Ok(mut file) => {
@@ -598,7 +599,12 @@ impl Main {
         let images = self
             .images
             .as_ref()
-            .and_then(|images| images.lock().ok().map(|mut images| std::mem::take(&mut *images)))
+            .and_then(|images| {
+                images
+                    .lock()
+                    .ok()
+                    .map(|mut images| std::mem::take(&mut *images))
+            })
             .unwrap_or_default();
         for (image, fd) in images {
             self.desktop.state.add_gpu_image(image, fd);
@@ -703,7 +709,9 @@ pub fn one_shot(action: &str, package: &str) -> Result<(), String> {
             client
                 .ensure_running(Duration::from_secs(120), Duration::from_millis(500), |_| {})
                 .map_err(|error| error.to_string())?;
-            client.launch_app(package).map_err(|error| error.to_string())
+            client
+                .launch_app(package)
+                .map_err(|error| error.to_string())
         }
         "--app-settings" => client
             .open_app_settings(Some(package))

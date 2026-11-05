@@ -290,7 +290,11 @@ mod tests {
             ("AC", vec![("type", "Mains"), ("online", "0")]),
             (
                 "BAT0",
-                vec![("type", "Battery"), ("capacity", "57"), ("status", "Discharging")],
+                vec![
+                    ("type", "Battery"),
+                    ("capacity", "57"),
+                    ("status", "Discharging"),
+                ],
             ),
         ] {
             fs::create_dir_all(root.join(dir)).unwrap();

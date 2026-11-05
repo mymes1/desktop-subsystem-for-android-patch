@@ -219,8 +219,14 @@ mod tests {
         assert_eq!(config.log_port, 5001);
         assert!(config.grow_memory && config.network);
         assert_eq!(config.page_reporting_order, 9);
-        assert_eq!(config.settings_dir(), PathBuf::from("/var/lib/dsa/settings"));
-        assert_eq!(config.session_config().stop_timeout, Duration::from_secs(30));
+        assert_eq!(
+            config.settings_dir(),
+            PathBuf::from("/var/lib/dsa/settings")
+        );
+        assert_eq!(
+            config.session_config().stop_timeout,
+            Duration::from_secs(30)
+        );
     }
 
     #[test]
@@ -257,8 +263,14 @@ mod tests {
             }"#,
         )
         .unwrap();
-        assert_eq!(config.image_dir, Some(PathBuf::from("/usr/lib/dsa/vm/image")));
-        assert_eq!(config.kernel, Some(PathBuf::from("/usr/lib/dsa/vm/bzImage")));
+        assert_eq!(
+            config.image_dir,
+            Some(PathBuf::from("/usr/lib/dsa/vm/image"))
+        );
+        assert_eq!(
+            config.kernel,
+            Some(PathBuf::from("/usr/lib/dsa/vm/bzImage"))
+        );
         assert_eq!(config.vm_name, "dsa-android");
         assert!(config.first_image.is_none());
     }

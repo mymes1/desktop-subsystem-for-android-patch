@@ -160,7 +160,9 @@ pub fn layout(file: &mut (impl Read + Seek)) -> io::Result<Layout> {
     let parameters = item(FILE_PARAMETERS)?;
     let block_size = u64::from(u32_at(parameters, 0));
     if u32_at(parameters, 4) & 2 != 0 {
-        return Err(invalid("the VHDX is a differencing disk, which needs its parent"));
+        return Err(invalid(
+            "the VHDX is a differencing disk, which needs its parent",
+        ));
     }
     let virtual_size = u64_at(item(VIRTUAL_DISK_SIZE)?, 0);
     let logical_sector_size = u64::from(u32_at(item(LOGICAL_SECTOR_SIZE)?, 0));
@@ -183,7 +185,9 @@ pub fn layout(file: &mut (impl Read + Seek)) -> io::Result<Layout> {
             .ok_or_else(|| invalid("the VHDX allocation table is too short"))?;
         let state = entry & 7;
         if state == PAYLOAD_PARTIALLY_PRESENT {
-            return Err(invalid("the VHDX has a block that is partly in a parent disk"));
+            return Err(invalid(
+                "the VHDX has a block that is partly in a parent disk",
+            ));
         }
         blocks.push((state == PAYLOAD_FULLY_PRESENT).then_some((entry >> 20) * MIB));
     }

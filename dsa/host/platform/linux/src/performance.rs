@@ -31,7 +31,11 @@ fn renice(pid: u32, nice: i32) -> Result<(), String> {
     let tasks = std::fs::read_dir(format!("/proc/{pid}/task"))
         .map_err(|e| format!("reading the threads of the VM's process {pid}: {e}"))?;
     for task in tasks.flatten() {
-        let Some(tid) = task.file_name().to_str().and_then(|t| t.parse::<u32>().ok()) else {
+        let Some(tid) = task
+            .file_name()
+            .to_str()
+            .and_then(|t| t.parse::<u32>().ok())
+        else {
             continue;
         };
         // SAFETY: setpriority on a thread ID; a thread that has ended is an error, ignored.

@@ -10,7 +10,11 @@ pub const MIN_CONTENT_POINTS: (f64, f64) = (240.0, 160.0);
 /// The task's size in guest pixels for a window content of `points` on a display of backing
 /// scale `scale`. Never 0 in either direction.
 pub fn task_pixels(points: (f64, f64), scale: f64) -> (u32, u32) {
-    let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
     let axis = |points: f64| -> u32 {
         let pixels = (points.max(0.0) * scale).round();
         if pixels >= f64::from(u32::MAX) {
@@ -24,7 +28,11 @@ pub fn task_pixels(points: (f64, f64), scale: f64) -> (u32, u32) {
 
 /// The window content in points that shows a task of `pixels` one to one at `scale`.
 pub fn window_points(pixels: (u32, u32), scale: f64) -> (f64, f64) {
-    let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+    let scale = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
     (f64::from(pixels.0) / scale, f64::from(pixels.1) / scale)
 }
 

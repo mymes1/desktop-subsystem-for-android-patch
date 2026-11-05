@@ -22,7 +22,11 @@ extern "C" {}
 
 extern "C" {
     static _dispatch_main_q: c_void;
-    fn dispatch_async_f(queue: *const c_void, context: *mut c_void, work: extern "C" fn(*mut c_void));
+    fn dispatch_async_f(
+        queue: *const c_void,
+        context: *mut c_void,
+        work: extern "C" fn(*mut c_void),
+    );
     fn pthread_main_np() -> i32;
 }
 

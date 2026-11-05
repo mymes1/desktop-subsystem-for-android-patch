@@ -62,7 +62,10 @@ pub fn access(status: i32) -> Option<(Access, &'static str)> {
              Location Services",
         )),
         3 | 4 => Some((Access::Allowed, "DSA may use the location")),
-        _ => Some((Access::Unavailable, "location services report an unknown state")),
+        _ => Some((
+            Access::Unavailable,
+            "location services report an unknown state",
+        )),
     }
 }
 
@@ -123,7 +126,10 @@ mod provider {
         if responds {
             msg_send![manager, authorizationStatus]
         } else {
-            msg_send![class(c"CLLocationManager").expect("checked"), authorizationStatus]
+            msg_send![
+                class(c"CLLocationManager").expect("checked"),
+                authorizationStatus
+            ]
         }
     }
 
@@ -248,8 +254,8 @@ mod provider {
             events: Sender<LocationEvent>,
         ) -> Result<(), (Access, String)> {
             let enabled: bool = unsafe {
-                let class = class(c"CLLocationManager")
-                    .map_err(|why| (Access::Unavailable, why))?;
+                let class =
+                    class(c"CLLocationManager").map_err(|why| (Access::Unavailable, why))?;
                 msg_send![class, locationServicesEnabled]
             };
             if !enabled {
@@ -259,8 +265,9 @@ mod provider {
                 ));
             }
             delegate_class().map_err(|why| (Access::Unavailable, why))?;
-            *EVENTS.lock().map_err(|_| (Access::Unavailable, "lock failed".into()))? =
-                Some(events);
+            *EVENTS
+                .lock()
+                .map_err(|_| (Access::Unavailable, "lock failed".into()))? = Some(events);
             // A fix about as often as asked: move far enough at walking pace in the interval.
             let distance = (interval.as_secs_f64() * 1.5).max(1.0);
             on_main(move || unsafe {
@@ -299,8 +306,7 @@ mod provider {
                 if let Some(running) = running {
                     unsafe {
                         let _: () = msg_send![&*running.manager, stopUpdatingLocation];
-                        let _: () =
-                            msg_send![&*running.manager, setDelegate: std::ptr::null::<AnyObject>()];
+                        let _: () = msg_send![&*running.manager, setDelegate: std::ptr::null::<AnyObject>()];
                     }
                 }
             });

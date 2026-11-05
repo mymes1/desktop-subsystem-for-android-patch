@@ -114,7 +114,10 @@ pub fn entry(app: &AppInfo, program: &Path, icon: Option<&Path>) -> String {
     ));
     text.push_str("\n[Desktop Action uninstall]\n");
     text.push_str("Name=Uninstall\n");
-    text.push_str(&format!("Exec={}\n", exec(program, &["--uninstall", package])));
+    text.push_str(&format!(
+        "Exec={}\n",
+        exec(program, &["--uninstall", package])
+    ));
     text
 }
 
@@ -229,7 +232,9 @@ mod tests {
         let text = entry(
             &app("com.example.notes", "Notes"),
             Path::new("/usr/lib/dsa/dsa-compositor"),
-            Some(Path::new("/home/me/.local/share/dsa/icons/com.example.notes.png")),
+            Some(Path::new(
+                "/home/me/.local/share/dsa/icons/com.example.notes.png",
+            )),
         );
         assert!(text.starts_with("[Desktop Entry]\n"));
         assert!(text.contains("\nName=Notes\n"));

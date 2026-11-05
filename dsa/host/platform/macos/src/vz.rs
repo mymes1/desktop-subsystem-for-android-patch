@@ -30,15 +30,15 @@ use objc2_foundation::{NSArray, NSError, NSString, NSURL};
 use objc2_virtualization::{
     VZBootLoader, VZDiskImageStorageDeviceAttachment, VZEntropyDeviceConfiguration,
     VZFileSerialPortAttachment, VZLinuxBootLoader, VZMACAddress,
-    VZMemoryBalloonDeviceConfiguration, VZNATNetworkDeviceAttachment,
-    VZNetworkDeviceAttachment, VZNetworkDeviceConfiguration, VZSerialPortAttachment,
-    VZSerialPortConfiguration, VZSocketDeviceConfiguration, VZStorageDeviceAttachment,
-    VZStorageDeviceConfiguration, VZVirtioBlockDeviceConfiguration,
-    VZVirtioConsoleDeviceSerialPortConfiguration, VZVirtioEntropyDeviceConfiguration,
-    VZVirtioNetworkDeviceConfiguration, VZVirtioSocketConnection, VZVirtioSocketDevice,
-    VZVirtioSocketDeviceConfiguration, VZVirtioSocketListener, VZVirtioSocketListenerDelegate,
-    VZVirtioTraditionalMemoryBalloonDevice, VZVirtioTraditionalMemoryBalloonDeviceConfiguration,
-    VZVirtualMachine, VZVirtualMachineConfiguration, VZVirtualMachineState,
+    VZMemoryBalloonDeviceConfiguration, VZNATNetworkDeviceAttachment, VZNetworkDeviceAttachment,
+    VZNetworkDeviceConfiguration, VZSerialPortAttachment, VZSerialPortConfiguration,
+    VZSocketDeviceConfiguration, VZStorageDeviceAttachment, VZStorageDeviceConfiguration,
+    VZVirtioBlockDeviceConfiguration, VZVirtioConsoleDeviceSerialPortConfiguration,
+    VZVirtioEntropyDeviceConfiguration, VZVirtioNetworkDeviceConfiguration,
+    VZVirtioSocketConnection, VZVirtioSocketDevice, VZVirtioSocketDeviceConfiguration,
+    VZVirtioSocketListener, VZVirtioSocketListenerDelegate, VZVirtioTraditionalMemoryBalloonDevice,
+    VZVirtioTraditionalMemoryBalloonDeviceConfiguration, VZVirtualMachine,
+    VZVirtualMachineConfiguration, VZVirtualMachineState,
 };
 
 use crate::vm_config::MacVmConfig;
@@ -211,8 +211,7 @@ fn configuration(config: &MacVmConfig) -> Result<Retained<VZVirtualMachineConfig
         vm.setSocketDevices(&NSArray::from_retained_slice(&[sockets]));
 
         let balloon = VZVirtioTraditionalMemoryBalloonDeviceConfiguration::new();
-        let balloon: Retained<VZMemoryBalloonDeviceConfiguration> =
-            Retained::into_super(balloon);
+        let balloon: Retained<VZMemoryBalloonDeviceConfiguration> = Retained::into_super(balloon);
         vm.setMemoryBalloonDevices(&NSArray::from_retained_slice(&[balloon]));
 
         let entropy = VZVirtioEntropyDeviceConfiguration::new();
@@ -244,7 +243,13 @@ fn configuration(config: &MacVmConfig) -> Result<Retained<VZVirtualMachineConfig
                 &file_url(log),
                 true,
             )
-            .map_err(|e| format!("opening the console log {}: {}", log.display(), ns_error(&e)))?;
+            .map_err(|e| {
+                format!(
+                    "opening the console log {}: {}",
+                    log.display(),
+                    ns_error(&e)
+                )
+            })?;
             let file: &VZSerialPortAttachment = &file;
             let console = VZVirtioConsoleDeviceSerialPortConfiguration::new();
             console.setAttachment(Some(file));

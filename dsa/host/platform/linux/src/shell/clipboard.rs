@@ -38,7 +38,11 @@ mod tests {
 
     #[test]
     fn fr13_text_is_read_in_utf8_when_the_program_offers_it() {
-        let offered = vec!["text/html".to_string(), "STRING".into(), "UTF8_STRING".into()];
+        let offered = vec![
+            "text/html".to_string(),
+            "STRING".into(),
+            "UTF8_STRING".into(),
+        ];
         assert_eq!(text_type(&offered), Some("UTF8_STRING"));
         let offered = vec!["TEXT/PLAIN;CHARSET=UTF-8".to_string()];
         assert_eq!(text_type(&offered), Some("TEXT/PLAIN;CHARSET=UTF-8"));
@@ -49,6 +53,9 @@ mod tests {
     fn fr13_text_too_long_for_the_guest_or_not_utf8_is_left_out() {
         assert_eq!(host_text(b"hello".to_vec()), Some("hello".into()));
         assert_eq!(host_text(vec![0xff, 0xfe]), None);
-        assert_eq!(host_text(vec![b'a'; clipboard::MAX_CLIPBOARD_BYTES + 1]), None);
+        assert_eq!(
+            host_text(vec![b'a'; clipboard::MAX_CLIPBOARD_BYTES + 1]),
+            None
+        );
     }
 }

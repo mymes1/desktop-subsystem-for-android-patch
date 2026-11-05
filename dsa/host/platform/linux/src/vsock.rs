@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::mem::{size_of, zeroed};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -48,9 +48,7 @@ fn address(cid: u32, port: u32) -> libc::sockaddr_vm {
 fn creation_error(error: io::Error) -> TransportError {
     match error.raw_os_error() {
         Some(libc::EAFNOSUPPORT) | Some(libc::EPROTONOSUPPORT) => TransportError::Unsupported(
-            format!(
-                "this kernel has no vsock support ({error}); load the vhost_vsock module"
-            ),
+            format!("this kernel has no vsock support ({error}); load the vhost_vsock module"),
         ),
         _ => error.into(),
     }

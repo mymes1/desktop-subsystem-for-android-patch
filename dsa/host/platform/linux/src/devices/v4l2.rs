@@ -204,8 +204,7 @@ const fn ioc(dir: u32, nr: u32, size: usize) -> libc::c_ulong {
 pub const VIDIOC_QUERYCAP: libc::c_ulong = ioc(IOC_READ, 0, size_of::<Capability>());
 pub const VIDIOC_ENUM_FMT: libc::c_ulong = ioc(IOC_READ | IOC_WRITE, 2, size_of::<FmtDesc>());
 pub const VIDIOC_S_FMT: libc::c_ulong = ioc(IOC_READ | IOC_WRITE, 5, size_of::<Format>());
-pub const VIDIOC_REQBUFS: libc::c_ulong =
-    ioc(IOC_READ | IOC_WRITE, 8, size_of::<RequestBuffers>());
+pub const VIDIOC_REQBUFS: libc::c_ulong = ioc(IOC_READ | IOC_WRITE, 8, size_of::<RequestBuffers>());
 pub const VIDIOC_QUERYBUF: libc::c_ulong = ioc(IOC_READ | IOC_WRITE, 9, size_of::<Buffer>());
 pub const VIDIOC_QBUF: libc::c_ulong = ioc(IOC_READ | IOC_WRITE, 15, size_of::<Buffer>());
 pub const VIDIOC_DQBUF: libc::c_ulong = ioc(IOC_READ | IOC_WRITE, 17, size_of::<Buffer>());
@@ -530,7 +529,9 @@ impl Capture {
                     .saturating_add(buffer.timestamp.tv_usec as u64 * 1000);
                 Ok(take(bytes, nanos))
             }
-            None => Err(io::Error::other("the camera named a buffer it does not have")),
+            None => Err(io::Error::other(
+                "the camera named a buffer it does not have",
+            )),
         };
         // SAFETY: VIDIOC_QBUF takes a v4l2_buffer; the same one goes back to the driver.
         unsafe { xioctl(fd, VIDIOC_QBUF, &mut buffer) }?;
