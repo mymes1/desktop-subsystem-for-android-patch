@@ -195,7 +195,10 @@ pub fn follow(
     // Windows.Gaming.Input is WinRT, used from this thread in the multithreaded apartment.
     // SAFETY: initialises COM for this thread, which ends with it.
     let _ = unsafe {
-        windows::Win32::System::Com::CoInitializeEx(None, windows::Win32::System::Com::COINIT_MULTITHREADED)
+        windows::Win32::System::Com::CoInitializeEx(
+            None,
+            windows::Win32::System::Com::COINIT_MULTITHREADED,
+        )
     };
     let mut pads = HostPads::default();
     let log = |line: &str| note(logger.as_deref(), line);
@@ -396,7 +399,7 @@ impl RawPads {
     fn try_read(&mut self) -> windows::core::Result<Vec<(GamepadInfo, GamepadState)>> {
         use windows::core::Interface;
         use windows::Gaming::Input::{
-            Gamepad, GameControllerSwitchPosition, IGameController, RawGameController,
+            GameControllerSwitchPosition, Gamepad, IGameController, RawGameController,
         };
         let mut pads = Vec::new();
         let controllers = RawGameController::RawGameControllers()?;
@@ -416,7 +419,10 @@ impl RawPads {
             let mut axes = vec![0.5f64; raw.AxisCount()?.max(0) as usize];
             raw.GetCurrentReading(&mut pressed, &mut switches, &mut axes)?;
             let dpad = switches.first().map(|position| position.0).unwrap_or(0);
-            let name = raw.DisplayName().map(|name| name.to_string()).unwrap_or_default();
+            let name = raw
+                .DisplayName()
+                .map(|name| name.to_string())
+                .unwrap_or_default();
             pads.push((
                 GamepadInfo {
                     pad_id,
@@ -492,7 +498,10 @@ mod raw_tests {
         let mut pressed = vec![false; 4];
         pressed[0] = true;
         let state = raw_state(18, RawLayout::Generic, &pressed, 8, &[]);
-        assert_eq!(state.buttons, buttons::A | buttons::DPAD_UP | buttons::DPAD_LEFT);
+        assert_eq!(
+            state.buttons,
+            buttons::A | buttons::DPAD_UP | buttons::DPAD_LEFT
+        );
         assert_eq!(state.left_x, 0);
     }
 }
