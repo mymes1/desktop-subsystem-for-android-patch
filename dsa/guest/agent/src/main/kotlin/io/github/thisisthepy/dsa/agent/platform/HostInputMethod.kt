@@ -106,6 +106,11 @@ class HostInputMethod : InputMethodService() {
                 val ic = current?.editor() ?: return false
                 return ic.commitText(text, 1)
             }
+
+            override fun deleteSurrounding(before: Int, after: Int): Boolean {
+                val ic = current?.editor() ?: return false
+                return ic.deleteSurroundingText(before, after)
+            }
         }
 
         /**

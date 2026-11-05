@@ -195,6 +195,17 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.ImeCommit getImeCommit();
 
   /**
+   * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+   * @return Whether the imeDeleteSurrounding field is set.
+   */
+  boolean hasImeDeleteSurrounding();
+  /**
+   * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+   * @return The imeDeleteSurrounding.
+   */
+  io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding getImeDeleteSurrounding();
+
+  /**
    * <code>.dsa.control.v1.ImeCursor ime_cursor = 19;</code>
    * @return Whether the imeCursor field is set.
    */

@@ -34,7 +34,13 @@ pub enum ImeEvent {
     },
     /// `text` is typed, in place of the composition if there is one, which ends.
     Commit { task_id: i32, text: String },
+    /// The input method deletes `before` UTF-16 code units before the cursor and `after`
+    /// after it, as it does when it reconverts or corrects what was typed.
+    DeleteSurrounding { task_id: i32, before: u32, after: u32 },
 }
+
+/// The most text one deletion removes on either side of the cursor, in UTF-16 code units.
+pub const MAX_DELETE_UNITS: u32 = 65536;
 
 /// How many UTF-16 code units `text` takes.
 pub fn utf16_len(text: &str) -> usize {
@@ -67,7 +73,9 @@ impl ImeEvent {
     /// The task whose editor the event is for.
     pub fn task_id(&self) -> i32 {
         match self {
-            ImeEvent::Composition { task_id, .. } | ImeEvent::Commit { task_id, .. } => *task_id,
+            ImeEvent::Composition { task_id, .. }
+            | ImeEvent::Commit { task_id, .. }
+            | ImeEvent::DeleteSurrounding { task_id, .. } => *task_id,
         }
     }
 
@@ -86,6 +94,15 @@ impl ImeEvent {
             ImeEvent::Commit { task_id, text } => {
                 control::envelope::Body::ImeCommit(control::ImeCommit { task_id, text })
             }
+            ImeEvent::DeleteSurrounding {
+                task_id,
+                before,
+                after,
+            } => control::envelope::Body::ImeDeleteSurrounding(control::ImeDeleteSurrounding {
+                task_id,
+                before_length: before,
+                after_length: after,
+            }),
         }
     }
 
@@ -104,6 +121,15 @@ impl ImeEvent {
             ImeEvent::Commit { task_id, text } => {
                 wire::envelope::Body::ImeCommit(wire::ImeCommit { task_id, text })
             }
+            ImeEvent::DeleteSurrounding {
+                task_id,
+                before,
+                after,
+            } => wire::envelope::Body::ImeDeleteSurrounding(wire::ImeDeleteSurrounding {
+                task_id,
+                before_length: before,
+                after_length: after,
+            }),
         }
     }
 
@@ -136,6 +162,26 @@ impl ImeEvent {
         Ok(ImeEvent::Commit {
             task_id: commit.task_id,
             text: commit.text.clone(),
+        })
+    }
+}
+
+impl ImeEvent {
+    /// The deletion the local API carried, or a reason it makes no sense: nothing to delete,
+    /// or more than [`MAX_DELETE_UNITS`] on a side.
+    pub fn from_wire_delete(delete: &wire::ImeDeleteSurrounding) -> Result<ImeEvent, String> {
+        if delete.before_length == 0 && delete.after_length == 0 {
+            return Err("the deletion removes nothing".into());
+        }
+        if delete.before_length > MAX_DELETE_UNITS || delete.after_length > MAX_DELETE_UNITS {
+            return Err(format!(
+                "the deletion removes more than {MAX_DELETE_UNITS} UTF-16 code units on a side"
+            ));
+        }
+        Ok(ImeEvent::DeleteSurrounding {
+            task_id: delete.task_id,
+            before: delete.before_length,
+            after: delete.after_length,
         })
     }
 }
@@ -244,6 +290,33 @@ pub struct ImeCursor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fr6_a_deletion_around_the_cursor_crosses_the_local_api_and_reaches_the_guest() {
+        let event = ImeEvent::DeleteSurrounding {
+            task_id: 3,
+            before: 2,
+            after: 1,
+        };
+        let wire::envelope::Body::ImeDeleteSurrounding(delete) = event.to_wire() else {
+            panic!("not a deletion");
+        };
+        assert_eq!(ImeEvent::from_wire_delete(&delete), Ok(event.clone()));
+        assert!(matches!(
+            event.to_control(),
+            control::envelope::Body::ImeDeleteSurrounding(control::ImeDeleteSurrounding {
+                task_id: 3,
+                before_length: 2,
+                after_length: 1,
+            })
+        ));
+        let nothing = wire::ImeDeleteSurrounding {
+            task_id: 3,
+            before_length: 0,
+            after_length: 0,
+        };
+        assert!(ImeEvent::from_wire_delete(&nothing).is_err());
+    }
 
     #[test]
     fn fr6_each_change_to_the_composition_replaces_it_whole_with_its_cursor() {

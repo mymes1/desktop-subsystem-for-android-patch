@@ -1993,6 +1993,11 @@ impl HostApiService {
                 }) => ImeEvent::from_wire_commit(&commit)
                     .map(InputEvent::Ime)
                     .map_err(|why| format!("dropped committed text: {why}")),
+                Ok(Envelope {
+                    body: Some(Body::ImeDeleteSurrounding(delete)),
+                }) => ImeEvent::from_wire_delete(&delete)
+                    .map(InputEvent::Ime)
+                    .map_err(|why| format!("dropped a deletion: {why}")),
                 Ok(_) => {
                     eprintln!(
                         "local API: a client of {} sent something other than input on a \

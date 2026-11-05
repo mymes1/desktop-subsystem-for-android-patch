@@ -840,6 +840,18 @@ impl Dispatch<ZwpTextInputV3, ()> for State {
                     window.ime.commit(text);
                 }
             }
+            zwp_text_input_v3::Event::DeleteSurroundingText {
+                before_length,
+                after_length,
+            } => {
+                if let Some(window) = state
+                    .seat_state
+                    .keyboard_focus
+                    .and_then(|task_id| state.windows.get_mut(&task_id))
+                {
+                    window.ime.delete_surrounding(before_length, after_length);
+                }
+            }
             zwp_text_input_v3::Event::Done { .. } => {
                 let events = match state
                     .seat_state
