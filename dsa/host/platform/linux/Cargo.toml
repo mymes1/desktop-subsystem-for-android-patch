@@ -1,7 +1,7 @@
 [package]
 name = "dsa-host-linux"
 version = "0.1.0"
-description = "The Linux host: the Android VM over KVM, vsock, and the host's devices"
+description = "The Linux host: the Android VM over KVM, vsock, the host's devices, and one Wayland window per Android task"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,10 @@ publish.workspace = true
 name = "dsa-devices"
 path = "src/bin/dsa-devices.rs"
 
+[[bin]]
+name = "dsa-compositor"
+path = "src/bin/dsa-compositor.rs"
+
 [dependencies]
 dsa-transport.workspace = true
 dsa-host-core.workspace = true
@@ -18,20 +22,27 @@ dsa-protocol.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 dsa-host-unix = { path = "../unix" }
+libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"
 # The vsock listener the device ports are served on; the guest's own socket code works the
 # same on the host's side.
 dsa-guest-transport = { path = "../../../guest/transport" }
-# The session bus and the system bus: GeoClue2, UPower, logind, iio-sensor-proxy and the
-# desktop portals. Pure Rust, so the host links no D-Bus C library.
+# The session bus and the system bus: GeoClue2, UPower, logind, iio-sensor-proxy, the
+# desktop portals and the notification service. Pure Rust, so the host links no D-Bus C
+# library.
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 # Camera pictures that come as Motion JPEG, decoded to pixels.
 zune-jpeg = "0.4"
 zune-core = "0.4"
 # Still pictures for the guest's camera, encoded from the newest picture.
 jpeg-encoder = "0.6"
+# The compositor's Wayland client, pure Rust, and the protocols it speaks (xdg-shell,
+# decorations, text-input-v3, tablet-v2, cursor-shape).
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable", "staging"] }
+# gfxstream's host renderer and libxkbcommon, loaded at run time.
+libloading = "0.8"
 
 [dev-dependencies]
 dsa-transport = { workspace = true, features = ["conformance"] }

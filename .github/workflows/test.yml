@@ -36,6 +36,7 @@ jobs:
       rust: ${{ steps.find.outputs.rust }}
       unix: ${{ steps.find.outputs.unix }}
       macos: ${{ steps.find.outputs.macos }}
+      linux: ${{ steps.find.outputs.linux }}
       agent: ${{ steps.find.outputs.agent }}
       apk: ${{ steps.find.outputs.apk }}
       protocol: ${{ steps.find.outputs.protocol }}
@@ -73,8 +74,9 @@ jobs:
             fi
           }
           part 'dsa/(Cargo\.(toml|lock)|deny\.toml|protocol/|host/|guest/(transport|channeld)/)' rust
-          part 'dsa/(Cargo\.(toml|lock)|protocol/|host/(core|platform/unix|cli)/)' unix
+          part 'dsa/(Cargo\.(toml|lock)|protocol/|host/(core|platform/unix|platform/linux|cli)/)' unix
           part 'dsa/(Cargo\.(toml|lock)|protocol/|host/(core|platform/(unix|macos)|cli)/|host/platform/windows/src/(gpt|pstore_disk)\.rs|kernel/)' macos
+          part 'dsa/(Cargo\.(toml|lock)|protocol/|host/(core|platform/unix|platform/linux)/)' linux
           part 'dsa/(guest/agent|protocol)/' agent
           part 'dsa/(Cargo\.(toml|lock)|host/(core|cli)/)|\.github/scripts/apk/' apk
           part 'dsa/protocol/' protocol
@@ -197,7 +199,65 @@ jobs:
 
       # Linux runs this in the job above; macOS reads the peer's user another way.
       - name: Run the tests
-        run: cargo test --no-fail-fast -p dsa-transport -p dsa-host-unix -p dsa-cli
+        run: cargo test --no-fail-fast -p dsa-transport -p dsa-host-unix -p dsa-cli -p dsa-host-linux
+
+  # The Linux host's compositor in a real Wayland session: a headless compositor stands in
+  # for the desktop. With no DSA service to reach, the compositor connects to the display,
+  # takes the seat, says it is waiting for the service and keeps running, as it must on a
+  # desktop where the service starts later.
+  linux-host:
+    name: Run the Linux compositor in a headless Wayland session (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.linux == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: dsa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install a headless Wayland compositor and libxkbcommon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y weston libxkbcommon0
+
+      - name: Run the Linux host's tests
+        run: cargo test --no-fail-fast -p dsa-host-linux
+
+      - name: Build the compositor
+        run: cargo build -p dsa-host-linux --bin dsa-compositor
+
+      - name: Run the compositor against the headless session
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime"
+          mkdir -p -m 0700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=wayland-dsa --idle-time=0 &
+          for _ in $(seq 50); do
+            [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
+            sleep 0.2
+          done
+          export WAYLAND_DISPLAY=wayland-dsa
+          export DSA_SOCKET="$RUNNER_TEMP/no-service.sock"
+          export XDG_DATA_HOME="$RUNNER_TEMP/data"
+          set +e
+          timeout 5 target/debug/dsa-compositor 2> "$RUNNER_TEMP/compositor.log"
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/compositor.log"
+          if [[ $code -ne 124 ]]; then
+            echo "::error::the compositor exited (code $code) instead of waiting for the service"
+            exit 1
+          fi
+          grep -q "waiting for the DSA service" "$RUNNER_TEMP/compositor.log"
+
+      - name: Check a second compositor in the same session leaves the first alone
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime2"
+          mkdir -p -m 0700 "$XDG_RUNTIME_DIR"
+          exec 9> "$XDG_RUNTIME_DIR/dsa-compositor.lock"
+          flock -n 9
+          timeout 5 target/debug/dsa-compositor
 
   # The macOS host on Apple silicon: its tests, the vsock transport over socket pairs, and
   # dsa-hostd signed with the virtualization entitlement and checked by the framework itself.
@@ -517,7 +577,7 @@ jobs:
     name: Report the test result
     if: always()
     needs:
-      [changes, repository, rust, unix-socket, macos-host, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
+      [changes, repository, rust, unix-socket, macos-host, linux-host, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
