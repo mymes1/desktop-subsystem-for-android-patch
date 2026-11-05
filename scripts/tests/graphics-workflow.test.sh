@@ -28,3 +28,7 @@ grep -Fq 'dsa/graphics/tests/test.sh' "$workflow"
 grep -Fq 'verify.py check-subset' "$workflow"
 grep -Fq 'dsa/graphics/verify/build-test-apps.sh' "$workflow"
 grep -Fq 'name: graphics-test-apps' "$workflow"
+# The Linux host's renderer is built natively and hands frames over by read-back.
+grep -Fq 'Build the host graphics renderer (linux, x64)' "$workflow"
+grep -Fq 'dsa/graphics/host/build.sh' "$workflow"
+grep -Fq 'dsa_gfx_set_display_pixels_callback' "$workflow"

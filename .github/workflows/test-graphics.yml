@@ -8,6 +8,7 @@ on:
     paths:
       - "dsa/graphics/**"
       - "dsa/host/platform/windows/**"
+      - "dsa/host/platform/linux/**"
       - ".github/workflows/test-graphics.yml"
       - "scripts/tests/graphics-workflow.test.sh"
   workflow_dispatch:
@@ -109,6 +110,50 @@ jobs:
 
   # x64 on windows-latest, and ARM64 natively on windows-11-arm with MSVC's ARM64 tools.
   # Each runs the renderer on software Vulkan (Mesa Lavapipe) for its own processor.
+  # The renderer the Linux host loads, built natively, and run on software Vulkan (Mesa
+  # Lavapipe) by the same smoke test as the Windows renderer.
+  host-renderer-linux:
+    name: Build the host graphics renderer (linux, x64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the build tools and software Vulkan
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake libvulkan-dev mesa-vulkan-drivers \
+            libdrm-dev libx11-dev libxext-dev
+
+      - name: Fetch gfxstream and host build dependencies
+        run: bash dsa/graphics/host/fetch.sh .scratch
+
+      - name: Build the host graphics renderer
+        run: bash dsa/graphics/host/build.sh .scratch .scratch/build-host
+
+      - name: Check the renderer hands frames to the Linux host
+        run: |
+          nm -D --defined-only .scratch/build-host/dist/bin/libgfxstream_backend.so \
+            | grep -q ' dsa_gfx_set_display_pixels_callback$'
+
+      - name: Run host renderer smoke test on software Vulkan
+        env:
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}/.scratch/build-host/dist/bin/libgfxstream_backend.so
+        run: uv run dsa/graphics/host/test_host_renderer.py
+
+      - name: Keep the host renderer library and headers
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-gfxstream-linux
+          path: |
+            .scratch/build-host/dist/bin/libgfxstream_backend.so
+            .scratch/build-host/dist/include/
+          if-no-files-found: error
+
   host-renderer:
     name: Build the host graphics renderer (windows, ${{ matrix.platform }})
     strategy:

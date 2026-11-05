@@ -547,17 +547,180 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_get_adapter_luid(uint8_t luid[8]) {
     return 0;
 }
 
+extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_pixels_callback(dsa_display_pixels_fn,
+                                                                  void*) {
+    return -1;
+}
+
 void dsa_gfx_display_shutdown(void) { stop_presenter(); }
 
 #else /* !_WIN32 */
+
+/* On Linux and macOS there is no shared texture to copy into, so each display's newest frame
+ * is read back to memory on a presentation thread and handed to the embedder, which shows it
+ * in a shared-memory buffer of the window system. The hook and the pending frames work as on
+ * Windows: only the newest frame of each display is kept, so a slow window never makes the
+ * guest wait. */
+
+namespace {
+
+using gfxstream::FrameBuffer;
+
+constexpr uint32_t kGlRgba = 0x1908;
+constexpr uint32_t kGlUnsignedByte = 0x1401;
+
+/* The largest frame read back, in pixels on a side. A size beyond it is a broken guest. */
+constexpr uint32_t kMaxSide = 16384;
+
+struct PendingFrame {
+    uint32_t color_buffer = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+};
+
+struct PixelPresenter {
+    std::mutex mutex;
+    std::condition_variable wake;
+    std::map<uint32_t, PendingFrame> pending;
+    bool stopping = false;
+    std::thread thread;
+    dsa_display_pixels_fn pixels_cb = nullptr;
+    void* context = nullptr;
+    /* Only the presentation thread touches this. */
+    std::vector<uint8_t> buffer;
+};
+
+std::mutex s_presenter_mutex;
+PixelPresenter* s_presenter = nullptr;
+int (*s_original_set_display_color_buffer)(uint32_t, uint32_t) = nullptr;
+int (*s_get_display_pose)(uint32_t, int32_t*, int32_t*, uint32_t*, uint32_t*) = nullptr;
+bool s_hook_installed = false;
+
+int hooked_set_display_color_buffer(uint32_t display_id, uint32_t color_buffer) {
+    int result = s_original_set_display_color_buffer
+                     ? s_original_set_display_color_buffer(display_id, color_buffer)
+                     : 0;
+    if (color_buffer == 0) {
+        return result;
+    }
+    PendingFrame frame;
+    frame.color_buffer = color_buffer;
+    if (s_get_display_pose) {
+        int32_t x = 0;
+        int32_t y = 0;
+        uint32_t w = 0;
+        uint32_t h = 0;
+        if (s_get_display_pose(display_id, &x, &y, &w, &h) == 0) {
+            frame.width = w;
+            frame.height = h;
+        }
+    }
+    std::lock_guard<std::mutex> lock(s_presenter_mutex);
+    if (s_presenter) {
+        std::lock_guard<std::mutex> pending_lock(s_presenter->mutex);
+        s_presenter->pending[display_id] = frame;
+        s_presenter->wake.notify_one();
+    }
+    return result;
+}
+
+bool install_hook() {
+    if (s_hook_installed) {
+        return true;
+    }
+    QAndroidMultiDisplayAgent operations = emugl::get_emugl_multi_display_operations();
+    s_original_set_display_color_buffer = operations.setDisplayColorBuffer;
+    s_get_display_pose = operations.getDisplayPose;
+    operations.setDisplayColorBuffer = hooked_set_display_color_buffer;
+    emugl::set_emugl_multi_display_operations(operations);
+    s_hook_installed = true;
+    return true;
+}
+
+void present(PixelPresenter& presenter, uint32_t display_id, const PendingFrame& frame) {
+    FrameBuffer* fb = FrameBuffer::getFB();
+    if (!fb || frame.width == 0 || frame.height == 0 || frame.width > kMaxSide ||
+        frame.height > kMaxSide) {
+        return;
+    }
+    const uint64_t size = uint64_t(frame.width) * frame.height * 4;
+    presenter.buffer.resize(size);
+    fb->readColorBuffer(frame.color_buffer, 0, 0, int(frame.width), int(frame.height), kGlRgba,
+                        kGlUnsignedByte, presenter.buffer.data(), size);
+    presenter.pixels_cb(presenter.context, display_id, frame.width, frame.height,
+                        presenter.buffer.data());
+}
+
+void run(PixelPresenter* presenter) {
+    for (;;) {
+        std::map<uint32_t, PendingFrame> frames;
+        {
+            std::unique_lock<std::mutex> lock(presenter->mutex);
+            presenter->wake.wait(lock, [presenter] {
+                return presenter->stopping || !presenter->pending.empty();
+            });
+            if (presenter->stopping) {
+                break;
+            }
+            frames.swap(presenter->pending);
+        }
+        for (const auto& [display_id, frame] : frames) {
+            present(*presenter, display_id, frame);
+        }
+    }
+}
+
+void stop_presenter() {
+    PixelPresenter* presenter = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(s_presenter_mutex);
+        presenter = s_presenter;
+        s_presenter = nullptr;
+    }
+    if (!presenter) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(presenter->mutex);
+        presenter->stopping = true;
+        presenter->wake.notify_one();
+    }
+    if (presenter->thread.joinable()) {
+        presenter->thread.join();
+    }
+    delete presenter;
+}
+
+}  // namespace
 
 extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_callbacks2(dsa_display_target_fn,
                                                              dsa_display_frame_fn, void*) {
     return -1;
 }
 
+extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_pixels_callback(dsa_display_pixels_fn pixels,
+                                                                  void* context) {
+    stop_presenter();
+    if (!pixels) {
+        return 0;
+    }
+    if (!FrameBuffer::getFB()) {
+        return -1;
+    }
+    if (!install_hook()) {
+        return -1;
+    }
+    auto* presenter = new PixelPresenter();
+    presenter->pixels_cb = pixels;
+    presenter->context = context;
+    presenter->thread = std::thread(run, presenter);
+    std::lock_guard<std::mutex> lock(s_presenter_mutex);
+    s_presenter = presenter;
+    return 0;
+}
+
 extern "C" DSA_GFX_EXPORT int dsa_gfx_get_adapter_luid(uint8_t*) { return -1; }
 
-void dsa_gfx_display_shutdown(void) {}
+void dsa_gfx_display_shutdown(void) { stop_presenter(); }
 
 #endif /* _WIN32 */
