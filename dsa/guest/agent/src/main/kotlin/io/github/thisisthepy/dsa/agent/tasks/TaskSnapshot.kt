@@ -57,6 +57,22 @@ data class TaskSnapshot(
     val pictureInPicture: Boolean = false,
 )
 
+/**
+ * Whether an app asked to fill the screen by hiding its bars (immersive mode): the window
+ * insets types its task asks to be visible ([requestedVisibleTypes], a mask of
+ * WindowInsets.Type) leave out both the status bars and the navigation bars. Null, when the
+ * framework does not say, is not immersive.
+ */
+fun hidesBothSystemBars(requestedVisibleTypes: Int?): Boolean {
+    if (requestedVisibleTypes == null) return false
+    val bars = STATUS_BARS or NAVIGATION_BARS
+    return requestedVisibleTypes and bars == 0
+}
+
+/** WindowInsets.Type.statusBars() and navigationBars(). */
+const val STATUS_BARS = 1
+const val NAVIGATION_BARS = 2
+
 /** The orientation a task's top activity asks for. */
 enum class TaskOrientation {
     /** It does not lock its orientation, or the agent could not read it. */
