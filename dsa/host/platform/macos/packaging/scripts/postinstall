@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs after the installer put DSA.app in place: installs (or reloads) the launchd agents of
-# the user at the console, the service (dsa-hostd) and the window manager (dsa-wm), so DSA
-# runs without a restart or a login. Other users get theirs when they run `dsa-hostd
+# the user at the console, the service (dsa-hostd), the window manager (dsa-wm) and the
+# device lender (dsa-devices), so DSA runs without a restart or a login. Other users get theirs when they run `dsa-hostd
 # install-agent` or open DSA. A failure here leaves the installation as it is.
 #
 # $2 is where the package was installed (/Applications).
