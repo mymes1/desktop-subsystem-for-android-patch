@@ -589,14 +589,19 @@ fn fr31_a_data_reset_stops_android_and_gives_it_a_fresh_disk_keeping_the_image_a
     use dsa_host_core::settings::{Settings, SettingsStore};
     use dsa_host_core::widgets::WidgetPlacements;
     let dir = reset_scratch("fresh");
-    let paths = dsa_host_core::host_paths::FakeHostPaths::new(dir.join("machine"), dir.join("users"));
+    let paths =
+        dsa_host_core::host_paths::FakeHostPaths::new(dir.join("machine"), dir.join("users"));
     let images = dir.join("machine").join("images");
     std::fs::create_dir_all(&images).unwrap();
     let template = images.join("disk.vhdx");
     std::fs::write(&template, b"fresh Android").unwrap();
     let user_root = dir.join("users").join("alice");
     std::fs::create_dir_all(&user_root).unwrap();
-    std::fs::write(user_root.join("android.vhdx"), b"apps, accounts and their data").unwrap();
+    std::fs::write(
+        user_root.join("android.vhdx"),
+        b"apps, accounts and their data",
+    )
+    .unwrap();
     std::fs::write(user_root.join("android.image-version"), "1").unwrap();
 
     let store = Arc::new(dsa_host_core::settings::MemorySettings::default());
@@ -636,8 +641,15 @@ fn fr31_a_data_reset_stops_android_and_gives_it_a_fresh_disk_keeping_the_image_a
         std::fs::read_to_string(user_root.join("android.image-version")).unwrap(),
         "2"
     );
-    assert!(!user_root.join("android.vhdx.before-reset").exists(), "the old disk is gone");
-    assert_eq!(std::fs::read(&template).unwrap(), b"fresh Android", "the image is untouched");
+    assert!(
+        !user_root.join("android.vhdx.before-reset").exists(),
+        "the old disk is gone"
+    );
+    assert_eq!(
+        std::fs::read(&template).unwrap(),
+        b"fresh Android",
+        "the image is untouched"
+    );
     assert_eq!(store.get("alice").unwrap(), chosen, "the settings are kept");
     assert!(
         placements.all("alice").unwrap().is_empty(),
@@ -650,7 +662,8 @@ fn fr31_a_data_reset_stops_android_and_gives_it_a_fresh_disk_keeping_the_image_a
 fn fr31_a_reset_that_cannot_make_a_new_disk_keeps_the_old_one() {
     use dsa_host_core::host_api::{ClientError, HostApiService};
     let dir = reset_scratch("failed");
-    let paths = dsa_host_core::host_paths::FakeHostPaths::new(dir.join("machine"), dir.join("users"));
+    let paths =
+        dsa_host_core::host_paths::FakeHostPaths::new(dir.join("machine"), dir.join("users"));
     let user_root = dir.join("users").join("alice");
     std::fs::create_dir_all(&user_root).unwrap();
     std::fs::write(user_root.join("android.vhdx"), b"the user's data").unwrap();
@@ -671,7 +684,10 @@ fn fr31_a_reset_that_cannot_make_a_new_disk_keeps_the_old_one() {
         }
         other => panic!("expected the reset to fail, got {other:?}"),
     }
-    assert_eq!(std::fs::read(user_root.join("android.vhdx")).unwrap(), b"the user's data");
+    assert_eq!(
+        std::fs::read(user_root.join("android.vhdx")).unwrap(),
+        b"the user's data"
+    );
     assert_eq!(
         std::fs::read_to_string(user_root.join("android.image-version")).unwrap(),
         "1"
@@ -727,7 +743,13 @@ fn fr31_the_run_mode_is_kept_and_reaches_the_callers_android_at_once() {
     assert_eq!(changed.stop_after_secs, 900);
     assert!(changed.keep_for_notifications);
     assert_eq!(
-        androids.of("alice").unwrap().run_modes.lock().unwrap().last(),
+        androids
+            .of("alice")
+            .unwrap()
+            .run_modes
+            .lock()
+            .unwrap()
+            .last(),
         Some(&RunModePolicy {
             mode: RunMode::Continuous,
             stop_after: Duration::from_secs(900),

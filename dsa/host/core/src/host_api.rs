@@ -72,6 +72,7 @@ use crate::background::{
     self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundWatch, MediaCommand,
     MediaSession, Playback,
 };
+use crate::data_reset::{UserDataReset, RESET_STOP_WAIT};
 use crate::device_identity::{DeviceIdentity, DeviceIdentityStore, ImageBuild};
 use crate::diagnostics::HostFile;
 use crate::files::{self, FileAction, FileTransfer};
@@ -86,9 +87,8 @@ use crate::memory::{
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent};
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
-use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
-use crate::data_reset::{UserDataReset, RESET_STOP_WAIT};
 use crate::run_mode::{RunMode, RunModePolicy};
+use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
 use crate::settings::{Settings, SettingsStore};
 use crate::tasks::{
     AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskRequestError, TaskWatch,
@@ -3485,7 +3485,10 @@ impl HostApiService {
                 response::Body::Done(types::Done {})
             }
             Err(why) => {
-                eprintln!("local API: resetting the Android data of {}: {why}", peer.user);
+                eprintln!(
+                    "local API: resetting the Android data of {}: {why}",
+                    peer.user
+                );
                 error(ErrorCode::Unavailable, why)
             }
         }

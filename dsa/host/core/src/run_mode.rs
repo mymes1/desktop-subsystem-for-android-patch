@@ -101,7 +101,10 @@ pub fn normalise_stop_after_secs(secs: u32) -> u32 {
     if secs == 0 {
         return DEFAULT_STOP_AFTER.as_secs() as u32;
     }
-    secs.clamp(MIN_STOP_AFTER.as_secs() as u32, MAX_STOP_AFTER.as_secs() as u32)
+    secs.clamp(
+        MIN_STOP_AFTER.as_secs() as u32,
+        MAX_STOP_AFTER.as_secs() as u32,
+    )
 }
 
 /// What uses Android at one moment, as the session sees it.

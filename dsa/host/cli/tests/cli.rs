@@ -2062,8 +2062,14 @@ fn fr31_the_run_mode_is_as_needed_after_five_minutes_and_changed_with_dsa_settin
     assert_eq!(changed["run_mode"], "continuous");
     let changed = json_of(&dsa(&endpoint, "settings set stop-after 10m --json"));
     assert_eq!(changed["stop_after_secs"], 600);
-    assert_eq!(changed["run_mode"], "continuous", "one change keeps the others");
-    let changed = json_of(&dsa(&endpoint, "settings set keep-for-notifications on --json"));
+    assert_eq!(
+        changed["run_mode"], "continuous",
+        "one change keeps the others"
+    );
+    let changed = json_of(&dsa(
+        &endpoint,
+        "settings set keep-for-notifications on --json",
+    ));
     assert_eq!(changed["keep_for_notifications"], true);
     let shown = stdout(&dsa(&endpoint, "settings"));
     assert!(shown.contains("Run mode: continuous"), "{shown}");
@@ -2100,11 +2106,18 @@ fn fr31_dsa_reset_data_says_what_is_lost_and_resets_only_with_yes() {
     assert!(warning.contains("every app you installed"), "{warning}");
     assert!(warning.contains("accounts"), "{warning}");
     assert!(warning.contains("--yes"), "{warning}");
-    assert_eq!(std::fs::read(&disk).unwrap(), b"old data", "nothing was reset");
+    assert_eq!(
+        std::fs::read(&disk).unwrap(),
+        b"old data",
+        "nothing was reset"
+    );
 
     let json = json_of(&dsa(&endpoint, "reset-data --yes --json"));
     assert_eq!(json["reset"], true);
     assert_eq!(std::fs::read(&disk).unwrap(), b"fresh");
-    assert_eq!(parse(&args("reset-data --yes")).unwrap().command, Cmd::ResetData);
+    assert_eq!(
+        parse(&args("reset-data --yes")).unwrap().command,
+        Cmd::ResetData
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

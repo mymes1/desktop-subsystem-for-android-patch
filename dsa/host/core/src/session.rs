@@ -137,8 +137,8 @@ use crate::memory::{GrowthAction, GuestMemory, GuestMemoryReport, GuestPressure,
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent, RateLimit};
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
-use crate::run_mode::{IdleStop, RunModePolicy, Usage};
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
+use crate::run_mode::{IdleStop, RunModePolicy, Usage};
 use crate::tasks::{
     AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskRequest, TaskTable, TaskWatch,
 };

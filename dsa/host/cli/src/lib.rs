@@ -389,9 +389,7 @@ fn parse_stop_after(value: &str) -> Result<u32, String> {
         .parse::<u32>()
         .ok()
         .and_then(|n| n.checked_mul(scale))
-        .ok_or_else(|| {
-            format!("stop-after is a time such as 300, 90s, 5m or 1h, not {value:?}")
-        })?;
+        .ok_or_else(|| format!("stop-after is a time such as 300, 90s, 5m or 1h, not {value:?}"))?;
     let (min, max) = (
         dsa_host_core::run_mode::MIN_STOP_AFTER.as_secs() as u32,
         dsa_host_core::run_mode::MAX_STOP_AFTER.as_secs() as u32,
