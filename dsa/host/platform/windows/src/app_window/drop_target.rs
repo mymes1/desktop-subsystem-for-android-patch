@@ -14,12 +14,10 @@ use dsa_host_core::files::{dropped, Dropped, FileAction, FileTransfer};
 use dsa_host_core::host_api::HostApiClient;
 use windows::core::{implement, Ref, Result as ComResult};
 use windows::Win32::Foundation::{HWND, POINTL};
-use windows::Win32::System::Com::{
-    IDataObject, ReleaseStgMedium, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL,
-};
+use windows::Win32::System::Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
 use windows::Win32::System::Ole::{
-    IDropTarget, IDropTarget_Impl, OleInitialize, RegisterDragDrop, RevokeDragDrop, CF_HDROP,
-    DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE,
+    IDropTarget, IDropTarget_Impl, OleInitialize, RegisterDragDrop, ReleaseStgMedium,
+    RevokeDragDrop, CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE,
 };
 use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
 use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
