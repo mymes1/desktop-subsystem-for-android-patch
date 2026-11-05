@@ -122,6 +122,15 @@ class ImageLayoutTests(unittest.TestCase):
         cmdline = make_image.kernel_cmdline(make_image.command_line_partitions({"super": (1 << 20, 1 << 30)}))
         self.assertEqual(make_image.kernel_disk_names(cmdline), [])
 
+    def test_fr1_the_builds_own_mount_tables_lose_their_entries_that_name_a_disk_by_probe_order(self):
+        table = ("system /system erofs ro wait,logical,first_stage_mount\n"
+                 "/dev/block/vdc1 /sdcard vfat defaults voldmanaged=sdcard:auto\n"
+                 "/dev/block/by-name/userdata /data f2fs noatime wait\n")
+        edited = make_image.without_kernel_disk_entries(table)
+        self.assertEqual(make_image.kernel_disk_names(edited), [])
+        self.assertIn("/dev/block/by-name/userdata /data", edited)
+        self.assertIn("system /system erofs", edited)
+
     def test_fr1_check_image_rejects_a_disk_named_by_probe_order(self):
         check_script = Path(__file__).with_name("check-image.py")
         with tempfile.TemporaryDirectory() as tmp:
