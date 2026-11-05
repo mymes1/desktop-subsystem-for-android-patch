@@ -70,7 +70,8 @@ pub fn supported() -> bool {
 
 /// The largest memory size the framework allows a VM, in MiB.
 pub fn max_memory_mb() -> u64 {
-    unsafe { VZVirtualMachineConfiguration::maximumAllowedMemorySize() } / MIB
+    let bytes = unsafe { VZVirtualMachineConfiguration::maximumAllowedMemorySize() };
+    bytes / MIB
 }
 
 /// The channels the guest's connections to each host port arrive on. They outlive each VM:

@@ -53,10 +53,17 @@ fn byte_of(disk: &Path, mib: usize) -> u8 {
 fn fr14_a_new_user_gets_a_copy_of_the_template_at_its_version() {
     let dir = folder("new");
     let template = dir.join("disk.img");
-    std::fs::write(&template, gpt_disk(&[("super", 1, 0x11), ("userdata", 1, 0)])).unwrap();
+    std::fs::write(
+        &template,
+        gpt_disk(&[("super", 1, 0x11), ("userdata", 1, 0)]),
+    )
+    .unwrap();
     let disk = dir.join("user").join("android.img");
     bring_disk_to(&disk, &template, "16.0.0-1").unwrap();
-    assert_eq!(std::fs::read(&disk).unwrap(), std::fs::read(&template).unwrap());
+    assert_eq!(
+        std::fs::read(&disk).unwrap(),
+        std::fs::read(&template).unwrap()
+    );
     assert_eq!(disk_image_version(&disk).as_deref(), Some("16.0.0-1"));
 }
 
@@ -118,7 +125,11 @@ fn fr14_an_empty_disk_is_replaced_by_the_template() {
     prepare_empty_disk(&disk, 1).unwrap();
     assert_eq!(std::fs::metadata(&disk).unwrap().len(), 1 << 30);
     let template = dir.join("disk.img");
-    std::fs::write(&template, gpt_disk(&[("super", 1, 0x11), ("userdata", 1, 0)])).unwrap();
+    std::fs::write(
+        &template,
+        gpt_disk(&[("super", 1, 0x11), ("userdata", 1, 0)]),
+    )
+    .unwrap();
     bring_disk_to(&disk, &template, "1").unwrap();
     assert_eq!(byte_of(&disk, 1), 0x11);
 }

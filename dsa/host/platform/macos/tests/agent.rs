@@ -35,7 +35,10 @@ fn pr5_the_users_files_and_socket_are_in_their_own_folder() {
 #[test]
 fn nfr2_memory_starts_small_and_grows_to_what_the_mac_can_spare() {
     // No limit: the default start, growing to the Mac's memory less its reserve, capped.
-    assert_eq!(memory_range_mb(0, Some(16384)), (3072, AUTOMATIC_GROWTH_CAP_MB));
+    assert_eq!(
+        memory_range_mb(0, Some(16384)),
+        (3072, AUTOMATIC_GROWTH_CAP_MB)
+    );
     assert_eq!(memory_range_mb(0, Some(8192)).0, 3072);
     assert!(memory_range_mb(0, Some(8192)).1 <= 8192);
     // A limit is how far it grows; a low one is also where it starts.
@@ -73,7 +76,10 @@ fn fr2_the_agent_is_loaded_into_the_users_login_session() {
     assert_eq!(domain(501), "gui/501");
     assert_eq!(service_target(501), format!("gui/501/{LABEL}"));
     let commands = install_commands(501, Path::new("/p.plist"));
-    assert_eq!(commands[0], vec!["bootout".to_string(), service_target(501)]);
+    assert_eq!(
+        commands[0],
+        vec!["bootout".to_string(), service_target(501)]
+    );
     assert_eq!(
         commands[1],
         vec!["bootstrap".to_string(), "gui/501".into(), "/p.plist".into()]

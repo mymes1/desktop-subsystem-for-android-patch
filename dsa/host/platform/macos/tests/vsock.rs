@@ -34,7 +34,10 @@ impl Connector for GuestDialer {
 fn vsock_pair() -> (Box<dyn Listener>, Box<dyn Connector>) {
     let (tx, rx) = mpsc::channel();
     (
-        Box::new(VsockListener::new(Arc::new(Mutex::new(rx)), Framing::Framed)),
+        Box::new(VsockListener::new(
+            Arc::new(Mutex::new(rx)),
+            Framing::Framed,
+        )),
         Box::new(GuestDialer(tx)),
     )
 }
