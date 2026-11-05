@@ -6,7 +6,7 @@
 //! transfer and asks the user which app opens it.
 
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The largest file that crosses, in bytes: 64 MiB.
 ///
@@ -59,6 +59,9 @@ pub struct FileTransfer {
     pub name: String,
     pub content: Vec<u8>,
     pub action: FileAction,
+    /// The app to share it with, as when the user drops it on that app's window. Empty to
+    /// let the user pick.
+    pub package: String,
 }
 
 impl FileTransfer {
@@ -83,6 +86,7 @@ impl FileTransfer {
             name: name.to_string(),
             content,
             action,
+            package: String::new(),
         })
     }
 
@@ -91,6 +95,39 @@ impl FileTransfer {
         check_name(&self.name)?;
         check_size(self.content.len() as u64)
     }
+}
+
+/// What becomes of one path dropped on an app's window.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Dropped {
+    /// An APK: it goes to the install flow, as opening it would.
+    Install(PathBuf),
+    /// Any other file: it is shared with the window's app.
+    Share(PathBuf),
+    /// Not a file that can be sent, and why.
+    Skipped(PathBuf, String),
+}
+
+/// What becomes of each path dropped on an app's window, in the order they were dropped.
+/// Folders and paths that are not there are skipped, since only files cross.
+pub fn dropped(paths: &[PathBuf]) -> Vec<Dropped> {
+    paths
+        .iter()
+        .map(|path| {
+            if !path.is_file() {
+                return Dropped::Skipped(path.clone(), "only files can be sent to an app".into());
+            }
+            let apk = path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("apk"));
+            if apk {
+                Dropped::Install(path.clone())
+            } else {
+                Dropped::Share(path.clone())
+            }
+        })
+        .collect()
 }
 
 /// Refuses a file larger than [`MAX_FILE_BYTES`], saying why.
@@ -140,6 +177,23 @@ mod tests {
         assert!(check_size(MAX_FILE_BYTES).is_ok());
         let refused = check_size(MAX_FILE_BYTES + 1).unwrap_err();
         assert!(refused.contains("64 MiB"), "{refused}");
+    }
+
+    #[test]
+    fn fr29_a_dropped_apk_is_installed_and_other_files_are_shared() {
+        let dir = std::env::temp_dir().join(format!("dsa-dropped-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (apk, photo, folder) = (dir.join("game.APK"), dir.join("photo.jpg"), dir.join("sub"));
+        std::fs::write(&apk, b"PK").unwrap();
+        std::fs::write(&photo, b"jpeg").unwrap();
+        std::fs::create_dir_all(&folder).unwrap();
+        let gone = dir.join("gone.txt");
+        let outcome = dropped(&[photo.clone(), apk.clone(), folder.clone(), gone.clone()]);
+        assert_eq!(outcome[0], Dropped::Share(photo));
+        assert_eq!(outcome[1], Dropped::Install(apk));
+        assert!(matches!(&outcome[2], Dropped::Skipped(path, _) if *path == folder));
+        assert!(matches!(&outcome[3], Dropped::Skipped(path, _) if *path == gone));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

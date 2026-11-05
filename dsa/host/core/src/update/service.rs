@@ -311,6 +311,12 @@ impl UserAndroid for UpdatingAndroid {
     fn open_file(&self, file: &crate::files::FileTransfer) -> Result<(), TaskRequestError> {
         UserAndroid::open_file(&*self.session, file)
     }
+    fn share_folders(&self, on: bool, folders: Vec<String>) {
+        UserAndroid::share_folders(&*self.session, on, folders)
+    }
+    fn android_files(&self) -> Result<String, String> {
+        UserAndroid::android_files(&*self.session)
+    }
     fn guest_memory(&self) -> Option<GuestMemoryReport> {
         UserAndroid::guest_memory(&*self.session)
     }

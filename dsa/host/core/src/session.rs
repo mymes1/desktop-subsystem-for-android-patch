@@ -123,6 +123,7 @@ use crate::background::{
 };
 use crate::clipboard;
 use crate::clock_trace::ClockTrace;
+use crate::file_share::{self, ShareHost, Sharing, SharingNow};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::guest_log::{
     serve_log_connection, DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogHub,
@@ -635,6 +636,15 @@ struct Shared {
     boot_secret: Mutex<Option<BootSecret>>,
     /// Set when the session ends, so the log port's threads end with it.
     log_port_stop: Arc<AtomicBool>,
+    /// Which of the user's host folders their Android shows, which each agent that connects
+    /// is told.
+    file_sharing: SharingNow,
+    /// The host's file server once the platform serves one: its port, and the folder in the
+    /// guest's shared storage the shared folders go under.
+    share_server: Mutex<Option<(u32, String)>>,
+    /// The token in the address of the guest's shared storage on the host, while the host
+    /// serves it.
+    android_files_token: Mutex<Option<String>>,
 }
 
 /// Opens a stream to the guest's adbd in the VM with the given runtime ID: the platform's
@@ -729,6 +739,43 @@ struct TaskHub {
 }
 
 impl Shared {
+    /// What the guest is told of the shared folders, once the host serves them.
+    fn file_sharing_body(&self) -> Option<Body> {
+        let (port, location) = self
+            .share_server
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()?;
+        let sharing = self
+            .file_sharing
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        Some(Body::FileSharing(control::FileSharing {
+            on: sharing.on,
+            port,
+            location,
+            folders: if sharing.on {
+                sharing.folders
+            } else {
+                Vec::new()
+            },
+        }))
+    }
+
+    /// What the guest's daemon is told to serve its shared storage, while the host shows it.
+    fn android_files_body(&self) -> Option<Body> {
+        let token = self
+            .android_files_token
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()?;
+        Some(Body::AndroidFiles(control::AndroidFiles {
+            port: file_share::ANDROID_FILES_PORT,
+            token,
+        }))
+    }
+
     fn set(&self, state: SessionState, reason: Option<StopReason>) {
         // Holding the subscriber list across the update means a subscriber sees exactly the
         // changes made after it subscribed, never one from just before.
@@ -990,6 +1037,10 @@ pub struct Session {
     adb_connect: Mutex<Option<AdbConnect>>,
     /// Developer mode's loopback port and the bridge on it, while developer mode is on.
     adb_bridge: Mutex<Option<(u16, AdbBridge)>>,
+    /// How the platform reaches the server of the guest's shared storage, when it can.
+    android_files_connect: Mutex<Option<AdbConnect>>,
+    /// The loopback bridge to the guest's shared storage, once a client has asked for it.
+    android_files_bridge: Mutex<Option<AdbBridge>>,
 }
 
 impl Session {
@@ -1038,6 +1089,9 @@ impl Session {
             logs: Mutex::new(LogHub::default()),
             boot_secret: Mutex::new(None),
             log_port_stop: Arc::new(AtomicBool::new(false)),
+            file_sharing: Arc::new(Mutex::new(Sharing::default())),
+            share_server: Mutex::new(None),
+            android_files_token: Mutex::new(None),
         });
         let freeze_delay = config.freeze_after.unwrap_or(DEFAULT_FREEZE_AFTER);
         let (commands, command_rx) = mpsc::channel();
@@ -1097,6 +1151,8 @@ impl Session {
             freeze_delay,
             adb_connect: Mutex::new(None),
             adb_bridge: Mutex::new(None),
+            android_files_connect: Mutex::new(None),
+            android_files_bridge: Mutex::new(None),
         }
     }
 
@@ -1164,6 +1220,143 @@ impl Session {
             );
         }
         Ok(())
+    }
+
+    /// Shares the user's host folders named in `folders` with the guest while `on`, as the
+    /// user's file sharing setting says. The guest mounts them, or takes them away, as soon as
+    /// it is told; the file server refuses a folder from the moment it is no longer shared.
+    pub fn share_folders(&self, on: bool, folders: Vec<String>) {
+        let wanted = Sharing { on, folders };
+        let changed = {
+            let mut sharing = self
+                .shared
+                .file_sharing
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            let changed = *sharing != wanted;
+            *sharing = wanted;
+            changed
+        };
+        if changed {
+            if let Some(body) = self.shared.file_sharing_body() {
+                send_quietly(&self.shared, &self.commands, body);
+            }
+        }
+    }
+
+    /// The folders shared now, as the user's setting says.
+    pub fn sharing(&self) -> Sharing {
+        self.shared
+            .file_sharing
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// Serves the user's host folders to the guest on `listener` for the life of the session,
+    /// with `host` saying where each folder is and running the server with the user's rights.
+    /// Only a connection that proves it knows the running boot's secret gets in.
+    pub fn serve_file_shares(&self, listener: Box<dyn Listener>, host: Arc<dyn ShareHost>) {
+        *self
+            .shared
+            .share_server
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some((file_share::SHARE_PORT, host.location()));
+        let sharing = Arc::clone(&self.shared.file_sharing);
+        let secret_of = Arc::clone(&self.shared);
+        let stop_of = Arc::clone(&self.shared.log_port_stop);
+        let spawned = thread::Builder::new()
+            .name("dsa-file-shares".into())
+            .spawn(move || {
+                file_share::serve_shares(
+                    listener,
+                    host,
+                    sharing,
+                    Arc::new(move || {
+                        secret_of
+                            .boot_secret
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .clone()
+                    }),
+                    Arc::new(move || stop_of.load(Ordering::Relaxed)),
+                )
+            });
+        if let Err(error) = spawned {
+            eprintln!("file sharing: the file server cannot be served: {error}");
+        }
+    }
+
+    /// Lets the host show the guest's shared storage through `connect`, which opens a stream
+    /// to the guest's server of it ([`file_share::ANDROID_FILES_PORT`]) in the VM with the
+    /// runtime ID it is given.
+    pub fn set_android_files_connect(&self, connect: AdbConnect) {
+        *self
+            .android_files_connect
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(connect);
+    }
+
+    /// The address the host's file manager opens the guest's shared storage at, as a WebDAV
+    /// URL on the loopback address. The first call starts the guest if it is stopped, opens
+    /// the loopback port, and has the guest serve its shared storage; the address then holds
+    /// for the life of the session.
+    pub fn android_files(&self) -> Result<String, String> {
+        let connect = self
+            .android_files_connect
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .ok_or_else(|| "this host cannot reach Android's files".to_string())?;
+        if self.state() == SessionState::Stopped {
+            self.start();
+        }
+        let mut bridge = self
+            .android_files_bridge
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if bridge.is_none() {
+            let shared = Arc::clone(&self.shared);
+            let guest: GuestAdb = Arc::new(move || {
+                let vm_id = shared
+                    .vm_id
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone()
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::NotConnected,
+                            "Android is not running",
+                        )
+                    })?;
+                connect(&vm_id)
+            });
+            let opened = AdbBridge::start(0, guest).map_err(|error| {
+                format!("cannot open a loopback port for Android's files: {error}")
+            })?;
+            let token = dsa_protocol::auth::to_hex(&dsa_protocol::auth::nonce()?);
+            *self
+                .shared
+                .android_files_token
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(token);
+            *bridge = Some(opened);
+            if let Some(body) = self.shared.android_files_body() {
+                send_quietly(&self.shared, &self.commands, body);
+            }
+        }
+        let address = bridge
+            .as_ref()
+            .map(AdbBridge::address)
+            .ok_or_else(|| "the loopback port for Android's files closed".to_string())?;
+        let token = self
+            .shared
+            .android_files_token
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .unwrap_or_default();
+        Ok(format!("http://{address}/{token}/"))
     }
 
     /// The address adb connects to while developer mode is on.
@@ -1997,6 +2190,7 @@ impl Session {
                 name: file.name.clone(),
                 size,
                 action: action as i32,
+                package: file.package.clone(),
             })),
         }))?;
         let window = files::CHUNK_BYTES as u64 * files::CHUNKS_IN_FLIGHT;
@@ -3831,6 +4025,15 @@ impl Worker {
             if self.shared.developer_mode.load(Ordering::SeqCst) {
                 self.send_body(Body::DeveloperMode(control::DeveloperMode { on: true }));
             }
+            // A guest boots with no host folder mounted, and without serving its own files.
+            if let Some(body @ Body::FileSharing(control::FileSharing { on: true, .. })) =
+                self.shared.file_sharing_body()
+            {
+                self.send_body(body);
+            }
+            if let Some(body) = self.shared.android_files_body() {
+                self.send_body(body);
+            }
             // A new agent reads no task's accessibility tree until it is asked.
             for task_id in self.shared.watched_tasks() {
                 self.send_body(Body::AccessibilityWatch(control::AccessibilityWatch {
@@ -4551,6 +4754,8 @@ impl Worker {
             | Some(Body::FileChunk(_))
             | Some(Body::ClipboardSharing(_))
             | Some(Body::DeveloperMode(_))
+            | Some(Body::FileSharing(_))
+            | Some(Body::AndroidFiles(_))
             | Some(Body::ArmTranslationInstall(_))
             | Some(Body::ArmTranslationChunk(_))
             | Some(Body::ArmTranslationRemove(_))

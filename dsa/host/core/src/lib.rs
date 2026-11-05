@@ -36,6 +36,8 @@
 //! - [`sensors`]: the host's motion and light sensors, read by the guest's sensors HAL.
 //! - [`camera`]: the host's cameras, used by the apps in the guest.
 //! - [`ime`]: text input through the host's input method in a task's window.
+//! - [`file_share`]: the user's host folders in the guest's shared storage, and the guest's
+//!   shared storage on the host.
 //! - [`settings`]: the settings a user changes from the settings app, kept by the service.
 //! - [`memory`]: how much memory a user's Android takes, in the guest and on the host.
 //! - [`window_manager`]: keeping a user's window manager running while their Android runs.
@@ -57,6 +59,7 @@ pub mod clock_trace;
 pub mod compositor;
 pub mod device_identity;
 pub mod diagnostics;
+pub mod file_share;
 pub mod files;
 pub mod guest_display;
 pub mod guest_log;

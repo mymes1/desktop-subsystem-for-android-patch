@@ -2351,6 +2351,7 @@ fn fr9_a_host_file_reaches_the_guest_in_chunks_paced_by_the_agent() {
         name: "report.pdf".into(),
         content: content.clone(),
         action: FileAction::View,
+        package: String::new(),
     };
     thread::scope(|scope| {
         let sending = scope.spawn(|| session.open_file(&file));
@@ -2390,6 +2391,118 @@ fn fr9_a_host_file_reaches_the_guest_in_chunks_paced_by_the_agent() {
 }
 
 #[test]
+fn fr29_a_file_dropped_on_a_window_reaches_that_app_whole() {
+    use dsa_host_core::files::{FileAction, FileTransfer, CHUNK_BYTES};
+    let (session, mut agent, _launcher) = active_session();
+    let content: Vec<u8> = (0..(CHUNK_BYTES + 5)).map(|i| (i % 251) as u8).collect();
+    let file = FileTransfer {
+        name: "holiday.jpg".into(),
+        content: content.clone(),
+        action: FileAction::Send,
+        package: "com.example.gallery".into(),
+    };
+    thread::scope(|scope| {
+        let sending = scope.spawn(|| session.open_file(&file));
+        let Body::OpenFile(open) = next_body(&mut agent) else {
+            panic!("expected the file's announcement");
+        };
+        assert_eq!(open.action, dsa_protocol::control::FileAction::Send as i32);
+        assert_eq!(open.package, "com.example.gallery");
+        let mut received = Vec::new();
+        while received.len() < content.len() {
+            let Body::FileChunk(chunk) = next_body(&mut agent) else {
+                panic!("expected a chunk");
+            };
+            received.extend_from_slice(&chunk.data);
+            send_body(
+                &mut agent,
+                progress(open.transfer_id, received.len() as u64, ""),
+            );
+        }
+        assert_eq!(sending.join().unwrap(), Ok(()));
+        assert_eq!(received, content, "the app gets the file as it is on the host");
+    });
+}
+
+fn file_sharing(on: bool, folders: &[&str]) -> Body {
+    Body::FileSharing(dsa_protocol::control::FileSharing {
+        on,
+        port: dsa_host_core::file_share::SHARE_PORT,
+        location: "Host".into(),
+        folders: folders.iter().map(|f| f.to_string()).collect(),
+    })
+}
+
+#[test]
+fn fr29_the_guest_is_told_to_mount_the_shared_folders_and_to_take_them_away() {
+    use dsa_host_core::file_share::PlainShareHost;
+    let (session, mut agent, _launcher) = active_session();
+    let (listener, _connector) = memory::pair();
+    session.serve_file_shares(
+        Box::new(listener),
+        Arc::new(PlainShareHost {
+            folders: Vec::new(),
+            location: "Host".into(),
+        }),
+    );
+    session.share_folders(true, vec!["Documents".into(), "Pictures".into()]);
+    assert_eq!(
+        next_body(&mut agent),
+        file_sharing(true, &["Documents", "Pictures"])
+    );
+    // A guest boots with nothing mounted, so an agent that connects again is told.
+    report_boot(&mut agent, true, false);
+    thread::sleep(Duration::from_millis(50));
+    report_boot(&mut agent, true, true);
+    assert_eq!(
+        next_body(&mut agent),
+        file_sharing(true, &["Documents", "Pictures"])
+    );
+    // Turned off, the guest takes every folder away.
+    session.share_folders(false, vec!["Documents".into(), "Pictures".into()]);
+    assert_eq!(next_body(&mut agent), file_sharing(false, &[]));
+    assert!(!session.sharing().shares("Documents"));
+}
+
+#[test]
+fn fr29_the_guest_is_told_nothing_of_folders_while_the_host_serves_none() {
+    let (session, mut agent, _launcher) = active_session();
+    session.share_folders(true, vec!["Documents".into()]);
+    nothing_for_the_guest(&mut agent);
+}
+
+#[test]
+fn fr29_android_files_open_a_loopback_address_and_have_the_guest_serve_them() {
+    use std::io::{Read, Write};
+    let (session, mut agent, _launcher) = active_session();
+    assert!(
+        session.android_files().is_err(),
+        "a host that cannot reach the guest's files has no address"
+    );
+    let (connect, reached) = fake_adbd();
+    session.set_android_files_connect(connect);
+    let url = session.android_files().unwrap();
+    let Body::AndroidFiles(files) = next_body(&mut agent) else {
+        panic!("expected the guest to be told to serve its files");
+    };
+    assert_eq!(files.port, dsa_host_core::file_share::ANDROID_FILES_PORT);
+    assert_eq!(files.token.len(), 64);
+    let rest = url.strip_prefix("http://127.0.0.1:").expect(&url);
+    let (port, path) = rest.split_once('/').unwrap();
+    assert_eq!(path, format!("{}/", files.token));
+    assert_eq!(session.android_files().unwrap(), url, "the address holds");
+
+    let mut client = std::net::TcpStream::connect(("127.0.0.1", port.parse::<u16>().unwrap()))
+        .unwrap();
+    client.set_read_timeout(Some(WAIT)).unwrap();
+    client.write_all(b"PROPFIND").unwrap();
+    let mut answer = [0u8; 8];
+    client.read_exact(&mut answer).unwrap();
+    assert_eq!(&answer, b"PROPFIND");
+    assert_eq!(*reached.lock().unwrap(), vec!["fake-vm".to_string()]);
+}
+
+#[test]
 fn fr9_a_file_the_agent_cannot_take_is_refused_with_its_reason() {
     use dsa_host_core::files::{FileAction, FileTransfer};
     let (session, mut agent, _launcher) = active_session();
@@ -2397,6 +2510,7 @@ fn fr9_a_file_the_agent_cannot_take_is_refused_with_its_reason() {
         name: "a.bin".into(),
         content: vec![1, 2, 3],
         action: FileAction::Send,
+        package: String::new(),
     };
     thread::scope(|scope| {
         let sending = scope.spawn(|| session.open_file(&file));
@@ -2429,6 +2543,7 @@ fn fr9_a_file_is_refused_before_sending_when_too_large_or_badly_named() {
         name: "big.iso".into(),
         content: vec![0; MAX_FILE_BYTES as usize + 1],
         action: FileAction::View,
+        package: String::new(),
     };
     assert!(matches!(
         session.open_file(&large),
@@ -2438,6 +2553,7 @@ fn fr9_a_file_is_refused_before_sending_when_too_large_or_badly_named() {
         name: "../etc/passwd".into(),
         content: vec![1],
         action: FileAction::View,
+        package: String::new(),
     };
     assert!(matches!(
         session.open_file(&named),
@@ -2455,6 +2571,7 @@ fn fr9_a_file_for_a_stopped_guest_is_refused() {
         name: "a.txt".into(),
         content: vec![1],
         action: FileAction::View,
+        package: String::new(),
     };
     assert_eq!(
         session.open_file(&file),

@@ -204,6 +204,16 @@ pub trait UserAndroid: Send + Sync {
             "this Android does not take files".into(),
         ))
     }
+    /// Shows the user's host folders named in `folders` in this Android's shared storage
+    /// while `on`, as the user's file sharing setting says.
+    fn share_folders(&self, on: bool, folders: Vec<String>) {
+        let _ = (on, folders);
+    }
+    /// The address (a WebDAV URL on the loopback address) the host's file manager opens this
+    /// Android's shared storage at. It starts this Android when it is stopped.
+    fn android_files(&self) -> Result<String, String> {
+        Err("this Android does not show its files on the host".into())
+    }
     /// The notifications of this Android from now on. `None` when it does not report them.
     fn watch_notifications(&self) -> Option<Receiver<NotificationEvent>> {
         None
@@ -518,6 +528,12 @@ impl UserAndroid for Session {
     }
     fn open_file(&self, file: &FileTransfer) -> Result<(), TaskRequestError> {
         Session::open_file(self, file).map_err(request_error)
+    }
+    fn share_folders(&self, on: bool, folders: Vec<String>) {
+        Session::share_folders(self, on, folders)
+    }
+    fn android_files(&self) -> Result<String, String> {
+        Session::android_files(self)
     }
     fn watch_notifications(&self) -> Option<Receiver<NotificationEvent>> {
         Some(Session::watch_notifications(self))
@@ -1714,6 +1730,7 @@ impl HostApiService {
             name: open.name,
             content,
             action,
+            package: open.package,
         };
         eprintln!(
             "files: {} asked to {} {} ({} bytes) in Android",
@@ -2886,6 +2903,18 @@ impl HostApiService {
                     response::Body::Memory(snapshot_to_wire(&memory))
                 }
             },
+            Some(request::Body::GetAndroidFiles(_)) => match self.androids.android(&peer.user) {
+                Err(why) => error(ErrorCode::Unavailable, why),
+                Ok(android) => match android.android_files() {
+                    Ok(url) => response::Body::AndroidFiles(types::AndroidFilesLocation {
+                        location: url,
+                    }),
+                    Err(why) => {
+                        eprintln!("files: Android's files for {}: {why}", peer.user);
+                        error(ErrorCode::Unavailable, why)
+                    }
+                },
+            },
             Some(request::Body::GetVmId(_)) => match self.androids.android(&peer.user) {
                 Err(why) => error(ErrorCode::Unavailable, why),
                 Ok(android) => response::Body::VmId(types::VmId {
@@ -3005,6 +3034,7 @@ impl HostApiService {
                         request::Body::StopSession(_) => android.stop(),
                         request::Body::UpdateProgram(_)
                         | request::Body::GetVmId(_)
+                        | request::Body::GetAndroidFiles(_)
                         | request::Body::ListTasks(_)
                         | request::Body::ListApps(_)
                         | request::Body::OpenAppSettings(_)
@@ -3392,6 +3422,8 @@ impl HostApiService {
             resize_trace: wanted.resize_trace,
             developer_mode: wanted.developer_mode,
             arm_translation: wanted.arm_translation,
+            file_sharing: wanted.file_sharing,
+            shared_folders: wanted.shared_folders,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -3441,6 +3473,7 @@ impl HostApiService {
                     android.freeze_when_idle(settings.freeze);
                     android.share_clipboard(settings.clipboard);
                     android.links_in_android(settings.links_in_android);
+                    android.share_folders(settings.file_sharing, settings.shared_folders.clone());
                     if let Err(why) =
                         android.developer_mode(settings.developer_mode, settings.adb_port)
                     {
@@ -3458,7 +3491,8 @@ impl HostApiService {
                 eprintln!(
                     "local API: {} changed the settings: render GPU {}, freeze {}, clipboard \
                      {}, links in Android {}, program updates {}, image updates {}, input \
-                     trace {}, resize trace {}, developer mode {} (adb port {})",
+                     trace {}, resize trace {}, developer mode {} (adb port {}), file sharing {} \
+                     ({})",
                     peer.user,
                     settings.render_gpu,
                     on_off(settings.freeze),
@@ -3469,7 +3503,9 @@ impl HostApiService {
                     on_off(settings.input_trace),
                     on_off(settings.resize_trace),
                     on_off(settings.developer_mode),
-                    settings.adb_port
+                    settings.adb_port,
+                    on_off(settings.file_sharing),
+                    settings.shared_folders.join(", ")
                 );
                 response::Body::Settings(settings_to_wire(&settings, &self.facts_now(facts)))
             }
@@ -3513,6 +3549,8 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         developer_mode: settings.developer_mode,
         adb_port: settings.adb_port.into(),
         arm_translation: settings.arm_translation,
+        file_sharing: settings.file_sharing,
+        shared_folders: settings.shared_folders.clone(),
         program_updates_available: facts.program_updates_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
@@ -3539,6 +3577,8 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
                 u16::try_from(settings.adb_port).unwrap_or(0),
             ),
             arm_translation: settings.arm_translation,
+            file_sharing: settings.file_sharing,
+            shared_folders: settings.shared_folders,
         },
         facts: ServiceFacts {
             version: settings.version,
@@ -3786,6 +3826,19 @@ impl HostApiClient {
         match self.exchange(body, self.timeout)? {
             response::Body::Settings(settings) => Ok(settings_from_wire(settings)),
             _ => Err(ClientError::Malformed("expected the settings".into())),
+        }
+    }
+
+    /// The address (a WebDAV URL on the loopback address) the host's file manager opens the
+    /// caller's Android shared storage at. The service starts the caller's Android when it is
+    /// stopped.
+    pub fn android_files(&mut self) -> Result<String, ClientError> {
+        let body = request::Body::GetAndroidFiles(types::GetAndroidFiles {});
+        match self.exchange(body, self.timeout)? {
+            response::Body::AndroidFiles(files) => Ok(files.location),
+            _ => Err(ClientError::Malformed(
+                "expected where Android's files are".into(),
+            )),
         }
     }
 
@@ -4264,6 +4317,7 @@ impl HostApiClient {
                 name: file.name.clone(),
                 size: file.content.len() as u64,
                 action: action as i32,
+                package: file.package.clone(),
             }),
             self.timeout,
         )
