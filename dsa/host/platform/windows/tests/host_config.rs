@@ -652,10 +652,18 @@ fn fr15_a_test_packages_configuration_does_not_survive_a_real_upgrade_silently()
         update.trusted_keys,
         vec!["8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c".to_string()]
     );
-    assert_eq!(update.check_interval_hours, 48, "the user's own choice stays");
+    assert_eq!(
+        update.check_interval_hours, 48,
+        "the user's own choice stays"
+    );
     assert!(!config.test_package);
     assert_eq!(notes.len(), 2, "{notes:?}");
-    assert!(notes.iter().any(|n| n.contains(r"D:\\a\\dsa\\mirror\\images.json")), "{notes:?}");
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.contains(r"D:\\a\\dsa\\mirror\\images.json")),
+        "{notes:?}"
+    );
     assert_eq!(config.package_notes, notes);
 }
 

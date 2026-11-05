@@ -588,6 +588,10 @@ fn fr15_a_bundled_image_replaces_an_update_still_on_trial_keeping_the_good_one()
     assert!(store.adopt_bundled(&installed("17.0.0-5", 17, 5)).unwrap());
     let state = store.state().unwrap();
     assert_eq!(state.current, installed("17.0.0-5", 17, 5));
-    assert_eq!(state.previous, Some(good), "the last image known to boot stays");
+    assert_eq!(
+        state.previous,
+        Some(good),
+        "the last image known to boot stays"
+    );
     assert!(state.on_trial);
 }
