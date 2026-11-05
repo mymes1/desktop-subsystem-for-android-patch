@@ -239,14 +239,16 @@ impl AndroidVmConfig {
             }
         }
         if arch.boots_from_a_folder() {
-            boot_folder(&self.kernel)?;
+            let (kernel_folder, _) = boot_folder(&self.kernel)?;
             if let Some(initrd) = &self.initrd {
-                if initrd.parent() != self.kernel.parent() || initrd.file_name().is_none() {
+                let same = split_file(initrd)
+                    .is_some_and(|(folder, _)| folder.eq_ignore_ascii_case(&kernel_folder));
+                if !same {
                     return Err(ConfigError(format!(
                         "on ARM64 the initrd {} must be in the kernel's folder {}: the VM's \
                          firmware reads both from there",
                         initrd.display(),
-                        self.kernel.parent().unwrap_or(Path::new("")).display()
+                        kernel_folder
                     )));
                 }
             }
@@ -317,6 +319,13 @@ impl AndroidVmConfig {
     }
 
     /// The HCS compute system document (schema 2.3) that creates the VM on this host.
+    /// Checks what does not depend on where the boot's files are placed (paths absolute,
+    /// processors, memory), so a bad configuration is refused before any file is copied.
+    pub fn check_settings(&self) -> Result<(), ConfigError> {
+        // x86_64 places no rule on the folders, which only the prepared boot can meet.
+        self.validate(GuestArch::X86_64).map(|_| ())
+    }
+
     pub fn to_hcs_document(&self) -> Result<Value, ConfigError> {
         self.to_hcs_document_for(GuestArch::HOST)
     }
@@ -441,15 +450,25 @@ impl AndroidVmConfig {
 
 /// The folder the ARM64 VM's firmware reads the kernel from, and the kernel's name in it.
 fn boot_folder(kernel: &Path) -> Result<(String, String), ConfigError> {
-    match (kernel.parent(), kernel.file_name()) {
-        (Some(folder), Some(name)) if !folder.as_os_str().is_empty() => {
-            Ok((path_string(folder), name.to_string_lossy().into_owned()))
-        }
-        _ => Err(ConfigError(format!(
+    match split_file(kernel) {
+        Some(parts) => Ok(parts),
+        None => Err(ConfigError(format!(
             "the kernel path {} must name a file in a folder",
             kernel.display()
         ))),
     }
+}
+
+/// Splits a Windows path into its folder and file name. Both `\` and `/` separate on every
+/// build host, because HCS on Windows reads the path, not the process that wrote it.
+fn split_file(path: &Path) -> Option<(String, String)> {
+    let text = path_string(path);
+    let at = text.rfind(['\\', '/'])?;
+    let (folder, name) = (&text[..at], &text[at + 1..]);
+    if folder.is_empty() || name.is_empty() {
+        return None;
+    }
+    Some((folder.to_string(), name.to_string()))
 }
 
 /// Finds the runtime ID in an HCS properties document (`RuntimeId`, or `RuntimeID` in
