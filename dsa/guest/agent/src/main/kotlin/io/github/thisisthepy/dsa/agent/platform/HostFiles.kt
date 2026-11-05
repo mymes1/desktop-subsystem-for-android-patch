@@ -112,4 +112,30 @@ class AndroidFileOpener(private val context: Context) : FileOpener {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
         context.startActivity(chooser)
     }
+
+    /**
+     * Sends the file to [packageName] with ACTION_SEND, to the activity of that app that takes
+     * the file's type. An app that takes no such file gets the chooser instead, so the user can
+     * pick another one.
+     */
+    override fun shareWith(file: StoredFile, packageName: String) {
+        val uri = HostFileProvider.uriFor(context, file)
+        val intent = Intent(Intent.ACTION_SEND).setType(mimeTypeOf(file.name))
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .setPackage(packageName)
+        intent.clipData = ClipData.newRawUri(file.name, uri)
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (intent.resolveActivity(context.packageManager) == null) {
+            open(file, FileAction.FILE_ACTION_SEND)
+            return
+        }
+        context.startActivity(intent)
+    }
+}
+
+/** Has the media scanner look at a shared folder from the host, and all that is in it. */
+class AndroidMediaScan(private val context: Context) : io.github.thisisthepy.dsa.agent.files.MediaScan {
+    override fun scan(folder: File) {
+        android.media.MediaScannerConnection.scanFile(context, arrayOf(folder.path), null, null)
+    }
 }

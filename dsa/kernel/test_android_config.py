@@ -84,6 +84,13 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIn("CONFIG_VSOCKETS=y", config)
         self.assertIn("CONFIG_HYPERV_VSOCKETS=y", config)
 
+    def test_fr29_host_folders_can_be_mounted_with_9p_over_a_socket(self):
+        config = CONFIG.read_text()
+        self.assertIn("CONFIG_NET_9P=y", config)
+        # trans=fd: the guest's daemon hands the kernel a Hyper-V socket to speak 9P on.
+        self.assertIn("CONFIG_NET_9P_FD=y", config)
+        self.assertIn("CONFIG_9P_FS=y", config)
+
     def test_pr3_vgem_is_built_into_the_guest_kernel(self):
         config = CONFIG.read_text()
         self.assertIn("CONFIG_DRM=y", config)

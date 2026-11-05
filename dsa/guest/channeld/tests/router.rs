@@ -545,6 +545,44 @@ fn fr20_developer_mode_reaches_the_switch_and_no_client() {
     assert!(agent.frames().is_empty(), "the agent is not told");
 }
 
+#[test]
+fn fr29_file_sharing_reaches_the_switch_and_the_agent() {
+    let (router, _host) = router();
+    let switched = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&switched);
+    let router = router.on_file_sharing(move |sharing| seen.lock().unwrap().push(sharing.clone()));
+    let agent = Arc::new(Recorder::default());
+    router.subscribe(AGENT, agent.clone());
+    let sharing = dsa_protocol::control::FileSharing {
+        on: true,
+        port: 5590,
+        location: "Windows".into(),
+        folders: vec!["Pictures".into()],
+    };
+    let sent = frame(Body::FileSharing(sharing.clone()));
+    router.from_host(&sent);
+    assert_eq!(*switched.lock().unwrap(), vec![sharing]);
+    assert_eq!(agent.frames(), vec![sent], "the agent has the media scanner look");
+}
+
+#[test]
+fn fr29_the_request_for_androids_files_reaches_the_switch_and_no_client() {
+    let (router, _host) = router();
+    let switched = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&switched);
+    let router = router.on_android_files(move |files| seen.lock().unwrap().push(files.port));
+    let agent = Arc::new(Recorder::default());
+    router.subscribe(AGENT, agent.clone());
+    router.from_host(&frame(Body::AndroidFiles(
+        dsa_protocol::control::AndroidFiles {
+            port: 5591,
+            token: "3f9a".into(),
+        },
+    )));
+    assert_eq!(*switched.lock().unwrap(), vec![5591]);
+    assert!(agent.frames().is_empty(), "the token stays with the daemon");
+}
+
 const GNSS_HAL: Peer = Peer(700);
 
 fn location_request(active: bool, interval_ms: u32) -> Vec<u8> {

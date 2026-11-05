@@ -1828,6 +1828,8 @@ class GuestMemoryTests(unittest.TestCase):
             + make_image.TRIM_PROPERTY_CONTEXT + "\n"
             + make_image.BOOT_PROPERTY_CONTEXT + "\n"
             + make_image.ADB_PROPERTY_CONTEXT + "\n"
+            + make_image.SHARES_PROPERTY_CONTEXT + "\n"
+            + make_image.FILES_PROPERTY_CONTEXT + "\n"
         )
         self.assertEqual(make_image.update_vendor_property_contexts(all_of_them), all_of_them)
 
@@ -2548,6 +2550,29 @@ class DeveloperModeTests(unittest.TestCase):
         self.assertIn("(allow dsa_channeld dsa_adb_prop (property_service (set)))", channeld)
         adb = (Path(__file__).parent / "sepolicy/adb.cil").read_text()
         self.assertNotRegex(adb, r"\(allow (?!vendor_init)\S+ dsa_adb_prop \(property_service")
+
+    def test_fr29_the_host_folders_are_mounted_and_the_storage_served_through_properties_only_the_daemon_sets(self):
+        rc = (Path(__file__).with_name("dsa-channeld.rc")).read_text()
+        self.assertIn("on property:vendor.dsa.shares=* && property:sys.boot_completed=1\n    start dsa_sharemount", rc)
+        self.assertIn("service dsa_sharemount /vendor/bin/dsa-channeld --share-mount", rc)
+        self.assertIn("seclabel u:r:dsa_sharemount:s0", rc)
+        self.assertIn("on property:vendor.dsa.files=* && property:sys.boot_completed=1\n    restart dsa_files", rc)
+        files_service = rc[rc.index("service dsa_files"):]
+        self.assertIn("user media_rw", files_service)
+        contexts = make_image.update_vendor_property_contexts("")
+        self.assertIn("vendor.dsa.shares u:object_r:dsa_shares_prop:s0 exact string", contexts)
+        self.assertIn("vendor.dsa.files u:object_r:dsa_files_prop:s0 exact string", contexts)
+        files = (Path(__file__).parent / "sepolicy/files.cil").read_text()
+        setters = re.findall(r"\(allow (\S+) dsa_(?:shares|files)_prop \(property_service \(set\)\)\)", files)
+        self.assertEqual(sorted(set(setters)), ["dsa_channeld"])
+        # The host's folders carry the shared storage's label, so the media provider serves them.
+        self.assertIn('(genfscon 9p "/" (u object_r media_rw_data_file ((s0) (s0))))', files)
+
+    def test_fr29_the_policy_of_the_file_sharing_jobs_goes_into_the_image_with_the_daemon(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=True) as archive:
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertIn("(typeattributeset domain (dsa_sharemount))", policy)
+            self.assertIn("(typeattributeset domain (dsa_files))", policy)
 
     def test_fr20_adbd_may_listen_on_vsock(self):
         with tempfile.TemporaryDirectory() as tmp:

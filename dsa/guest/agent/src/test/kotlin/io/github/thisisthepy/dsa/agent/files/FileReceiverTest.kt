@@ -77,6 +77,41 @@ class FileReceiverTest {
     }
 
     @Test
+    fun fr29_a_file_dropped_on_a_window_goes_to_that_app_as_it_was_on_the_host() {
+        val shared = mutableListOf<Pair<StoredFile, String>>()
+        val dropped = FileReceiver(
+            store,
+            object : FileOpener {
+                override fun open(file: StoredFile, action: FileAction) {
+                    opened += file to action
+                }
+
+                override fun shareWith(file: StoredFile, packageName: String) {
+                    shared += file to packageName
+                }
+            },
+            { frame -> sent += decode(frame).fileProgress; true },
+            log,
+        )
+        val content = ByteArray(1000) { (it % 7).toByte() }
+        dropped.handle(
+            Envelope.newBuilder().setOpenFile(
+                OpenFile.newBuilder().setTransferId(9).setName("holiday.jpg").setSize(content.size.toLong())
+                    .setAction(FileAction.FILE_ACTION_SEND).setPackage("com.example.gallery"),
+            ).build(),
+        )
+        dropped.handle(
+            Envelope.newBuilder().setFileChunk(
+                FileChunk.newBuilder().setTransferId(9).setOffset(0).setData(ByteString.copyFrom(content)),
+            ).build(),
+        )
+        val (file, packageName) = shared.single()
+        assertEquals("com.example.gallery", packageName)
+        assertArrayEquals(content, file.file.readBytes())
+        assertTrue("no chooser for a dropped file", opened.isEmpty())
+    }
+
+    @Test
     fun fr9_an_empty_file_is_offered_at_once() {
         open(1, "empty.txt", 0)
         assertEquals(1, opened.size)

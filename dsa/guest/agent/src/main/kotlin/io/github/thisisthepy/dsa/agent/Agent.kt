@@ -26,6 +26,8 @@ import io.github.thisisthepy.dsa.agent.input.TextKeys
 import io.github.thisisthepy.dsa.agent.input.TouchSounds
 import io.github.thisisthepy.dsa.agent.files.FileOpener
 import io.github.thisisthepy.dsa.agent.files.FileReceiver
+import io.github.thisisthepy.dsa.agent.files.MediaScan
+import io.github.thisisthepy.dsa.agent.files.SharedFolders
 import io.github.thisisthepy.dsa.agent.files.TransferStore
 import io.github.thisisthepy.dsa.agent.links.BrowserRole
 import io.github.thisisthepy.dsa.agent.links.GuestBrowser
@@ -126,6 +128,8 @@ class Agent(
     guestBrowser: GuestBrowser = GuestBrowser.NONE,
     fileStore: TransferStore? = null,
     fileOpener: FileOpener = FileOpener.NONE,
+    mediaScan: MediaScan = MediaScan.NONE,
+    sharedStorage: java.io.File = java.io.File("/storage/emulated/0"),
     clipboard: GuestClipboard = GuestClipboard.NONE,
     notifications: NotificationSource = NotificationSource.NONE,
     media: MediaSource = MediaSource.NONE,
@@ -250,6 +254,7 @@ class Agent(
     private val installed = InstalledAppReporter(ownPackage) { frame -> channel.send(frame) }
     private val links = Links(browserRole, guestBrowser, { frame -> channel.send(frame) }, log)
     private val files = FileReceiver(fileStore, fileOpener, { frame -> channel.send(frame) }, log)
+    private val sharedFolders = SharedFolders(sharedStorage, mediaScan, scheduler, log)
     private val accessibilityExport = AccessibilityExport(
         accessibility,
         scheduler,
@@ -434,6 +439,7 @@ class Agent(
             log.warn("acting on a widget frame from the host failed", e)
             return true
         }
+        if (sharedFolders.handle(envelope)) return true
         if (clipboardSync.handle(envelope)) return true
         if (notificationForwarder.handle(envelope)) return true
         if (backgroundApps.handle(envelope)) return true
