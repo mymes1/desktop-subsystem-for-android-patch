@@ -123,7 +123,10 @@ class HostGraphicsBuildTests(unittest.TestCase):
         # The frame goes into the window's Direct3D texture without a trip through the CPU.
         self.assertIn("VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT", source)
         self.assertIn("vkCmdBlitImage", source)
-        self.assertNotIn("readColorBuffer", source)
+        # On Windows, that is: the Linux and macOS section reads a frame back only where the
+        # desktop takes no GPU buffers.
+        windows = source[source.index("#ifdef _WIN32"):source.index("#else /* !_WIN32 */")]
+        self.assertNotIn("readColorBuffer", windows)
         self.assertIn("setDisplayColorBuffer", source)
         self.assertIn("dsa_gfx_display.cpp", CMAKE_FILE.read_text(encoding="utf-8"))
 
