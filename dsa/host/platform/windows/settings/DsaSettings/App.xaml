@@ -109,6 +109,9 @@
                  right. A card that is not a button does not light up under the pointer or when
                  pressed; the library's card does both. -->
             <Style TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
+                <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="Padding" Value="16" />
                 <Setter Property="MinHeight" Value="68" />
                 <Setter Property="Template">
@@ -120,7 +123,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="{TemplateBinding CornerRadius}">
+                                    CornerRadius="4">
                                 <Grid VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
@@ -164,6 +167,9 @@
             <!-- A clickable settings card: the same layout, and a 13 px chevron 14 px after the
                  header in place of the library's 16 px one 4 px after it. -->
             <Style TargetType="ui:CardAction" BasedOn="{StaticResource {x:Type ui:CardAction}}">
+                <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="Padding" Value="16" />
                 <Setter Property="MinHeight" Value="68" />
                 <Setter Property="Template">
@@ -175,7 +181,7 @@
                                     Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="{TemplateBinding Border.CornerRadius}">
+                                    CornerRadius="4">
                                 <Grid VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
