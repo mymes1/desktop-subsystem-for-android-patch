@@ -296,7 +296,9 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if needed not in names:
             problems.append(f"{needed} is missing, so an installed ARM translation package is never used")
     if "PRODUCT/etc/build.prop" in names:
-        product_lines = z.read("PRODUCT/etc/build.prop").decode(errors="replace").splitlines()
+        # Signing rewrites every build.prop and ends it with a blank line, which init skips.
+        product_lines = [line for line in z.read("PRODUCT/etc/build.prop").decode(errors="replace").splitlines()
+                         if line.strip()]
         wanted_import = "import /system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop"
         if not product_lines or product_lines[-1].strip() != wanted_import:
             problems.append("PRODUCT/etc/build.prop does not end with the ARM translation import, so an "
