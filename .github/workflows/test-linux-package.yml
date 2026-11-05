@@ -16,8 +16,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: test-linux-package-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  # Each push to develop is checked on its own: several workers push in a row, and a
+  # newer push cancelling an older run left commits no run ever finished.
+  group: test-linux-package-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
   contents: read
@@ -44,6 +46,15 @@ jobs:
       - name: Build the host programs
         working-directory: dsa
         run: cargo build --release -p dsa-cli -p dsa-host-linux
+
+      # The lock file the build resolved, so a dependency added without one can be checked
+      # in from here.
+      - name: Keep the resolved lock file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock-${{ matrix.arch }}
+          path: dsa/Cargo.lock
 
       - name: Make a stand-in image
         run: |

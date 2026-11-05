@@ -37,6 +37,7 @@ public  final class Envelope extends
     KEY_EVENT(16),
     IME_COMPOSITION(17),
     IME_COMMIT(18),
+    IME_DELETE_SURROUNDING(377),
     IME_CURSOR(19),
     REQUEST_GUEST_MEMORY(20),
     GUEST_MEMORY(21),
@@ -181,6 +182,7 @@ public  final class Envelope extends
         case 16: return KEY_EVENT;
         case 17: return IME_COMPOSITION;
         case 18: return IME_COMMIT;
+        case 377: return IME_DELETE_SURROUNDING;
         case 19: return IME_CURSOR;
         case 20: return REQUEST_GUEST_MEMORY;
         case 21: return GUEST_MEMORY;
@@ -1159,6 +1161,56 @@ public  final class Envelope extends
    */
   private void clearImeCommit() {
     if (bodyCase_ == 18) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int IME_DELETE_SURROUNDING_FIELD_NUMBER = 377;
+  /**
+   * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+   */
+  @java.lang.Override
+  public boolean hasImeDeleteSurrounding() {
+    return bodyCase_ == 377;
+  }
+  /**
+   * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding getImeDeleteSurrounding() {
+    if (bodyCase_ == 377) {
+       return (io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+   */
+  private void setImeDeleteSurrounding(io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 377;
+  }
+  /**
+   * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+   */
+  private void mergeImeDeleteSurrounding(io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding value) {
+    value.getClass();
+  if (bodyCase_ == 377 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding.newBuilder((io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 377;
+  }
+  /**
+   * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+   */
+  private void clearImeDeleteSurrounding() {
+    if (bodyCase_ == 377) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -7692,6 +7744,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+     */
+    @java.lang.Override
+    public boolean hasImeDeleteSurrounding() {
+      return instance.hasImeDeleteSurrounding();
+    }
+    /**
+     * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding getImeDeleteSurrounding() {
+      return instance.getImeDeleteSurrounding();
+    }
+    /**
+     * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+     */
+    public Builder setImeDeleteSurrounding(io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding value) {
+      copyOnWrite();
+      instance.setImeDeleteSurrounding(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+     */
+    public Builder setImeDeleteSurrounding(
+        io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding.Builder builderForValue) {
+      copyOnWrite();
+      instance.setImeDeleteSurrounding(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+     */
+    public Builder mergeImeDeleteSurrounding(io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding value) {
+      copyOnWrite();
+      instance.mergeImeDeleteSurrounding(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;</code>
+     */
+    public Builder clearImeDeleteSurrounding() {
+      copyOnWrite();
+      instance.clearImeDeleteSurrounding();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.ImeCursor ime_cursor = 19;</code>
      */
     @java.lang.Override
@@ -13214,9 +13314,10 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.GamepadDisconnected.class,
             io.github.thisisthepy.dsa.control.v1.GamepadState.class,
             io.github.thisisthepy.dsa.control.v1.GamepadRumble.class,
+            io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding.class,
           };
           java.lang.String info =
-              "\u0000\u0081\u0001\u0000\u0001\u0158\u0081\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u0082\u0001\u0000\u0001\u0179\u0082\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -13233,7 +13334,7 @@ public  final class Envelope extends
               "<\u0000\u00dd<\u0000\u00de<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000" +
               "\u0104<\u0000\u0105<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a" +
               "<\u0000\u010b<\u0000\u0122<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000" +
-              "\u0157<\u0000\u0158<\u0000";
+              "\u0157<\u0000\u0158<\u0000\u0179<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

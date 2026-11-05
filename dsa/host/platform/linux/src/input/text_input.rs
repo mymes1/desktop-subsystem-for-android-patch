@@ -15,12 +15,16 @@ use dsa_host_core::ime::{ImeEvent, TextInput};
 struct Pending {
     preedit: Option<(String, i32)>,
     commit: Option<String>,
+    delete: Option<(u32, u32)>,
 }
 
 /// The input method's state for one task window.
 #[derive(Debug)]
 pub struct TextInputV3 {
+    task_id: i32,
     input: TextInput,
+    /// The text typed last through this window, to measure deletions against.
+    recent: String,
     pending: Pending,
 }
 
@@ -35,10 +39,24 @@ pub fn utf16_cursor(text: &str, bytes: i32) -> u32 {
     text[..end].encode_utf16().count() as u32
 }
 
+/// The UTF-16 length of the last `bytes` UTF-8 bytes of `recent`; `bytes` itself when they
+/// do not end on a character boundary of it or reach past it.
+pub fn recent_units(recent: &str, bytes: u32) -> u32 {
+    let bytes = bytes as usize;
+    match recent.len().checked_sub(bytes) {
+        Some(start) if recent.is_char_boundary(start) => {
+            recent[start..].encode_utf16().count() as u32
+        }
+        _ => bytes as u32,
+    }
+}
+
 impl TextInputV3 {
     pub fn new(task_id: i32) -> TextInputV3 {
         TextInputV3 {
+            task_id,
             input: TextInput::new(task_id),
+            recent: String::new(),
             pending: Pending::default(),
         }
     }
@@ -54,11 +72,33 @@ impl TextInputV3 {
         self.pending.commit = text;
     }
 
+    /// `delete_surrounding_text`: `before` and `after` UTF-8 bytes around the cursor go. The
+    /// guest counts UTF-16 code units. The host does not hold the editor's text, but an input
+    /// method deletes what it has just typed, which the host remembers, so the bytes before
+    /// the cursor are converted against that; anything else passes on as it is, which is
+    /// exact for ASCII.
+    pub fn delete_surrounding(&mut self, before: u32, after: u32) {
+        let before = recent_units(&self.recent, before);
+        self.pending.delete = Some((before, after));
+    }
+
     /// `done`: applies the batch, and says what the guest's editor receives, in order.
     pub fn done(&mut self) -> Vec<ImeEvent> {
         let batch = std::mem::take(&mut self.pending);
         let mut events = Vec::new();
+        if let Some((before, after)) = batch.delete.filter(|(b, a)| *b > 0 || *a > 0) {
+            events.push(ImeEvent::DeleteSurrounding {
+                task_id: self.task_id,
+                before,
+                after,
+            });
+        }
+        if let Some((before, _)) = batch.delete {
+            let keep = self.recent.chars().count().saturating_sub(before as usize);
+            self.recent = self.recent.chars().take(keep).collect();
+        }
         if let Some(text) = batch.commit.filter(|text| !text.is_empty()) {
+            self.remember(&text);
             events.extend(self.input.commit(&text));
         }
         match batch.preedit.filter(|(text, _)| !text.is_empty()) {
@@ -80,7 +120,17 @@ impl TextInputV3 {
 
     /// A key typed `text` with no input method composing it.
     pub fn typed(&mut self, text: &str) -> Vec<ImeEvent> {
+        self.remember(text);
         self.input.commit(text).into_iter().collect()
+    }
+
+    fn remember(&mut self, text: &str) {
+        const KEEP: usize = 256;
+        self.recent.push_str(text);
+        let extra = self.recent.chars().count().saturating_sub(KEEP);
+        if extra > 0 {
+            self.recent = self.recent.chars().skip(extra).collect();
+        }
     }
 
     /// Whether the guest's editor holds a composition.
@@ -151,6 +201,26 @@ mod tests {
         assert_eq!(utf16_cursor("\u{1f600}x", 4), 2, "an emoji is two units");
         assert_eq!(utf16_cursor("abc", -1), 3, "a hidden cursor stands at the end");
         assert_eq!(utf16_cursor("\u{d55c}", 1), 1, "inside a character means the end");
+    }
+
+    #[test]
+    fn fr6_an_input_method_deletes_around_the_cursor_before_it_commits() {
+        let mut ime = TextInputV3::new(4);
+        ime.typed("a\u{d55c}");
+        // The input method takes back the three bytes of 한: one UTF-16 code unit.
+        ime.delete_surrounding(3, 0);
+        ime.commit(Some("\u{d55c}".into()));
+        assert_eq!(
+            ime.done(),
+            vec![
+                ImeEvent::DeleteSurrounding {
+                    task_id: 4,
+                    before: 1,
+                    after: 0
+                },
+                commit("\u{d55c}")
+            ]
+        );
     }
 
     #[test]

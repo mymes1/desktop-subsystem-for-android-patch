@@ -5,6 +5,7 @@ import io.github.thisisthepy.dsa.agent.RecordingLog
 import io.github.thisisthepy.dsa.agent.decode
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
 import io.github.thisisthepy.dsa.control.v1.ImeCommit
+import io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding
 import io.github.thisisthepy.dsa.control.v1.ImeComposition
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -37,6 +38,18 @@ class FakeEditor : EditorConnection {
         this.text.insert(start, text)
         composing = null
         cursor = start + text.length
+        return true
+    }
+
+    override fun deleteSurrounding(before: Int, after: Int): Boolean {
+        calls += "delete $before $after"
+        if (!takesText) return false
+        val from = (cursor - before).coerceAtLeast(0)
+        val to = (cursor + after).coerceAtMost(text.length)
+        text.delete(cursor, to)
+        text.delete(from, cursor)
+        composing = composing?.let { (it.first - (cursor - from)) until (it.last + 1 - (cursor - from)) }
+        cursor = from
         return true
     }
 }
@@ -72,6 +85,16 @@ class TextInputTest {
 
     private fun commit(text: String, taskId: Int = 7) =
         input.handle(ImeCommit.newBuilder().setTaskId(taskId).setText(text).build())
+
+    @Test
+    fun fr6_the_input_method_deletes_around_the_cursor() {
+        commit("abcd")
+        input.handle(
+            ImeDeleteSurrounding.newBuilder().setTaskId(7).setBeforeLength(2).setAfterLength(0).build(),
+        )
+        assertEquals("ab", editor.text.toString())
+        assertEquals(2, editor.cursor)
+    }
 
     @Test
     fun fr6_korean_composes_in_the_editor_and_commits_in_place() {

@@ -15,3 +15,5 @@ pub mod gfxstream;
 pub mod session;
 #[cfg(target_os = "linux")]
 pub mod wayland;
+#[cfg(target_os = "linux")]
+pub mod x11_pip;

@@ -26,7 +26,7 @@ use dsa_host_core::tasks::{AppInfo, TaskEvent, TaskRequest};
 use dsa_host_unix::socket::UnixLocalConnector;
 use dsa_transport::Connector;
 
-use super::frames::LatestFrames;
+use super::frames::{GpuImage, LatestFrames, Shown};
 use super::gfxstream::{self, FrameSink, Listen, Renderer};
 use super::wayland::{Desktop, Event, Events, Wake};
 use crate::input::evdev::EvdevGamepads;
@@ -373,9 +373,17 @@ fn follow_gamepads(active: Arc<AtomicBool>) {
     });
 }
 
-fn start_graphics(frames: Arc<Mutex<LatestFrames>>, waker: Arc<PipeWaker>) {
+fn start_graphics(
+    frames: Arc<Mutex<LatestFrames>>,
+    images: Option<Arc<Mutex<Vec<(GpuImage, OwnedFd)>>>>,
+    waker: Arc<PipeWaker>,
+) {
     let path = gfxstream::backend_path();
-    let sink = FrameSink { frames, waker };
+    let sink = FrameSink {
+        frames,
+        waker,
+        images,
+    };
     match Renderer::load(&path, sink) {
         Ok(renderer) => {
             let renderer = Arc::new(renderer);
@@ -400,6 +408,7 @@ struct Main {
     input: Sender<InputEvent>,
     clipboard: Sender<String>,
     frames: Arc<Mutex<LatestFrames>>,
+    images: Option<Arc<Mutex<Vec<(GpuImage, OwnedFd)>>>>,
     active: Arc<AtomicBool>,
     /// The apps the guest told of, for the launcher entries.
     apps: BTreeMap<String, AppInfo>,
@@ -518,6 +527,9 @@ impl Main {
             Event::Input(input) => {
                 let _ = self.input.send(input);
             }
+            Event::PipInput { task_id, input } => {
+                self.desktop.state.pointer_input(task_id, input);
+            }
             Event::HostClipboard(text) => {
                 if self.guest_clipboard.as_deref() != Some(text.as_str()) {
                     let _ = self.clipboard.send(text);
@@ -583,9 +595,21 @@ impl Main {
             Ok(mut frames) => frames.take(),
             Err(_) => return,
         };
+        let images = self
+            .images
+            .as_ref()
+            .and_then(|images| images.lock().ok().map(|mut images| std::mem::take(&mut *images)))
+            .unwrap_or_default();
+        for (image, fd) in images {
+            self.desktop.state.add_gpu_image(image, fd);
+        }
         for (display_id, frame) in frames {
-            if let Some(task_id) = self.windows.task_for_display(display_id) {
-                self.desktop.state.present(task_id, frame);
+            let Some(task_id) = self.windows.task_for_display(display_id) else {
+                continue;
+            };
+            match frame {
+                Shown::Pixels(frame) => self.desktop.state.present(task_id, frame),
+                Shown::Gpu(frame) => self.desktop.state.present_gpu(task_id, display_id, frame),
             }
         }
         self.desktop.state.draw_waiting();
@@ -629,7 +653,11 @@ pub fn run() -> Result<(), String> {
         show_notifications(requests.clone(), folders.icons.join("notifications"));
     }
     follow_gamepads(active.clone());
-    start_graphics(frames.clone(), waker);
+    let images = desktop
+        .state
+        .takes_gpu_frames()
+        .then(|| Arc::new(Mutex::new(Vec::new())));
+    start_graphics(frames.clone(), images.clone(), waker);
 
     let mut main = Main {
         desktop,
@@ -639,6 +667,7 @@ pub fn run() -> Result<(), String> {
         input,
         clipboard,
         frames,
+        images,
         active,
         apps: BTreeMap::new(),
         folders,

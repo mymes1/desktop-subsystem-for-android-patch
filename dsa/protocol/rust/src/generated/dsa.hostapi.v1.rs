@@ -823,6 +823,18 @@ pub struct ImeCommit {
     #[prost(string, tag = "2")]
     pub text: ::prost::alloc::string::String,
 }
+/// The host's input method deletes text around the cursor of the focused editor in a task,
+/// sent on a connection that streams input: `before_length` UTF-16 code units before the
+/// cursor and `after_length` after it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ImeDeleteSurrounding {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(uint32, tag = "2")]
+    pub before_length: u32,
+    #[prost(uint32, tag = "3")]
+    pub after_length: u32,
+}
 /// Where the cursor of the editor focused in a task is, in the task's own pixels from its top
 /// left corner, which are its window's client pixels.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1970,7 +1982,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 333, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1998,6 +2010,8 @@ pub mod envelope {
         ImeComposition(super::ImeComposition),
         #[prost(message, tag = "10")]
         ImeCommit(super::ImeCommit),
+        #[prost(message, tag = "333")]
+        ImeDeleteSurrounding(super::ImeDeleteSurrounding),
         #[prost(message, tag = "12")]
         OpenLink(super::OpenLink),
         #[prost(message, tag = "13")]

@@ -389,6 +389,19 @@ pub struct ImeCommit {
     #[prost(string, tag = "2")]
     pub text: ::prost::alloc::string::String,
 }
+/// Host to guest: the host's input method deletes text around the cursor of the focused editor
+/// in a task, as an input method does when it reconverts or corrects what was typed:
+/// `before_length` UTF-16 code units before the cursor (or the selection) and `after_length`
+/// after it. The agent deletes them in the editor, keeping any composition.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ImeDeleteSurrounding {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(uint32, tag = "2")]
+    pub before_length: u32,
+    #[prost(uint32, tag = "3")]
+    pub after_length: u32,
+}
 /// Guest to host, from the agent: where the cursor of the editor focused in a task is, in the
 /// task's own pixels from its top left corner (where a pointer event's place is measured from),
 /// so the host can put its input method's windows (the candidate list, say) beside it. Sent
@@ -2035,7 +2048,7 @@ pub struct GamepadRumble {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2077,6 +2090,8 @@ pub mod envelope {
         ImeComposition(super::ImeComposition),
         #[prost(message, tag = "18")]
         ImeCommit(super::ImeCommit),
+        #[prost(message, tag = "377")]
+        ImeDeleteSurrounding(super::ImeDeleteSurrounding),
         #[prost(message, tag = "19")]
         ImeCursor(super::ImeCursor),
         #[prost(message, tag = "20")]
