@@ -5,7 +5,7 @@
 # zygote starts, so the bridge library the properties name (libdsa_native_bridge.so) and its
 # ARM64 libraries are where the runtime and the bridge look for them. The properties come from
 # /system/etc/dsa/arm-translation-on.prop, which the product build.prop imports on the same
-# condition. A system script, because only init itself may mount over /system.
+# condition. A system script, because only init itself may lay anything over /system.
 on post-fs-data && property:ro.boot.dsa.arm_translation=on
     mkdir /data/vendor/dsa 0771 system system
     mkdir /data/vendor/dsa/arm-translation 0770 system system
