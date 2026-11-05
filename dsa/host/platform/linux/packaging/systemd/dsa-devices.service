@@ -1,0 +1,17 @@
+# The user's devices for their Android (sound, cameras, location, sensors, printing, links,
+# settings). A user unit, so it runs in the desktop session, where the sound server, the
+# portals and the location agent are.
+[Unit]
+Description=Desktop Subsystem for Android devices
+Documentation=https://github.com/thisisthepy/desktop-subsystem-for-android
+PartOf=graphical-session.target
+After=graphical-session.target pipewire-pulse.service xdg-desktop-portal.service
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/dsa/bin/dsa-devices
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

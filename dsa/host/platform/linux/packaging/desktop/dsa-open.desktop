@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Open in an Android app
+Name[ko]=Android 앱에서 열기
+Comment=Sends the file to your Android, which asks which app opens it
+Comment[ko]=파일을 Android로 보내고, 어느 앱으로 열지 묻습니다
+Exec=dsa open %f
+Icon=document-open
+Terminal=false
+NoDisplay=true
+MimeType=application/octet-stream;application/pdf;application/zip;application/epub+zip;application/json;application/msword;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.openxmlformats-officedocument.presentationml.presentation;application/vnd.oasis.opendocument.text;text/plain;text/html;text/csv;text/markdown;image/png;image/jpeg;image/gif;image/webp;image/heic;image/avif;image/svg+xml;image/bmp;audio/mpeg;audio/ogg;audio/flac;audio/x-wav;audio/aac;audio/mp4;video/mp4;video/webm;video/x-matroska;video/quicktime;

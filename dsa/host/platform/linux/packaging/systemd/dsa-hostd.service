@@ -1,0 +1,31 @@
+# The DSA service: runs the Android VM and the local API at /run/dsa/host.sock.
+[Unit]
+Description=Desktop Subsystem for Android service
+Documentation=https://github.com/thisisthepy/desktop-subsystem-for-android
+After=network-online.target systemd-modules-load.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/dsa/bin/dsa-hostd serve /etc/dsa/dsa-hostd.json
+RuntimeDirectory=dsa
+RuntimeDirectoryMode=0755
+StateDirectory=dsa
+StateDirectoryMode=0755
+LogsDirectory=dsa
+Restart=on-failure
+RestartSec=2
+# The VM needs /dev/kvm and /dev/vhost-vsock, and serves each user's folders with that user's
+# own file system identity, so the service keeps the capabilities for that and nothing more.
+DeviceAllow=/dev/kvm rw
+DeviceAllow=/dev/vhost-vsock rw
+DeviceAllow=/dev/vhost-net rw
+DeviceAllow=/dev/net/tun rw
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_CHOWN CAP_NET_ADMIN CAP_SYS_RESOURCE
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target

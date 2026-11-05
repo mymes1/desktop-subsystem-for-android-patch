@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DSA Devices
+Comment=Lends this desktop's location, printers, links and settings to your Android
+Exec=dsa-devices --no-device-ports
+Icon=folder-remote
+Terminal=false
+NoDisplay=true
+Categories=System;
+X-GNOME-Autostart-enabled=true

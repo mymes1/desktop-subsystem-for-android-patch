@@ -1,0 +1,7 @@
+# The devices the Android VM needs. The service runs as root and opens them itself; the
+# signed-in user also gets them (uaccess), so `dsa` and the device lender run as the user.
+KERNEL=="kvm", GROUP="kvm", MODE="0660", TAG+="uaccess"
+KERNEL=="vhost-vsock", GROUP="kvm", MODE="0660", TAG+="uaccess"
+KERNEL=="vhost-net", GROUP="kvm", MODE="0660", TAG+="uaccess"
+# The cameras, for the user whose session is in front.
+SUBSYSTEM=="video4linux", TAG+="uaccess"

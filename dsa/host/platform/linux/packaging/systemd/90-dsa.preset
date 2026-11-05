@@ -1,0 +1,2 @@
+# Turned on when DSA is installed, as the Windows installer starts its service.
+enable dsa-hostd.service

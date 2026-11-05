@@ -1,0 +1,169 @@
+# Builds the Linux packages (.deb and .rpm) and checks them on real systems: the files and
+# the systemd units are where they belong and valid, the package installs and removes on
+# Ubuntu (the .deb) and Fedora (the .rpm), and the programs run. The kernel and the Android
+# image are built elsewhere, so the packages here carry a placeholder kernel and a small
+# stand-in image laid out like a real one. The Flatpak of the user's half is built too.
+
+name: Linux package test
+
+on:
+  # Only develop is built and tested: features are integrated there and fixed there.
+  push:
+    branches: [develop]
+    paths:
+      - "dsa/**"
+      - ".github/workflows/test-linux-package.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: test-linux-package-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build the Linux packages (${{ matrix.os }}, ${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, arch: amd64 }
+          - { os: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm desktop-file-utils
+
+      - name: Build the host programs
+        working-directory: dsa
+        run: cargo build --release -p dsa-cli -p dsa-host-linux
+
+      - name: Make a stand-in image
+        run: |
+          dir=.scratch/stand-in-image
+          mkdir -p "$dir"
+          printf 'a disk' > "$dir/disk.img"
+          printf 'a ramdisk' > "$dir/initrd.img"
+          printf 'AOSP stand-in notice' > "$dir/NOTICE.txt"
+          cat > "$dir/image.json" <<'EOF'
+          { "version": "17.0.0-1", "android_major": 17, "build": 1,
+            "files": { "disk.img": {}, "initrd.img": {}, "NOTICE.txt": {} } }
+          EOF
+
+      - name: Build the packages
+        run: |
+          version="$(grep -m1 '^version' dsa/host/platform/linux/Cargo.toml | cut -d'"' -f2)"
+          dsa/host/platform/linux/packaging/build-packages.sh \
+            --bin-dir dsa/target/release --version "$version" --arch "${{ matrix.arch }}" \
+            --placeholder-kernel --image-dir .scratch/stand-in-image --out .scratch/packages
+          ls -l .scratch/packages
+
+      - name: Check the package contents
+        run: |
+          set -x
+          deb="$(ls .scratch/packages/*.deb)"
+          rpm="$(ls .scratch/packages/*.rpm)"
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb" | tee .scratch/deb-contents
+          rpm -qlp "$rpm" | tee .scratch/rpm-contents
+          for path in /usr/bin/dsa /usr/lib/dsa/bin/dsa /usr/lib/dsa/bin/dsa-devices \
+              /usr/lib/systemd/user/dsa-devices.service /usr/lib/udev/rules.d/70-dsa.rules \
+              /usr/lib/modules-load.d/dsa.conf /usr/share/applications/dsa-open.desktop \
+              /usr/share/applications/dsa-apk.desktop /etc/geoclue/conf.d/90-dsa.conf \
+              /etc/dsa/dsa-hostd.json /usr/lib/dsa/vm/image/image.json; do
+            grep -q "\.$path\$\|\.$path -> " .scratch/deb-contents || { echo "the .deb has no $path"; exit 1; }
+            grep -qx "$path" .scratch/rpm-contents || { echo "the .rpm has no $path"; exit 1; }
+          done
+          case "${{ matrix.arch }}" in
+            amd64) kernel=/usr/lib/dsa/vm/bzImage ;;
+            arm64) kernel=/usr/lib/dsa/vm/Image ;;
+          esac
+          grep -qx "$kernel" .scratch/rpm-contents
+          for desktop in dsa/host/platform/linux/packaging/desktop/*.desktop; do
+            desktop-file-validate "$desktop"
+          done
+          python3 -c "import json,sys; json.load(open('.scratch/packages/stage/etc/dsa/dsa-hostd.json'))"
+
+      - name: Install the .deb, check it, and remove it
+        run: |
+          set -x
+          sudo apt-get install -y "./$(ls .scratch/packages/*.deb)"
+          dsa --version || dsa --help || true
+          test -x /usr/lib/dsa/bin/dsa-devices
+          /usr/lib/dsa/bin/dsa-devices --version
+          systemd-analyze verify /usr/lib/systemd/user/dsa-devices.service
+          if [ -f /usr/lib/systemd/system/dsa-hostd.service ]; then
+            systemd-analyze verify /usr/lib/systemd/system/dsa-hostd.service
+          fi
+          udevadm verify /usr/lib/udev/rules.d/70-dsa.rules || udevadm test /dev/null >/dev/null 2>&1 || true
+          sudo apt-get remove -y desktop-subsystem-for-android
+          test ! -e /usr/lib/dsa/bin/dsa
+          test ! -e /usr/bin/dsa
+
+      - name: Keep the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages-${{ matrix.arch }}
+          path: |
+            .scratch/packages/*.deb
+            .scratch/packages/*.rpm
+
+  rpm:
+    name: Install the .rpm (fedora, ${{ matrix.arch }})
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, arch: amd64 }
+          - { os: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    container: fedora:41
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-packages-${{ matrix.arch }}
+          path: packages
+
+      - name: Install the .rpm, check it, and remove it
+        run: |
+          set -x
+          dnf install -y ./packages/*.rpm
+          /usr/lib/dsa/bin/dsa-devices --version
+          test -L /usr/bin/dsa
+          test -f /usr/lib/systemd/user/dsa-devices.service
+          rpm -V desktop-subsystem-for-android
+          dnf remove -y desktop-subsystem-for-android
+          test ! -e /usr/lib/dsa/bin/dsa
+
+  flatpak:
+    name: Build the Flatpak of the user's half (ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install flatpak-builder and the runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 \
+            org.freedesktop.Sdk.Extension.rust-stable//24.08
+
+      - name: Build the Flatpak
+        run: |
+          flatpak-builder --user --force-clean \
+            --repo=.scratch/flatpak-repo .scratch/flatpak-build \
+            dsa/host/platform/linux/packaging/flatpak/io.github.thisisthepy.DSA.yml
+          flatpak build-bundle .scratch/flatpak-repo .scratch/dsa.flatpak io.github.thisisthepy.DSA
+          ls -l .scratch/dsa.flatpak
