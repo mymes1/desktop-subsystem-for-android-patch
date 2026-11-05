@@ -609,7 +609,7 @@ mod system {
                     .CreateStream()
                     .map_err(|e| fail("no stream for the still", e))?;
                 stream
-                    .InitializeFromMemory(&mut out)
+                    .InitializeFromMemory(&out)
                     .map_err(|e| fail("no stream for the still", e))?;
                 let encoder = factory
                     .CreateEncoder(&GUID_ContainerFormatJpeg, std::ptr::null())
