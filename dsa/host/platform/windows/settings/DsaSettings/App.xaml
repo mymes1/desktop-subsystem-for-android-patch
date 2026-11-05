@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime"
     ShutdownMode="OnLastWindowClose">
     <Application.Resources>
         <ResourceDictionary>
@@ -24,13 +25,24 @@
             <FontFamily x:Key="TextFont">Segoe UI Variable Text, Segoe UI, Malgun Gothic</FontFamily>
             <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI, Malgun Gothic</FontFamily>
 
-            <!-- The spacing of the Windows Settings app: cards 4 px apart, sections 28 px. -->
+            <!-- The page layout of the Windows Settings app and the WinUI Gallery: the title
+                 stays above the page while the page scrolls under it, both 36 px from the edges
+                 and at most 1000 px wide; cards 4 px apart, sections 30 px apart. -->
+            <Style x:Key="PageHeader" TargetType="Grid">
+                <Setter Property="Margin" Value="36,16,36,20" />
+                <Setter Property="MaxWidth" Value="1000" />
+            </Style>
+            <Style x:Key="PageContent" TargetType="StackPanel">
+                <Setter Property="Margin" Value="36,0,36,24" />
+                <Setter Property="MaxWidth" Value="1000" />
+            </Style>
             <Style x:Key="PageTitle" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="FontSize" Value="28" />
                 <Setter Property="LineHeight" Value="36" />
-                <Setter Property="Margin" Value="0,0,0,12" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             </Style>
             <Style x:Key="SectionHeader" TargetType="TextBlock">
@@ -38,16 +50,17 @@
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="FontSize" Value="14" />
                 <Setter Property="LineHeight" Value="20" />
-                <Setter Property="Margin" Value="1,28,0,6" />
+                <Setter Property="Margin" Value="1,30,0,6" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             </Style>
+            <!-- No colour of its own: it takes the card's, which turns grey when the card is
+                 disabled, as a WinUI settings card's header does. -->
             <Style x:Key="CardTitle" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
                 <Setter Property="FontWeight" Value="Normal" />
                 <Setter Property="FontSize" Value="14" />
                 <Setter Property="LineHeight" Value="20" />
                 <Setter Property="TextWrapping" Value="Wrap" />
-                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             </Style>
             <Style x:Key="CardDescription" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
@@ -65,6 +78,274 @@
                 <Setter Property="TextWrapping" Value="Wrap" />
                 <Setter Property="Margin" Value="1,6,0,0" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Style>
+
+            <!-- WinUI's text box and combo box are 32 px high: the library's are 36 to 38 px.
+                 These keys are the ones the library's templates read. -->
+            <Thickness x:Key="TextControlThemePadding">10,5,6,6</Thickness>
+            <sys:Double x:Key="TextControlThemeMinHeight">32</sys:Double>
+            <Thickness x:Key="ComboBoxPadding">12,5,0,7</Thickness>
+
+            <!-- "On" and "Off" beside every switch, in the app's language; App.OnStartup sets
+                 them once the language is known. -->
+            <sys:String x:Key="ToggleOnText">On</sys:String>
+            <sys:String x:Key="ToggleOffText">Off</sys:String>
+
+            <!-- Pop-ups do not inherit the window's font. -->
+            <Style TargetType="ToolTip" BasedOn="{StaticResource {x:Type ToolTip}}">
+                <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
+            </Style>
+            <Style TargetType="ContextMenu" BasedOn="{StaticResource {x:Type ContextMenu}}">
+                <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
+            </Style>
+
+            <!-- Info bars stacked on a page keep the cards' 4 px gap. -->
+            <Style TargetType="ui:InfoBar" BasedOn="{StaticResource {x:Type ui:InfoBar}}">
+                <Setter Property="Margin" Value="0,0,0,4" />
+            </Style>
+
+            <!-- A settings card as WinUI's SettingsCard draws it: 16 px padding, at least 68 px
+                 high, a 20 px icon 20 px before the header, the control 24 px after it on the
+                 right. A card that is not a button does not light up under the pointer or when
+                 pressed; the library's card does both. -->
+            <Style TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
+                <Setter Property="Padding" Value="16" />
+                <Setter Property="MinHeight" Value="68" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ui:CardControl">
+                            <Border x:Name="ContentBorder"
+                                    MinHeight="{TemplateBinding MinHeight}"
+                                    Padding="{TemplateBinding Padding}"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{TemplateBinding CornerRadius}">
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ContentControl x:Name="ControlIcon" Grid.Column="0" Margin="2,0,20,0"
+                                                    VerticalAlignment="Center" Focusable="False" IsTabStop="False"
+                                                    Content="{TemplateBinding Icon}" FontSize="20"
+                                                    Foreground="{TemplateBinding Foreground}" />
+                                    <ContentPresenter x:Name="HeaderContentPresenter" Grid.Column="1"
+                                                      VerticalAlignment="Center" Content="{TemplateBinding Header}"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}" />
+                                    <ContentPresenter x:Name="ContentPresenter" Grid.Column="2" Margin="24,0,0,0"
+                                                      HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                      Content="{TemplateBinding Content}"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}" />
+                                </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Background" Value="{DynamicResource CardBackgroundDisabled}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrushDisabled}" />
+                                    <Setter TargetName="HeaderContentPresenter" Property="TextElement.Foreground" Value="{DynamicResource CardForegroundDisabled}" />
+                                    <Setter TargetName="ContentPresenter" Property="TextElement.Foreground" Value="{DynamicResource CardForegroundDisabled}" />
+                                    <Setter TargetName="ControlIcon" Property="Foreground" Value="{DynamicResource CardForegroundDisabled}" />
+                                </Trigger>
+                                <Trigger Property="Content" Value="{x:Null}">
+                                    <Setter TargetName="ContentPresenter" Property="Margin" Value="0" />
+                                </Trigger>
+                                <Trigger Property="Icon" Value="{x:Null}">
+                                    <Setter TargetName="ControlIcon" Property="Margin" Value="0" />
+                                    <Setter TargetName="ControlIcon" Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- A clickable settings card: the same layout, and a 13 px chevron 14 px after the
+                 header in place of the library's 16 px one 4 px after it. -->
+            <Style TargetType="ui:CardAction" BasedOn="{StaticResource {x:Type ui:CardAction}}">
+                <Setter Property="Padding" Value="16" />
+                <Setter Property="MinHeight" Value="68" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ui:CardAction">
+                            <Border x:Name="ContentBorder"
+                                    MinHeight="{TemplateBinding MinHeight}"
+                                    Padding="{TemplateBinding Padding}"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{TemplateBinding Border.CornerRadius}">
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ContentControl x:Name="ControlIcon" Grid.Column="0" Margin="2,0,20,0"
+                                                    VerticalAlignment="Center" Focusable="False" IsTabStop="False"
+                                                    Content="{TemplateBinding Icon}" FontSize="20"
+                                                    Foreground="{TemplateBinding Foreground}" />
+                                    <ContentPresenter x:Name="ContentPresenter" Grid.Column="1" VerticalAlignment="Center"
+                                                      Content="{TemplateBinding Content}"
+                                                      TextElement.Foreground="{TemplateBinding Foreground}" />
+                                    <ui:SymbolIcon x:Name="ChevronIcon" Grid.Column="2" Margin="14,0,0,0"
+                                                   VerticalAlignment="Center" FontSize="13" Symbol="ChevronRight24" />
+                                </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource CardBackgroundPointerOver}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter Property="Background" Value="{DynamicResource CardBackgroundPressed}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrushPressed}" />
+                                    <Setter TargetName="ContentPresenter" Property="TextElement.Foreground" Value="{DynamicResource CardForegroundPressed}" />
+                                    <Setter TargetName="ControlIcon" Property="Foreground" Value="{DynamicResource CardForegroundPressed}" />
+                                    <Setter TargetName="ChevronIcon" Property="Foreground" Value="{DynamicResource CardForegroundPressed}" />
+                                </Trigger>
+                                <Trigger Property="IsChevronVisible" Value="False">
+                                    <Setter TargetName="ChevronIcon" Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Background" Value="{DynamicResource CardBackgroundDisabled}" />
+                                    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrushDisabled}" />
+                                    <Setter TargetName="ContentPresenter" Property="TextElement.Foreground" Value="{DynamicResource CardForegroundDisabled}" />
+                                    <Setter TargetName="ControlIcon" Property="Foreground" Value="{DynamicResource CardForegroundDisabled}" />
+                                    <Setter TargetName="ChevronIcon" Property="Foreground" Value="{DynamicResource CardForegroundDisabled}" />
+                                </Trigger>
+                                <Trigger Property="Icon" Value="{x:Null}">
+                                    <Setter TargetName="ControlIcon" Property="Margin" Value="0" />
+                                    <Setter TargetName="ControlIcon" Property="Visibility" Value="Collapsed" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- A toggle switch as the Windows Settings app shows it: "On" or "Off" to the left
+                 of the switch, 12 px from it. The library puts the text on the right. The
+                 switch itself is the library's (WPF UI, MIT licence, Leszek Pomianowski and
+                 WPF UI contributors): the same 40 by 20 track, knob and animation. -->
+            <Style TargetType="ui:ToggleSwitch" BasedOn="{StaticResource {x:Type ui:ToggleSwitch}}">
+                <Setter Property="OnContent" Value="{DynamicResource ToggleOnText}" />
+                <Setter Property="OffContent" Value="{DynamicResource ToggleOffText}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ui:ToggleSwitch">
+                            <Grid Background="Transparent">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter x:Name="ContentPresenter" Grid.Column="0" Margin="0,0,12,0"
+                                                  VerticalAlignment="Center" Content="{TemplateBinding Content}"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                                <Grid Grid.Column="1" Width="40" Height="20">
+                                    <Rectangle x:Name="ToggleRectangle" Width="40" Height="20" RadiusX="10" RadiusY="10"
+                                               Fill="{DynamicResource ToggleSwitchFillOff}"
+                                               Stroke="{DynamicResource ToggleSwitchStrokeOff}" StrokeThickness="1" />
+                                    <Rectangle x:Name="ActiveToggleRectangle" Width="40" Height="20" RadiusX="10" RadiusY="10"
+                                               Fill="{TemplateBinding Background}" Opacity="0" StrokeThickness="0" />
+                                    <Ellipse x:Name="ToggleEllipse" Width="12" Height="12"
+                                             Fill="{DynamicResource ToggleSwitchKnobFillOff}">
+                                        <Ellipse.RenderTransform>
+                                            <TranslateTransform X="-9" />
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                    <Ellipse x:Name="ActiveToggleEllipse" Width="12" Height="12" Opacity="0"
+                                             Fill="{DynamicResource ToggleSwitchKnobFillOn}">
+                                        <Ellipse.RenderTransform>
+                                            <TranslateTransform X="-9" />
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ToggleRectangle" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleRectangle" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="9" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="9" Duration="0:0:0.167" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="ToggleRectangle" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleRectangle" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="-9" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="-9" Duration="0:0:0.167" />
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="Content" Value="{x:Null}" />
+                                        <Condition Property="IsChecked" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ContentPresenter" Property="Content" Value="{Binding OnContent, RelativeSource={RelativeSource TemplatedParent}}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="Content" Value="{x:Null}" />
+                                        <Condition Property="IsChecked" Value="False" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ContentPresenter" Property="Content" Value="{Binding OffContent, RelativeSource={RelativeSource TemplatedParent}}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsMouseOver" Value="True" />
+                                        <Condition Property="IsChecked" Value="False" />
+                                        <Condition Property="IsEnabled" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ToggleRectangle" Property="Fill" Value="{DynamicResource ToggleSwitchFillOffPointerOver}" />
+                                    <Setter TargetName="ToggleRectangle" Property="Stroke" Value="{DynamicResource ToggleSwitchStrokeOffPointerOver}" />
+                                    <Setter TargetName="ToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOffPointerOver}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsMouseOver" Value="True" />
+                                        <Condition Property="IsChecked" Value="True" />
+                                        <Condition Property="IsEnabled" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter Property="Background" Value="{DynamicResource ToggleSwitchFillOnPointerOver}" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOnPointerOver}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsChecked" Value="False" />
+                                        <Condition Property="IsEnabled" Value="False" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ToggleRectangle" Property="Stroke" Value="{DynamicResource ToggleSwitchStrokeOffDisabled}" />
+                                    <Setter TargetName="ToggleRectangle" Property="Fill" Value="{DynamicResource ToggleSwitchFillOffDisabled}" />
+                                    <Setter TargetName="ToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOffDisabled}" />
+                                    <Setter Property="Foreground" Value="{DynamicResource ToggleSwitchContentForegroundDisabled}" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsChecked" Value="True" />
+                                        <Condition Property="IsEnabled" Value="False" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ActiveToggleRectangle" Property="Fill" Value="{DynamicResource ToggleSwitchFillOnDisabled}" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOnDisabled}" />
+                                    <Setter Property="Foreground" Value="{DynamicResource ToggleSwitchContentForegroundDisabled}" />
+                                </MultiTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
         </ResourceDictionary>
     </Application.Resources>

@@ -45,6 +45,9 @@ public partial class App : Application
             {
             }
         }
+        // The text beside every toggle switch, in the language just chosen.
+        Resources["ToggleOnText"] = Text.Get("Toggle.On");
+        Resources["ToggleOffText"] = Text.Get("Toggle.Off");
         // The app opens on the settings, or, given an APK, on the APK install window alone.
         var at = Array.IndexOf(e.Args, InstallApkArgument);
         if (at >= 0 && at + 1 < e.Args.Length)

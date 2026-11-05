@@ -1384,4 +1384,10 @@
   <data name="ResetDoneBar.Message" xml:space="preserve">
     <value>The next app you open starts Android as it was first installed.</value>
   </data>
+  <data name="Toggle.On" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="Toggle.Off" xml:space="preserve">
+    <value>Off</value>
+  </data>
 </root>

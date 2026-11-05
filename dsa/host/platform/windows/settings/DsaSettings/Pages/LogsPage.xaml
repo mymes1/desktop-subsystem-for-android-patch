@@ -1,13 +1,16 @@
 <Page
     x:Class="Dsa.Settings.Pages.LogsPage"
+    ScrollViewer.CanContentScroll="False"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:l="clr-namespace:Dsa.Settings">
     <!-- Android's log as it comes. Android sends it only while this page is shown. The page
-         scrolls nothing itself: inside the navigation view's scroll viewer the list would get
-         unlimited height, stop virtualizing and lay out every one of its 5000 lines. -->
-    <Grid Margin="36,8,36,24">
+         scrolls nothing itself, and ScrollViewer.CanContentScroll="False" keeps the navigation
+         view from wrapping it in a scroll viewer (the library wraps a page when it is true):
+         there the list would get unlimited height, stop virtualizing and lay out every one
+         of its 5000 lines. -->
+    <Grid Margin="36,16,36,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -16,9 +19,9 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0">
+        <Grid Grid.Row="0" Margin="0,0,0,20">
             <TextBlock Text="{l:Text LogsTitle.Text}" Style="{StaticResource PageTitle}" />
-            <ui:Button Content="{l:Text LogsSaveButton.Content}" HorizontalAlignment="Right" VerticalAlignment="Top"
+            <ui:Button Content="{l:Text LogsSaveButton.Content}" HorizontalAlignment="Right" VerticalAlignment="Center"
                        Icon="{ui:SymbolIcon Archive24}" Click="OnSaveDiagnostics"
                        IsEnabled="{Binding CanSave, Mode=OneWay}" />
         </Grid>
@@ -40,7 +43,7 @@
             </Grid.ColumnDefinitions>
             <ui:TextBox Grid.Column="0" PlaceholderText="{l:Text LogsFilter.PlaceholderText}"
                         Text="{Binding Filter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                        Icon="{ui:SymbolIcon Filter24}" />
+                        Icon="{ui:SymbolIcon Search24}" IconPlacement="Right" ClearButtonEnabled="True" />
             <ComboBox x:Name="PriorityBox" Grid.Column="1" Margin="8,0,0,0" MinWidth="140"
                       SelectionChanged="OnPriorityChanged" />
             <ToggleButton Grid.Column="2" Margin="8,0,0,0" MinWidth="110"
