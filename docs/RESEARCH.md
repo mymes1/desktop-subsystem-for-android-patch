@@ -653,7 +653,7 @@ Davey는 이 로그에 2건뿐이고 둘 다 액티비티 전환이다. 리플�
 
 1. **호스트, 프로토콜, 에이전트의 포인터 경로에는 일정한 오프셋도 비율 오차도 없다.** 정상 상태에서 클라이언트 픽셀 (x, y)는 작업 픽셀 (x, y)에 정확히 닿는다. 호버와 클릭은 같은 변환을 지나므로 서로 다를 수 없다.
 2. **호버 표시의 위치로는 입력 오프셋을 알 수 없다.** 호버 상태는 포인터 아래의 뷰가 자기 경계에 그린다. 입력이 몇 픽셀 어긋나면 표시가 켜지는 커서 위치가 달라질 뿐, 표시가 그려지는 자리는 그대로다. 그러므로 "표시가 버튼보다 왼쪽에 그려진다"는 관찰은 입력 경로가 아니라 앱이 그린 것이다.
-3. **남은 후보는 Settings의 그리기다(추론, 게스트에서 확인하지 않음).** Android 16 Settings의 툴바 뒤로 버튼은 원형 배경이 따로 있고, 호버 상태 레이어는 버튼 뷰(최소 56dp 폭) 전체나 리플의 핫스팟 영역에 그려진다. 둘의 중심이 다르면 휴대폰에서 마우스를 써도 같은 모습이 된다. 확인하려면 게스트에서 `adb shell uiautomator dump`나 레이아웃 검사기로 뒤로 버튼 `ImageButton`의 경계와 원형 배경의 경계를 비교한다.
+3. **(아래 "재조사"가 대체한다.) 남은 후보는 Settings의 그리기다(추론, 게스트에서 확인하지 않음).** Android 16 Settings의 툴바 뒤로 버튼은 원형 배경이 따로 있고, 호버 상태 레이어는 버튼 뷰(최소 56dp 폭) 전체나 리플의 핫스팟 영역에 그려진다. 둘의 중심이 다르면 휴대폰에서 마우스를 써도 같은 모습이 된다. 확인하려면 게스트에서 `adb shell uiautomator dump`나 레이아웃 검사기로 뒤로 버튼 `ImageButton`의 경계와 원형 배경의 경계를 비교한다.
 4. **늘어난 프레임에서의 작은 편향**: 크기 조절 중 게스트가 새 크기를 그리기 전에는 이전 프레임이 늘어나 보이고, 매핑은 같은 비율을 따른다. 매핑은 픽셀 중심이 아닌 픽셀 인덱스를 비율로 곱하므로 늘린 비율 r에서 최대 r/2 게스트 픽셀만큼 왼쪽 위로 치우친다. 1:1인 정상 상태에서는 0이고, 한 픽셀 미만이라 보고된 증상의 원인이 아니다.
 
 **고친 것**
@@ -664,6 +664,49 @@ Davey는 이 로그에 2건뿐이고 둘 다 액티비티 전환이다. 리플�
 
 - 뒤로 버튼 위에서 커서를 천천히 왼쪽에서 오른쪽으로 옮기며 호버 표시가 켜지는 x와 꺼지는 x를 적는다. 그 구간이 화살표 중심에 대해 좌우 대칭이면 입력은 맞고, 차이는 앱의 그리기다.
 - 게스트에서 `adb shell settings put system pointer_location 1`로 포인터 위치 표시를 켠다. 이 표시는 시스템 서버가 그리는 오버레이라 SystemUI가 없어도 나온다. 주입된 호버의 십자선이 Windows 커서 끝과 겹치면 입력은 맞다. 끝나면 `0`으로 끈다.
+
+### 재조사: 원인은 SettingsLib 뒤로 아이콘의 비대칭 배치다 (FR-4, FR-5)
+
+소유자는 "앱이 그린 것이라 우리 문제가 아니다"라는 결론을 받아들이지 않았다. 호버 표시와 클릭 리플이 모두 그려진 화살표보다 왼쪽에 있고, dp나 밀도 문제를 의심했다. 이 절은 그 가설을 숫자로 검증하고 원인을 고친 기록이다.
+
+**실측 (PC, Android 16 x86_64 게스트, Settings > 네트워크 및 인터넷, 디스플레이 2의 freeform 작업)**
+
+- 작업 경계 `Rect(1166, 953 - 1989, 2416)` = 823x1463, 창 클라이언트도 823x1463(1:1).
+- `dumpsys activity`: 전역 구성은 2880x2880 디스플레이에서 `sw2163dp 213dpi`, 작업의 재정의 구성은 `sw412dp w412dp h732dp 320dpi`(호스트가 `WindowContainerTransaction.setDensityDpi`로 작업마다 밀도를 준다).
+- uiautomator(작업 좌표): `action_bar`는 x 16..823, 내비게이션 `ImageButton`은 x 16..128, y 0..112(112px = 320 dpi의 56dp). 목록 글자는 노드 좌표 그대로 그려진다("인터넷" 노드 x=168, 클라이언트 x 168). 전체 이동은 없다.
+- 스크린샷(클라이언트 좌표): 뒤로 버튼의 원형 배경은 x 47..127(80px, 중심 87), 화살표 중심도 87이다. 뷰의 중심은 72이고, 호버 레이어와 리플은 72 둘레에 그려진다. 차이는 약 15px이다.
+
+**SettingsLib 소스 (frameworks/base android16-release)**
+
+- `CollapsingToolbarBaseActivity/res/layout-v36/settingslib_expressive_collapsing_toolbar_content_layout.xml`: 툴바는 프레임워크 `Toolbar`이고 `layout_marginStart="@dimen/settingslib_expressive_space_extrasmall4"`(8dp)를 둔다. uiautomator의 x=16(320 dpi의 8dp)과 맞다.
+- `CollapsingToolbarDelegate.java`: `actionBar.setHomeAsUpIndicator(R.drawable.settingslib_expressive_icon_back)`.
+- `CollapsingToolbarBaseActivity/res/drawable-v36/settingslib_expressive_icon_back.xml`: `layer-list`다. 첫 항목은 `android:start="16dp"`에 40x40dp 원, 둘째 항목은 `android:start="16dp"`, `gravity="center"`인 16dp 화살표다. 끝 쪽 인셋은 없다. 그래서 그림의 고유 폭은 56dp이고, 원은 그림 안에서 16..56dp, 중심은 36dp다. 그림의 중심(28dp)보다 8dp 오른쪽이다.
+- 내비게이션 버튼은 프레임워크 `Toolbar`의 `ImageButton`이다(`Widget.Material.Toolbar.Button.Navigation`: 최소 폭 56dp, 배경 `?selectableItemBackgroundBorderless`). 경계 없는 리플과 호버 상태 레이어는 뷰의 중심 둘레에 그려진다.
+
+**숫자 대조**
+
+- 320 dpi에서 원은 버튼 x 16에서 16dp(32px) 들어간 48..128, 중심 88이다. 측정값 47..127, 중심 87과 1px 안에서 맞는다. 원 폭 80px = 40dp도 320 dpi다.
+- 리플 중심은 16 + 56px = 72다. 측정값 72와 맞는다.
+- 두 중심의 차이는 8dp = 320 dpi의 16px이다(측정 15px, 픽셀 경계 반올림). 213 dpi로 풀었다면 원 폭은 53px, 차이는 10.7px이어야 한다. 240 dpi라면 60px과 12px이다. 측정과 맞는 것은 320 dpi 하나뿐이다.
+- 따라서 원, 화살표, 버튼, 리플은 모두 작업의 320 dpi로 해석되어 있다. 전역 213 dpi로 풀린 자원도, 밀도가 섞인 인셋도 없다. 어긋남은 아이콘 자체가 원을 버튼 중심에서 8dp 오른쪽에 그리기 때문이고, 밀도와 무관하게 모든 밀도에서 같은 비율로 생긴다. 휴대폰에서는 터치 리플이 손가락 아래에서 퍼지고 호버가 없어 눈에 덜 띌 뿐이다.
+
+**전역 밀도와 작업 밀도의 불일치에 대한 판단**
+
+- 디스플레이 밀도(213)와 작업 재정의(320)의 차이는 이 증상의 원인이 아니다. 위 숫자에 213 dpi의 흔적이 없다.
+- 앱 프로세스의 구성은 그 프로세스의 활동이 속한 작업의 구성을 따른다(`WindowProcessController`가 활동의 구성에 등록된다). 그래서 `Application` 컨텍스트의 자원도 보통 320 dpi로 풀린다. 한 프로세스가 밀도가 다른 두 창에 활동을 두는 경우만 예외가 될 수 있다.
+- 디스플레이 밀도를 `wm density`로 맞추는 방식으로 바꾸지 않는다. 한 게스트 디스플레이에 여러 호스트 모니터의 창이 함께 있고, 창마다 자기 모니터의 밀도가 필요하다. 이것은 프레임워크의 데스크톱 창 모드가 쓰는 작업별 밀도와 같은 방식이다. 디스플레이 하나의 밀도로는 모니터마다 다른 배율을 줄 수 없다.
+- 다른 앱에서 같은 불일치가 보이는지는 이 조사에서 PC로 확인하지 않았다(백그라운드 작업이라 기기를 쓰지 않는다). 확인 방법: 앱 창 하나에서 `adb shell dumpsys activity activities`의 작업 구성 dpi와, 그 앱 프로세스의 `adb shell dumpsys activity processes`에 나온 구성 dpi가 같은지 본다.
+
+**고친 것**
+
+- 이미지에 Settings용 정적 오버레이 `/vendor/overlay/DsaSettingsOverlay.apk`(`io.github.thisisthepy.dsa.overlay.settings`, 대상 `com.android.settings`)를 더했다. `settingslib_expressive_icon_back`을 원과 화살표 양쪽에 8dp씩 둔 그림으로 바꾼다. 고유 폭은 그대로 56dp라 버튼과 제목의 자리는 변하지 않고, 원의 중심이 버튼의 중심에 온다. 호버와 리플이 원과 같은 중심에 그려진다. 원은 휴대폰 디자인보다 8dp 왼쪽(창 끝에서 24dp가 아닌 16dp)에 놓인다.
+- 색은 SettingsLib의 v34 값과 같은 `system_surface_container_highest_light/dark`, `system_on_surface_variant_light/dark`를 `drawable`과 `drawable-night`로 나눠 쓴다. 오버레이는 프레임워크 오버레이처럼 aapt2로 이미지의 framework-res에 맞춰 만들고 플랫폼 키로 서명한다.
+- `check-image.py`는 이 오버레이가 없는 이미지를 거부한다. 테스트: `test_fr5_settings_back_button_circle_is_centred_on_the_button_its_hover_is_drawn_around`, `test_fr5_the_settings_overlay_is_built_against_the_images_own_framework`, `test_fr5_check_image_rejects_an_image_without_them`.
+
+**PC에서 확인할 것**
+
+- 새 이미지에서 `adb shell cmd overlay list com.android.settings`에 `[x] io.github.thisisthepy.dsa.overlay.settings`가 보이는지 본다.
+- 같은 화면에서 원형 배경이 x 32..112(중심 72)에 그려지고, 호버와 리플의 중심이 원의 중심과 같은지 스크린샷으로 본다.
 
 ## R7. 앱 하나를 연 비용을 Electron 앱 하나 수준으로 (NFR-1, NFR-2)
 
