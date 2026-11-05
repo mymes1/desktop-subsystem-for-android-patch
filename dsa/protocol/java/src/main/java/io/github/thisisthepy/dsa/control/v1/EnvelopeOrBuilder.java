@@ -1350,6 +1350,61 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.SetTaskCaption getSetTaskCaption();
 
   /**
+   * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+   * @return Whether the systemSettings field is set.
+   */
+  boolean hasSystemSettings();
+  /**
+   * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+   * @return The systemSettings.
+   */
+  io.github.thisisthepy.dsa.control.v1.SystemSettings getSystemSettings();
+
+  /**
+   * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+   * @return Whether the gamepadConnected field is set.
+   */
+  boolean hasGamepadConnected();
+  /**
+   * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+   * @return The gamepadConnected.
+   */
+  io.github.thisisthepy.dsa.control.v1.GamepadConnected getGamepadConnected();
+
+  /**
+   * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+   * @return Whether the gamepadDisconnected field is set.
+   */
+  boolean hasGamepadDisconnected();
+  /**
+   * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+   * @return The gamepadDisconnected.
+   */
+  io.github.thisisthepy.dsa.control.v1.GamepadDisconnected getGamepadDisconnected();
+
+  /**
+   * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+   * @return Whether the gamepadState field is set.
+   */
+  boolean hasGamepadState();
+  /**
+   * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+   * @return The gamepadState.
+   */
+  io.github.thisisthepy.dsa.control.v1.GamepadState getGamepadState();
+
+  /**
+   * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+   * @return Whether the gamepadRumble field is set.
+   */
+  boolean hasGamepadRumble();
+  /**
+   * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+   * @return The gamepadRumble.
+   */
+  io.github.thisisthepy.dsa.control.v1.GamepadRumble getGamepadRumble();
+
+  /**
    * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
    * @return Whether the fileSharing field is set.
    */

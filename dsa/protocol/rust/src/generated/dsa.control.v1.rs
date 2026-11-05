@@ -106,6 +106,18 @@ pub struct TaskUpdated {
     /// transparent. Used only while the appearance is unspecified.
     #[prost(fixed32, tag = "12")]
     pub status_bar_color: u32,
+    /// The orientation the task's top activity is locked to, if any. A task locked to portrait
+    /// opens as a window taller than it is wide.
+    #[prost(enumeration = "TaskOrientation", tag = "20")]
+    pub orientation: i32,
+    /// Whether the task's app asked to fill the screen (the task left the freeform windowing
+    /// mode for fullscreen). The host makes the task's window fill its monitor.
+    #[prost(bool, tag = "21")]
+    pub fullscreen: bool,
+    /// Whether the task's app went into picture-in-picture. The host makes the task's window a
+    /// small window that stays above the others.
+    #[prost(bool, tag = "22")]
+    pub picture_in_picture: bool,
 }
 /// Guest to host, from the agent: the task ended; the host closes its window.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1918,12 +1930,112 @@ pub struct CameraError {
     #[prost(string, tag = "1")]
     pub error: ::prost::alloc::string::String,
 }
+/// Host to guest: the host's system settings, which the agent makes the guest's. Sent once
+/// after the agent connects, when the host knows them, and on each change. Every field is sent
+/// each time. The user does not change these in the guest: the host's are the guest's.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SystemSettings {
+    /// The host's time zone as an IANA name, such as "Asia/Seoul". Empty when the host cannot
+    /// name it; the guest's then stays as it is.
+    #[prost(string, tag = "1")]
+    pub time_zone: ::prost::alloc::string::String,
+    /// The host's display languages as BCP 47 tags, preferred first, such as "ko-KR". The guest's
+    /// system languages become these. Empty leaves the guest's as they are.
+    #[prost(string, repeated, tag = "2")]
+    pub locales: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The locale the host formats dates, times and numbers by, as a BCP 47 tag. Empty when it
+    /// is the first of `locales`.
+    #[prost(string, tag = "3")]
+    pub regional_format: ::prost::alloc::string::String,
+    /// Whether the host shows times on a 24-hour clock.
+    #[prost(bool, tag = "4")]
+    pub time_24_hour: bool,
+    /// The first day of the week in the host's regional format: 1 is Monday through 7, Sunday.
+    /// 0 when the host does not say.
+    #[prost(uint32, tag = "5")]
+    pub first_day_of_week: u32,
+    /// Whether the host's apps use the dark theme. The guest's night mode follows it.
+    #[prost(bool, tag = "6")]
+    pub dark_mode: bool,
+    /// The host's accent color as 0xAARRGGBB, which becomes the seed of the guest's dynamic
+    /// colors. 0 when the host has none.
+    #[prost(fixed32, tag = "7")]
+    pub accent_color: u32,
+}
+/// Host to guest, for the control daemon: a game controller was connected to the host, or was
+/// already there when the guest connected. The daemon makes it a gamepad input device in the
+/// guest, which apps see as any USB or Bluetooth gamepad.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GamepadConnected {
+    /// Names the controller until it is disconnected.
+    #[prost(uint32, tag = "1")]
+    pub pad_id: u32,
+    /// The controller's name, for the guest's input device.
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// The USB vendor and product IDs the guest's device reports. 0 when the host does not know
+    /// them.
+    #[prost(uint32, tag = "3")]
+    pub vendor_id: u32,
+    #[prost(uint32, tag = "4")]
+    pub product_id: u32,
+    /// Whether the controller can rumble, so the guest's device offers force feedback.
+    #[prost(bool, tag = "5")]
+    pub rumble: bool,
+}
+/// Host to guest, for the control daemon: the controller was disconnected; its device in the
+/// guest goes away.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GamepadDisconnected {
+    #[prost(uint32, tag = "1")]
+    pub pad_id: u32,
+}
+/// Host to guest, for the control daemon: the state of every button, stick and trigger of a
+/// controller. Sent when any of them changes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GamepadState {
+    #[prost(uint32, tag = "1")]
+    pub pad_id: u32,
+    /// The buttons held, one bit each: see GamepadButton.
+    #[prost(uint32, tag = "2")]
+    pub buttons: u32,
+    /// The sticks, from -32768 (left, or up) to 32767 (right, or down).
+    #[prost(sint32, tag = "3")]
+    pub left_x: i32,
+    #[prost(sint32, tag = "4")]
+    pub left_y: i32,
+    #[prost(sint32, tag = "5")]
+    pub right_x: i32,
+    #[prost(sint32, tag = "6")]
+    pub right_y: i32,
+    /// The triggers, from 0 (released) to 255 (fully pressed).
+    #[prost(uint32, tag = "7")]
+    pub left_trigger: u32,
+    #[prost(uint32, tag = "8")]
+    pub right_trigger: u32,
+}
+/// Guest to host, from the control daemon: an app plays a rumble effect on a controller, or
+/// stops it (both strengths 0). The host runs the controller's motors at these strengths for
+/// `duration_ms`, or until the next GamepadRumble for the controller.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GamepadRumble {
+    #[prost(uint32, tag = "1")]
+    pub pad_id: u32,
+    /// The strong (low frequency) and weak (high frequency) motors, from 0 to 65535.
+    #[prost(uint32, tag = "2")]
+    pub strong: u32,
+    #[prost(uint32, tag = "3")]
+    pub weak: u32,
+    /// How long the effect lasts, in milliseconds; 0 until the next GamepadRumble.
+    #[prost(uint32, tag = "4")]
+    pub duration_ms: u32,
+}
 /// The one message type on the wire. Each frame carries exactly one.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 290, 291"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2175,6 +2287,16 @@ pub mod envelope {
         CameraError(super::CameraError),
         #[prost(message, tag = "155")]
         SetTaskCaption(super::SetTaskCaption),
+        #[prost(message, tag = "340")]
+        SystemSettings(super::SystemSettings),
+        #[prost(message, tag = "341")]
+        GamepadConnected(super::GamepadConnected),
+        #[prost(message, tag = "342")]
+        GamepadDisconnected(super::GamepadDisconnected),
+        #[prost(message, tag = "343")]
+        GamepadState(super::GamepadState),
+        #[prost(message, tag = "344")]
+        GamepadRumble(super::GamepadRumble),
         #[prost(message, tag = "290")]
         FileSharing(super::FileSharing),
         #[prost(message, tag = "291")]
@@ -2297,6 +2419,39 @@ impl RejectReason {
             "REJECT_REASON_UNEXPECTED_ROLE" => Some(Self::UnexpectedRole),
             "REJECT_REASON_MALFORMED_HELLO" => Some(Self::MalformedHello),
             "REJECT_REASON_AUTHENTICATION_FAILED" => Some(Self::AuthenticationFailed),
+            _ => None,
+        }
+    }
+}
+/// The orientation a task's top activity asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum TaskOrientation {
+    /// The activity does not lock its orientation, or the agent could not read it.
+    Unspecified = 0,
+    /// Portrait, reverse portrait, sensor portrait or user portrait.
+    Portrait = 1,
+    /// Landscape, reverse landscape, sensor landscape or user landscape.
+    Landscape = 2,
+}
+impl TaskOrientation {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "TASK_ORIENTATION_UNSPECIFIED",
+            Self::Portrait => "TASK_ORIENTATION_PORTRAIT",
+            Self::Landscape => "TASK_ORIENTATION_LANDSCAPE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "TASK_ORIENTATION_UNSPECIFIED" => Some(Self::Unspecified),
+            "TASK_ORIENTATION_PORTRAIT" => Some(Self::Portrait),
+            "TASK_ORIENTATION_LANDSCAPE" => Some(Self::Landscape),
             _ => None,
         }
     }
@@ -3093,6 +3248,75 @@ impl CameraFacing {
             "CAMERA_FACING_FRONT" => Some(Self::Front),
             "CAMERA_FACING_BACK" => Some(Self::Back),
             "CAMERA_FACING_EXTERNAL" => Some(Self::External),
+            _ => None,
+        }
+    }
+}
+/// The bits of GamepadState.buttons.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum GamepadButton {
+    None = 0,
+    A = 1,
+    B = 2,
+    X = 4,
+    Y = 8,
+    LeftShoulder = 16,
+    RightShoulder = 32,
+    Back = 64,
+    Start = 128,
+    Guide = 256,
+    LeftThumb = 512,
+    RightThumb = 1024,
+    DpadUp = 2048,
+    DpadDown = 4096,
+    DpadLeft = 8192,
+    DpadRight = 16384,
+}
+impl GamepadButton {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::None => "GAMEPAD_BUTTON_NONE",
+            Self::A => "GAMEPAD_BUTTON_A",
+            Self::B => "GAMEPAD_BUTTON_B",
+            Self::X => "GAMEPAD_BUTTON_X",
+            Self::Y => "GAMEPAD_BUTTON_Y",
+            Self::LeftShoulder => "GAMEPAD_BUTTON_LEFT_SHOULDER",
+            Self::RightShoulder => "GAMEPAD_BUTTON_RIGHT_SHOULDER",
+            Self::Back => "GAMEPAD_BUTTON_BACK",
+            Self::Start => "GAMEPAD_BUTTON_START",
+            Self::Guide => "GAMEPAD_BUTTON_GUIDE",
+            Self::LeftThumb => "GAMEPAD_BUTTON_LEFT_THUMB",
+            Self::RightThumb => "GAMEPAD_BUTTON_RIGHT_THUMB",
+            Self::DpadUp => "GAMEPAD_BUTTON_DPAD_UP",
+            Self::DpadDown => "GAMEPAD_BUTTON_DPAD_DOWN",
+            Self::DpadLeft => "GAMEPAD_BUTTON_DPAD_LEFT",
+            Self::DpadRight => "GAMEPAD_BUTTON_DPAD_RIGHT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "GAMEPAD_BUTTON_NONE" => Some(Self::None),
+            "GAMEPAD_BUTTON_A" => Some(Self::A),
+            "GAMEPAD_BUTTON_B" => Some(Self::B),
+            "GAMEPAD_BUTTON_X" => Some(Self::X),
+            "GAMEPAD_BUTTON_Y" => Some(Self::Y),
+            "GAMEPAD_BUTTON_LEFT_SHOULDER" => Some(Self::LeftShoulder),
+            "GAMEPAD_BUTTON_RIGHT_SHOULDER" => Some(Self::RightShoulder),
+            "GAMEPAD_BUTTON_BACK" => Some(Self::Back),
+            "GAMEPAD_BUTTON_START" => Some(Self::Start),
+            "GAMEPAD_BUTTON_GUIDE" => Some(Self::Guide),
+            "GAMEPAD_BUTTON_LEFT_THUMB" => Some(Self::LeftThumb),
+            "GAMEPAD_BUTTON_RIGHT_THUMB" => Some(Self::RightThumb),
+            "GAMEPAD_BUTTON_DPAD_UP" => Some(Self::DpadUp),
+            "GAMEPAD_BUTTON_DPAD_DOWN" => Some(Self::DpadDown),
+            "GAMEPAD_BUTTON_DPAD_LEFT" => Some(Self::DpadLeft),
+            "GAMEPAD_BUTTON_DPAD_RIGHT" => Some(Self::DpadRight),
             _ => None,
         }
     }
