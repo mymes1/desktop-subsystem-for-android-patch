@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Desktop Subsystem for Android</string>
+	<key>CFBundleExecutable</key>
+	<string>dsa-app-window</string>
+	<key>CFBundleIdentifier</key>
+	<string>org.thisisthepy.dsa</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>DSA</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Apps in Desktop Subsystem for Android use the camera when you allow them to.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Apps in Desktop Subsystem for Android record sound when you allow them to.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Apps in Desktop Subsystem for Android use your location when you allow them to.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Apps in Desktop Subsystem for Android use your location when you allow them to.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Apache License 2.0. Android is a trademark of Google LLC.</string>
+</dict>
+</plist>

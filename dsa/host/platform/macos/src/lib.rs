@@ -12,13 +12,29 @@
 //! its disks as VHDX; the framework reads raw images, so the host converts them once
 //! ([`vhdx`]) and keeps the result.
 //!
+//! The desktop side:
+//!
+//! - [`compositor`]: one `NSWindow` per Android task, each showing the task's frames through
+//!   a `CAMetalLayer`, resized without stretching, with full screen and picture in picture.
+//! - [`input`]: the mouse, the trackpad, the keyboard and the input method (through
+//!   `NSTextInputClient`) of a task window, turned into what the guest receives.
+//! - [`shell`]: the clipboard, notifications, Dock and Launchpad entries for Android apps,
+//!   drag and drop, and opening links and files on the host.
+//! - [`devices`]: sound, cameras, location, printing, shared folders, game controllers, and
+//!   the system settings each user's Android follows.
+//!
 //! What can be checked anywhere (the kernel command line, the disk formats, the
-//! configuration, the launchd agent) is platform neutral and tested on every build host. The
-//! parts that call the framework are compiled on macOS only.
+//! configuration, the launchd agent, key tables, sizes, bundle layouts, value conversions) is
+//! platform neutral and tested on every build host. The parts that call the frameworks are
+//! compiled on macOS only.
 
 pub mod cmdline;
+pub mod compositor;
+pub mod devices;
 pub mod host_config;
+pub mod input;
 pub mod launchd;
+pub mod shell;
 pub mod user_disk;
 pub mod vhdx;
 pub mod vm_config;
@@ -40,6 +56,8 @@ pub mod android_vm;
 pub mod fetch;
 #[cfg(target_os = "macos")]
 pub mod host_memory;
+#[cfg(target_os = "macos")]
+pub mod objc;
 #[cfg(target_os = "macos")]
 pub mod service;
 #[cfg(target_os = "macos")]
