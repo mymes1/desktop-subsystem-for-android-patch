@@ -112,7 +112,6 @@ PROTOBUF_CONSTEXPR TaskUpdated::TaskUpdated(
   , /*decltype(_impl_.label_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
   , /*decltype(_impl_.bounds_)*/nullptr
   , /*decltype(_impl_.task_id_)*/0
-  , /*decltype(_impl_.focused_)*/false
   , /*decltype(_impl_.density_dpi_)*/0u
   , /*decltype(_impl_.max_width_)*/0u
   , /*decltype(_impl_.max_height_)*/0u
@@ -120,6 +119,10 @@ PROTOBUF_CONSTEXPR TaskUpdated::TaskUpdated(
   , /*decltype(_impl_.min_height_)*/0u
   , /*decltype(_impl_.status_bar_appearance_)*/0
   , /*decltype(_impl_.status_bar_color_)*/0u
+  , /*decltype(_impl_.focused_)*/false
+  , /*decltype(_impl_.fullscreen_)*/false
+  , /*decltype(_impl_.picture_in_picture_)*/false
+  , /*decltype(_impl_.orientation_)*/0
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct TaskUpdatedDefaultTypeInternal {
   PROTOBUF_CONSTEXPR TaskUpdatedDefaultTypeInternal()
@@ -2104,6 +2107,91 @@ struct CameraErrorDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CameraErrorDefaultTypeInternal _CameraError_default_instance_;
+PROTOBUF_CONSTEXPR SystemSettings::SystemSettings(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.locales_)*/{}
+  , /*decltype(_impl_.time_zone_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.regional_format_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.first_day_of_week_)*/0u
+  , /*decltype(_impl_.time_24_hour_)*/false
+  , /*decltype(_impl_.dark_mode_)*/false
+  , /*decltype(_impl_.accent_color_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct SystemSettingsDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SystemSettingsDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SystemSettingsDefaultTypeInternal() {}
+  union {
+    SystemSettings _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SystemSettingsDefaultTypeInternal _SystemSettings_default_instance_;
+PROTOBUF_CONSTEXPR GamepadConnected::GamepadConnected(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.pad_id_)*/0u
+  , /*decltype(_impl_.vendor_id_)*/0u
+  , /*decltype(_impl_.product_id_)*/0u
+  , /*decltype(_impl_.rumble_)*/false
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct GamepadConnectedDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR GamepadConnectedDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~GamepadConnectedDefaultTypeInternal() {}
+  union {
+    GamepadConnected _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GamepadConnectedDefaultTypeInternal _GamepadConnected_default_instance_;
+PROTOBUF_CONSTEXPR GamepadDisconnected::GamepadDisconnected(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.pad_id_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct GamepadDisconnectedDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR GamepadDisconnectedDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~GamepadDisconnectedDefaultTypeInternal() {}
+  union {
+    GamepadDisconnected _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GamepadDisconnectedDefaultTypeInternal _GamepadDisconnected_default_instance_;
+PROTOBUF_CONSTEXPR GamepadState::GamepadState(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.pad_id_)*/0u
+  , /*decltype(_impl_.buttons_)*/0u
+  , /*decltype(_impl_.left_x_)*/0
+  , /*decltype(_impl_.left_y_)*/0
+  , /*decltype(_impl_.right_x_)*/0
+  , /*decltype(_impl_.right_y_)*/0
+  , /*decltype(_impl_.left_trigger_)*/0u
+  , /*decltype(_impl_.right_trigger_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct GamepadStateDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR GamepadStateDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~GamepadStateDefaultTypeInternal() {}
+  union {
+    GamepadState _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GamepadStateDefaultTypeInternal _GamepadState_default_instance_;
+PROTOBUF_CONSTEXPR GamepadRumble::GamepadRumble(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.pad_id_)*/0u
+  , /*decltype(_impl_.strong_)*/0u
+  , /*decltype(_impl_.weak_)*/0u
+  , /*decltype(_impl_.duration_ms_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct GamepadRumbleDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR GamepadRumbleDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~GamepadRumbleDefaultTypeInternal() {}
+  union {
+    GamepadRumble _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 GamepadRumbleDefaultTypeInternal _GamepadRumble_default_instance_;
 PROTOBUF_CONSTEXPR Envelope::Envelope(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.body_)*/{}
@@ -2310,6 +2398,61 @@ bool RejectReason_Parse(
       RejectReason_entries, 6, name, &int_value);
   if (success) {
     *value = static_cast<RejectReason>(int_value);
+  }
+  return success;
+}
+bool TaskOrientation_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> TaskOrientation_strings[3] = {};
+
+static const char TaskOrientation_names[] =
+  "TASK_ORIENTATION_LANDSCAPE"
+  "TASK_ORIENTATION_PORTRAIT"
+  "TASK_ORIENTATION_UNSPECIFIED";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry TaskOrientation_entries[] = {
+  { {TaskOrientation_names + 0, 26}, 2 },
+  { {TaskOrientation_names + 26, 25}, 1 },
+  { {TaskOrientation_names + 51, 28}, 0 },
+};
+
+static const int TaskOrientation_entries_by_number[] = {
+  2, // 0 -> TASK_ORIENTATION_UNSPECIFIED
+  1, // 1 -> TASK_ORIENTATION_PORTRAIT
+  0, // 2 -> TASK_ORIENTATION_LANDSCAPE
+};
+
+const std::string& TaskOrientation_Name(
+    TaskOrientation value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          TaskOrientation_entries,
+          TaskOrientation_entries_by_number,
+          3, TaskOrientation_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      TaskOrientation_entries,
+      TaskOrientation_entries_by_number,
+      3, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     TaskOrientation_strings[idx].get();
+}
+bool TaskOrientation_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, TaskOrientation* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      TaskOrientation_entries, 3, name, &int_value);
+  if (success) {
+    *value = static_cast<TaskOrientation>(int_value);
   }
   return success;
 }
@@ -3574,6 +3717,113 @@ bool CameraFacing_Parse(
       CameraFacing_entries, 4, name, &int_value);
   if (success) {
     *value = static_cast<CameraFacing>(int_value);
+  }
+  return success;
+}
+bool GamepadButton_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+    case 4:
+    case 8:
+    case 16:
+    case 32:
+    case 64:
+    case 128:
+    case 256:
+    case 512:
+    case 1024:
+    case 2048:
+    case 4096:
+    case 8192:
+    case 16384:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static ::PROTOBUF_NAMESPACE_ID::internal::ExplicitlyConstructed<std::string> GamepadButton_strings[16] = {};
+
+static const char GamepadButton_names[] =
+  "GAMEPAD_BUTTON_A"
+  "GAMEPAD_BUTTON_B"
+  "GAMEPAD_BUTTON_BACK"
+  "GAMEPAD_BUTTON_DPAD_DOWN"
+  "GAMEPAD_BUTTON_DPAD_LEFT"
+  "GAMEPAD_BUTTON_DPAD_RIGHT"
+  "GAMEPAD_BUTTON_DPAD_UP"
+  "GAMEPAD_BUTTON_GUIDE"
+  "GAMEPAD_BUTTON_LEFT_SHOULDER"
+  "GAMEPAD_BUTTON_LEFT_THUMB"
+  "GAMEPAD_BUTTON_NONE"
+  "GAMEPAD_BUTTON_RIGHT_SHOULDER"
+  "GAMEPAD_BUTTON_RIGHT_THUMB"
+  "GAMEPAD_BUTTON_START"
+  "GAMEPAD_BUTTON_X"
+  "GAMEPAD_BUTTON_Y";
+
+static const ::PROTOBUF_NAMESPACE_ID::internal::EnumEntry GamepadButton_entries[] = {
+  { {GamepadButton_names + 0, 16}, 1 },
+  { {GamepadButton_names + 16, 16}, 2 },
+  { {GamepadButton_names + 32, 19}, 64 },
+  { {GamepadButton_names + 51, 24}, 4096 },
+  { {GamepadButton_names + 75, 24}, 8192 },
+  { {GamepadButton_names + 99, 25}, 16384 },
+  { {GamepadButton_names + 124, 22}, 2048 },
+  { {GamepadButton_names + 146, 20}, 256 },
+  { {GamepadButton_names + 166, 28}, 16 },
+  { {GamepadButton_names + 194, 25}, 512 },
+  { {GamepadButton_names + 219, 19}, 0 },
+  { {GamepadButton_names + 238, 29}, 32 },
+  { {GamepadButton_names + 267, 26}, 1024 },
+  { {GamepadButton_names + 293, 20}, 128 },
+  { {GamepadButton_names + 313, 16}, 4 },
+  { {GamepadButton_names + 329, 16}, 8 },
+};
+
+static const int GamepadButton_entries_by_number[] = {
+  10, // 0 -> GAMEPAD_BUTTON_NONE
+  0, // 1 -> GAMEPAD_BUTTON_A
+  1, // 2 -> GAMEPAD_BUTTON_B
+  14, // 4 -> GAMEPAD_BUTTON_X
+  15, // 8 -> GAMEPAD_BUTTON_Y
+  8, // 16 -> GAMEPAD_BUTTON_LEFT_SHOULDER
+  11, // 32 -> GAMEPAD_BUTTON_RIGHT_SHOULDER
+  2, // 64 -> GAMEPAD_BUTTON_BACK
+  13, // 128 -> GAMEPAD_BUTTON_START
+  7, // 256 -> GAMEPAD_BUTTON_GUIDE
+  9, // 512 -> GAMEPAD_BUTTON_LEFT_THUMB
+  12, // 1024 -> GAMEPAD_BUTTON_RIGHT_THUMB
+  6, // 2048 -> GAMEPAD_BUTTON_DPAD_UP
+  3, // 4096 -> GAMEPAD_BUTTON_DPAD_DOWN
+  4, // 8192 -> GAMEPAD_BUTTON_DPAD_LEFT
+  5, // 16384 -> GAMEPAD_BUTTON_DPAD_RIGHT
+};
+
+const std::string& GamepadButton_Name(
+    GamepadButton value) {
+  static const bool dummy =
+      ::PROTOBUF_NAMESPACE_ID::internal::InitializeEnumStrings(
+          GamepadButton_entries,
+          GamepadButton_entries_by_number,
+          16, GamepadButton_strings);
+  (void) dummy;
+  int idx = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumName(
+      GamepadButton_entries,
+      GamepadButton_entries_by_number,
+      16, value);
+  return idx == -1 ? ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString() :
+                     GamepadButton_strings[idx].get();
+}
+bool GamepadButton_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, GamepadButton* value) {
+  int int_value;
+  bool success = ::PROTOBUF_NAMESPACE_ID::internal::LookUpEnumValue(
+      GamepadButton_entries, 16, name, &int_value);
+  if (success) {
+    *value = static_cast<GamepadButton>(int_value);
   }
   return success;
 }
@@ -5053,7 +5303,6 @@ TaskUpdated::TaskUpdated(const TaskUpdated& from)
     , decltype(_impl_.label_){}
     , decltype(_impl_.bounds_){nullptr}
     , decltype(_impl_.task_id_){}
-    , decltype(_impl_.focused_){}
     , decltype(_impl_.density_dpi_){}
     , decltype(_impl_.max_width_){}
     , decltype(_impl_.max_height_){}
@@ -5061,6 +5310,10 @@ TaskUpdated::TaskUpdated(const TaskUpdated& from)
     , decltype(_impl_.min_height_){}
     , decltype(_impl_.status_bar_appearance_){}
     , decltype(_impl_.status_bar_color_){}
+    , decltype(_impl_.focused_){}
+    , decltype(_impl_.fullscreen_){}
+    , decltype(_impl_.picture_in_picture_){}
+    , decltype(_impl_.orientation_){}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
@@ -5084,8 +5337,8 @@ TaskUpdated::TaskUpdated(const TaskUpdated& from)
     _this->_impl_.bounds_ = new ::dsa::control::v1::Rect(*from._impl_.bounds_);
   }
   ::memcpy(&_impl_.task_id_, &from._impl_.task_id_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.status_bar_color_) -
-    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.status_bar_color_));
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.orientation_) -
+    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.orientation_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.TaskUpdated)
 }
 
@@ -5098,7 +5351,6 @@ inline void TaskUpdated::SharedCtor(
     , decltype(_impl_.label_){}
     , decltype(_impl_.bounds_){nullptr}
     , decltype(_impl_.task_id_){0}
-    , decltype(_impl_.focused_){false}
     , decltype(_impl_.density_dpi_){0u}
     , decltype(_impl_.max_width_){0u}
     , decltype(_impl_.max_height_){0u}
@@ -5106,6 +5358,10 @@ inline void TaskUpdated::SharedCtor(
     , decltype(_impl_.min_height_){0u}
     , decltype(_impl_.status_bar_appearance_){0}
     , decltype(_impl_.status_bar_color_){0u}
+    , decltype(_impl_.focused_){false}
+    , decltype(_impl_.fullscreen_){false}
+    , decltype(_impl_.picture_in_picture_){false}
+    , decltype(_impl_.orientation_){0}
     , /*decltype(_impl_._cached_size_)*/{}
   };
   _impl_.package_name_.InitDefault();
@@ -5151,8 +5407,8 @@ void TaskUpdated::Clear() {
   }
   _impl_.bounds_ = nullptr;
   ::memset(&_impl_.task_id_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.status_bar_color_) -
-      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.status_bar_color_));
+      reinterpret_cast<char*>(&_impl_.orientation_) -
+      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.orientation_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -5260,6 +5516,31 @@ const char* TaskUpdated::_InternalParse(const char* ptr, ::_pbi::ParseContext* c
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 101)) {
           _impl_.status_bar_color_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<uint32_t>(ptr);
           ptr += sizeof(uint32_t);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.TaskOrientation orientation = 20;
+      case 20:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 160)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_orientation(static_cast<::dsa::control::v1::TaskOrientation>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // bool fullscreen = 21;
+      case 21:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 168)) {
+          _impl_.fullscreen_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool picture_in_picture = 22;
+      case 22:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 176)) {
+          _impl_.picture_in_picture_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
         } else
           goto handle_unusual;
         continue;
@@ -5374,6 +5655,25 @@ uint8_t* TaskUpdated::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteFixed32ToArray(12, this->_internal_status_bar_color(), target);
   }
 
+  // .dsa.control.v1.TaskOrientation orientation = 20;
+  if (this->_internal_orientation() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      20, this->_internal_orientation(), target);
+  }
+
+  // bool fullscreen = 21;
+  if (this->_internal_fullscreen() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(21, this->_internal_fullscreen(), target);
+  }
+
+  // bool picture_in_picture = 22;
+  if (this->_internal_picture_in_picture() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(22, this->_internal_picture_in_picture(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -5416,11 +5716,6 @@ size_t TaskUpdated::ByteSizeLong() const {
     total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_task_id());
   }
 
-  // bool focused = 5;
-  if (this->_internal_focused() != 0) {
-    total_size += 1 + 1;
-  }
-
   // uint32 density_dpi = 6;
   if (this->_internal_density_dpi() != 0) {
     total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_density_dpi());
@@ -5457,6 +5752,27 @@ size_t TaskUpdated::ByteSizeLong() const {
     total_size += 1 + 4;
   }
 
+  // bool focused = 5;
+  if (this->_internal_focused() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // bool fullscreen = 21;
+  if (this->_internal_fullscreen() != 0) {
+    total_size += 2 + 1;
+  }
+
+  // bool picture_in_picture = 22;
+  if (this->_internal_picture_in_picture() != 0) {
+    total_size += 2 + 1;
+  }
+
+  // .dsa.control.v1.TaskOrientation orientation = 20;
+  if (this->_internal_orientation() != 0) {
+    total_size += 2 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_orientation());
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
   }
@@ -5491,9 +5807,6 @@ void TaskUpdated::MergeFrom(const TaskUpdated& from) {
   if (from._internal_task_id() != 0) {
     _this->_internal_set_task_id(from._internal_task_id());
   }
-  if (from._internal_focused() != 0) {
-    _this->_internal_set_focused(from._internal_focused());
-  }
   if (from._internal_density_dpi() != 0) {
     _this->_internal_set_density_dpi(from._internal_density_dpi());
   }
@@ -5514,6 +5827,18 @@ void TaskUpdated::MergeFrom(const TaskUpdated& from) {
   }
   if (from._internal_status_bar_color() != 0) {
     _this->_internal_set_status_bar_color(from._internal_status_bar_color());
+  }
+  if (from._internal_focused() != 0) {
+    _this->_internal_set_focused(from._internal_focused());
+  }
+  if (from._internal_fullscreen() != 0) {
+    _this->_internal_set_fullscreen(from._internal_fullscreen());
+  }
+  if (from._internal_picture_in_picture() != 0) {
+    _this->_internal_set_picture_in_picture(from._internal_picture_in_picture());
+  }
+  if (from._internal_orientation() != 0) {
+    _this->_internal_set_orientation(from._internal_orientation());
   }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
@@ -5543,8 +5868,8 @@ void TaskUpdated::InternalSwap(TaskUpdated* other) {
       &other->_impl_.label_, rhs_arena
   );
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TaskUpdated, _impl_.status_bar_color_)
-      + sizeof(TaskUpdated::_impl_.status_bar_color_)
+      PROTOBUF_FIELD_OFFSET(TaskUpdated, _impl_.orientation_)
+      + sizeof(TaskUpdated::_impl_.orientation_)
       - PROTOBUF_FIELD_OFFSET(TaskUpdated, _impl_.bounds_)>(
           reinterpret_cast<char*>(&_impl_.bounds_),
           reinterpret_cast<char*>(&other->_impl_.bounds_));
@@ -39799,6 +40124,1519 @@ std::string CameraError::GetTypeName() const {
 
 // ===================================================================
 
+class SystemSettings::_Internal {
+ public:
+};
+
+SystemSettings::SystemSettings(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.SystemSettings)
+}
+SystemSettings::SystemSettings(const SystemSettings& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  SystemSettings* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.locales_){from._impl_.locales_}
+    , decltype(_impl_.time_zone_){}
+    , decltype(_impl_.regional_format_){}
+    , decltype(_impl_.first_day_of_week_){}
+    , decltype(_impl_.time_24_hour_){}
+    , decltype(_impl_.dark_mode_){}
+    , decltype(_impl_.accent_color_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.time_zone_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.time_zone_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_time_zone().empty()) {
+    _this->_impl_.time_zone_.Set(from._internal_time_zone(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.regional_format_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.regional_format_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_regional_format().empty()) {
+    _this->_impl_.regional_format_.Set(from._internal_regional_format(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.first_day_of_week_, &from._impl_.first_day_of_week_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.accent_color_) -
+    reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.accent_color_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.SystemSettings)
+}
+
+inline void SystemSettings::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.locales_){arena}
+    , decltype(_impl_.time_zone_){}
+    , decltype(_impl_.regional_format_){}
+    , decltype(_impl_.first_day_of_week_){0u}
+    , decltype(_impl_.time_24_hour_){false}
+    , decltype(_impl_.dark_mode_){false}
+    , decltype(_impl_.accent_color_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.time_zone_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.time_zone_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.regional_format_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.regional_format_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+SystemSettings::~SystemSettings() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.SystemSettings)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void SystemSettings::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.locales_.~RepeatedPtrField();
+  _impl_.time_zone_.Destroy();
+  _impl_.regional_format_.Destroy();
+}
+
+void SystemSettings::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void SystemSettings::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.SystemSettings)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.locales_.Clear();
+  _impl_.time_zone_.ClearToEmpty();
+  _impl_.regional_format_.ClearToEmpty();
+  ::memset(&_impl_.first_day_of_week_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.accent_color_) -
+      reinterpret_cast<char*>(&_impl_.first_day_of_week_)) + sizeof(_impl_.accent_color_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* SystemSettings::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string time_zone = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_time_zone();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated string locales = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            auto str = _internal_add_locales();
+            ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+            CHK_(ptr);
+            CHK_(::_pbi::VerifyUTF8(str, nullptr));
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<18>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string regional_format = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_regional_format();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // bool time_24_hour = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.time_24_hour_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 first_day_of_week = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.first_day_of_week_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool dark_mode = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
+          _impl_.dark_mode_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // fixed32 accent_color = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 61)) {
+          _impl_.accent_color_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<uint32_t>(ptr);
+          ptr += sizeof(uint32_t);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* SystemSettings::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.SystemSettings)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string time_zone = 1;
+  if (!this->_internal_time_zone().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_time_zone().data(), static_cast<int>(this->_internal_time_zone().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.SystemSettings.time_zone");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_time_zone(), target);
+  }
+
+  // repeated string locales = 2;
+  for (int i = 0, n = this->_internal_locales_size(); i < n; i++) {
+    const auto& s = this->_internal_locales(i);
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      s.data(), static_cast<int>(s.length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.SystemSettings.locales");
+    target = stream->WriteString(2, s, target);
+  }
+
+  // string regional_format = 3;
+  if (!this->_internal_regional_format().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_regional_format().data(), static_cast<int>(this->_internal_regional_format().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.SystemSettings.regional_format");
+    target = stream->WriteStringMaybeAliased(
+        3, this->_internal_regional_format(), target);
+  }
+
+  // bool time_24_hour = 4;
+  if (this->_internal_time_24_hour() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(4, this->_internal_time_24_hour(), target);
+  }
+
+  // uint32 first_day_of_week = 5;
+  if (this->_internal_first_day_of_week() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(5, this->_internal_first_day_of_week(), target);
+  }
+
+  // bool dark_mode = 6;
+  if (this->_internal_dark_mode() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(6, this->_internal_dark_mode(), target);
+  }
+
+  // fixed32 accent_color = 7;
+  if (this->_internal_accent_color() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFixed32ToArray(7, this->_internal_accent_color(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.SystemSettings)
+  return target;
+}
+
+size_t SystemSettings::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.SystemSettings)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated string locales = 2;
+  total_size += 1 *
+      ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(_impl_.locales_.size());
+  for (int i = 0, n = _impl_.locales_.size(); i < n; i++) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+      _impl_.locales_.Get(i));
+  }
+
+  // string time_zone = 1;
+  if (!this->_internal_time_zone().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_time_zone());
+  }
+
+  // string regional_format = 3;
+  if (!this->_internal_regional_format().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_regional_format());
+  }
+
+  // uint32 first_day_of_week = 5;
+  if (this->_internal_first_day_of_week() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_first_day_of_week());
+  }
+
+  // bool time_24_hour = 4;
+  if (this->_internal_time_24_hour() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // bool dark_mode = 6;
+  if (this->_internal_dark_mode() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // fixed32 accent_color = 7;
+  if (this->_internal_accent_color() != 0) {
+    total_size += 1 + 4;
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void SystemSettings::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const SystemSettings*>(
+      &from));
+}
+
+void SystemSettings::MergeFrom(const SystemSettings& from) {
+  SystemSettings* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.SystemSettings)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.locales_.MergeFrom(from._impl_.locales_);
+  if (!from._internal_time_zone().empty()) {
+    _this->_internal_set_time_zone(from._internal_time_zone());
+  }
+  if (!from._internal_regional_format().empty()) {
+    _this->_internal_set_regional_format(from._internal_regional_format());
+  }
+  if (from._internal_first_day_of_week() != 0) {
+    _this->_internal_set_first_day_of_week(from._internal_first_day_of_week());
+  }
+  if (from._internal_time_24_hour() != 0) {
+    _this->_internal_set_time_24_hour(from._internal_time_24_hour());
+  }
+  if (from._internal_dark_mode() != 0) {
+    _this->_internal_set_dark_mode(from._internal_dark_mode());
+  }
+  if (from._internal_accent_color() != 0) {
+    _this->_internal_set_accent_color(from._internal_accent_color());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void SystemSettings::CopyFrom(const SystemSettings& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.SystemSettings)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool SystemSettings::IsInitialized() const {
+  return true;
+}
+
+void SystemSettings::InternalSwap(SystemSettings* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.locales_.InternalSwap(&other->_impl_.locales_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.time_zone_, lhs_arena,
+      &other->_impl_.time_zone_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.regional_format_, lhs_arena,
+      &other->_impl_.regional_format_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SystemSettings, _impl_.accent_color_)
+      + sizeof(SystemSettings::_impl_.accent_color_)
+      - PROTOBUF_FIELD_OFFSET(SystemSettings, _impl_.first_day_of_week_)>(
+          reinterpret_cast<char*>(&_impl_.first_day_of_week_),
+          reinterpret_cast<char*>(&other->_impl_.first_day_of_week_));
+}
+
+std::string SystemSettings::GetTypeName() const {
+  return "dsa.control.v1.SystemSettings";
+}
+
+
+// ===================================================================
+
+class GamepadConnected::_Internal {
+ public:
+};
+
+GamepadConnected::GamepadConnected(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.GamepadConnected)
+}
+GamepadConnected::GamepadConnected(const GamepadConnected& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  GamepadConnected* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , decltype(_impl_.pad_id_){}
+    , decltype(_impl_.vendor_id_){}
+    , decltype(_impl_.product_id_){}
+    , decltype(_impl_.rumble_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_name().empty()) {
+    _this->_impl_.name_.Set(from._internal_name(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.pad_id_, &from._impl_.pad_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.rumble_) -
+    reinterpret_cast<char*>(&_impl_.pad_id_)) + sizeof(_impl_.rumble_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GamepadConnected)
+}
+
+inline void GamepadConnected::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , decltype(_impl_.pad_id_){0u}
+    , decltype(_impl_.vendor_id_){0u}
+    , decltype(_impl_.product_id_){0u}
+    , decltype(_impl_.rumble_){false}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+GamepadConnected::~GamepadConnected() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.GamepadConnected)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void GamepadConnected::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.name_.Destroy();
+}
+
+void GamepadConnected::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void GamepadConnected::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.GamepadConnected)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.name_.ClearToEmpty();
+  ::memset(&_impl_.pad_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.rumble_) -
+      reinterpret_cast<char*>(&_impl_.pad_id_)) + sizeof(_impl_.rumble_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* GamepadConnected::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 pad_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.pad_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string name = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 vendor_id = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.vendor_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 product_id = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.product_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool rumble = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.rumble_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* GamepadConnected::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GamepadConnected)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 pad_id = 1;
+  if (this->_internal_pad_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_pad_id(), target);
+  }
+
+  // string name = 2;
+  if (!this->_internal_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.GamepadConnected.name");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_name(), target);
+  }
+
+  // uint32 vendor_id = 3;
+  if (this->_internal_vendor_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_vendor_id(), target);
+  }
+
+  // uint32 product_id = 4;
+  if (this->_internal_product_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(4, this->_internal_product_id(), target);
+  }
+
+  // bool rumble = 5;
+  if (this->_internal_rumble() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(5, this->_internal_rumble(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.GamepadConnected)
+  return target;
+}
+
+size_t GamepadConnected::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.GamepadConnected)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string name = 2;
+  if (!this->_internal_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_name());
+  }
+
+  // uint32 pad_id = 1;
+  if (this->_internal_pad_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_pad_id());
+  }
+
+  // uint32 vendor_id = 3;
+  if (this->_internal_vendor_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_vendor_id());
+  }
+
+  // uint32 product_id = 4;
+  if (this->_internal_product_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_product_id());
+  }
+
+  // bool rumble = 5;
+  if (this->_internal_rumble() != 0) {
+    total_size += 1 + 1;
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void GamepadConnected::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const GamepadConnected*>(
+      &from));
+}
+
+void GamepadConnected::MergeFrom(const GamepadConnected& from) {
+  GamepadConnected* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.GamepadConnected)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_name().empty()) {
+    _this->_internal_set_name(from._internal_name());
+  }
+  if (from._internal_pad_id() != 0) {
+    _this->_internal_set_pad_id(from._internal_pad_id());
+  }
+  if (from._internal_vendor_id() != 0) {
+    _this->_internal_set_vendor_id(from._internal_vendor_id());
+  }
+  if (from._internal_product_id() != 0) {
+    _this->_internal_set_product_id(from._internal_product_id());
+  }
+  if (from._internal_rumble() != 0) {
+    _this->_internal_set_rumble(from._internal_rumble());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void GamepadConnected::CopyFrom(const GamepadConnected& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.GamepadConnected)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool GamepadConnected::IsInitialized() const {
+  return true;
+}
+
+void GamepadConnected::InternalSwap(GamepadConnected* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.name_, lhs_arena,
+      &other->_impl_.name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GamepadConnected, _impl_.rumble_)
+      + sizeof(GamepadConnected::_impl_.rumble_)
+      - PROTOBUF_FIELD_OFFSET(GamepadConnected, _impl_.pad_id_)>(
+          reinterpret_cast<char*>(&_impl_.pad_id_),
+          reinterpret_cast<char*>(&other->_impl_.pad_id_));
+}
+
+std::string GamepadConnected::GetTypeName() const {
+  return "dsa.control.v1.GamepadConnected";
+}
+
+
+// ===================================================================
+
+class GamepadDisconnected::_Internal {
+ public:
+};
+
+GamepadDisconnected::GamepadDisconnected(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.GamepadDisconnected)
+}
+GamepadDisconnected::GamepadDisconnected(const GamepadDisconnected& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  GamepadDisconnected* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.pad_id_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _this->_impl_.pad_id_ = from._impl_.pad_id_;
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GamepadDisconnected)
+}
+
+inline void GamepadDisconnected::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.pad_id_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+GamepadDisconnected::~GamepadDisconnected() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.GamepadDisconnected)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void GamepadDisconnected::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void GamepadDisconnected::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void GamepadDisconnected::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.GamepadDisconnected)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.pad_id_ = 0u;
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* GamepadDisconnected::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 pad_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.pad_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* GamepadDisconnected::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GamepadDisconnected)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 pad_id = 1;
+  if (this->_internal_pad_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_pad_id(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.GamepadDisconnected)
+  return target;
+}
+
+size_t GamepadDisconnected::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.GamepadDisconnected)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 pad_id = 1;
+  if (this->_internal_pad_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_pad_id());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void GamepadDisconnected::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const GamepadDisconnected*>(
+      &from));
+}
+
+void GamepadDisconnected::MergeFrom(const GamepadDisconnected& from) {
+  GamepadDisconnected* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.GamepadDisconnected)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_pad_id() != 0) {
+    _this->_internal_set_pad_id(from._internal_pad_id());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void GamepadDisconnected::CopyFrom(const GamepadDisconnected& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.GamepadDisconnected)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool GamepadDisconnected::IsInitialized() const {
+  return true;
+}
+
+void GamepadDisconnected::InternalSwap(GamepadDisconnected* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_.pad_id_, other->_impl_.pad_id_);
+}
+
+std::string GamepadDisconnected::GetTypeName() const {
+  return "dsa.control.v1.GamepadDisconnected";
+}
+
+
+// ===================================================================
+
+class GamepadState::_Internal {
+ public:
+};
+
+GamepadState::GamepadState(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.GamepadState)
+}
+GamepadState::GamepadState(const GamepadState& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  GamepadState* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.pad_id_){}
+    , decltype(_impl_.buttons_){}
+    , decltype(_impl_.left_x_){}
+    , decltype(_impl_.left_y_){}
+    , decltype(_impl_.right_x_){}
+    , decltype(_impl_.right_y_){}
+    , decltype(_impl_.left_trigger_){}
+    , decltype(_impl_.right_trigger_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.pad_id_, &from._impl_.pad_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.right_trigger_) -
+    reinterpret_cast<char*>(&_impl_.pad_id_)) + sizeof(_impl_.right_trigger_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GamepadState)
+}
+
+inline void GamepadState::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.pad_id_){0u}
+    , decltype(_impl_.buttons_){0u}
+    , decltype(_impl_.left_x_){0}
+    , decltype(_impl_.left_y_){0}
+    , decltype(_impl_.right_x_){0}
+    , decltype(_impl_.right_y_){0}
+    , decltype(_impl_.left_trigger_){0u}
+    , decltype(_impl_.right_trigger_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+GamepadState::~GamepadState() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.GamepadState)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void GamepadState::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void GamepadState::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void GamepadState::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.GamepadState)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.pad_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.right_trigger_) -
+      reinterpret_cast<char*>(&_impl_.pad_id_)) + sizeof(_impl_.right_trigger_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* GamepadState::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 pad_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.pad_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 buttons = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.buttons_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // sint32 left_x = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.left_x_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarintZigZag32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // sint32 left_y = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.left_y_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarintZigZag32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // sint32 right_x = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.right_x_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarintZigZag32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // sint32 right_y = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
+          _impl_.right_y_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarintZigZag32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 left_trigger = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
+          _impl_.left_trigger_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 right_trigger = 8;
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 64)) {
+          _impl_.right_trigger_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* GamepadState::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GamepadState)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 pad_id = 1;
+  if (this->_internal_pad_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_pad_id(), target);
+  }
+
+  // uint32 buttons = 2;
+  if (this->_internal_buttons() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_buttons(), target);
+  }
+
+  // sint32 left_x = 3;
+  if (this->_internal_left_x() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteSInt32ToArray(3, this->_internal_left_x(), target);
+  }
+
+  // sint32 left_y = 4;
+  if (this->_internal_left_y() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteSInt32ToArray(4, this->_internal_left_y(), target);
+  }
+
+  // sint32 right_x = 5;
+  if (this->_internal_right_x() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteSInt32ToArray(5, this->_internal_right_x(), target);
+  }
+
+  // sint32 right_y = 6;
+  if (this->_internal_right_y() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteSInt32ToArray(6, this->_internal_right_y(), target);
+  }
+
+  // uint32 left_trigger = 7;
+  if (this->_internal_left_trigger() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(7, this->_internal_left_trigger(), target);
+  }
+
+  // uint32 right_trigger = 8;
+  if (this->_internal_right_trigger() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(8, this->_internal_right_trigger(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.GamepadState)
+  return target;
+}
+
+size_t GamepadState::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.GamepadState)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 pad_id = 1;
+  if (this->_internal_pad_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_pad_id());
+  }
+
+  // uint32 buttons = 2;
+  if (this->_internal_buttons() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_buttons());
+  }
+
+  // sint32 left_x = 3;
+  if (this->_internal_left_x() != 0) {
+    total_size += ::_pbi::WireFormatLite::SInt32SizePlusOne(this->_internal_left_x());
+  }
+
+  // sint32 left_y = 4;
+  if (this->_internal_left_y() != 0) {
+    total_size += ::_pbi::WireFormatLite::SInt32SizePlusOne(this->_internal_left_y());
+  }
+
+  // sint32 right_x = 5;
+  if (this->_internal_right_x() != 0) {
+    total_size += ::_pbi::WireFormatLite::SInt32SizePlusOne(this->_internal_right_x());
+  }
+
+  // sint32 right_y = 6;
+  if (this->_internal_right_y() != 0) {
+    total_size += ::_pbi::WireFormatLite::SInt32SizePlusOne(this->_internal_right_y());
+  }
+
+  // uint32 left_trigger = 7;
+  if (this->_internal_left_trigger() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_left_trigger());
+  }
+
+  // uint32 right_trigger = 8;
+  if (this->_internal_right_trigger() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_right_trigger());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void GamepadState::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const GamepadState*>(
+      &from));
+}
+
+void GamepadState::MergeFrom(const GamepadState& from) {
+  GamepadState* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.GamepadState)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_pad_id() != 0) {
+    _this->_internal_set_pad_id(from._internal_pad_id());
+  }
+  if (from._internal_buttons() != 0) {
+    _this->_internal_set_buttons(from._internal_buttons());
+  }
+  if (from._internal_left_x() != 0) {
+    _this->_internal_set_left_x(from._internal_left_x());
+  }
+  if (from._internal_left_y() != 0) {
+    _this->_internal_set_left_y(from._internal_left_y());
+  }
+  if (from._internal_right_x() != 0) {
+    _this->_internal_set_right_x(from._internal_right_x());
+  }
+  if (from._internal_right_y() != 0) {
+    _this->_internal_set_right_y(from._internal_right_y());
+  }
+  if (from._internal_left_trigger() != 0) {
+    _this->_internal_set_left_trigger(from._internal_left_trigger());
+  }
+  if (from._internal_right_trigger() != 0) {
+    _this->_internal_set_right_trigger(from._internal_right_trigger());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void GamepadState::CopyFrom(const GamepadState& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.GamepadState)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool GamepadState::IsInitialized() const {
+  return true;
+}
+
+void GamepadState::InternalSwap(GamepadState* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GamepadState, _impl_.right_trigger_)
+      + sizeof(GamepadState::_impl_.right_trigger_)
+      - PROTOBUF_FIELD_OFFSET(GamepadState, _impl_.pad_id_)>(
+          reinterpret_cast<char*>(&_impl_.pad_id_),
+          reinterpret_cast<char*>(&other->_impl_.pad_id_));
+}
+
+std::string GamepadState::GetTypeName() const {
+  return "dsa.control.v1.GamepadState";
+}
+
+
+// ===================================================================
+
+class GamepadRumble::_Internal {
+ public:
+};
+
+GamepadRumble::GamepadRumble(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.GamepadRumble)
+}
+GamepadRumble::GamepadRumble(const GamepadRumble& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  GamepadRumble* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.pad_id_){}
+    , decltype(_impl_.strong_){}
+    , decltype(_impl_.weak_){}
+    , decltype(_impl_.duration_ms_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.pad_id_, &from._impl_.pad_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.duration_ms_) -
+    reinterpret_cast<char*>(&_impl_.pad_id_)) + sizeof(_impl_.duration_ms_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.GamepadRumble)
+}
+
+inline void GamepadRumble::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.pad_id_){0u}
+    , decltype(_impl_.strong_){0u}
+    , decltype(_impl_.weak_){0u}
+    , decltype(_impl_.duration_ms_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+GamepadRumble::~GamepadRumble() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.GamepadRumble)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void GamepadRumble::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void GamepadRumble::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void GamepadRumble::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.GamepadRumble)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.pad_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.duration_ms_) -
+      reinterpret_cast<char*>(&_impl_.pad_id_)) + sizeof(_impl_.duration_ms_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* GamepadRumble::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 pad_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.pad_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 strong = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.strong_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 weak = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.weak_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 duration_ms = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.duration_ms_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* GamepadRumble::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.GamepadRumble)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 pad_id = 1;
+  if (this->_internal_pad_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_pad_id(), target);
+  }
+
+  // uint32 strong = 2;
+  if (this->_internal_strong() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_strong(), target);
+  }
+
+  // uint32 weak = 3;
+  if (this->_internal_weak() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_weak(), target);
+  }
+
+  // uint32 duration_ms = 4;
+  if (this->_internal_duration_ms() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(4, this->_internal_duration_ms(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.GamepadRumble)
+  return target;
+}
+
+size_t GamepadRumble::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.GamepadRumble)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 pad_id = 1;
+  if (this->_internal_pad_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_pad_id());
+  }
+
+  // uint32 strong = 2;
+  if (this->_internal_strong() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_strong());
+  }
+
+  // uint32 weak = 3;
+  if (this->_internal_weak() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_weak());
+  }
+
+  // uint32 duration_ms = 4;
+  if (this->_internal_duration_ms() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_duration_ms());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void GamepadRumble::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const GamepadRumble*>(
+      &from));
+}
+
+void GamepadRumble::MergeFrom(const GamepadRumble& from) {
+  GamepadRumble* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.GamepadRumble)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_pad_id() != 0) {
+    _this->_internal_set_pad_id(from._internal_pad_id());
+  }
+  if (from._internal_strong() != 0) {
+    _this->_internal_set_strong(from._internal_strong());
+  }
+  if (from._internal_weak() != 0) {
+    _this->_internal_set_weak(from._internal_weak());
+  }
+  if (from._internal_duration_ms() != 0) {
+    _this->_internal_set_duration_ms(from._internal_duration_ms());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void GamepadRumble::CopyFrom(const GamepadRumble& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.GamepadRumble)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool GamepadRumble::IsInitialized() const {
+  return true;
+}
+
+void GamepadRumble::InternalSwap(GamepadRumble* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(GamepadRumble, _impl_.duration_ms_)
+      + sizeof(GamepadRumble::_impl_.duration_ms_)
+      - PROTOBUF_FIELD_OFFSET(GamepadRumble, _impl_.pad_id_)>(
+          reinterpret_cast<char*>(&_impl_.pad_id_),
+          reinterpret_cast<char*>(&other->_impl_.pad_id_));
+}
+
+std::string GamepadRumble::GetTypeName() const {
+  return "dsa.control.v1.GamepadRumble";
+}
+
+
+// ===================================================================
+
 class Envelope::_Internal {
  public:
   static const ::dsa::control::v1::Hello& hello(const Envelope* msg);
@@ -39923,6 +41761,11 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::CameraStillTaken& camera_still_taken(const Envelope* msg);
   static const ::dsa::control::v1::CameraError& camera_error(const Envelope* msg);
   static const ::dsa::control::v1::SetTaskCaption& set_task_caption(const Envelope* msg);
+  static const ::dsa::control::v1::SystemSettings& system_settings(const Envelope* msg);
+  static const ::dsa::control::v1::GamepadConnected& gamepad_connected(const Envelope* msg);
+  static const ::dsa::control::v1::GamepadDisconnected& gamepad_disconnected(const Envelope* msg);
+  static const ::dsa::control::v1::GamepadState& gamepad_state(const Envelope* msg);
+  static const ::dsa::control::v1::GamepadRumble& gamepad_rumble(const Envelope* msg);
   static const ::dsa::control::v1::FileSharing& file_sharing(const Envelope* msg);
   static const ::dsa::control::v1::AndroidFiles& android_files(const Envelope* msg);
 };
@@ -40414,6 +42257,26 @@ Envelope::_Internal::camera_error(const Envelope* msg) {
 const ::dsa::control::v1::SetTaskCaption&
 Envelope::_Internal::set_task_caption(const Envelope* msg) {
   return *msg->_impl_.body_.set_task_caption_;
+}
+const ::dsa::control::v1::SystemSettings&
+Envelope::_Internal::system_settings(const Envelope* msg) {
+  return *msg->_impl_.body_.system_settings_;
+}
+const ::dsa::control::v1::GamepadConnected&
+Envelope::_Internal::gamepad_connected(const Envelope* msg) {
+  return *msg->_impl_.body_.gamepad_connected_;
+}
+const ::dsa::control::v1::GamepadDisconnected&
+Envelope::_Internal::gamepad_disconnected(const Envelope* msg) {
+  return *msg->_impl_.body_.gamepad_disconnected_;
+}
+const ::dsa::control::v1::GamepadState&
+Envelope::_Internal::gamepad_state(const Envelope* msg) {
+  return *msg->_impl_.body_.gamepad_state_;
+}
+const ::dsa::control::v1::GamepadRumble&
+Envelope::_Internal::gamepad_rumble(const Envelope* msg) {
+  return *msg->_impl_.body_.gamepad_rumble_;
 }
 const ::dsa::control::v1::FileSharing&
 Envelope::_Internal::file_sharing(const Envelope* msg) {
@@ -42253,6 +44116,81 @@ void Envelope::set_allocated_set_task_caption(::dsa::control::v1::SetTaskCaption
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.set_task_caption)
 }
+void Envelope::set_allocated_system_settings(::dsa::control::v1::SystemSettings* system_settings) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (system_settings) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(system_settings);
+    if (message_arena != submessage_arena) {
+      system_settings = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, system_settings, submessage_arena);
+    }
+    set_has_system_settings();
+    _impl_.body_.system_settings_ = system_settings;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.system_settings)
+}
+void Envelope::set_allocated_gamepad_connected(::dsa::control::v1::GamepadConnected* gamepad_connected) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (gamepad_connected) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(gamepad_connected);
+    if (message_arena != submessage_arena) {
+      gamepad_connected = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, gamepad_connected, submessage_arena);
+    }
+    set_has_gamepad_connected();
+    _impl_.body_.gamepad_connected_ = gamepad_connected;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.gamepad_connected)
+}
+void Envelope::set_allocated_gamepad_disconnected(::dsa::control::v1::GamepadDisconnected* gamepad_disconnected) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (gamepad_disconnected) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(gamepad_disconnected);
+    if (message_arena != submessage_arena) {
+      gamepad_disconnected = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, gamepad_disconnected, submessage_arena);
+    }
+    set_has_gamepad_disconnected();
+    _impl_.body_.gamepad_disconnected_ = gamepad_disconnected;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.gamepad_disconnected)
+}
+void Envelope::set_allocated_gamepad_state(::dsa::control::v1::GamepadState* gamepad_state) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (gamepad_state) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(gamepad_state);
+    if (message_arena != submessage_arena) {
+      gamepad_state = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, gamepad_state, submessage_arena);
+    }
+    set_has_gamepad_state();
+    _impl_.body_.gamepad_state_ = gamepad_state;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.gamepad_state)
+}
+void Envelope::set_allocated_gamepad_rumble(::dsa::control::v1::GamepadRumble* gamepad_rumble) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (gamepad_rumble) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(gamepad_rumble);
+    if (message_arena != submessage_arena) {
+      gamepad_rumble = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, gamepad_rumble, submessage_arena);
+    }
+    set_has_gamepad_rumble();
+    _impl_.body_.gamepad_rumble_ = gamepad_rumble;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.gamepad_rumble)
+}
 void Envelope::set_allocated_file_sharing(::dsa::control::v1::FileSharing* file_sharing) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
   clear_body();
@@ -42908,6 +44846,31 @@ Envelope::Envelope(const Envelope& from)
     case kSetTaskCaption: {
       _this->_internal_mutable_set_task_caption()->::dsa::control::v1::SetTaskCaption::MergeFrom(
           from._internal_set_task_caption());
+      break;
+    }
+    case kSystemSettings: {
+      _this->_internal_mutable_system_settings()->::dsa::control::v1::SystemSettings::MergeFrom(
+          from._internal_system_settings());
+      break;
+    }
+    case kGamepadConnected: {
+      _this->_internal_mutable_gamepad_connected()->::dsa::control::v1::GamepadConnected::MergeFrom(
+          from._internal_gamepad_connected());
+      break;
+    }
+    case kGamepadDisconnected: {
+      _this->_internal_mutable_gamepad_disconnected()->::dsa::control::v1::GamepadDisconnected::MergeFrom(
+          from._internal_gamepad_disconnected());
+      break;
+    }
+    case kGamepadState: {
+      _this->_internal_mutable_gamepad_state()->::dsa::control::v1::GamepadState::MergeFrom(
+          from._internal_gamepad_state());
+      break;
+    }
+    case kGamepadRumble: {
+      _this->_internal_mutable_gamepad_rumble()->::dsa::control::v1::GamepadRumble::MergeFrom(
+          from._internal_gamepad_rumble());
       break;
     }
     case kFileSharing: {
@@ -43691,6 +45654,36 @@ void Envelope::clear_body() {
     case kSetTaskCaption: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.set_task_caption_;
+      }
+      break;
+    }
+    case kSystemSettings: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.system_settings_;
+      }
+      break;
+    }
+    case kGamepadConnected: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.gamepad_connected_;
+      }
+      break;
+    }
+    case kGamepadDisconnected: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.gamepad_disconnected_;
+      }
+      break;
+    }
+    case kGamepadState: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.gamepad_state_;
+      }
+      break;
+    }
+    case kGamepadRumble: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.gamepad_rumble_;
       }
       break;
     }
@@ -44722,6 +46715,46 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.SystemSettings system_settings = 340;
+      case 340:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 162)) {
+          ptr = ctx->ParseMessage(_internal_mutable_system_settings(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.GamepadConnected gamepad_connected = 341;
+      case 341:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 170)) {
+          ptr = ctx->ParseMessage(_internal_mutable_gamepad_connected(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;
+      case 342:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 178)) {
+          ptr = ctx->ParseMessage(_internal_mutable_gamepad_disconnected(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.GamepadState gamepad_state = 343;
+      case 343:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 186)) {
+          ptr = ctx->ParseMessage(_internal_mutable_gamepad_state(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.GamepadRumble gamepad_rumble = 344;
+      case 344:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 194)) {
+          ptr = ctx->ParseMessage(_internal_mutable_gamepad_rumble(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -45619,6 +47652,41 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::android_files(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.SystemSettings system_settings = 340;
+  if (_internal_has_system_settings()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(340, _Internal::system_settings(this),
+        _Internal::system_settings(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.GamepadConnected gamepad_connected = 341;
+  if (_internal_has_gamepad_connected()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(341, _Internal::gamepad_connected(this),
+        _Internal::gamepad_connected(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;
+  if (_internal_has_gamepad_disconnected()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(342, _Internal::gamepad_disconnected(this),
+        _Internal::gamepad_disconnected(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.GamepadState gamepad_state = 343;
+  if (_internal_has_gamepad_state()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(343, _Internal::gamepad_state(this),
+        _Internal::gamepad_state(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.GamepadRumble gamepad_rumble = 344;
+  if (_internal_has_gamepad_rumble()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(344, _Internal::gamepad_rumble(this),
+        _Internal::gamepad_rumble(this).GetCachedSize(), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -46490,6 +48558,41 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.set_task_caption_);
       break;
     }
+    // .dsa.control.v1.SystemSettings system_settings = 340;
+    case kSystemSettings: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.system_settings_);
+      break;
+    }
+    // .dsa.control.v1.GamepadConnected gamepad_connected = 341;
+    case kGamepadConnected: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.gamepad_connected_);
+      break;
+    }
+    // .dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;
+    case kGamepadDisconnected: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.gamepad_disconnected_);
+      break;
+    }
+    // .dsa.control.v1.GamepadState gamepad_state = 343;
+    case kGamepadState: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.gamepad_state_);
+      break;
+    }
+    // .dsa.control.v1.GamepadRumble gamepad_rumble = 344;
+    case kGamepadRumble: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.gamepad_rumble_);
+      break;
+    }
     // .dsa.control.v1.FileSharing file_sharing = 290;
     case kFileSharing: {
       total_size += 2 +
@@ -47140,6 +49243,31 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_set_task_caption());
       break;
     }
+    case kSystemSettings: {
+      _this->_internal_mutable_system_settings()->::dsa::control::v1::SystemSettings::MergeFrom(
+          from._internal_system_settings());
+      break;
+    }
+    case kGamepadConnected: {
+      _this->_internal_mutable_gamepad_connected()->::dsa::control::v1::GamepadConnected::MergeFrom(
+          from._internal_gamepad_connected());
+      break;
+    }
+    case kGamepadDisconnected: {
+      _this->_internal_mutable_gamepad_disconnected()->::dsa::control::v1::GamepadDisconnected::MergeFrom(
+          from._internal_gamepad_disconnected());
+      break;
+    }
+    case kGamepadState: {
+      _this->_internal_mutable_gamepad_state()->::dsa::control::v1::GamepadState::MergeFrom(
+          from._internal_gamepad_state());
+      break;
+    }
+    case kGamepadRumble: {
+      _this->_internal_mutable_gamepad_rumble()->::dsa::control::v1::GamepadRumble::MergeFrom(
+          from._internal_gamepad_rumble());
+      break;
+    }
     case kFileSharing: {
       _this->_internal_mutable_file_sharing()->::dsa::control::v1::FileSharing::MergeFrom(
           from._internal_file_sharing());
@@ -47724,6 +49852,26 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::CameraStillTaken >(Arena* arena) 
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::CameraError*
 Arena::CreateMaybeMessage< ::dsa::control::v1::CameraError >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::CameraError >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::SystemSettings*
+Arena::CreateMaybeMessage< ::dsa::control::v1::SystemSettings >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::SystemSettings >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::GamepadConnected*
+Arena::CreateMaybeMessage< ::dsa::control::v1::GamepadConnected >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::GamepadConnected >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::GamepadDisconnected*
+Arena::CreateMaybeMessage< ::dsa::control::v1::GamepadDisconnected >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::GamepadDisconnected >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::GamepadState*
+Arena::CreateMaybeMessage< ::dsa::control::v1::GamepadState >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::GamepadState >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::GamepadRumble*
+Arena::CreateMaybeMessage< ::dsa::control::v1::GamepadRumble >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::GamepadRumble >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::Envelope*
 Arena::CreateMaybeMessage< ::dsa::control::v1::Envelope >(Arena* arena) {

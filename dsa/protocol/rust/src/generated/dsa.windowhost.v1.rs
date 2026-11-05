@@ -255,12 +255,26 @@ pub struct SetCaptionTone {
     #[prost(enumeration = "CaptionTone", tag = "2")]
     pub tone: i32,
 }
+/// Window manager to window host: how the task's window is shown, as the app asks and the
+/// user's settings for the app say. Sent when the window opens unless the window is an
+/// ordinary resizable one, and on each change. The user's F11 turns full screen on or off
+/// over what the app asked for, until the app asks again.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetWindowMode {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(enumeration = "WindowMode", tag = "2")]
+    pub mode: i32,
+    /// Whether the user may resize the window: off when the user's settings for the app say so.
+    #[prost(bool, tag = "3")]
+    pub resizable: bool,
+}
 /// The one message type on the wire. Each frame carries exactly one.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 30, 31, 32"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 30, 31, 32, 60"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -312,6 +326,8 @@ pub mod envelope {
         WindowCaption(super::WindowCaption),
         #[prost(message, tag = "32")]
         SetCaptionTone(super::SetCaptionTone),
+        #[prost(message, tag = "60")]
+        SetWindowMode(super::SetWindowMode),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -437,6 +453,39 @@ impl CaptionTone {
             "CAPTION_TONE_UNSPECIFIED" => Some(Self::Unspecified),
             "CAPTION_TONE_DARK_GLYPHS" => Some(Self::DarkGlyphs),
             "CAPTION_TONE_LIGHT_GLYPHS" => Some(Self::LightGlyphs),
+            _ => None,
+        }
+    }
+}
+/// How a task's window is shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum WindowMode {
+    /// An ordinary window with a title bar, which the user moves and resizes.
+    Normal = 0,
+    /// The app asked to fill the screen: the window covers its whole monitor, with no title bar.
+    Fullscreen = 1,
+    /// The app went into picture-in-picture: a small window that stays above the others.
+    PictureInPicture = 2,
+}
+impl WindowMode {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Normal => "WINDOW_MODE_NORMAL",
+            Self::Fullscreen => "WINDOW_MODE_FULLSCREEN",
+            Self::PictureInPicture => "WINDOW_MODE_PICTURE_IN_PICTURE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "WINDOW_MODE_NORMAL" => Some(Self::Normal),
+            "WINDOW_MODE_FULLSCREEN" => Some(Self::Fullscreen),
+            "WINDOW_MODE_PICTURE_IN_PICTURE" => Some(Self::PictureInPicture),
             _ => None,
         }
     }

@@ -165,4 +165,47 @@ public interface TaskUpdatedOrBuilder extends
    * @return The statusBarColor.
    */
   int getStatusBarColor();
+
+  /**
+   * <pre>
+   * The orientation the task's top activity is locked to, if any. A task locked to portrait
+   * opens as a window taller than it is wide.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+   * @return The enum numeric value on the wire for orientation.
+   */
+  int getOrientationValue();
+  /**
+   * <pre>
+   * The orientation the task's top activity is locked to, if any. A task locked to portrait
+   * opens as a window taller than it is wide.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+   * @return The orientation.
+   */
+  io.github.thisisthepy.dsa.control.v1.TaskOrientation getOrientation();
+
+  /**
+   * <pre>
+   * Whether the task's app asked to fill the screen (the task left the freeform windowing
+   * mode for fullscreen). The host makes the task's window fill its monitor.
+   * </pre>
+   *
+   * <code>bool fullscreen = 21;</code>
+   * @return The fullscreen.
+   */
+  boolean getFullscreen();
+
+  /**
+   * <pre>
+   * Whether the task's app went into picture-in-picture. The host makes the task's window a
+   * small window that stays above the others.
+   * </pre>
+   *
+   * <code>bool picture_in_picture = 22;</code>
+   * @return The pictureInPicture.
+   */
+  boolean getPictureInPicture();
 }

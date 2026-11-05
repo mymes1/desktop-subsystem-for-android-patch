@@ -588,6 +588,155 @@ public  final class TaskUpdated extends
     statusBarColor_ = 0;
   }
 
+  public static final int ORIENTATION_FIELD_NUMBER = 20;
+  private int orientation_;
+  /**
+   * <pre>
+   * The orientation the task's top activity is locked to, if any. A task locked to portrait
+   * opens as a window taller than it is wide.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+   * @return The enum numeric value on the wire for orientation.
+   */
+  @java.lang.Override
+  public int getOrientationValue() {
+    return orientation_;
+  }
+  /**
+   * <pre>
+   * The orientation the task's top activity is locked to, if any. A task locked to portrait
+   * opens as a window taller than it is wide.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+   * @return The orientation.
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.TaskOrientation getOrientation() {
+    io.github.thisisthepy.dsa.control.v1.TaskOrientation result = io.github.thisisthepy.dsa.control.v1.TaskOrientation.forNumber(orientation_);
+    return result == null ? io.github.thisisthepy.dsa.control.v1.TaskOrientation.UNRECOGNIZED : result;
+  }
+  /**
+   * <pre>
+   * The orientation the task's top activity is locked to, if any. A task locked to portrait
+   * opens as a window taller than it is wide.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+   * @param value The enum numeric value on the wire for orientation to set.
+   */
+  private void setOrientationValue(int value) {
+      orientation_ = value;
+  }
+  /**
+   * <pre>
+   * The orientation the task's top activity is locked to, if any. A task locked to portrait
+   * opens as a window taller than it is wide.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+   * @param value The orientation to set.
+   */
+  private void setOrientation(io.github.thisisthepy.dsa.control.v1.TaskOrientation value) {
+    orientation_ = value.getNumber();
+    
+  }
+  /**
+   * <pre>
+   * The orientation the task's top activity is locked to, if any. A task locked to portrait
+   * opens as a window taller than it is wide.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+   */
+  private void clearOrientation() {
+    
+    orientation_ = 0;
+  }
+
+  public static final int FULLSCREEN_FIELD_NUMBER = 21;
+  private boolean fullscreen_;
+  /**
+   * <pre>
+   * Whether the task's app asked to fill the screen (the task left the freeform windowing
+   * mode for fullscreen). The host makes the task's window fill its monitor.
+   * </pre>
+   *
+   * <code>bool fullscreen = 21;</code>
+   * @return The fullscreen.
+   */
+  @java.lang.Override
+  public boolean getFullscreen() {
+    return fullscreen_;
+  }
+  /**
+   * <pre>
+   * Whether the task's app asked to fill the screen (the task left the freeform windowing
+   * mode for fullscreen). The host makes the task's window fill its monitor.
+   * </pre>
+   *
+   * <code>bool fullscreen = 21;</code>
+   * @param value The fullscreen to set.
+   */
+  private void setFullscreen(boolean value) {
+    
+    fullscreen_ = value;
+  }
+  /**
+   * <pre>
+   * Whether the task's app asked to fill the screen (the task left the freeform windowing
+   * mode for fullscreen). The host makes the task's window fill its monitor.
+   * </pre>
+   *
+   * <code>bool fullscreen = 21;</code>
+   */
+  private void clearFullscreen() {
+    
+    fullscreen_ = false;
+  }
+
+  public static final int PICTURE_IN_PICTURE_FIELD_NUMBER = 22;
+  private boolean pictureInPicture_;
+  /**
+   * <pre>
+   * Whether the task's app went into picture-in-picture. The host makes the task's window a
+   * small window that stays above the others.
+   * </pre>
+   *
+   * <code>bool picture_in_picture = 22;</code>
+   * @return The pictureInPicture.
+   */
+  @java.lang.Override
+  public boolean getPictureInPicture() {
+    return pictureInPicture_;
+  }
+  /**
+   * <pre>
+   * Whether the task's app went into picture-in-picture. The host makes the task's window a
+   * small window that stays above the others.
+   * </pre>
+   *
+   * <code>bool picture_in_picture = 22;</code>
+   * @param value The pictureInPicture to set.
+   */
+  private void setPictureInPicture(boolean value) {
+    
+    pictureInPicture_ = value;
+  }
+  /**
+   * <pre>
+   * Whether the task's app went into picture-in-picture. The host makes the task's window a
+   * small window that stays above the others.
+   * </pre>
+   *
+   * <code>bool picture_in_picture = 22;</code>
+   */
+  private void clearPictureInPicture() {
+    
+    pictureInPicture_ = false;
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.TaskUpdated parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1285,6 +1434,163 @@ public  final class TaskUpdated extends
       return this;
     }
 
+    /**
+     * <pre>
+     * The orientation the task's top activity is locked to, if any. A task locked to portrait
+     * opens as a window taller than it is wide.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+     * @return The enum numeric value on the wire for orientation.
+     */
+    @java.lang.Override
+    public int getOrientationValue() {
+      return instance.getOrientationValue();
+    }
+    /**
+     * <pre>
+     * The orientation the task's top activity is locked to, if any. A task locked to portrait
+     * opens as a window taller than it is wide.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+     * @param value The orientation to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOrientationValue(int value) {
+      copyOnWrite();
+      instance.setOrientationValue(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The orientation the task's top activity is locked to, if any. A task locked to portrait
+     * opens as a window taller than it is wide.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+     * @return The orientation.
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.TaskOrientation getOrientation() {
+      return instance.getOrientation();
+    }
+    /**
+     * <pre>
+     * The orientation the task's top activity is locked to, if any. A task locked to portrait
+     * opens as a window taller than it is wide.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+     * @param value The enum numeric value on the wire for orientation to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOrientation(io.github.thisisthepy.dsa.control.v1.TaskOrientation value) {
+      copyOnWrite();
+      instance.setOrientation(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The orientation the task's top activity is locked to, if any. A task locked to portrait
+     * opens as a window taller than it is wide.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.TaskOrientation orientation = 20;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearOrientation() {
+      copyOnWrite();
+      instance.clearOrientation();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * Whether the task's app asked to fill the screen (the task left the freeform windowing
+     * mode for fullscreen). The host makes the task's window fill its monitor.
+     * </pre>
+     *
+     * <code>bool fullscreen = 21;</code>
+     * @return The fullscreen.
+     */
+    @java.lang.Override
+    public boolean getFullscreen() {
+      return instance.getFullscreen();
+    }
+    /**
+     * <pre>
+     * Whether the task's app asked to fill the screen (the task left the freeform windowing
+     * mode for fullscreen). The host makes the task's window fill its monitor.
+     * </pre>
+     *
+     * <code>bool fullscreen = 21;</code>
+     * @param value The fullscreen to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFullscreen(boolean value) {
+      copyOnWrite();
+      instance.setFullscreen(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Whether the task's app asked to fill the screen (the task left the freeform windowing
+     * mode for fullscreen). The host makes the task's window fill its monitor.
+     * </pre>
+     *
+     * <code>bool fullscreen = 21;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFullscreen() {
+      copyOnWrite();
+      instance.clearFullscreen();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * Whether the task's app went into picture-in-picture. The host makes the task's window a
+     * small window that stays above the others.
+     * </pre>
+     *
+     * <code>bool picture_in_picture = 22;</code>
+     * @return The pictureInPicture.
+     */
+    @java.lang.Override
+    public boolean getPictureInPicture() {
+      return instance.getPictureInPicture();
+    }
+    /**
+     * <pre>
+     * Whether the task's app went into picture-in-picture. The host makes the task's window a
+     * small window that stays above the others.
+     * </pre>
+     *
+     * <code>bool picture_in_picture = 22;</code>
+     * @param value The pictureInPicture to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPictureInPicture(boolean value) {
+      copyOnWrite();
+      instance.setPictureInPicture(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Whether the task's app went into picture-in-picture. The host makes the task's window a
+     * small window that stays above the others.
+     * </pre>
+     *
+     * <code>bool picture_in_picture = 22;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPictureInPicture() {
+      copyOnWrite();
+      instance.clearPictureInPicture();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.TaskUpdated)
   }
   @java.lang.Override
@@ -1313,11 +1619,14 @@ public  final class TaskUpdated extends
             "minHeight_",
             "statusBarAppearance_",
             "statusBarColor_",
+            "orientation_",
+            "fullscreen_",
+            "pictureInPicture_",
           };
           java.lang.String info =
-              "\u0000\f\u0000\u0000\u0001\f\f\u0000\u0000\u0000\u0001\u0004\u0002\t\u0003\u0208" +
-              "\u0004\u0208\u0005\u0007\u0006\u000b\u0007\u000b\b\u000b\t\u000b\n\u000b\u000b\f" +
-              "\f\u0006";
+              "\u0000\u000f\u0000\u0000\u0001\u0016\u000f\u0000\u0000\u0000\u0001\u0004\u0002\t" +
+              "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u000b\u0007\u000b\b\u000b\t\u000b\n\u000b" +
+              "\u000b\f\f\u0006\u0014\f\u0015\u0007\u0016\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
