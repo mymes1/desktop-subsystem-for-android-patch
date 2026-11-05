@@ -72,8 +72,14 @@ mod macos {
         }
         // SAFETY: the handler only stores to an atomic.
         unsafe {
-            libc::signal(libc::SIGTERM, on_signal as libc::sighandler_t);
-            libc::signal(libc::SIGINT, on_signal as libc::sighandler_t);
+            libc::signal(
+                libc::SIGTERM,
+                on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t,
+            );
+            libc::signal(
+                libc::SIGINT,
+                on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t,
+            );
         }
     }
 

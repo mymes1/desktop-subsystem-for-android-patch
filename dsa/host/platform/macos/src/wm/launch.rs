@@ -174,7 +174,10 @@ mod tests {
         std::fs::write(&host, b"window host").unwrap();
         let entry = app_entry(&notes());
         let bundle = app_stubs::write_stub(&folder, "Notes.app", &entry, &host).unwrap();
-        assert_eq!(bundle_for(&folder, "com.example.notes"), Some(bundle.clone()));
+        assert_eq!(
+            bundle_for(&folder, "com.example.notes"),
+            Some(bundle.clone())
+        );
         assert_eq!(bundle_for(&folder, "com.example.other"), None);
         let arguments = open_arguments(&bundle);
         assert_eq!(arguments[0], "-a");

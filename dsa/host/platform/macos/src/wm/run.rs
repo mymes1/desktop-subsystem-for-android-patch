@@ -204,7 +204,10 @@ fn watch_tasks(host_api: PathBuf, events: Sender<ManagerEvent>) {
                     }
                 };
                 warned = false;
-                if events.send(ManagerEvent::Sync(stream.current().events())).is_err() {
+                if events
+                    .send(ManagerEvent::Sync(stream.current().events()))
+                    .is_err()
+                {
                     return;
                 }
                 loop {
@@ -273,7 +276,10 @@ fn serve_requests(
                     None => Err("the DSA service is not reachable".to_string()),
                 };
                 if let Err(why) = result {
-                    log(&format!("{} did not reach Android: {why}", request.describe()));
+                    log(&format!(
+                        "{} did not reach Android: {why}",
+                        request.describe()
+                    ));
                     client = None;
                     if let TaskRequest::Close { task_id } = request {
                         let _ = events.send(ManagerEvent::CloseFailed(task_id));

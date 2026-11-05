@@ -101,9 +101,7 @@ impl FrameSlots {
             Some((_, _, since)) if now.saturating_duration_since(since) >= PRESENT_WAIT => {}
             _ => return None,
         }
-        if self.ready.is_none() {
-            return None;
-        }
+        self.ready?;
         self.in_flight = None;
         self.send_ready(now)
     }

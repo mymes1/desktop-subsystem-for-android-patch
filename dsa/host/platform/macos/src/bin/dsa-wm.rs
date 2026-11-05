@@ -40,8 +40,14 @@ fn main() -> std::process::ExitCode {
     let _ = STOP.set(Arc::clone(&stop));
     // SAFETY: the handler only stores to an atomic.
     unsafe {
-        libc::signal(libc::SIGTERM, on_signal as libc::sighandler_t);
-        libc::signal(libc::SIGINT, on_signal as libc::sighandler_t);
+        libc::signal(
+            libc::SIGTERM,
+            on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t,
+        );
+        libc::signal(
+            libc::SIGINT,
+            on_signal as extern "C" fn(libc::c_int) as libc::sighandler_t,
+        );
         // A window host that goes away mid-write must not end the window manager.
         libc::signal(libc::SIGPIPE, libc::SIG_IGN);
     }

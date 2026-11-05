@@ -317,7 +317,13 @@ impl SurfacePorts {
         if right == MACH_PORT_NULL {
             return false;
         }
-        if send(remote, SURFACE_ID, right, MACH_MSG_TYPE_MOVE_SEND, texture_id) {
+        if send(
+            remote,
+            SURFACE_ID,
+            right,
+            MACH_MSG_TYPE_MOVE_SEND,
+            texture_id,
+        ) {
             return true;
         }
         deallocate(right);
@@ -347,14 +353,18 @@ pub fn receive_surfaces(
     // SAFETY: a NUL-terminated name and an out pointer that outlive the call.
     let result = unsafe { bootstrap_look_up(bootstrap_port, c_name.as_ptr(), &mut service) };
     if result != KERN_SUCCESS {
-        return Err(format!("the window manager's Mach service {name} is not there"));
+        return Err(format!(
+            "the window manager's Mach service {name} is not there"
+        ));
     }
     let mut own = MACH_PORT_NULL;
     // SAFETY: an out pointer that outlives the call.
     let made = unsafe { mach_port_allocate(task_self(), MACH_PORT_RIGHT_RECEIVE, &mut own) };
     if made != KERN_SUCCESS {
         deallocate(service);
-        return Err(format!("no Mach port for the frame surfaces (error {made})"));
+        return Err(format!(
+            "no Mach port for the frame surfaces (error {made})"
+        ));
     }
     let said = send(service, HELLO_ID, own, MACH_MSG_TYPE_MAKE_SEND, 0);
     deallocate(service);

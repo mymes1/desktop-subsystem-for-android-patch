@@ -35,11 +35,14 @@ const FORMATS: [u32; 5] = [
 /// How long a picture is waited for before the camera is taken as stalled.
 const PICTURE_WAIT: Duration = Duration::from_secs(5);
 
+/// A size a camera captures, as width, height and the pixel format to capture it in.
+type SizeFormat = (u32, u32, u32);
+
 /// The cameras of this computer.
 pub struct V4l2Cameras {
     log: Log,
     /// For each camera listed, the format to capture each size in.
-    formats: Mutex<HashMap<String, Vec<(u32, u32, u32)>>>,
+    formats: Mutex<HashMap<String, Vec<SizeFormat>>>,
 }
 
 impl V4l2Cameras {
@@ -68,7 +71,7 @@ impl V4l2Cameras {
     }
 
     /// The camera at `path`, or `None` when the node does not capture video.
-    fn probe(&self, path: &Path) -> Option<(Camera, Vec<(u32, u32, u32)>)> {
+    fn probe(&self, path: &Path) -> Option<(Camera, Vec<SizeFormat>)> {
         let id = path.to_string_lossy().into_owned();
         let device = match Device::open(path) {
             Ok(device) => device,
@@ -493,7 +496,12 @@ pub fn encode_jpeg(frame: &Frame, quality: u8) -> Result<Vec<u8>, String> {
     }
     let mut out = Vec::new();
     image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality.clamp(1, 100))
-        .encode(&rgb, frame.width, frame.height, image::ExtendedColorType::Rgb8)
+        .encode(
+            &rgb,
+            frame.width,
+            frame.height,
+            image::ExtendedColorType::Rgb8,
+        )
         .map_err(|e| format!("the picture cannot be encoded: {e}"))?;
     Ok(out)
 }

@@ -76,10 +76,14 @@ pub fn compose(view: (u32, u32), background: u32, icon: Option<Icon<'_>>, edge: 
     for y in 0..edge {
         // The source rows this destination row covers: at least one.
         let y0 = y * source_height / edge;
-        let y1 = ((y + 1) * source_height / edge).max(y0 + 1).min(source_height);
+        let y1 = ((y + 1) * source_height / edge)
+            .max(y0 + 1)
+            .min(source_height);
         for x in 0..edge {
             let x0 = x * source_width / edge;
-            let x1 = ((x + 1) * source_width / edge).max(x0 + 1).min(source_width);
+            let x1 = ((x + 1) * source_width / edge)
+                .max(x0 + 1)
+                .min(source_width);
             // The average of the source pixels under this one: a box filter when shrinking,
             // the nearest pixel when growing.
             let mut sum = [0u32; 4];

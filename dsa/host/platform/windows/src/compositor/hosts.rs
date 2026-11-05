@@ -897,26 +897,24 @@ impl Manager {
                     // are handed over once the window host has the window.
                     let mut waiting = None;
                     match &message {
-                        ToHost::Show { task_id, .. } => {
-                            match self.remotes.get(task_id) {
-                                Some(remote) if remote.is_waiting() => {
-                                    waiting = Some(Arc::clone(remote));
-                                }
-                                _ => {
-                                    if let Some(gpu) = &self.setup.gpu {
-                                        let remote = RemoteWindow::new(
-                                            *task_id,
-                                            Arc::clone(&link),
-                                            Arc::clone(gpu),
-                                            self.setup.logger.clone(),
-                                        );
-                                        if let Some(old) = self.remotes.insert(*task_id, remote) {
-                                            old.close();
-                                        }
+                        ToHost::Show { task_id, .. } => match self.remotes.get(task_id) {
+                            Some(remote) if remote.is_waiting() => {
+                                waiting = Some(Arc::clone(remote));
+                            }
+                            _ => {
+                                if let Some(gpu) = &self.setup.gpu {
+                                    let remote = RemoteWindow::new(
+                                        *task_id,
+                                        Arc::clone(&link),
+                                        Arc::clone(gpu),
+                                        self.setup.logger.clone(),
+                                    );
+                                    if let Some(old) = self.remotes.insert(*task_id, remote) {
+                                        old.close();
                                     }
                                 }
                             }
-                        }
+                        },
                         ToHost::Close { task_id } => {
                             self.focused.remove(task_id);
                             FOCUSED_WINDOWS.store(self.focused.len(), Ordering::Relaxed);

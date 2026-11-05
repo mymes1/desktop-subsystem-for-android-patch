@@ -120,7 +120,11 @@ impl Presenter {
                 state.displays.insert(route.display_id, shown);
             }
         }
-        let renderer = self.renderer.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let renderer = self
+            .renderer
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if let Some(renderer) = renderer.and_then(|weak| weak.upgrade()) {
             for display_id in forgotten {
                 renderer.forget_display(display_id);
@@ -154,7 +158,9 @@ impl Presenter {
 
     /// A window host went away: its Mach port is of no more use.
     pub fn host_gone(&self, host: HostId, process_id: u32) {
-        self.lock().displays.retain(|_, shown| shown.link.id() != host);
+        self.lock()
+            .displays
+            .retain(|_, shown| shown.link.id() != host);
         if let Some(ports) = &self.ports {
             ports.forget(process_id);
         }
@@ -187,7 +193,10 @@ impl Presenter {
             match made {
                 Ok(surface) => shown.surfaces[slot] = Some(surface),
                 Err(why) => {
-                    log(&format!("task {}'s frames cannot be shown: {why}", shown.task_id));
+                    log(&format!(
+                        "task {}'s frames cannot be shown: {why}",
+                        shown.task_id
+                    ));
                     return None;
                 }
             }
@@ -285,7 +294,10 @@ impl FrameSink for Presenter {
             Err(why) => {
                 shown.slots.abandon();
                 if !why.is_empty() {
-                    log(&format!("a frame of task {} was dropped: {why}", shown.task_id));
+                    log(&format!(
+                        "a frame of task {} was dropped: {why}",
+                        shown.task_id
+                    ));
                 }
             }
         }

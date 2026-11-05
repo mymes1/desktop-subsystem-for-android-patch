@@ -153,7 +153,10 @@ impl Surface {
     /// the top-left `width` by `height` region as BGRA, cut to the surface's size.
     pub fn write_rgba(&self, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
         let (surface_w, surface_h) = self.size();
-        let (w, h) = (width.min(surface_w) as usize, height.min(surface_h) as usize);
+        let (w, h) = (
+            width.min(surface_w) as usize,
+            height.min(surface_h) as usize,
+        );
         let row = width as usize * 4;
         if rgba.len() < row * height as usize {
             return Err("the frame is shorter than its size".into());
