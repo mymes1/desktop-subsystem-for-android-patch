@@ -139,6 +139,20 @@ DSA_GFX_EXPORT int dsa_gfx_set_display_callbacks2(dsa_display_target_fn target,
                                                   dsa_display_frame_fn frame,
                                                   void* context);
 
+/* Called on the backend's presentation thread with `display_id`'s newest frame read back to
+ * memory: `width` x `height` pixels, RGBA, 8 bits a channel, rows from the top with no
+ * padding. The pixels are valid only during the call. Used where the window system cannot
+ * take a Direct3D texture (Linux and macOS). */
+typedef void (*dsa_display_pixels_fn)(void* context,
+                                      uint32_t display_id,
+                                      uint32_t width,
+                                      uint32_t height,
+                                      const uint8_t* rgba);
+/* Registers the read-back presentation; NULL stops it. Returns 0 on success, -1 when the
+ * renderer is not initialised or the host presents through dsa_gfx_set_display_callbacks2
+ * instead (Windows). */
+DSA_GFX_EXPORT int dsa_gfx_set_display_pixels_callback(dsa_display_pixels_fn pixels,
+                                                       void* context);
 /* Writes the LUID of the GPU the renderer runs on (8 bytes, as a Windows LUID). Returns 0 on
  * success, -1 when the renderer is not initialised or the driver does not report one. */
 DSA_GFX_EXPORT int dsa_gfx_get_adapter_luid(uint8_t luid[8]);
