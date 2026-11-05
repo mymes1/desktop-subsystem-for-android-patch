@@ -198,6 +198,18 @@ extern FileProgressDefaultTypeInternal _FileProgress_default_instance_;
 class FileSharing;
 struct FileSharingDefaultTypeInternal;
 extern FileSharingDefaultTypeInternal _FileSharing_default_instance_;
+class GamepadConnected;
+struct GamepadConnectedDefaultTypeInternal;
+extern GamepadConnectedDefaultTypeInternal _GamepadConnected_default_instance_;
+class GamepadDisconnected;
+struct GamepadDisconnectedDefaultTypeInternal;
+extern GamepadDisconnectedDefaultTypeInternal _GamepadDisconnected_default_instance_;
+class GamepadRumble;
+struct GamepadRumbleDefaultTypeInternal;
+extern GamepadRumbleDefaultTypeInternal _GamepadRumble_default_instance_;
+class GamepadState;
+struct GamepadStateDefaultTypeInternal;
+extern GamepadStateDefaultTypeInternal _GamepadState_default_instance_;
 class GuestBoot;
 struct GuestBootDefaultTypeInternal;
 extern GuestBootDefaultTypeInternal _GuestBoot_default_instance_;
@@ -390,6 +402,9 @@ extern SetTaskDensityDefaultTypeInternal _SetTaskDensity_default_instance_;
 class StopApp;
 struct StopAppDefaultTypeInternal;
 extern StopAppDefaultTypeInternal _StopApp_default_instance_;
+class SystemSettings;
+struct SystemSettingsDefaultTypeInternal;
+extern SystemSettingsDefaultTypeInternal _SystemSettings_default_instance_;
 class TaskFrames;
 struct TaskFramesDefaultTypeInternal;
 extern TaskFramesDefaultTypeInternal _TaskFrames_default_instance_;
@@ -508,6 +523,10 @@ template<> ::dsa::control::v1::Envelope* Arena::CreateMaybeMessage<::dsa::contro
 template<> ::dsa::control::v1::FileChunk* Arena::CreateMaybeMessage<::dsa::control::v1::FileChunk>(Arena*);
 template<> ::dsa::control::v1::FileProgress* Arena::CreateMaybeMessage<::dsa::control::v1::FileProgress>(Arena*);
 template<> ::dsa::control::v1::FileSharing* Arena::CreateMaybeMessage<::dsa::control::v1::FileSharing>(Arena*);
+template<> ::dsa::control::v1::GamepadConnected* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadConnected>(Arena*);
+template<> ::dsa::control::v1::GamepadDisconnected* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadDisconnected>(Arena*);
+template<> ::dsa::control::v1::GamepadRumble* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadRumble>(Arena*);
+template<> ::dsa::control::v1::GamepadState* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadState>(Arena*);
 template<> ::dsa::control::v1::GuestBoot* Arena::CreateMaybeMessage<::dsa::control::v1::GuestBoot>(Arena*);
 template<> ::dsa::control::v1::GuestMemory* Arena::CreateMaybeMessage<::dsa::control::v1::GuestMemory>(Arena*);
 template<> ::dsa::control::v1::GuestMemoryPressure* Arena::CreateMaybeMessage<::dsa::control::v1::GuestMemoryPressure>(Arena*);
@@ -572,6 +591,7 @@ template<> ::dsa::control::v1::SensorReadings* Arena::CreateMaybeMessage<::dsa::
 template<> ::dsa::control::v1::SetTaskCaption* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskCaption>(Arena*);
 template<> ::dsa::control::v1::SetTaskDensity* Arena::CreateMaybeMessage<::dsa::control::v1::SetTaskDensity>(Arena*);
 template<> ::dsa::control::v1::StopApp* Arena::CreateMaybeMessage<::dsa::control::v1::StopApp>(Arena*);
+template<> ::dsa::control::v1::SystemSettings* Arena::CreateMaybeMessage<::dsa::control::v1::SystemSettings>(Arena*);
 template<> ::dsa::control::v1::TaskFrames* Arena::CreateMaybeMessage<::dsa::control::v1::TaskFrames>(Arena*);
 template<> ::dsa::control::v1::TaskRemoved* Arena::CreateMaybeMessage<::dsa::control::v1::TaskRemoved>(Arena*);
 template<> ::dsa::control::v1::TaskUpdated* Arena::CreateMaybeMessage<::dsa::control::v1::TaskUpdated>(Arena*);
@@ -670,6 +690,28 @@ inline const std::string& RejectReason_Name(T enum_t_value) {
 }
 bool RejectReason_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, RejectReason* value);
+enum TaskOrientation : int {
+  TASK_ORIENTATION_UNSPECIFIED = 0,
+  TASK_ORIENTATION_PORTRAIT = 1,
+  TASK_ORIENTATION_LANDSCAPE = 2,
+  TaskOrientation_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  TaskOrientation_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool TaskOrientation_IsValid(int value);
+constexpr TaskOrientation TaskOrientation_MIN = TASK_ORIENTATION_UNSPECIFIED;
+constexpr TaskOrientation TaskOrientation_MAX = TASK_ORIENTATION_LANDSCAPE;
+constexpr int TaskOrientation_ARRAYSIZE = TaskOrientation_MAX + 1;
+
+const std::string& TaskOrientation_Name(TaskOrientation value);
+template<typename T>
+inline const std::string& TaskOrientation_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, TaskOrientation>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function TaskOrientation_Name.");
+  return TaskOrientation_Name(static_cast<TaskOrientation>(enum_t_value));
+}
+bool TaskOrientation_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, TaskOrientation* value);
 enum StatusBarAppearance : int {
   STATUS_BAR_APPEARANCE_UNSPECIFIED = 0,
   STATUS_BAR_APPEARANCE_LIGHT = 1,
@@ -1151,6 +1193,41 @@ inline const std::string& CameraFacing_Name(T enum_t_value) {
 }
 bool CameraFacing_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, CameraFacing* value);
+enum GamepadButton : int {
+  GAMEPAD_BUTTON_NONE = 0,
+  GAMEPAD_BUTTON_A = 1,
+  GAMEPAD_BUTTON_B = 2,
+  GAMEPAD_BUTTON_X = 4,
+  GAMEPAD_BUTTON_Y = 8,
+  GAMEPAD_BUTTON_LEFT_SHOULDER = 16,
+  GAMEPAD_BUTTON_RIGHT_SHOULDER = 32,
+  GAMEPAD_BUTTON_BACK = 64,
+  GAMEPAD_BUTTON_START = 128,
+  GAMEPAD_BUTTON_GUIDE = 256,
+  GAMEPAD_BUTTON_LEFT_THUMB = 512,
+  GAMEPAD_BUTTON_RIGHT_THUMB = 1024,
+  GAMEPAD_BUTTON_DPAD_UP = 2048,
+  GAMEPAD_BUTTON_DPAD_DOWN = 4096,
+  GAMEPAD_BUTTON_DPAD_LEFT = 8192,
+  GAMEPAD_BUTTON_DPAD_RIGHT = 16384,
+  GamepadButton_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  GamepadButton_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool GamepadButton_IsValid(int value);
+constexpr GamepadButton GamepadButton_MIN = GAMEPAD_BUTTON_NONE;
+constexpr GamepadButton GamepadButton_MAX = GAMEPAD_BUTTON_DPAD_RIGHT;
+constexpr int GamepadButton_ARRAYSIZE = GamepadButton_MAX + 1;
+
+const std::string& GamepadButton_Name(GamepadButton value);
+template<typename T>
+inline const std::string& GamepadButton_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, GamepadButton>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function GamepadButton_Name.");
+  return GamepadButton_Name(static_cast<GamepadButton>(enum_t_value));
+}
+bool GamepadButton_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, GamepadButton* value);
 // ===================================================================
 
 class Hello final :
@@ -2171,7 +2248,6 @@ class TaskUpdated final :
     kLabelFieldNumber = 4,
     kBoundsFieldNumber = 2,
     kTaskIdFieldNumber = 1,
-    kFocusedFieldNumber = 5,
     kDensityDpiFieldNumber = 6,
     kMaxWidthFieldNumber = 7,
     kMaxHeightFieldNumber = 8,
@@ -2179,6 +2255,10 @@ class TaskUpdated final :
     kMinHeightFieldNumber = 10,
     kStatusBarAppearanceFieldNumber = 11,
     kStatusBarColorFieldNumber = 12,
+    kFocusedFieldNumber = 5,
+    kFullscreenFieldNumber = 21,
+    kPictureInPictureFieldNumber = 22,
+    kOrientationFieldNumber = 20,
   };
   // string package_name = 3;
   void clear_package_name();
@@ -2233,15 +2313,6 @@ class TaskUpdated final :
   private:
   int32_t _internal_task_id() const;
   void _internal_set_task_id(int32_t value);
-  public:
-
-  // bool focused = 5;
-  void clear_focused();
-  bool focused() const;
-  void set_focused(bool value);
-  private:
-  bool _internal_focused() const;
-  void _internal_set_focused(bool value);
   public:
 
   // uint32 density_dpi = 6;
@@ -2307,6 +2378,42 @@ class TaskUpdated final :
   void _internal_set_status_bar_color(uint32_t value);
   public:
 
+  // bool focused = 5;
+  void clear_focused();
+  bool focused() const;
+  void set_focused(bool value);
+  private:
+  bool _internal_focused() const;
+  void _internal_set_focused(bool value);
+  public:
+
+  // bool fullscreen = 21;
+  void clear_fullscreen();
+  bool fullscreen() const;
+  void set_fullscreen(bool value);
+  private:
+  bool _internal_fullscreen() const;
+  void _internal_set_fullscreen(bool value);
+  public:
+
+  // bool picture_in_picture = 22;
+  void clear_picture_in_picture();
+  bool picture_in_picture() const;
+  void set_picture_in_picture(bool value);
+  private:
+  bool _internal_picture_in_picture() const;
+  void _internal_set_picture_in_picture(bool value);
+  public:
+
+  // .dsa.control.v1.TaskOrientation orientation = 20;
+  void clear_orientation();
+  ::dsa::control::v1::TaskOrientation orientation() const;
+  void set_orientation(::dsa::control::v1::TaskOrientation value);
+  private:
+  ::dsa::control::v1::TaskOrientation _internal_orientation() const;
+  void _internal_set_orientation(::dsa::control::v1::TaskOrientation value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.TaskUpdated)
  private:
   class _Internal;
@@ -2319,7 +2426,6 @@ class TaskUpdated final :
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr label_;
     ::dsa::control::v1::Rect* bounds_;
     int32_t task_id_;
-    bool focused_;
     uint32_t density_dpi_;
     uint32_t max_width_;
     uint32_t max_height_;
@@ -2327,6 +2433,10 @@ class TaskUpdated final :
     uint32_t min_height_;
     int status_bar_appearance_;
     uint32_t status_bar_color_;
+    bool focused_;
+    bool fullscreen_;
+    bool picture_in_picture_;
+    int orientation_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -23086,6 +23196,906 @@ class CameraError final :
 };
 // -------------------------------------------------------------------
 
+class SystemSettings final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.SystemSettings) */ {
+ public:
+  inline SystemSettings() : SystemSettings(nullptr) {}
+  ~SystemSettings() override;
+  explicit PROTOBUF_CONSTEXPR SystemSettings(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  SystemSettings(const SystemSettings& from);
+  SystemSettings(SystemSettings&& from) noexcept
+    : SystemSettings() {
+    *this = ::std::move(from);
+  }
+
+  inline SystemSettings& operator=(const SystemSettings& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline SystemSettings& operator=(SystemSettings&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const SystemSettings& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const SystemSettings* internal_default_instance() {
+    return reinterpret_cast<const SystemSettings*>(
+               &_SystemSettings_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    135;
+
+  friend void swap(SystemSettings& a, SystemSettings& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(SystemSettings* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(SystemSettings* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  SystemSettings* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<SystemSettings>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const SystemSettings& from);
+  void MergeFrom(const SystemSettings& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(SystemSettings* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.SystemSettings";
+  }
+  protected:
+  explicit SystemSettings(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kLocalesFieldNumber = 2,
+    kTimeZoneFieldNumber = 1,
+    kRegionalFormatFieldNumber = 3,
+    kFirstDayOfWeekFieldNumber = 5,
+    kTime24HourFieldNumber = 4,
+    kDarkModeFieldNumber = 6,
+    kAccentColorFieldNumber = 7,
+  };
+  // repeated string locales = 2;
+  int locales_size() const;
+  private:
+  int _internal_locales_size() const;
+  public:
+  void clear_locales();
+  const std::string& locales(int index) const;
+  std::string* mutable_locales(int index);
+  void set_locales(int index, const std::string& value);
+  void set_locales(int index, std::string&& value);
+  void set_locales(int index, const char* value);
+  void set_locales(int index, const char* value, size_t size);
+  std::string* add_locales();
+  void add_locales(const std::string& value);
+  void add_locales(std::string&& value);
+  void add_locales(const char* value);
+  void add_locales(const char* value, size_t size);
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>& locales() const;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>* mutable_locales();
+  private:
+  const std::string& _internal_locales(int index) const;
+  std::string* _internal_add_locales();
+  public:
+
+  // string time_zone = 1;
+  void clear_time_zone();
+  const std::string& time_zone() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_time_zone(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_time_zone();
+  PROTOBUF_NODISCARD std::string* release_time_zone();
+  void set_allocated_time_zone(std::string* time_zone);
+  private:
+  const std::string& _internal_time_zone() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_time_zone(const std::string& value);
+  std::string* _internal_mutable_time_zone();
+  public:
+
+  // string regional_format = 3;
+  void clear_regional_format();
+  const std::string& regional_format() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_regional_format(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_regional_format();
+  PROTOBUF_NODISCARD std::string* release_regional_format();
+  void set_allocated_regional_format(std::string* regional_format);
+  private:
+  const std::string& _internal_regional_format() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_regional_format(const std::string& value);
+  std::string* _internal_mutable_regional_format();
+  public:
+
+  // uint32 first_day_of_week = 5;
+  void clear_first_day_of_week();
+  uint32_t first_day_of_week() const;
+  void set_first_day_of_week(uint32_t value);
+  private:
+  uint32_t _internal_first_day_of_week() const;
+  void _internal_set_first_day_of_week(uint32_t value);
+  public:
+
+  // bool time_24_hour = 4;
+  void clear_time_24_hour();
+  bool time_24_hour() const;
+  void set_time_24_hour(bool value);
+  private:
+  bool _internal_time_24_hour() const;
+  void _internal_set_time_24_hour(bool value);
+  public:
+
+  // bool dark_mode = 6;
+  void clear_dark_mode();
+  bool dark_mode() const;
+  void set_dark_mode(bool value);
+  private:
+  bool _internal_dark_mode() const;
+  void _internal_set_dark_mode(bool value);
+  public:
+
+  // fixed32 accent_color = 7;
+  void clear_accent_color();
+  uint32_t accent_color() const;
+  void set_accent_color(uint32_t value);
+  private:
+  uint32_t _internal_accent_color() const;
+  void _internal_set_accent_color(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.SystemSettings)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string> locales_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr time_zone_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr regional_format_;
+    uint32_t first_day_of_week_;
+    bool time_24_hour_;
+    bool dark_mode_;
+    uint32_t accent_color_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GamepadConnected final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GamepadConnected) */ {
+ public:
+  inline GamepadConnected() : GamepadConnected(nullptr) {}
+  ~GamepadConnected() override;
+  explicit PROTOBUF_CONSTEXPR GamepadConnected(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GamepadConnected(const GamepadConnected& from);
+  GamepadConnected(GamepadConnected&& from) noexcept
+    : GamepadConnected() {
+    *this = ::std::move(from);
+  }
+
+  inline GamepadConnected& operator=(const GamepadConnected& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GamepadConnected& operator=(GamepadConnected&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GamepadConnected& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GamepadConnected* internal_default_instance() {
+    return reinterpret_cast<const GamepadConnected*>(
+               &_GamepadConnected_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    136;
+
+  friend void swap(GamepadConnected& a, GamepadConnected& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GamepadConnected* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GamepadConnected* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GamepadConnected* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GamepadConnected>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GamepadConnected& from);
+  void MergeFrom(const GamepadConnected& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GamepadConnected* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GamepadConnected";
+  }
+  protected:
+  explicit GamepadConnected(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kNameFieldNumber = 2,
+    kPadIdFieldNumber = 1,
+    kVendorIdFieldNumber = 3,
+    kProductIdFieldNumber = 4,
+    kRumbleFieldNumber = 5,
+  };
+  // string name = 2;
+  void clear_name();
+  const std::string& name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* name);
+  private:
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
+  std::string* _internal_mutable_name();
+  public:
+
+  // uint32 pad_id = 1;
+  void clear_pad_id();
+  uint32_t pad_id() const;
+  void set_pad_id(uint32_t value);
+  private:
+  uint32_t _internal_pad_id() const;
+  void _internal_set_pad_id(uint32_t value);
+  public:
+
+  // uint32 vendor_id = 3;
+  void clear_vendor_id();
+  uint32_t vendor_id() const;
+  void set_vendor_id(uint32_t value);
+  private:
+  uint32_t _internal_vendor_id() const;
+  void _internal_set_vendor_id(uint32_t value);
+  public:
+
+  // uint32 product_id = 4;
+  void clear_product_id();
+  uint32_t product_id() const;
+  void set_product_id(uint32_t value);
+  private:
+  uint32_t _internal_product_id() const;
+  void _internal_set_product_id(uint32_t value);
+  public:
+
+  // bool rumble = 5;
+  void clear_rumble();
+  bool rumble() const;
+  void set_rumble(bool value);
+  private:
+  bool _internal_rumble() const;
+  void _internal_set_rumble(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GamepadConnected)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
+    uint32_t pad_id_;
+    uint32_t vendor_id_;
+    uint32_t product_id_;
+    bool rumble_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GamepadDisconnected final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GamepadDisconnected) */ {
+ public:
+  inline GamepadDisconnected() : GamepadDisconnected(nullptr) {}
+  ~GamepadDisconnected() override;
+  explicit PROTOBUF_CONSTEXPR GamepadDisconnected(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GamepadDisconnected(const GamepadDisconnected& from);
+  GamepadDisconnected(GamepadDisconnected&& from) noexcept
+    : GamepadDisconnected() {
+    *this = ::std::move(from);
+  }
+
+  inline GamepadDisconnected& operator=(const GamepadDisconnected& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GamepadDisconnected& operator=(GamepadDisconnected&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GamepadDisconnected& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GamepadDisconnected* internal_default_instance() {
+    return reinterpret_cast<const GamepadDisconnected*>(
+               &_GamepadDisconnected_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    137;
+
+  friend void swap(GamepadDisconnected& a, GamepadDisconnected& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GamepadDisconnected* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GamepadDisconnected* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GamepadDisconnected* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GamepadDisconnected>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GamepadDisconnected& from);
+  void MergeFrom(const GamepadDisconnected& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GamepadDisconnected* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GamepadDisconnected";
+  }
+  protected:
+  explicit GamepadDisconnected(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kPadIdFieldNumber = 1,
+  };
+  // uint32 pad_id = 1;
+  void clear_pad_id();
+  uint32_t pad_id() const;
+  void set_pad_id(uint32_t value);
+  private:
+  uint32_t _internal_pad_id() const;
+  void _internal_set_pad_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GamepadDisconnected)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t pad_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GamepadState final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GamepadState) */ {
+ public:
+  inline GamepadState() : GamepadState(nullptr) {}
+  ~GamepadState() override;
+  explicit PROTOBUF_CONSTEXPR GamepadState(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GamepadState(const GamepadState& from);
+  GamepadState(GamepadState&& from) noexcept
+    : GamepadState() {
+    *this = ::std::move(from);
+  }
+
+  inline GamepadState& operator=(const GamepadState& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GamepadState& operator=(GamepadState&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GamepadState& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GamepadState* internal_default_instance() {
+    return reinterpret_cast<const GamepadState*>(
+               &_GamepadState_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    138;
+
+  friend void swap(GamepadState& a, GamepadState& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GamepadState* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GamepadState* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GamepadState* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GamepadState>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GamepadState& from);
+  void MergeFrom(const GamepadState& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GamepadState* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GamepadState";
+  }
+  protected:
+  explicit GamepadState(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kPadIdFieldNumber = 1,
+    kButtonsFieldNumber = 2,
+    kLeftXFieldNumber = 3,
+    kLeftYFieldNumber = 4,
+    kRightXFieldNumber = 5,
+    kRightYFieldNumber = 6,
+    kLeftTriggerFieldNumber = 7,
+    kRightTriggerFieldNumber = 8,
+  };
+  // uint32 pad_id = 1;
+  void clear_pad_id();
+  uint32_t pad_id() const;
+  void set_pad_id(uint32_t value);
+  private:
+  uint32_t _internal_pad_id() const;
+  void _internal_set_pad_id(uint32_t value);
+  public:
+
+  // uint32 buttons = 2;
+  void clear_buttons();
+  uint32_t buttons() const;
+  void set_buttons(uint32_t value);
+  private:
+  uint32_t _internal_buttons() const;
+  void _internal_set_buttons(uint32_t value);
+  public:
+
+  // sint32 left_x = 3;
+  void clear_left_x();
+  int32_t left_x() const;
+  void set_left_x(int32_t value);
+  private:
+  int32_t _internal_left_x() const;
+  void _internal_set_left_x(int32_t value);
+  public:
+
+  // sint32 left_y = 4;
+  void clear_left_y();
+  int32_t left_y() const;
+  void set_left_y(int32_t value);
+  private:
+  int32_t _internal_left_y() const;
+  void _internal_set_left_y(int32_t value);
+  public:
+
+  // sint32 right_x = 5;
+  void clear_right_x();
+  int32_t right_x() const;
+  void set_right_x(int32_t value);
+  private:
+  int32_t _internal_right_x() const;
+  void _internal_set_right_x(int32_t value);
+  public:
+
+  // sint32 right_y = 6;
+  void clear_right_y();
+  int32_t right_y() const;
+  void set_right_y(int32_t value);
+  private:
+  int32_t _internal_right_y() const;
+  void _internal_set_right_y(int32_t value);
+  public:
+
+  // uint32 left_trigger = 7;
+  void clear_left_trigger();
+  uint32_t left_trigger() const;
+  void set_left_trigger(uint32_t value);
+  private:
+  uint32_t _internal_left_trigger() const;
+  void _internal_set_left_trigger(uint32_t value);
+  public:
+
+  // uint32 right_trigger = 8;
+  void clear_right_trigger();
+  uint32_t right_trigger() const;
+  void set_right_trigger(uint32_t value);
+  private:
+  uint32_t _internal_right_trigger() const;
+  void _internal_set_right_trigger(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GamepadState)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t pad_id_;
+    uint32_t buttons_;
+    int32_t left_x_;
+    int32_t left_y_;
+    int32_t right_x_;
+    int32_t right_y_;
+    uint32_t left_trigger_;
+    uint32_t right_trigger_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GamepadRumble final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GamepadRumble) */ {
+ public:
+  inline GamepadRumble() : GamepadRumble(nullptr) {}
+  ~GamepadRumble() override;
+  explicit PROTOBUF_CONSTEXPR GamepadRumble(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GamepadRumble(const GamepadRumble& from);
+  GamepadRumble(GamepadRumble&& from) noexcept
+    : GamepadRumble() {
+    *this = ::std::move(from);
+  }
+
+  inline GamepadRumble& operator=(const GamepadRumble& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GamepadRumble& operator=(GamepadRumble&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GamepadRumble& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GamepadRumble* internal_default_instance() {
+    return reinterpret_cast<const GamepadRumble*>(
+               &_GamepadRumble_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    139;
+
+  friend void swap(GamepadRumble& a, GamepadRumble& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GamepadRumble* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GamepadRumble* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GamepadRumble* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GamepadRumble>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GamepadRumble& from);
+  void MergeFrom(const GamepadRumble& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GamepadRumble* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GamepadRumble";
+  }
+  protected:
+  explicit GamepadRumble(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kPadIdFieldNumber = 1,
+    kStrongFieldNumber = 2,
+    kWeakFieldNumber = 3,
+    kDurationMsFieldNumber = 4,
+  };
+  // uint32 pad_id = 1;
+  void clear_pad_id();
+  uint32_t pad_id() const;
+  void set_pad_id(uint32_t value);
+  private:
+  uint32_t _internal_pad_id() const;
+  void _internal_set_pad_id(uint32_t value);
+  public:
+
+  // uint32 strong = 2;
+  void clear_strong();
+  uint32_t strong() const;
+  void set_strong(uint32_t value);
+  private:
+  uint32_t _internal_strong() const;
+  void _internal_set_strong(uint32_t value);
+  public:
+
+  // uint32 weak = 3;
+  void clear_weak();
+  uint32_t weak() const;
+  void set_weak(uint32_t value);
+  private:
+  uint32_t _internal_weak() const;
+  void _internal_set_weak(uint32_t value);
+  public:
+
+  // uint32 duration_ms = 4;
+  void clear_duration_ms();
+  uint32_t duration_ms() const;
+  void set_duration_ms(uint32_t value);
+  private:
+  uint32_t _internal_duration_ms() const;
+  void _internal_set_duration_ms(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GamepadRumble)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t pad_id_;
+    uint32_t strong_;
+    uint32_t weak_;
+    uint32_t duration_ms_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class Envelope final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.Envelope) */ {
  public:
@@ -23243,6 +24253,11 @@ class Envelope final :
     kCameraStillTaken = 266,
     kCameraError = 267,
     kSetTaskCaption = 155,
+    kSystemSettings = 340,
+    kGamepadConnected = 341,
+    kGamepadDisconnected = 342,
+    kGamepadState = 343,
+    kGamepadRumble = 344,
     kFileSharing = 290,
     kAndroidFiles = 291,
     BODY_NOT_SET = 0,
@@ -23253,7 +24268,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    135;
+    140;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -23439,6 +24454,11 @@ class Envelope final :
     kCameraStillTakenFieldNumber = 266,
     kCameraErrorFieldNumber = 267,
     kSetTaskCaptionFieldNumber = 155,
+    kSystemSettingsFieldNumber = 340,
+    kGamepadConnectedFieldNumber = 341,
+    kGamepadDisconnectedFieldNumber = 342,
+    kGamepadStateFieldNumber = 343,
+    kGamepadRumbleFieldNumber = 344,
     kFileSharingFieldNumber = 290,
     kAndroidFilesFieldNumber = 291,
   };
@@ -25638,6 +26658,96 @@ class Envelope final :
       ::dsa::control::v1::SetTaskCaption* set_task_caption);
   ::dsa::control::v1::SetTaskCaption* unsafe_arena_release_set_task_caption();
 
+  // .dsa.control.v1.SystemSettings system_settings = 340;
+  bool has_system_settings() const;
+  private:
+  bool _internal_has_system_settings() const;
+  public:
+  void clear_system_settings();
+  const ::dsa::control::v1::SystemSettings& system_settings() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::SystemSettings* release_system_settings();
+  ::dsa::control::v1::SystemSettings* mutable_system_settings();
+  void set_allocated_system_settings(::dsa::control::v1::SystemSettings* system_settings);
+  private:
+  const ::dsa::control::v1::SystemSettings& _internal_system_settings() const;
+  ::dsa::control::v1::SystemSettings* _internal_mutable_system_settings();
+  public:
+  void unsafe_arena_set_allocated_system_settings(
+      ::dsa::control::v1::SystemSettings* system_settings);
+  ::dsa::control::v1::SystemSettings* unsafe_arena_release_system_settings();
+
+  // .dsa.control.v1.GamepadConnected gamepad_connected = 341;
+  bool has_gamepad_connected() const;
+  private:
+  bool _internal_has_gamepad_connected() const;
+  public:
+  void clear_gamepad_connected();
+  const ::dsa::control::v1::GamepadConnected& gamepad_connected() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GamepadConnected* release_gamepad_connected();
+  ::dsa::control::v1::GamepadConnected* mutable_gamepad_connected();
+  void set_allocated_gamepad_connected(::dsa::control::v1::GamepadConnected* gamepad_connected);
+  private:
+  const ::dsa::control::v1::GamepadConnected& _internal_gamepad_connected() const;
+  ::dsa::control::v1::GamepadConnected* _internal_mutable_gamepad_connected();
+  public:
+  void unsafe_arena_set_allocated_gamepad_connected(
+      ::dsa::control::v1::GamepadConnected* gamepad_connected);
+  ::dsa::control::v1::GamepadConnected* unsafe_arena_release_gamepad_connected();
+
+  // .dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;
+  bool has_gamepad_disconnected() const;
+  private:
+  bool _internal_has_gamepad_disconnected() const;
+  public:
+  void clear_gamepad_disconnected();
+  const ::dsa::control::v1::GamepadDisconnected& gamepad_disconnected() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GamepadDisconnected* release_gamepad_disconnected();
+  ::dsa::control::v1::GamepadDisconnected* mutable_gamepad_disconnected();
+  void set_allocated_gamepad_disconnected(::dsa::control::v1::GamepadDisconnected* gamepad_disconnected);
+  private:
+  const ::dsa::control::v1::GamepadDisconnected& _internal_gamepad_disconnected() const;
+  ::dsa::control::v1::GamepadDisconnected* _internal_mutable_gamepad_disconnected();
+  public:
+  void unsafe_arena_set_allocated_gamepad_disconnected(
+      ::dsa::control::v1::GamepadDisconnected* gamepad_disconnected);
+  ::dsa::control::v1::GamepadDisconnected* unsafe_arena_release_gamepad_disconnected();
+
+  // .dsa.control.v1.GamepadState gamepad_state = 343;
+  bool has_gamepad_state() const;
+  private:
+  bool _internal_has_gamepad_state() const;
+  public:
+  void clear_gamepad_state();
+  const ::dsa::control::v1::GamepadState& gamepad_state() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GamepadState* release_gamepad_state();
+  ::dsa::control::v1::GamepadState* mutable_gamepad_state();
+  void set_allocated_gamepad_state(::dsa::control::v1::GamepadState* gamepad_state);
+  private:
+  const ::dsa::control::v1::GamepadState& _internal_gamepad_state() const;
+  ::dsa::control::v1::GamepadState* _internal_mutable_gamepad_state();
+  public:
+  void unsafe_arena_set_allocated_gamepad_state(
+      ::dsa::control::v1::GamepadState* gamepad_state);
+  ::dsa::control::v1::GamepadState* unsafe_arena_release_gamepad_state();
+
+  // .dsa.control.v1.GamepadRumble gamepad_rumble = 344;
+  bool has_gamepad_rumble() const;
+  private:
+  bool _internal_has_gamepad_rumble() const;
+  public:
+  void clear_gamepad_rumble();
+  const ::dsa::control::v1::GamepadRumble& gamepad_rumble() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GamepadRumble* release_gamepad_rumble();
+  ::dsa::control::v1::GamepadRumble* mutable_gamepad_rumble();
+  void set_allocated_gamepad_rumble(::dsa::control::v1::GamepadRumble* gamepad_rumble);
+  private:
+  const ::dsa::control::v1::GamepadRumble& _internal_gamepad_rumble() const;
+  ::dsa::control::v1::GamepadRumble* _internal_mutable_gamepad_rumble();
+  public:
+  void unsafe_arena_set_allocated_gamepad_rumble(
+      ::dsa::control::v1::GamepadRumble* gamepad_rumble);
+  ::dsa::control::v1::GamepadRumble* unsafe_arena_release_gamepad_rumble();
+
   // .dsa.control.v1.FileSharing file_sharing = 290;
   bool has_file_sharing() const;
   private:
@@ -25801,6 +26911,11 @@ class Envelope final :
   void set_has_camera_still_taken();
   void set_has_camera_error();
   void set_has_set_task_caption();
+  void set_has_system_settings();
+  void set_has_gamepad_connected();
+  void set_has_gamepad_disconnected();
+  void set_has_gamepad_state();
+  void set_has_gamepad_rumble();
   void set_has_file_sharing();
   void set_has_android_files();
 
@@ -25936,6 +27051,11 @@ class Envelope final :
       ::dsa::control::v1::CameraStillTaken* camera_still_taken_;
       ::dsa::control::v1::CameraError* camera_error_;
       ::dsa::control::v1::SetTaskCaption* set_task_caption_;
+      ::dsa::control::v1::SystemSettings* system_settings_;
+      ::dsa::control::v1::GamepadConnected* gamepad_connected_;
+      ::dsa::control::v1::GamepadDisconnected* gamepad_disconnected_;
+      ::dsa::control::v1::GamepadState* gamepad_state_;
+      ::dsa::control::v1::GamepadRumble* gamepad_rumble_;
       ::dsa::control::v1::FileSharing* file_sharing_;
       ::dsa::control::v1::AndroidFiles* android_files_;
     } body_;
@@ -26919,6 +28039,66 @@ inline void TaskUpdated::_internal_set_status_bar_color(uint32_t value) {
 inline void TaskUpdated::set_status_bar_color(uint32_t value) {
   _internal_set_status_bar_color(value);
   // @@protoc_insertion_point(field_set:dsa.control.v1.TaskUpdated.status_bar_color)
+}
+
+// .dsa.control.v1.TaskOrientation orientation = 20;
+inline void TaskUpdated::clear_orientation() {
+  _impl_.orientation_ = 0;
+}
+inline ::dsa::control::v1::TaskOrientation TaskUpdated::_internal_orientation() const {
+  return static_cast< ::dsa::control::v1::TaskOrientation >(_impl_.orientation_);
+}
+inline ::dsa::control::v1::TaskOrientation TaskUpdated::orientation() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.TaskUpdated.orientation)
+  return _internal_orientation();
+}
+inline void TaskUpdated::_internal_set_orientation(::dsa::control::v1::TaskOrientation value) {
+  
+  _impl_.orientation_ = value;
+}
+inline void TaskUpdated::set_orientation(::dsa::control::v1::TaskOrientation value) {
+  _internal_set_orientation(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.TaskUpdated.orientation)
+}
+
+// bool fullscreen = 21;
+inline void TaskUpdated::clear_fullscreen() {
+  _impl_.fullscreen_ = false;
+}
+inline bool TaskUpdated::_internal_fullscreen() const {
+  return _impl_.fullscreen_;
+}
+inline bool TaskUpdated::fullscreen() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.TaskUpdated.fullscreen)
+  return _internal_fullscreen();
+}
+inline void TaskUpdated::_internal_set_fullscreen(bool value) {
+  
+  _impl_.fullscreen_ = value;
+}
+inline void TaskUpdated::set_fullscreen(bool value) {
+  _internal_set_fullscreen(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.TaskUpdated.fullscreen)
+}
+
+// bool picture_in_picture = 22;
+inline void TaskUpdated::clear_picture_in_picture() {
+  _impl_.picture_in_picture_ = false;
+}
+inline bool TaskUpdated::_internal_picture_in_picture() const {
+  return _impl_.picture_in_picture_;
+}
+inline bool TaskUpdated::picture_in_picture() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.TaskUpdated.picture_in_picture)
+  return _internal_picture_in_picture();
+}
+inline void TaskUpdated::_internal_set_picture_in_picture(bool value) {
+  
+  _impl_.picture_in_picture_ = value;
+}
+inline void TaskUpdated::set_picture_in_picture(bool value) {
+  _internal_set_picture_in_picture(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.TaskUpdated.picture_in_picture)
 }
 
 // -------------------------------------------------------------------
@@ -40053,6 +41233,671 @@ inline void CameraError::set_allocated_error(std::string* error) {
 
 // -------------------------------------------------------------------
 
+// SystemSettings
+
+// string time_zone = 1;
+inline void SystemSettings::clear_time_zone() {
+  _impl_.time_zone_.ClearToEmpty();
+}
+inline const std::string& SystemSettings::time_zone() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SystemSettings.time_zone)
+  return _internal_time_zone();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SystemSettings::set_time_zone(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.time_zone_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.time_zone)
+}
+inline std::string* SystemSettings::mutable_time_zone() {
+  std::string* _s = _internal_mutable_time_zone();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SystemSettings.time_zone)
+  return _s;
+}
+inline const std::string& SystemSettings::_internal_time_zone() const {
+  return _impl_.time_zone_.Get();
+}
+inline void SystemSettings::_internal_set_time_zone(const std::string& value) {
+  
+  _impl_.time_zone_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SystemSettings::_internal_mutable_time_zone() {
+  
+  return _impl_.time_zone_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SystemSettings::release_time_zone() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SystemSettings.time_zone)
+  return _impl_.time_zone_.Release();
+}
+inline void SystemSettings::set_allocated_time_zone(std::string* time_zone) {
+  if (time_zone != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.time_zone_.SetAllocated(time_zone, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.time_zone_.IsDefault()) {
+    _impl_.time_zone_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SystemSettings.time_zone)
+}
+
+// repeated string locales = 2;
+inline int SystemSettings::_internal_locales_size() const {
+  return _impl_.locales_.size();
+}
+inline int SystemSettings::locales_size() const {
+  return _internal_locales_size();
+}
+inline void SystemSettings::clear_locales() {
+  _impl_.locales_.Clear();
+}
+inline std::string* SystemSettings::add_locales() {
+  std::string* _s = _internal_add_locales();
+  // @@protoc_insertion_point(field_add_mutable:dsa.control.v1.SystemSettings.locales)
+  return _s;
+}
+inline const std::string& SystemSettings::_internal_locales(int index) const {
+  return _impl_.locales_.Get(index);
+}
+inline const std::string& SystemSettings::locales(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SystemSettings.locales)
+  return _internal_locales(index);
+}
+inline std::string* SystemSettings::mutable_locales(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SystemSettings.locales)
+  return _impl_.locales_.Mutable(index);
+}
+inline void SystemSettings::set_locales(int index, const std::string& value) {
+  _impl_.locales_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.locales)
+}
+inline void SystemSettings::set_locales(int index, std::string&& value) {
+  _impl_.locales_.Mutable(index)->assign(std::move(value));
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.locales)
+}
+inline void SystemSettings::set_locales(int index, const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.locales_.Mutable(index)->assign(value);
+  // @@protoc_insertion_point(field_set_char:dsa.control.v1.SystemSettings.locales)
+}
+inline void SystemSettings::set_locales(int index, const char* value, size_t size) {
+  _impl_.locales_.Mutable(index)->assign(
+    reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_set_pointer:dsa.control.v1.SystemSettings.locales)
+}
+inline std::string* SystemSettings::_internal_add_locales() {
+  return _impl_.locales_.Add();
+}
+inline void SystemSettings::add_locales(const std::string& value) {
+  _impl_.locales_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SystemSettings.locales)
+}
+inline void SystemSettings::add_locales(std::string&& value) {
+  _impl_.locales_.Add(std::move(value));
+  // @@protoc_insertion_point(field_add:dsa.control.v1.SystemSettings.locales)
+}
+inline void SystemSettings::add_locales(const char* value) {
+  GOOGLE_DCHECK(value != nullptr);
+  _impl_.locales_.Add()->assign(value);
+  // @@protoc_insertion_point(field_add_char:dsa.control.v1.SystemSettings.locales)
+}
+inline void SystemSettings::add_locales(const char* value, size_t size) {
+  _impl_.locales_.Add()->assign(reinterpret_cast<const char*>(value), size);
+  // @@protoc_insertion_point(field_add_pointer:dsa.control.v1.SystemSettings.locales)
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>&
+SystemSettings::locales() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.SystemSettings.locales)
+  return _impl_.locales_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField<std::string>*
+SystemSettings::mutable_locales() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.SystemSettings.locales)
+  return &_impl_.locales_;
+}
+
+// string regional_format = 3;
+inline void SystemSettings::clear_regional_format() {
+  _impl_.regional_format_.ClearToEmpty();
+}
+inline const std::string& SystemSettings::regional_format() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SystemSettings.regional_format)
+  return _internal_regional_format();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void SystemSettings::set_regional_format(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.regional_format_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.regional_format)
+}
+inline std::string* SystemSettings::mutable_regional_format() {
+  std::string* _s = _internal_mutable_regional_format();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.SystemSettings.regional_format)
+  return _s;
+}
+inline const std::string& SystemSettings::_internal_regional_format() const {
+  return _impl_.regional_format_.Get();
+}
+inline void SystemSettings::_internal_set_regional_format(const std::string& value) {
+  
+  _impl_.regional_format_.Set(value, GetArenaForAllocation());
+}
+inline std::string* SystemSettings::_internal_mutable_regional_format() {
+  
+  return _impl_.regional_format_.Mutable(GetArenaForAllocation());
+}
+inline std::string* SystemSettings::release_regional_format() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.SystemSettings.regional_format)
+  return _impl_.regional_format_.Release();
+}
+inline void SystemSettings::set_allocated_regional_format(std::string* regional_format) {
+  if (regional_format != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.regional_format_.SetAllocated(regional_format, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.regional_format_.IsDefault()) {
+    _impl_.regional_format_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.SystemSettings.regional_format)
+}
+
+// bool time_24_hour = 4;
+inline void SystemSettings::clear_time_24_hour() {
+  _impl_.time_24_hour_ = false;
+}
+inline bool SystemSettings::_internal_time_24_hour() const {
+  return _impl_.time_24_hour_;
+}
+inline bool SystemSettings::time_24_hour() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SystemSettings.time_24_hour)
+  return _internal_time_24_hour();
+}
+inline void SystemSettings::_internal_set_time_24_hour(bool value) {
+  
+  _impl_.time_24_hour_ = value;
+}
+inline void SystemSettings::set_time_24_hour(bool value) {
+  _internal_set_time_24_hour(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.time_24_hour)
+}
+
+// uint32 first_day_of_week = 5;
+inline void SystemSettings::clear_first_day_of_week() {
+  _impl_.first_day_of_week_ = 0u;
+}
+inline uint32_t SystemSettings::_internal_first_day_of_week() const {
+  return _impl_.first_day_of_week_;
+}
+inline uint32_t SystemSettings::first_day_of_week() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SystemSettings.first_day_of_week)
+  return _internal_first_day_of_week();
+}
+inline void SystemSettings::_internal_set_first_day_of_week(uint32_t value) {
+  
+  _impl_.first_day_of_week_ = value;
+}
+inline void SystemSettings::set_first_day_of_week(uint32_t value) {
+  _internal_set_first_day_of_week(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.first_day_of_week)
+}
+
+// bool dark_mode = 6;
+inline void SystemSettings::clear_dark_mode() {
+  _impl_.dark_mode_ = false;
+}
+inline bool SystemSettings::_internal_dark_mode() const {
+  return _impl_.dark_mode_;
+}
+inline bool SystemSettings::dark_mode() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SystemSettings.dark_mode)
+  return _internal_dark_mode();
+}
+inline void SystemSettings::_internal_set_dark_mode(bool value) {
+  
+  _impl_.dark_mode_ = value;
+}
+inline void SystemSettings::set_dark_mode(bool value) {
+  _internal_set_dark_mode(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.dark_mode)
+}
+
+// fixed32 accent_color = 7;
+inline void SystemSettings::clear_accent_color() {
+  _impl_.accent_color_ = 0u;
+}
+inline uint32_t SystemSettings::_internal_accent_color() const {
+  return _impl_.accent_color_;
+}
+inline uint32_t SystemSettings::accent_color() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SystemSettings.accent_color)
+  return _internal_accent_color();
+}
+inline void SystemSettings::_internal_set_accent_color(uint32_t value) {
+  
+  _impl_.accent_color_ = value;
+}
+inline void SystemSettings::set_accent_color(uint32_t value) {
+  _internal_set_accent_color(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SystemSettings.accent_color)
+}
+
+// -------------------------------------------------------------------
+
+// GamepadConnected
+
+// uint32 pad_id = 1;
+inline void GamepadConnected::clear_pad_id() {
+  _impl_.pad_id_ = 0u;
+}
+inline uint32_t GamepadConnected::_internal_pad_id() const {
+  return _impl_.pad_id_;
+}
+inline uint32_t GamepadConnected::pad_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadConnected.pad_id)
+  return _internal_pad_id();
+}
+inline void GamepadConnected::_internal_set_pad_id(uint32_t value) {
+  
+  _impl_.pad_id_ = value;
+}
+inline void GamepadConnected::set_pad_id(uint32_t value) {
+  _internal_set_pad_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadConnected.pad_id)
+}
+
+// string name = 2;
+inline void GamepadConnected::clear_name() {
+  _impl_.name_.ClearToEmpty();
+}
+inline const std::string& GamepadConnected::name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadConnected.name)
+  return _internal_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GamepadConnected::set_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadConnected.name)
+}
+inline std::string* GamepadConnected::mutable_name() {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GamepadConnected.name)
+  return _s;
+}
+inline const std::string& GamepadConnected::_internal_name() const {
+  return _impl_.name_.Get();
+}
+inline void GamepadConnected::_internal_set_name(const std::string& value) {
+  
+  _impl_.name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GamepadConnected::_internal_mutable_name() {
+  
+  return _impl_.name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GamepadConnected::release_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GamepadConnected.name)
+  return _impl_.name_.Release();
+}
+inline void GamepadConnected::set_allocated_name(std::string* name) {
+  if (name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GamepadConnected.name)
+}
+
+// uint32 vendor_id = 3;
+inline void GamepadConnected::clear_vendor_id() {
+  _impl_.vendor_id_ = 0u;
+}
+inline uint32_t GamepadConnected::_internal_vendor_id() const {
+  return _impl_.vendor_id_;
+}
+inline uint32_t GamepadConnected::vendor_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadConnected.vendor_id)
+  return _internal_vendor_id();
+}
+inline void GamepadConnected::_internal_set_vendor_id(uint32_t value) {
+  
+  _impl_.vendor_id_ = value;
+}
+inline void GamepadConnected::set_vendor_id(uint32_t value) {
+  _internal_set_vendor_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadConnected.vendor_id)
+}
+
+// uint32 product_id = 4;
+inline void GamepadConnected::clear_product_id() {
+  _impl_.product_id_ = 0u;
+}
+inline uint32_t GamepadConnected::_internal_product_id() const {
+  return _impl_.product_id_;
+}
+inline uint32_t GamepadConnected::product_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadConnected.product_id)
+  return _internal_product_id();
+}
+inline void GamepadConnected::_internal_set_product_id(uint32_t value) {
+  
+  _impl_.product_id_ = value;
+}
+inline void GamepadConnected::set_product_id(uint32_t value) {
+  _internal_set_product_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadConnected.product_id)
+}
+
+// bool rumble = 5;
+inline void GamepadConnected::clear_rumble() {
+  _impl_.rumble_ = false;
+}
+inline bool GamepadConnected::_internal_rumble() const {
+  return _impl_.rumble_;
+}
+inline bool GamepadConnected::rumble() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadConnected.rumble)
+  return _internal_rumble();
+}
+inline void GamepadConnected::_internal_set_rumble(bool value) {
+  
+  _impl_.rumble_ = value;
+}
+inline void GamepadConnected::set_rumble(bool value) {
+  _internal_set_rumble(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadConnected.rumble)
+}
+
+// -------------------------------------------------------------------
+
+// GamepadDisconnected
+
+// uint32 pad_id = 1;
+inline void GamepadDisconnected::clear_pad_id() {
+  _impl_.pad_id_ = 0u;
+}
+inline uint32_t GamepadDisconnected::_internal_pad_id() const {
+  return _impl_.pad_id_;
+}
+inline uint32_t GamepadDisconnected::pad_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadDisconnected.pad_id)
+  return _internal_pad_id();
+}
+inline void GamepadDisconnected::_internal_set_pad_id(uint32_t value) {
+  
+  _impl_.pad_id_ = value;
+}
+inline void GamepadDisconnected::set_pad_id(uint32_t value) {
+  _internal_set_pad_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadDisconnected.pad_id)
+}
+
+// -------------------------------------------------------------------
+
+// GamepadState
+
+// uint32 pad_id = 1;
+inline void GamepadState::clear_pad_id() {
+  _impl_.pad_id_ = 0u;
+}
+inline uint32_t GamepadState::_internal_pad_id() const {
+  return _impl_.pad_id_;
+}
+inline uint32_t GamepadState::pad_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadState.pad_id)
+  return _internal_pad_id();
+}
+inline void GamepadState::_internal_set_pad_id(uint32_t value) {
+  
+  _impl_.pad_id_ = value;
+}
+inline void GamepadState::set_pad_id(uint32_t value) {
+  _internal_set_pad_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadState.pad_id)
+}
+
+// uint32 buttons = 2;
+inline void GamepadState::clear_buttons() {
+  _impl_.buttons_ = 0u;
+}
+inline uint32_t GamepadState::_internal_buttons() const {
+  return _impl_.buttons_;
+}
+inline uint32_t GamepadState::buttons() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadState.buttons)
+  return _internal_buttons();
+}
+inline void GamepadState::_internal_set_buttons(uint32_t value) {
+  
+  _impl_.buttons_ = value;
+}
+inline void GamepadState::set_buttons(uint32_t value) {
+  _internal_set_buttons(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadState.buttons)
+}
+
+// sint32 left_x = 3;
+inline void GamepadState::clear_left_x() {
+  _impl_.left_x_ = 0;
+}
+inline int32_t GamepadState::_internal_left_x() const {
+  return _impl_.left_x_;
+}
+inline int32_t GamepadState::left_x() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadState.left_x)
+  return _internal_left_x();
+}
+inline void GamepadState::_internal_set_left_x(int32_t value) {
+  
+  _impl_.left_x_ = value;
+}
+inline void GamepadState::set_left_x(int32_t value) {
+  _internal_set_left_x(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadState.left_x)
+}
+
+// sint32 left_y = 4;
+inline void GamepadState::clear_left_y() {
+  _impl_.left_y_ = 0;
+}
+inline int32_t GamepadState::_internal_left_y() const {
+  return _impl_.left_y_;
+}
+inline int32_t GamepadState::left_y() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadState.left_y)
+  return _internal_left_y();
+}
+inline void GamepadState::_internal_set_left_y(int32_t value) {
+  
+  _impl_.left_y_ = value;
+}
+inline void GamepadState::set_left_y(int32_t value) {
+  _internal_set_left_y(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadState.left_y)
+}
+
+// sint32 right_x = 5;
+inline void GamepadState::clear_right_x() {
+  _impl_.right_x_ = 0;
+}
+inline int32_t GamepadState::_internal_right_x() const {
+  return _impl_.right_x_;
+}
+inline int32_t GamepadState::right_x() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadState.right_x)
+  return _internal_right_x();
+}
+inline void GamepadState::_internal_set_right_x(int32_t value) {
+  
+  _impl_.right_x_ = value;
+}
+inline void GamepadState::set_right_x(int32_t value) {
+  _internal_set_right_x(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadState.right_x)
+}
+
+// sint32 right_y = 6;
+inline void GamepadState::clear_right_y() {
+  _impl_.right_y_ = 0;
+}
+inline int32_t GamepadState::_internal_right_y() const {
+  return _impl_.right_y_;
+}
+inline int32_t GamepadState::right_y() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadState.right_y)
+  return _internal_right_y();
+}
+inline void GamepadState::_internal_set_right_y(int32_t value) {
+  
+  _impl_.right_y_ = value;
+}
+inline void GamepadState::set_right_y(int32_t value) {
+  _internal_set_right_y(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadState.right_y)
+}
+
+// uint32 left_trigger = 7;
+inline void GamepadState::clear_left_trigger() {
+  _impl_.left_trigger_ = 0u;
+}
+inline uint32_t GamepadState::_internal_left_trigger() const {
+  return _impl_.left_trigger_;
+}
+inline uint32_t GamepadState::left_trigger() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadState.left_trigger)
+  return _internal_left_trigger();
+}
+inline void GamepadState::_internal_set_left_trigger(uint32_t value) {
+  
+  _impl_.left_trigger_ = value;
+}
+inline void GamepadState::set_left_trigger(uint32_t value) {
+  _internal_set_left_trigger(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadState.left_trigger)
+}
+
+// uint32 right_trigger = 8;
+inline void GamepadState::clear_right_trigger() {
+  _impl_.right_trigger_ = 0u;
+}
+inline uint32_t GamepadState::_internal_right_trigger() const {
+  return _impl_.right_trigger_;
+}
+inline uint32_t GamepadState::right_trigger() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadState.right_trigger)
+  return _internal_right_trigger();
+}
+inline void GamepadState::_internal_set_right_trigger(uint32_t value) {
+  
+  _impl_.right_trigger_ = value;
+}
+inline void GamepadState::set_right_trigger(uint32_t value) {
+  _internal_set_right_trigger(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadState.right_trigger)
+}
+
+// -------------------------------------------------------------------
+
+// GamepadRumble
+
+// uint32 pad_id = 1;
+inline void GamepadRumble::clear_pad_id() {
+  _impl_.pad_id_ = 0u;
+}
+inline uint32_t GamepadRumble::_internal_pad_id() const {
+  return _impl_.pad_id_;
+}
+inline uint32_t GamepadRumble::pad_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadRumble.pad_id)
+  return _internal_pad_id();
+}
+inline void GamepadRumble::_internal_set_pad_id(uint32_t value) {
+  
+  _impl_.pad_id_ = value;
+}
+inline void GamepadRumble::set_pad_id(uint32_t value) {
+  _internal_set_pad_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadRumble.pad_id)
+}
+
+// uint32 strong = 2;
+inline void GamepadRumble::clear_strong() {
+  _impl_.strong_ = 0u;
+}
+inline uint32_t GamepadRumble::_internal_strong() const {
+  return _impl_.strong_;
+}
+inline uint32_t GamepadRumble::strong() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadRumble.strong)
+  return _internal_strong();
+}
+inline void GamepadRumble::_internal_set_strong(uint32_t value) {
+  
+  _impl_.strong_ = value;
+}
+inline void GamepadRumble::set_strong(uint32_t value) {
+  _internal_set_strong(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadRumble.strong)
+}
+
+// uint32 weak = 3;
+inline void GamepadRumble::clear_weak() {
+  _impl_.weak_ = 0u;
+}
+inline uint32_t GamepadRumble::_internal_weak() const {
+  return _impl_.weak_;
+}
+inline uint32_t GamepadRumble::weak() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadRumble.weak)
+  return _internal_weak();
+}
+inline void GamepadRumble::_internal_set_weak(uint32_t value) {
+  
+  _impl_.weak_ = value;
+}
+inline void GamepadRumble::set_weak(uint32_t value) {
+  _internal_set_weak(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadRumble.weak)
+}
+
+// uint32 duration_ms = 4;
+inline void GamepadRumble::clear_duration_ms() {
+  _impl_.duration_ms_ = 0u;
+}
+inline uint32_t GamepadRumble::_internal_duration_ms() const {
+  return _impl_.duration_ms_;
+}
+inline uint32_t GamepadRumble::duration_ms() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GamepadRumble.duration_ms)
+  return _internal_duration_ms();
+}
+inline void GamepadRumble::_internal_set_duration_ms(uint32_t value) {
+  
+  _impl_.duration_ms_ = value;
+}
+inline void GamepadRumble::set_duration_ms(uint32_t value) {
+  _internal_set_duration_ms(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GamepadRumble.duration_ms)
+}
+
+// -------------------------------------------------------------------
+
 // Envelope
 
 // .dsa.control.v1.Hello hello = 1;
@@ -49083,6 +50928,376 @@ inline ::dsa::control::v1::SetTaskCaption* Envelope::mutable_set_task_caption() 
   return _msg;
 }
 
+// .dsa.control.v1.SystemSettings system_settings = 340;
+inline bool Envelope::_internal_has_system_settings() const {
+  return body_case() == kSystemSettings;
+}
+inline bool Envelope::has_system_settings() const {
+  return _internal_has_system_settings();
+}
+inline void Envelope::set_has_system_settings() {
+  _impl_._oneof_case_[0] = kSystemSettings;
+}
+inline void Envelope::clear_system_settings() {
+  if (_internal_has_system_settings()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.system_settings_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::SystemSettings* Envelope::release_system_settings() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.system_settings)
+  if (_internal_has_system_settings()) {
+    clear_has_body();
+    ::dsa::control::v1::SystemSettings* temp = _impl_.body_.system_settings_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.system_settings_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::SystemSettings& Envelope::_internal_system_settings() const {
+  return _internal_has_system_settings()
+      ? *_impl_.body_.system_settings_
+      : reinterpret_cast< ::dsa::control::v1::SystemSettings&>(::dsa::control::v1::_SystemSettings_default_instance_);
+}
+inline const ::dsa::control::v1::SystemSettings& Envelope::system_settings() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.system_settings)
+  return _internal_system_settings();
+}
+inline ::dsa::control::v1::SystemSettings* Envelope::unsafe_arena_release_system_settings() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.system_settings)
+  if (_internal_has_system_settings()) {
+    clear_has_body();
+    ::dsa::control::v1::SystemSettings* temp = _impl_.body_.system_settings_;
+    _impl_.body_.system_settings_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_system_settings(::dsa::control::v1::SystemSettings* system_settings) {
+  clear_body();
+  if (system_settings) {
+    set_has_system_settings();
+    _impl_.body_.system_settings_ = system_settings;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.system_settings)
+}
+inline ::dsa::control::v1::SystemSettings* Envelope::_internal_mutable_system_settings() {
+  if (!_internal_has_system_settings()) {
+    clear_body();
+    set_has_system_settings();
+    _impl_.body_.system_settings_ = CreateMaybeMessage< ::dsa::control::v1::SystemSettings >(GetArenaForAllocation());
+  }
+  return _impl_.body_.system_settings_;
+}
+inline ::dsa::control::v1::SystemSettings* Envelope::mutable_system_settings() {
+  ::dsa::control::v1::SystemSettings* _msg = _internal_mutable_system_settings();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.system_settings)
+  return _msg;
+}
+
+// .dsa.control.v1.GamepadConnected gamepad_connected = 341;
+inline bool Envelope::_internal_has_gamepad_connected() const {
+  return body_case() == kGamepadConnected;
+}
+inline bool Envelope::has_gamepad_connected() const {
+  return _internal_has_gamepad_connected();
+}
+inline void Envelope::set_has_gamepad_connected() {
+  _impl_._oneof_case_[0] = kGamepadConnected;
+}
+inline void Envelope::clear_gamepad_connected() {
+  if (_internal_has_gamepad_connected()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.gamepad_connected_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GamepadConnected* Envelope::release_gamepad_connected() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gamepad_connected)
+  if (_internal_has_gamepad_connected()) {
+    clear_has_body();
+    ::dsa::control::v1::GamepadConnected* temp = _impl_.body_.gamepad_connected_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.gamepad_connected_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GamepadConnected& Envelope::_internal_gamepad_connected() const {
+  return _internal_has_gamepad_connected()
+      ? *_impl_.body_.gamepad_connected_
+      : reinterpret_cast< ::dsa::control::v1::GamepadConnected&>(::dsa::control::v1::_GamepadConnected_default_instance_);
+}
+inline const ::dsa::control::v1::GamepadConnected& Envelope::gamepad_connected() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gamepad_connected)
+  return _internal_gamepad_connected();
+}
+inline ::dsa::control::v1::GamepadConnected* Envelope::unsafe_arena_release_gamepad_connected() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gamepad_connected)
+  if (_internal_has_gamepad_connected()) {
+    clear_has_body();
+    ::dsa::control::v1::GamepadConnected* temp = _impl_.body_.gamepad_connected_;
+    _impl_.body_.gamepad_connected_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_gamepad_connected(::dsa::control::v1::GamepadConnected* gamepad_connected) {
+  clear_body();
+  if (gamepad_connected) {
+    set_has_gamepad_connected();
+    _impl_.body_.gamepad_connected_ = gamepad_connected;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gamepad_connected)
+}
+inline ::dsa::control::v1::GamepadConnected* Envelope::_internal_mutable_gamepad_connected() {
+  if (!_internal_has_gamepad_connected()) {
+    clear_body();
+    set_has_gamepad_connected();
+    _impl_.body_.gamepad_connected_ = CreateMaybeMessage< ::dsa::control::v1::GamepadConnected >(GetArenaForAllocation());
+  }
+  return _impl_.body_.gamepad_connected_;
+}
+inline ::dsa::control::v1::GamepadConnected* Envelope::mutable_gamepad_connected() {
+  ::dsa::control::v1::GamepadConnected* _msg = _internal_mutable_gamepad_connected();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gamepad_connected)
+  return _msg;
+}
+
+// .dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;
+inline bool Envelope::_internal_has_gamepad_disconnected() const {
+  return body_case() == kGamepadDisconnected;
+}
+inline bool Envelope::has_gamepad_disconnected() const {
+  return _internal_has_gamepad_disconnected();
+}
+inline void Envelope::set_has_gamepad_disconnected() {
+  _impl_._oneof_case_[0] = kGamepadDisconnected;
+}
+inline void Envelope::clear_gamepad_disconnected() {
+  if (_internal_has_gamepad_disconnected()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.gamepad_disconnected_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GamepadDisconnected* Envelope::release_gamepad_disconnected() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gamepad_disconnected)
+  if (_internal_has_gamepad_disconnected()) {
+    clear_has_body();
+    ::dsa::control::v1::GamepadDisconnected* temp = _impl_.body_.gamepad_disconnected_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.gamepad_disconnected_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GamepadDisconnected& Envelope::_internal_gamepad_disconnected() const {
+  return _internal_has_gamepad_disconnected()
+      ? *_impl_.body_.gamepad_disconnected_
+      : reinterpret_cast< ::dsa::control::v1::GamepadDisconnected&>(::dsa::control::v1::_GamepadDisconnected_default_instance_);
+}
+inline const ::dsa::control::v1::GamepadDisconnected& Envelope::gamepad_disconnected() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gamepad_disconnected)
+  return _internal_gamepad_disconnected();
+}
+inline ::dsa::control::v1::GamepadDisconnected* Envelope::unsafe_arena_release_gamepad_disconnected() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gamepad_disconnected)
+  if (_internal_has_gamepad_disconnected()) {
+    clear_has_body();
+    ::dsa::control::v1::GamepadDisconnected* temp = _impl_.body_.gamepad_disconnected_;
+    _impl_.body_.gamepad_disconnected_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_gamepad_disconnected(::dsa::control::v1::GamepadDisconnected* gamepad_disconnected) {
+  clear_body();
+  if (gamepad_disconnected) {
+    set_has_gamepad_disconnected();
+    _impl_.body_.gamepad_disconnected_ = gamepad_disconnected;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gamepad_disconnected)
+}
+inline ::dsa::control::v1::GamepadDisconnected* Envelope::_internal_mutable_gamepad_disconnected() {
+  if (!_internal_has_gamepad_disconnected()) {
+    clear_body();
+    set_has_gamepad_disconnected();
+    _impl_.body_.gamepad_disconnected_ = CreateMaybeMessage< ::dsa::control::v1::GamepadDisconnected >(GetArenaForAllocation());
+  }
+  return _impl_.body_.gamepad_disconnected_;
+}
+inline ::dsa::control::v1::GamepadDisconnected* Envelope::mutable_gamepad_disconnected() {
+  ::dsa::control::v1::GamepadDisconnected* _msg = _internal_mutable_gamepad_disconnected();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gamepad_disconnected)
+  return _msg;
+}
+
+// .dsa.control.v1.GamepadState gamepad_state = 343;
+inline bool Envelope::_internal_has_gamepad_state() const {
+  return body_case() == kGamepadState;
+}
+inline bool Envelope::has_gamepad_state() const {
+  return _internal_has_gamepad_state();
+}
+inline void Envelope::set_has_gamepad_state() {
+  _impl_._oneof_case_[0] = kGamepadState;
+}
+inline void Envelope::clear_gamepad_state() {
+  if (_internal_has_gamepad_state()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.gamepad_state_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GamepadState* Envelope::release_gamepad_state() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gamepad_state)
+  if (_internal_has_gamepad_state()) {
+    clear_has_body();
+    ::dsa::control::v1::GamepadState* temp = _impl_.body_.gamepad_state_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.gamepad_state_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GamepadState& Envelope::_internal_gamepad_state() const {
+  return _internal_has_gamepad_state()
+      ? *_impl_.body_.gamepad_state_
+      : reinterpret_cast< ::dsa::control::v1::GamepadState&>(::dsa::control::v1::_GamepadState_default_instance_);
+}
+inline const ::dsa::control::v1::GamepadState& Envelope::gamepad_state() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gamepad_state)
+  return _internal_gamepad_state();
+}
+inline ::dsa::control::v1::GamepadState* Envelope::unsafe_arena_release_gamepad_state() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gamepad_state)
+  if (_internal_has_gamepad_state()) {
+    clear_has_body();
+    ::dsa::control::v1::GamepadState* temp = _impl_.body_.gamepad_state_;
+    _impl_.body_.gamepad_state_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_gamepad_state(::dsa::control::v1::GamepadState* gamepad_state) {
+  clear_body();
+  if (gamepad_state) {
+    set_has_gamepad_state();
+    _impl_.body_.gamepad_state_ = gamepad_state;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gamepad_state)
+}
+inline ::dsa::control::v1::GamepadState* Envelope::_internal_mutable_gamepad_state() {
+  if (!_internal_has_gamepad_state()) {
+    clear_body();
+    set_has_gamepad_state();
+    _impl_.body_.gamepad_state_ = CreateMaybeMessage< ::dsa::control::v1::GamepadState >(GetArenaForAllocation());
+  }
+  return _impl_.body_.gamepad_state_;
+}
+inline ::dsa::control::v1::GamepadState* Envelope::mutable_gamepad_state() {
+  ::dsa::control::v1::GamepadState* _msg = _internal_mutable_gamepad_state();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gamepad_state)
+  return _msg;
+}
+
+// .dsa.control.v1.GamepadRumble gamepad_rumble = 344;
+inline bool Envelope::_internal_has_gamepad_rumble() const {
+  return body_case() == kGamepadRumble;
+}
+inline bool Envelope::has_gamepad_rumble() const {
+  return _internal_has_gamepad_rumble();
+}
+inline void Envelope::set_has_gamepad_rumble() {
+  _impl_._oneof_case_[0] = kGamepadRumble;
+}
+inline void Envelope::clear_gamepad_rumble() {
+  if (_internal_has_gamepad_rumble()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.gamepad_rumble_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GamepadRumble* Envelope::release_gamepad_rumble() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gamepad_rumble)
+  if (_internal_has_gamepad_rumble()) {
+    clear_has_body();
+    ::dsa::control::v1::GamepadRumble* temp = _impl_.body_.gamepad_rumble_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.gamepad_rumble_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GamepadRumble& Envelope::_internal_gamepad_rumble() const {
+  return _internal_has_gamepad_rumble()
+      ? *_impl_.body_.gamepad_rumble_
+      : reinterpret_cast< ::dsa::control::v1::GamepadRumble&>(::dsa::control::v1::_GamepadRumble_default_instance_);
+}
+inline const ::dsa::control::v1::GamepadRumble& Envelope::gamepad_rumble() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gamepad_rumble)
+  return _internal_gamepad_rumble();
+}
+inline ::dsa::control::v1::GamepadRumble* Envelope::unsafe_arena_release_gamepad_rumble() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gamepad_rumble)
+  if (_internal_has_gamepad_rumble()) {
+    clear_has_body();
+    ::dsa::control::v1::GamepadRumble* temp = _impl_.body_.gamepad_rumble_;
+    _impl_.body_.gamepad_rumble_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_gamepad_rumble(::dsa::control::v1::GamepadRumble* gamepad_rumble) {
+  clear_body();
+  if (gamepad_rumble) {
+    set_has_gamepad_rumble();
+    _impl_.body_.gamepad_rumble_ = gamepad_rumble;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gamepad_rumble)
+}
+inline ::dsa::control::v1::GamepadRumble* Envelope::_internal_mutable_gamepad_rumble() {
+  if (!_internal_has_gamepad_rumble()) {
+    clear_body();
+    set_has_gamepad_rumble();
+    _impl_.body_.gamepad_rumble_ = CreateMaybeMessage< ::dsa::control::v1::GamepadRumble >(GetArenaForAllocation());
+  }
+  return _impl_.body_.gamepad_rumble_;
+}
+inline ::dsa::control::v1::GamepadRumble* Envelope::mutable_gamepad_rumble() {
+  ::dsa::control::v1::GamepadRumble* _msg = _internal_mutable_gamepad_rumble();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gamepad_rumble)
+  return _msg;
+}
+
 // .dsa.control.v1.FileSharing file_sharing = 290;
 inline bool Envelope::_internal_has_file_sharing() const {
   return body_case() == kFileSharing;
@@ -49513,6 +51728,16 @@ inline Envelope::BodyCase Envelope::body_case() const {
 
 // -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 
 // @@protoc_insertion_point(namespace_scope)
 
@@ -49525,6 +51750,7 @@ PROTOBUF_NAMESPACE_OPEN
 template <> struct is_proto_enum< ::dsa::control::v1::ProtocolVersion> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::Role> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::RejectReason> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::TaskOrientation> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::StatusBarAppearance> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::UninstallStatus> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PointerAction> : ::std::true_type {};
@@ -49545,6 +51771,7 @@ template <> struct is_proto_enum< ::dsa::control::v1::AudioOutputCommand> : ::st
 template <> struct is_proto_enum< ::dsa::control::v1::LogBuffer> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PrintOutcome> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::CameraFacing> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::GamepadButton> : ::std::true_type {};
 
 PROTOBUF_NAMESPACE_CLOSE
 

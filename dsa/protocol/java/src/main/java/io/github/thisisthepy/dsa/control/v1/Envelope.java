@@ -142,6 +142,11 @@ public  final class Envelope extends
     CAMERA_STILL_TAKEN(266),
     CAMERA_ERROR(267),
     SET_TASK_CAPTION(155),
+    SYSTEM_SETTINGS(340),
+    GAMEPAD_CONNECTED(341),
+    GAMEPAD_DISCONNECTED(342),
+    GAMEPAD_STATE(343),
+    GAMEPAD_RUMBLE(344),
     FILE_SHARING(290),
     ANDROID_FILES(291),
     BODY_NOT_SET(0);
@@ -281,6 +286,11 @@ public  final class Envelope extends
         case 266: return CAMERA_STILL_TAKEN;
         case 267: return CAMERA_ERROR;
         case 155: return SET_TASK_CAPTION;
+        case 340: return SYSTEM_SETTINGS;
+        case 341: return GAMEPAD_CONNECTED;
+        case 342: return GAMEPAD_DISCONNECTED;
+        case 343: return GAMEPAD_STATE;
+        case 344: return GAMEPAD_RUMBLE;
         case 290: return FILE_SHARING;
         case 291: return ANDROID_FILES;
         case 0: return BODY_NOT_SET;
@@ -6404,6 +6414,256 @@ public  final class Envelope extends
     }
   }
 
+  public static final int SYSTEM_SETTINGS_FIELD_NUMBER = 340;
+  /**
+   * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+   */
+  @java.lang.Override
+  public boolean hasSystemSettings() {
+    return bodyCase_ == 340;
+  }
+  /**
+   * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SystemSettings getSystemSettings() {
+    if (bodyCase_ == 340) {
+       return (io.github.thisisthepy.dsa.control.v1.SystemSettings) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SystemSettings.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+   */
+  private void setSystemSettings(io.github.thisisthepy.dsa.control.v1.SystemSettings value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 340;
+  }
+  /**
+   * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+   */
+  private void mergeSystemSettings(io.github.thisisthepy.dsa.control.v1.SystemSettings value) {
+    value.getClass();
+  if (bodyCase_ == 340 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SystemSettings.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SystemSettings.newBuilder((io.github.thisisthepy.dsa.control.v1.SystemSettings) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 340;
+  }
+  /**
+   * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+   */
+  private void clearSystemSettings() {
+    if (bodyCase_ == 340) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int GAMEPAD_CONNECTED_FIELD_NUMBER = 341;
+  /**
+   * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+   */
+  @java.lang.Override
+  public boolean hasGamepadConnected() {
+    return bodyCase_ == 341;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.GamepadConnected getGamepadConnected() {
+    if (bodyCase_ == 341) {
+       return (io.github.thisisthepy.dsa.control.v1.GamepadConnected) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.GamepadConnected.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+   */
+  private void setGamepadConnected(io.github.thisisthepy.dsa.control.v1.GamepadConnected value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 341;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+   */
+  private void mergeGamepadConnected(io.github.thisisthepy.dsa.control.v1.GamepadConnected value) {
+    value.getClass();
+  if (bodyCase_ == 341 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.GamepadConnected.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.GamepadConnected.newBuilder((io.github.thisisthepy.dsa.control.v1.GamepadConnected) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 341;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+   */
+  private void clearGamepadConnected() {
+    if (bodyCase_ == 341) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int GAMEPAD_DISCONNECTED_FIELD_NUMBER = 342;
+  /**
+   * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+   */
+  @java.lang.Override
+  public boolean hasGamepadDisconnected() {
+    return bodyCase_ == 342;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.GamepadDisconnected getGamepadDisconnected() {
+    if (bodyCase_ == 342) {
+       return (io.github.thisisthepy.dsa.control.v1.GamepadDisconnected) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.GamepadDisconnected.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+   */
+  private void setGamepadDisconnected(io.github.thisisthepy.dsa.control.v1.GamepadDisconnected value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 342;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+   */
+  private void mergeGamepadDisconnected(io.github.thisisthepy.dsa.control.v1.GamepadDisconnected value) {
+    value.getClass();
+  if (bodyCase_ == 342 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.GamepadDisconnected.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.GamepadDisconnected.newBuilder((io.github.thisisthepy.dsa.control.v1.GamepadDisconnected) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 342;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+   */
+  private void clearGamepadDisconnected() {
+    if (bodyCase_ == 342) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int GAMEPAD_STATE_FIELD_NUMBER = 343;
+  /**
+   * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+   */
+  @java.lang.Override
+  public boolean hasGamepadState() {
+    return bodyCase_ == 343;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.GamepadState getGamepadState() {
+    if (bodyCase_ == 343) {
+       return (io.github.thisisthepy.dsa.control.v1.GamepadState) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.GamepadState.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+   */
+  private void setGamepadState(io.github.thisisthepy.dsa.control.v1.GamepadState value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 343;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+   */
+  private void mergeGamepadState(io.github.thisisthepy.dsa.control.v1.GamepadState value) {
+    value.getClass();
+  if (bodyCase_ == 343 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.GamepadState.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.GamepadState.newBuilder((io.github.thisisthepy.dsa.control.v1.GamepadState) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 343;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+   */
+  private void clearGamepadState() {
+    if (bodyCase_ == 343) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int GAMEPAD_RUMBLE_FIELD_NUMBER = 344;
+  /**
+   * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+   */
+  @java.lang.Override
+  public boolean hasGamepadRumble() {
+    return bodyCase_ == 344;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.GamepadRumble getGamepadRumble() {
+    if (bodyCase_ == 344) {
+       return (io.github.thisisthepy.dsa.control.v1.GamepadRumble) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.GamepadRumble.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+   */
+  private void setGamepadRumble(io.github.thisisthepy.dsa.control.v1.GamepadRumble value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 344;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+   */
+  private void mergeGamepadRumble(io.github.thisisthepy.dsa.control.v1.GamepadRumble value) {
+    value.getClass();
+  if (bodyCase_ == 344 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.GamepadRumble.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.GamepadRumble.newBuilder((io.github.thisisthepy.dsa.control.v1.GamepadRumble) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 344;
+  }
+  /**
+   * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+   */
+  private void clearGamepadRumble() {
+    if (bodyCase_ == 344) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static final int FILE_SHARING_FIELD_NUMBER = 290;
   /**
    * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
@@ -12472,6 +12732,246 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+     */
+    @java.lang.Override
+    public boolean hasSystemSettings() {
+      return instance.hasSystemSettings();
+    }
+    /**
+     * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SystemSettings getSystemSettings() {
+      return instance.getSystemSettings();
+    }
+    /**
+     * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+     */
+    public Builder setSystemSettings(io.github.thisisthepy.dsa.control.v1.SystemSettings value) {
+      copyOnWrite();
+      instance.setSystemSettings(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+     */
+    public Builder setSystemSettings(
+        io.github.thisisthepy.dsa.control.v1.SystemSettings.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSystemSettings(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+     */
+    public Builder mergeSystemSettings(io.github.thisisthepy.dsa.control.v1.SystemSettings value) {
+      copyOnWrite();
+      instance.mergeSystemSettings(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SystemSettings system_settings = 340;</code>
+     */
+    public Builder clearSystemSettings() {
+      copyOnWrite();
+      instance.clearSystemSettings();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+     */
+    @java.lang.Override
+    public boolean hasGamepadConnected() {
+      return instance.hasGamepadConnected();
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.GamepadConnected getGamepadConnected() {
+      return instance.getGamepadConnected();
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+     */
+    public Builder setGamepadConnected(io.github.thisisthepy.dsa.control.v1.GamepadConnected value) {
+      copyOnWrite();
+      instance.setGamepadConnected(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+     */
+    public Builder setGamepadConnected(
+        io.github.thisisthepy.dsa.control.v1.GamepadConnected.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGamepadConnected(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+     */
+    public Builder mergeGamepadConnected(io.github.thisisthepy.dsa.control.v1.GamepadConnected value) {
+      copyOnWrite();
+      instance.mergeGamepadConnected(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
+     */
+    public Builder clearGamepadConnected() {
+      copyOnWrite();
+      instance.clearGamepadConnected();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+     */
+    @java.lang.Override
+    public boolean hasGamepadDisconnected() {
+      return instance.hasGamepadDisconnected();
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.GamepadDisconnected getGamepadDisconnected() {
+      return instance.getGamepadDisconnected();
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+     */
+    public Builder setGamepadDisconnected(io.github.thisisthepy.dsa.control.v1.GamepadDisconnected value) {
+      copyOnWrite();
+      instance.setGamepadDisconnected(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+     */
+    public Builder setGamepadDisconnected(
+        io.github.thisisthepy.dsa.control.v1.GamepadDisconnected.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGamepadDisconnected(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+     */
+    public Builder mergeGamepadDisconnected(io.github.thisisthepy.dsa.control.v1.GamepadDisconnected value) {
+      copyOnWrite();
+      instance.mergeGamepadDisconnected(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadDisconnected gamepad_disconnected = 342;</code>
+     */
+    public Builder clearGamepadDisconnected() {
+      copyOnWrite();
+      instance.clearGamepadDisconnected();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+     */
+    @java.lang.Override
+    public boolean hasGamepadState() {
+      return instance.hasGamepadState();
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.GamepadState getGamepadState() {
+      return instance.getGamepadState();
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+     */
+    public Builder setGamepadState(io.github.thisisthepy.dsa.control.v1.GamepadState value) {
+      copyOnWrite();
+      instance.setGamepadState(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+     */
+    public Builder setGamepadState(
+        io.github.thisisthepy.dsa.control.v1.GamepadState.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGamepadState(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+     */
+    public Builder mergeGamepadState(io.github.thisisthepy.dsa.control.v1.GamepadState value) {
+      copyOnWrite();
+      instance.mergeGamepadState(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadState gamepad_state = 343;</code>
+     */
+    public Builder clearGamepadState() {
+      copyOnWrite();
+      instance.clearGamepadState();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+     */
+    @java.lang.Override
+    public boolean hasGamepadRumble() {
+      return instance.hasGamepadRumble();
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.GamepadRumble getGamepadRumble() {
+      return instance.getGamepadRumble();
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+     */
+    public Builder setGamepadRumble(io.github.thisisthepy.dsa.control.v1.GamepadRumble value) {
+      copyOnWrite();
+      instance.setGamepadRumble(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+     */
+    public Builder setGamepadRumble(
+        io.github.thisisthepy.dsa.control.v1.GamepadRumble.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGamepadRumble(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+     */
+    public Builder mergeGamepadRumble(io.github.thisisthepy.dsa.control.v1.GamepadRumble value) {
+      copyOnWrite();
+      instance.mergeGamepadRumble(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.GamepadRumble gamepad_rumble = 344;</code>
+     */
+    public Builder clearGamepadRumble() {
+      copyOnWrite();
+      instance.clearGamepadRumble();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
      */
     @java.lang.Override
@@ -12709,25 +13209,31 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.CameraError.class,
             io.github.thisisthepy.dsa.control.v1.FileSharing.class,
             io.github.thisisthepy.dsa.control.v1.AndroidFiles.class,
+            io.github.thisisthepy.dsa.control.v1.SystemSettings.class,
+            io.github.thisisthepy.dsa.control.v1.GamepadConnected.class,
+            io.github.thisisthepy.dsa.control.v1.GamepadDisconnected.class,
+            io.github.thisisthepy.dsa.control.v1.GamepadState.class,
+            io.github.thisisthepy.dsa.control.v1.GamepadRumble.class,
           };
           java.lang.String info =
-              "\u0000|\u0001\u0000\u0001\u0123|\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
-              "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
-              "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
-              "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
-              "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001d<\u0000\u001e<\u0000(<" +
-              "\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u00004<\u00005<\u00006<" +
-              "\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<" +
-              "\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<" +
-              "\u0000P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000^<\u0000_" +
-              "<\u0000`<\u0000a<\u0000b<\u0000c<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i" +
-              "<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0082" +
-              "<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000" +
-              "\u008c<\u0000\u008d<\u0000\u0096<\u0000\u0097<\u0000\u0098<\u0000\u0099<\u0000\u009a" +
-              "<\u0000\u009b<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000\u00dc<\u0000\u00dd<\u0000" +
-              "\u00de<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000\u0104<\u0000\u0105" +
-              "<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a<\u0000\u010b<\u0000" +
-              "\u0122<\u0000\u0123<\u0000";
+              "\u0000\u0081\u0001\u0000\u0001\u0158\u0081\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
+              "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
+              "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
+              "\u0018<\u0000\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001d<\u0000\u001e" +
+              "<\u0000(<\u0000)<\u0000*<\u0000+<\u0000,<\u0000-<\u00002<\u00003<\u00004<\u00005" +
+              "<\u00006<\u0000<<\u0000=<\u0000><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D" +
+              "<\u0000E<\u0000F<\u0000G<\u0000H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N" +
+              "<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000S<\u0000Z<\u0000[<\u0000\\<\u0000]<\u0000" +
+              "^<\u0000_<\u0000`<\u0000a<\u0000b<\u0000c<\u0000d<\u0000e<\u0000f<\u0000g<\u0000" +
+              "h<\u0000i<\u0000n<\u0000x<\u0000y<\u0000z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000" +
+              "<\u0000\u0082<\u0000\u0083<\u0000\u0084<\u0000\u0085<\u0000\u0086<\u0000\u0087<" +
+              "\u0000\u0088<\u0000\u008c<\u0000\u008d<\u0000\u0096<\u0000\u0097<\u0000\u0098<\u0000" +
+              "\u0099<\u0000\u009a<\u0000\u009b<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000\u00dc" +
+              "<\u0000\u00dd<\u0000\u00de<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000" +
+              "\u0104<\u0000\u0105<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a" +
+              "<\u0000\u010b<\u0000\u0122<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000" +
+              "\u0157<\u0000\u0158<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

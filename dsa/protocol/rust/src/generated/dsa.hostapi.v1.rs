@@ -886,6 +886,15 @@ pub struct Task {
     /// appearance is unspecified.
     #[prost(fixed32, tag = "12")]
     pub status_bar_color: u32,
+    /// The orientation the task's top activity is locked to, if any.
+    #[prost(enumeration = "TaskOrientation", tag = "20")]
+    pub orientation: i32,
+    /// Whether the task's app asked to fill the screen.
+    #[prost(bool, tag = "21")]
+    pub fullscreen: bool,
+    /// Whether the task's app went into picture-in-picture.
+    #[prost(bool, tag = "22")]
+    pub picture_in_picture: bool,
 }
 /// The task ended.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1620,13 +1629,163 @@ pub struct Error {
 }
 /// A request from the client. The service answers each with one Response carrying the same
 /// id, in the order the requests arrived.
+/// Gives the caller's Android the system settings of the caller's host session: its time zone,
+/// languages, regional format, app theme and accent color. The caller's window manager sends
+/// them when it starts and whenever the user changes one; the Android takes them at once when
+/// it runs, and when it next starts otherwise. The service answers Done.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetSystemSettings {
+    #[prost(message, optional, tag = "1")]
+    pub settings: ::core::option::Option<SystemSettings>,
+}
+/// The system settings of a user's host session, which their Android follows.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SystemSettings {
+    /// The time zone as an IANA name, such as "Asia/Seoul"; empty when unknown.
+    #[prost(string, tag = "1")]
+    pub time_zone: ::prost::alloc::string::String,
+    /// The display languages as BCP 47 tags, preferred first.
+    #[prost(string, repeated, tag = "2")]
+    pub locales: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The locale dates, times and numbers are formatted by; empty when it is the first language.
+    #[prost(string, tag = "3")]
+    pub regional_format: ::prost::alloc::string::String,
+    #[prost(bool, tag = "4")]
+    pub time_24_hour: bool,
+    /// 1 is Monday through 7, Sunday; 0 when unknown.
+    #[prost(uint32, tag = "5")]
+    pub first_day_of_week: u32,
+    /// Whether apps use the dark theme.
+    #[prost(bool, tag = "6")]
+    pub dark_mode: bool,
+    /// The accent color as 0xAARRGGBB; 0 when there is none.
+    #[prost(fixed32, tag = "7")]
+    pub accent_color: u32,
+}
+/// Turns the connection into the caller's game controllers: after the answer (Done), the client
+/// sends a GamepadEvent each time a controller is connected, disconnected or changes state, and
+/// the service sends a GamepadRumble each time an app in the caller's Android plays a rumble
+/// effect on one. Neither is answered. The service keeps the controllers that are connected and
+/// gives them to the Android each time it is ready, so a controller connected before Android
+/// started is there too. When the connection ends, its controllers are disconnected.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct WatchGamepads {}
+/// A controller changed, on a connection that carries the controllers (WatchGamepads).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GamepadEvent {
+    #[prost(oneof = "gamepad_event::Event", tags = "1, 2, 3")]
+    pub event: ::core::option::Option<gamepad_event::Event>,
+}
+/// Nested message and enum types in `GamepadEvent`.
+pub mod gamepad_event {
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum Event {
+        #[prost(message, tag = "1")]
+        Connected(super::GamepadConnected),
+        #[prost(message, tag = "2")]
+        Disconnected(super::GamepadDisconnected),
+        #[prost(message, tag = "3")]
+        State(super::GamepadState),
+    }
+}
+/// A controller was connected.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GamepadConnected {
+    #[prost(uint32, tag = "1")]
+    pub pad_id: u32,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub vendor_id: u32,
+    #[prost(uint32, tag = "4")]
+    pub product_id: u32,
+    #[prost(bool, tag = "5")]
+    pub rumble: bool,
+}
+/// A controller was disconnected.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GamepadDisconnected {
+    #[prost(uint32, tag = "1")]
+    pub pad_id: u32,
+}
+/// The state of a controller's buttons (the bits of the control protocol's GamepadButton),
+/// sticks (-32768 to 32767) and triggers (0 to 255).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GamepadState {
+    #[prost(uint32, tag = "1")]
+    pub pad_id: u32,
+    #[prost(uint32, tag = "2")]
+    pub buttons: u32,
+    #[prost(sint32, tag = "3")]
+    pub left_x: i32,
+    #[prost(sint32, tag = "4")]
+    pub left_y: i32,
+    #[prost(sint32, tag = "5")]
+    pub right_x: i32,
+    #[prost(sint32, tag = "6")]
+    pub right_y: i32,
+    #[prost(uint32, tag = "7")]
+    pub left_trigger: u32,
+    #[prost(uint32, tag = "8")]
+    pub right_trigger: u32,
+}
+/// An app plays a rumble effect on a controller (both strengths 0 stops it), on a connection
+/// that carries the controllers.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GamepadRumble {
+    #[prost(uint32, tag = "1")]
+    pub pad_id: u32,
+    /// From 0 to 65535.
+    #[prost(uint32, tag = "2")]
+    pub strong: u32,
+    #[prost(uint32, tag = "3")]
+    pub weak: u32,
+    /// How long it lasts, in milliseconds; 0 until the next one.
+    #[prost(uint32, tag = "4")]
+    pub duration_ms: u32,
+}
+/// The user's window settings for one app.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AppWindowSettings {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    /// Whether the app's windows keep the size they open at: the user cannot resize or maximise
+    /// them. Off by default.
+    #[prost(bool, tag = "2")]
+    pub fixed_size: bool,
+    /// The size the app's windows open at, in density-independent pixels. 0 by 0, the default,
+    /// opens them at the size Android gives the task.
+    #[prost(uint32, tag = "3")]
+    pub start_width_dp: u32,
+    #[prost(uint32, tag = "4")]
+    pub start_height_dp: u32,
+}
+/// Lists the caller's window settings for every app that has any. The service answers
+/// AppWindowSettingsList.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListAppWindowSettings {}
+/// Replaces the caller's window settings for one app; the defaults (resizable, opening at
+/// Android's size) remove the app's entry. The service answers AppWindowSettingsList with
+/// every app's settings as they are now, or ERROR_CODE_INVALID_SETTING for a package name or
+/// size it cannot take. Windows that open from now on follow the new settings.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetAppWindowSettings {
+    #[prost(message, optional, tag = "1")]
+    pub app: ::core::option::Option<AppWindowSettings>,
+}
+/// The caller's window settings for every app that has any, by package name.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AppWindowSettingsList {
+    #[prost(message, repeated, tag = "1")]
+    pub apps: ::prost::alloc::vec::Vec<AppWindowSettings>,
+}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Request {
     #[prost(uint64, tag = "1")]
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 90, 310"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1736,6 +1895,14 @@ pub mod request {
         ActOnBackgroundApp(super::ActOnBackgroundApp),
         #[prost(message, tag = "44")]
         ControlMedia(super::ControlMedia),
+        #[prost(message, tag = "300")]
+        SetSystemSettings(super::SetSystemSettings),
+        #[prost(message, tag = "301")]
+        WatchGamepads(super::WatchGamepads),
+        #[prost(message, tag = "302")]
+        ListAppWindowSettings(super::ListAppWindowSettings),
+        #[prost(message, tag = "303")]
+        SetAppWindowSettings(super::SetAppWindowSettings),
         #[prost(message, tag = "90")]
         GetAndroidFiles(super::GetAndroidFiles),
         #[prost(message, tag = "310")]
@@ -1748,7 +1915,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 90"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -1792,6 +1959,8 @@ pub mod response {
         UninstallResult(super::UninstallResult),
         #[prost(message, tag = "18")]
         BackgroundApps(super::BackgroundApps),
+        #[prost(message, tag = "300")]
+        AppWindowSettings(super::AppWindowSettingsList),
         #[prost(message, tag = "90")]
         AndroidFiles(super::AndroidFilesLocation),
     }
@@ -1801,7 +1970,7 @@ pub mod response {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 11, 15, 16, 14, 17, 18, 19, 20, 50, 51, 120, 121, 122, 200, 201, 202, 21, 300, 301"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -1867,6 +2036,10 @@ pub mod envelope {
         LocationFix(super::LocationFix),
         #[prost(message, tag = "21")]
         BackgroundAppEvent(super::BackgroundAppEvent),
+        #[prost(message, tag = "300")]
+        GamepadEvent(super::GamepadEvent),
+        #[prost(message, tag = "301")]
+        GamepadRumble(super::GamepadRumble),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -2469,6 +2642,36 @@ impl KeyAction {
             "KEY_ACTION_UNSPECIFIED" => Some(Self::Unspecified),
             "KEY_ACTION_DOWN" => Some(Self::Down),
             "KEY_ACTION_UP" => Some(Self::Up),
+            _ => None,
+        }
+    }
+}
+/// The orientation a task's top activity asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum TaskOrientation {
+    Unspecified = 0,
+    Portrait = 1,
+    Landscape = 2,
+}
+impl TaskOrientation {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "TASK_ORIENTATION_UNSPECIFIED",
+            Self::Portrait => "TASK_ORIENTATION_PORTRAIT",
+            Self::Landscape => "TASK_ORIENTATION_LANDSCAPE",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "TASK_ORIENTATION_UNSPECIFIED" => Some(Self::Unspecified),
+            "TASK_ORIENTATION_PORTRAIT" => Some(Self::Portrait),
+            "TASK_ORIENTATION_LANDSCAPE" => Some(Self::Landscape),
             _ => None,
         }
     }
