@@ -176,8 +176,18 @@ mod macos {
             listen_ports: vec![config.control_port],
         };
         println!("kernel command line: {}", vm.cmdline);
-        dsa_host_macos::vz::validate(&vm)?;
-        println!("the Virtualization framework accepts the VM");
-        Ok(())
+        match dsa_host_macos::vz::validate(&vm) {
+            Ok(()) => {
+                println!("the Virtualization framework accepts the VM");
+                Ok(())
+            }
+            // A Mac that is itself a VM without nested virtualization refuses every VM; the
+            // image and the configuration were still read.
+            Err(why) if !dsa_host_macos::vz::supported() => {
+                println!("this Mac runs no VMs, so the framework only says: {why}");
+                Ok(())
+            }
+            Err(why) => Err(why),
+        }
     }
 }
