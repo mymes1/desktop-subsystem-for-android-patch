@@ -558,45 +558,8 @@ mod system {
 
     /// Runs this program with the probe argument and returns what it printed.
     fn probe_in_child() -> Result<String, String> {
-        use std::io::Read;
-        use std::os::windows::process::CommandExt;
-        use std::process::{Command, Stdio};
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        let exe = std::env::current_exe().map_err(|e| format!("cannot find this program: {e}"))?;
-        let mut child = Command::new(exe)
-            .arg(super::PROBE_ARGUMENT)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| format!("the probe did not start: {e}"))?;
-        let mut stdout = child.stdout.take().ok_or("the probe has no output")?;
-        let reader = std::thread::spawn(move || {
-            let mut text = String::new();
-            let _ = stdout.read_to_string(&mut text);
-            text
-        });
-        let started = std::time::Instant::now();
-        loop {
-            match child.try_wait() {
-                Ok(Some(_)) => break,
-                Ok(None) if started.elapsed() < PROBE_TIMEOUT => {
-                    std::thread::sleep(std::time::Duration::from_millis(50))
-                }
-                _ => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    return Err(format!(
-                        "the probe did not finish in {} s",
-                        PROBE_TIMEOUT.as_secs()
-                    ));
-                }
-            }
-        }
-        reader
-            .join()
-            .map_err(|_| "the probe's output was lost".to_string())
+        crate::child_probe::run_self(&[super::PROBE_ARGUMENT.to_string()], PROBE_TIMEOUT)
+            .map(|output| output.stdout)
     }
 
     impl MediaFoundationDecoders {
