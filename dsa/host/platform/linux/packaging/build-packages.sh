@@ -92,6 +92,10 @@ for program in "$bin_dir"/dsa "$bin_dir"/dsa-*; do
     programs+=("$(basename "$program")")
 done
 ln -s ../lib/dsa/bin/dsa "$stage/usr/bin/dsa"
+# gfxstream's host renderer, which the compositor loads from beside itself.
+if [[ -f "$bin_dir/libgfxstream_backend.so" ]]; then
+    install -m 0755 "$bin_dir/libgfxstream_backend.so" "$stage/usr/lib/dsa/bin/"
+fi
 echo "programs: ${programs[*]}"
 has_program() {
     [[ -x "$stage/usr/lib/dsa/bin/$1" ]]
@@ -161,6 +165,11 @@ if has_program dsa-devices; then
     install -m 0644 "$here/systemd/dsa-devices.service" "$stage/usr/lib/systemd/user/"
     install -m 0644 "$here/systemd/90-dsa-user.preset" "$stage/usr/lib/systemd/user-preset/"
     user_units+=(dsa-devices.service)
+fi
+if has_program dsa-compositor; then
+    install -m 0644 "$here/systemd/dsa-compositor.service" "$stage/usr/lib/systemd/user/"
+    install -m 0644 "$here/systemd/90-dsa-user.preset" "$stage/usr/lib/systemd/user-preset/"
+    user_units+=(dsa-compositor.service)
 fi
 install -m 0644 "$here/udev/70-dsa.rules" "$stage/usr/lib/udev/rules.d/"
 install -m 0644 "$here/udev/dsa-modules.conf" "$stage/usr/lib/modules-load.d/dsa.conf"

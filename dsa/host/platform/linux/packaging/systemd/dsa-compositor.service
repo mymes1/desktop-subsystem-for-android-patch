@@ -1,0 +1,17 @@
+# The windows of the user's Android tasks, one Wayland window each, with their input, the
+# clipboard, notifications and the app menu entries. A user unit, so it runs in the desktop
+# session, on its Wayland display.
+[Unit]
+Description=Desktop Subsystem for Android windows
+Documentation=https://github.com/thisisthepy/desktop-subsystem-for-android
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/dsa/bin/dsa-compositor
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
