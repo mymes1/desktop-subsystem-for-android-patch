@@ -1174,7 +1174,33 @@ message Settings {
   // Whether stopping an app that runs in the background skips the question that confirms
   // it. Off by default: the first stop asks, and the user may tick "do not ask again".
   bool stop_without_asking = 18;
+  // Whether the caller's Android stops once nothing uses it. RUN_MODE_AS_NEEDED, the
+  // default, stops it `stop_after_secs` after the last app window closed, while no app runs
+  // in the background and no widget is placed; RUN_MODE_CONTINUOUS keeps it running in Doze.
+  // It applies at once.
+  RunMode run_mode = 310;
+  // How long nothing may use the caller's Android in RUN_MODE_AS_NEEDED before it stops, in
+  // seconds. 0 in a request means the default, 300; the service keeps it from 10 seconds to a
+  // day.
+  uint32 stop_after_secs = 311;
+  // Whether an app with a notification shown keeps the caller's Android running in
+  // RUN_MODE_AS_NEEDED. Off by default.
+  bool keep_for_notifications = 312;
 }
+
+// Whether a user's Android stops once nothing uses it.
+enum RunMode {
+  // Stop once nothing has used it for a while. The default.
+  RUN_MODE_AS_NEEDED = 0;
+  // Keep it running, in Doze while it is idle.
+  RUN_MODE_CONTINUOUS = 1;
+}
+
+// Erases the caller's Android data: the apps they installed, their accounts and every app's
+// data. The service stops the caller's Android, waits for it to stop, and replaces their data
+// disk with a fresh one from the Android image. The system image and DSA's settings stay as
+// they are. The answer is Done once the new disk is in place; the next start boots it.
+message ResetData {}
 
 // What an ARM translation package says of itself, from its arm-translation.json.
 message ArmTranslationPackage {
@@ -1450,6 +1476,7 @@ message Request {
     WatchBackgroundApps watch_background_apps = 42;
     ActOnBackgroundApp act_on_background_app = 43;
     ControlMedia control_media = 44;
+    ResetData reset_data = 310;
   }
 }
 

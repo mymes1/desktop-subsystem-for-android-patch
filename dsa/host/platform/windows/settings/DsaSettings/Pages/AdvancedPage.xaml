@@ -45,6 +45,58 @@
                                  IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnLinksToggled" />
             </ui:CardControl>
 
+            <TextBlock Text="{l:Text RunModeHeader.Text}" Style="{StaticResource SectionHeader}" />
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Power24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text ContinuousCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text ContinuousCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ContinuousSwitch" IsChecked="{Binding Continuous, Mode=OneWay}"
+                                 IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnContinuousToggled" />
+            </ui:CardControl>
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text StopAfterCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text StopAfterCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ComboBox x:Name="StopAfterBox" MinWidth="160" DisplayMemberPath="Label"
+                          ItemsSource="{Binding StopAfterChoices, Mode=OneWay}"
+                          SelectedIndex="{Binding SelectedStopAfterIndex, Mode=OneWay}"
+                          IsEnabled="{Binding CanChangeStopAfter, Mode=OneWay}" SelectionChanged="OnStopAfterChanged" />
+            </ui:CardControl>
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Alert24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text KeepForNotificationsCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text KeepForNotificationsCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="KeepForNotificationsSwitch" IsChecked="{Binding KeepForNotifications, Mode=OneWay}"
+                                 IsEnabled="{Binding CanChangeStopAfter, Mode=OneWay}" Click="OnKeepForNotificationsToggled" />
+            </ui:CardControl>
+
+            <TextBlock Text="{l:Text ResetDataHeader.Text}" Style="{StaticResource SectionHeader}" />
+            <ui:InfoBar Title="{l:Text ResetDoneBar.Title}" Message="{l:Text ResetDoneBar.Message}"
+                        Severity="Success" IsClosable="False" IsOpen="{Binding ResetDone, Mode=OneWay}" Margin="0,0,0,4" />
+            <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowReset24}">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{l:Text ResetDataCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text ResetDataCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <StackPanel Orientation="Horizontal">
+                    <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
+                                     Visibility="{Binding IsResetting, Converter={StaticResource Visible}}" />
+                    <ui:Button Content="{l:Text ResetDataButton.Content}" Appearance="Danger" Click="OnResetData"
+                               IsEnabled="{Binding CanResetData, Mode=OneWay}" />
+                </StackPanel>
+            </ui:CardControl>
+
             <TextBlock Text="{l:Text ArmHeader.Text}" Style="{StaticResource SectionHeader}" />
             <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Apps24}">
                 <ui:CardControl.Header>
