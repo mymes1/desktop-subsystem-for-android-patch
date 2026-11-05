@@ -40,6 +40,7 @@ class AgentApplication : Application() {
         } else {
             null
         }
+        val dragCatcher = AndroidDragCatcher(this, log)
         val agent = Agent(
             ownPackage = packageName,
             tasks = AndroidTaskSource(this, log),
@@ -83,10 +84,12 @@ class AgentApplication : Application() {
             accessibility = AndroidAccessibilitySource(this, log),
             diagnostics = AndroidDiagnostics(this),
             wifi = AndroidWifi(this),
+            dragCatcher = dragCatcher,
         )
         AgentApplication.agent = agent
         HostInputMethod.onCursor = { rect -> agent.cursorMoved(rect.left, rect.top, rect.right, rect.bottom) }
         agent.start()
+        dragCatcher.start()
         // Starting windows draw on a thread of their own, so a slow app theme never holds up
         // the agent's work or the home activity on the main thread.
         val splash = HandlerThread("dsa-splash").apply { start() }

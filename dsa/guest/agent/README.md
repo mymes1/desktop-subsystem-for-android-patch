@@ -104,6 +104,15 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   message. `INSTALL_PACKAGES` lets the session commit without asking the user; a
   `CancelInstall`, a broken transfer or a new connection abandons the session. An installed
   app reaches the host's Start menu through the launcher apps report.
+- **Dragging out of a window.** A one-pixel window of the agent's, above every app and
+  taking no input, hears of every drag an app starts with `DRAG_FLAG_GLOBAL` (the window
+  manager's private flag for intercepting global drags). When the pointer leaves a task's
+  host window with a button held, the host sends `DragOut`. The window then covers the
+  display, the agent lifts the pointer, and the drag drops on it. The agent takes the drop's
+  read access for its own process, answers `DragOffer` with each item's name, size and type
+  (or its text), and streams each file from the app's provider in answer to `DragRead`.
+  Content URIs and paths stay in the guest. `DragEnd` closes the streams and gives the
+  access back, whether the drag was dropped or cancelled on the host.
 - **Host sleep.** When the host wakes from sleep it sends `HostSleep` with its wall clock, and
   the agent sets the guest's time to it with `AlarmManager.setTime` (the privileged
   `SET_TIME` permission), since the guest's clock stood still or drifted while the host slept.
