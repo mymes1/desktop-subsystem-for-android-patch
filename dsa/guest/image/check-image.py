@@ -417,8 +417,10 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         problems.append("dsa-camera.xml does not declare ICameraProvider/internal/0")
     if "META/file_contexts.bin" in names and b"/vendor/bin/hw/dsa-camera" not in z.read("META/file_contexts.bin"):
         problems.append("META/file_contexts.bin does not label dsa-camera, so init refuses to start it")
-    if "VENDOR/apex/com.google.emulated.camera.provider.hal.apex" in names:
-        problems.append("com.google.emulated.camera.provider.hal is still in the image and would serve fake cameras")
+    for name in sorted(names):
+        if name.startswith("VENDOR/apex/com.google.emulated.camera.provider.hal"):
+            problems.append(f"{name} is still in the image; it declares the camera provider DSA's "
+                            "HAL declares, which fails the vendor VINTF manifest")
 
     if "VENDOR/etc/selinux/vendor_file_contexts" in names:
         vendor_fc = z.read("VENDOR/etc/selinux/vendor_file_contexts").decode()
