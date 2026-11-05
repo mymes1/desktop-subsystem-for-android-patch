@@ -105,6 +105,9 @@ impl State {
 
     /// The renderer exported a GPU image of a display: it becomes a buffer of the desktop.
     pub fn add_gpu_image(&mut self, image: GpuImage, fd: OwnedFd) {
+        if let (Some(x11), Ok(copy)) = (&mut self.x11, fd.try_clone()) {
+            x11.import(&image, copy);
+        }
         let Some(dmabuf) = &self.dmabuf else {
             return;
         };
@@ -138,6 +141,20 @@ impl State {
 
     /// Shows a frame that is in one of the display's GPU images.
     pub fn present_gpu(&mut self, task_id: i32, display_id: u32, frame: GpuFrame) {
+        let in_x11 = self
+            .windows
+            .get(&task_id)
+            .is_some_and(|w| matches!(w.pip, Some(super::pip::Pip::X11)));
+        if in_x11 {
+            if let Some(x11) = &mut self.x11 {
+                x11.show_gpu(task_id, display_id, frame);
+            }
+            if let Some(window) = self.windows.get_mut(&task_id) {
+                window.last_gpu = Some((display_id, frame));
+                window.model.frame_shown((frame.width, frame.height));
+            }
+            return;
+        }
         let Some(gpu) = self.gpu_buffers.get(&(display_id, frame.slot)) else {
             return;
         };
@@ -156,14 +173,19 @@ impl State {
         window.last_gpu = Some((display_id, frame));
         window.model.frame_shown((width, height));
         let (logical_width, logical_height) = window.model.to_logical((width, height));
-        let viewport = window
-            .viewport
-            .get_or_insert_with(|| viewporter.get_viewport(&window.surface, &self.qh, ()));
+        let in_pip = window.pip.is_some();
+        let target = window.target().clone();
+        let viewport = match window.pip.as_mut().and_then(|pip| pip.viewport()) {
+            Some(viewport) => viewport,
+            None => &mut window.viewport,
+        };
+        let viewport =
+            viewport.get_or_insert_with(|| viewporter.get_viewport(&target, &self.qh, ()));
         viewport.set_source(0.0, 0.0, f64::from(width), f64::from(height));
         viewport.set_destination(logical_width, logical_height);
 
         // The title bar's buttons, on their own surface over the frame.
-        if window.model.has_caption() {
+        if window.model.has_caption() && !in_pip {
             let layout = window.model.caption_layout();
             let pixels = paint_buttons(
                 &layout,
@@ -205,15 +227,15 @@ impl State {
             layer.hide();
         }
 
-        window.surface.set_buffer_scale(1);
-        window.surface.attach(Some(&gpu.buffer), 0, 0);
-        window
-            .surface
-            .damage_buffer(0, 0, gpu.size.0 as i32, gpu.size.1 as i32);
-        window
-            .xdg_surface()
-            .set_window_geometry(0, 0, logical_width, logical_height);
-        window.surface.commit();
+        target.set_buffer_scale(1);
+        target.attach(Some(&gpu.buffer), 0, 0);
+        target.damage_buffer(0, 0, gpu.size.0 as i32, gpu.size.1 as i32);
+        if !in_pip {
+            window
+                .xdg_surface()
+                .set_window_geometry(0, 0, logical_width, logical_height);
+        }
+        target.commit();
     }
 }
 

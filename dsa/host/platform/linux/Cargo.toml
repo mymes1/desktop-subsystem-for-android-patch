@@ -55,6 +55,11 @@ jpeg-encoder = "0.6"
 # decorations, text-input-v3, tablet-v2, cursor-shape).
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "unstable", "staging"] }
+# The layer shell, for picture-in-picture windows that stay above the others.
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+# Picture-in-picture windows through XWayland on desktops without a layer shell, with their
+# GPU frames as DRI3 pixmaps. Pure Rust.
+x11rb = { version = "0.13", features = ["dri3", "render"] }
 # gfxstream's host renderer and libxkbcommon, loaded at run time.
 libloading = "0.8"
 

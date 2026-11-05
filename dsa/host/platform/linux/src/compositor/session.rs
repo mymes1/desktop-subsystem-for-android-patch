@@ -527,6 +527,9 @@ impl Main {
             Event::Input(input) => {
                 let _ = self.input.send(input);
             }
+            Event::PipInput { task_id, input } => {
+                self.desktop.state.pointer_input(task_id, input);
+            }
             Event::HostClipboard(text) => {
                 if self.guest_clipboard.as_deref() != Some(text.as_str()) {
                     let _ = self.clipboard.send(text);

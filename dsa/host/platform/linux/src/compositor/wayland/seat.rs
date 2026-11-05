@@ -132,7 +132,7 @@ impl State {
         time.wrapping_add(now.saturating_duration_since(at).as_millis() as u32)
     }
 
-    fn pointer_input(&mut self, task_id: i32, input: WindowInput) {
+    pub(crate) fn pointer_input(&mut self, task_id: i32, input: WindowInput) {
         let Some(window) = self.windows.get_mut(&task_id) else {
             return;
         };

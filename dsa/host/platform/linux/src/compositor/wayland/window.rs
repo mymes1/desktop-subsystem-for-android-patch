@@ -66,6 +66,8 @@ pub struct Window {
     pub(crate) caption_layer: Option<super::gpu::CaptionLayer>,
     /// The GPU frame shown last, drawn again when the title bar changes.
     pub(crate) last_gpu: Option<(u32, crate::compositor::frames::GpuFrame)>,
+    /// Where the task is shown while in picture-in-picture, instead of its toplevel.
+    pub(crate) pip: Option<super::pip::Pip>,
 }
 
 impl State {
@@ -118,6 +120,7 @@ impl State {
                 viewport: None,
                 caption_layer: None,
                 last_gpu: None,
+                pip: None,
             },
         );
     }
@@ -214,14 +217,20 @@ impl State {
         self.picture_in_picture(task_id, small);
     }
 
-    /// Asks the task for the small size of a picture-in-picture window.
+    /// Asks the task for the small size of a picture-in-picture window, and moves it to a
+    /// surface that stays above the others; or brings its toplevel back when it left
+    /// picture-in-picture.
     fn picture_in_picture(&mut self, task_id: i32, size: Option<(u32, u32)>) {
-        if let Some((width, height)) = size {
-            self.report(FromHost::Resized {
-                task_id,
-                width,
-                height,
-            });
+        match size {
+            Some((width, height)) => {
+                self.enter_pip(task_id, (width, height));
+                self.report(FromHost::Resized {
+                    task_id,
+                    width,
+                    height,
+                });
+            }
+            None => self.leave_pip(task_id),
         }
     }
 
@@ -238,6 +247,7 @@ impl State {
     }
 
     pub(crate) fn close_window(&mut self, task_id: i32) {
+        self.leave_pip(task_id);
         if let Some(window) = self.windows.remove(&task_id) {
             if let Some(viewport) = &window.viewport {
                 viewport.destroy();
@@ -262,6 +272,15 @@ impl State {
 
     /// Shows a frame of the task in its window.
     pub fn present(&mut self, task_id: i32, frame: Frame) {
+        if self.windows.get(&task_id).is_some_and(|w| matches!(w.pip, Some(super::pip::Pip::X11))) {
+            if let Some(x11) = &mut self.x11 {
+                x11.show_pixels(task_id, &frame);
+            }
+            if let Some(window) = self.windows.get_mut(&task_id) {
+                window.model.frame_shown((frame.width, frame.height));
+            }
+            return;
+        }
         let shm = self.shm.clone();
         let qh = self.qh.clone();
         if let Some(window) = self.windows.get_mut(&task_id) {
@@ -274,6 +293,14 @@ impl State {
     pub(crate) fn redraw(&mut self, task_id: i32) {
         let shm = self.shm.clone();
         let qh = self.qh.clone();
+        if self
+            .windows
+            .get(&task_id)
+            .is_some_and(|w| matches!(w.pip, Some(super::pip::Pip::X11)))
+        {
+            // The X11 window keeps its last frame, and has no title bar to draw again.
+            return;
+        }
         if let Some((display_id, frame)) = self.windows.get(&task_id).and_then(|w| w.last_gpu)
         {
             self.present_gpu(task_id, display_id, frame);
@@ -345,9 +372,33 @@ impl Window {
     }
 
     /// Draws the waiting frame, with the title bar over it, into a free buffer.
-    /// Whether the first configure has been acknowledged, so the window may draw.
+    /// Whether the window may draw: its first configure has been acknowledged.
     pub(crate) fn is_configured(&self) -> bool {
-        self.configured
+        match &self.pip {
+            Some(pip) => pip.is_configured(),
+            None => self.configured,
+        }
+    }
+
+    /// The surface the frames go to: the picture-in-picture surface, else the toplevel's.
+    pub(crate) fn target(&self) -> &WlSurface {
+        self.pip
+            .as_ref()
+            .and_then(|pip| pip.surface())
+            .unwrap_or(&self.surface)
+    }
+
+    /// Takes the toplevel off the screen, for picture-in-picture elsewhere.
+    pub(crate) fn unmap(&mut self) {
+        self.surface.attach(None, 0, 0);
+        self.surface.commit();
+        self.configured = false;
+        self.buffers.clear();
+    }
+
+    /// Puts the toplevel back: a commit with no buffer asks for a new first configure.
+    pub(crate) fn remap(&mut self) {
+        self.surface.commit();
     }
 
     pub(crate) fn xdg_surface(&self) -> &XdgSurface {
@@ -355,7 +406,7 @@ impl Window {
     }
 
     fn draw(&mut self, shm: &wayland_client::protocol::wl_shm::WlShm, qh: &QueueHandle<State>) {
-        if !self.configured {
+        if !self.is_configured() {
             return;
         }
         if self.last_gpu.is_some() && self.waiting.is_none() {
@@ -422,12 +473,18 @@ impl Window {
         buffer.write(&shown.pixels);
         buffer.set_busy();
         let (width, height) = self.model.to_logical(size);
-        self.surface.set_buffer_scale(self.model.scale.max(1) as i32);
-        self.surface.attach(Some(&buffer.buffer), 0, 0);
-        self.surface
-            .damage_buffer(0, 0, size.0 as i32, size.1 as i32);
-        self.xdg_surface.set_window_geometry(0, 0, width, height);
-        self.surface.commit();
+        let target = self
+            .pip
+            .as_ref()
+            .and_then(|pip| pip.surface())
+            .unwrap_or(&self.surface);
+        target.set_buffer_scale(self.model.scale.max(1) as i32);
+        target.attach(Some(&buffer.buffer), 0, 0);
+        target.damage_buffer(0, 0, size.0 as i32, size.1 as i32);
+        if self.pip.is_none() {
+            self.xdg_surface.set_window_geometry(0, 0, width, height);
+        }
+        target.commit();
         self.last = Some(frame);
     }
 
