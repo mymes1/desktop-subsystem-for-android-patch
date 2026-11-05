@@ -84,6 +84,20 @@
                                            ToolTipService.ShowOnDisabled="True"
                                            ToolTip="{Binding UninstallTip, TargetNullValue={x:Null}}"
                                            AutomationProperties.HelpText="{Binding Label}" />
+                                <!-- The app's windows: whether the user resizes them, and the size they open at. -->
+                                <ui:ToggleSwitch Content="{l:Text AppsResizable.Content}" Tag="{Binding Package}"
+                                                 IsChecked="{Binding Resizable, Mode=OneWay}" Click="OnResizable"
+                                                 Margin="16,0,8,0" VerticalAlignment="Center"
+                                                 ToolTip="{l:Text AppsResizable.ToolTip}"
+                                                 AutomationProperties.HelpText="{Binding Label}" />
+                                <ComboBox Tag="{Binding Package}" MinWidth="200" VerticalAlignment="Center"
+                                          ItemsSource="{Binding DataContext.StartSizeChoices, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                          DisplayMemberPath="Label"
+                                          SelectedIndex="{Binding StartSizeIndex, Mode=OneWay}"
+                                          SelectionChanged="OnStartSize"
+                                          ToolTip="{l:Text AppsStartSize.ToolTip}"
+                                          AutomationProperties.Name="{l:Text AppsStartSize.ToolTip}"
+                                          AutomationProperties.HelpText="{Binding Label}" />
                             </StackPanel>
                         </ui:CardControl>
                     </DataTemplate>

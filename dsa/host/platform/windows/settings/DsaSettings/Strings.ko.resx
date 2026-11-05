@@ -1204,4 +1204,31 @@
   <data name="Background_Stopped" xml:space="preserve">
     <value>{0}을(를) 중지했습니다.</value>
   </data>
+  <data name="AppsResizable.Content" xml:space="preserve">
+    <value>크기 조절</value>
+  </data>
+  <data name="AppsResizable.ToolTip" xml:space="preserve">
+    <value>이 앱 창의 크기를 바꾸거나 최대화할 수 있는지 정합니다. 끄면 창이 열린 크기 그대로 있습니다.</value>
+  </data>
+  <data name="AppsStartSize.ToolTip" xml:space="preserve">
+    <value>이 앱 창이 열리는 크기</value>
+  </data>
+  <data name="Apps_StartSize_Auto" xml:space="preserve">
+    <value>Android가 정한 크기로 열기</value>
+  </data>
+  <data name="Apps_StartSize_PhonePortrait" xml:space="preserve">
+    <value>휴대폰, 세로 ({0} × {1})</value>
+  </data>
+  <data name="Apps_StartSize_PhoneLandscape" xml:space="preserve">
+    <value>휴대폰, 가로 ({0} × {1})</value>
+  </data>
+  <data name="Apps_StartSize_TabletPortrait" xml:space="preserve">
+    <value>태블릿, 세로 ({0} × {1})</value>
+  </data>
+  <data name="Apps_StartSize_TabletLandscape" xml:space="preserve">
+    <value>태블릿, 가로 ({0} × {1})</value>
+  </data>
+  <data name="Apps_WindowChanged" xml:space="preserve">
+    <value>{0}의 창은 다음에 열리는 창부터 새 설정을 따릅니다.</value>
+  </data>
 </root>

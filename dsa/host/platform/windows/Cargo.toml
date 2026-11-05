@@ -47,6 +47,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_SystemInformation",
     "Win32_System_Performance",
     "Win32_System_Threading",
+    # The time zone, which the user's Android follows.
+    "Win32_System_Time",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Accessibility",
     "Win32_UI_Controls",
@@ -56,6 +58,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Input_Pointer",
     "Win32_UI_Input_Touch",
+    # The game controllers the user's Android shows its apps as gamepads.
+    "Win32_UI_Input_XboxController",
     # Printing the documents of the user's Android: the print dialog and the printer's jobs.
     "Win32_UI_Controls_Dialogs",
     "Win32_Storage_Xps",

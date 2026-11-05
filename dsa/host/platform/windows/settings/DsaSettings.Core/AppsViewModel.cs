@@ -21,6 +21,23 @@ public sealed record InstalledAppInfo(
     public ulong TotalBytes => AppBytes + DataBytes + CacheBytes;
 }
 
+/// <summary>The user's window settings for one app, as dsa app-window reports them: whether
+/// its windows keep their size, and the size they open at in density-independent pixels
+/// (null for the size Android gives the task).</summary>
+public sealed record AppWindowSetting(string Package, bool FixedSize, int? StartWidth, int? StartHeight)
+{
+    public static AppWindowSetting Default(string package) => new(package, false, null, null);
+
+    /// <summary>The start size as dsa app-window --start-size takes it.</summary>
+    public string StartSizeArgument => StartWidth is { } width && StartHeight is { } height
+        ? string.Create(CultureInfo.InvariantCulture, $"{width}x{height}")
+        : "auto";
+}
+
+/// <summary>A start size the Apps page offers, in density-independent pixels; null for the
+/// size Android gives the task.</summary>
+public sealed record StartSizeChoice(string Label, int? Width, int? Height);
+
 /// <summary>How an uninstall went: <paramref name="Status"/> is dsa's stable reason
 /// (<c>uninstalled</c>, <c>not-installed</c>, <c>system-app</c>, <c>blocked</c> or <c>other</c>),
 /// <paramref name="Message"/> Android's own words.</summary>
@@ -158,6 +175,50 @@ public sealed class AppsService
         }
     }
 
+    /// <summary>The user's window settings for every app that has any, by package.</summary>
+    public async Task<IReadOnlyDictionary<string, AppWindowSetting>> WindowSettingsAsync()
+    {
+        var json = await RunJsonAsync("app-window").ConfigureAwait(true);
+        return ReadWindowSettings(json);
+    }
+
+    private static IReadOnlyDictionary<string, AppWindowSetting> ReadWindowSettings(JsonElement json)
+    {
+        var settings = new Dictionary<string, AppWindowSetting>();
+        if (json.TryGetProperty("apps", out var list) && list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var app in list.EnumerateArray())
+            {
+                var package = String(app, "package");
+                if (package.Length == 0)
+                {
+                    continue;
+                }
+                int? width = null, height = null;
+                if (app.TryGetProperty("start_size", out var size) && size.ValueKind == JsonValueKind.Array
+                    && size.GetArrayLength() == 2 && size[0].TryGetInt32(out var w) && size[1].TryGetInt32(out var h))
+                {
+                    (width, height) = (w, h);
+                }
+                settings[package] = new AppWindowSetting(package, Bool(app, "fixed_size"), width, height);
+            }
+        }
+        return settings;
+    }
+
+    /// <summary>Replaces the window settings of one app, and returns them as the service now
+    /// has them.</summary>
+    public async Task<AppWindowSetting> SetWindowSettingAsync(AppWindowSetting setting)
+    {
+        var json = await RunJsonAsync(
+            "app-window", setting.Package,
+            "--fixed-size", setting.FixedSize ? "on" : "off",
+            "--start-size", setting.StartSizeArgument).ConfigureAwait(true);
+        return ReadWindowSettings(json).TryGetValue(setting.Package, out var now)
+            ? now
+            : AppWindowSetting.Default(setting.Package);
+    }
+
     /// <summary>Uninstalls <paramref name="package"/>. A refusal by Android is a report with its
     /// reason; anything else that kept the request from Android is a
     /// <see cref="DsaException"/>.</summary>
@@ -187,7 +248,9 @@ public sealed record AppRow(
     byte[]? Icon,
     bool CanUninstall,
     bool IsSystem,
-    string? UninstallTip)
+    string? UninstallTip,
+    bool Resizable = true,
+    int StartSizeIndex = 0)
 {
     public bool NoIcon => Icon is null;
 }
@@ -199,6 +262,7 @@ public sealed class AppsViewModel : ObservableObject
     private readonly AppsService _service;
     private readonly ITextSource _text;
     private IReadOnlyList<InstalledAppInfo>? _apps;
+    private IReadOnlyDictionary<string, AppWindowSetting> _windows = new Dictionary<string, AppWindowSetting>();
     private string _search = "";
     private string? _error;
     private string? _message;
@@ -272,6 +336,39 @@ public sealed class AppsViewModel : ObservableObject
         }
     }
 
+    /// <summary>The start sizes the page offers: Android's own, then phone and tablet sizes, in
+    /// density-independent pixels.</summary>
+    public IReadOnlyList<StartSizeChoice> StartSizeChoices => new[]
+    {
+        new StartSizeChoice(_text.Get("Apps_StartSize_Auto"), null, null),
+        Choice("Apps_StartSize_PhonePortrait", 412, 915),
+        Choice("Apps_StartSize_PhoneLandscape", 915, 412),
+        Choice("Apps_StartSize_TabletPortrait", 800, 1280),
+        Choice("Apps_StartSize_TabletLandscape", 1280, 800),
+    };
+
+    private StartSizeChoice Choice(string key, int width, int height) =>
+        new(string.Format(CultureInfo.CurrentCulture, _text.Get(key), width, height), width, height);
+
+    /// <summary>The window settings of <paramref name="package"/>.</summary>
+    public AppWindowSetting WindowOf(string package) =>
+        _windows.TryGetValue(package, out var setting) ? setting : AppWindowSetting.Default(package);
+
+    /// <summary>Where a start size is among <see cref="StartSizeChoices"/>; -1, none of them,
+    /// for a size set another way (with dsa app-window).</summary>
+    private int StartSizeIndexOf(AppWindowSetting setting)
+    {
+        var choices = StartSizeChoices;
+        for (var i = 0; i < choices.Count; i++)
+        {
+            if (choices[i].Width == setting.StartWidth && choices[i].Height == setting.StartHeight)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private AppRow Row(InstalledAppInfo app)
     {
         var parts = new List<string> { app.Package };
@@ -295,7 +392,63 @@ public sealed class AppsViewModel : ObservableObject
             app.IconPng.Length > 0 ? app.IconPng : null,
             !app.SystemApp,
             app.SystemApp,
-            app.SystemApp ? _text.Get("Apps_SystemTip") : null);
+            app.SystemApp ? _text.Get("Apps_SystemTip") : null,
+            !WindowOf(app.Package).FixedSize,
+            StartSizeIndexOf(WindowOf(app.Package)));
+    }
+
+    /// <summary>Reads the user's window settings for the apps. A service that keeps none
+    /// leaves every app at the defaults.</summary>
+    public Task LoadWindowSettingsAsync() => Run(async () =>
+    {
+        try
+        {
+            _windows = await _service.WindowSettingsAsync().ConfigureAwait(true);
+        }
+        catch (DsaException e) when (e.Problem == Problem.Refused)
+        {
+            _windows = new Dictionary<string, AppWindowSetting>();
+        }
+        return null;
+    }, reload: false);
+
+    private Task SetWindowAsync(AppWindowSetting wanted) => Run(async () =>
+    {
+        var now = await _service.SetWindowSettingAsync(wanted).ConfigureAwait(true);
+        var windows = new Dictionary<string, AppWindowSetting>(_windows);
+        if (now == AppWindowSetting.Default(now.Package))
+        {
+            windows.Remove(now.Package);
+        }
+        else
+        {
+            windows[now.Package] = now;
+        }
+        _windows = windows;
+        return string.Format(CultureInfo.CurrentCulture, _text.Get("Apps_WindowChanged"), LabelOf(now.Package));
+    }, reload: false);
+
+    /// <summary>Lets the user resize the app's windows, or keeps them at the size they open
+    /// at. Windows that open from now on follow it.</summary>
+    public Task SetResizableAsync(string package, bool resizable) =>
+        SetWindowAsync(WindowOf(package) with { FixedSize = !resizable });
+
+    /// <summary>Opens the app's windows at the start size at <paramref name="index"/> of
+    /// <see cref="StartSizeChoices"/>.</summary>
+    public Task SetStartSizeAsync(string package, int index)
+    {
+        var choices = StartSizeChoices;
+        if (index < 0 || index >= choices.Count)
+        {
+            return Task.CompletedTask;
+        }
+        var choice = choices[index];
+        var current = WindowOf(package);
+        if (current.StartWidth == choice.Width && current.StartHeight == choice.Height)
+        {
+            return Task.CompletedTask;
+        }
+        return SetWindowAsync(current with { StartWidth = choice.Width, StartHeight = choice.Height });
     }
 
     /// <summary>The name an app goes by on the page.</summary>

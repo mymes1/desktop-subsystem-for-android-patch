@@ -1204,4 +1204,31 @@
   <data name="Background_Stopped" xml:space="preserve">
     <value>{0} was stopped.</value>
   </data>
+  <data name="AppsResizable.Content" xml:space="preserve">
+    <value>Resizable</value>
+  </data>
+  <data name="AppsResizable.ToolTip" xml:space="preserve">
+    <value>Whether you can resize and maximize this app's windows. Off keeps each window at the size it opens at.</value>
+  </data>
+  <data name="AppsStartSize.ToolTip" xml:space="preserve">
+    <value>The size this app's windows open at</value>
+  </data>
+  <data name="Apps_StartSize_Auto" xml:space="preserve">
+    <value>Opens at the size Android chooses</value>
+  </data>
+  <data name="Apps_StartSize_PhonePortrait" xml:space="preserve">
+    <value>Phone, portrait ({0} × {1})</value>
+  </data>
+  <data name="Apps_StartSize_PhoneLandscape" xml:space="preserve">
+    <value>Phone, landscape ({0} × {1})</value>
+  </data>
+  <data name="Apps_StartSize_TabletPortrait" xml:space="preserve">
+    <value>Tablet, portrait ({0} × {1})</value>
+  </data>
+  <data name="Apps_StartSize_TabletLandscape" xml:space="preserve">
+    <value>Tablet, landscape ({0} × {1})</value>
+  </data>
+  <data name="Apps_WindowChanged" xml:space="preserve">
+    <value>{0}'s windows follow the new settings from the next one that opens.</value>
+  </data>
 </root>
