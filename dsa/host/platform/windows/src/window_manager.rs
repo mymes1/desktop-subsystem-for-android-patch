@@ -80,6 +80,23 @@ fn sessions_of(sid: &str) -> io::Result<Vec<UserSession>> {
     }
 }
 
+/// The token of the user with SID `sid` from a session they are signed in to, the active one
+/// first. An error when they are signed in nowhere, or this process may not ask.
+pub fn user_token(sid: &str) -> io::Result<OwnedHandle> {
+    let mut sessions = sessions_of(sid)?;
+    sessions.sort_by_key(|session| !session.active);
+    sessions
+        .into_iter()
+        .next()
+        .map(|session| session.token)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("{sid} is not signed in to any session"),
+            )
+        })
+}
+
 /// Starts the window manager at `program` in every session someone is signed in to, as that
 /// session's user, the way signing in starts it. A window manager already running in a
 /// session keeps it, and the new one ends at once. Returns what could not be started.

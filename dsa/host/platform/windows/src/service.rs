@@ -367,6 +367,16 @@ pub fn create_user_android(
             HvSocketListener::bind(vm_id, log_service).map(|l| Box::new(l) as Box<dyn Listener>)
         }),
     );
+    // The file server of the user's shared folders: a plain byte stream, which the guest's
+    // kernel speaks 9P on.
+    let share_service = Guid::vsock_service(dsa_host_core::file_share::SHARE_PORT);
+    let share_listener = VmBoundListener::new(
+        launcher.vm_id_slot(),
+        Box::new(move |vm_id| {
+            crate::hvsocket::RawHvSocketListener::bind(vm_id, share_service)
+                .map(|l| Box::new(l) as Box<dyn Listener>)
+        }),
+    );
     let session_config = config.session_config();
     let handshake = ControlHandshake::new(build, session_config.connect_timeout);
     let session = Session::new(launcher, Box::new(listener), handshake, session_config);
@@ -385,6 +395,25 @@ pub fn create_user_android(
         )
     }));
     session.serve_log_port(Box::new(log_listener), build);
+    // The user's folders, served with the user's own rights.
+    session.serve_file_shares(
+        Box::new(share_listener),
+        Arc::new(crate::file_share::UserFolders::new(sid)),
+    );
+    // Android's shared storage, which Explorer opens through a loopback port.
+    session.set_android_files_connect(Arc::new(|vm_id: &str| {
+        let vm: Guid = vm_id.parse().map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("{vm_id} is not a VM's runtime ID"),
+            )
+        })?;
+        crate::hvsocket::connect_stream(
+            vm,
+            Guid::vsock_service(dsa_host_core::file_share::ANDROID_FILES_PORT),
+            Duration::from_secs(5),
+        )
+    }));
     // The clock lines go to the service's log, beside the guest's console log.
     let user_name = sid.to_string();
     session.set_clock_trace(Some(ClockTrace::new(
@@ -828,6 +857,14 @@ where
                 android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
                 android.share_clipboard(settings.as_ref().is_none_or(|s| s.clipboard));
                 android.links_in_android(settings.as_ref().is_some_and(|s| s.links_in_android));
+                // So is file sharing, on with every folder unless they chose otherwise.
+                android.share_folders(
+                    settings.as_ref().is_none_or(|s| s.file_sharing),
+                    settings.as_ref().map_or_else(
+                        dsa_host_core::file_share::all_folders,
+                        |s| s.shared_folders.clone(),
+                    ),
+                );
                 // So is developer mode, off unless they turned it on, and its adb port.
                 if let Some(settings) = settings.as_ref().filter(|s| s.developer_mode) {
                     if let Err(why) = android.developer_mode(true, settings.adb_port) {

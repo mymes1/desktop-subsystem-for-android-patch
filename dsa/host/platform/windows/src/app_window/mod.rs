@@ -15,6 +15,7 @@
 pub mod accessibility;
 pub mod apk_install;
 pub mod caption;
+pub mod drop_target;
 pub mod host_file;
 pub mod ime;
 pub mod keys;
@@ -210,6 +211,14 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
         logger: log.clone(),
         listing: Arc::clone(&setup.listing),
         accessibility: setup.accessibility.clone(),
+        drops: setup.accessibility.clone().map(|api| {
+            let log = log.clone();
+            drop_target::handler(
+                setup.package.clone(),
+                api,
+                Arc::new(move |line: &str| note(log.as_deref(), line)),
+            )
+        }),
     })?;
 
     // This thread shows each frame, and the renderer waits for it.
