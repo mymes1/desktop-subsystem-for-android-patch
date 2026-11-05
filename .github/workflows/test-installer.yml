@@ -492,6 +492,20 @@ jobs:
           }
           Set-AppTheme
 
+      # The ARM64 runner image has no Android SDK and no JDK, which the APK tools need.
+      - name: Set up a JDK for ARM64 Windows
+        if: matrix.arch == 'arm64'
+        uses: actions/setup-java@v4
+        with:
+          distribution: microsoft
+          java-version: "21"
+
+      - name: Set up the Android SDK for ARM64 Windows
+        if: matrix.arch == 'arm64'
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "build-tools;35.0.0 platforms;android-35"
+
       # APKs made by the Android SDK's own tools, for the APK install window.
       - name: Make the test APKs
         shell: bash
