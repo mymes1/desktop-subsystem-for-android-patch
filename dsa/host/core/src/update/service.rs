@@ -14,13 +14,22 @@ use super::policy::{decide, Decision, InstalledImage};
 use super::store::{Fetch, ImageStore};
 use super::trial::{self, Boot, Outcome};
 use super::UpdateError;
+use crate::accessibility::{AccessibilityWatch, ActionRequest};
+use crate::apk::{InstallOutcome, InstalledPackage};
+use crate::apps::UninstallOutcome;
+use crate::background::{BackgroundApp, BackgroundWatch, MediaSession};
+use crate::host_api::InstallError;
 use crate::host_api::UserAndroid;
 use crate::ime::ImeEvent;
 use crate::input::PointerEvent;
 use crate::keys::KeyEvent;
 use crate::memory::GuestMemoryReport;
+use crate::print::{PrintEvent, PrintOutcome};
+use crate::session::BackgroundRequest;
 use crate::session::{BootProblem, Session, SessionState};
 use crate::tasks::{TaskRequest, TaskRequestError, TaskWatch};
+use crate::widgets::{WidgetError, WidgetProvider, WidgetSize};
+use std::sync::mpsc::Receiver;
 
 /// The latest news about the image, shared by every user's Android.
 #[derive(Default)]
@@ -435,5 +444,74 @@ impl UserAndroid for UpdatingAndroid {
         });
         // Answer once the session has moved on, as a plain start does.
         let _ = events.recv_timeout(Duration::from_secs(5));
+    }
+    fn watch_print_jobs(&self) -> Option<Receiver<PrintEvent>> {
+        UserAndroid::watch_print_jobs(&*self.session)
+    }
+    fn print_result(&self, job_id: u32, outcome: &PrintOutcome) -> Result<(), TaskRequestError> {
+        UserAndroid::print_result(&*self.session, job_id, outcome)
+    }
+    fn watch_background(&self) -> Option<BackgroundWatch> {
+        UserAndroid::watch_background(&*self.session)
+    }
+    fn background_apps(&self) -> (Vec<BackgroundApp>, Vec<MediaSession>) {
+        UserAndroid::background_apps(&*self.session)
+    }
+    fn background_action(&self, request: BackgroundRequest) -> Result<(), TaskRequestError> {
+        UserAndroid::background_action(&*self.session, request)
+    }
+    fn watch_widgets(&self) -> Option<crate::session::WidgetWatch> {
+        UserAndroid::watch_widgets(&*self.session)
+    }
+    fn widgets(&self) -> Vec<(i32, WidgetProvider)> {
+        UserAndroid::widgets(&*self.session)
+    }
+    fn widget_providers(&self) -> Result<Vec<WidgetProvider>, WidgetError> {
+        UserAndroid::widget_providers(&*self.session)
+    }
+    fn add_widget(&self, provider: &str) -> Result<i32, WidgetError> {
+        UserAndroid::add_widget(&*self.session, provider)
+    }
+    fn remove_widget(&self, widget_id: i32) -> Result<(), TaskRequestError> {
+        UserAndroid::remove_widget(&*self.session, widget_id)
+    }
+    fn resize_widget(&self, widget_id: i32, size: WidgetSize) -> Result<(), TaskRequestError> {
+        UserAndroid::resize_widget(&*self.session, widget_id, size)
+    }
+    fn widget_pointer(
+        &self,
+        pointer: dsa_protocol::control::WidgetPointer,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::widget_pointer(&*self.session, pointer)
+    }
+    fn install_apk(
+        &self,
+        name: &str,
+        size: u64,
+        content: &mut dyn std::io::Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        UserAndroid::install_apk(&*self.session, name, size, content)
+    }
+    fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
+        UserAndroid::package_state(&*self.session, package)
+    }
+    fn refresh_apps(&self) -> Result<(), TaskRequestError> {
+        UserAndroid::refresh_apps(&*self.session)
+    }
+    fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
+        UserAndroid::open_app_settings(&*self.session, package)
+    }
+    fn uninstall_app(&self, package: &str) -> Result<UninstallOutcome, TaskRequestError> {
+        UserAndroid::uninstall_app(&*self.session, package)
+    }
+    fn watch_accessibility(&self, task_id: i32) -> Option<AccessibilityWatch> {
+        UserAndroid::watch_accessibility(&*self.session, task_id)
+    }
+    fn accessibility_action(
+        &self,
+        task_id: i32,
+        action: &ActionRequest,
+    ) -> Result<(), TaskRequestError> {
+        UserAndroid::accessibility_action(&*self.session, task_id, action)
     }
 }
