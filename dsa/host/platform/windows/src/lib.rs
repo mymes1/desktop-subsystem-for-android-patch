@@ -70,6 +70,8 @@ pub mod compositor;
 pub mod console_log;
 #[cfg(windows)]
 pub mod console_pipe;
+#[cfg(windows)]
+pub mod data_reset;
 pub mod gpt;
 #[cfg(windows)]
 pub mod guest_communication_services;

@@ -1998,3 +1998,62 @@ fn fr24_stopping_without_asking_is_a_setting_off_by_default() {
     ));
     assert_eq!(changed["stop_without_asking"], true);
 }
+
+#[test]
+fn fr31_the_run_mode_is_as_needed_after_five_minutes_and_changed_with_dsa_settings() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["run_mode"], "as-needed");
+    assert_eq!(settings["stop_after_secs"], 300);
+    assert_eq!(settings["keep_for_notifications"], false);
+    let changed = json_of(&dsa(&endpoint, "settings set run-mode continuous --json"));
+    assert_eq!(changed["run_mode"], "continuous");
+    let changed = json_of(&dsa(&endpoint, "settings set stop-after 10m --json"));
+    assert_eq!(changed["stop_after_secs"], 600);
+    assert_eq!(changed["run_mode"], "continuous", "one change keeps the others");
+    let changed = json_of(&dsa(&endpoint, "settings set keep-for-notifications on --json"));
+    assert_eq!(changed["keep_for_notifications"], true);
+    let shown = stdout(&dsa(&endpoint, "settings"));
+    assert!(shown.contains("Run mode: continuous"), "{shown}");
+    assert!(parse(&args("settings set stop-after 1s")).is_err());
+    assert!(parse(&args("settings set run-mode sometimes")).is_err());
+}
+
+#[test]
+fn fr31_dsa_reset_data_says_what_is_lost_and_resets_only_with_yes() {
+    use dsa_host_core::data_reset::TemplateDataDisk;
+    use dsa_host_core::host_api::HostApiService;
+    let ((listener, _, user), endpoint) = local_pair();
+    let dir = std::env::temp_dir().join(format!("dsa-cli-reset-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let disk = dir.join(format!("{}.vhdx", user.replace([':', '\\', '/'], "_")));
+    std::fs::write(&disk, b"old data").unwrap();
+    let reset = {
+        let disk = disk.clone();
+        TemplateDataDisk::new(
+            Box::new(move |_: &str| Ok(disk.clone())),
+            Box::new(|fresh: &std::path::Path| {
+                std::fs::write(fresh, b"fresh").map_err(|e| e.to_string())
+            }),
+        )
+    };
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_data_reset(Arc::new(reset));
+    let _service = RunningService::start_service(listener, service);
+
+    let asked = dsa(&endpoint, "reset-data");
+    assert!(!asked.status.success());
+    let warning = stderr(&asked);
+    assert!(warning.contains("every app you installed"), "{warning}");
+    assert!(warning.contains("accounts"), "{warning}");
+    assert!(warning.contains("--yes"), "{warning}");
+    assert_eq!(std::fs::read(&disk).unwrap(), b"old data", "nothing was reset");
+
+    let json = json_of(&dsa(&endpoint, "reset-data --yes --json"));
+    assert_eq!(json["reset"], true);
+    assert_eq!(std::fs::read(&disk).unwrap(), b"fresh");
+    assert_eq!(parse(&args("reset-data --yes")).unwrap().command, Cmd::ResetData);
+    let _ = std::fs::remove_dir_all(&dir);
+}
