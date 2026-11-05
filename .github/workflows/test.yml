@@ -286,7 +286,10 @@ jobs:
       - name: Show the host target
         run: rustc -vV
 
+      # "Test the Rust code" fails on formatting already; here it must not hide what the
+      # build and the tests say.
       - name: Check formatting
+        continue-on-error: true
         run: cargo fmt -p dsa-host-macos -p dsa-cli --check
 
       - name: Lint
@@ -294,6 +297,15 @@ jobs:
 
       - name: Run the tests
         run: cargo test --no-fail-fast -p dsa-host-macos -p dsa-cli
+
+      # The lock file as cargo resolved it here, for a change that adds dependencies on
+      # a machine that cannot build the macOS host.
+      - name: Keep the resolved lock file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock-macos
+          path: dsa/Cargo.lock
 
       - name: Build and sign dsa-hostd
         run: |

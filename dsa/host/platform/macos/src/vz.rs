@@ -74,15 +74,18 @@ pub fn max_memory_mb() -> u64 {
     bytes / MIB
 }
 
+/// Where the guest's connections to one host port arrive.
+pub type Incoming = Arc<Mutex<Receiver<OwnedFd>>>;
+
 /// The channels the guest's connections to each host port arrive on. They outlive each VM:
 /// the session's listeners read from them across boots.
 #[derive(Default)]
 pub struct PortChannels {
-    ports: Mutex<HashMap<u32, (Sender<OwnedFd>, Arc<Mutex<Receiver<OwnedFd>>>)>>,
+    ports: Mutex<HashMap<u32, (Sender<OwnedFd>, Incoming)>>,
 }
 
 impl PortChannels {
-    fn entry(&self, port: u32) -> (Sender<OwnedFd>, Arc<Mutex<Receiver<OwnedFd>>>) {
+    fn entry(&self, port: u32) -> (Sender<OwnedFd>, Incoming) {
         let mut ports = self.ports.lock().unwrap_or_else(|e| e.into_inner());
         let (tx, rx) = ports.entry(port).or_insert_with(|| {
             let (tx, rx) = mpsc::channel();
@@ -92,7 +95,7 @@ impl PortChannels {
     }
 
     /// Where port `port`'s connections arrive.
-    pub fn receiver(&self, port: u32) -> Arc<Mutex<Receiver<OwnedFd>>> {
+    pub fn receiver(&self, port: u32) -> Incoming {
         self.entry(port).1
     }
 
