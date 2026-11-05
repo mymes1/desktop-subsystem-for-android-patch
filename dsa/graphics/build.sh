@@ -3,6 +3,12 @@
 # Android NDK, Mesa's Meson build for its shared Vulkan code, and CMake for the gfxstream parts.
 set -euo pipefail
 
+# DSA_GRAPHICS_TARGET=host-macos builds the host renderer for macOS instead, on Vulkan
+# through MoltenVK; the guest libraries are the same for every host.
+if [[ "${DSA_GRAPHICS_TARGET:-guest}" == host-macos ]]; then
+    exec bash "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/host/build-macos.sh" "$@"
+fi
+
 # The guest architecture: x86_64 (default) or arm64. DSA_GUEST_ARCH selects it.
 guest_arch="${DSA_GUEST_ARCH:-x86_64}"
 case "$guest_arch" in

@@ -32,3 +32,8 @@ grep -Fq 'name: graphics-test-apps' "$workflow"
 grep -Fq 'Build the host graphics renderer (linux, x64)' "$workflow"
 grep -Fq 'dsa/graphics/host/build.sh' "$workflow"
 grep -Fq 'dsa_gfx_set_display_pixels_callback' "$workflow"
+# The same renderer for macOS, on Vulkan through MoltenVK.
+grep -Fq 'Build the host graphics renderer (macos, ' "$workflow"
+grep -Fq 'DSA_GRAPHICS_TARGET: host-macos' "$workflow"
+grep -Fq 'host-gfxstream-macos' "$workflow"
+grep -Fq 'libgfxstream_backend.dylib' "$workflow"

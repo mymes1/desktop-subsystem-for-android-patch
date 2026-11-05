@@ -1,4 +1,5 @@
-# Builds the patched Android guest transport and Windows host renderer from source.
+# Builds the patched Android guest transport and the Windows and macOS host renderers from
+# source.
 name: Graphics test
 
 on:
@@ -9,6 +10,7 @@ on:
       - "dsa/graphics/**"
       - "dsa/host/platform/windows/**"
       - "dsa/host/platform/linux/**"
+      - "dsa/host/platform/macos/**"
       - ".github/workflows/test-graphics.yml"
       - "scripts/tests/graphics-workflow.test.sh"
   workflow_dispatch:
@@ -282,6 +284,52 @@ jobs:
           name: ${{ matrix.artifact }}-symbols
           path: .scratch/build-host/dist/symbols/gfxstream_backend.pdb
           if-no-files-found: warn
+
+  # The same renderer on macOS, on Vulkan through MoltenVK over Metal.
+  host-renderer-macos:
+    name: Build the host graphics renderer (macos, arm64)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the Vulkan loader, its headers, MoltenVK and Ninja
+        run: brew install vulkan-loader vulkan-headers molten-vk ninja
+
+      - name: Fetch gfxstream and host build dependencies
+        run: bash dsa/graphics/host/fetch.sh .scratch
+
+      - name: Build the host graphics renderer
+        env:
+          DSA_GRAPHICS_TARGET: host-macos
+        run: bash dsa/graphics/build.sh .scratch .scratch/build-host-macos
+
+      - name: Check the renderer is built for arm64 and exports its entry points
+        run: |
+          library=.scratch/build-host-macos/dist/bin/libgfxstream_backend.dylib
+          lipo -archs "$library" | grep -Fq arm64
+          nm -gU "$library" | grep -Fq _dsa_gfx_init
+          nm -gU "$library" | grep -Fq _dsa_gfx_set_display_pixels_callback
+
+      - name: Run host renderer smoke test on MoltenVK
+        env:
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}/.scratch/build-host-macos/dist/bin/libgfxstream_backend.dylib
+        run: |
+          export VK_ICD_FILENAMES="$(brew --prefix molten-vk)/etc/vulkan/icd.d/MoltenVK_icd.json"
+          export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix vulkan-loader)/lib:$(brew --prefix molten-vk)/lib"
+          uv run dsa/graphics/host/test_host_renderer.py
+
+      - name: Keep the host renderer library and headers
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-gfxstream-macos
+          path: |
+            .scratch/build-host-macos/dist/bin/libgfxstream_backend.dylib
+            .scratch/build-host-macos/dist/include/
+          if-no-files-found: error
 
   installer-package:
     name: Package the installer with the host graphics renderer (windows)
