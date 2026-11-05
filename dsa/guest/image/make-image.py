@@ -452,6 +452,14 @@ def kernel_disk_names(text):
     return KERNEL_DISK_NAME.findall(text)
 
 
+def without_kernel_disk_entries(text):
+    """Returns a mount table without the entries that name a disk by its kernel name. The
+    build's own fstab.cf.* tables mount a Cuttlefish disk by probe order (/dev/block/vdc1);
+    the VM has no such disk, and on Hyper-V that name could reach another one."""
+    return "".join(line for line in text.splitlines(keepends=True)
+                   if not kernel_disk_names(line))
+
+
 def removed_apexes(hwcomposer=False, power=False, gnss=False, sensors=False,
                    camera=False):
     """The vendor APEXes the guest must not have; Cuttlefish's composers too when DSA's
@@ -1776,6 +1784,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                         data = add_arm_translation_import(data.decode()).encode()
                 elif name in IDENTITY_PROP_FILES:
                     data = edit_identity(data.decode(), build_tag=build_tag).encode()
+                elif name.rsplit("/", 1)[-1].startswith("fstab.") and kernel_disk_names(data.decode(errors="replace")):
+                    data = without_kernel_disk_entries(data.decode()).encode()
                 elif name == WIFI_RC:
                     data = edit_wifi_rc(data.decode()).encode()
                 elif name.endswith(SETTINGS_APK):

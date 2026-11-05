@@ -374,6 +374,7 @@ impl GuestLauncher for AndroidVmLauncher {
         self.console_report = None;
         *self.log_signs.lock().unwrap_or_else(|e| e.into_inner()) = ConsoleSigns::default();
         let mut config = (self.config)()?;
+        config.check_settings().map_err(|e| e.to_string())?;
         self.data_disk = Some(config.data_disk.clone());
         // Removed on every way out of this function: by then the VM has read them or will
         // never run.
@@ -386,6 +387,10 @@ impl GuestLauncher for AndroidVmLauncher {
             .boot_properties
             .as_mut()
             .and_then(|properties| properties(&config));
+        config.kernel_cmdline = format!("{} {}", config.kernel_cmdline, bootconfig::CMDLINE_FLAG);
+        // The console is kept from here, so a boot whose files cannot be prepared is still
+        // in the log with its reason.
+        config.console_pipe = self.begin_console(&config);
         let boot = prepare_boot(
             GuestArch::HOST,
             &mut config,
@@ -395,8 +400,6 @@ impl GuestLauncher for AndroidVmLauncher {
             &self.boot_dir,
             &crate::paths::unique_name(&self.id, ""),
         )?;
-        config.kernel_cmdline = format!("{} {}", config.kernel_cmdline, bootconfig::CMDLINE_FLAG);
-        config.console_pipe = self.begin_console(&config);
         if windows_build()
             .is_some_and(|(build, ubr)| hosting_process_name_suffix_supported(build, ubr))
         {

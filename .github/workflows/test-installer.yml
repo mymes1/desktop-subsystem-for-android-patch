@@ -380,7 +380,7 @@ jobs:
           New-Item -ItemType Directory -Force screens | Out-Null
           $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
           $name = [System.Windows.Automation.AutomationElement]::NameProperty
-          $items = 'General', 'Memory', 'Widgets', 'Display & GPU', 'Updates', 'Advanced', 'Android log', 'About'
+          $items = 'General', 'Memory', 'Apps', 'Running in the background', 'Widgets', 'Display & GPU', 'Updates', 'Device identity', 'Advanced', 'Android log', 'About'
 
           # The navigation item named $Text: the pane is on the left, so a page title of the
           # same name is not it.
@@ -440,7 +440,7 @@ jobs:
             Save-WindowScreen $window "$PWD\screens\settings-$theme-short-before.png"
             $seen = @{}
             Get-ShownItems $window | ForEach-Object { $seen[$_] = $true }
-            for ($i = 0; $i -lt 6; $i++) {
+            for ($i = 0; $i -lt 12; $i++) {
               $pane = Find-Item $window ($items | Where-Object { Test-InView $window (Find-Item $window $_) } | Select-Object -First 1)
               Wheel-Over $pane 3
               Get-ShownItems $window | ForEach-Object { $seen[$_] = $true }
@@ -460,7 +460,7 @@ jobs:
             [Dsa.Input]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)   # left down
             [Dsa.Input]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)   # left up
             Start-Sleep -Seconds 1
-            for ($i = 0; $i -lt 10; $i++) {
+            for ($i = 0; $i -lt 16; $i++) {
               [System.Windows.Forms.SendKeys]::SendWait('{TAB}')
               Start-Sleep -Milliseconds 500
               $shown = Get-ShownItems $window
@@ -1218,9 +1218,16 @@ jobs:
           $p = Start-Process msiexec -Wait -PassThru -ArgumentList '/i', 'dsa\target\installer\dsa-test-0.0.9.msi', '/qn', '/l*v', 'arm64-msi.log'
           Write-Host "msiexec exit code: $($p.ExitCode)"
           if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) { throw "the arm64 package installed on x64 Windows" }
-          $p = Start-Process 'dsa\target\installer\setup-test-0.0.9.exe' -Wait -PassThru -ArgumentList '/quiet', '/norestart', '/log', "$PWD\arm64-setup.log"
-          Write-Host "setup.exe exit code: $($p.ExitCode)"
-          if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) { throw "the arm64 setup.exe installed on x64 Windows" }
+          # An arm64 setup.exe is an ARM64 program, which x64 Windows refuses to start at all;
+          # that refusal is as good as the bundle's own.
+          try {
+            $p = Start-Process 'dsa\target\installer\setup-test-0.0.9.exe' -Wait -PassThru -ArgumentList '/quiet', '/norestart', '/log', "$PWD\arm64-setup.log" -ErrorAction Stop
+            Write-Host "setup.exe exit code: $($p.ExitCode)"
+            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) { throw "the arm64 setup.exe installed on x64 Windows" }
+          } catch {
+            if ($_.FullyQualifiedErrorId -notlike 'InvalidOperationException*') { throw }
+            Write-Host "x64 Windows did not start the arm64 setup.exe: $($_.Exception.Message)"
+          }
           if (Get-Service DsaHost -ErrorAction SilentlyContinue) { throw "the DsaHost service was installed" }
           if (Test-Path "$env:ProgramFiles\DSA") { throw "the program folder was made" }
 
