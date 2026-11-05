@@ -358,6 +358,9 @@ impl Drop for SharedTexture {
     }
 }
 
+/// A texture a frame came in, the texture's size, and the region the frame fills.
+type Newest = (ID3D11Texture2D, (u32, u32), (u32, u32));
+
 struct State {
     target: IDCompositionTarget,
     /// The frame's visual, under the caption's.
@@ -402,7 +405,7 @@ struct State {
     hidden: HiddenBuffers,
     /// The texture the newest frame came in, its size and the region the frame fills: what is
     /// shown again when a minimized window is restored.
-    newest: Option<(ID3D11Texture2D, (u32, u32), (u32, u32))>,
+    newest: Option<Newest>,
 }
 
 /// A press a window has to watch: the point in guest pixels and when it came on the host clock.
