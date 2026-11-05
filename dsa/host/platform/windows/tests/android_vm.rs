@@ -22,7 +22,10 @@ fn missing_files() -> AndroidVmConfig {
     let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("no-such-vm");
     std::fs::create_dir_all(&dir).unwrap();
     let initrd = dir.join("initrd.img");
-    std::fs::write(&initrd, b"ramdisk").unwrap();
+    // Written once: the tests run in parallel, and rewriting it would let another test read
+    // it while it is empty.
+    static WRITTEN: std::sync::Once = std::sync::Once::new();
+    WRITTEN.call_once(|| std::fs::write(&initrd, b"ramdisk").unwrap());
     AndroidVmConfig {
         owner: "DSA test".into(),
         kernel: dir.join("kernel"),
