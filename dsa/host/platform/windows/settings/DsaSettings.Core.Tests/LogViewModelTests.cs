@@ -118,4 +118,26 @@ public class LogViewModelTests
         Assert.True(model.HasError);
         Assert.Contains("Problem_ServiceUnreachable", model.Error);
     }
+
+    [Fact]
+    public void Fr21_a_burst_of_lines_is_shown_in_one_change_of_the_list()
+    {
+        // Hundreds of lines arrive at once; each one laying the page out made it crawl.
+        var (model, _, _) = Make();
+        var changes = 0;
+        model.Lines.CollectionChanged += (_, _) => changes++;
+        model.AddMany(Enumerable.Range(0, 300).Select(i => Record("T", $"line {i}")).ToList());
+        Assert.Equal(1, changes);
+        Assert.Equal(300, model.Lines.Count);
+        Assert.Equal("line 299", model.Lines[^1].Message);
+    }
+
+    [Fact]
+    public void Fr21_a_burst_past_the_limit_keeps_the_newest_lines()
+    {
+        var (model, _, _) = Make();
+        model.AddMany(Enumerable.Range(0, LogViewModel.MaxLines + 50).Select(i => Record("T", $"line {i}")).ToList());
+        Assert.Equal(LogViewModel.MaxLines, model.Lines.Count);
+        Assert.Equal("line 50", model.Lines[0].Message);
+    }
 }

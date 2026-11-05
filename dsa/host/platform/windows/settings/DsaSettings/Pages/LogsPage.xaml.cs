@@ -34,7 +34,9 @@ public partial class LogsPage : Page
     /// <summary>Keeps the newest line in view while the log is not paused.</summary>
     private void OnLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (ViewModel.Paused || e.Action != NotifyCollectionChangedAction.Add || LinesList.Items.Count == 0)
+        if (ViewModel.Paused
+            || e.Action is not (NotifyCollectionChangedAction.Add or NotifyCollectionChangedAction.Reset)
+            || LinesList.Items.Count == 0)
         {
             return;
         }
