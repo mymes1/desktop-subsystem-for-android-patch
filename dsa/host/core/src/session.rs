@@ -124,6 +124,7 @@ use crate::background::{
 use crate::clipboard;
 use crate::clock_trace::ClockTrace;
 use crate::file_share::{self, ShareHost, Sharing, SharingNow};
+use crate::drag::{self, DragChunk, DragItem, DragOffer, DragOut, DragRead};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadRumble, GamepadTable};
 use crate::guest_log::{
@@ -640,6 +641,12 @@ struct Shared {
     package_queries: Mutex<HashMap<u32, Sender<Option<InstalledPackage>>>>,
     /// The ID of the last question about an installed package.
     last_package_query: AtomicU32,
+    /// The drags out of a window waiting for the agent's offer, by request ID.
+    drag_offers: Mutex<HashMap<u32, Sender<control::DragOffer>>>,
+    /// The reads of dragged files waiting for the agent's data, by request ID.
+    drag_reads: Mutex<HashMap<u32, Sender<control::DragData>>>,
+    /// The ID of the last request about a drag.
+    last_drag_request: AtomicU32,
     /// The uninstalls waiting for the agent's answer, by request ID.
     uninstalls: Mutex<HashMap<u32, Sender<UninstallOutcome>>>,
     /// The ID of the last uninstall.
@@ -1111,6 +1118,9 @@ impl Session {
             last_widget_request: AtomicU32::new(0),
             package_queries: Mutex::new(HashMap::new()),
             last_package_query: AtomicU32::new(0),
+            drag_offers: Mutex::new(HashMap::new()),
+            drag_reads: Mutex::new(HashMap::new()),
+            last_drag_request: AtomicU32::new(0),
             uninstalls: Mutex::new(HashMap::new()),
             last_uninstall: AtomicU32::new(0),
             app_refreshes: Mutex::new(Vec::new()),
@@ -2451,6 +2461,139 @@ impl Session {
             .unwrap_or_else(|e| e.into_inner())
             .remove(&request_id);
         result
+    }
+
+    /// Asks the agent whether an app is dragging something out of the window the pointer
+    /// left (`out`), and waits up to `timeout` for its answer. When one is, the agent ends the
+    /// drag in the guest and offers what it carries; `None` when nothing is being dragged.
+    /// Needs an active session.
+    pub fn drag_out(
+        &self,
+        out: DragOut,
+        timeout: Duration,
+    ) -> Result<Option<DragOffer>, SessionError> {
+        let request_id = self.next_drag_request();
+        let (tx, answer) = mpsc::channel();
+        self.shared
+            .drag_offers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(request_id, tx);
+        let result = self
+            .send(dsa_protocol::encode(&control::Envelope {
+                body: Some(Body::DragOut(control::DragOut {
+                    request_id,
+                    task_id: out.task_id,
+                    x: out.x,
+                    y: out.y,
+                    tool: out.tool,
+                    pointer_id: out.pointer_id,
+                })),
+            }))
+            .and_then(|()| {
+                answer.recv_timeout(timeout).map_err(|_| {
+                    SessionError::NoAnswer(format!(
+                        "Android did not say within {} seconds what is being dragged",
+                        timeout.as_secs()
+                    ))
+                })
+            });
+        // Once the request is gone, an offer that comes late ends its own drag.
+        self.shared
+            .drag_offers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&request_id);
+        let offer = result?;
+        if !offer.error.trim().is_empty() {
+            if offer.drag_id != 0 {
+                let _ = self.end_drag(offer.drag_id, false);
+            }
+            return Err(SessionError::FileRefused(
+                offer.error.chars().take(512).collect(),
+            ));
+        }
+        if offer.items.is_empty() {
+            if offer.drag_id != 0 {
+                let _ = self.end_drag(offer.drag_id, false);
+            }
+            return Ok(None);
+        }
+        Ok(Some(DragOffer {
+            drag_id: offer.drag_id,
+            items: offer
+                .items
+                .iter()
+                .enumerate()
+                .map(|(index, item)| DragItem::from_control(item, index))
+                .collect(),
+        }))
+    }
+
+    /// Reads part of a file of a drag the agent offered, waiting up to `timeout`. Needs an
+    /// active session.
+    pub fn read_drag(&self, read: DragRead, timeout: Duration) -> Result<DragChunk, SessionError> {
+        let length = read.length.clamp(1, drag::READ_BYTES);
+        let request_id = self.next_drag_request();
+        let (tx, answer) = mpsc::channel();
+        self.shared
+            .drag_reads
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(request_id, tx);
+        let result = self
+            .send(dsa_protocol::encode(&control::Envelope {
+                body: Some(Body::DragRead(control::DragRead {
+                    request_id,
+                    drag_id: read.drag_id,
+                    item: read.item,
+                    offset: read.offset,
+                    length,
+                })),
+            }))
+            .and_then(|()| {
+                answer.recv_timeout(timeout).map_err(|_| {
+                    SessionError::NoAnswer(format!(
+                        "Android did not send the dragged file within {} seconds",
+                        timeout.as_secs()
+                    ))
+                })
+            });
+        self.shared
+            .drag_reads
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&request_id);
+        let data = result?;
+        if !data.error.trim().is_empty() {
+            return Err(SessionError::FileRefused(
+                data.error.chars().take(512).collect(),
+            ));
+        }
+        if data.data.len() > length as usize {
+            return Err(SessionError::FileRefused(
+                "Android sent more of the dragged file than was asked for".into(),
+            ));
+        }
+        Ok(DragChunk {
+            data: data.data,
+            end: data.end,
+        })
+    }
+
+    /// Tells the agent drag `drag_id` is over on the host, dropped or not, so it closes what
+    /// it read and gives back its access to the drag's content.
+    pub fn end_drag(&self, drag_id: u32, dropped: bool) -> Result<(), SessionError> {
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::DragEnd(control::DragEnd { drag_id, dropped })),
+        }))
+    }
+
+    fn next_drag_request(&self) -> u32 {
+        self.shared
+            .last_drag_request
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1)
     }
 
     /// Asks the agent to read the installed apps again, sizes included, and waits up to
@@ -4911,6 +5054,43 @@ impl Worker {
                     ),
                 }
             }
+            Some(Body::DragOffer(offer)) => {
+                let waiting = self
+                    .shared
+                    .drag_offers
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&offer.request_id);
+                let late = match waiting {
+                    Some(waiting) => waiting.send(offer).err().map(|e| e.0),
+                    None => Some(offer),
+                };
+                // Nobody waits for this offer any more, so the drag is over on the host: the
+                // guest gives its access back now rather than holding it.
+                if let Some(late) = late {
+                    if late.drag_id != 0 {
+                        eprintln!(
+                            "drag: Android offered drag {} after the host stopped asking; ending it",
+                            late.drag_id
+                        );
+                        self.send_body(Body::DragEnd(control::DragEnd {
+                            drag_id: late.drag_id,
+                            dropped: false,
+                        }));
+                    }
+                }
+            }
+            Some(Body::DragData(data)) => {
+                let waiting = self
+                    .shared
+                    .drag_reads
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&data.request_id);
+                if let Some(waiting) = waiting {
+                    let _ = waiting.send(data);
+                }
+            }
             Some(Body::WidgetFrame(frame)) => self.guest_widget_frame(frame),
             Some(Body::GuestBoot(boot)) => self.guest_boot(boot),
             Some(Body::ClockAnswer(answer)) => self.clock_answered(answer),
@@ -4975,6 +5155,9 @@ impl Worker {
             | Some(Body::DeveloperMode(_))
             | Some(Body::FileSharing(_))
             | Some(Body::AndroidFiles(_))
+            | Some(Body::DragOut(_))
+            | Some(Body::DragRead(_))
+            | Some(Body::DragEnd(_))
             | Some(Body::ArmTranslationInstall(_))
             | Some(Body::ArmTranslationChunk(_))
             | Some(Body::ArmTranslationRemove(_))

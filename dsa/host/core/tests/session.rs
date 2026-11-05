@@ -2430,6 +2430,141 @@ fn fr29_a_file_dropped_on_a_window_reaches_that_app_whole() {
     });
 }
 
+fn drag_out_here() -> dsa_host_core::drag::DragOut {
+    dsa_host_core::drag::DragOut {
+        task_id: 7,
+        x: 300.0,
+        y: 2.0,
+        tool: dsa_protocol::control::PointerTool::Mouse as i32,
+        pointer_id: 0,
+    }
+}
+
+#[test]
+fn fr29_a_file_dragged_out_of_a_window_reaches_the_host_whole_with_its_name() {
+    use dsa_host_core::drag::{DragContent, DragRead};
+    use dsa_protocol::control::{DragData, DragItem, DragOffer};
+    use std::io::Read;
+    let (session, mut agent, _launcher) = active_session();
+    let session = Arc::new(session);
+    let content: Vec<u8> = (0..300_000u32).map(|i| (i % 253) as u8).collect();
+    let asking = {
+        let session = Arc::clone(&session);
+        thread::spawn(move || session.drag_out(drag_out_here(), WAIT))
+    };
+    let request_id = loop {
+        if let Body::DragOut(out) = next_body(&mut agent) {
+            assert_eq!((out.task_id, out.x, out.y), (7, 300.0, 2.0));
+            break out.request_id;
+        }
+    };
+    send_body(
+        &mut agent,
+        Body::DragOffer(DragOffer {
+            request_id,
+            drag_id: 5,
+            items: vec![DragItem {
+                name: "../holiday.jpg".into(),
+                size: content.len() as u64,
+                size_known: true,
+                mime_type: "image/jpeg".into(),
+                ..Default::default()
+            }],
+            error: String::new(),
+        }),
+    );
+    let offer = asking.join().unwrap().expect("an answer").expect("a drag");
+    assert_eq!(offer.drag_id, 5);
+    assert_eq!(offer.items[0].name, "holiday.jpg", "no path reaches the host");
+    assert_eq!(offer.items[0].size, Some(content.len() as u64));
+
+    let copying = {
+        let session = Arc::clone(&session);
+        thread::spawn(move || {
+            let mut copied = Vec::new();
+            DragContent::new(5, 0, |read: DragRead| {
+                session.read_drag(read, WAIT).map_err(|e| e.to_string())
+            })
+            .read_to_end(&mut copied)
+            .map(|_| copied)
+        })
+    };
+    loop {
+        let Body::DragRead(read) = next_body(&mut agent) else {
+            continue;
+        };
+        assert_eq!((read.drag_id, read.item), (5, 0));
+        let start = read.offset as usize;
+        let end = (start + read.length as usize).min(content.len());
+        send_body(
+            &mut agent,
+            Body::DragData(DragData {
+                request_id: read.request_id,
+                data: content[start..end].to_vec(),
+                end: end == content.len(),
+                error: String::new(),
+            }),
+        );
+        if end == content.len() {
+            break;
+        }
+    }
+    assert_eq!(copying.join().unwrap().expect("the copy"), content);
+
+    session.end_drag(5, true).expect("the end goes out");
+    loop {
+        if let Body::DragEnd(end) = next_body(&mut agent) {
+            assert_eq!((end.drag_id, end.dropped), (5, true));
+            break;
+        }
+    }
+}
+
+#[test]
+fn fr29_nothing_dragged_is_no_drag_and_a_cancelled_one_is_ended() {
+    use dsa_protocol::control::DragOffer;
+    let (session, mut agent, _launcher) = active_session();
+    let session = Arc::new(session);
+    let asking = {
+        let session = Arc::clone(&session);
+        thread::spawn(move || session.drag_out(drag_out_here(), WAIT))
+    };
+    let request_id = loop {
+        if let Body::DragOut(out) = next_body(&mut agent) {
+            break out.request_id;
+        }
+    };
+    send_body(
+        &mut agent,
+        Body::DragOffer(DragOffer {
+            request_id,
+            ..Default::default()
+        }),
+    );
+    assert_eq!(asking.join().unwrap(), Ok(None));
+
+    // An offer nobody waits for any more is ended at once, so the guest holds nothing.
+    send_body(
+        &mut agent,
+        Body::DragOffer(DragOffer {
+            request_id: 999,
+            drag_id: 8,
+            items: vec![dsa_protocol::control::DragItem {
+                is_text: true,
+                text: "hi".into(),
+                ..Default::default()
+            }],
+            error: String::new(),
+        }),
+    );
+    loop {
+        if let Body::DragEnd(end) = next_body(&mut agent) {
+            assert_eq!((end.drag_id, end.dropped), (8, false));
+            break;
+        }
+    }
+}
+
 fn file_sharing(on: bool, folders: &[&str]) -> Body {
     Body::FileSharing(dsa_protocol::control::FileSharing {
         on,
