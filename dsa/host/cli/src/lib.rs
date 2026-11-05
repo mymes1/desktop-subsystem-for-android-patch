@@ -2027,13 +2027,18 @@ fn describe_gpus(gpus: &Value) -> String {
 }
 
 /// Where the host's file manager shows the WebDAV `url` of Android's shared storage: on
-/// Windows, the UNC path of the WebDAV redirector (`\\127.0.0.1@<port>\<token>`).
+/// Windows, the UNC path of the WebDAV redirector (`\\127.0.0.1@<port>\<token>`); on Linux,
+/// the `dav:` location the desktop's file managers (GVfs, KIO) open.
 pub fn files_path(url: &str) -> String {
     #[cfg(windows)]
     {
         dsa_host_windows::android_files::unc_path(url).unwrap_or_else(|| url.to_string())
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        dav_location(url)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         url.to_string()
     }
@@ -2058,6 +2063,14 @@ fn open_in_finder(url: &str) -> Result<(), String> {
     }
 }
 
+/// The `dav:` location of the WebDAV `url`: `http://...` becomes `dav://...`.
+pub fn dav_location(url: &str) -> String {
+    match url.strip_prefix("http://") {
+        Some(rest) => format!("dav://{rest}"),
+        None => url.to_string(),
+    }
+}
+
 /// `dsa files`, and `dsa files open`.
 fn android_files(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
     let url = client.android_files().map_err(|e| e.to_string())?;
@@ -2067,7 +2080,16 @@ fn android_files(invocation: &Invocation, client: &mut HostApiClient) -> Result<
         dsa_host_windows::android_files::open_in_explorer(&path)?;
         #[cfg(target_os = "macos")]
         open_in_finder(&url)?;
-        #[cfg(not(any(windows, target_os = "macos")))]
+        // The desktop's own file manager, through its URL opener.
+        #[cfg(target_os = "linux")]
+        std::process::Command::new("xdg-open")
+            .arg(&path)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| format!("open {path} in a file manager; xdg-open could not: {e}"))?;
+        #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
         return Err(format!(
             "open {url} in a file manager that speaks WebDAV; this host opens none itself"
         ));

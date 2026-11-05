@@ -2274,3 +2274,17 @@ fn fr31_dsa_reset_data_says_what_is_lost_and_resets_only_with_yes() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn fr29_android_files_open_as_a_dav_location_on_linux() {
+    assert_eq!(
+        dsa_cli::dav_location("http://127.0.0.1:50000/token/"),
+        "dav://127.0.0.1:50000/token/"
+    );
+    assert_eq!(dsa_cli::dav_location("dav://a/"), "dav://a/");
+    #[cfg(target_os = "linux")]
+    assert_eq!(
+        dsa_cli::files_path("http://127.0.0.1:50000/token/"),
+        "dav://127.0.0.1:50000/token/"
+    );
+}
