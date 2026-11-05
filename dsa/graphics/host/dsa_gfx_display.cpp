@@ -558,6 +558,13 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_dmabuf_callbacks(dsa_display_d
     return -1;
 }
 
+extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_iosurface_callbacks(
+    dsa_display_iosurface_fn, dsa_display_iosurface_frame_fn, dsa_display_pixels_fn, void*) {
+    return -1;
+}
+
+extern "C" DSA_GFX_EXPORT void dsa_gfx_forget_display(uint32_t) {}
+
 void dsa_gfx_display_shutdown(void) { stop_presenter(); }
 
 #else /* !_WIN32 */
@@ -613,20 +620,58 @@ struct Display {
     uint32_t next = 0;
 };
 
+#ifdef __APPLE__
+/* CoreFoundation's reference counting, which an IOSurfaceRef follows. */
+extern "C" const void* CFRetain(const void* object);
+extern "C" void CFRelease(const void* object);
+
+/* VkImportMetalIOSurfaceInfoEXT (VK_EXT_metal_objects), laid out as the Vulkan headers
+ * declare it, so the file builds whether or not they were included with the Metal
+ * platform. */
+struct ImportIoSurfaceInfo {
+    VkStructureType sType;
+    const void* pNext;
+    void* ioSurface;
+};
+constexpr VkStructureType kImportMetalIoSurfaceInfo = static_cast<VkStructureType>(1000311009);
+
+/* How many of a display's IOSurfaces stay imported: the embedder cycles through two. */
+constexpr size_t kImportsPerDisplay = 3;
+
+/* One of the embedder's IOSurfaces, imported into Vulkan and held while it is. */
+struct SurfaceImport {
+    const void* surface = nullptr;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    VkImage image = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    uint64_t last_used = 0;
+};
+#endif
+
 struct PixelPresenter {
     std::mutex mutex;
     std::condition_variable wake;
     std::map<uint32_t, PendingFrame> pending;
+    /* Displays the embedder no longer shows. */
+    std::vector<uint32_t> forget;
     bool stopping = false;
     std::thread thread;
     dsa_display_pixels_fn pixels_cb = nullptr;
     dsa_display_dmabuf_fn dmabuf_cb = nullptr;
     dsa_display_dmabuf_frame_fn dmabuf_frame_cb = nullptr;
+    dsa_display_iosurface_fn iosurface_cb = nullptr;
+    dsa_display_iosurface_frame_fn iosurface_frame_cb = nullptr;
     void* context = nullptr;
     /* Only the presentation thread touches these. */
     std::vector<uint8_t> buffer;
     std::map<uint32_t, Display> displays;
     bool dmabuf_failed = false;
+    bool iosurface_failed = false;
+#ifdef __APPLE__
+    std::map<uint32_t, std::vector<SurfaceImport>> imports;
+    uint64_t uses = 0;
+#endif
     VkCommandPool pool = VK_NULL_HANDLE;
     VkCommandBuffer commands = VK_NULL_HANDLE;
     VkFence fence = VK_NULL_HANDLE;
@@ -978,6 +1023,280 @@ bool present_dmabuf(PixelPresenter& presenter, uint32_t display_id, const Pendin
     return true;
 }
 
+#ifdef __APPLE__
+
+void release_import(VkEmulation& emu, SurfaceImport& import) {
+    VulkanDispatch* vk = emu.getDeviceDispatch();
+    if (import.image != VK_NULL_HANDLE) {
+        vk->vkDestroyImage(emu.getDevice(), import.image, nullptr);
+    }
+    if (import.memory != VK_NULL_HANDLE) {
+        vk->vkFreeMemory(emu.getDevice(), import.memory, nullptr);
+    }
+    if (import.surface) {
+        CFRelease(import.surface);
+    }
+    import = SurfaceImport{};
+}
+
+void forget_display(PixelPresenter& presenter, uint32_t display_id) {
+    auto found = presenter.imports.find(display_id);
+    if (found == presenter.imports.end()) {
+        return;
+    }
+    VkEmulation* emu = emulation();
+    if (emu) {
+        for (SurfaceImport& import : found->second) {
+            release_import(*emu, import);
+        }
+    }
+    presenter.imports.erase(found);
+}
+
+/* Whether the Vulkan device can take an IOSurface as an image's storage. */
+bool imports_iosurfaces(VkEmulation& emu) {
+    static int answer = -1;
+    if (answer >= 0) {
+        return answer == 1;
+    }
+    answer = 0;
+    VulkanDispatch* ivk = emu.getInstanceDispatch();
+    uint32_t count = 0;
+    if (ivk->vkEnumerateDeviceExtensionProperties(emu.getPhysicalDevice(), nullptr, &count,
+                                                  nullptr) != VK_SUCCESS) {
+        return false;
+    }
+    std::vector<VkExtensionProperties> extensions(count);
+    if (ivk->vkEnumerateDeviceExtensionProperties(emu.getPhysicalDevice(), nullptr, &count,
+                                                  extensions.data()) != VK_SUCCESS) {
+        return false;
+    }
+    for (const VkExtensionProperties& extension : extensions) {
+        if (std::strcmp(extension.extensionName, "VK_EXT_metal_objects") == 0) {
+            answer = 1;
+        }
+    }
+    return answer == 1;
+}
+
+/* Makes a Vulkan image whose storage is the embedder's IOSurface, and holds the surface. */
+bool import_surface(VkEmulation& emu, const void* surface, uint32_t width, uint32_t height,
+                    SurfaceImport* out) {
+    VulkanDispatch* vk = emu.getDeviceDispatch();
+    VkDevice device = emu.getDevice();
+    ImportIoSurfaceInfo import_info = {};
+    import_info.sType = kImportMetalIoSurfaceInfo;
+    import_info.ioSurface = const_cast<void*>(surface);
+
+    VkImageCreateInfo image_info = {};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.pNext = &import_info;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = VK_FORMAT_B8G8R8A8_UNORM;
+    image_info.extent = {width, height, 1};
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    SurfaceImport import;
+    import.width = width;
+    import.height = height;
+    if (vk->vkCreateImage(device, &image_info, nullptr, &import.image) != VK_SUCCESS) {
+        log_once("the Vulkan driver cannot make an image of an IOSurface; frames are read back");
+        return false;
+    }
+    VkMemoryRequirements requirements = {};
+    vk->vkGetImageMemoryRequirements(device, import.image, &requirements);
+    VkPhysicalDeviceMemoryProperties memory = {};
+    emu.getInstanceDispatch()->vkGetPhysicalDeviceMemoryProperties(emu.getPhysicalDevice(),
+                                                                   &memory);
+    uint32_t type_index = UINT32_MAX;
+    for (uint32_t i = 0; i < memory.memoryTypeCount; i++) {
+        if ((requirements.memoryTypeBits & (1u << i)) &&
+            (memory.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            type_index = i;
+            break;
+        }
+    }
+    if (type_index == UINT32_MAX) {
+        for (uint32_t i = 0; i < memory.memoryTypeCount; i++) {
+            if (requirements.memoryTypeBits & (1u << i)) {
+                type_index = i;
+                break;
+            }
+        }
+    }
+    /* MoltenVK keeps the image's texture on the IOSurface; the memory bound is only what
+     * the API asks for. */
+    VkMemoryDedicatedAllocateInfo dedicated = {};
+    dedicated.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO;
+    dedicated.image = import.image;
+    VkMemoryAllocateInfo allocate_info = {};
+    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocate_info.pNext = &dedicated;
+    allocate_info.allocationSize = requirements.size;
+    allocate_info.memoryTypeIndex = type_index;
+    if (type_index == UINT32_MAX ||
+        vk->vkAllocateMemory(device, &allocate_info, nullptr, &import.memory) != VK_SUCCESS ||
+        vk->vkBindImageMemory(device, import.image, import.memory, 0) != VK_SUCCESS) {
+        log_once("the Vulkan driver cannot bind an IOSurface image; frames are read back");
+        release_import(emu, import);
+        return false;
+    }
+    import.surface = CFRetain(surface);
+    *out = import;
+    return true;
+}
+
+/* The display's import of `surface`, made when it is new. The oldest import goes when the
+ * display holds more than it cycles through. */
+SurfaceImport* surface_import(VkEmulation& emu, PixelPresenter& presenter, uint32_t display_id,
+                              const void* surface, uint32_t width, uint32_t height) {
+    std::vector<SurfaceImport>& imports = presenter.imports[display_id];
+    presenter.uses++;
+    for (SurfaceImport& import : imports) {
+        if (import.surface == surface && import.width == width && import.height == height) {
+            import.last_used = presenter.uses;
+            return &import;
+        }
+    }
+    SurfaceImport import;
+    if (!import_surface(emu, surface, width, height, &import)) {
+        return nullptr;
+    }
+    import.last_used = presenter.uses;
+    while (imports.size() >= kImportsPerDisplay) {
+        auto oldest = std::min_element(imports.begin(), imports.end(),
+                                       [](const SurfaceImport& a, const SurfaceImport& b) {
+                                           return a.last_used < b.last_used;
+                                       });
+        release_import(emu, *oldest);
+        imports.erase(oldest);
+    }
+    imports.push_back(import);
+    return &imports.back();
+}
+
+/* Copies the frame into the IOSurface the embedder gives, on the GPU. False when the device
+ * cannot, and the frame is read back instead. */
+bool present_iosurface(PixelPresenter& presenter, uint32_t display_id, const PendingFrame& frame) {
+    VkEmulation* emu = emulation();
+    FrameBuffer* fb = FrameBuffer::getFB();
+    if (!emu || !fb) {
+        return false;
+    }
+    if (!imports_iosurfaces(*emu)) {
+        log_once("the Vulkan device has no VK_EXT_metal_objects; frames are read back");
+        return false;
+    }
+    auto keep_alive = fb->findColorBuffer(frame.color_buffer);
+    if (!keep_alive) {
+        return true;
+    }
+    const uint32_t width = keep_alive->getWidth();
+    const uint32_t height = keep_alive->getHeight();
+    if (width == 0 || height == 0 || width > kMaxSide || height > kMaxSide) {
+        return true;
+    }
+    void* surface = presenter.iosurface_cb(presenter.context, display_id, width, height);
+    if (!surface) {
+        /* Shown nowhere: what was imported for the display goes. */
+        forget_display(presenter, display_id);
+        return true;
+    }
+    SurfaceImport* target = surface_import(*emu, presenter, display_id, surface, width, height);
+    if (!target) {
+        return false;
+    }
+    if (!ensure_commands(*emu, presenter)) {
+        log_once("could not set up the Vulkan commands that copy frames into task windows");
+        return false;
+    }
+    std::unique_ptr<BorrowedImageInfoVk> source = emu->borrowColorBufferForDisplay(frame.color_buffer);
+    if (!source) {
+        return true;
+    }
+    uint32_t content_width = frame.width ? frame.width : width;
+    uint32_t content_height = frame.height ? frame.height : height;
+    content_width = std::min(std::min(content_width, width), source->imageCreateInfo.extent.width);
+    content_height =
+        std::min(std::min(content_height, height), source->imageCreateInfo.extent.height);
+    if (content_width == 0 || content_height == 0) {
+        return true;
+    }
+    VulkanDispatch* vk = emu->getDeviceDispatch();
+    VkDevice device = emu->getDevice();
+    const uint32_t family = emu->getQueueFamilyIndex();
+
+    std::vector<VkImageMemoryBarrier> acquire_transfers;
+    std::vector<VkImageMemoryBarrier> acquire_layouts;
+    std::vector<VkImageMemoryBarrier> release_layouts;
+    std::vector<VkImageMemoryBarrier> release_transfers;
+    gfxstream::vk::addNeededBarriersToUseBorrowedImage(
+        *source, family, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT, &acquire_transfers,
+        &acquire_layouts, &release_layouts, &release_transfers);
+    acquire_layouts.push_back(image_barrier(
+        target->image, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED));
+    release_layouts.push_back(image_barrier(
+        target->image, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_GENERAL, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED));
+
+    VkCommandBufferBeginInfo begin = {};
+    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vk->vkResetCommandBuffer(presenter.commands, 0);
+    vk->vkBeginCommandBuffer(presenter.commands, &begin);
+    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                 VK_PIPELINE_STAGE_TRANSFER_BIT, acquire_transfers);
+    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                 VK_PIPELINE_STAGE_TRANSFER_BIT, acquire_layouts);
+    /* A blit, not a copy: the color buffer is RGBA and the surface BGRA, and only a blit
+     * converts between them. The sizes match, so nothing is scaled. */
+    VkImageBlit region = {};
+    region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.srcOffsets[1] = {static_cast<int32_t>(content_width),
+                            static_cast<int32_t>(content_height), 1};
+    region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.dstOffsets[1] = region.srcOffsets[1];
+    vk->vkCmdBlitImage(presenter.commands, source->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       target->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region,
+                       VK_FILTER_NEAREST);
+    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, release_layouts);
+    cmd_barriers(vk, presenter.commands, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, release_transfers);
+    vk->vkEndCommandBuffer(presenter.commands);
+
+    VkSubmitInfo submit = {};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &presenter.commands;
+    VkResult submitted;
+    {
+        android::base::AutoLock lock(*emu->getQueueLock());
+        submitted = vk->vkQueueSubmit(emu->getQueue(), 1, &submit, presenter.fence);
+    }
+    if (submitted != VK_SUCCESS) {
+        log_once("submitting the copy of a frame into a task window failed");
+        return true;
+    }
+    if (vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, kCopyTimeoutNs) != VK_SUCCESS) {
+        log_once("copying a frame into a task window took longer than a second");
+        vk->vkWaitForFences(device, 1, &presenter.fence, VK_TRUE, UINT64_MAX);
+    }
+    vk->vkResetFences(device, 1, &presenter.fence);
+    presenter.iosurface_frame_cb(presenter.context, display_id, content_width, content_height);
+    return true;
+}
+
+#endif /* __APPLE__ */
+
 void present_pixels(PixelPresenter& presenter, uint32_t display_id, const PendingFrame& frame) {
     FrameBuffer* fb = FrameBuffer::getFB();
     if (!fb || !presenter.pixels_cb || frame.width == 0 || frame.height == 0 ||
@@ -993,6 +1312,14 @@ void present_pixels(PixelPresenter& presenter, uint32_t display_id, const Pendin
 }
 
 void present(PixelPresenter& presenter, uint32_t display_id, const PendingFrame& frame) {
+#ifdef __APPLE__
+    if (presenter.iosurface_cb && presenter.iosurface_frame_cb && !presenter.iosurface_failed) {
+        if (present_iosurface(presenter, display_id, frame)) {
+            return;
+        }
+        presenter.iosurface_failed = true;
+    }
+#endif
     if (presenter.dmabuf_cb && presenter.dmabuf_frame_cb && !presenter.dmabuf_failed) {
         if (present_dmabuf(presenter, display_id, frame)) {
             return;
@@ -1005,16 +1332,24 @@ void present(PixelPresenter& presenter, uint32_t display_id, const PendingFrame&
 void run(PixelPresenter* presenter) {
     for (;;) {
         std::map<uint32_t, PendingFrame> frames;
+        std::vector<uint32_t> forget;
         {
             std::unique_lock<std::mutex> lock(presenter->mutex);
             presenter->wake.wait(lock, [presenter] {
-                return presenter->stopping || !presenter->pending.empty();
+                return presenter->stopping || !presenter->pending.empty() ||
+                       !presenter->forget.empty();
             });
             if (presenter->stopping) {
                 break;
             }
             frames.swap(presenter->pending);
+            forget.swap(presenter->forget);
         }
+#ifdef __APPLE__
+        for (uint32_t display_id : forget) {
+            forget_display(*presenter, display_id);
+        }
+#endif
         for (const auto& [display_id, frame] : frames) {
             present(*presenter, display_id, frame);
         }
@@ -1023,6 +1358,14 @@ void run(PixelPresenter* presenter) {
     if (!emu) {
         return;
     }
+#ifdef __APPLE__
+    for (auto& [display_id, imports] : presenter->imports) {
+        for (SurfaceImport& import : imports) {
+            release_import(*emu, import);
+        }
+    }
+    presenter->imports.clear();
+#endif
     for (auto& [display_id, display] : presenter->displays) {
         for (Slot& slot : display.slots) {
             destroy_slot(*emu, slot);
@@ -1058,10 +1401,19 @@ void stop_presenter() {
     delete presenter;
 }
 
-int start_presenter(dsa_display_pixels_fn pixels, dsa_display_dmabuf_fn dmabuf,
-                    dsa_display_dmabuf_frame_fn dmabuf_frame, void* context) {
+/* The ways a presentation can hand frames over; the first that works for a frame is used. */
+struct Handover {
+    dsa_display_pixels_fn pixels = nullptr;
+    dsa_display_dmabuf_fn dmabuf = nullptr;
+    dsa_display_dmabuf_frame_fn dmabuf_frame = nullptr;
+    dsa_display_iosurface_fn iosurface = nullptr;
+    dsa_display_iosurface_frame_fn iosurface_frame = nullptr;
+};
+
+int start_presenter(const Handover& handover, void* context) {
     stop_presenter();
-    if (!pixels && !(dmabuf && dmabuf_frame)) {
+    if (!handover.pixels && !(handover.dmabuf && handover.dmabuf_frame) &&
+        !(handover.iosurface && handover.iosurface_frame)) {
         return 0;
     }
     if (!FrameBuffer::getFB()) {
@@ -1071,9 +1423,11 @@ int start_presenter(dsa_display_pixels_fn pixels, dsa_display_dmabuf_fn dmabuf,
         return -1;
     }
     auto* presenter = new PixelPresenter();
-    presenter->pixels_cb = pixels;
-    presenter->dmabuf_cb = dmabuf;
-    presenter->dmabuf_frame_cb = dmabuf_frame;
+    presenter->pixels_cb = handover.pixels;
+    presenter->dmabuf_cb = handover.dmabuf;
+    presenter->dmabuf_frame_cb = handover.dmabuf_frame;
+    presenter->iosurface_cb = handover.iosurface;
+    presenter->iosurface_frame_cb = handover.iosurface_frame;
     presenter->context = context;
     presenter->thread = std::thread(run, presenter);
     std::lock_guard<std::mutex> lock(s_presenter_mutex);
@@ -1090,7 +1444,9 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_callbacks2(dsa_display_target_
 
 extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_pixels_callback(dsa_display_pixels_fn pixels,
                                                                   void* context) {
-    return start_presenter(pixels, nullptr, nullptr, context);
+    Handover handover;
+    handover.pixels = pixels;
+    return start_presenter(handover, context);
 }
 
 extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_dmabuf_callbacks(
@@ -1099,7 +1455,42 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_dmabuf_callbacks(
     if (dmabuf && frame && !emulation()) {
         return -1;
     }
-    return start_presenter(fallback, dmabuf, frame, context);
+    Handover handover;
+    handover.pixels = fallback;
+    handover.dmabuf = dmabuf;
+    handover.dmabuf_frame = frame;
+    return start_presenter(handover, context);
+}
+
+extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_iosurface_callbacks(
+    dsa_display_iosurface_fn target, dsa_display_iosurface_frame_fn frame,
+    dsa_display_pixels_fn fallback, void* context) {
+#ifdef __APPLE__
+    if (target && frame && !emulation()) {
+        return -1;
+    }
+    Handover handover;
+    handover.pixels = fallback;
+    handover.iosurface = target;
+    handover.iosurface_frame = frame;
+    return start_presenter(handover, context);
+#else
+    (void)target;
+    (void)frame;
+    (void)fallback;
+    (void)context;
+    return -1;
+#endif
+}
+
+extern "C" DSA_GFX_EXPORT void dsa_gfx_forget_display(uint32_t display_id) {
+    std::lock_guard<std::mutex> lock(s_presenter_mutex);
+    if (s_presenter) {
+        std::lock_guard<std::mutex> pending_lock(s_presenter->mutex);
+        s_presenter->pending.erase(display_id);
+        s_presenter->forget.push_back(display_id);
+        s_presenter->wake.notify_one();
+    }
 }
 
 extern "C" DSA_GFX_EXPORT int dsa_gfx_get_adapter_luid(uint8_t*) { return -1; }

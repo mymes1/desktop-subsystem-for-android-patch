@@ -37,3 +37,5 @@ grep -Fq 'Build the host graphics renderer (macos, ' "$workflow"
 grep -Fq 'DSA_GRAPHICS_TARGET: host-macos' "$workflow"
 grep -Fq 'host-gfxstream-macos' "$workflow"
 grep -Fq 'libgfxstream_backend.dylib' "$workflow"
+# On macOS the frames are copied on the GPU into the window manager's IOSurfaces.
+grep -Fq '_dsa_gfx_set_display_iosurface_callbacks' "$workflow"

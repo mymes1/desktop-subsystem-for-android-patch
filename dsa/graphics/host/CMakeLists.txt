@@ -90,6 +90,11 @@ if(TARGET gfxstream_backend)
         "${CMAKE_CURRENT_SOURCE_DIR}/dsa_gfx_backend.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/dsa_gfx_display.cpp")
     target_include_directories(gfxstream_backend PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+    # On macOS the frames are copied into the window manager's IOSurfaces, which the
+    # presentation holds (CFRetain) while it has them imported.
+    if(APPLE)
+        target_link_libraries(gfxstream_backend PRIVATE "-framework CoreFoundation")
+    endif()
 endif()
 
 # Suppress warning escalation to error for compiler variations
