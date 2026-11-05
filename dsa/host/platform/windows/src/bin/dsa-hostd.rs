@@ -107,16 +107,14 @@ mod windows_host {
                 Ok(package) => {
                     config.apply_package(&package);
                 }
-                Err(error) => config.package_notes.push(format!(
-                    "ignoring {}: {error}",
-                    package_path.display()
-                )),
+                Err(error) => config
+                    .package_notes
+                    .push(format!("ignoring {}: {error}", package_path.display())),
             },
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => config.package_notes.push(format!(
-                "reading {}: {error}",
-                package_path.display()
-            )),
+            Err(error) => config
+                .package_notes
+                .push(format!("reading {}: {error}", package_path.display())),
         }
         config.machine_root = Some(data);
         Ok(config)
