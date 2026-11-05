@@ -234,7 +234,7 @@ impl GamepadDevices {
                     return true;
                 }
                 match pad.device.write(&events) {
-                    Ok(()) => pad.last = Some(state.clone()),
+                    Ok(()) => pad.last = Some(*state),
                     Err(why) => eprintln!(
                         "dsa-channeld: gamepad {} did not take its state: {why}",
                         state.pad_id
@@ -573,8 +573,11 @@ mod tests {
     use std::sync::mpsc;
     use std::sync::{Arc, Mutex as StdMutex};
 
+    /// What each fake device was given, by controller.
+    type Writes = Arc<StdMutex<Vec<(u32, Vec<InputEvent>)>>>;
+
     #[derive(Default, Clone)]
-    struct Written(Arc<StdMutex<Vec<(u32, Vec<InputEvent>)>>>);
+    struct Written(Writes);
 
     struct FakePad {
         pad_id: u32,
@@ -660,7 +663,7 @@ mod tests {
         let after = GamepadState {
             buttons: 2,
             right_trigger: 100,
-            ..before.clone()
+            ..before
         };
         assert_eq!(
             events_for(Some(&before), &after),
