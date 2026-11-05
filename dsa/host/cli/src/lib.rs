@@ -255,6 +255,7 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      background [list | open <package> | stop <package>] | \
      app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
+     arm-translation [status | install <folder> | remove] | files [open]> \
      arm-translation [status | install <folder> | remove] | reset-data --yes> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
@@ -313,6 +314,10 @@ pub enum Command {
     Apps,
     /// Show or change the window settings of apps ([`Invocation::app_window`]).
     AppWindow,
+    /// Say where the host's file manager shows Android's shared storage.
+    Files,
+    /// Open Android's shared storage in the host's file manager.
+    FilesOpen,
     /// Erase the user's Android data, once [`Invocation::yes`] confirms it.
     ResetData,
 }
@@ -411,6 +416,9 @@ pub enum Change {
     /// Put one value of the device identity, or all of them, back to the image's own.
     ResetDevice(Option<dsa_host_core::device_identity::Field>),
     StopWithoutAsking(bool),
+    FileSharing(bool),
+    /// The folders to share, in the order the service keeps them.
+    SharedFolders(Vec<String>),
     AdvancedNetworking(bool),
     RunMode(dsa_host_core::run_mode::RunMode),
     /// The wait before Android stops in "As needed", in seconds.
@@ -472,6 +480,8 @@ impl Change {
             "developer-mode" => switch().map(Change::DeveloperMode),
             "arm-translation" => switch().map(Change::ArmTranslation),
             "stop-without-asking" => switch().map(Change::StopWithoutAsking),
+            "file-sharing" => switch().map(Change::FileSharing),
+            "shared-folders" => parse_shared_folders(value).map(Change::SharedFolders),
             "advanced-networking" => switch().map(Change::AdvancedNetworking),
             "run-mode" => dsa_host_core::run_mode::RunMode::parse(value).map(Change::RunMode),
             "stop-after" => parse_stop_after(value).map(Change::StopAfter),
@@ -486,11 +496,27 @@ impl Change {
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, image-updates, input-trace, \
                  resize-trace, memory-limit, developer-mode, adb-port, arm-translation, \
-                 stop-without-asking, run-mode, stop-after, keep-for-notifications, \
-                 advanced-networking and device.<field>"
+                 stop-without-asking, file-sharing, shared-folders, run-mode, stop-after, \
+                 keep-for-notifications, advanced-networking and device.<field>"
             )),
         }
     }
+}
+
+/// The folders `dsa settings set shared-folders` takes: `all`, `none`, or names separated by
+/// commas, such as `Documents,Pictures`.
+fn parse_shared_folders(value: &str) -> Result<Vec<String>, String> {
+    let names: Vec<String> = match value.trim().to_ascii_lowercase().as_str() {
+        "all" => return Ok(dsa_host_core::file_share::all_folders()),
+        "none" | "" => return Ok(Vec::new()),
+        _ => value
+            .split(',')
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty())
+            .collect(),
+    };
+    dsa_host_core::file_share::normalise_folders(&names)
+        .map_err(|why| format!("shared-folders is all, none or a list such as Documents,Pictures: {why}"))
 }
 
 /// A memory limit as `dsa settings set memory-limit` takes it: `auto` (the service's
@@ -684,6 +710,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 });
             }
             "apps" if command.is_none() => command = Some(Command::Apps),
+            "files" if command.is_none() => command = Some(Command::Files),
+            "open" if command == Some(Command::Files) => command = Some(Command::FilesOpen),
             "list" if command == Some(Command::Apps) && apps.is_none() => {
                 apps = Some(AppsAction::List);
             }
@@ -1646,6 +1674,8 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "adb_address": adb_address(&report.settings),
         "arm_translation": report.settings.arm_translation,
         "stop_without_asking": report.settings.stop_without_asking,
+        "file_sharing": report.settings.file_sharing,
+        "shared_folders": report.settings.shared_folders,
         "advanced_networking": report.settings.advanced_networking,
         "network": network_json(report.network.as_ref()),
         "run_mode": report.settings.run_mode.as_str(),
@@ -1817,6 +1847,15 @@ pub fn describe_settings(report: &SettingsReport) -> String {
             on_off(settings.stop_without_asking)
         ),
         format!(
+            "File sharing: {}{}",
+            on_off(settings.file_sharing),
+            if settings.shared_folders.is_empty() {
+                " (no folder chosen)".to_string()
+            } else {
+                format!(" ({})", settings.shared_folders.join(", "))
+            }
+        ),
+        format!(
             "Advanced networking: {} (dsa network shows the addresses)",
             on_off(settings.advanced_networking)
         ),
@@ -1940,6 +1979,40 @@ fn describe_gpus(gpus: &Value) -> String {
         .join("\n")
 }
 
+/// Where the host's file manager shows the WebDAV `url` of Android's shared storage: on
+/// Windows, the UNC path of the WebDAV redirector (`\\127.0.0.1@<port>\<token>`).
+pub fn files_path(url: &str) -> String {
+    #[cfg(windows)]
+    {
+        dsa_host_windows::android_files::unc_path(url).unwrap_or_else(|| url.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        url.to_string()
+    }
+}
+
+/// `dsa files`, and `dsa files open`.
+fn android_files(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
+    let url = client.android_files().map_err(|e| e.to_string())?;
+    let path = files_path(&url);
+    if invocation.command == Command::FilesOpen {
+        #[cfg(windows)]
+        dsa_host_windows::android_files::open_in_explorer(&path)?;
+        #[cfg(not(windows))]
+        return Err(format!(
+            "open {url} in a file manager that speaks WebDAV; this host opens none itself"
+        ));
+    }
+    Ok(if invocation.json {
+        json!({ "url": url, "path": path }).to_string()
+    } else if invocation.command == Command::FilesOpen {
+        format!("Opened Android's files ({path})")
+    } else {
+        format!("Android's files: {path}")
+    })
+}
+
 /// `dsa settings`, and `dsa settings set`.
 fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
     if let Some(change @ (Change::ShowDevice | Change::Device(..) | Change::ResetDevice(_))) =
@@ -1967,6 +2040,8 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
                 unreachable!("answered above")
             }
             Change::StopWithoutAsking(on) => wanted.stop_without_asking = *on,
+            Change::FileSharing(on) => wanted.file_sharing = *on,
+            Change::SharedFolders(folders) => wanted.shared_folders = folders.clone(),
             Change::AdvancedNetworking(on) => wanted.advanced_networking = *on,
             Change::RunMode(mode) => wanted.run_mode = *mode,
             Change::StopAfter(secs) => wanted.stop_after_secs = *secs,
@@ -2875,6 +2950,7 @@ pub fn run_with_starter(
             return Ok(describe_tasks(&list));
         }
         Command::Settings => return settings(invocation, &mut client),
+        Command::Files | Command::FilesOpen => return android_files(invocation, &mut client),
         Command::Network => {
             let report = client.settings().map_err(|e| e.to_string())?;
             return Ok(if invocation.json {

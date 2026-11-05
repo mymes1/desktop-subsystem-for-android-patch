@@ -284,6 +284,39 @@ mod daemon {
     #[cfg(not(target_os = "android"))]
     fn switch_adb(_on: bool) {}
 
+    /// Has init mount the host's folders the host shares and take the others away
+    /// (`dsa-channeld.rc` runs `dsa-channeld --share-mount` as root when the property changes).
+    #[cfg(target_os = "android")]
+    fn switch_shares(sharing: &dsa_protocol::control::FileSharing) {
+        use dsa_guest_channeld::share_mount::{property_value, PROPERTY};
+        let value = property_value(sharing);
+        match set_property(PROPERTY, &value) {
+            Ok(()) => say!("the host's shared folders: {value}"),
+            Err(why) => say!("could not have the host's folders mounted: {why}"),
+        }
+    }
+
+    #[cfg(not(target_os = "android"))]
+    fn switch_shares(_sharing: &dsa_protocol::control::FileSharing) {}
+
+    /// Has init serve the shared storage to the host (`dsa-channeld.rc` restarts the files
+    /// service when the property changes).
+    #[cfg(target_os = "android")]
+    fn switch_android_files(files: &dsa_protocol::control::AndroidFiles) {
+        use dsa_guest_channeld::android_files::{property_value, PROPERTY};
+        let value = property_value(files);
+        match set_property(PROPERTY, &value) {
+            Ok(()) => say!(
+                "Android's files are {}",
+                if value == "off" { "not served" } else { "served to the host" }
+            ),
+            Err(why) => say!("could not serve Android's files: {why}"),
+        }
+    }
+
+    #[cfg(not(target_os = "android"))]
+    fn switch_android_files(_files: &dsa_protocol::control::AndroidFiles) {}
+
     /// Hands idle memory back to the host: every so often, decides whether the guest should
     /// reclaim now (see `reclaim`), and has init do it. Only init may write the
     /// kernel's memory controls; the daemon only asks.
@@ -367,6 +400,15 @@ mod daemon {
     }
 
     pub fn run() -> i32 {
+        // The two jobs init runs this program for besides the daemon: mounting the host's
+        // folders (as root), and serving the shared storage to the host (as media_rw).
+        let say_line = |line: &str| say!("{line}");
+        if std::env::args().nth(1).as_deref() == Some("--share-mount") {
+            return dsa_guest_channeld::share_mount::run(&read_property, &say_line);
+        }
+        if std::env::args().nth(1).as_deref() == Some("--android-files") {
+            return dsa_guest_channeld::android_files::run(&read_property, &say_line);
+        }
         let options = match options() {
             Ok(options) => options,
             Err(why) => {
@@ -411,6 +453,8 @@ mod daemon {
         let router = Arc::new(
             Router::new(to_host, check_agent)
                 .on_developer_mode(switch_adb)
+                .on_file_sharing(switch_shares)
+                .on_android_files(switch_android_files)
                 .on_arm_translation(Arc::new(ArmTranslation::new(
                     arm_translation::DIR,
                     BootFacts::of_system(|| read_property("ro.product.cpu.abilist")),

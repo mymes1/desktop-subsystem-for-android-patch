@@ -987,6 +987,11 @@ pub struct OpenFile {
     pub size: u64,
     #[prost(enumeration = "FileAction", tag = "4")]
     pub action: i32,
+    /// The app to share the file with, when the user dropped it on that app's window: the agent
+    /// sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+    /// only when that app does not take it. Empty to let the user pick.
+    #[prost(string, tag = "5")]
+    pub package: ::prost::alloc::string::String,
 }
 /// Host to guest: part of the content of a file an OpenFile announced.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1042,6 +1047,43 @@ pub struct FileProgress {
     pub received: u64,
     #[prost(string, tag = "3")]
     pub error: ::prost::alloc::string::String,
+}
+/// Host to guest: which of the user's host folders their Android shows in its shared storage.
+/// The control daemon has the guest mount each one at `<location>/<folder>` under shared
+/// storage (/storage/emulated/0), over a file server (9P2000.L) on the host's vsock `port`; it
+/// takes them all away when `on` is false, or a folder when it is no longer named. The agent
+/// gets it too, and has the media scanner look at the folders once they are there. The host
+/// sends it each time the agent connects, and on every change after that. A guest boots with
+/// no folders shared.
+///
+/// Each connection to `port` starts with the host's 32-byte nonce; the guest answers with the
+/// 32-byte HMAC-SHA256 of "file-share:" and the nonce, keyed with the boot's secret, so only the
+/// guest's own daemon reaches the user's files. The 9P conversation follows on the same stream,
+/// and its attach names the folder (`aname`).
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FileSharing {
+    #[prost(bool, tag = "1")]
+    pub on: bool,
+    #[prost(uint32, tag = "2")]
+    pub port: u32,
+    /// The folder in shared storage the host's folders go under, such as "Windows".
+    #[prost(string, tag = "3")]
+    pub location: ::prost::alloc::string::String,
+    /// The folders, by the names the host gives them: "Documents", "Downloads", "Pictures",
+    /// "Music", "Videos", "Desktop".
+    #[prost(string, repeated, tag = "4")]
+    pub folders: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// Host to guest, to the control daemon: serve Android's shared storage to the host, so the
+/// user can see it in the host's file manager. The daemon listens on the vsock `port` for the
+/// host and answers WebDAV requests whose path starts with "/<token>/", and no others. A new
+/// AndroidFiles replaces the last one; a `port` of 0 stops the server.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AndroidFiles {
+    #[prost(uint32, tag = "1")]
+    pub port: u32,
+    #[prost(string, tag = "2")]
+    pub token: ::prost::alloc::string::String,
 }
 /// Host to guest, to the control daemon: a probe that pairs the host's clock with the guest's,
 /// so trace lines from both can be put on one time line. The daemon answers at once with
@@ -1881,7 +1923,7 @@ pub struct CameraError {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 290, 291"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2133,6 +2175,10 @@ pub mod envelope {
         CameraError(super::CameraError),
         #[prost(message, tag = "155")]
         SetTaskCaption(super::SetTaskCaption),
+        #[prost(message, tag = "290")]
+        FileSharing(super::FileSharing),
+        #[prost(message, tag = "291")]
+        AndroidFiles(super::AndroidFiles),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.

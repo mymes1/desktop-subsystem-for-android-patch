@@ -797,6 +797,12 @@ impl UserAndroid for WithProgramStatus {
     fn open_file(&self, file: &crate::files::FileTransfer) -> Result<(), TaskRequestError> {
         self.android.open_file(file)
     }
+    fn share_folders(&self, on: bool, folders: Vec<String>) {
+        self.android.share_folders(on, folders)
+    }
+    fn android_files(&self) -> Result<String, String> {
+        self.android.android_files()
+    }
     fn guest_memory(&self) -> Option<GuestMemoryReport> {
         self.android.guest_memory()
     }

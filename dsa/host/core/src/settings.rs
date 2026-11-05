@@ -3,7 +3,8 @@
 //! Six of them are the user's own: the GPU their window manager renders on, whether their
 //! Android may be frozen when idle, whether their clipboard is shared with it, whether web
 //! links open in apps in their Android instead of the host's browser, and developer mode
-//! (whether adb reaches their Android) with the loopback port adb connects to. The others are the
+//! (whether adb reaches their Android) with the loopback port adb connects to, and file sharing
+//! (which of their host folders their Android shows in its shared storage). The others are the
 //! machine's, shared by every user: whether the service updates DSA itself, whether it
 //! downloads new Android images, and whether DSA's processes write the input trace and the
 //! per-stage resize trace to their logs.
@@ -18,6 +19,8 @@
 //! <dir>/users/<user>.json     {"render_gpu": "display", "freeze": false, "clipboard": true,
 //!                              "links_in_android": false, "developer_mode": false,
 //!                              "adb_port": 58526, "arm_translation": true,
+//!                              "file_sharing": true,
+//!                              "shared_folders": ["Documents", "Pictures"],
 //!                              "advanced_networking": false}
 //! <dir>/users/<user>.app-windows.json
 //!                             the user's window settings for each app
@@ -36,6 +39,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::app_windows::AppWindowSettings;
 use crate::arm_translation::Package;
+use crate::file_share;
 use crate::run_mode::{normalise_stop_after_secs, RunMode, DEFAULT_STOP_AFTER};
 
 /// The longest render GPU value accepted, in characters.
@@ -87,6 +91,11 @@ pub struct Settings {
     /// Whether the user's Android uses an installed ARM translation package, from its next
     /// start. On by default; it does nothing while no package is installed.
     pub arm_translation: bool,
+    /// Whether the user's host folders show in their Android's shared storage. On by default.
+    pub file_sharing: bool,
+    /// The host folders shared while file sharing is on, by name, in the order of
+    /// [`file_share::FOLDERS`]. All of them by default.
+    pub shared_folders: Vec<String>,
     /// Whether the user's Android stops once nothing uses it ("As needed", the default) or
     /// keeps running in Doze ("Continuous").
     pub run_mode: RunMode,
@@ -115,6 +124,8 @@ impl Default for Settings {
             developer_mode: false,
             adb_port: DEFAULT_ADB_PORT,
             arm_translation: true,
+            file_sharing: true,
+            shared_folders: file_share::all_folders(),
             run_mode: RunMode::AsNeeded,
             stop_after_secs: DEFAULT_STOP_AFTER.as_secs() as u32,
             keep_for_notifications: false,
@@ -193,6 +204,10 @@ pub struct UserSettings {
     pub arm_translation: bool,
     #[serde(default)]
     pub stop_without_asking: bool,
+    #[serde(default = "yes")]
+    pub file_sharing: bool,
+    #[serde(default = "file_share::all_folders")]
+    pub shared_folders: Vec<String>,
     #[serde(default)]
     pub advanced_networking: bool,
     #[serde(default)]
@@ -215,6 +230,8 @@ impl Default for UserSettings {
             adb_port: DEFAULT_ADB_PORT,
             arm_translation: true,
             stop_without_asking: false,
+            file_sharing: true,
+            shared_folders: file_share::all_folders(),
             advanced_networking: false,
             run_mode: RunMode::AsNeeded,
             stop_after_secs: default_stop_after_secs(),
@@ -224,8 +241,13 @@ impl Default for UserSettings {
 }
 
 impl UserSettings {
-    /// The user's share of `settings`, as kept, with `render_gpu` already checked.
-    fn from_settings(settings: &Settings, render_gpu: String) -> UserSettings {
+    /// The user's share of `settings`, as kept, with `render_gpu` and `shared_folders`
+    /// already checked.
+    fn from_settings(
+        settings: &Settings,
+        render_gpu: String,
+        shared_folders: Vec<String>,
+    ) -> UserSettings {
         UserSettings {
             render_gpu,
             freeze: settings.freeze,
@@ -236,6 +258,8 @@ impl UserSettings {
             adb_port: normalise_adb_port(settings.adb_port),
             arm_translation: settings.arm_translation,
             stop_without_asking: settings.stop_without_asking,
+            file_sharing: settings.file_sharing,
+            shared_folders,
             advanced_networking: settings.advanced_networking,
             run_mode: settings.run_mode,
             stop_after_secs: normalise_stop_after_secs(settings.stop_after_secs),
@@ -421,6 +445,11 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         developer_mode: mine.developer_mode,
         adb_port: normalise_adb_port(mine.adb_port),
         arm_translation: mine.arm_translation,
+        file_sharing: mine.file_sharing,
+        // A folder name a later release no longer knows is dropped rather than refused, so
+        // a file kept by another release still reads.
+        shared_folders: file_share::normalise_folders(&mine.shared_folders)
+            .unwrap_or_else(|_| file_share::known_folders(&mine.shared_folders)),
         run_mode: mine.run_mode,
         stop_after_secs: normalise_stop_after_secs(mine.stop_after_secs),
         keep_for_notifications: mine.keep_for_notifications,
@@ -447,16 +476,18 @@ impl SettingsStore for FileSettings {
 
     fn set(&self, user: &str, settings: &Settings) -> Result<Settings, String> {
         let render_gpu = normalise_render_gpu(&settings.render_gpu)?;
+        let shared_folders = file_share::normalise_folders(&settings.shared_folders)?;
         let user_file = self.user_file(user)?;
         let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         write_json(
             &user_file,
-            &UserSettings::from_settings(settings, render_gpu.clone()),
+            &UserSettings::from_settings(settings, render_gpu.clone(), shared_folders.clone()),
         )?;
         write_json(&self.machine_file(), &machine_part(settings))?;
         Ok(Settings {
             render_gpu,
             adb_port: normalise_adb_port(settings.adb_port),
+            shared_folders,
             stop_after_secs: normalise_stop_after_secs(settings.stop_after_secs),
             ..settings.clone()
         })
@@ -530,14 +561,16 @@ impl SettingsStore for MemorySettings {
 
     fn set(&self, user: &str, settings: &Settings) -> Result<Settings, String> {
         let render_gpu = normalise_render_gpu(&settings.render_gpu)?;
+        let shared_folders = file_share::normalise_folders(&settings.shared_folders)?;
         self.users.lock().unwrap_or_else(|e| e.into_inner()).insert(
             user.to_string(),
-            UserSettings::from_settings(settings, render_gpu.clone()),
+            UserSettings::from_settings(settings, render_gpu.clone(), shared_folders.clone()),
         );
         *self.machine.lock().unwrap_or_else(|e| e.into_inner()) = machine_part(settings);
         Ok(Settings {
             render_gpu,
             adb_port: normalise_adb_port(settings.adb_port),
+            shared_folders,
             stop_after_secs: normalise_stop_after_secs(settings.stop_after_secs),
             ..settings.clone()
         })
@@ -614,6 +647,39 @@ mod tests {
             "freeze is off unless the user turns it on"
         );
         assert_eq!(store.machine(), MachineSettings::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr29_file_sharing_is_on_with_every_folder_by_default() {
+        let dir = scratch("sharing-default");
+        let settings = FileSettings::new(&dir).get("S-1-5-21-1-2-3-1001").unwrap();
+        assert!(settings.file_sharing);
+        assert_eq!(settings.shared_folders, file_share::all_folders());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr29_chosen_folders_are_kept_and_an_unknown_one_is_refused() {
+        let dir = scratch("sharing-chosen");
+        let store = FileSettings::new(&dir);
+        let user = "S-1-5-21-1-2-3-1001";
+        let chosen = Settings {
+            file_sharing: false,
+            shared_folders: vec!["pictures".into(), "Documents".into(), "Pictures".into()],
+            ..Settings::default()
+        };
+        let kept = store.set(user, &chosen).unwrap();
+        assert_eq!(kept.shared_folders, ["Documents", "Pictures"]);
+        let again = FileSettings::new(&dir).get(user).unwrap();
+        assert!(!again.file_sharing);
+        assert_eq!(again.shared_folders, ["Documents", "Pictures"]);
+        let unknown = Settings {
+            shared_folders: vec!["C:\\".into()],
+            ..Settings::default()
+        };
+        assert!(store.set(user, &unknown).is_err());
+        assert_eq!(store.get(user).unwrap().shared_folders, ["Documents", "Pictures"]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

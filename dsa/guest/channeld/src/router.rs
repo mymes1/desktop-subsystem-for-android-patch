@@ -27,6 +27,11 @@
 //! - The host's `DeveloperMode` stops here too: it goes to the platform's developer mode
 //!   switch ([`Router::on_developer_mode`]), which has init start or stop adbd. A guest boots
 //!   with it off; the host says when it is on.
+//! - The host's `FileSharing` goes to the platform's file sharing switch
+//!   ([`Router::on_file_sharing`]), which has init mount or take away the host's folders, and
+//!   on to the listeners too: the agent has the media scanner look at the folders. Its
+//!   `AndroidFiles` goes to the switch alone ([`Router::on_android_files`]), which has init
+//!   serve the shared storage to the host.
 //! - The host's ARM translation messages stop here as well: the package's image is the
 //!   daemon's to keep ([`Router::on_arm_translation`]), and the daemon answers each one.
 //! - So do the host's game controllers: each becomes a gamepad device of the daemon's
@@ -46,7 +51,8 @@ use std::time::Duration;
 
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
-    ArmTranslationState, Envelope, GuestBoot, LocationRequest, PowerHintKind,
+    AndroidFiles, ArmTranslationState, Envelope, FileSharing, GuestBoot, LocationRequest,
+    PowerHintKind,
 };
 
 use crate::arm_translation::ArmTranslation;
@@ -222,6 +228,10 @@ pub struct Router {
     state: Mutex<State>,
     agent_check: AgentCheck,
     developer_mode: Option<DeveloperModeSwitch>,
+    /// Mounts or takes away the host's folders, as the host says.
+    file_sharing: Option<FileSharingSwitch>,
+    /// Serves the shared storage to the host, as the host asks.
+    android_files: Option<AndroidFilesSwitch>,
     /// The ARM translation package on the user's disk, which the host installs and removes.
     arm_translation: Option<Arc<ArmTranslation>>,
     /// The gamepad devices of the host's controllers.
@@ -234,6 +244,12 @@ pub struct Router {
 
 /// Turns the guest's developer mode (adbd) on or off, as the host says.
 type DeveloperModeSwitch = Box<dyn Fn(bool) + Send + Sync>;
+
+/// Mounts the host's folders the host shares, and takes the others away.
+type FileSharingSwitch = Box<dyn Fn(&FileSharing) + Send + Sync>;
+
+/// Serves the shared storage to the host on the port, with the token, it names.
+type AndroidFilesSwitch = Box<dyn Fn(&AndroidFiles) + Send + Sync>;
 
 /// Says whether the caller of the current call is the agent. It runs on the caller's thread.
 type AgentCheck = Box<dyn Fn(Peer) -> Result<(), String> + Send + Sync>;
@@ -250,6 +266,8 @@ impl Router {
             state: Mutex::new(State::default()),
             agent_check: Box::new(agent_check),
             developer_mode: None,
+            file_sharing: None,
+            android_files: None,
             arm_translation: None,
             gamepads: None,
             diagnostics: Mutex::new(None),
@@ -289,6 +307,24 @@ impl Router {
     /// when they turn it off.
     pub fn on_developer_mode(mut self, switch: impl Fn(bool) + Send + Sync + 'static) -> Router {
         self.developer_mode = Some(Box::new(switch));
+        self
+    }
+
+    /// Hands the host's file sharing to `switch`, which mounts the folders it names.
+    pub fn on_file_sharing(
+        mut self,
+        switch: impl Fn(&FileSharing) + Send + Sync + 'static,
+    ) -> Router {
+        self.file_sharing = Some(Box::new(switch));
+        self
+    }
+
+    /// Hands the host's request for the shared storage to `switch`.
+    pub fn on_android_files(
+        mut self,
+        switch: impl Fn(&AndroidFiles) + Send + Sync + 'static,
+    ) -> Router {
+        self.android_files = Some(Box::new(switch));
         self
     }
 
@@ -449,6 +485,19 @@ impl Router {
             // For the daemon alone: no client of the channel acts on it.
             self.set_developer_mode(mode.on);
             return;
+        }
+        if let Some(Body::AndroidFiles(files)) = &body {
+            // For the daemon alone, like developer mode.
+            if let Some(switch) = &self.android_files {
+                switch(files);
+            }
+            return;
+        }
+        if let Some(Body::FileSharing(sharing)) = &body {
+            // The daemon has the folders mounted; the agent hears of it as well.
+            if let Some(switch) = &self.file_sharing {
+                switch(sharing);
+            }
         }
         if let Some(body) = &body {
             // For the daemon alone, like developer mode.

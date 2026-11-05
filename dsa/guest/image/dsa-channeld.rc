@@ -58,3 +58,34 @@ on property:vendor.dsa.adb=0
 
 on property:sys.usb.config=none && property:vendor.dsa.adb=1
     start adbd
+
+# File sharing: the user's host folders in the shared storage. dsa-channeld sets
+# vendor.dsa.shares as the host says ("off", or the port, the location and the folders), and
+# dsa-channeld --share-mount mounts each folder with 9p at /data/media/0/<location>/<folder>
+# and takes away the ones no longer shared. It runs as root, which mounting needs, in a domain
+# of its own (files.cil), and only once Android has finished booting, when the storage is
+# there.
+service dsa_sharemount /vendor/bin/dsa-channeld --share-mount
+    user root
+    group root media_rw
+    seclabel u:r:dsa_sharemount:s0
+    oneshot
+    disabled
+    stdio_to_kmsg
+
+on property:vendor.dsa.shares=* && property:sys.boot_completed=1
+    start dsa_sharemount
+
+# Android's shared storage, served to the host as WebDAV while the host asks for it.
+# dsa-channeld sets vendor.dsa.files to the port and the token ("off" to stop), and the service
+# restarts with them. It runs as media_rw, the storage's owner, so what it writes belongs
+# where Android's own files do.
+service dsa_files /vendor/bin/dsa-channeld --android-files
+    user media_rw
+    group media_rw
+    seclabel u:r:dsa_files:s0
+    disabled
+    stdio_to_kmsg
+
+on property:vendor.dsa.files=* && property:sys.boot_completed=1
+    restart dsa_files

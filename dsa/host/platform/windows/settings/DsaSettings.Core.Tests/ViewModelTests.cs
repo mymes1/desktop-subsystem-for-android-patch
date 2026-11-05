@@ -199,6 +199,89 @@ public class ViewModelTests
     }
 
     [Fact]
+    public async Task Fr29_file_sharing_is_on_with_every_folder_by_default_and_changed_through_the_service()
+    {
+        var withSharing = Settings.Replace("\"freeze\":false",
+            "\"freeze\":false,\"file_sharing\":true," +
+            "\"shared_folders\":[\"Documents\",\"Downloads\",\"Pictures\",\"Music\",\"Videos\",\"Desktop\"]");
+        var withoutMusic = withSharing.Replace("\"Music\",", "");
+        var cli = new FakeCli()
+            .Answer("settings --json", withSharing)
+            .Fail("gpus --json", "dsa: no GPU list")
+            .Answer("settings set shared-folders Documents,Downloads,Pictures,Videos,Desktop --json", withoutMusic)
+            .Answer("settings set file-sharing off --json",
+                withoutMusic.Replace("\"file_sharing\":true", "\"file_sharing\":false"));
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.True(vm.FileSharing);
+        Assert.True(vm.ShareMusic);
+        Assert.True(vm.CanChooseFolders);
+
+        await vm.SetFolderSharedAsync("Music", false);
+        Assert.False(vm.ShareMusic);
+        Assert.True(vm.SharePictures, "one folder changes alone");
+
+        await vm.SetFileSharingAsync(false);
+        Assert.False(vm.FileSharing);
+        Assert.False(vm.CanChooseFolders, "the folders wait while sharing is off");
+        Assert.Contains("settings set file-sharing off --json", cli.Calls);
+    }
+
+    [Fact]
+    public async Task Fr29_clearing_every_folder_shares_none_and_an_unknown_folder_is_not_sent()
+    {
+        var one = Settings.Replace("\"freeze\":false",
+            "\"freeze\":false,\"file_sharing\":true,\"shared_folders\":[\"Pictures\"]");
+        var cli = new FakeCli()
+            .Answer("settings --json", one)
+            .Fail("gpus --json", "dsa: no GPU list")
+            .Answer("settings set shared-folders none --json", one.Replace("[\"Pictures\"]", "[]"));
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.False(vm.ShareDocuments);
+        await vm.SetFolderSharedAsync("C:\\Windows", true);
+        Assert.DoesNotContain(cli.Calls, call => call.Contains("C:"));
+        await vm.SetFolderSharedAsync("Pictures", false);
+        Assert.False(vm.SharePictures);
+        Assert.Contains("settings set shared-folders none --json", cli.Calls);
+    }
+
+    [Fact]
+    public async Task Fr29_a_service_that_does_not_report_file_sharing_shares_every_folder()
+    {
+        var cli = new FakeCli()
+            .Answer("settings --json", Settings)
+            .Fail("gpus --json", "dsa: no GPU list");
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.True(vm.FileSharing);
+        Assert.True(SettingsInfo.AllFolders.All(vm.IsFolderShared));
+    }
+
+    [Fact]
+    public async Task Fr29_the_android_files_button_opens_them_through_the_service_and_shows_a_failure()
+    {
+        var cli = new FakeCli()
+            .Answer("settings --json", Settings)
+            .Fail("gpus --json", "dsa: no GPU list")
+            .Answer("files open --json", "{\"url\":\"http://127.0.0.1:5/t/\",\"path\":\"\\\\\\\\127.0.0.1@5\\\\t\"}");
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        await vm.OpenAndroidFilesAsync();
+        Assert.Contains("files open --json", cli.Calls);
+        Assert.False(vm.HasError);
+
+        var failing = new FakeCli()
+            .Answer("settings --json", Settings)
+            .Fail("gpus --json", "dsa: no GPU list")
+            .Fail("files open --json", "dsa: this host cannot reach Android's files");
+        var broken = new SettingsViewModel(new DsaService(failing), new KeyText());
+        await broken.LoadAsync();
+        await broken.OpenAndroidFilesAsync();
+        Assert.True(broken.HasError);
+    }
+
+    [Fact]
     public async Task Fr9_a_service_that_does_not_report_the_links_switch_opens_links_on_the_host()
     {
         var cli = new FakeCli()

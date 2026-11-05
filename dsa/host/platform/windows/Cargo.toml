@@ -33,6 +33,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_Security_Authorization",
     "Win32_Storage_FileSystem",
     "Win32_Storage_Vhd",
+    # Freeing the path of a known folder the shell gives (the shared folders).
+    "Win32_System_Com",
     "Win32_System_HostComputeSystem",
     "Win32_System_Com",
     "Win32_System_Console",
@@ -91,6 +93,8 @@ windows = { version = "0.62", features = [
     "Win32_System_Com_StructuredStorage",
     # Each task window's UI Automation tree: its providers, VARIANTs and SAFEARRAYs.
     "Win32_System_Ole",
+    # The key state a drop target is told of (files dropped on a task window).
+    "Win32_System_SystemServices",
     "Win32_UI_Accessibility",
     "Win32_System_Variant",
     "Win32_UI_Shell",

@@ -36,6 +36,8 @@
 //! - [`sensors`]: the host's motion and light sensors, read by the guest's sensors HAL.
 //! - [`camera`]: the host's cameras, used by the apps in the guest.
 //! - [`ime`]: text input through the host's input method in a task's window.
+//! - [`file_share`]: the user's host folders in the guest's shared storage, and the guest's
+//!   shared storage on the host.
 //! - [`settings`]: the settings a user changes from the settings app, kept by the service.
 //! - [`system_settings`]: the host's time zone, languages, regional format, theme and accent
 //!   color, which each user's Android follows.
@@ -63,6 +65,7 @@ pub mod compositor;
 pub mod data_reset;
 pub mod device_identity;
 pub mod diagnostics;
+pub mod file_share;
 pub mod files;
 pub mod gamepads;
 pub mod guest_display;

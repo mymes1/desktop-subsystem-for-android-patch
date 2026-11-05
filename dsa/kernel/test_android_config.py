@@ -84,6 +84,13 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIn("CONFIG_VSOCKETS=y", config)
         self.assertIn("CONFIG_HYPERV_VSOCKETS=y", config)
 
+    def test_fr29_host_folders_can_be_mounted_with_9p_over_a_socket(self):
+        config = CONFIG.read_text()
+        self.assertIn("CONFIG_NET_9P=y", config)
+        # trans=fd: the guest's daemon hands the kernel a Hyper-V socket to speak 9P on.
+        self.assertIn("CONFIG_NET_9P_FD=y", config)
+        self.assertIn("CONFIG_9P_FS=y", config)
+
     def test_fr28_the_synthetic_network_adapter_and_virt_wifi_are_built_in(self):
         # The host attaches a Hyper-V synthetic adapter; hv_netvsc drives it, and virt_wifi
         # shows it to Android as Wi-Fi. Both architectures need them, and the arm64 fragment

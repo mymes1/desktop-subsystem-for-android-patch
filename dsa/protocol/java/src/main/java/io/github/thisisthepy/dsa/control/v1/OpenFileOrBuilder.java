@@ -57,4 +57,28 @@ public interface OpenFileOrBuilder extends
    * @return The action.
    */
   io.github.thisisthepy.dsa.control.v1.FileAction getAction();
+
+  /**
+   * <pre>
+   * The app to share the file with, when the user dropped it on that app's window: the agent
+   * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+   * only when that app does not take it. Empty to let the user pick.
+   * </pre>
+   *
+   * <code>string package = 5;</code>
+   * @return The package.
+   */
+  java.lang.String getPackage();
+  /**
+   * <pre>
+   * The app to share the file with, when the user dropped it on that app's window: the agent
+   * sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+   * only when that app does not take it. Empty to let the user pick.
+   * </pre>
+   *
+   * <code>string package = 5;</code>
+   * @return The bytes for package.
+   */
+  com.google.protobuf.ByteString
+      getPackageBytes();
 }

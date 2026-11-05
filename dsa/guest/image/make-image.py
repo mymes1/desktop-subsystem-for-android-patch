@@ -1281,6 +1281,13 @@ BOOT_PROPERTY_CONTEXT = f"{BOOT_PROPERTY} u:object_r:dsa_boot_prop:s0 exact bool
 # dsa-channeld.rc starts and stops adbd to match.
 ADB_PROPERTY = "vendor.dsa.adb"
 ADB_PROPERTY_CONTEXT = f"{ADB_PROPERTY} u:object_r:dsa_adb_prop:s0 exact bool"
+# dsa-channeld sets these as the host says: which host folders are mounted in the shared
+# storage, and the port and token the shared storage is served to the host on.
+# dsa-channeld.rc runs the mounts and the server when they change (files.cil).
+SHARES_PROPERTY = "vendor.dsa.shares"
+SHARES_PROPERTY_CONTEXT = f"{SHARES_PROPERTY} u:object_r:dsa_shares_prop:s0 exact string"
+FILES_PROPERTY = "vendor.dsa.files"
+FILES_PROPERTY_CONTEXT = f"{FILES_PROPERTY} u:object_r:dsa_files_prop:s0 exact string"
 # Features the VM lacks; SystemConfig drops them wherever else they are declared.
 UNAVAILABLE_FEATURES = "VENDOR/etc/permissions/dsa-unavailable-features.xml"
 
@@ -1402,6 +1409,10 @@ def update_vendor_property_contexts(text):
         lines.append(BOOT_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [ADB_PROPERTY] for line in lines):
         lines.append(ADB_PROPERTY_CONTEXT)
+    if not any(line.split()[:1] == [SHARES_PROPERTY] for line in lines):
+        lines.append(SHARES_PROPERTY_CONTEXT)
+    if not any(line.split()[:1] == [FILES_PROPERTY] for line in lines):
+        lines.append(FILES_PROPERTY_CONTEXT)
     return "\n".join(lines) + "\n"
 
 
@@ -1495,6 +1506,7 @@ GFXSTREAM_ALLOWED_PERMS = {
 }
 SEPOLICY_FRAGMENT = HERE / "sepolicy/graphics-vsock.cil"
 CHANNELD_POLICY = HERE / "sepolicy/channeld.cil"
+FILES_POLICY = HERE / "sepolicy/files.cil"
 POWER_POLICY = HERE / "sepolicy/power.cil"
 GNSS_POLICY = HERE / "sepolicy/gnss.cil"
 CODEC2_POLICY = HERE / "sepolicy/codec2.cil"
@@ -1742,6 +1754,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             if channeld_payload is not None:
                 # Its rules name the domain they declare, so they go in whole.
                 plat_patched += "\n" + CHANNELD_POLICY.read_text()
+                # The daemon's file sharing jobs, which name its program's label.
+                plat_patched += "\n" + FILES_POLICY.read_text()
             if has_power:
                 # The power and health HALs reach the daemon.
                 plat_patched += "\n" + POWER_POLICY.read_text()

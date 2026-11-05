@@ -23,6 +23,7 @@
 //! arrival as the daemon can read it.
 
 pub mod aidl;
+pub mod android_files;
 pub mod arm_translation;
 #[cfg(target_os = "android")]
 pub mod binder;
@@ -32,6 +33,8 @@ pub mod logd;
 pub mod pressure;
 pub mod reclaim;
 pub mod router;
+pub mod share_mount;
+pub mod webdav;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};

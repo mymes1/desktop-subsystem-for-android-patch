@@ -142,6 +142,8 @@ public  final class Envelope extends
     CAMERA_STILL_TAKEN(266),
     CAMERA_ERROR(267),
     SET_TASK_CAPTION(155),
+    FILE_SHARING(290),
+    ANDROID_FILES(291),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -279,6 +281,8 @@ public  final class Envelope extends
         case 266: return CAMERA_STILL_TAKEN;
         case 267: return CAMERA_ERROR;
         case 155: return SET_TASK_CAPTION;
+        case 290: return FILE_SHARING;
+        case 291: return ANDROID_FILES;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -6400,6 +6404,106 @@ public  final class Envelope extends
     }
   }
 
+  public static final int FILE_SHARING_FIELD_NUMBER = 290;
+  /**
+   * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+   */
+  @java.lang.Override
+  public boolean hasFileSharing() {
+    return bodyCase_ == 290;
+  }
+  /**
+   * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.FileSharing getFileSharing() {
+    if (bodyCase_ == 290) {
+       return (io.github.thisisthepy.dsa.control.v1.FileSharing) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.FileSharing.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+   */
+  private void setFileSharing(io.github.thisisthepy.dsa.control.v1.FileSharing value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 290;
+  }
+  /**
+   * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+   */
+  private void mergeFileSharing(io.github.thisisthepy.dsa.control.v1.FileSharing value) {
+    value.getClass();
+  if (bodyCase_ == 290 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.FileSharing.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.FileSharing.newBuilder((io.github.thisisthepy.dsa.control.v1.FileSharing) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 290;
+  }
+  /**
+   * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+   */
+  private void clearFileSharing() {
+    if (bodyCase_ == 290) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int ANDROID_FILES_FIELD_NUMBER = 291;
+  /**
+   * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+   */
+  @java.lang.Override
+  public boolean hasAndroidFiles() {
+    return bodyCase_ == 291;
+  }
+  /**
+   * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.AndroidFiles getAndroidFiles() {
+    if (bodyCase_ == 291) {
+       return (io.github.thisisthepy.dsa.control.v1.AndroidFiles) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.AndroidFiles.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+   */
+  private void setAndroidFiles(io.github.thisisthepy.dsa.control.v1.AndroidFiles value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 291;
+  }
+  /**
+   * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+   */
+  private void mergeAndroidFiles(io.github.thisisthepy.dsa.control.v1.AndroidFiles value) {
+    value.getClass();
+  if (bodyCase_ == 291 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.AndroidFiles.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.AndroidFiles.newBuilder((io.github.thisisthepy.dsa.control.v1.AndroidFiles) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 291;
+  }
+  /**
+   * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+   */
+  private void clearAndroidFiles() {
+    if (bodyCase_ == 291) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -12367,6 +12471,102 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+     */
+    @java.lang.Override
+    public boolean hasFileSharing() {
+      return instance.hasFileSharing();
+    }
+    /**
+     * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.FileSharing getFileSharing() {
+      return instance.getFileSharing();
+    }
+    /**
+     * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+     */
+    public Builder setFileSharing(io.github.thisisthepy.dsa.control.v1.FileSharing value) {
+      copyOnWrite();
+      instance.setFileSharing(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+     */
+    public Builder setFileSharing(
+        io.github.thisisthepy.dsa.control.v1.FileSharing.Builder builderForValue) {
+      copyOnWrite();
+      instance.setFileSharing(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+     */
+    public Builder mergeFileSharing(io.github.thisisthepy.dsa.control.v1.FileSharing value) {
+      copyOnWrite();
+      instance.mergeFileSharing(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.FileSharing file_sharing = 290;</code>
+     */
+    public Builder clearFileSharing() {
+      copyOnWrite();
+      instance.clearFileSharing();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+     */
+    @java.lang.Override
+    public boolean hasAndroidFiles() {
+      return instance.hasAndroidFiles();
+    }
+    /**
+     * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.AndroidFiles getAndroidFiles() {
+      return instance.getAndroidFiles();
+    }
+    /**
+     * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+     */
+    public Builder setAndroidFiles(io.github.thisisthepy.dsa.control.v1.AndroidFiles value) {
+      copyOnWrite();
+      instance.setAndroidFiles(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+     */
+    public Builder setAndroidFiles(
+        io.github.thisisthepy.dsa.control.v1.AndroidFiles.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAndroidFiles(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+     */
+    public Builder mergeAndroidFiles(io.github.thisisthepy.dsa.control.v1.AndroidFiles value) {
+      copyOnWrite();
+      instance.mergeAndroidFiles(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.AndroidFiles android_files = 291;</code>
+     */
+    public Builder clearAndroidFiles() {
+      copyOnWrite();
+      instance.clearAndroidFiles();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -12507,9 +12707,11 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.CameraStill.class,
             io.github.thisisthepy.dsa.control.v1.CameraStillTaken.class,
             io.github.thisisthepy.dsa.control.v1.CameraError.class,
+            io.github.thisisthepy.dsa.control.v1.FileSharing.class,
+            io.github.thisisthepy.dsa.control.v1.AndroidFiles.class,
           };
           java.lang.String info =
-              "\u0000z\u0001\u0000\u0001\u010bz\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
+              "\u0000|\u0001\u0000\u0001\u0123|\u0000\u0000\u0000\u0001<\u0000\u0002<\u0000\u0003" +
               "<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000\t<\u0000\n<" +
               "\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011<\u0000\u0012" +
               "<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000\u0018<\u0000" +
@@ -12525,7 +12727,7 @@ public  final class Envelope extends
               "<\u0000\u009b<\u0000\u00c8<\u0000\u00c9<\u0000\u00ca<\u0000\u00dc<\u0000\u00dd<\u0000" +
               "\u00de<\u0000\u00df<\u0000\u00f0<\u0000\u00f1<\u0000\u00f2<\u0000\u0104<\u0000\u0105" +
               "<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a<\u0000\u010b<\u0000" +
-              "";
+              "\u0122<\u0000\u0123<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
