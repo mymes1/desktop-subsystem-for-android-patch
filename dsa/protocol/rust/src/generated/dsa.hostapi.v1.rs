@@ -1288,7 +1288,28 @@ pub struct Settings {
     /// it. Off by default: the first stop asks, and the user may tick "do not ask again".
     #[prost(bool, tag = "18")]
     pub stop_without_asking: bool,
+    /// Whether the caller's Android stops once nothing uses it. RUN_MODE_AS_NEEDED, the
+    /// default, stops it `stop_after_secs` after the last app window closed, while no app runs
+    /// in the background and no widget is placed; RUN_MODE_CONTINUOUS keeps it running in Doze.
+    /// It applies at once.
+    #[prost(enumeration = "RunMode", tag = "310")]
+    pub run_mode: i32,
+    /// How long nothing may use the caller's Android in RUN_MODE_AS_NEEDED before it stops, in
+    /// seconds. 0 in a request means the default, 300; the service keeps it from 10 seconds to a
+    /// day.
+    #[prost(uint32, tag = "311")]
+    pub stop_after_secs: u32,
+    /// Whether an app with a notification shown keeps the caller's Android running in
+    /// RUN_MODE_AS_NEEDED. Off by default.
+    #[prost(bool, tag = "312")]
+    pub keep_for_notifications: bool,
 }
+/// Erases the caller's Android data: the apps they installed, their accounts and every app's
+/// data. The service stops the caller's Android, waits for it to stop, and replaces their data
+/// disk with a fresh one from the Android image. The system image and DSA's settings stay as
+/// they are. The answer is Done once the new disk is in place; the next start boots it.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ResetData {}
 /// What an ARM translation package says of itself, from its arm-translation.json.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ArmTranslationPackage {
@@ -1548,7 +1569,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 310"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1658,6 +1679,8 @@ pub mod request {
         ActOnBackgroundApp(super::ActOnBackgroundApp),
         #[prost(message, tag = "44")]
         ControlMedia(super::ControlMedia),
+        #[prost(message, tag = "310")]
+        ResetData(super::ResetData),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2415,6 +2438,35 @@ impl StatusBarAppearance {
             "STATUS_BAR_APPEARANCE_UNSPECIFIED" => Some(Self::Unspecified),
             "STATUS_BAR_APPEARANCE_LIGHT" => Some(Self::Light),
             "STATUS_BAR_APPEARANCE_DARK" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+}
+/// Whether a user's Android stops once nothing uses it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum RunMode {
+    /// Stop once nothing has used it for a while. The default.
+    AsNeeded = 0,
+    /// Keep it running, in Doze while it is idle.
+    Continuous = 1,
+}
+impl RunMode {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::AsNeeded => "RUN_MODE_AS_NEEDED",
+            Self::Continuous => "RUN_MODE_CONTINUOUS",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "RUN_MODE_AS_NEEDED" => Some(Self::AsNeeded),
+            "RUN_MODE_CONTINUOUS" => Some(Self::Continuous),
             _ => None,
         }
     }

@@ -64,6 +64,7 @@ pub mod app_exe;
 #[cfg(windows)]
 pub mod app_window;
 pub mod camera_capture;
+pub mod child_probe;
 #[cfg(windows)]
 pub mod compositor;
 pub mod console_log;

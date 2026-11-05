@@ -6,7 +6,15 @@
 # cheap, so the kernel is told to prefer it over dropping file pages it would read again.
 # Reading one swapped page reads only that page: zram has no seek to save by reading ahead, and
 # the neighbours would be resident again for nothing.
+#
+# Free page reporting hands back only whole free blocks of its order (up to 2 MiB). Memory an
+# app frees is scattered in small pieces among pages still in use, and until they gather into
+# whole blocks none of it goes back. The kernel compacts in the background whenever free
+# memory is more fragmented than this setting allows; 40, twice its default, has it gather
+# free pages sooner, so more of them reach the host without waiting for the control daemon's
+# reclaim.
 on boot
     swapon_all /vendor/etc/fstab.dsa
     write /proc/sys/vm/swappiness 100
     write /proc/sys/vm/page-cluster 0
+    write /proc/sys/vm/compaction_proactiveness 40

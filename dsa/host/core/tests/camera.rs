@@ -7,8 +7,9 @@ use std::thread;
 use std::time::Duration;
 
 use dsa_host_core::camera::{
-    choose_mode, facing_of, nv12_to_bgr, offered_modes, scale_nv12, sensor_orientation,
-    serve_connection, Camera, CameraEnd, CameraStream, Cameras, Facing, Frame, Mode, Panel,
+    choose_mode, facing_of, list_text, nv12_to_bgr, offered_modes, parse_list_text, scale_nv12,
+    sensor_orientation, serve_connection, Camera, CameraEnd, CameraStream, Cameras, Facing, Frame,
+    Mode, Panel,
 };
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
@@ -465,4 +466,29 @@ fn fr26_a_picture_scales_and_converts_for_a_still() {
     assert_eq!(bgr.len(), 12);
     // Mid grey stays grey.
     assert!(bgr.iter().all(|&b| (128..=131).contains(&b)), "{bgr:?}");
+}
+
+#[test]
+fn nfr1_the_camera_list_comes_back_whole_from_the_process_that_listed_it() {
+    let mut front = camera(r"\\?\usb#vid_1&pid_2#3#{e5323777}", Facing::Front, false);
+    front.name = "Integrated\tCamera\n".into();
+    front.sensor_orientation = 90;
+    front.modes = vec![mode(1280, 720, 15, 30), mode(640, 480, 1, 60)];
+    let mut blocked = camera("usb#other", Facing::External, true);
+    blocked.modes = Vec::new();
+    let back = camera("usb#back", Facing::Back, false);
+    let text = list_text(&[front.clone(), blocked.clone(), back.clone()]);
+    assert_eq!(text.lines().count(), 3);
+    let parsed = parse_list_text(&text);
+    front.name = "Integrated Camera ".into();
+    assert_eq!(parsed, vec![front, blocked, back]);
+}
+
+#[test]
+fn nfr1_a_camera_line_that_does_not_read_is_left_out() {
+    let parsed = parse_list_text("garbage\n\tname\tfront\t0\t0\t\nid\tname\tsideways\t0\t0\t\n");
+    assert!(parsed.is_empty());
+    let parsed = parse_list_text("id\tname\tback\t0\t0\t640x480@1-30,bad,1x2\n");
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(parsed[0].modes, vec![mode(640, 480, 1, 30)]);
 }

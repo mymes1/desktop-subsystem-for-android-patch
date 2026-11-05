@@ -59,8 +59,25 @@ pub fn frame_rate(numerator: u32, denominator: u32) -> u32 {
     ((u64::from(numerator) + u64::from(denominator) / 2) / u64::from(denominator)) as u32
 }
 
+/// The argument that makes the window manager list the computer's cameras and print them
+/// (`dsa_host_core::camera::list_text`), then end. The window manager runs itself with it, so
+/// Media Foundation, the camera drivers and the camera frame server's client load in a process
+/// that ends, and into the window manager only once an app opens a camera. The links that
+/// follow it are cameras whose modes the window manager already knows, which the child does
+/// not open again.
+pub const LIST_ARGUMENT: &str = "--list-cameras";
+
+/// The links given after [`LIST_ARGUMENT`] in `args`; empty when it is not there.
+pub fn known_links(args: &[String]) -> Vec<String> {
+    args.iter()
+        .skip_while(|arg| arg.as_str() != LIST_ARGUMENT)
+        .skip(1)
+        .cloned()
+        .collect()
+}
+
 #[cfg(windows)]
-pub use system::MediaFoundationCameras;
+pub use system::{list_here, MediaFoundationCameras};
 
 #[cfg(windows)]
 mod system {
@@ -69,8 +86,8 @@ mod system {
     use std::time::{Duration, Instant};
 
     use dsa_host_core::camera::{
-        facing_of, nv12_to_bgr, sensor_orientation, Camera, CameraStream, Cameras, Frame, Mode,
-        Panel,
+        facing_of, list_text, nv12_to_bgr, parse_list_text, sensor_orientation, Camera,
+        CameraStream, Cameras, Frame, Mode, Panel,
     };
     use windows::core::{GUID, PWSTR};
     use windows::Devices::Enumeration::{DeviceClass, DeviceInformation};
@@ -480,10 +497,30 @@ mod system {
         }
     }
 
+    /// How long listing the cameras in a child process may take before no camera is offered.
+    const LIST_TIMEOUT: Duration = Duration::from_secs(30);
+
+    /// Lists the cameras in this process and returns them as text, one line each: what
+    /// `dsa-wm --list-cameras` runs. The cameras of `known` are not opened, and are listed
+    /// with no modes; the caller has them. Lines on why a camera is not offered go to the
+    /// standard error.
+    pub fn list_here(known: &[String]) -> String {
+        let cameras = MediaFoundationCameras::new(Box::new(|line: &str| eprintln!("{line}")));
+        {
+            let mut modes = cameras.modes.lock().unwrap_or_else(|e| e.into_inner());
+            for link in known {
+                modes.insert(link.clone(), Vec::new());
+            }
+        }
+        list_text(&cameras.list_in_process())
+    }
+
     /// The computer's cameras, through Media Foundation.
     ///
-    /// The modes of each camera are found the first time it is listed, by opening it once,
-    /// and kept while it stays plugged in; listing again opens no camera.
+    /// They are listed in a child process ([`LIST_ARGUMENT`](super::LIST_ARGUMENT)), so the
+    /// camera stack loads into this one only when an app opens a camera. The modes of each
+    /// camera are found the first time it is listed, by opening it once, and kept while it
+    /// stays plugged in; listing again opens no camera.
     pub struct MediaFoundationCameras {
         modes: Mutex<HashMap<String, Vec<Mode>>>,
         log: Box<dyn Fn(&str) + Send + Sync>,
@@ -499,8 +536,9 @@ mod system {
         }
     }
 
-    impl Cameras for MediaFoundationCameras {
-        fn list(&self) -> Vec<Camera> {
+    impl MediaFoundationCameras {
+        /// The cameras, listed in this process.
+        fn list_in_process(&self) -> Vec<Camera> {
             let devices = match list_devices() {
                 Ok(devices) => devices,
                 Err(why) => {
@@ -550,6 +588,45 @@ mod system {
                 out.push(camera);
             }
             out
+        }
+    }
+
+    impl Cameras for MediaFoundationCameras {
+        fn list(&self) -> Vec<Camera> {
+            let mut args = vec![super::LIST_ARGUMENT.to_string()];
+            args.extend(
+                self.modes
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .keys()
+                    .cloned(),
+            );
+            let output = match crate::child_probe::run_self(&args, LIST_TIMEOUT) {
+                Ok(output) => output,
+                Err(why) => {
+                    (self.log)(&format!("camera: no camera is offered: {why}"));
+                    return Vec::new();
+                }
+            };
+            for line in output.stderr.lines().filter(|l| !l.trim().is_empty()) {
+                (self.log)(line);
+            }
+            let mut cameras = parse_list_text(&output.stdout);
+            let mut known = self.modes.lock().unwrap_or_else(|e| e.into_inner());
+            known.retain(|link, _| cameras.iter().any(|c| &c.id == link));
+            for camera in &mut cameras {
+                if camera.blocked {
+                    continue;
+                }
+                match known.get(&camera.id) {
+                    Some(modes) => camera.modes = modes.clone(),
+                    None if !camera.modes.is_empty() => {
+                        known.insert(camera.id.clone(), camera.modes.clone());
+                    }
+                    None => {}
+                }
+            }
+            cameras
         }
 
         fn open(&self, id: &str, mode: Mode, fps: u32) -> Result<Box<dyn CameraStream>, String> {
