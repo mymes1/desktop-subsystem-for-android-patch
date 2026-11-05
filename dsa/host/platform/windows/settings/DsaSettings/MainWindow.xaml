@@ -43,7 +43,7 @@
             Grid.Row="2"
             PaneDisplayMode="Left"
             OpenPaneLength="260"
-            IsBackButtonVisible="Collapsed"
+            IsBackButtonVisible="Auto"
             IsPaneToggleVisible="True">
             <ui:NavigationView.MenuItems>
                 <ui:NavigationViewItem Content="{l:Text NavGeneral.Content}" TargetPageType="{x:Type pages:GeneralPage}"
