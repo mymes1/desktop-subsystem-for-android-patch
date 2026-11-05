@@ -198,7 +198,7 @@ fn deliver(package: &str, api: &ApiConnect, note: &dyn Fn(&str), task_id: i32, p
 /// shows what it is first, or else through this program's own install.
 fn install(path: &std::path::Path) -> Result<String, String> {
     let program = std::env::current_exe().map_err(|e| e.to_string())?;
-    let installed_program = crate::app_window::launch::window_manager_path(Some(&program))
+    let installed_program = crate::app_window::launch::window_manager_path(Some(program.as_path()))
         .and_then(|manager| manager.parent().map(|dir| dir.join("dsa-app-window.exe")))
         .unwrap_or(program);
     match apk_install::install_window(&installed_program) {
