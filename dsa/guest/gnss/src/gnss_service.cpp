@@ -187,28 +187,20 @@ ndk::ScopedAStatus Gnss::stopSvStatus() { return ndk::ScopedAStatus::ok(); }
 ndk::ScopedAStatus Gnss::startNmea() { return ndk::ScopedAStatus::ok(); }
 ndk::ScopedAStatus Gnss::stopNmea() { return ndk::ScopedAStatus::ok(); }
 
-// The extensions the interface marks optional: none, and the call succeeds.
-ndk::ScopedAStatus Gnss::getExtensionPsds(std::shared_ptr<IGnssPsds>* psds) {
-    *psds = nullptr;
-    return ndk::ScopedAStatus::ok();
-}
-ndk::ScopedAStatus Gnss::getExtensionGnssBatching(std::shared_ptr<IGnssBatching>* batching) {
-    *batching = nullptr;
-    return ndk::ScopedAStatus::ok();
-}
-ndk::ScopedAStatus Gnss::getExtensionGnssGeofence(std::shared_ptr<IGnssGeofence>* geofence) {
-    *geofence = nullptr;
-    return ndk::ScopedAStatus::ok();
-}
+// The extensions the interface marks optional: not offered either. The framework takes a
+// successful call as the extension being there and uses what it returned without checking it
+// for null (system_server crashes in GnssPsdsAidl::setCallback), so success with a null
+// interface is never an answer.
+ndk::ScopedAStatus Gnss::getExtensionPsds(std::shared_ptr<IGnssPsds>*) { return notOffered(); }
+ndk::ScopedAStatus Gnss::getExtensionGnssBatching(std::shared_ptr<IGnssBatching>*) { return notOffered(); }
+ndk::ScopedAStatus Gnss::getExtensionGnssGeofence(std::shared_ptr<IGnssGeofence>*) { return notOffered(); }
 ndk::ScopedAStatus Gnss::getExtensionGnssNavigationMessage(
-    std::shared_ptr<IGnssNavigationMessageInterface>* navigation) {
-    *navigation = nullptr;
-    return ndk::ScopedAStatus::ok();
+    std::shared_ptr<IGnssNavigationMessageInterface>*) {
+    return notOffered();
 }
 ndk::ScopedAStatus Gnss::getExtensionMeasurementCorrections(
-    std::shared_ptr<IMeasurementCorrectionsInterface>* corrections) {
-    *corrections = nullptr;
-    return ndk::ScopedAStatus::ok();
+    std::shared_ptr<IMeasurementCorrectionsInterface>*) {
+    return notOffered();
 }
 
 // The extensions the interface returns as present: not offered, which the framework treats
