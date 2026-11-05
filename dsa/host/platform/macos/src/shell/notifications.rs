@@ -1,0 +1,381 @@
+//! Guest notifications in macOS's Notification Center.
+//!
+//! Each guest notification is one `UNNotificationRequest` whose identifier is Android's key,
+//! so a notification posted again replaces its banner and one removed in the guest leaves
+//! the Notification Center. Clicking a banner opens the notification in the guest; clearing
+//! it dismisses it there.
+
+use dsa_host_core::notifications::Notification;
+
+/// The category every DSA notification has, which asks macOS to report dismissals.
+pub const CATEGORY: &str = "org.thisisthepy.dsa.notification";
+
+/// How loudly a notification arrives (`UNNotificationInterruptionLevel`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Interruption {
+    /// Into the Notification Center only, without a banner or sound.
+    Passive,
+    /// A banner and the notification sound.
+    Active,
+}
+
+impl Interruption {
+    /// The `UNNotificationInterruptionLevel` value.
+    pub fn level(self) -> usize {
+        match self {
+            Interruption::Passive => 0,
+            Interruption::Active => 1,
+        }
+    }
+}
+
+/// What a `UNMutableNotificationContent` is given for one guest notification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Content {
+    pub identifier: String,
+    pub title: String,
+    pub subtitle: String,
+    pub body: String,
+    /// Groups an app's notifications together.
+    pub thread: String,
+    pub interruption: Interruption,
+}
+
+/// The content of `notification`'s banner. The app's name heads it when the notification has
+/// a title of its own, and is the title when it has none. Android's low and minimum
+/// importances (1 and 2) never interrupt; the others do.
+pub fn content(notification: &Notification) -> Content {
+    let (title, subtitle) = if notification.title.trim().is_empty() {
+        (notification.app_label.clone(), String::new())
+    } else {
+        (notification.title.clone(), notification.app_label.clone())
+    };
+    let interruption = if notification.importance >= 3 || notification.high_priority {
+        Interruption::Active
+    } else {
+        Interruption::Passive
+    };
+    Content {
+        identifier: notification.key.clone(),
+        title,
+        subtitle,
+        body: notification.text.clone(),
+        thread: notification.package_name.clone(),
+        interruption,
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub use center::NotificationCenter;
+
+#[cfg(target_os = "macos")]
+mod center {
+    use std::path::PathBuf;
+    use std::sync::mpsc::Sender;
+    use std::sync::{Mutex, OnceLock};
+
+    use block2::{Block, RcBlock};
+    use dsa_host_core::notifications::{Notification, NotificationAction};
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, Sel};
+    use objc2::sel;
+
+    use super::{content, CATEGORY};
+    use crate::objc::{class, file_url, ns_string, string_of};
+
+    #[link(name = "UserNotifications", kind = "framework")]
+    extern "C" {}
+
+    const DEFAULT_ACTION: &str = "com.apple.UNNotificationDefaultActionIdentifier";
+    const DISMISS_ACTION: &str = "com.apple.UNNotificationDismissActionIdentifier";
+    /// `UNNotificationCategoryOptionCustomDismissAction`.
+    const CUSTOM_DISMISS: usize = 1;
+    /// `UNAuthorizationOptionBadge | Sound | Alert`.
+    const AUTHORIZE: usize = 1 | 2 | 4;
+    /// `UNNotificationPresentationOptionSound | List | Banner`: shown even while a DSA window
+    /// is in front, as the guest's own notifications would be.
+    const PRESENT: usize = 2 | 8 | 16;
+
+    static ACTIONS: Mutex<Option<Sender<NotificationAction>>> = Mutex::new(None);
+
+    unsafe extern "C-unwind" fn did_receive(
+        _this: &AnyObject,
+        _: Sel,
+        _center: *mut AnyObject,
+        response: *mut AnyObject,
+        done: *mut Block<dyn Fn()>,
+    ) {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let action: *mut AnyObject = msg_send![response, actionIdentifier];
+            let notification: *mut AnyObject = msg_send![response, notification];
+            let request: *mut AnyObject = msg_send![notification, request];
+            let key = string_of(msg_send![request, identifier]);
+            let action = match string_of(action).as_str() {
+                DEFAULT_ACTION => Some(NotificationAction::Open { key }),
+                DISMISS_ACTION => Some(NotificationAction::Dismiss { key }),
+                _ => None,
+            };
+            if let (Some(action), Ok(actions)) = (action, ACTIONS.lock()) {
+                if let Some(actions) = actions.as_ref() {
+                    let _ = actions.send(action);
+                }
+            }
+        }));
+        if let Some(done) = done.as_ref() {
+            done.call(());
+        }
+    }
+
+    unsafe extern "C-unwind" fn will_present(
+        _this: &AnyObject,
+        _: Sel,
+        _center: *mut AnyObject,
+        _notification: *mut AnyObject,
+        done: *mut Block<dyn Fn(usize)>,
+    ) {
+        if let Some(done) = done.as_ref() {
+            done.call((PRESENT,));
+        }
+    }
+
+    fn delegate_class() -> Result<&'static AnyClass, String> {
+        static CLASS: OnceLock<Result<&'static AnyClass, String>> = OnceLock::new();
+        CLASS
+            .get_or_init(|| unsafe {
+                let mut b = ClassBuilder::new(c"DSANotificationDelegate", class(c"NSObject")?)
+                    .ok_or("the notification delegate class is already defined")?;
+                b.add_method(
+                    sel!(userNotificationCenter:didReceiveNotificationResponse:withCompletionHandler:),
+                    did_receive as unsafe extern "C-unwind" fn(_, _, _, _, _),
+                );
+                b.add_method(
+                    sel!(userNotificationCenter:willPresentNotification:withCompletionHandler:),
+                    will_present as unsafe extern "C-unwind" fn(_, _, _, _, _),
+                );
+                if let Some(protocol) =
+                    objc2::runtime::AnyProtocol::get(c"UNUserNotificationCenterDelegate")
+                {
+                    b.add_protocol(protocol);
+                }
+                Ok(b.register())
+            })
+            .clone()
+    }
+
+    /// The Notification Center, as DSA posts to it.
+    pub struct NotificationCenter {
+        center: Retained<AnyObject>,
+        _delegate: Retained<AnyObject>,
+        /// Where icons are written for macOS to read as attachments.
+        icons: PathBuf,
+    }
+
+    impl NotificationCenter {
+        /// Connects to the Notification Center and asks the user, the first time, to allow
+        /// DSA's notifications. What the user does with them goes to `actions`. `icons` is a
+        /// folder for the icons attached to notifications. Fails when this process is not an
+        /// application bundle, which the Notification Center serves only.
+        pub fn new(
+            actions: Sender<NotificationAction>,
+            icons: PathBuf,
+        ) -> Result<NotificationCenter, String> {
+            unsafe {
+                let bundle_class = class(c"NSBundle")?;
+                let bundle: *mut AnyObject = msg_send![bundle_class, mainBundle];
+                let identifier: *mut AnyObject = msg_send![bundle, bundleIdentifier];
+                if identifier.is_null() {
+                    return Err("notifications need DSA to run from its application bundle".into());
+                }
+                let center_class = class(c"UNUserNotificationCenter")?;
+                let center: Option<Retained<AnyObject>> =
+                    msg_send![center_class, currentNotificationCenter];
+                let center = center.ok_or("the Notification Center is not available")?;
+                let delegate: Option<Retained<AnyObject>> = msg_send![delegate_class()?, new];
+                let delegate = delegate.ok_or("no notification delegate could be made")?;
+                let _: () = msg_send![&*center, setDelegate: &*delegate];
+                *ACTIONS.lock().map_err(|_| "the notification actions lock failed")? =
+                    Some(actions);
+
+                let category_class = class(c"UNNotificationCategory")?;
+                let array_class = class(c"NSArray")?;
+                let empty: *mut AnyObject = msg_send![array_class, array];
+                let id = ns_string(CATEGORY);
+                let category: *mut AnyObject = msg_send![
+                    category_class,
+                    categoryWithIdentifier: &*id,
+                    actions: empty,
+                    intentIdentifiers: empty,
+                    options: CUSTOM_DISMISS
+                ];
+                let set_class = class(c"NSSet")?;
+                let categories: *mut AnyObject = msg_send![set_class, setWithObject: category];
+                let _: () = msg_send![&*center, setNotificationCategories: categories];
+
+                let answered = RcBlock::new(|_granted: Bool, _error: *mut AnyObject| {});
+                let _: () = msg_send![
+                    &*center,
+                    requestAuthorizationWithOptions: AUTHORIZE,
+                    completionHandler: &*answered
+                ];
+                Ok(NotificationCenter {
+                    center,
+                    _delegate: delegate,
+                    icons,
+                })
+            }
+        }
+
+        /// The icon's attachment, written to the icons folder under a name made from the
+        /// notification's key.
+        fn attachment(&self, notification: &Notification) -> Option<Retained<AnyObject>> {
+            if notification.icon_png.is_empty() {
+                return None;
+            }
+            std::fs::create_dir_all(&self.icons).ok()?;
+            let name: String = notification
+                .key
+                .bytes()
+                .map(|b| format!("{b:02x}"))
+                .take(64)
+                .collect();
+            let path = self.icons.join(format!("{name}.png"));
+            std::fs::write(&path, &notification.icon_png).ok()?;
+            unsafe {
+                let class = class(c"UNNotificationAttachment").ok()?;
+                let url = file_url(&path).ok()?;
+                let id = ns_string("icon");
+                let mut error: *mut AnyObject = std::ptr::null_mut();
+                let attachment: Option<Retained<AnyObject>> = msg_send![
+                    class,
+                    attachmentWithIdentifier: &*id,
+                    URL: &*url,
+                    options: std::ptr::null::<AnyObject>(),
+                    error: &mut error
+                ];
+                attachment
+            }
+        }
+
+        /// Shows `notification`, in place of the one with its key if there is one.
+        pub fn post(&self, notification: &Notification) -> Result<(), String> {
+            let content = content(notification);
+            unsafe {
+                let content_class = class(c"UNMutableNotificationContent")?;
+                let banner: Option<Retained<AnyObject>> = msg_send![content_class, new];
+                let banner = banner.ok_or("no notification content could be made")?;
+                let _: () = msg_send![&*banner, setTitle: &*ns_string(&content.title)];
+                let _: () = msg_send![&*banner, setSubtitle: &*ns_string(&content.subtitle)];
+                let _: () = msg_send![&*banner, setBody: &*ns_string(&content.body)];
+                let _: () = msg_send![&*banner, setThreadIdentifier: &*ns_string(&content.thread)];
+                let _: () = msg_send![&*banner, setCategoryIdentifier: &*ns_string(CATEGORY)];
+                let level_selector = sel!(setInterruptionLevel:);
+                let can_level: bool = msg_send![&*banner, respondsToSelector: level_selector];
+                if can_level {
+                    let _: () = msg_send![&*banner, setInterruptionLevel: content.interruption.level()];
+                }
+                if content.interruption == super::Interruption::Active {
+                    let sound_class = class(c"UNNotificationSound")?;
+                    let sound: *mut AnyObject = msg_send![sound_class, defaultSound];
+                    let _: () = msg_send![&*banner, setSound: sound];
+                }
+                if let Some(attachment) = self.attachment(notification) {
+                    let array_class = class(c"NSArray")?;
+                    let attachments: *mut AnyObject =
+                        msg_send![array_class, arrayWithObject: &*attachment];
+                    let _: () = msg_send![&*banner, setAttachments: attachments];
+                }
+                let request_class = class(c"UNNotificationRequest")?;
+                let request: *mut AnyObject = msg_send![
+                    request_class,
+                    requestWithIdentifier: &*ns_string(&content.identifier),
+                    content: &*banner,
+                    trigger: std::ptr::null::<AnyObject>()
+                ];
+                if request.is_null() {
+                    return Err("the notification request could not be made".into());
+                }
+                let _: () = msg_send![
+                    &*self.center,
+                    addNotificationRequest: request,
+                    withCompletionHandler: std::ptr::null::<Block<dyn Fn(*mut AnyObject)>>()
+                ];
+            }
+            Ok(())
+        }
+
+        /// Takes the notification with `key` out of the Notification Center.
+        pub fn remove(&self, key: &str) {
+            unsafe {
+                let Ok(array_class) = class(c"NSArray") else {
+                    return;
+                };
+                let ids: *mut AnyObject = msg_send![array_class, arrayWithObject: &*ns_string(key)];
+                let _: () = msg_send![&*self.center, removeDeliveredNotificationsWithIdentifiers: ids];
+                let _: () = msg_send![&*self.center, removePendingNotificationRequestsWithIdentifiers: ids];
+            }
+        }
+
+        /// Takes every DSA notification out of the Notification Center, as when the guest
+        /// stops.
+        pub fn clear(&self) {
+            unsafe {
+                let _: () = msg_send![&*self.center, removeAllDeliveredNotifications];
+                let _: () = msg_send![&*self.center, removeAllPendingNotificationRequests];
+            }
+        }
+    }
+
+    impl Drop for NotificationCenter {
+        fn drop(&mut self) {
+            if let Ok(mut actions) = ACTIONS.lock() {
+                *actions = None;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn note(title: &str, importance: i32) -> Notification {
+        Notification {
+            key: "0|com.example|1|null|10123".into(),
+            package_name: "com.example".into(),
+            app_label: "Example".into(),
+            title: title.into(),
+            text: "Hello".into(),
+            icon_png: Vec::new(),
+            importance,
+            high_priority: false,
+            clearable: true,
+            when_millis: 0,
+        }
+    }
+
+    #[test]
+    fn fr8_a_notification_is_replaced_by_one_with_its_key() {
+        let content = content(&note("Title", 3));
+        assert_eq!(content.identifier, "0|com.example|1|null|10123");
+        assert_eq!(content.thread, "com.example");
+    }
+
+    #[test]
+    fn fr8_the_app_heads_a_titled_notification_and_titles_an_untitled_one() {
+        let titled = content(&note("Meeting", 3));
+        assert_eq!((titled.title.as_str(), titled.subtitle.as_str()), ("Meeting", "Example"));
+        let untitled = content(&note("  ", 3));
+        assert_eq!((untitled.title.as_str(), untitled.subtitle.as_str()), ("Example", ""));
+        assert_eq!(untitled.body, "Hello");
+    }
+
+    #[test]
+    fn fr8_low_importance_never_interrupts() {
+        assert_eq!(content(&note("t", 2)).interruption, Interruption::Passive);
+        assert_eq!(content(&note("t", 3)).interruption, Interruption::Active);
+        let mut urgent = note("t", 1);
+        urgent.high_priority = true;
+        assert_eq!(content(&urgent).interruption, Interruption::Active);
+    }
+}
