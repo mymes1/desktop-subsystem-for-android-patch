@@ -1257,6 +1257,7 @@
   </data>
   <data name="NetworkRestartBar.Message" xml:space="preserve">
     <value>바뀐 설정은 안드로이드가 다음에 시작할 때 적용됩니다. 일반 페이지에서 안드로이드를 중지한 뒤 앱을 여세요.</value>
+  </data>
   <data name="RunModeHeader.Text" xml:space="preserve">
     <value>안드로이드를 쓰지 않을 때</value>
   </data>
