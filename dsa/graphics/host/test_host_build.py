@@ -173,6 +173,17 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn("+    if (mDvk && mDevice != VK_NULL_HANDLE) {", patch)
         self.assertIn("+    if (mGvk && mInstance != VK_NULL_HANDLE) {", patch)
 
+    def test_pr3_renderer_on_macos_finds_moltenvk_without_being_told(self):
+        # stream_renderer_init clears ANDROID_EMU_VK_ICD, and without portability enumeration
+        # the loader hides MoltenVK: creating the instance failed with
+        # VK_ERROR_INCOMPATIBLE_DRIVER on every Mac.
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0013", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0013-use-moltenvk-when-the-host-vulkan-is-asked-for.patch").read_text(encoding="utf-8")
+        self.assertIn('+        (vulkanIcd == "moltenvk") || (vulkanIcd.empty() && moltenVKSupported);', patch)
+        self.assertIn('-    const bool moltenVKEnabled = (vulkanIcd == "moltenvk");', patch)
+
     def test_pr3_gpu_preference_names_clear_x11_macros(self):
         # X11/X.h, which EGL pulls in on Linux, defines None as a macro.
         patch = (HERE.parent / "patches" /
