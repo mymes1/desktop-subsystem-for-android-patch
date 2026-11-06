@@ -1,10 +1,10 @@
 //! Reading the image's VHDX disks into raw disk images.
 //!
 //! The image ships its disks as dynamic VHDX files, which Hyper-V attaches. Apple's
-//! Virtualization framework attaches raw images, so the macOS host converts each disk once.
-//! A dynamic VHDX holds only the blocks that were written; the raw file gets those blocks and
-//! nothing else, and the rest stays a hole, so on APFS the raw disk takes about the space the
-//! VHDX did.
+//! Virtualization framework on macOS and crosvm on Linux attach raw images, so those hosts
+//! convert each disk once. A dynamic VHDX holds only the blocks that were written; the raw
+//! file gets those blocks and nothing else, and the rest stays a hole, so on APFS or ext4 the
+//! raw disk takes about the space the VHDX did.
 //!
 //! The reader follows the VHDX format: the file identifier, the two headers (the one with
 //! the higher sequence number wins), the region table that locates the block allocation

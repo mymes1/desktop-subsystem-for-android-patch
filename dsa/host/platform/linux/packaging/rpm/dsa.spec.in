@@ -8,6 +8,12 @@ License:        Apache-2.0
 URL:            https://github.com/thisisthepy/desktop-subsystem-for-android
 Requires:       systemd
 Requires:       systemd-udev
+# What crosvm, which runs the Android VM, links from the system.
+Requires:       libstdc++
+Requires:       libcap
+Requires:       libwayland-client
+Requires:       libdrm
+Requires:       vulkan-loader
 Recommends:     pipewire-pulseaudio
 Recommends:     pulseaudio-libs
 Recommends:     geoclue2

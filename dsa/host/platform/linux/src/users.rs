@@ -3,7 +3,7 @@
 //!
 //! The service runs as root, as the one system service every user's `dsa` talks to, so it can
 //! serve the vsock ports every guest shares and make each user's network. Everything that
-//! belongs to a user runs as that user: their VM's QEMU and passt, with only the rights the
+//! belongs to a user runs as that user: their VM's crosvm and passt, with only the rights the
 //! user has, and the files in their home are theirs.
 
 use std::ffi::{CStr, CString};

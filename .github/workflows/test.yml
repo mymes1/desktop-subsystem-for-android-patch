@@ -333,24 +333,45 @@ jobs:
           target/release/dsa-hostd check "$RUNNER_TEMP/dsa-hostd.json"
 
   # The Linux host's VM and its ports: the vsock suite over vsock loopback standing in for a
-  # guest, and the launcher against a real QEMU under KVM, booting the runner's own kernel.
+  # guest, and the launcher against the crosvm DSA ships, under KVM: the runner's own kernel
+  # for the control socket's commands, and the published Android image until its control
+  # daemon connects.
   linux-vm:
     name: Test the Linux host's VM under KVM (ubuntu-latest)
     needs: changes
     if: needs.changes.outputs.linux == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     defaults:
       run:
         working-directory: dsa
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install QEMU
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Keep the VM programs between runs
+        uses: actions/cache@v4
+        with:
+          path: .scratch/vm-programs
+          key: linux-vm-programs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsa/host/platform/linux/crosvm/**', 'dsa/graphics/host/**', 'dsa/graphics/patches/**', '.github/scripts/linux-vm/**') }}
+
+      - name: Build crosvm, passt and gfxstream's renderer
+        working-directory: .
+        run: bash .github/scripts/linux-vm/build-vm-programs.sh .scratch/vm-programs
+
+      # Where the package puts them, so the package's AppArmor profile lets crosvm and passt
+      # make their sandboxes' user namespaces, as on an installed system.
+      - name: Install the VM programs as the package does
+        working-directory: .
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils
-          qemu-system-x86_64 --version
+          sudo install -d /usr/lib/dsa/bin
+          sudo install -m 0755 .scratch/vm-programs/crosvm .scratch/vm-programs/passt .scratch/vm-programs/libgfxstream_backend.so /usr/lib/dsa/bin/
+          sudo install -m 0644 dsa/host/platform/linux/packaging/apparmor/dsa-vm /etc/apparmor.d/dsa-vm
+          sudo apparmor_parser -r -W /etc/apparmor.d/dsa-vm
+          /usr/lib/dsa/bin/crosvm version
+          echo "DSA_CROSVM=/usr/lib/dsa/bin/crosvm" >> "$GITHUB_ENV"
 
       # The runner's user gets KVM and vhost-vsock, as a desktop user has them.
       - name: Load KVM, vhost-vsock and vsock loopback
@@ -360,18 +381,40 @@ jobs:
           sudo chmod 666 /dev/kvm /dev/vhost-vsock
           ls -l /dev/kvm /dev/vhost-vsock
 
-      - name: Give QEMU a kernel to boot
+      - name: Give crosvm a kernel to boot
         run: |
           kernel="$RUNNER_TEMP/vmlinuz"
           sudo cp "/boot/vmlinuz-$(uname -r)" "$kernel"
           sudo chmod 644 "$kernel"
-          echo "DSA_QEMU_TEST_KERNEL=$kernel" >> "$GITHUB_ENV"
+          echo "DSA_CROSVM_TEST_KERNEL=$kernel" >> "$GITHUB_ENV"
+
+      - name: Download the newest published Android image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh release list -R "${{ github.repository }}" -L 50 --json tagName -q '[.[] | select(.tagName | startswith("android-17"))][0].tagName')"
+          echo "image release: $tag"
+          image="$RUNNER_TEMP/image"
+          mkdir -p "$image"
+          for file in image.json bzImage initrd.img system.vhdx data.vhdx; do
+            gh release download "$tag" -R "${{ github.repository }}" -p "$file" -D "$image"
+          done
+          ls -l "$image"
+          echo "DSA_CROSVM_TEST_IMAGE=$image" >> "$GITHUB_ENV"
 
       - name: Build the service and dsa
         run: cargo build -p dsa-host-linux -p dsa-cli
 
       - name: Run the tests
         run: cargo test -p dsa-host-linux --features vsock-loopback-tests -- --nocapture
+
+      - name: Keep the Android VM's console
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-vm-console
+          path: /tmp/crosvm-test-*/console.log
+          if-no-files-found: ignore
 
   agent:
     name: Test the guest agent (ubuntu-latest)
