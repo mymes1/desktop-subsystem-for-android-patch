@@ -328,8 +328,8 @@ mod daemon {
     fn reclaim_idle_memory(router: Arc<Router>) {
         use dsa_guest_channeld::reclaim::{
             file_refaults_kb, memory_pressure, package_running, MemInfo, ReadFailures, Reason,
-            ReclaimPolicy, Reclaimer, CHECK_INTERVAL, EXIT_POLL, EXIT_WAIT_LIMIT, RECLAIM_PROPERTY, TRIM_PROPERTY,
-            TRIM_SIZE_PROPERTY,
+            ReclaimPolicy, Reclaimer, CHECK_INTERVAL, EXIT_POLL, EXIT_WAIT_LIMIT, RECLAIM_PROPERTY,
+            TRIM_PROPERTY, TRIM_SIZE_PROPERTY,
         };
         // The command lines of the guest's processes, for whether a closed app's are gone.
         fn command_lines(failures: &mut ReadFailures) -> Vec<String> {
@@ -415,7 +415,10 @@ mod daemon {
             ) {
                 say!("{line}");
             }
-            if let Some(refaults) = vmstat.ok().and_then(|text| file_refaults_kb(&text, page_kb)) {
+            if let Some(refaults) = vmstat
+                .ok()
+                .and_then(|text| file_refaults_kb(&text, page_kb))
+            {
                 reclaimer.refaults(refaults);
             }
             let reason = if app_closed {
