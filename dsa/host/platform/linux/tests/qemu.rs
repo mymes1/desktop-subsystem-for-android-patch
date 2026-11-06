@@ -28,6 +28,14 @@ fn fr2_qemu_starts_resizes_freezes_and_stops_the_vm() {
         .join(format!("qemu-test-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
+    // QEMU's QMP socket is a Unix socket, whose path must fit in 108 bytes. A deep checkout
+    // (a CI runner's work directory) pushes `target/` past that, so the run directory moves
+    // to the temporary directory when the checkout's own would not fit.
+    let mut run_dir = dir.join("run");
+    if run_dir.join("qmp.sock").as_os_str().len() >= 108 {
+        run_dir = std::env::temp_dir().join(format!("dsa-qemu-{}", std::process::id()));
+    }
+    let _ = std::fs::remove_dir_all(&run_dir);
     let initrd = dir.join("initrd.img");
     std::fs::write(&initrd, b"070701").unwrap();
     let account = Account::current().unwrap();
@@ -53,7 +61,7 @@ fn fr2_qemu_starts_resizes_freezes_and_stops_the_vm() {
             page_reporting_order: 9,
             data_disk: disk,
             pstore_disk: Some(dir.join("pstore.img")),
-            run_dir: dir.join("run"),
+            run_dir: run_dir.clone(),
             console_log: dir.join("console.log"),
             grow_memory: true,
         },
@@ -80,7 +88,7 @@ fn fr2_qemu_starts_resizes_freezes_and_stops_the_vm() {
     launcher.stop(Duration::from_secs(5)).unwrap();
     assert!(launcher.vm_id().is_none());
     // The boot's initrd, which carried the secret, is gone.
-    let left: Vec<_> = std::fs::read_dir(dir.join("run"))
+    let left: Vec<_> = std::fs::read_dir(&run_dir)
         .unwrap()
         .flatten()
         .map(|e| e.file_name())
@@ -90,4 +98,5 @@ fn fr2_qemu_starts_resizes_freezes_and_stops_the_vm() {
     let console = std::fs::read_to_string(dir.join("console.log")).unwrap();
     assert!(console.contains("==== DSA boot at"));
     let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&run_dir);
 }

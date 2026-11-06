@@ -412,10 +412,7 @@ mod tests {
         );
         assert_eq!(
             changed.mount,
-            vec![(
-                "Music".to_string(),
-                "/data/media/0/Host/Music".to_string()
-            )]
+            vec![("Music".to_string(), "/data/media/0/Host/Music".to_string())]
         );
     }
 
@@ -435,7 +432,10 @@ mod tests {
         let now = mounted(mounts, STORAGE);
         let wanted = parse("5590 Host Documents").unwrap();
         let moved = plan(Some(&wanted), &now, STORAGE);
-        assert_eq!(moved.unmount, vec!["/data/media/0/Windows/Documents".to_string()]);
+        assert_eq!(
+            moved.unmount,
+            vec!["/data/media/0/Windows/Documents".to_string()]
+        );
         assert_eq!(
             moved.mount,
             vec![(
@@ -446,7 +446,10 @@ mod tests {
         let old = leftovers(STORAGE, LOCATION);
         assert!(old.contains(&"/data/media/0/Windows/Documents".to_string()));
         assert!(old.contains(&"/data/media/0/Linux".to_string()));
-        let windows = old.iter().position(|p| p == "/data/media/0/Windows").unwrap();
+        let windows = old
+            .iter()
+            .position(|p| p == "/data/media/0/Windows")
+            .unwrap();
         let documents = old
             .iter()
             .position(|p| p == "/data/media/0/Windows/Documents")

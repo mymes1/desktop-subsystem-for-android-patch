@@ -42,7 +42,8 @@ git -C $GfxstreamDir clean -fdx
 # locks, for all GPU work on the queue to finish, and the guest's buffer allocations queue
 # up behind it for seconds while a window is resized. Without 0011 the renderer's
 # spin-wait has no processor hint on ARM64, and the lavapipe test driver is looked for under
-# its x86_64 name. A patch that does not apply stops the fetch.
+# its x86_64 name. Without 0012 a host with no usable Vulkan driver crashes the renderer
+# while it falls back from Vulkan. A patch that does not apply stops the fetch.
 $PatchDir = Join-Path $RepoRoot "dsa/graphics/patches"
 $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0004-*.patch") +
@@ -51,7 +52,8 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0007-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0009-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0010-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0011-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0011-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0012-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName

@@ -90,6 +90,8 @@ pub struct FakeAndroid {
     pub refuse_developer_mode: Mutex<Option<String>>,
     /// Each word on file sharing (on, and the folders), in order.
     pub shared_folders: Mutex<Vec<(bool, Vec<String>)>>,
+    /// The drags the host ended, and whether each was dropped.
+    pub ended_drags: Mutex<Vec<(u32, bool)>>,
     link_watchers: Mutex<Vec<Sender<String>>>,
     /// The files it was given, in order.
     pub files: Mutex<Vec<FileTransfer>>,
@@ -212,6 +214,7 @@ impl FakeAndroid {
             developer_mode: Mutex::new(Vec::new()),
             refuse_developer_mode: Mutex::new(None),
             shared_folders: Mutex::new(Vec::new()),
+            ended_drags: Mutex::new(Vec::new()),
             link_watchers: Mutex::new(Vec::new()),
             files: Mutex::new(Vec::new()),
             clipboard_shared: Mutex::new(Vec::new()),
@@ -394,6 +397,51 @@ impl UserAndroid for FakeAndroid {
     fn android_files(&self) -> Result<String, String> {
         self.start();
         Ok("http://127.0.0.1:50000/token/".into())
+    }
+    fn drag_out(
+        &self,
+        out: crate::drag::DragOut,
+    ) -> Result<Option<crate::drag::DragOffer>, TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        if out.task_id != DRAGGING_TASK {
+            return Ok(None);
+        }
+        Ok(Some(crate::drag::DragOffer {
+            drag_id: DRAG_ID,
+            items: vec![
+                crate::drag::DragItem {
+                    name: "notes.txt".into(),
+                    size: Some(DRAGGED_FILE.len() as u64),
+                    mime_type: "text/plain".into(),
+                    text: None,
+                },
+                crate::drag::DragItem {
+                    name: String::new(),
+                    size: None,
+                    mime_type: "text/plain".into(),
+                    text: Some("hello".into()),
+                },
+            ],
+        }))
+    }
+    fn read_drag(
+        &self,
+        read: crate::drag::DragRead,
+    ) -> Result<crate::drag::DragChunk, TaskRequestError> {
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        if read.drag_id != DRAG_ID || read.item != 0 {
+            return Err(TaskRequestError::Failed("no such dragged file".into()));
+        }
+        let start = (read.offset as usize).min(DRAGGED_FILE.len());
+        let end = (start + read.length as usize).min(DRAGGED_FILE.len());
+        Ok(crate::drag::DragChunk {
+            data: DRAGGED_FILE[start..end].to_vec(),
+            end: end == DRAGGED_FILE.len(),
+        })
+    }
+    fn end_drag(&self, drag_id: u32, dropped: bool) -> Result<(), TaskRequestError> {
+        self.ended_drags.lock().unwrap().push((drag_id, dropped));
+        Ok(())
     }
     fn open_file(&self, file: &FileTransfer) -> Result<(), TaskRequestError> {
         if self.state() != SessionState::Active {
@@ -1034,6 +1082,10 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr29_the_file_sharing_setting_reaches_the_callers_android() {
             $crate::host_api_conformance::file_sharing_setting_reaches_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr29_a_file_dragged_out_of_a_window_reaches_the_caller() {
+            $crate::host_api_conformance::dragged_file_reaches_the_caller(&mut || $make);
         }
         #[test]
         fn fr29_the_caller_learns_where_their_android_files_are() {
@@ -2674,6 +2726,52 @@ pub fn file_sharing_setting_reaches_the_caller(make: MakeLocal<'_>) {
             (true, vec!["Documents".to_string(), "Pictures".to_string()]),
             (false, crate::file_share::all_folders()),
         ]
+    );
+}
+
+/// The task [`FakeAndroid`] has an app dragging out of.
+const DRAGGING_TASK: i32 = 7;
+/// The ID of [`FakeAndroid`]'s drag.
+const DRAG_ID: u32 = 3;
+/// The content of the file [`FakeAndroid`]'s drag carries.
+const DRAGGED_FILE: &[u8] = b"the notes an app dragged out of its window";
+
+pub fn dragged_file_reaches_the_caller(make: MakeLocal<'_>) {
+    use std::io::Read;
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut client = connect(&mut *connector);
+    client.start().unwrap();
+    let out = |task_id| crate::drag::DragOut {
+        task_id,
+        x: 10.0,
+        y: 0.0,
+        tool: types::PointerTool::Mouse as i32,
+        pointer_id: 0,
+    };
+    assert_eq!(
+        client.drag_out(out(DRAGGING_TASK + 1)).unwrap(),
+        None,
+        "a window nothing is dragged out of starts no drag"
+    );
+    let offer = client
+        .drag_out(out(DRAGGING_TASK))
+        .unwrap()
+        .expect("the drag");
+    assert_eq!(offer.items[0].name, "notes.txt");
+    assert_eq!(offer.text().as_deref(), Some("hello"));
+    let mut copied = Vec::new();
+    crate::drag::DragContent::new(offer.drag_id, 0, |read| {
+        client.read_drag(read).map_err(|e| e.to_string())
+    })
+    .read_to_end(&mut copied)
+    .unwrap();
+    assert_eq!(copied, DRAGGED_FILE, "the file arrives as it is in Android");
+    client.end_drag(offer.drag_id, true).unwrap();
+    assert_eq!(
+        *androids.of(&user).unwrap().ended_drags.lock().unwrap(),
+        [(DRAG_ID, true)]
     );
 }
 

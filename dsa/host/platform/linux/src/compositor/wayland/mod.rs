@@ -82,6 +82,12 @@ pub enum Event {
         package: String,
         paths: Vec<PathBuf>,
     },
+    /// A press of the left button left a task's window (`out`), maybe carrying an app's drag;
+    /// `serial` is the press's, which a drag on the desktop starts with.
+    DragOut {
+        out: dsa_host_core::drag::DragOut,
+        serial: u32,
+    },
 }
 
 /// Wakes the session's loop when another thread has something for it.

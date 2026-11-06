@@ -681,6 +681,38 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
             wrap(Body::LinkHandling(LinkHandling { in_guest: true })),
         ),
         (
+            "drag_offer",
+            wrap(Body::DragOffer(dsa_protocol::control::DragOffer {
+                request_id: 7,
+                drag_id: 2,
+                items: vec![
+                    dsa_protocol::control::DragItem {
+                        name: "a.txt".into(),
+                        size: 5,
+                        size_known: true,
+                        mime_type: "text/plain".into(),
+                        ..Default::default()
+                    },
+                    dsa_protocol::control::DragItem {
+                        is_text: true,
+                        text: "hi".into(),
+                        ..Default::default()
+                    },
+                ],
+                error: String::new(),
+            })),
+        ),
+        (
+            "drag_read",
+            wrap(Body::DragRead(dsa_protocol::control::DragRead {
+                request_id: 7,
+                drag_id: 2,
+                item: 1,
+                offset: 65536,
+                length: 65536,
+            })),
+        ),
+        (
             "open_file",
             wrap(Body::OpenFile(OpenFile {
                 transfer_id: 3,

@@ -186,6 +186,24 @@ extern DiagnosticsDoneDefaultTypeInternal _DiagnosticsDone_default_instance_;
 class DiagnosticsFile;
 struct DiagnosticsFileDefaultTypeInternal;
 extern DiagnosticsFileDefaultTypeInternal _DiagnosticsFile_default_instance_;
+class DragData;
+struct DragDataDefaultTypeInternal;
+extern DragDataDefaultTypeInternal _DragData_default_instance_;
+class DragEnd;
+struct DragEndDefaultTypeInternal;
+extern DragEndDefaultTypeInternal _DragEnd_default_instance_;
+class DragItem;
+struct DragItemDefaultTypeInternal;
+extern DragItemDefaultTypeInternal _DragItem_default_instance_;
+class DragOffer;
+struct DragOfferDefaultTypeInternal;
+extern DragOfferDefaultTypeInternal _DragOffer_default_instance_;
+class DragOut;
+struct DragOutDefaultTypeInternal;
+extern DragOutDefaultTypeInternal _DragOut_default_instance_;
+class DragRead;
+struct DragReadDefaultTypeInternal;
+extern DragReadDefaultTypeInternal _DragRead_default_instance_;
 class Envelope;
 struct EnvelopeDefaultTypeInternal;
 extern EnvelopeDefaultTypeInternal _Envelope_default_instance_;
@@ -522,6 +540,12 @@ template<> ::dsa::control::v1::DeveloperMode* Arena::CreateMaybeMessage<::dsa::c
 template<> ::dsa::control::v1::DeviceIdle* Arena::CreateMaybeMessage<::dsa::control::v1::DeviceIdle>(Arena*);
 template<> ::dsa::control::v1::DiagnosticsDone* Arena::CreateMaybeMessage<::dsa::control::v1::DiagnosticsDone>(Arena*);
 template<> ::dsa::control::v1::DiagnosticsFile* Arena::CreateMaybeMessage<::dsa::control::v1::DiagnosticsFile>(Arena*);
+template<> ::dsa::control::v1::DragData* Arena::CreateMaybeMessage<::dsa::control::v1::DragData>(Arena*);
+template<> ::dsa::control::v1::DragEnd* Arena::CreateMaybeMessage<::dsa::control::v1::DragEnd>(Arena*);
+template<> ::dsa::control::v1::DragItem* Arena::CreateMaybeMessage<::dsa::control::v1::DragItem>(Arena*);
+template<> ::dsa::control::v1::DragOffer* Arena::CreateMaybeMessage<::dsa::control::v1::DragOffer>(Arena*);
+template<> ::dsa::control::v1::DragOut* Arena::CreateMaybeMessage<::dsa::control::v1::DragOut>(Arena*);
+template<> ::dsa::control::v1::DragRead* Arena::CreateMaybeMessage<::dsa::control::v1::DragRead>(Arena*);
 template<> ::dsa::control::v1::Envelope* Arena::CreateMaybeMessage<::dsa::control::v1::Envelope>(Arena*);
 template<> ::dsa::control::v1::FileChunk* Arena::CreateMaybeMessage<::dsa::control::v1::FileChunk>(Arena*);
 template<> ::dsa::control::v1::FileProgress* Arena::CreateMaybeMessage<::dsa::control::v1::FileProgress>(Arena*);
@@ -13385,6 +13409,1056 @@ class AndroidFiles final :
 };
 // -------------------------------------------------------------------
 
+class DragItem final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DragItem) */ {
+ public:
+  inline DragItem() : DragItem(nullptr) {}
+  ~DragItem() override;
+  explicit PROTOBUF_CONSTEXPR DragItem(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  DragItem(const DragItem& from);
+  DragItem(DragItem&& from) noexcept
+    : DragItem() {
+    *this = ::std::move(from);
+  }
+
+  inline DragItem& operator=(const DragItem& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DragItem& operator=(DragItem&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const DragItem& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const DragItem* internal_default_instance() {
+    return reinterpret_cast<const DragItem*>(
+               &_DragItem_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    76;
+
+  friend void swap(DragItem& a, DragItem& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(DragItem* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DragItem* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  DragItem* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<DragItem>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const DragItem& from);
+  void MergeFrom(const DragItem& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(DragItem* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.DragItem";
+  }
+  protected:
+  explicit DragItem(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kNameFieldNumber = 1,
+    kMimeTypeFieldNumber = 4,
+    kTextFieldNumber = 6,
+    kSizeFieldNumber = 2,
+    kSizeKnownFieldNumber = 3,
+    kIsTextFieldNumber = 5,
+  };
+  // string name = 1;
+  void clear_name();
+  const std::string& name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* name);
+  private:
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
+  std::string* _internal_mutable_name();
+  public:
+
+  // string mime_type = 4;
+  void clear_mime_type();
+  const std::string& mime_type() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_mime_type(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_mime_type();
+  PROTOBUF_NODISCARD std::string* release_mime_type();
+  void set_allocated_mime_type(std::string* mime_type);
+  private:
+  const std::string& _internal_mime_type() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_mime_type(const std::string& value);
+  std::string* _internal_mutable_mime_type();
+  public:
+
+  // string text = 6;
+  void clear_text();
+  const std::string& text() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_text(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_text();
+  PROTOBUF_NODISCARD std::string* release_text();
+  void set_allocated_text(std::string* text);
+  private:
+  const std::string& _internal_text() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_text(const std::string& value);
+  std::string* _internal_mutable_text();
+  public:
+
+  // uint64 size = 2;
+  void clear_size();
+  uint64_t size() const;
+  void set_size(uint64_t value);
+  private:
+  uint64_t _internal_size() const;
+  void _internal_set_size(uint64_t value);
+  public:
+
+  // bool size_known = 3;
+  void clear_size_known();
+  bool size_known() const;
+  void set_size_known(bool value);
+  private:
+  bool _internal_size_known() const;
+  void _internal_set_size_known(bool value);
+  public:
+
+  // bool is_text = 5;
+  void clear_is_text();
+  bool is_text() const;
+  void set_is_text(bool value);
+  private:
+  bool _internal_is_text() const;
+  void _internal_set_is_text(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.DragItem)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr mime_type_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr text_;
+    uint64_t size_;
+    bool size_known_;
+    bool is_text_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class DragOut final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DragOut) */ {
+ public:
+  inline DragOut() : DragOut(nullptr) {}
+  ~DragOut() override;
+  explicit PROTOBUF_CONSTEXPR DragOut(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  DragOut(const DragOut& from);
+  DragOut(DragOut&& from) noexcept
+    : DragOut() {
+    *this = ::std::move(from);
+  }
+
+  inline DragOut& operator=(const DragOut& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DragOut& operator=(DragOut&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const DragOut& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const DragOut* internal_default_instance() {
+    return reinterpret_cast<const DragOut*>(
+               &_DragOut_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    77;
+
+  friend void swap(DragOut& a, DragOut& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(DragOut* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DragOut* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  DragOut* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<DragOut>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const DragOut& from);
+  void MergeFrom(const DragOut& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(DragOut* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.DragOut";
+  }
+  protected:
+  explicit DragOut(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kRequestIdFieldNumber = 1,
+    kTaskIdFieldNumber = 2,
+    kXFieldNumber = 3,
+    kYFieldNumber = 4,
+    kToolFieldNumber = 5,
+    kPointerIdFieldNumber = 6,
+  };
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // int32 task_id = 2;
+  void clear_task_id();
+  int32_t task_id() const;
+  void set_task_id(int32_t value);
+  private:
+  int32_t _internal_task_id() const;
+  void _internal_set_task_id(int32_t value);
+  public:
+
+  // float x = 3;
+  void clear_x();
+  float x() const;
+  void set_x(float value);
+  private:
+  float _internal_x() const;
+  void _internal_set_x(float value);
+  public:
+
+  // float y = 4;
+  void clear_y();
+  float y() const;
+  void set_y(float value);
+  private:
+  float _internal_y() const;
+  void _internal_set_y(float value);
+  public:
+
+  // .dsa.control.v1.PointerTool tool = 5;
+  void clear_tool();
+  ::dsa::control::v1::PointerTool tool() const;
+  void set_tool(::dsa::control::v1::PointerTool value);
+  private:
+  ::dsa::control::v1::PointerTool _internal_tool() const;
+  void _internal_set_tool(::dsa::control::v1::PointerTool value);
+  public:
+
+  // uint32 pointer_id = 6;
+  void clear_pointer_id();
+  uint32_t pointer_id() const;
+  void set_pointer_id(uint32_t value);
+  private:
+  uint32_t _internal_pointer_id() const;
+  void _internal_set_pointer_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.DragOut)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t request_id_;
+    int32_t task_id_;
+    float x_;
+    float y_;
+    int tool_;
+    uint32_t pointer_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class DragOffer final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DragOffer) */ {
+ public:
+  inline DragOffer() : DragOffer(nullptr) {}
+  ~DragOffer() override;
+  explicit PROTOBUF_CONSTEXPR DragOffer(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  DragOffer(const DragOffer& from);
+  DragOffer(DragOffer&& from) noexcept
+    : DragOffer() {
+    *this = ::std::move(from);
+  }
+
+  inline DragOffer& operator=(const DragOffer& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DragOffer& operator=(DragOffer&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const DragOffer& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const DragOffer* internal_default_instance() {
+    return reinterpret_cast<const DragOffer*>(
+               &_DragOffer_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    78;
+
+  friend void swap(DragOffer& a, DragOffer& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(DragOffer* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DragOffer* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  DragOffer* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<DragOffer>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const DragOffer& from);
+  void MergeFrom(const DragOffer& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(DragOffer* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.DragOffer";
+  }
+  protected:
+  explicit DragOffer(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kItemsFieldNumber = 3,
+    kErrorFieldNumber = 4,
+    kRequestIdFieldNumber = 1,
+    kDragIdFieldNumber = 2,
+  };
+  // repeated .dsa.control.v1.DragItem items = 3;
+  int items_size() const;
+  private:
+  int _internal_items_size() const;
+  public:
+  void clear_items();
+  ::dsa::control::v1::DragItem* mutable_items(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem >*
+      mutable_items();
+  private:
+  const ::dsa::control::v1::DragItem& _internal_items(int index) const;
+  ::dsa::control::v1::DragItem* _internal_add_items();
+  public:
+  const ::dsa::control::v1::DragItem& items(int index) const;
+  ::dsa::control::v1::DragItem* add_items();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem >&
+      items() const;
+
+  // string error = 4;
+  void clear_error();
+  const std::string& error() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_error(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_error();
+  PROTOBUF_NODISCARD std::string* release_error();
+  void set_allocated_error(std::string* error);
+  private:
+  const std::string& _internal_error() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_error(const std::string& value);
+  std::string* _internal_mutable_error();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // uint32 drag_id = 2;
+  void clear_drag_id();
+  uint32_t drag_id() const;
+  void set_drag_id(uint32_t value);
+  private:
+  uint32_t _internal_drag_id() const;
+  void _internal_set_drag_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.DragOffer)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem > items_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
+    uint32_t request_id_;
+    uint32_t drag_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class DragRead final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DragRead) */ {
+ public:
+  inline DragRead() : DragRead(nullptr) {}
+  ~DragRead() override;
+  explicit PROTOBUF_CONSTEXPR DragRead(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  DragRead(const DragRead& from);
+  DragRead(DragRead&& from) noexcept
+    : DragRead() {
+    *this = ::std::move(from);
+  }
+
+  inline DragRead& operator=(const DragRead& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DragRead& operator=(DragRead&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const DragRead& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const DragRead* internal_default_instance() {
+    return reinterpret_cast<const DragRead*>(
+               &_DragRead_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    79;
+
+  friend void swap(DragRead& a, DragRead& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(DragRead* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DragRead* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  DragRead* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<DragRead>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const DragRead& from);
+  void MergeFrom(const DragRead& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(DragRead* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.DragRead";
+  }
+  protected:
+  explicit DragRead(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kRequestIdFieldNumber = 1,
+    kDragIdFieldNumber = 2,
+    kOffsetFieldNumber = 4,
+    kItemFieldNumber = 3,
+    kLengthFieldNumber = 5,
+  };
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // uint32 drag_id = 2;
+  void clear_drag_id();
+  uint32_t drag_id() const;
+  void set_drag_id(uint32_t value);
+  private:
+  uint32_t _internal_drag_id() const;
+  void _internal_set_drag_id(uint32_t value);
+  public:
+
+  // uint64 offset = 4;
+  void clear_offset();
+  uint64_t offset() const;
+  void set_offset(uint64_t value);
+  private:
+  uint64_t _internal_offset() const;
+  void _internal_set_offset(uint64_t value);
+  public:
+
+  // uint32 item = 3;
+  void clear_item();
+  uint32_t item() const;
+  void set_item(uint32_t value);
+  private:
+  uint32_t _internal_item() const;
+  void _internal_set_item(uint32_t value);
+  public:
+
+  // uint32 length = 5;
+  void clear_length();
+  uint32_t length() const;
+  void set_length(uint32_t value);
+  private:
+  uint32_t _internal_length() const;
+  void _internal_set_length(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.DragRead)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t request_id_;
+    uint32_t drag_id_;
+    uint64_t offset_;
+    uint32_t item_;
+    uint32_t length_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class DragData final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DragData) */ {
+ public:
+  inline DragData() : DragData(nullptr) {}
+  ~DragData() override;
+  explicit PROTOBUF_CONSTEXPR DragData(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  DragData(const DragData& from);
+  DragData(DragData&& from) noexcept
+    : DragData() {
+    *this = ::std::move(from);
+  }
+
+  inline DragData& operator=(const DragData& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DragData& operator=(DragData&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const DragData& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const DragData* internal_default_instance() {
+    return reinterpret_cast<const DragData*>(
+               &_DragData_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    80;
+
+  friend void swap(DragData& a, DragData& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(DragData* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DragData* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  DragData* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<DragData>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const DragData& from);
+  void MergeFrom(const DragData& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(DragData* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.DragData";
+  }
+  protected:
+  explicit DragData(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kDataFieldNumber = 2,
+    kErrorFieldNumber = 4,
+    kRequestIdFieldNumber = 1,
+    kEndFieldNumber = 3,
+  };
+  // bytes data = 2;
+  void clear_data();
+  const std::string& data() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_data(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_data();
+  PROTOBUF_NODISCARD std::string* release_data();
+  void set_allocated_data(std::string* data);
+  private:
+  const std::string& _internal_data() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_data(const std::string& value);
+  std::string* _internal_mutable_data();
+  public:
+
+  // string error = 4;
+  void clear_error();
+  const std::string& error() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_error(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_error();
+  PROTOBUF_NODISCARD std::string* release_error();
+  void set_allocated_error(std::string* error);
+  private:
+  const std::string& _internal_error() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_error(const std::string& value);
+  std::string* _internal_mutable_error();
+  public:
+
+  // uint32 request_id = 1;
+  void clear_request_id();
+  uint32_t request_id() const;
+  void set_request_id(uint32_t value);
+  private:
+  uint32_t _internal_request_id() const;
+  void _internal_set_request_id(uint32_t value);
+  public:
+
+  // bool end = 3;
+  void clear_end();
+  bool end() const;
+  void set_end(bool value);
+  private:
+  bool _internal_end() const;
+  void _internal_set_end(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.DragData)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr data_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
+    uint32_t request_id_;
+    bool end_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class DragEnd final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.DragEnd) */ {
+ public:
+  inline DragEnd() : DragEnd(nullptr) {}
+  ~DragEnd() override;
+  explicit PROTOBUF_CONSTEXPR DragEnd(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  DragEnd(const DragEnd& from);
+  DragEnd(DragEnd&& from) noexcept
+    : DragEnd() {
+    *this = ::std::move(from);
+  }
+
+  inline DragEnd& operator=(const DragEnd& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DragEnd& operator=(DragEnd&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const DragEnd& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const DragEnd* internal_default_instance() {
+    return reinterpret_cast<const DragEnd*>(
+               &_DragEnd_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    81;
+
+  friend void swap(DragEnd& a, DragEnd& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(DragEnd* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DragEnd* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  DragEnd* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<DragEnd>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const DragEnd& from);
+  void MergeFrom(const DragEnd& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(DragEnd* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.DragEnd";
+  }
+  protected:
+  explicit DragEnd(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kDragIdFieldNumber = 1,
+    kDroppedFieldNumber = 2,
+  };
+  // uint32 drag_id = 1;
+  void clear_drag_id();
+  uint32_t drag_id() const;
+  void set_drag_id(uint32_t value);
+  private:
+  uint32_t _internal_drag_id() const;
+  void _internal_set_drag_id(uint32_t value);
+  public:
+
+  // bool dropped = 2;
+  void clear_dropped();
+  bool dropped() const;
+  void set_dropped(bool value);
+  private:
+  bool _internal_dropped() const;
+  void _internal_set_dropped(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.DragEnd)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    uint32_t drag_id_;
+    bool dropped_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ClockProbe final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.ClockProbe) */ {
  public:
@@ -13424,7 +14498,7 @@ class ClockProbe final :
                &_ClockProbe_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    82;
 
   friend void swap(ClockProbe& a, ClockProbe& b) {
     a.Swap(&b);
@@ -13554,7 +14628,7 @@ class VideoCodecSupport final :
                &_VideoCodecSupport_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    83;
 
   friend void swap(VideoCodecSupport& a, VideoCodecSupport& b) {
     a.Swap(&b);
@@ -13706,7 +14780,7 @@ class VideoCapabilities final :
                &_VideoCapabilities_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    84;
 
   friend void swap(VideoCapabilities& a, VideoCapabilities& b) {
     a.Swap(&b);
@@ -13845,7 +14919,7 @@ class VideoDecoderOpen final :
                &_VideoDecoderOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    85;
 
   friend void swap(VideoDecoderOpen& a, VideoDecoderOpen& b) {
     a.Swap(&b);
@@ -13997,7 +15071,7 @@ class VideoDecoderOpened final :
                &_VideoDecoderOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    86;
 
   friend void swap(VideoDecoderOpened& a, VideoDecoderOpened& b) {
     a.Swap(&b);
@@ -14143,7 +15217,7 @@ class VideoPacket final :
                &_VideoPacket_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    87;
 
   friend void swap(VideoPacket& a, VideoPacket& b) {
     a.Swap(&b);
@@ -14322,7 +15396,7 @@ class VideoFrame final :
                &_VideoFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    88;
 
   friend void swap(VideoFrame& a, VideoFrame& b) {
     a.Swap(&b);
@@ -14523,7 +15597,7 @@ class VideoFlush final :
                &_VideoFlush_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    89;
 
   friend void swap(VideoFlush& a, VideoFlush& b) {
     a.Swap(&b);
@@ -14640,7 +15714,7 @@ class VideoFlushed final :
                &_VideoFlushed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    90;
 
   friend void swap(VideoFlushed& a, VideoFlushed& b) {
     a.Swap(&b);
@@ -14757,7 +15831,7 @@ class VideoError final :
                &_VideoError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    91;
 
   friend void swap(VideoError& a, VideoError& b) {
     a.Swap(&b);
@@ -14892,7 +15966,7 @@ class SensorDescription final :
                &_SensorDescription_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    92;
 
   friend void swap(SensorDescription& a, SensorDescription& b) {
     a.Swap(&b);
@@ -15087,7 +16161,7 @@ class SensorList final :
                &_SensorList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    93;
 
   friend void swap(SensorList& a, SensorList& b) {
     a.Swap(&b);
@@ -15226,7 +16300,7 @@ class SensorActivate final :
                &_SensorActivate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    94;
 
   friend void swap(SensorActivate& a, SensorActivate& b) {
     a.Swap(&b);
@@ -15378,7 +16452,7 @@ class SensorReading final :
                &_SensorReading_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    89;
+    95;
 
   friend void swap(SensorReading& a, SensorReading& b) {
     a.Swap(&b);
@@ -15543,7 +16617,7 @@ class SensorReadings final :
                &_SensorReadings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    90;
+    96;
 
   friend void swap(SensorReadings& a, SensorReadings& b) {
     a.Swap(&b);
@@ -15682,7 +16756,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    91;
+    97;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -15823,7 +16897,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    92;
+    98;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -15953,7 +17027,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    93;
+    99;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -16240,7 +17314,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    94;
+    100;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -16401,7 +17475,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    95;
+    101;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -16547,7 +17621,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    96;
+    102;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -16704,7 +17778,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    97;
+    103;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -16854,7 +17928,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    98;
+    104;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -16998,7 +18072,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    99;
+    105;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -17128,7 +18202,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    100;
+    106;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -17313,7 +18387,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    101;
+    107;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -17481,7 +18555,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    102;
+    108;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -17655,7 +18729,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    103;
+    109;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -17796,7 +18870,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    104;
+    110;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -17948,7 +19022,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    105;
+    111;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -18391,7 +19465,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    106;
+    112;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -18624,7 +19698,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    107;
+    113;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -18814,7 +19888,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    108;
+    114;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -18982,7 +20056,7 @@ class AudioOutputOpen final :
                &_AudioOutputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    109;
+    115;
 
   friend void swap(AudioOutputOpen& a, AudioOutputOpen& b) {
     a.Swap(&b);
@@ -19161,7 +20235,7 @@ class AudioOutputReady final :
                &_AudioOutputReady_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    110;
+    116;
 
   friend void swap(AudioOutputReady& a, AudioOutputReady& b) {
     a.Swap(&b);
@@ -19302,7 +20376,7 @@ class AudioPcm final :
                &_AudioPcm_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    111;
+    117;
 
   friend void swap(AudioPcm& a, AudioPcm& b) {
     a.Swap(&b);
@@ -19448,7 +20522,7 @@ class AudioInputOpen final :
                &_AudioInputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    112;
+    118;
 
   friend void swap(AudioInputOpen& a, AudioInputOpen& b) {
     a.Swap(&b);
@@ -19627,7 +20701,7 @@ class AudioInputOpened final :
                &_AudioInputOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    113;
+    119;
 
   friend void swap(AudioInputOpened& a, AudioInputOpened& b) {
     a.Swap(&b);
@@ -19773,7 +20847,7 @@ class AudioOutputControl final :
                &_AudioOutputControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    114;
+    120;
 
   friend void swap(AudioOutputControl& a, AudioOutputControl& b) {
     a.Swap(&b);
@@ -19903,7 +20977,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    115;
+    121;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -20066,7 +21140,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    116;
+    122;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -20218,7 +21292,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    117;
+    123;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -20446,7 +21520,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    118;
+    124;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -20623,7 +21697,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    119;
+    125;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -20753,7 +21827,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    120;
+    126;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -20926,7 +22000,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    121;
+    127;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -21072,7 +22146,7 @@ class PrintJob final :
                &_PrintJob_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    122;
+    128;
 
   friend void swap(PrintJob& a, PrintJob& b) {
     a.Swap(&b);
@@ -21338,7 +22412,7 @@ class PrintJobChunk final :
                &_PrintJobChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    123;
+    129;
 
   friend void swap(PrintJobChunk& a, PrintJobChunk& b) {
     a.Swap(&b);
@@ -21495,7 +22569,7 @@ class PrintJobCancel final :
                &_PrintJobCancel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    124;
+    130;
 
   friend void swap(PrintJobCancel& a, PrintJobCancel& b) {
     a.Swap(&b);
@@ -21625,7 +22699,7 @@ class PrintJobResult final :
                &_PrintJobResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    125;
+    131;
 
   friend void swap(PrintJobResult& a, PrintJobResult& b) {
     a.Swap(&b);
@@ -21782,7 +22856,7 @@ class CameraMode final :
                &_CameraMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    126;
+    132;
 
   friend void swap(CameraMode& a, CameraMode& b) {
     a.Swap(&b);
@@ -21945,7 +23019,7 @@ class CameraDevice final :
                &_CameraDevice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    127;
+    133;
 
   friend void swap(CameraDevice& a, CameraDevice& b) {
     a.Swap(&b);
@@ -22138,7 +23212,7 @@ class CameraList final :
                &_CameraList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    128;
+    134;
 
   friend void swap(CameraList& a, CameraList& b) {
     a.Swap(&b);
@@ -22277,7 +23351,7 @@ class CameraOpen final :
                &_CameraOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    129;
+    135;
 
   friend void swap(CameraOpen& a, CameraOpen& b) {
     a.Swap(&b);
@@ -22445,7 +23519,7 @@ class CameraOpened final :
                &_CameraOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    130;
+    136;
 
   friend void swap(CameraOpened& a, CameraOpened& b) {
     a.Swap(&b);
@@ -22624,7 +23698,7 @@ class CameraFrame final :
                &_CameraFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    131;
+    137;
 
   friend void swap(CameraFrame& a, CameraFrame& b) {
     a.Swap(&b);
@@ -22814,7 +23888,7 @@ class CameraStop final :
                &_CameraStop_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    132;
+    138;
 
   friend void swap(CameraStop& a, CameraStop& b) {
     a.Swap(&b);
@@ -22931,7 +24005,7 @@ class CameraStill final :
                &_CameraStill_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    133;
+    139;
 
   friend void swap(CameraStill& a, CameraStill& b) {
     a.Swap(&b);
@@ -23094,7 +24168,7 @@ class CameraStillTaken final :
                &_CameraStillTaken_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    134;
+    140;
 
   friend void swap(CameraStillTaken& a, CameraStillTaken& b) {
     a.Swap(&b);
@@ -23256,7 +24330,7 @@ class CameraError final :
                &_CameraError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    135;
+    141;
 
   friend void swap(CameraError& a, CameraError& b) {
     a.Swap(&b);
@@ -23391,7 +24465,7 @@ class SystemSettings final :
                &_SystemSettings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    136;
+    142;
 
   friend void swap(SystemSettings& a, SystemSettings& b) {
     a.Swap(&b);
@@ -23612,7 +24686,7 @@ class GamepadConnected final :
                &_GamepadConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    137;
+    143;
 
   friend void swap(GamepadConnected& a, GamepadConnected& b) {
     a.Swap(&b);
@@ -23791,7 +24865,7 @@ class GamepadDisconnected final :
                &_GamepadDisconnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    138;
+    144;
 
   friend void swap(GamepadDisconnected& a, GamepadDisconnected& b) {
     a.Swap(&b);
@@ -23921,7 +24995,7 @@ class GamepadState final :
                &_GamepadState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    139;
+    145;
 
   friend void swap(GamepadState& a, GamepadState& b) {
     a.Swap(&b);
@@ -24128,7 +25202,7 @@ class GamepadRumble final :
                &_GamepadRumble_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    140;
+    146;
 
   friend void swap(GamepadRumble& a, GamepadRumble& b) {
     a.Swap(&b);
@@ -24417,6 +25491,11 @@ class Envelope final :
     kGamepadRumble = 344,
     kFileSharing = 290,
     kAndroidFiles = 291,
+    kDragOut = 350,
+    kDragOffer = 351,
+    kDragRead = 352,
+    kDragData = 353,
+    kDragEnd = 354,
     BODY_NOT_SET = 0,
   };
 
@@ -24425,7 +25504,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    141;
+    147;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -24619,6 +25698,11 @@ class Envelope final :
     kGamepadRumbleFieldNumber = 344,
     kFileSharingFieldNumber = 290,
     kAndroidFilesFieldNumber = 291,
+    kDragOutFieldNumber = 350,
+    kDragOfferFieldNumber = 351,
+    kDragReadFieldNumber = 352,
+    kDragDataFieldNumber = 353,
+    kDragEndFieldNumber = 354,
   };
   // .dsa.control.v1.Hello hello = 1;
   bool has_hello() const;
@@ -26960,6 +28044,96 @@ class Envelope final :
       ::dsa::control::v1::AndroidFiles* android_files);
   ::dsa::control::v1::AndroidFiles* unsafe_arena_release_android_files();
 
+  // .dsa.control.v1.DragOut drag_out = 350;
+  bool has_drag_out() const;
+  private:
+  bool _internal_has_drag_out() const;
+  public:
+  void clear_drag_out();
+  const ::dsa::control::v1::DragOut& drag_out() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::DragOut* release_drag_out();
+  ::dsa::control::v1::DragOut* mutable_drag_out();
+  void set_allocated_drag_out(::dsa::control::v1::DragOut* drag_out);
+  private:
+  const ::dsa::control::v1::DragOut& _internal_drag_out() const;
+  ::dsa::control::v1::DragOut* _internal_mutable_drag_out();
+  public:
+  void unsafe_arena_set_allocated_drag_out(
+      ::dsa::control::v1::DragOut* drag_out);
+  ::dsa::control::v1::DragOut* unsafe_arena_release_drag_out();
+
+  // .dsa.control.v1.DragOffer drag_offer = 351;
+  bool has_drag_offer() const;
+  private:
+  bool _internal_has_drag_offer() const;
+  public:
+  void clear_drag_offer();
+  const ::dsa::control::v1::DragOffer& drag_offer() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::DragOffer* release_drag_offer();
+  ::dsa::control::v1::DragOffer* mutable_drag_offer();
+  void set_allocated_drag_offer(::dsa::control::v1::DragOffer* drag_offer);
+  private:
+  const ::dsa::control::v1::DragOffer& _internal_drag_offer() const;
+  ::dsa::control::v1::DragOffer* _internal_mutable_drag_offer();
+  public:
+  void unsafe_arena_set_allocated_drag_offer(
+      ::dsa::control::v1::DragOffer* drag_offer);
+  ::dsa::control::v1::DragOffer* unsafe_arena_release_drag_offer();
+
+  // .dsa.control.v1.DragRead drag_read = 352;
+  bool has_drag_read() const;
+  private:
+  bool _internal_has_drag_read() const;
+  public:
+  void clear_drag_read();
+  const ::dsa::control::v1::DragRead& drag_read() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::DragRead* release_drag_read();
+  ::dsa::control::v1::DragRead* mutable_drag_read();
+  void set_allocated_drag_read(::dsa::control::v1::DragRead* drag_read);
+  private:
+  const ::dsa::control::v1::DragRead& _internal_drag_read() const;
+  ::dsa::control::v1::DragRead* _internal_mutable_drag_read();
+  public:
+  void unsafe_arena_set_allocated_drag_read(
+      ::dsa::control::v1::DragRead* drag_read);
+  ::dsa::control::v1::DragRead* unsafe_arena_release_drag_read();
+
+  // .dsa.control.v1.DragData drag_data = 353;
+  bool has_drag_data() const;
+  private:
+  bool _internal_has_drag_data() const;
+  public:
+  void clear_drag_data();
+  const ::dsa::control::v1::DragData& drag_data() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::DragData* release_drag_data();
+  ::dsa::control::v1::DragData* mutable_drag_data();
+  void set_allocated_drag_data(::dsa::control::v1::DragData* drag_data);
+  private:
+  const ::dsa::control::v1::DragData& _internal_drag_data() const;
+  ::dsa::control::v1::DragData* _internal_mutable_drag_data();
+  public:
+  void unsafe_arena_set_allocated_drag_data(
+      ::dsa::control::v1::DragData* drag_data);
+  ::dsa::control::v1::DragData* unsafe_arena_release_drag_data();
+
+  // .dsa.control.v1.DragEnd drag_end = 354;
+  bool has_drag_end() const;
+  private:
+  bool _internal_has_drag_end() const;
+  public:
+  void clear_drag_end();
+  const ::dsa::control::v1::DragEnd& drag_end() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::DragEnd* release_drag_end();
+  ::dsa::control::v1::DragEnd* mutable_drag_end();
+  void set_allocated_drag_end(::dsa::control::v1::DragEnd* drag_end);
+  private:
+  const ::dsa::control::v1::DragEnd& _internal_drag_end() const;
+  ::dsa::control::v1::DragEnd* _internal_mutable_drag_end();
+  public:
+  void unsafe_arena_set_allocated_drag_end(
+      ::dsa::control::v1::DragEnd* drag_end);
+  ::dsa::control::v1::DragEnd* unsafe_arena_release_drag_end();
+
   void clear_body();
   BodyCase body_case() const;
   // @@protoc_insertion_point(class_scope:dsa.control.v1.Envelope)
@@ -27095,6 +28269,11 @@ class Envelope final :
   void set_has_gamepad_rumble();
   void set_has_file_sharing();
   void set_has_android_files();
+  void set_has_drag_out();
+  void set_has_drag_offer();
+  void set_has_drag_read();
+  void set_has_drag_data();
+  void set_has_drag_end();
 
   inline bool has_body() const;
   inline void clear_has_body();
@@ -27236,6 +28415,11 @@ class Envelope final :
       ::dsa::control::v1::GamepadRumble* gamepad_rumble_;
       ::dsa::control::v1::FileSharing* file_sharing_;
       ::dsa::control::v1::AndroidFiles* android_files_;
+      ::dsa::control::v1::DragOut* drag_out_;
+      ::dsa::control::v1::DragOffer* drag_offer_;
+      ::dsa::control::v1::DragRead* drag_read_;
+      ::dsa::control::v1::DragData* drag_data_;
+      ::dsa::control::v1::DragEnd* drag_end_;
     } body_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
     uint32_t _oneof_case_[1];
@@ -34933,6 +36117,770 @@ inline void AndroidFiles::set_allocated_token(std::string* token) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AndroidFiles.token)
+}
+
+// -------------------------------------------------------------------
+
+// DragItem
+
+// string name = 1;
+inline void DragItem::clear_name() {
+  _impl_.name_.ClearToEmpty();
+}
+inline const std::string& DragItem::name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragItem.name)
+  return _internal_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void DragItem::set_name(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragItem.name)
+}
+inline std::string* DragItem::mutable_name() {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.DragItem.name)
+  return _s;
+}
+inline const std::string& DragItem::_internal_name() const {
+  return _impl_.name_.Get();
+}
+inline void DragItem::_internal_set_name(const std::string& value) {
+  
+  _impl_.name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* DragItem::_internal_mutable_name() {
+  
+  return _impl_.name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* DragItem::release_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.DragItem.name)
+  return _impl_.name_.Release();
+}
+inline void DragItem::set_allocated_name(std::string* name) {
+  if (name != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.DragItem.name)
+}
+
+// uint64 size = 2;
+inline void DragItem::clear_size() {
+  _impl_.size_ = uint64_t{0u};
+}
+inline uint64_t DragItem::_internal_size() const {
+  return _impl_.size_;
+}
+inline uint64_t DragItem::size() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragItem.size)
+  return _internal_size();
+}
+inline void DragItem::_internal_set_size(uint64_t value) {
+  
+  _impl_.size_ = value;
+}
+inline void DragItem::set_size(uint64_t value) {
+  _internal_set_size(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragItem.size)
+}
+
+// bool size_known = 3;
+inline void DragItem::clear_size_known() {
+  _impl_.size_known_ = false;
+}
+inline bool DragItem::_internal_size_known() const {
+  return _impl_.size_known_;
+}
+inline bool DragItem::size_known() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragItem.size_known)
+  return _internal_size_known();
+}
+inline void DragItem::_internal_set_size_known(bool value) {
+  
+  _impl_.size_known_ = value;
+}
+inline void DragItem::set_size_known(bool value) {
+  _internal_set_size_known(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragItem.size_known)
+}
+
+// string mime_type = 4;
+inline void DragItem::clear_mime_type() {
+  _impl_.mime_type_.ClearToEmpty();
+}
+inline const std::string& DragItem::mime_type() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragItem.mime_type)
+  return _internal_mime_type();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void DragItem::set_mime_type(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.mime_type_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragItem.mime_type)
+}
+inline std::string* DragItem::mutable_mime_type() {
+  std::string* _s = _internal_mutable_mime_type();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.DragItem.mime_type)
+  return _s;
+}
+inline const std::string& DragItem::_internal_mime_type() const {
+  return _impl_.mime_type_.Get();
+}
+inline void DragItem::_internal_set_mime_type(const std::string& value) {
+  
+  _impl_.mime_type_.Set(value, GetArenaForAllocation());
+}
+inline std::string* DragItem::_internal_mutable_mime_type() {
+  
+  return _impl_.mime_type_.Mutable(GetArenaForAllocation());
+}
+inline std::string* DragItem::release_mime_type() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.DragItem.mime_type)
+  return _impl_.mime_type_.Release();
+}
+inline void DragItem::set_allocated_mime_type(std::string* mime_type) {
+  if (mime_type != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.mime_type_.SetAllocated(mime_type, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.mime_type_.IsDefault()) {
+    _impl_.mime_type_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.DragItem.mime_type)
+}
+
+// bool is_text = 5;
+inline void DragItem::clear_is_text() {
+  _impl_.is_text_ = false;
+}
+inline bool DragItem::_internal_is_text() const {
+  return _impl_.is_text_;
+}
+inline bool DragItem::is_text() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragItem.is_text)
+  return _internal_is_text();
+}
+inline void DragItem::_internal_set_is_text(bool value) {
+  
+  _impl_.is_text_ = value;
+}
+inline void DragItem::set_is_text(bool value) {
+  _internal_set_is_text(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragItem.is_text)
+}
+
+// string text = 6;
+inline void DragItem::clear_text() {
+  _impl_.text_.ClearToEmpty();
+}
+inline const std::string& DragItem::text() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragItem.text)
+  return _internal_text();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void DragItem::set_text(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.text_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragItem.text)
+}
+inline std::string* DragItem::mutable_text() {
+  std::string* _s = _internal_mutable_text();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.DragItem.text)
+  return _s;
+}
+inline const std::string& DragItem::_internal_text() const {
+  return _impl_.text_.Get();
+}
+inline void DragItem::_internal_set_text(const std::string& value) {
+  
+  _impl_.text_.Set(value, GetArenaForAllocation());
+}
+inline std::string* DragItem::_internal_mutable_text() {
+  
+  return _impl_.text_.Mutable(GetArenaForAllocation());
+}
+inline std::string* DragItem::release_text() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.DragItem.text)
+  return _impl_.text_.Release();
+}
+inline void DragItem::set_allocated_text(std::string* text) {
+  if (text != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.text_.SetAllocated(text, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.text_.IsDefault()) {
+    _impl_.text_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.DragItem.text)
+}
+
+// -------------------------------------------------------------------
+
+// DragOut
+
+// uint32 request_id = 1;
+inline void DragOut::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t DragOut::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t DragOut::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOut.request_id)
+  return _internal_request_id();
+}
+inline void DragOut::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void DragOut::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragOut.request_id)
+}
+
+// int32 task_id = 2;
+inline void DragOut::clear_task_id() {
+  _impl_.task_id_ = 0;
+}
+inline int32_t DragOut::_internal_task_id() const {
+  return _impl_.task_id_;
+}
+inline int32_t DragOut::task_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOut.task_id)
+  return _internal_task_id();
+}
+inline void DragOut::_internal_set_task_id(int32_t value) {
+  
+  _impl_.task_id_ = value;
+}
+inline void DragOut::set_task_id(int32_t value) {
+  _internal_set_task_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragOut.task_id)
+}
+
+// float x = 3;
+inline void DragOut::clear_x() {
+  _impl_.x_ = 0;
+}
+inline float DragOut::_internal_x() const {
+  return _impl_.x_;
+}
+inline float DragOut::x() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOut.x)
+  return _internal_x();
+}
+inline void DragOut::_internal_set_x(float value) {
+  
+  _impl_.x_ = value;
+}
+inline void DragOut::set_x(float value) {
+  _internal_set_x(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragOut.x)
+}
+
+// float y = 4;
+inline void DragOut::clear_y() {
+  _impl_.y_ = 0;
+}
+inline float DragOut::_internal_y() const {
+  return _impl_.y_;
+}
+inline float DragOut::y() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOut.y)
+  return _internal_y();
+}
+inline void DragOut::_internal_set_y(float value) {
+  
+  _impl_.y_ = value;
+}
+inline void DragOut::set_y(float value) {
+  _internal_set_y(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragOut.y)
+}
+
+// .dsa.control.v1.PointerTool tool = 5;
+inline void DragOut::clear_tool() {
+  _impl_.tool_ = 0;
+}
+inline ::dsa::control::v1::PointerTool DragOut::_internal_tool() const {
+  return static_cast< ::dsa::control::v1::PointerTool >(_impl_.tool_);
+}
+inline ::dsa::control::v1::PointerTool DragOut::tool() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOut.tool)
+  return _internal_tool();
+}
+inline void DragOut::_internal_set_tool(::dsa::control::v1::PointerTool value) {
+  
+  _impl_.tool_ = value;
+}
+inline void DragOut::set_tool(::dsa::control::v1::PointerTool value) {
+  _internal_set_tool(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragOut.tool)
+}
+
+// uint32 pointer_id = 6;
+inline void DragOut::clear_pointer_id() {
+  _impl_.pointer_id_ = 0u;
+}
+inline uint32_t DragOut::_internal_pointer_id() const {
+  return _impl_.pointer_id_;
+}
+inline uint32_t DragOut::pointer_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOut.pointer_id)
+  return _internal_pointer_id();
+}
+inline void DragOut::_internal_set_pointer_id(uint32_t value) {
+  
+  _impl_.pointer_id_ = value;
+}
+inline void DragOut::set_pointer_id(uint32_t value) {
+  _internal_set_pointer_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragOut.pointer_id)
+}
+
+// -------------------------------------------------------------------
+
+// DragOffer
+
+// uint32 request_id = 1;
+inline void DragOffer::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t DragOffer::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t DragOffer::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOffer.request_id)
+  return _internal_request_id();
+}
+inline void DragOffer::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void DragOffer::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragOffer.request_id)
+}
+
+// uint32 drag_id = 2;
+inline void DragOffer::clear_drag_id() {
+  _impl_.drag_id_ = 0u;
+}
+inline uint32_t DragOffer::_internal_drag_id() const {
+  return _impl_.drag_id_;
+}
+inline uint32_t DragOffer::drag_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOffer.drag_id)
+  return _internal_drag_id();
+}
+inline void DragOffer::_internal_set_drag_id(uint32_t value) {
+  
+  _impl_.drag_id_ = value;
+}
+inline void DragOffer::set_drag_id(uint32_t value) {
+  _internal_set_drag_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragOffer.drag_id)
+}
+
+// repeated .dsa.control.v1.DragItem items = 3;
+inline int DragOffer::_internal_items_size() const {
+  return _impl_.items_.size();
+}
+inline int DragOffer::items_size() const {
+  return _internal_items_size();
+}
+inline void DragOffer::clear_items() {
+  _impl_.items_.Clear();
+}
+inline ::dsa::control::v1::DragItem* DragOffer::mutable_items(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.DragOffer.items)
+  return _impl_.items_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem >*
+DragOffer::mutable_items() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.DragOffer.items)
+  return &_impl_.items_;
+}
+inline const ::dsa::control::v1::DragItem& DragOffer::_internal_items(int index) const {
+  return _impl_.items_.Get(index);
+}
+inline const ::dsa::control::v1::DragItem& DragOffer::items(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOffer.items)
+  return _internal_items(index);
+}
+inline ::dsa::control::v1::DragItem* DragOffer::_internal_add_items() {
+  return _impl_.items_.Add();
+}
+inline ::dsa::control::v1::DragItem* DragOffer::add_items() {
+  ::dsa::control::v1::DragItem* _add = _internal_add_items();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.DragOffer.items)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::DragItem >&
+DragOffer::items() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.DragOffer.items)
+  return _impl_.items_;
+}
+
+// string error = 4;
+inline void DragOffer::clear_error() {
+  _impl_.error_.ClearToEmpty();
+}
+inline const std::string& DragOffer::error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragOffer.error)
+  return _internal_error();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void DragOffer::set_error(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.error_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragOffer.error)
+}
+inline std::string* DragOffer::mutable_error() {
+  std::string* _s = _internal_mutable_error();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.DragOffer.error)
+  return _s;
+}
+inline const std::string& DragOffer::_internal_error() const {
+  return _impl_.error_.Get();
+}
+inline void DragOffer::_internal_set_error(const std::string& value) {
+  
+  _impl_.error_.Set(value, GetArenaForAllocation());
+}
+inline std::string* DragOffer::_internal_mutable_error() {
+  
+  return _impl_.error_.Mutable(GetArenaForAllocation());
+}
+inline std::string* DragOffer::release_error() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.DragOffer.error)
+  return _impl_.error_.Release();
+}
+inline void DragOffer::set_allocated_error(std::string* error) {
+  if (error != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.error_.SetAllocated(error, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.error_.IsDefault()) {
+    _impl_.error_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.DragOffer.error)
+}
+
+// -------------------------------------------------------------------
+
+// DragRead
+
+// uint32 request_id = 1;
+inline void DragRead::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t DragRead::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t DragRead::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragRead.request_id)
+  return _internal_request_id();
+}
+inline void DragRead::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void DragRead::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragRead.request_id)
+}
+
+// uint32 drag_id = 2;
+inline void DragRead::clear_drag_id() {
+  _impl_.drag_id_ = 0u;
+}
+inline uint32_t DragRead::_internal_drag_id() const {
+  return _impl_.drag_id_;
+}
+inline uint32_t DragRead::drag_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragRead.drag_id)
+  return _internal_drag_id();
+}
+inline void DragRead::_internal_set_drag_id(uint32_t value) {
+  
+  _impl_.drag_id_ = value;
+}
+inline void DragRead::set_drag_id(uint32_t value) {
+  _internal_set_drag_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragRead.drag_id)
+}
+
+// uint32 item = 3;
+inline void DragRead::clear_item() {
+  _impl_.item_ = 0u;
+}
+inline uint32_t DragRead::_internal_item() const {
+  return _impl_.item_;
+}
+inline uint32_t DragRead::item() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragRead.item)
+  return _internal_item();
+}
+inline void DragRead::_internal_set_item(uint32_t value) {
+  
+  _impl_.item_ = value;
+}
+inline void DragRead::set_item(uint32_t value) {
+  _internal_set_item(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragRead.item)
+}
+
+// uint64 offset = 4;
+inline void DragRead::clear_offset() {
+  _impl_.offset_ = uint64_t{0u};
+}
+inline uint64_t DragRead::_internal_offset() const {
+  return _impl_.offset_;
+}
+inline uint64_t DragRead::offset() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragRead.offset)
+  return _internal_offset();
+}
+inline void DragRead::_internal_set_offset(uint64_t value) {
+  
+  _impl_.offset_ = value;
+}
+inline void DragRead::set_offset(uint64_t value) {
+  _internal_set_offset(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragRead.offset)
+}
+
+// uint32 length = 5;
+inline void DragRead::clear_length() {
+  _impl_.length_ = 0u;
+}
+inline uint32_t DragRead::_internal_length() const {
+  return _impl_.length_;
+}
+inline uint32_t DragRead::length() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragRead.length)
+  return _internal_length();
+}
+inline void DragRead::_internal_set_length(uint32_t value) {
+  
+  _impl_.length_ = value;
+}
+inline void DragRead::set_length(uint32_t value) {
+  _internal_set_length(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragRead.length)
+}
+
+// -------------------------------------------------------------------
+
+// DragData
+
+// uint32 request_id = 1;
+inline void DragData::clear_request_id() {
+  _impl_.request_id_ = 0u;
+}
+inline uint32_t DragData::_internal_request_id() const {
+  return _impl_.request_id_;
+}
+inline uint32_t DragData::request_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragData.request_id)
+  return _internal_request_id();
+}
+inline void DragData::_internal_set_request_id(uint32_t value) {
+  
+  _impl_.request_id_ = value;
+}
+inline void DragData::set_request_id(uint32_t value) {
+  _internal_set_request_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragData.request_id)
+}
+
+// bytes data = 2;
+inline void DragData::clear_data() {
+  _impl_.data_.ClearToEmpty();
+}
+inline const std::string& DragData::data() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragData.data)
+  return _internal_data();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void DragData::set_data(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.data_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragData.data)
+}
+inline std::string* DragData::mutable_data() {
+  std::string* _s = _internal_mutable_data();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.DragData.data)
+  return _s;
+}
+inline const std::string& DragData::_internal_data() const {
+  return _impl_.data_.Get();
+}
+inline void DragData::_internal_set_data(const std::string& value) {
+  
+  _impl_.data_.Set(value, GetArenaForAllocation());
+}
+inline std::string* DragData::_internal_mutable_data() {
+  
+  return _impl_.data_.Mutable(GetArenaForAllocation());
+}
+inline std::string* DragData::release_data() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.DragData.data)
+  return _impl_.data_.Release();
+}
+inline void DragData::set_allocated_data(std::string* data) {
+  if (data != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.data_.SetAllocated(data, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.data_.IsDefault()) {
+    _impl_.data_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.DragData.data)
+}
+
+// bool end = 3;
+inline void DragData::clear_end() {
+  _impl_.end_ = false;
+}
+inline bool DragData::_internal_end() const {
+  return _impl_.end_;
+}
+inline bool DragData::end() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragData.end)
+  return _internal_end();
+}
+inline void DragData::_internal_set_end(bool value) {
+  
+  _impl_.end_ = value;
+}
+inline void DragData::set_end(bool value) {
+  _internal_set_end(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragData.end)
+}
+
+// string error = 4;
+inline void DragData::clear_error() {
+  _impl_.error_.ClearToEmpty();
+}
+inline const std::string& DragData::error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragData.error)
+  return _internal_error();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void DragData::set_error(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.error_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragData.error)
+}
+inline std::string* DragData::mutable_error() {
+  std::string* _s = _internal_mutable_error();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.DragData.error)
+  return _s;
+}
+inline const std::string& DragData::_internal_error() const {
+  return _impl_.error_.Get();
+}
+inline void DragData::_internal_set_error(const std::string& value) {
+  
+  _impl_.error_.Set(value, GetArenaForAllocation());
+}
+inline std::string* DragData::_internal_mutable_error() {
+  
+  return _impl_.error_.Mutable(GetArenaForAllocation());
+}
+inline std::string* DragData::release_error() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.DragData.error)
+  return _impl_.error_.Release();
+}
+inline void DragData::set_allocated_error(std::string* error) {
+  if (error != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.error_.SetAllocated(error, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.error_.IsDefault()) {
+    _impl_.error_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.DragData.error)
+}
+
+// -------------------------------------------------------------------
+
+// DragEnd
+
+// uint32 drag_id = 1;
+inline void DragEnd::clear_drag_id() {
+  _impl_.drag_id_ = 0u;
+}
+inline uint32_t DragEnd::_internal_drag_id() const {
+  return _impl_.drag_id_;
+}
+inline uint32_t DragEnd::drag_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragEnd.drag_id)
+  return _internal_drag_id();
+}
+inline void DragEnd::_internal_set_drag_id(uint32_t value) {
+  
+  _impl_.drag_id_ = value;
+}
+inline void DragEnd::set_drag_id(uint32_t value) {
+  _internal_set_drag_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragEnd.drag_id)
+}
+
+// bool dropped = 2;
+inline void DragEnd::clear_dropped() {
+  _impl_.dropped_ = false;
+}
+inline bool DragEnd::_internal_dropped() const {
+  return _impl_.dropped_;
+}
+inline bool DragEnd::dropped() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.DragEnd.dropped)
+  return _internal_dropped();
+}
+inline void DragEnd::_internal_set_dropped(bool value) {
+  
+  _impl_.dropped_ = value;
+}
+inline void DragEnd::set_dropped(bool value) {
+  _internal_set_dropped(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.DragEnd.dropped)
 }
 
 // -------------------------------------------------------------------
@@ -51762,6 +53710,376 @@ inline ::dsa::control::v1::AndroidFiles* Envelope::mutable_android_files() {
   return _msg;
 }
 
+// .dsa.control.v1.DragOut drag_out = 350;
+inline bool Envelope::_internal_has_drag_out() const {
+  return body_case() == kDragOut;
+}
+inline bool Envelope::has_drag_out() const {
+  return _internal_has_drag_out();
+}
+inline void Envelope::set_has_drag_out() {
+  _impl_._oneof_case_[0] = kDragOut;
+}
+inline void Envelope::clear_drag_out() {
+  if (_internal_has_drag_out()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.drag_out_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::DragOut* Envelope::release_drag_out() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.drag_out)
+  if (_internal_has_drag_out()) {
+    clear_has_body();
+    ::dsa::control::v1::DragOut* temp = _impl_.body_.drag_out_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.drag_out_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::DragOut& Envelope::_internal_drag_out() const {
+  return _internal_has_drag_out()
+      ? *_impl_.body_.drag_out_
+      : reinterpret_cast< ::dsa::control::v1::DragOut&>(::dsa::control::v1::_DragOut_default_instance_);
+}
+inline const ::dsa::control::v1::DragOut& Envelope::drag_out() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.drag_out)
+  return _internal_drag_out();
+}
+inline ::dsa::control::v1::DragOut* Envelope::unsafe_arena_release_drag_out() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.drag_out)
+  if (_internal_has_drag_out()) {
+    clear_has_body();
+    ::dsa::control::v1::DragOut* temp = _impl_.body_.drag_out_;
+    _impl_.body_.drag_out_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_drag_out(::dsa::control::v1::DragOut* drag_out) {
+  clear_body();
+  if (drag_out) {
+    set_has_drag_out();
+    _impl_.body_.drag_out_ = drag_out;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.drag_out)
+}
+inline ::dsa::control::v1::DragOut* Envelope::_internal_mutable_drag_out() {
+  if (!_internal_has_drag_out()) {
+    clear_body();
+    set_has_drag_out();
+    _impl_.body_.drag_out_ = CreateMaybeMessage< ::dsa::control::v1::DragOut >(GetArenaForAllocation());
+  }
+  return _impl_.body_.drag_out_;
+}
+inline ::dsa::control::v1::DragOut* Envelope::mutable_drag_out() {
+  ::dsa::control::v1::DragOut* _msg = _internal_mutable_drag_out();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.drag_out)
+  return _msg;
+}
+
+// .dsa.control.v1.DragOffer drag_offer = 351;
+inline bool Envelope::_internal_has_drag_offer() const {
+  return body_case() == kDragOffer;
+}
+inline bool Envelope::has_drag_offer() const {
+  return _internal_has_drag_offer();
+}
+inline void Envelope::set_has_drag_offer() {
+  _impl_._oneof_case_[0] = kDragOffer;
+}
+inline void Envelope::clear_drag_offer() {
+  if (_internal_has_drag_offer()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.drag_offer_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::DragOffer* Envelope::release_drag_offer() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.drag_offer)
+  if (_internal_has_drag_offer()) {
+    clear_has_body();
+    ::dsa::control::v1::DragOffer* temp = _impl_.body_.drag_offer_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.drag_offer_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::DragOffer& Envelope::_internal_drag_offer() const {
+  return _internal_has_drag_offer()
+      ? *_impl_.body_.drag_offer_
+      : reinterpret_cast< ::dsa::control::v1::DragOffer&>(::dsa::control::v1::_DragOffer_default_instance_);
+}
+inline const ::dsa::control::v1::DragOffer& Envelope::drag_offer() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.drag_offer)
+  return _internal_drag_offer();
+}
+inline ::dsa::control::v1::DragOffer* Envelope::unsafe_arena_release_drag_offer() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.drag_offer)
+  if (_internal_has_drag_offer()) {
+    clear_has_body();
+    ::dsa::control::v1::DragOffer* temp = _impl_.body_.drag_offer_;
+    _impl_.body_.drag_offer_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_drag_offer(::dsa::control::v1::DragOffer* drag_offer) {
+  clear_body();
+  if (drag_offer) {
+    set_has_drag_offer();
+    _impl_.body_.drag_offer_ = drag_offer;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.drag_offer)
+}
+inline ::dsa::control::v1::DragOffer* Envelope::_internal_mutable_drag_offer() {
+  if (!_internal_has_drag_offer()) {
+    clear_body();
+    set_has_drag_offer();
+    _impl_.body_.drag_offer_ = CreateMaybeMessage< ::dsa::control::v1::DragOffer >(GetArenaForAllocation());
+  }
+  return _impl_.body_.drag_offer_;
+}
+inline ::dsa::control::v1::DragOffer* Envelope::mutable_drag_offer() {
+  ::dsa::control::v1::DragOffer* _msg = _internal_mutable_drag_offer();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.drag_offer)
+  return _msg;
+}
+
+// .dsa.control.v1.DragRead drag_read = 352;
+inline bool Envelope::_internal_has_drag_read() const {
+  return body_case() == kDragRead;
+}
+inline bool Envelope::has_drag_read() const {
+  return _internal_has_drag_read();
+}
+inline void Envelope::set_has_drag_read() {
+  _impl_._oneof_case_[0] = kDragRead;
+}
+inline void Envelope::clear_drag_read() {
+  if (_internal_has_drag_read()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.drag_read_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::DragRead* Envelope::release_drag_read() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.drag_read)
+  if (_internal_has_drag_read()) {
+    clear_has_body();
+    ::dsa::control::v1::DragRead* temp = _impl_.body_.drag_read_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.drag_read_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::DragRead& Envelope::_internal_drag_read() const {
+  return _internal_has_drag_read()
+      ? *_impl_.body_.drag_read_
+      : reinterpret_cast< ::dsa::control::v1::DragRead&>(::dsa::control::v1::_DragRead_default_instance_);
+}
+inline const ::dsa::control::v1::DragRead& Envelope::drag_read() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.drag_read)
+  return _internal_drag_read();
+}
+inline ::dsa::control::v1::DragRead* Envelope::unsafe_arena_release_drag_read() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.drag_read)
+  if (_internal_has_drag_read()) {
+    clear_has_body();
+    ::dsa::control::v1::DragRead* temp = _impl_.body_.drag_read_;
+    _impl_.body_.drag_read_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_drag_read(::dsa::control::v1::DragRead* drag_read) {
+  clear_body();
+  if (drag_read) {
+    set_has_drag_read();
+    _impl_.body_.drag_read_ = drag_read;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.drag_read)
+}
+inline ::dsa::control::v1::DragRead* Envelope::_internal_mutable_drag_read() {
+  if (!_internal_has_drag_read()) {
+    clear_body();
+    set_has_drag_read();
+    _impl_.body_.drag_read_ = CreateMaybeMessage< ::dsa::control::v1::DragRead >(GetArenaForAllocation());
+  }
+  return _impl_.body_.drag_read_;
+}
+inline ::dsa::control::v1::DragRead* Envelope::mutable_drag_read() {
+  ::dsa::control::v1::DragRead* _msg = _internal_mutable_drag_read();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.drag_read)
+  return _msg;
+}
+
+// .dsa.control.v1.DragData drag_data = 353;
+inline bool Envelope::_internal_has_drag_data() const {
+  return body_case() == kDragData;
+}
+inline bool Envelope::has_drag_data() const {
+  return _internal_has_drag_data();
+}
+inline void Envelope::set_has_drag_data() {
+  _impl_._oneof_case_[0] = kDragData;
+}
+inline void Envelope::clear_drag_data() {
+  if (_internal_has_drag_data()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.drag_data_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::DragData* Envelope::release_drag_data() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.drag_data)
+  if (_internal_has_drag_data()) {
+    clear_has_body();
+    ::dsa::control::v1::DragData* temp = _impl_.body_.drag_data_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.drag_data_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::DragData& Envelope::_internal_drag_data() const {
+  return _internal_has_drag_data()
+      ? *_impl_.body_.drag_data_
+      : reinterpret_cast< ::dsa::control::v1::DragData&>(::dsa::control::v1::_DragData_default_instance_);
+}
+inline const ::dsa::control::v1::DragData& Envelope::drag_data() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.drag_data)
+  return _internal_drag_data();
+}
+inline ::dsa::control::v1::DragData* Envelope::unsafe_arena_release_drag_data() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.drag_data)
+  if (_internal_has_drag_data()) {
+    clear_has_body();
+    ::dsa::control::v1::DragData* temp = _impl_.body_.drag_data_;
+    _impl_.body_.drag_data_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_drag_data(::dsa::control::v1::DragData* drag_data) {
+  clear_body();
+  if (drag_data) {
+    set_has_drag_data();
+    _impl_.body_.drag_data_ = drag_data;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.drag_data)
+}
+inline ::dsa::control::v1::DragData* Envelope::_internal_mutable_drag_data() {
+  if (!_internal_has_drag_data()) {
+    clear_body();
+    set_has_drag_data();
+    _impl_.body_.drag_data_ = CreateMaybeMessage< ::dsa::control::v1::DragData >(GetArenaForAllocation());
+  }
+  return _impl_.body_.drag_data_;
+}
+inline ::dsa::control::v1::DragData* Envelope::mutable_drag_data() {
+  ::dsa::control::v1::DragData* _msg = _internal_mutable_drag_data();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.drag_data)
+  return _msg;
+}
+
+// .dsa.control.v1.DragEnd drag_end = 354;
+inline bool Envelope::_internal_has_drag_end() const {
+  return body_case() == kDragEnd;
+}
+inline bool Envelope::has_drag_end() const {
+  return _internal_has_drag_end();
+}
+inline void Envelope::set_has_drag_end() {
+  _impl_._oneof_case_[0] = kDragEnd;
+}
+inline void Envelope::clear_drag_end() {
+  if (_internal_has_drag_end()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.drag_end_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::DragEnd* Envelope::release_drag_end() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.drag_end)
+  if (_internal_has_drag_end()) {
+    clear_has_body();
+    ::dsa::control::v1::DragEnd* temp = _impl_.body_.drag_end_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.drag_end_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::DragEnd& Envelope::_internal_drag_end() const {
+  return _internal_has_drag_end()
+      ? *_impl_.body_.drag_end_
+      : reinterpret_cast< ::dsa::control::v1::DragEnd&>(::dsa::control::v1::_DragEnd_default_instance_);
+}
+inline const ::dsa::control::v1::DragEnd& Envelope::drag_end() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.drag_end)
+  return _internal_drag_end();
+}
+inline ::dsa::control::v1::DragEnd* Envelope::unsafe_arena_release_drag_end() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.drag_end)
+  if (_internal_has_drag_end()) {
+    clear_has_body();
+    ::dsa::control::v1::DragEnd* temp = _impl_.body_.drag_end_;
+    _impl_.body_.drag_end_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_drag_end(::dsa::control::v1::DragEnd* drag_end) {
+  clear_body();
+  if (drag_end) {
+    set_has_drag_end();
+    _impl_.body_.drag_end_ = drag_end;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.drag_end)
+}
+inline ::dsa::control::v1::DragEnd* Envelope::_internal_mutable_drag_end() {
+  if (!_internal_has_drag_end()) {
+    clear_body();
+    set_has_drag_end();
+    _impl_.body_.drag_end_ = CreateMaybeMessage< ::dsa::control::v1::DragEnd >(GetArenaForAllocation());
+  }
+  return _impl_.body_.drag_end_;
+}
+inline ::dsa::control::v1::DragEnd* Envelope::mutable_drag_end() {
+  ::dsa::control::v1::DragEnd* _msg = _internal_mutable_drag_end();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.drag_end)
+  return _msg;
+}
+
 inline bool Envelope::has_body() const {
   return body_case() != BODY_NOT_SET;
 }
@@ -51774,6 +54092,18 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

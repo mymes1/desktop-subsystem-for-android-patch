@@ -94,6 +94,9 @@ windows = { version = "0.62", features = [
     "Win32_Storage_FileSystem",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
+    # Dragging an app's files out of its window: the virtual files' memory and formats.
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
     # Each task window's UI Automation tree: its providers, VARIANTs and SAFEARRAYs.
     "Win32_System_Ole",
     # The key state a drop target is told of (files dropped on a task window).

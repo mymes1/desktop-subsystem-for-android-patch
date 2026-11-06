@@ -65,6 +65,7 @@ pub mod compositor;
 pub mod data_reset;
 pub mod device_identity;
 pub mod diagnostics;
+pub mod drag;
 pub mod file_share;
 pub mod files;
 pub mod files_door;

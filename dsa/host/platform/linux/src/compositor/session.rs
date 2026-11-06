@@ -18,6 +18,7 @@ use std::time::{Duration, Instant};
 use dsa_host_core::compositor::shown_windows::ShownWindows;
 use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
 use dsa_host_core::compositor::window_hosts::FromHost;
+use dsa_host_core::drag::{DragOffer, DragOut};
 use dsa_host_core::files::{FileAction, FileTransfer};
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::input::InputEvent;
@@ -114,6 +115,14 @@ enum Message {
     TasksLost,
     /// The guest copied text.
     GuestClipboard(String),
+    /// An app drags `offer` out of task `task_id`'s window, from the press `serial`; `client`
+    /// reads its files and ends it.
+    DragOut {
+        task_id: i32,
+        offer: DragOffer,
+        client: HostApiClient,
+        serial: u32,
+    },
 }
 
 /// What the main thread asks of the service.
@@ -229,6 +238,43 @@ fn serve_requests(requests: Receiver<Request>) {
                 log(&format!("a request to Android failed: {why}"));
                 client = None;
             }
+        }
+    });
+}
+
+/// Asks the service whether an app drags out of the window a press left (`out`), on a thread
+/// of its own, and hands an offer to the main thread to start on the desktop.
+fn ask_drag_out(to_main: ToMain, out: DragOut, serial: u32) {
+    std::thread::spawn(move || {
+        let mut client = match connect() {
+            Ok(client) => client,
+            Err(why) => {
+                log(&format!("a drag out of task {}: {why}", out.task_id));
+                return;
+            }
+        };
+        match client.drag_out(out) {
+            Ok(Some(offer)) => {
+                let drag_id = offer.drag_id;
+                log(&format!(
+                    "task {}: {} item(s) dragged out of the window",
+                    out.task_id,
+                    offer.items.len()
+                ));
+                let sent = to_main.send(Message::DragOut {
+                    task_id: out.task_id,
+                    offer,
+                    client,
+                    serial,
+                });
+                if !sent {
+                    if let Ok(mut client) = connect() {
+                        let _ = client.end_drag(drag_id, false);
+                    }
+                }
+            }
+            Ok(None) => {}
+            Err(why) => log(&format!("a drag out of task {} did not start: {why}", out.task_id)),
         }
     });
 }
@@ -419,6 +465,8 @@ struct Main {
     /// What the guest copied last, so its echo from the desktop is not sent back.
     guest_clipboard: Option<String>,
     focused: Option<i32>,
+    /// Where the threads that ask about drags hand their offers.
+    to_main: ToMain,
 }
 
 impl Main {
@@ -493,6 +541,15 @@ impl Main {
                 self.guest_clipboard = Some(text.clone());
                 self.desktop.state.set_clipboard(text);
             }
+            Message::DragOut {
+                task_id,
+                offer,
+                client,
+                serial,
+            } => self
+                .desktop
+                .state
+                .start_drag_out(task_id, offer, client, serial),
         }
     }
 
@@ -538,6 +595,7 @@ impl Main {
                     let _ = self.clipboard.send(text);
                 }
             }
+            Event::DragOut { out, serial } => ask_drag_out(self.to_main.clone(), out, serial),
             Event::Dropped { package, paths, .. } => {
                 for path in paths {
                     match FileTransfer::read(&path, FileAction::Send) {
@@ -654,7 +712,7 @@ pub fn run() -> Result<(), String> {
     watch_tasks(to_main.clone());
     send_input(input_receiver);
     serve_requests(request_receiver);
-    sync_clipboard(to_main, clipboard_receiver);
+    sync_clipboard(to_main.clone(), clipboard_receiver);
     if let Some(folders) = &folders {
         show_notifications(requests.clone(), folders.icons.join("notifications"));
     }
@@ -679,6 +737,7 @@ pub fn run() -> Result<(), String> {
         folders,
         guest_clipboard: None,
         focused: None,
+        to_main,
     };
     if let Ok(mut client) = connect() {
         if let Ok(settings) = client.app_window_settings() {

@@ -3,11 +3,18 @@
 //! The desktop's clipboard reaches the guest whenever it changes while a task window has the
 //! keyboard, which is when Wayland lets a program read it. What the guest copies becomes the
 //! desktop's clipboard, offered under every name for text. Files dropped on a task window
-//! are handed to the window's app.
+//! are handed to the window's app. What an app drags out of its window becomes a drag on the
+//! desktop, of files (`text/uri-list`, streamed from the guest when a target asks) and text.
 
 use std::io::{Read, Write};
 use std::os::fd::{AsFd, OwnedFd};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use dsa_host_core::drag::{DragOffer, LeaveWatch};
+use dsa_host_core::host_api::HostApiClient;
 
 use wayland_client::protocol::{
     wl_data_device::{self, WlDataDevice},
@@ -19,6 +26,7 @@ use wayland_client::{event_created_child, Connection, Dispatch, Proxy, QueueHand
 
 use super::{task_of, Event, State};
 use crate::shell::clipboard::{host_text, text_type, TEXT_TYPES};
+use crate::shell::file_drag;
 use crate::shell::file_drop::{paths, URI_LIST};
 
 /// The types an offer has, as it announces them.
@@ -34,6 +42,76 @@ pub struct DataState {
     waiting: Option<String>,
     /// The desktop's clipboard offer, read when a task window has the keyboard.
     selection: Option<WlDataOffer>,
+    /// When a press of the left button leaves a task window.
+    pub(crate) leave: LeaveWatch,
+    /// The serial of the last press of the left button in a task window.
+    pub(crate) press_serial: u32,
+}
+
+/// How long the files of a dropped drag stay, for the target to copy them.
+const DROPPED_FILES_KEPT: Duration = Duration::from_secs(120);
+
+/// An app's drag out of its window, as the desktop's drag source carries it.
+pub struct DragOutSource {
+    offer: DragOffer,
+    client: Mutex<HostApiClient>,
+    /// The folder the files are streamed into, and their paths, once a target asked.
+    files: Mutex<Option<(PathBuf, Vec<PathBuf>)>>,
+    ended: AtomicBool,
+}
+
+impl DragOutSource {
+    /// The `text/uri-list` of the drag's files, streaming them from the guest the first time.
+    fn uri_list(&self) -> Result<String, String> {
+        let mut files = self.files.lock().unwrap_or_else(|e| e.into_inner());
+        if files.is_none() {
+            let folder = file_drag::drag_folder(&file_drag::drags_root(), self.offer.drag_id)
+                .map_err(|e| format!("no folder for the dragged files: {e}"))?;
+            let mut client = self.client.lock().unwrap_or_else(|e| e.into_inner());
+            let paths = file_drag::materialize(&folder, &self.offer, |read| {
+                client.read_drag(read).map_err(|e| e.to_string())
+            });
+            match paths {
+                Ok(paths) => *files = Some((folder, paths)),
+                Err(why) => {
+                    let _ = std::fs::remove_dir_all(&folder);
+                    return Err(why);
+                }
+            }
+        }
+        Ok(files
+            .as_ref()
+            .map(|(_, paths)| file_drag::uri_list(paths))
+            .unwrap_or_default())
+    }
+
+    /// Ends the drag in the guest once, then removes its files: at once when it was
+    /// cancelled, after [`DROPPED_FILES_KEPT`] when it was dropped.
+    fn end(&self, dropped: bool) {
+        if self.ended.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let ended = self
+            .client
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .end_drag(self.offer.drag_id, dropped);
+        if let Err(why) = ended {
+            super::super::session::log(&format!("the drag ended, but Android was not told: {why}"));
+        }
+        let folder = self
+            .files
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+            .map(|(folder, _)| folder);
+        if let Some(folder) = folder {
+            if dropped {
+                std::thread::sleep(DROPPED_FILES_KEPT);
+            }
+            let _ = std::fs::remove_dir_all(folder);
+        }
+    }
 }
 
 /// A pipe for an offer to write into: (read end, write end).
@@ -74,6 +152,45 @@ fn read_offer(
 }
 
 impl State {
+    /// Starts a drag on the desktop of what an app drags out of task `task_id`'s window,
+    /// from the press `serial`. The drag ends in the guest when the desktop's ends.
+    pub fn start_drag_out(
+        &mut self,
+        task_id: i32,
+        offer: DragOffer,
+        client: HostApiClient,
+        serial: u32,
+    ) {
+        let surface = self.windows.get(&task_id).map(|window| window.surface.clone());
+        let source_data = Arc::new(DragOutSource {
+            offer,
+            client: Mutex::new(client),
+            files: Mutex::new(None),
+            ended: AtomicBool::new(false),
+        });
+        let (Some(manager), Some(device), Some(surface)) =
+            (&self.data_manager, &self.data_device, surface)
+        else {
+            std::thread::spawn(move || source_data.end(false));
+            return;
+        };
+        let has_files = source_data.offer.files().next().is_some();
+        let has_text = source_data.offer.text().is_some();
+        let source = manager.create_data_source(&self.qh, Arc::clone(&source_data));
+        if has_files {
+            source.offer(URI_LIST.to_string());
+        }
+        if has_text {
+            for mime in TEXT_TYPES {
+                source.offer(mime.to_string());
+            }
+        }
+        if source.version() >= 3 {
+            source.set_actions(DndAction::Copy);
+        }
+        device.start_drag(Some(&source), &surface, None, serial);
+    }
+
     /// A task window got the keyboard: the desktop's clipboard may be read now, and what the
     /// guest copied meanwhile becomes the desktop's.
     pub(crate) fn data_focus_changed(&mut self) {
@@ -245,6 +362,49 @@ impl Dispatch<WlDataSource, Arc<String>> for State {
                 if state.data_state.source.as_ref() == Some(source) {
                     state.data_state.source = None;
                 }
+                source.destroy();
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<WlDataSource, Arc<DragOutSource>> for State {
+    fn event(
+        _: &mut Self,
+        source: &WlDataSource,
+        event: wl_data_source::Event,
+        drag: &Arc<DragOutSource>,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        match event {
+            wl_data_source::Event::Send { mime_type, fd } => {
+                let drag = Arc::clone(drag);
+                std::thread::spawn(move || {
+                    let bytes = if mime_type == URI_LIST {
+                        match drag.uri_list() {
+                            Ok(list) => list.into_bytes(),
+                            Err(why) => {
+                                super::super::session::log(&why);
+                                Vec::new()
+                            }
+                        }
+                    } else {
+                        drag.offer.text().unwrap_or_default().into_bytes()
+                    };
+                    let mut file = std::fs::File::from(fd);
+                    let _ = file.write_all(&bytes);
+                });
+            }
+            wl_data_source::Event::Cancelled => {
+                let drag = Arc::clone(drag);
+                std::thread::spawn(move || drag.end(false));
+                source.destroy();
+            }
+            wl_data_source::Event::DndFinished => {
+                let drag = Arc::clone(drag);
+                std::thread::spawn(move || drag.end(true));
                 source.destroy();
             }
             _ => {}

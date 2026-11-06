@@ -24,6 +24,8 @@ import io.github.thisisthepy.dsa.agent.input.PointerQueue
 import io.github.thisisthepy.dsa.agent.input.TextInput
 import io.github.thisisthepy.dsa.agent.input.TextKeys
 import io.github.thisisthepy.dsa.agent.input.TouchSounds
+import io.github.thisisthepy.dsa.agent.files.DragCatcher
+import io.github.thisisthepy.dsa.agent.files.DragOut
 import io.github.thisisthepy.dsa.agent.files.FileOpener
 import io.github.thisisthepy.dsa.agent.files.FileReceiver
 import io.github.thisisthepy.dsa.agent.files.MediaScan
@@ -94,7 +96,8 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * text, and text copied in the guest goes to the host, while the user shares the clipboard
  * ([ClipboardSync]). Web links apps open go to the host's browser unless the host says they
  * stay in the guest ([Links]), and files the host sends are stored and offered to the apps
- * that can open them ([FileReceiver]). APKs the host sends are installed through the guest's
+ * that can open them ([FileReceiver]). Files and text an app drags out of its window go on to
+ * the host's own drag and drop ([DragOut]). APKs the host sends are installed through the guest's
  * package installer ([ApkInstaller]), and the host is told how each install went. The guest's
  * notifications go to the host's notification centre, and a click or a dismissal there comes
  * back to them ([NotificationForwarder]). Apps that keep running with no window, because they
@@ -152,6 +155,8 @@ class Agent(
     diagnosticsRunner: (Runnable) -> Unit = { Thread(it, "dsa-diagnostics").start() },
     systemSettings: SystemSettingsPort = SystemSettingsPort.NONE,
     wifi: WifiPort = WifiPort.NONE,
+    dragCatcher: DragCatcher = DragCatcher.NONE,
+    dragRunner: ((Runnable) -> Unit)? = null,
 ) {
     private val network = NetworkSetup(wifi, log)
     private val channel = ChannelClient(
@@ -265,6 +270,31 @@ class Agent(
     private val links = Links(browserRole, guestBrowser, { frame -> channel.send(frame) }, log)
     private val files = FileReceiver(fileStore, fileOpener, { frame -> channel.send(frame) }, log)
     private val sharedFolders = SharedFolders(sharedStorage, mediaScan, scheduler, log)
+    private val dragThread by lazy {
+        java.util.concurrent.Executors.newSingleThreadExecutor { work -> Thread(work, "dsa-drag-out") }
+    }
+    private val dragOut = DragOut(
+        dragCatcher,
+        releasePointer = { taskId, x, y, tool, pointerId ->
+            // The pointer lifts where it left the window, as the host's own UP would, so the
+            // app's drag drops on the agent's window and the input stays in step.
+            pointerQueue.add(
+                io.github.thisisthepy.dsa.control.v1.PointerEvent.newBuilder()
+                    .setTaskId(taskId)
+                    .setAction(PointerAction.POINTER_ACTION_UP)
+                    .setTool(tool)
+                    .setPointerId(pointerId)
+                    .setX(x)
+                    .setY(y)
+                    .setButtons(0)
+                    .setPressure(0f)
+                    .build(),
+            )
+        },
+        send = { frame -> channel.send(frame) },
+        log = log,
+        run = dragRunner ?: { work -> dragThread.execute(work) },
+    )
     private val accessibilityExport = AccessibilityExport(
         accessibility,
         scheduler,
@@ -462,6 +492,7 @@ class Agent(
         if (backgroundApps.handle(envelope)) return true
         if (apkInstaller.handle(envelope)) return true
         if (packageQueries.handle(envelope)) return true
+        if (dragOut.handle(envelope)) return true
         if (printer.handle(envelope)) return true
         if (appUninstaller.handle(envelope)) return true
         when (envelope.bodyCase) {
