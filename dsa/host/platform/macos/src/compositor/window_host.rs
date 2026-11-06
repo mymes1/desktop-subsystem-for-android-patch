@@ -18,6 +18,7 @@ use dsa_host_core::compositor::window_hosts::{
     connect_window_host, report_to_wire, to_host_from_wire, FromHost, ToHost,
 };
 use dsa_host_core::compositor::window_mode::WindowMode;
+use dsa_host_core::drag::{DragOffer, DragOut};
 use dsa_host_core::files::{FileAction, FileTransfer};
 use dsa_host_core::host_api::{HostApiClient, InputStream};
 use dsa_host_core::ime::ImeCursor;
@@ -213,6 +214,7 @@ struct Input {
     events: Sender<InputEvent>,
     cursors: Cursors,
     files: Sender<PathBuf>,
+    drags: Sender<DragOut>,
 }
 
 impl InputSink for Input {
@@ -229,6 +231,16 @@ impl InputSink for Input {
     fn ime_cursor(&self) -> Option<ImeCursor> {
         self.cursors.lock().ok()?.get(&self.task_id).copied()
     }
+
+    fn drag_left(&mut self, x: f32, y: f32) {
+        let _ = self.drags.send(DragOut {
+            task_id: self.task_id,
+            x,
+            y,
+            tool: dsa_protocol::control::PointerTool::Mouse as i32,
+            pointer_id: 0,
+        });
+    }
 }
 
 #[derive(Default)]
@@ -243,11 +255,36 @@ struct State {
     reports: Option<Reports>,
     input: Option<Sender<InputEvent>>,
     files: Option<Sender<PathBuf>>,
+    drags: Option<Sender<DragOut>>,
     cursors: Cursors,
 }
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::default());
+}
+
+/// Starts an app's drag out of task `task_id`'s window on the desktop, or ends it in the
+/// guest when it cannot start. On the main thread.
+fn start_drag(task_id: i32, offer: DragOffer, client: HostApiClient) {
+    let drag_id = offer.drag_id;
+    let mut client = Some(client);
+    let started = STATE.with(|state| -> Result<(), String> {
+        let state = state
+            .try_borrow()
+            .map_err(|_| "the windows are busy".to_string())?;
+        let window = state
+            .windows
+            .get(&task_id)
+            .ok_or_else(|| "the window has closed".to_string())?;
+        let client = client.take().ok_or_else(|| "no connection".to_string())?;
+        crate::input::drag_source::begin(window.view(), offer, client)
+    });
+    if let Err(why) = started {
+        eprintln!("dsa-app-window: the drag out of task {task_id} did not start: {why}");
+        if let Some(mut client) = client {
+            let _ = client.end_drag(drag_id, false);
+        }
+    }
 }
 
 fn show(task_id: i32, title: &str, size: (u32, u32), focused: bool) {
@@ -260,10 +297,11 @@ fn show(task_id: i32, title: &str, size: (u32, u32), focused: bool) {
             }
             return;
         }
-        let (Some(reports), Some(input), Some(files)) = (
+        let (Some(reports), Some(input), Some(files), Some(drags)) = (
             state.reports.clone(),
             state.input.clone(),
             state.files.clone(),
+            state.drags.clone(),
         ) else {
             return;
         };
@@ -273,6 +311,7 @@ fn show(task_id: i32, title: &str, size: (u32, u32), focused: bool) {
             events: input,
             cursors: Arc::clone(&state.cursors),
             files,
+            drags,
         });
         match TaskWindow::open(task_id, title, size, events, sink) {
             Ok(window) => {
@@ -528,11 +567,39 @@ pub fn run(setup: HostSetup) -> Result<(), String> {
         })
         .map_err(|e| format!("the file drop could not start: {e}"))?;
 
+    // A press that leaves a window asks the local API whether the app drags out of it; an
+    // offer becomes an AppKit drag on the main thread.
+    let (drags, left) = channel::<DragOut>();
+    let ask_with = setup.host_api.clone();
+    std::thread::Builder::new()
+        .name("dsa-app-window-drags".into())
+        .spawn(move || {
+            for out in left {
+                let mut connector = UnixLocalConnector {
+                    path: ask_with.clone(),
+                };
+                let asked = HostApiClient::connect(&mut connector, BUILD, CONNECT_TIMEOUT)
+                    .and_then(|mut client| client.drag_out(out).map(|offer| (offer, client)));
+                match asked {
+                    Ok((Some(offer), client)) => {
+                        on_main(move || start_drag(out.task_id, offer, client))
+                    }
+                    Ok((None, _)) => {}
+                    Err(why) => eprintln!(
+                        "dsa-app-window: a drag out of task {} did not start: {why}",
+                        out.task_id
+                    ),
+                }
+            }
+        })
+        .map_err(|e| format!("the drags out of the windows could not start: {e}"))?;
+
     STATE.with(|state| {
         let mut state = state.borrow_mut();
         state.reports = Some(reports);
         state.input = Some(input);
         state.files = Some(files);
+        state.drags = Some(drags);
     });
 
     std::thread::Builder::new()
