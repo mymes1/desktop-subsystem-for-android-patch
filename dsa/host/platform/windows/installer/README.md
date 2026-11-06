@@ -75,6 +75,14 @@ copies only `setup.exe` itself, because the package is embedded in it.)
   DSA program still running from them in every session (the window manager, the app
   windows and the settings app), and afterwards starts the window manager again for each
   signed-in user.
+- Installs a rebuild of the version already installed (development and CI builds share a
+  version) as an upgrade: double-click the newer MSI or `setup.exe`. Each build is its own
+  product to Windows Installer, so it replaces the one before it rather than repairing it.
+  `msiexec /i dsa-<version>.msi REINSTALL=ALL REINSTALLMODE=vamus` does the same for a newer
+  build, and repairs the build that is installed when it is the same package.
+- Removes the images, the settings and each user's files only on a real uninstall. A repair
+  (`msiexec /fa`, or Repair in Installed apps), a reinstall, a change and an upgrade keep
+  them.
 - When the image the service last used has missing or broken files, the service moves to
   a usable installed image, or downloads one when there is none, rather than waiting on
   files that cannot boot.
