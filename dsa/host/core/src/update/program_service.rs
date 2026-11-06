@@ -920,6 +920,21 @@ impl UserAndroid for WithProgramStatus {
     fn refresh_apps(&self) -> Result<(), TaskRequestError> {
         UserAndroid::refresh_apps(&*self.android)
     }
+    fn drag_out(
+        &self,
+        out: crate::drag::DragOut,
+    ) -> Result<Option<crate::drag::DragOffer>, TaskRequestError> {
+        UserAndroid::drag_out(&*self.android, out)
+    }
+    fn read_drag(
+        &self,
+        read: crate::drag::DragRead,
+    ) -> Result<crate::drag::DragChunk, TaskRequestError> {
+        UserAndroid::read_drag(&*self.android, read)
+    }
+    fn end_drag(&self, drag_id: u32, dropped: bool) -> Result<(), TaskRequestError> {
+        UserAndroid::end_drag(&*self.android, drag_id, dropped)
+    }
     fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
         UserAndroid::open_app_settings(&*self.android, package)
     }

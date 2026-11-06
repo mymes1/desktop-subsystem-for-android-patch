@@ -1110,6 +1110,101 @@ pub struct AndroidFiles {
     #[prost(string, tag = "2")]
     pub token: ::prost::alloc::string::String,
 }
+/// One thing an app drags out of its window: a file (a content URI the app granted read
+/// access to) or text. The host never learns the URI or any path in the guest, only what it
+/// needs to make a file of the same name and content.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DragItem {
+    /// The file's name, without any folder, as the content provider names it. Empty for text.
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    /// The file's length in bytes, when the provider says (`size_known`).
+    #[prost(uint64, tag = "2")]
+    pub size: u64,
+    #[prost(bool, tag = "3")]
+    pub size_known: bool,
+    /// The MIME type the app gave, such as image/jpeg or text/plain.
+    #[prost(string, tag = "4")]
+    pub mime_type: ::prost::alloc::string::String,
+    /// Whether this item is text rather than a file, and the text itself.
+    #[prost(bool, tag = "5")]
+    pub is_text: bool,
+    #[prost(string, tag = "6")]
+    pub text: ::prost::alloc::string::String,
+}
+/// Host to guest, to the agent: the pointer left task `task_id`'s window with a button held,
+/// at (`x`, `y`) relative to the task, the last place inside it. If an app is dragging with
+/// DRAG_FLAG_GLOBAL, the agent ends the drag in the guest on a window of its own, takes read
+/// access to what it carries, and answers DragOffer with its items; otherwise DragOffer with
+/// none, and the guest's pointer is left as it was.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct DragOut {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(int32, tag = "2")]
+    pub task_id: i32,
+    #[prost(float, tag = "3")]
+    pub x: f32,
+    #[prost(float, tag = "4")]
+    pub y: f32,
+    #[prost(enumeration = "PointerTool", tag = "5")]
+    pub tool: i32,
+    #[prost(uint32, tag = "6")]
+    pub pointer_id: u32,
+}
+/// Guest to host, from the agent: what the drag a DragOut asked about carries. No items means
+/// no app was dragging anything the host can take; a non-empty `error` says why, in words a
+/// person can act on. The drag stays open in the guest until DragEnd.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DragOffer {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    /// Names the drag in DragRead and DragEnd. Unique among the drags of one connection.
+    #[prost(uint32, tag = "2")]
+    pub drag_id: u32,
+    #[prost(message, repeated, tag = "3")]
+    pub items: ::prost::alloc::vec::Vec<DragItem>,
+    #[prost(string, tag = "4")]
+    pub error: ::prost::alloc::string::String,
+}
+/// Host to guest, to the agent: up to `length` bytes of item `item` of drag `drag_id`, from
+/// `offset`. The host reads each file in order, as the host app it was dropped on copies it,
+/// so the guest never holds more than one read's worth.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DragRead {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(uint32, tag = "2")]
+    pub drag_id: u32,
+    #[prost(uint32, tag = "3")]
+    pub item: u32,
+    #[prost(uint64, tag = "4")]
+    pub offset: u64,
+    #[prost(uint32, tag = "5")]
+    pub length: u32,
+}
+/// Guest to host, from the agent: the answer to a DragRead. `end` says the file ends after
+/// `data`. A non-empty `error` ends the read: the file cannot be read further.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DragData {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(bytes = "vec", tag = "2")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bool, tag = "3")]
+    pub end: bool,
+    #[prost(string, tag = "4")]
+    pub error: ::prost::alloc::string::String,
+}
+/// Host to guest, to the agent: the drag is over on the host, dropped or cancelled. The agent
+/// closes what it read and gives back its access to the drag's content, so nothing stays open.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DragEnd {
+    #[prost(uint32, tag = "1")]
+    pub drag_id: u32,
+    #[prost(bool, tag = "2")]
+    pub dropped: bool,
+}
 /// Host to guest, to the control daemon: a probe that pairs the host's clock with the guest's,
 /// so trace lines from both can be put on one time line. The daemon answers at once with
 /// ClockAnswer and passes the probe to no one else. Sent only while the host traces input.
@@ -2048,7 +2143,7 @@ pub struct GamepadRumble {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2316,6 +2411,16 @@ pub mod envelope {
         FileSharing(super::FileSharing),
         #[prost(message, tag = "291")]
         AndroidFiles(super::AndroidFiles),
+        #[prost(message, tag = "350")]
+        DragOut(super::DragOut),
+        #[prost(message, tag = "351")]
+        DragOffer(super::DragOffer),
+        #[prost(message, tag = "352")]
+        DragRead(super::DragRead),
+        #[prost(message, tag = "353")]
+        DragData(super::DragData),
+        #[prost(message, tag = "354")]
+        DragEnd(super::DragEnd),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.

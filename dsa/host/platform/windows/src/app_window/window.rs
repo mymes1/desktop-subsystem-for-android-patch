@@ -82,6 +82,7 @@ use crate::compositor::window_marks;
 
 use super::accessibility::{AccessibilityWindow, ApiConnect, WM_APP_ACCESSIBILITY};
 use super::caption::{task_frame, CaptionWindow};
+use super::drag_source::{self, DragStarter, WM_APP_DRAG_OUT};
 use super::drop_target::{self, DropHandler};
 use super::ime::ImeWindow;
 use super::keys::KeyWindow;
@@ -186,6 +187,9 @@ pub struct UiSetup {
     pub accessibility: Option<ApiConnect>,
     /// What happens to files dropped on a task window. `None` takes no drops.
     pub drops: Option<DropHandler>,
+    /// Asks whether an app drags out of a task window a press has left. `None` starts no
+    /// drags on the host.
+    pub drags: Option<DragStarter>,
 }
 
 /// Starts the UI thread. Returns once its message window exists.
@@ -485,6 +489,11 @@ unsafe extern "system" fn task_window_proc(
     }
     if message == trace_press_message() {
         return trace_press(hwnd, wparam, lparam);
+    }
+    if message == WM_APP_DRAG_OUT {
+        // An app's drag out of this window: the host's drag runs here until it is dropped.
+        drag_source::run_pending(lparam);
+        return 0;
     }
     match message {
         WM_NCCREATE => {
@@ -1307,7 +1316,12 @@ impl Ui {
             task_id,
             report: Arc::clone(&self.setup.report),
             presenter: RefCell::new(None),
-            pointer: PointerWindow::new(task_id, size, self.setup.input.clone()),
+            pointer: PointerWindow::new(
+                task_id,
+                size,
+                self.setup.input.clone(),
+                self.setup.drags.clone(),
+            ),
             keys: KeyWindow::new(task_id, self.setup.input.clone()),
             ime: ImeWindow::new(task_id, self.setup.input.clone()),
             accessibility: RefCell::new(AccessibilityWindow::new(
