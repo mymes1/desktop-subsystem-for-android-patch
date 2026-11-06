@@ -35,16 +35,20 @@ on property:vendor.dsa.memory.reclaim=1 && property:sys.boot_completed=1
     write /proc/sys/vm/compact_memory 1
     setprop vendor.dsa.memory.reclaim 0
 
-# The gradual trim: dsa-channeld sets this whenever page cache has grown past the guest's
-# working set and the guest is not under memory pressure, whether or not the host is short.
-# vendor.dsa.memory.trim_size says how many MiB (at most 128). The kernel takes them from the
+# The working set trim: dsa-channeld sets this on the first look that finds page cache grown
+# past the guest's working set (an app closed, or files were read), while the guest is not
+# under memory pressure, whether or not the host is short. vendor.dsa.memory.trim_size says
+# how many MiB: all of the excess at once. The kernel takes them from the
 # root cgroup, which every process's memory is charged under, coldest pages first, so the hot
 # pages of running apps and system_server stay. "swappiness=0" takes page cache only: app
 # memory moves to zram in the idle reclaim, not while an app is in use. The root's file is
 # root's, unlike those of the groups libprocessgroup makes, so init's vendor scripts can always
-# open it.
+# open it. The pages it frees are scattered among pages in use, and free page reporting hands
+# back only whole free blocks, so compaction then gathers them and they go back to the host at
+# once rather than whenever background compaction gets to them.
 on property:vendor.dsa.memory.trim=1
     write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.trim_size}M swappiness=0"
+    write /proc/sys/vm/compact_memory 1
     setprop vendor.dsa.memory.trim 0
 
 # Developer mode. dsa-channeld sets vendor.dsa.adb as the host says: 1 while the user's

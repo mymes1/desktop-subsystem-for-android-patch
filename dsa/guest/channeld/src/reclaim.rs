@@ -13,17 +13,20 @@
 //! much zram is free. So the idle reclaim also asks the kernel to move cold anonymous pages to
 //! zram (cgroup `memory.reclaim`), where they take about a third of their size.
 //!
-//! Dropping caches costs reading those files again later, and swapped pages cost decompressing
-//! them, so neither is done often: once each time the guest goes idle, again while idle only
-//! when memory has grown back, and otherwise at most every few minutes while cache dominates.
+//! Memory the guest no longer uses goes back at once, not over minutes: the first look after
+//! the last task closes reclaims, and while idle every look that finds memory grown back
+//! reclaims again. Dropping caches costs reading those files again later, so the full drop
+//! with tasks open waits for cache to dominate, at most every few minutes.
 //! When the host says it is short of memory, the guest gives back what it can at once, as a
 //! phone's low memory killer would: the agent ends the cached app processes first, and the
 //! daemon's next look reclaims whatever that and the caches freed, whether tasks are open or
 //! not, and again every so often while the host stays short.
 //!
 //! Between those, and whether or not the host is short, the guest keeps only its working set:
-//! page cache beyond a target goes back in bounded slices of the coldest pages, once the open
-//! tasks have settled and while the guest is not under memory pressure. The target follows the
+//! all the page cache beyond a target goes back in one trim of the coldest pages, on the next
+//! look that finds it, while the guest is not under memory pressure. Only an app that has just
+//! opened holds the trim back for a while, because it is still reading its files. An app that
+//! closes holds nothing back: its cache goes on the next look. The target follows the
 //! guest's own signal, the evicted file pages it reads back (`workingset_refault_file`): cache
 //! that returns soon after a trim was in use, so the target rises; while none returns, it falls
 //! back to its floor.
@@ -37,16 +40,17 @@ use std::time::Duration;
 /// back to `0`.
 pub const RECLAIM_PROPERTY: &str = "vendor.dsa.memory.reclaim";
 
-/// The property init watches for the gradual trim: set to `1`, init asks the kernel to
+/// The property init watches for the working set trim: set to `1`, init asks the kernel to
 /// reclaim [`TRIM_SIZE_PROPERTY`] MiB of the coldest page cache (cgroup `memory.reclaim`) and
 /// sets it back to `0`.
 pub const TRIM_PROPERTY: &str = "vendor.dsa.memory.trim";
 
-/// How much the next gradual trim takes, in MiB. The daemon sets it before [`TRIM_PROPERTY`].
+/// How much the next working set trim takes, in MiB. The daemon sets it before [`TRIM_PROPERTY`].
 pub const TRIM_SIZE_PROPERTY: &str = "vendor.dsa.memory.trim_size";
 
-/// How often the daemon looks at the guest's memory.
-pub const CHECK_INTERVAL: Duration = Duration::from_secs(30);
+/// How often the daemon looks at the guest's memory. Free memory reaches the host on the
+/// look after it is freed, so this is how long it can sit in the guest.
+pub const CHECK_INTERVAL: Duration = Duration::from_secs(5);
 
 /// The fields of `/proc/meminfo` the decision uses, in KiB.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -143,13 +147,13 @@ pub fn file_refaults_kb(vmstat: &str, page_kb: u64) -> Option<u64> {
 /// Why the daemon asks for a reclaim.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reason {
-    /// No app task has been open for a while.
+    /// No app task is open.
     Idle,
     /// Most of the memory in use is cache the guest can drop.
     MostlyCache,
-    /// Cold cache has piled up past the guest's working set: a slice of page cache
-    /// ([`Reclaimer::trim_mib`]) goes back to the host, as WSL's gradual reclaim does. It runs
-    /// whether or not the host is short of memory, so the guest keeps only what it uses.
+    /// Cold cache has piled up past the guest's working set: all of it
+    /// ([`Reclaimer::trim_mib`]) goes back to the host at once. It runs whether or not the
+    /// host is short of memory, so the guest keeps only what it uses.
     Gradual,
     /// The host is short of memory.
     HostShort,
@@ -158,7 +162,8 @@ pub enum Reason {
 /// The decision's settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReclaimPolicy {
-    /// How long the guest must have no app task before its idle reclaim.
+    /// How long the guest must have no app task before its idle reclaim. None by default:
+    /// the first look after the last task closes reclaims.
     pub idle_after: Duration,
     /// The least time between two reclaims.
     pub min_gap: Duration,
@@ -173,9 +178,9 @@ pub struct ReclaimPolicy {
     /// How much reclaimable memory must have come back since the last idle reclaim for
     /// another, in KiB. A guest that stays small is left alone.
     pub idle_growth_kb: u64,
-    /// The time between two gradual trims while tasks are open.
+    /// The least time between two working set trims.
     pub trim_gap: Duration,
-    /// The least page cache the gradual trim leaves alone, in KiB: warm files of the open
+    /// The least page cache the working set trim leaves alone, in KiB: warm files of the open
     /// apps. It is where the working set target starts and the lowest it goes.
     pub keep_cache_kb: u64,
     /// The most the working set target rises to, in KiB, however often evicted files are read
@@ -183,12 +188,12 @@ pub struct ReclaimPolicy {
     pub keep_cache_max_kb: u64,
     /// The least cache above the working set target worth a trim, in KiB.
     pub min_trim_kb: u64,
-    /// The most one trim takes, in KiB. init does nothing else while the kernel reclaims, so a
-    /// large excess goes back over several trims.
+    /// The most one trim takes, in KiB. Unbounded by default: an excess that went back in
+    /// slices would sit in the guest for several looks.
     pub max_trim_kb: u64,
-    /// How long after the open tasks change (an app opens or closes) the trims and cache drops
-    /// wait: an app that has just started is reading its files, and trimming them then would
-    /// make it read them twice.
+    /// How long after an app opens the trims and cache drops wait: an app that has just
+    /// started is reading its files, and trimming them then would make it read them twice.
+    /// An app closing does not wait: what it read is no longer anyone's.
     pub settle_after: Duration,
     /// How much evicted page cache read back between two looks, in KiB, says the cache trimmed
     /// was in use: the target rises by `min_trim_kb` and that look trims nothing. A quarter of
@@ -201,17 +206,17 @@ pub struct ReclaimPolicy {
 impl Default for ReclaimPolicy {
     fn default() -> Self {
         ReclaimPolicy {
-            idle_after: Duration::from_secs(60),
+            idle_after: Duration::ZERO,
             min_gap: Duration::from_secs(10 * 60),
             cache_percent: 50,
             min_droppable_kb: 128 * 1024,
-            idle_repeat: Duration::from_secs(5 * 60),
+            idle_repeat: Duration::ZERO,
             idle_growth_kb: 64 * 1024,
-            trim_gap: Duration::from_secs(45),
+            trim_gap: Duration::ZERO,
             keep_cache_kb: 256 * 1024,
             keep_cache_max_kb: 1024 * 1024,
             min_trim_kb: 64 * 1024,
-            max_trim_kb: 128 * 1024,
+            max_trim_kb: u64::MAX,
             settle_after: Duration::from_secs(30),
             refault_limit_kb: 16 * 1024,
             host_short_gap: Duration::from_secs(60),
@@ -235,7 +240,7 @@ pub struct Reclaimer {
     idle_floor_kb: Option<u64>,
     /// The host said it is short of memory.
     host_short: bool,
-    /// The page cache the apps are taken to need, in KiB: the gradual trim leaves this much.
+    /// The page cache the apps are taken to need, in KiB: the working set trim leaves this much.
     /// It follows the refaults (see [`Reclaimer::refaults`]).
     target_kb: u64,
     /// The refault count at the last look, in KiB.
@@ -245,7 +250,7 @@ pub struct Reclaimer {
     /// The number of open tasks at the last look, and when it last changed.
     last_tasks: Option<usize>,
     tasks_changed: Option<Duration>,
-    /// What the last gradual trim asks for, in KiB.
+    /// What the last working set trim asks for, in KiB.
     trim_kb: u64,
 }
 
@@ -296,7 +301,7 @@ impl Reclaimer {
         }
     }
 
-    /// The page cache the gradual trim leaves now, in KiB.
+    /// The page cache the working set trim leaves now, in KiB.
     pub fn working_set_target_kb(&self) -> u64 {
         self.target_kb
     }
@@ -318,7 +323,7 @@ impl Reclaimer {
     }
 
     /// Like [`Reclaimer::decide`], told whether the guest is under memory pressure. Under
-    /// pressure the gradual trim waits, so it never competes with an app for memory.
+    /// pressure the working set trim waits, so it never competes with an app for memory.
     pub fn decide_under(
         &mut self,
         now: Duration,
@@ -332,8 +337,15 @@ impl Reclaimer {
         } else if self.idle_since.is_none() {
             self.idle_since = Some(now);
         }
-        if self.last_tasks.is_some_and(|last| last != tasks) {
-            self.tasks_changed = Some(now);
+        match self.last_tasks {
+            Some(last) if tasks > last => self.tasks_changed = Some(now),
+            Some(last) if tasks < last => {
+                // An app closed: the cache it used is not the working set any more, and the
+                // refaults it caused say nothing about the apps left.
+                self.target_kb = self.policy.keep_cache_kb;
+                self.refaulting = false;
+            }
+            _ => {}
         }
         self.last_tasks = Some(tasks);
         let settled = self

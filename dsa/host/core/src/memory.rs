@@ -569,8 +569,10 @@ pub enum GrowthAction {
 /// - Grow when the guest's available memory falls under a fifth of its total (at least
 ///   512 MiB), or when its tasks stall on memory for 10% of the time: by half the current size,
 ///   at least 1 GiB, up to the maximum, at most every 5 seconds.
-/// - Shrink when the guest has not been short for 30 seconds: to what it uses plus half again
-///   (at least 1 GiB of headroom), never below the base, at most every 30 seconds.
+/// - Shrink on the first report that finds the guest not short, once 5 seconds have passed
+///   since the last change: to what it uses plus half again (at least 1 GiB of headroom),
+///   never below the base. Memory the guest no longer needs goes back at once; the headroom,
+///   not a wait, keeps the size from swinging.
 /// - If memory added does not show in the guest's total within 30 seconds, give up growing:
 ///   the platform or the guest cannot hot-add.
 #[derive(Debug, Clone)]
@@ -579,7 +581,6 @@ pub struct MemoryGrowth {
     max_mb: u64,
     current_mb: u64,
     last_change: Option<Instant>,
-    calm_since: Option<Instant>,
     /// The guest total before the last growth, and when it was asked for.
     awaiting: Option<(u64, Instant)>,
     stopped: bool,
@@ -588,8 +589,7 @@ pub struct MemoryGrowth {
 /// Memory is added and removed in steps of this, in MiB, the guest's memory block size.
 const GROWTH_GRANULE_MB: u64 = 128;
 const GROW_COOLDOWN: Duration = Duration::from_secs(5);
-const SHRINK_COOLDOWN: Duration = Duration::from_secs(30);
-const SHRINK_AFTER_CALM: Duration = Duration::from_secs(30);
+const SHRINK_COOLDOWN: Duration = Duration::from_secs(5);
 const HOT_ADD_DEADLINE: Duration = Duration::from_secs(30);
 
 fn round_up_mb(mb: u64) -> u64 {
@@ -604,7 +604,6 @@ impl MemoryGrowth {
             max_mb: max_mb.max(base_mb),
             current_mb: base_mb,
             last_change: None,
-            calm_since: None,
             awaiting: None,
             stopped: false,
         }
@@ -647,7 +646,6 @@ impl MemoryGrowth {
                 .is_none_or(|at| now.saturating_duration_since(at) >= cooldown)
         };
         if short {
-            self.calm_since = None;
             if self.current_mb >= self.max_mb || !since_change(GROW_COOLDOWN) {
                 return None;
             }
@@ -656,10 +654,8 @@ impl MemoryGrowth {
             self.awaiting = Some((total_mb, now));
             return Some(self.resize(target, now));
         }
-        let calm_since = *self.calm_since.get_or_insert(now);
         if self.current_mb <= self.base_mb
             || p.stall_percent >= 1.0
-            || now.saturating_duration_since(calm_since) < SHRINK_AFTER_CALM
             || !since_change(SHRINK_COOLDOWN)
         {
             return None;
