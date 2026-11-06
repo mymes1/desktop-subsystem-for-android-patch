@@ -986,7 +986,10 @@ mod tests {
                 let image = paint_title_bar(&layout, dpi, &palette, &active, &content);
                 assert_eq!(image.len(), (layout.width * layout.height * 4) as usize);
                 let center = (icon_left as u32 + side / 2, icon_top as u32 + side / 2);
-                assert_eq!(bar_pixel(&image, &layout, center.0, center.1), [0, 0, 255, 255]);
+                assert_eq!(
+                    bar_pixel(&image, &layout, center.0, center.1),
+                    [0, 0, 255, 255]
+                );
                 // The name takes the glyphs' color.
                 let text = bar_pixel(&image, &layout, title_left as u32 + 2, layout.height / 2);
                 assert!(text[3] > 200, "{text:?}");
@@ -1001,7 +1004,10 @@ mod tests {
                 let faint_icon = bar_pixel(&inactive, &layout, center.0, center.1);
                 let faint_text = bar_pixel(&inactive, &layout, at_text.0, at_text.1);
                 assert!(faint_icon[3] < 128, "{faint_icon:?}");
-                assert!(faint_text[3] < text[3] / 2, "{faint_text:?} against {text:?}");
+                assert!(
+                    faint_text[3] < text[3] / 2,
+                    "{faint_text:?} against {text:?}"
+                );
             }
         }
     }
@@ -1010,7 +1016,7 @@ mod tests {
     fn fr22_a_long_name_ends_before_the_caption_buttons() {
         let layout = at_100();
         let (left, _, width, height) = layout.title_rect().unwrap();
-        assert_eq!(left as i32 + width as i32, layout.buttons_left() - 8);
+        assert_eq!(left + width as i32, layout.buttons_left() - 8);
         let title = vec![255u8; (width * height) as usize];
         let image = paint_title_bar(
             &layout,
@@ -1041,7 +1047,10 @@ mod tests {
     fn fr22_the_icon_opens_the_system_menu() {
         let layout = at_100();
         assert!(layout.on_icon(20, 15));
-        assert!(layout.on_icon(16, 30), "the band's whole height over the icon");
+        assert!(
+            layout.on_icon(16, 30),
+            "the band's whole height over the icon"
+        );
         assert!(!layout.on_icon(20, 4), "the top resize edge comes first");
         assert!(!layout.on_icon(40, 15));
         assert!(!layout.on_icon(20, 31), "below the band");

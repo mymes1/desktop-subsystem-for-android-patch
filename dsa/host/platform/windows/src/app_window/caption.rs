@@ -37,8 +37,8 @@
 use std::cell::{Cell, RefCell};
 
 use dsa_host_core::compositor::caption::{
-    caption_tone, paint_title_bar, scaled, CaptionButton, CaptionHit, CaptionLayout, CaptionPalette,
-    CaptionState, CaptionTone, TitleBarContent, TITLE_TEXT_AT_100,
+    caption_tone, paint_title_bar, scaled, CaptionButton, CaptionHit, CaptionLayout,
+    CaptionPalette, CaptionState, CaptionTone, TitleBarContent, TITLE_TEXT_AT_100,
 };
 use dsa_host_core::compositor::window_hosts::FromHost;
 use dsa_host_core::tasks::StatusBarAppearance;
@@ -250,7 +250,14 @@ unsafe fn title_mask(title: &str, size: (u32, u32), dpi: u32) -> Option<Vec<u8>>
         ..std::mem::zeroed()
     };
     let mut bits: *mut std::ffi::c_void = std::ptr::null_mut();
-    let bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &mut bits, std::ptr::null_mut(), 0);
+    let bitmap = CreateDIBSection(
+        dc,
+        &info,
+        DIB_RGB_COLORS,
+        &mut bits,
+        std::ptr::null_mut(),
+        0,
+    );
     if bitmap.is_null() || bits.is_null() {
         if !bitmap.is_null() {
             DeleteObject(bitmap);
@@ -299,10 +306,20 @@ unsafe fn title_mask(title: &str, size: (u32, u32), dpi: u32) -> Option<Vec<u8>>
 }
 
 /// What a title bar was drawn from, so a message that changes nothing draws nothing.
-type Drawn = (CaptionLayout, CaptionState, CaptionPalette, u32, String, Option<u32>);
+type Drawn = (
+    CaptionLayout,
+    CaptionState,
+    CaptionPalette,
+    u32,
+    String,
+    Option<u32>,
+);
 
 /// A task window's title bar: the tone and state of its buttons, the app's icon and name,
 /// and the height it last reported.
+/// What the title was laid out for: the text, the box it fits in and the DPI.
+type TitleKey = (String, (u32, u32), u32);
+
 pub struct CaptionWindow {
     task_id: i32,
     style: WINDOW_STYLE,
@@ -316,7 +333,7 @@ pub struct CaptionWindow {
     /// The icon as last read, and the side it was read at.
     icon: RefCell<Option<(u32, Option<Vec<u8>>)>>,
     /// The name as last laid out, and what it was laid out for: text, box and DPI.
-    text: RefCell<Option<((String, (u32, u32), u32), Option<Vec<u8>>)>>,
+    text: RefCell<Option<(TitleKey, Option<Vec<u8>>)>>,
     tone: Cell<CaptionTone>,
     hovered: Cell<Option<CaptionButton>>,
     pressed: Cell<Option<CaptionButton>>,
@@ -744,7 +761,10 @@ mod tests {
             assert!((0..300).all(|x| short[x] == 0 && short[30 * 300 + x] == 0));
             let long = "A name far too long to fit in the room the title bar leaves for it";
             let cut = title_mask(long, (300, 31), 96).unwrap();
-            assert!(inked(&cut, 250, 300), "the ellipsis reaches the end of the box");
+            assert!(
+                inked(&cut, 250, 300),
+                "the ellipsis reaches the end of the box"
+            );
             assert!(title_mask("", (300, 31), 96).is_none());
         }
     }
