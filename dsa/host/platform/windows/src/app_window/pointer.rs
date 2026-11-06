@@ -13,7 +13,9 @@
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc::Sender;
 
+use super::drag_source::DragStarter;
 use crate::compositor::log::{input_trace, input_trace_on};
+use dsa_host_core::drag::{DragOut, LeaveWatch};
 use dsa_host_core::input::{
     buttons, Capture, ContactPhase, InputEvent, MouseButton, PointerAction, PointerMapper,
     PointerTool, WindowGeometry, WindowInput,
@@ -217,17 +219,54 @@ pub struct PointerWindow {
     /// Whether Windows will say when the mouse leaves the window.
     tracking_leave: Cell<bool>,
     events: Sender<InputEvent>,
+    /// When a press of the left button leaves the window, which may carry an app's drag out.
+    leave: RefCell<LeaveWatch>,
+    /// Asks whether an app drags out of the window; `None` starts no drags on the host.
+    drags: Option<DragStarter>,
 }
 
 impl PointerWindow {
-    pub fn new(task_id: i32, task_size: (u32, u32), events: Sender<InputEvent>) -> Self {
+    pub fn new(
+        task_id: i32,
+        task_size: (u32, u32),
+        events: Sender<InputEvent>,
+        drags: Option<DragStarter>,
+    ) -> Self {
         PointerWindow {
             task_id,
             mapper: RefCell::new(PointerMapper::new(task_id)),
             task_size: Cell::new(task_size),
             tracking_leave: Cell::new(false),
             events,
+            leave: RefCell::new(LeaveWatch::default()),
+            drags,
         }
+    }
+
+    /// Asks whether an app drags out of the window, when the press has just left it.
+    unsafe fn watch_leave(&self, hwnd: HWND, position: (f64, f64)) {
+        let Some(drags) = &self.drags else {
+            return;
+        };
+        let client = client_size(hwnd);
+        let Some(inside) = self.leave.borrow_mut().moved(position, client) else {
+            return;
+        };
+        let geometry = WindowGeometry {
+            client,
+            task: self.task_size.get(),
+        };
+        let (x, y) = geometry.to_guest(inside);
+        drags(
+            hwnd as isize,
+            DragOut {
+                task_id: self.task_id,
+                x,
+                y,
+                tool: dsa_protocol::control::PointerTool::Mouse as i32,
+                pointer_id: 0,
+            },
+        );
     }
 
     /// The guest resized the task the window shows.
@@ -264,12 +303,9 @@ impl PointerWindow {
                         self.tracking_leave.set(true);
                     }
                 }
-                self.deliver(
-                    hwnd,
-                    WindowInput::MouseMove {
-                        position: message_point(lparam),
-                    },
-                );
+                let position = message_point(lparam);
+                self.deliver(hwnd, WindowInput::MouseMove { position });
+                self.watch_leave(hwnd, position);
                 Some(0)
             }
             WM_LBUTTONDOWN | WM_LBUTTONUP | WM_RBUTTONDOWN | WM_RBUTTONUP | WM_MBUTTONDOWN
@@ -284,6 +320,9 @@ impl PointerWindow {
                     return Some(handled);
                 }
                 let (button, down) = mouse_button(message, wparam)?;
+                if button == MouseButton::Left {
+                    self.leave.borrow_mut().pressed(down);
+                }
                 input_trace("app.pointer", self.task_id, &format!("mouse_down={down}"));
                 self.deliver(
                     hwnd,
@@ -320,6 +359,7 @@ impl PointerWindow {
             }
             WM_CAPTURECHANGED => {
                 if lparam as HWND != hwnd {
+                    self.leave.borrow_mut().cancel();
                     self.deliver(hwnd, WindowInput::CaptureLost);
                 }
                 Some(0)

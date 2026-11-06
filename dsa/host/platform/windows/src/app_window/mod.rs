@@ -15,6 +15,7 @@
 pub mod accessibility;
 pub mod apk_install;
 pub mod caption;
+pub mod drag_source;
 pub mod drop_target;
 pub mod host_file;
 pub mod ime;
@@ -224,6 +225,10 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
                 api,
                 Arc::new(move |line: &str| note(log.as_deref(), line)),
             )
+        }),
+        drags: setup.accessibility.clone().map(|api| {
+            let log = log.clone();
+            drag_source::starter(api, Arc::new(move |line: &str| note(log.as_deref(), line)))
         }),
     })?;
 

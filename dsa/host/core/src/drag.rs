@@ -133,6 +133,51 @@ pub struct DragOut {
     pub pointer_id: u32,
 }
 
+/// Watches a task window's pointer for the moment a press drags out of it: the first move
+/// outside the window while the primary button (or a finger or pen) is down, once per press.
+/// That is when the window host asks whether an app is dragging something out.
+#[derive(Debug, Default)]
+pub struct LeaveWatch {
+    down: bool,
+    asked: bool,
+    inside: Option<(f64, f64)>,
+}
+
+impl LeaveWatch {
+    /// The primary button (or a contact) went down or up.
+    pub fn pressed(&mut self, down: bool) {
+        self.down = down;
+        if down {
+            self.asked = false;
+        }
+    }
+
+    /// The press ended without completing, as when the window lost the pointer.
+    pub fn cancel(&mut self) {
+        self.down = false;
+    }
+
+    /// The pointer moved to `position` in a client area of `client` pixels. The last place
+    /// inside the window when the press has just left it, which is where the guest's drag
+    /// leaves the task; `None` otherwise.
+    pub fn moved(&mut self, position: (f64, f64), client: (u32, u32)) -> Option<(f64, f64)> {
+        let (x, y) = position;
+        let inside = x >= 0.0 && y >= 0.0 && x < f64::from(client.0) && y < f64::from(client.1);
+        if inside {
+            self.inside = Some(position);
+            return None;
+        }
+        if !self.down || self.asked {
+            return None;
+        }
+        self.asked = true;
+        Some(self.inside.unwrap_or((
+            x.clamp(0.0, f64::from(client.0.saturating_sub(1))),
+            y.clamp(0.0, f64::from(client.1.saturating_sub(1))),
+        )))
+    }
+}
+
 /// A request for part of a dragged file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DragRead {
@@ -327,6 +372,22 @@ mod tests {
         assert_eq!(copied, content);
         drop(reader);
         assert_eq!(reads, 3);
+    }
+
+    #[test]
+    fn fr29_a_press_that_leaves_the_window_asks_once_from_the_last_place_inside() {
+        let mut watch = LeaveWatch::default();
+        assert_eq!(watch.moved((-5.0, 10.0), (200, 100)), None, "no press, no drag");
+        watch.pressed(true);
+        assert_eq!(watch.moved((50.0, 40.0), (200, 100)), None);
+        assert_eq!(watch.moved((199.0, 40.0), (200, 100)), None);
+        assert_eq!(watch.moved((230.0, 41.0), (200, 100)), Some((199.0, 40.0)));
+        assert_eq!(watch.moved((260.0, 42.0), (200, 100)), None, "once per press");
+        watch.pressed(false);
+        watch.pressed(true);
+        assert_eq!(watch.moved((10.0, -1.0), (200, 100)), Some((199.0, 40.0)));
+        watch.cancel();
+        assert_eq!(watch.moved((10.0, -9.0), (200, 100)), None);
     }
 
     #[test]
