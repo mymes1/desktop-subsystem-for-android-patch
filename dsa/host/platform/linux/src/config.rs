@@ -91,7 +91,7 @@ pub struct HostConfig {
     /// The VM's starting memory in MiB, whatever the user's limit, for tests and development.
     #[serde(default)]
     pub memory_mb: Option<u32>,
-    /// Whether the VM may grow while it runs (the balloon lets memory out). Off, it keeps its
+    /// Whether the VM may grow while it runs (virtio-mem plugs memory in). Off, it keeps its
     /// starting size.
     #[serde(default = "default_true")]
     pub grow_memory: bool,

@@ -2,9 +2,9 @@
 //!
 //! Two runs, each when CI gives it what it needs:
 //! - `DSA_CROSVM` names the crosvm to run and `DSA_CROSVM_TEST_KERNEL` a kernel to boot: the
-//!   command line it builds is one crosvm takes, and the VM can be resized through the
-//!   balloon, suspended, resumed and stopped through the control socket. The kernel need not
-//!   reach Android.
+//!   command line it builds is one crosvm takes, and the VM can be resized through its
+//!   virtio-mem device, suspended, resumed and stopped through the control socket. The kernel
+//!   need not reach Android.
 //! - `DSA_CROSVM_TEST_IMAGE` names a published Android image folder as well: the real image
 //!   boots under crosvm until the guest's control daemon connects on its vsock port.
 //!
