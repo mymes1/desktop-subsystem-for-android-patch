@@ -358,7 +358,10 @@ jobs:
             msgfmt --check --statistics -o /dev/null "$po"
           done
           desktop-file-validate data/io.github.thisisthepy.DSA.Settings.desktop
-          appstreamcli validate --no-net --explain data/io.github.thisisthepy.DSA.Settings.metainfo.xml
+          # The packages fill in the version and the date (build-packages.sh); the check reads
+          # the file as a package ships it.
+          sed -e "s|@VERSION@|0.0.0|g" -e "s|@DATE@|$(date -u +%Y-%m-%d)|g"             data/io.github.thisisthepy.DSA.Settings.metainfo.xml > "$RUNNER_TEMP/io.github.thisisthepy.DSA.Settings.metainfo.xml"
+          appstreamcli validate --no-net --explain "$RUNNER_TEMP/io.github.thisisthepy.DSA.Settings.metainfo.xml"
 
       - name: Run the settings app against the headless session
         run: |
