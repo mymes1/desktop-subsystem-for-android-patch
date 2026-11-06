@@ -89,7 +89,9 @@ choice), and any of Microsoft's WSA binaries.
 DSA supports the newest two Android major versions: today Android 16 and Android 17. A
 version leaves support when the second newer major ships, so Android 16 is supported until
 Android 18 is released. The image updater moves each user to a supported version and never
-to a lower major.
+to a lower major on its own. You can choose either supported version in the settings app
+or with `dsa android use`; moving to the older one erases the Android data, because Android
+cannot read data a newer version wrote.
 
 <p align="center">
   <img src=".github/assets/android-support.svg" alt="Timeline of the Android versions DSA supports: Android 16 and 17 from DSA 0.1.0 in October 2026, Android 18 and 19 expected in 2027 and 2028" width="860">

@@ -30,7 +30,7 @@ use dsa_host_core::host_api::{HostApiService, PerUser, ServiceFacts, UserAndroid
 use dsa_host_core::session::Session;
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{
-    check_reporting, next_image_check, UpdateNotices, UpdatingAndroid,
+    check_reporting, next_image_check, CheckNow, StoreVersions, UpdateNotices, UpdatingAndroid,
 };
 use dsa_host_core::update::store::{ImageStore, Recovery};
 use dsa_host_core::window_manager::{WindowManagerHost, WindowManagerKeeper};
@@ -200,6 +200,21 @@ impl Planner {
         }
         let cache = self.user.image_cache(&version);
         let template = raw_disk(&files.disk_template, &cache)?;
+        // A disk holding a newer Android's data than this image, after the user chose an older
+        // version and agreed to erase it, starts afresh.
+        if let Some(store) = &self.store {
+            let major = store
+                .state()
+                .map_err(|e| e.to_string())?
+                .current
+                .android_major;
+            let disk = self.user.disk();
+            dsa_host_core::data_reset::erase_if_newer(
+                &disk,
+                &disk.with_extension("image-version"),
+                major,
+            )?;
+        }
         bring_disk_to(&self.user.disk(), &template, &version)?;
         prune_image_cache(&self.user, &version);
         let mut disks = Vec::new();
@@ -361,6 +376,7 @@ fn check_for_updates(
     config: MacHostConfig,
     store: Arc<ImageStore>,
     notices: Arc<UpdateNotices>,
+    check_now: Arc<CheckNow>,
     settings: Arc<dyn SettingsStore>,
     build: String,
     stop: Arc<AtomicBool>,
@@ -386,11 +402,15 @@ fn check_for_updates(
     };
     while !stop.load(Ordering::Relaxed) {
         next = next_image_check(next, Instant::now(), !no_image(), FIRST_IMAGE_RETRY);
+        // A user who chose another Android version waits for it now, not at the next turn.
+        if check_now.take() {
+            next = Instant::now();
+        }
         if Instant::now() < next {
             thread::sleep(Duration::from_secs(1));
             continue;
         }
-        if !no_image() && !settings.machine().image_updates {
+        if !no_image() && !store.switch_pending() && !settings.machine().image_updates {
             next = Instant::now() + Duration::from_secs(60);
             continue;
         }
@@ -585,18 +605,22 @@ pub fn serve(
     let settings: Arc<dyn SettingsStore> = Arc::new(FileSettings::new(config.settings_dir(&user)));
     let store = open_store(&config, build);
     let notices = Arc::new(UpdateNotices::default());
+    let check_now = Arc::new(CheckNow::default());
     if let Some(store) = &store {
-        let (config, store, notices, settings, worker, stop) = (
+        let (config, store, notices, check, settings, worker, stop) = (
             config.clone(),
             Arc::clone(store),
             Arc::clone(&notices),
+            Arc::clone(&check_now),
             Arc::clone(&settings),
             build.to_string(),
             Arc::clone(&stop),
         );
         if let Err(why) = thread::Builder::new()
             .name("dsa-updates".into())
-            .spawn(move || check_for_updates(config, store, notices, settings, worker, stop))
+            .spawn(move || {
+                check_for_updates(config, store, notices, check, settings, worker, stop)
+            })
         {
             eprintln!("{build}: starting the update check failed: {why}");
         }
@@ -684,6 +708,13 @@ pub fn serve(
             }),
         );
     if let Some(store) = &store {
+        // The agent keeps this user's own images, so the choice is theirs alone.
+        service = service.with_android_versions(Arc::new(StoreVersions {
+            store: Arc::clone(store),
+            notices: Arc::clone(&shared.notices),
+            check_now: Arc::clone(&check_now),
+            shared_by_users: false,
+        }));
         let store = Arc::clone(store);
         service = service.with_android_version(Arc::new(move || {
             store.state().ok().map(|state| state.current.version)
