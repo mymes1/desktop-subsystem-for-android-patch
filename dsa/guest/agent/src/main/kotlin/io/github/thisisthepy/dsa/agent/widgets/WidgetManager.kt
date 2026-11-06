@@ -157,6 +157,26 @@ interface WidgetStore {
 }
 
 /**
+ * Whether an RGBA image read back from the GPU holds nothing: every pixel's alpha is zero.
+ * A widget's view always draws something, so an image that is all clear means the GPU's
+ * drawing did not reach memory the CPU can read, as when the guest's graphics driver keeps
+ * the buffer's contents on the host. [buffer] holds [height] rows of [rowStride] bytes,
+ * [pixelStride] bytes a pixel, alpha last; its position is left as it was.
+ */
+fun allClear(buffer: java.nio.ByteBuffer, width: Int, height: Int, rowStride: Int, pixelStride: Int = 4): Boolean {
+    val start = buffer.position()
+    for (y in 0 until height) {
+        val row = start + y * rowStride
+        for (x in 0 until width) {
+            val at = row + x * pixelStride + 3
+            if (at >= buffer.limit()) return true
+            if (buffer.get(at) != 0.toByte()) return false
+        }
+    }
+    return true
+}
+
+/**
  * How often a widget's image is taken. A widget is drawn again only when something in it
  * changed, and at most every [activeMillis]; while the guest is in Doze at most every
  * [dozeMillis], which is enough for a clock and keeps the guest's CPU idle otherwise.
@@ -209,6 +229,15 @@ class WidgetManager(
     private var post: (() -> Unit) -> Unit = { it() }
     private val shown = mutableMapOf<Int, WidgetSize>()
     private val lastFrame = mutableMapOf<Int, ByteArray>()
+
+    /**
+     * The latest image each widget drew, sent or not. A widget draws once when it is shown
+     * and then only when it changes, so an image drawn before the host connected is the only
+     * one a still widget makes: each new connection gets it from here.
+     */
+    private val drawn = mutableMapOf<Int, Drawn>()
+
+    private class Drawn(val width: Int, val height: Int, val png: ByteArray)
 
     /** Whether the host has heard which widgets are placed since the agent started. */
     private var listed = false
@@ -282,12 +311,17 @@ class WidgetManager(
         store.remove(id)
         shown.remove(id)
         lastFrame.remove(id)
+        drawn.remove(id)
     }
 
     /** The host connected: it hears of every placed widget and what each shows now. */
     fun connected() {
         lastFrame.clear()
-        if (started) announce()
+        if (!started) return
+        announce()
+        for ((id, image) in drawn.toList()) {
+            if (id in shown) frame(id, image.width, image.height, image.png)
+        }
     }
 
     private fun announce() {
@@ -488,11 +522,13 @@ class WidgetManager(
 
     /** A new image of a widget: it goes to the host if it differs from the last one. */
     private fun frame(id: Int, width: Int, height: Int, png: ByteArray) {
-        if (id !in shown || !isConnected()) return
+        if (id !in shown) return
         if (png.size > MAX_FRAME_BYTES) {
             log.warn("widget $id drew an image of ${png.size} bytes, more than $MAX_FRAME_BYTES; not sent")
             return
         }
+        drawn[id] = Drawn(width, height, png)
+        if (!isConnected()) return
         if (lastFrame[id]?.contentEquals(png) == true) return
         val sent = send(
             Envelope.newBuilder()

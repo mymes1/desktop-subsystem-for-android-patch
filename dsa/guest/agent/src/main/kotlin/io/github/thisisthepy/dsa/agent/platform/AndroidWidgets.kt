@@ -47,6 +47,7 @@ import io.github.thisisthepy.dsa.agent.widgets.WidgetManager
 import io.github.thisisthepy.dsa.agent.widgets.WidgetPlatform
 import io.github.thisisthepy.dsa.agent.widgets.WidgetSize
 import io.github.thisisthepy.dsa.agent.widgets.WidgetStore
+import io.github.thisisthepy.dsa.agent.widgets.allClear
 import io.github.thisisthepy.dsa.control.v1.PointerAction
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ConcurrentHashMap
@@ -60,7 +61,8 @@ import kotlin.math.ceil
  * size, which only the agent can show anything on. Being in a window is what makes the
  * widget's views run, as a clock's ticking and a list's adapter need. The widget's image does
  * not come from that display, though: the agent records the view into a render node and draws
- * it with a hardware renderer of its own into an image reader ([Renderer]). That drawing
+ * it with a hardware renderer of its own into an image reader ([Renderer]), or in software
+ * when the GPU's image comes back with nothing in it. That drawing
  * does not depend on the guest's screen, so a widget keeps drawing while the guest's screen is
  * off and the device dozes, at the low rate a clock needs, without waking anything else.
  *
@@ -262,9 +264,19 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         )
         private val node = RenderNode("dsa-widget-$id").also { it.setPosition(0, 0, width, height) }
         private val renderer = HardwareRenderer().also {
+            // A hardware renderer draws opaque unless told otherwise, and then the alpha it
+            // leaves in the buffer means nothing: the host would show the widget see-through.
+            it.isOpaque = false
             it.setSurface(captureReader.surface)
             it.setContentRoot(node)
         }
+
+        /**
+         * Whether this widget is drawn without the GPU: set when the GPU's image of it came
+         * back with nothing in it, which a widget never draws.
+         */
+        @Volatile
+        private var software = false
         private var captureScheduled = false
         private var tickScheduled = false
         private var closed = false
@@ -283,6 +295,15 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
                 val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
                 val png = try {
                     val plane = image.planes[0]
+                    if (!software && allClear(plane.buffer, width, height, plane.rowStride, plane.pixelStride)) {
+                        main.post {
+                            if (closed || software) return@post
+                            software = true
+                            log.warn("the GPU's image of widget $id came back empty; drawing it in software from now on")
+                            captureInSoftware()
+                        }
+                        return@setOnImageAvailableListener
+                    }
                     val stride = plane.rowStride / plane.pixelStride
                     val full = Bitmap.createBitmap(stride, height, Bitmap.Config.ARGB_8888)
                     full.copyPixelsFromBuffer(plane.buffer)
@@ -314,14 +335,14 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         private fun capture() {
             if (closed) return
             gate.taken(SystemClock.uptimeMillis())
+            if (software) {
+                layOut()
+                captureInSoftware()
+                scheduleTick()
+                return
+            }
             try {
-                if (root.isLayoutRequested || root.width != width || root.height != height) {
-                    root.measure(
-                        View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                        View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
-                    )
-                    root.layout(0, 0, width, height)
-                }
+                layOut()
                 val canvas = node.beginRecording(width, height)
                 try {
                     canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
@@ -335,6 +356,16 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
                 captureInSoftware()
             }
             scheduleTick()
+        }
+
+        private fun layOut() {
+            if (root.isLayoutRequested || root.width != width || root.height != height) {
+                root.measure(
+                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
+                )
+                root.layout(0, 0, width, height)
+            }
         }
 
         /** Draws the widget without the GPU, for a view the hardware renderer cannot take. */
