@@ -279,6 +279,54 @@ class WidgetManagerTest {
     }
 
     @Test
+    fun fr12_an_image_drawn_before_the_host_connected_reaches_it_when_it_connects() {
+        // A still widget draws once, when it is shown at boot, long before the host connects,
+        // and never again: that image is the only one there is.
+        platform.offered += clock()
+        platform.bound[3] = "com.example.clock/.ClockWidget"
+        connected = false
+        started()
+        val png = byteArrayOf(0x89.toByte(), 5, 6)
+        platform.frame(3, 180, 110, png)
+        scheduler.runDue()
+        assertTrue(sent.none { it.hasWidgetFrame() })
+        connected = true
+        manager.connected()
+        val kinds = sent.map { it.bodyCase }
+        assertEquals(
+            listOf(Envelope.BodyCase.WIDGET_UPDATED, Envelope.BodyCase.WIDGET_LIST, Envelope.BodyCase.WIDGET_FRAME),
+            kinds,
+        )
+        val frame = sent.last().widgetFrame
+        assertEquals(3, frame.widgetId)
+        assertEquals(180, frame.width)
+        assertTrue(frame.png.toByteArray().contentEquals(png))
+        // A later connection gets it again, and a removed widget's image is forgotten.
+        sent.clear()
+        manager.connected()
+        assertEquals(1, sent.count { it.hasWidgetFrame() })
+        manager.handle(Envelope.newBuilder().setRemoveWidget(RemoveWidget.newBuilder().setWidgetId(3)).build())
+        sent.clear()
+        manager.connected()
+        assertEquals(0, sent.count { it.hasWidgetFrame() })
+    }
+
+    @Test
+    fun fr12_an_image_the_gpu_left_clear_is_told_from_one_with_something_drawn() {
+        // Two rows of three pixels, with two bytes of padding at the end of each row.
+        val stride = 3 * 4 + 2
+        val clear = java.nio.ByteBuffer.allocate(stride * 2)
+        assertTrue(allClear(clear, 3, 2, stride))
+        val drawn = java.nio.ByteBuffer.allocate(stride * 2)
+        drawn.put(stride + 2 * 4 + 3, 0x80.toByte())
+        assertFalse(allClear(drawn, 3, 2, stride))
+        // Padding is not a pixel: something there leaves the image clear.
+        val padded = java.nio.ByteBuffer.allocate(stride * 2)
+        padded.put(3 * 4 + 1, 0x7f)
+        assertTrue(allClear(padded, 3, 2, stride))
+    }
+
+    @Test
     fun fr12_widgets_draw_at_their_lowest_rate_while_the_guest_dozes() {
         started()
         manager.screen(false)
