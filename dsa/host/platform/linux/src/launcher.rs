@@ -1,14 +1,15 @@
-//! The Android VM as the session's guest launcher: QEMU under KVM, run as the user it is for.
+//! The Android VM as the session's guest launcher: crosvm under KVM, run as the user it is for.
 //!
 //! Each boot's secret reaches the guest as a bootconfig appended to a copy of the image's
 //! initrd, readable only by the user, as on every host. The copy exists only while the VM
-//! starts: QEMU has read it by the time it answers on its control socket, and it is deleted
-//! then. The user's device identity, when they changed it, travels in the same copy.
+//! starts: crosvm has loaded it into the guest's memory by the time the guest kernel prints
+//! its first line, and it is deleted then. The user's device identity, when they changed it,
+//! travels in the same copy.
 //!
-//! Stopping asks the guest to sync its disks and power off (SysRq on the serial console, see
-//! `qemu::SHUTDOWN_SEQUENCE`), ends QEMU through QMP if it has not exited within the stop
-//! timeout, and kills it if that does not work either. Every guest process has ended once
-//! `stop` returns `Ok`, because the VM itself is gone.
+//! Stopping asks the guest to sync its disks and power off (SysRq on the console, see
+//! `crosvm::SHUTDOWN_SEQUENCE`), ends the VM through crosvm's control socket if it has not
+//! exited within the stop timeout, and kills crosvm if that does not work either. Every guest
+//! process has ended once `stop` returns `Ok`, because the VM itself is gone.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -25,16 +26,16 @@ use dsa_host_core::session::{GuestLauncher, GuestStall};
 use dsa_protocol::auth::{bootconfig_entry, BootSecret};
 
 use crate::console::{boot_header, capture, Tail};
+use crate::crosvm::{balloon_bytes, GuestArch, NetworkBackend, VmConfig, SHUTDOWN_SEQUENCE};
+use crate::crosvm_control::{Control, Request};
 use crate::image::ImageFiles;
 use crate::network::{place_tap, VmNetwork};
-use crate::qemu::{plugged_bytes, GuestArch, NetworkBackend, VmConfig, SHUTDOWN_SEQUENCE};
-use crate::qmp::Qmp;
 use crate::signs::{explain_unfinished_boot, explain_unreachable_agent, BootSigns};
 use crate::users::{Account, BeforeExec};
 
-/// How long QEMU may take to open its control socket.
-const QMP_WAIT: Duration = Duration::from_secs(30);
-/// How long QEMU may take to exit after it is told to quit or is killed.
+/// How long crosvm may take to open its control socket and start the guest kernel.
+const START_WAIT: Duration = Duration::from_secs(30);
+/// How long crosvm may take to exit after it is told to stop or is killed.
 const QUIT_GRACE: Duration = Duration::from_secs(10);
 /// The pause between the steps of the guest's shutdown, for each to finish.
 const SYSRQ_STEP: Duration = Duration::from_millis(1500);
@@ -63,13 +64,13 @@ pub type AdvancedNetworking = Box<dyn FnMut() -> bool + Send>;
 /// The network of a user's running VM, as the local API reports it.
 pub type SharedNetworkStatus = Arc<Mutex<Option<NetworkStatus>>>;
 
-/// The QEMU process of each running VM, by the VM's vsock address, for the memory report.
+/// The crosvm process of each running VM, by the VM's vsock address, for the memory report.
 fn running_vms() -> &'static Mutex<HashMap<u32, u32>> {
     static VMS: OnceLock<Mutex<HashMap<u32, u32>>> = OnceLock::new();
     VMS.get_or_init(Default::default)
 }
 
-/// The process ID of the QEMU that runs the VM at `cid`.
+/// The process ID of the crosvm that runs the VM at `cid`.
 pub fn vm_process(cid: u32) -> Option<u32> {
     running_vms()
         .lock()
@@ -96,10 +97,10 @@ struct Networking {
 struct RunningVm {
     child: Child,
     console_input: Option<ChildStdin>,
-    qmp: Option<Qmp>,
+    control: Control,
     readers: Vec<JoinHandle<()>>,
-    qmp_socket: PathBuf,
-    /// The memory it started with and may grow to, in MiB, when it may grow.
+    /// The memory it started with and may grow to, in MiB, when it may grow. It is made at
+    /// the second, with the balloon holding the rest.
     memory: Option<(u64, u64)>,
 }
 
@@ -143,7 +144,8 @@ pub struct LinuxVmLauncher {
     account: Account,
     name: String,
     guest_cid: u32,
-    qemu: PathBuf,
+    crosvm: PathBuf,
+    sandbox: bool,
     arch: GuestArch,
     processors: u32,
     page_reporting_order: u8,
@@ -160,7 +162,10 @@ pub struct LinuxVmLauncher {
     /// Whether the VM may grow; turned off for good when growing did not work.
     grow: bool,
     vm: Option<RunningVm>,
+    /// The guest's console.
     tail: Tail,
+    /// crosvm's own messages.
+    vmm_tail: Tail,
     signs: Arc<Mutex<BootSigns>>,
     /// What the last finished boot's console says, for a start that failed.
     report: Option<String>,
@@ -171,7 +176,10 @@ pub struct LauncherSetup {
     pub account: Account,
     pub name: String,
     pub guest_cid: u32,
-    pub qemu: PathBuf,
+    /// The crosvm program.
+    pub crosvm: PathBuf,
+    /// Whether crosvm runs each device in its sandbox.
+    pub sandbox: bool,
     pub processors: u32,
     pub page_reporting_order: u8,
     pub data_disk: PathBuf,
@@ -187,7 +195,8 @@ impl LinuxVmLauncher {
             account: setup.account,
             name: setup.name,
             guest_cid: setup.guest_cid,
-            qemu: setup.qemu,
+            crosvm: setup.crosvm,
+            sandbox: setup.sandbox,
             arch: GuestArch::HOST,
             processors: setup.processors,
             page_reporting_order: setup.page_reporting_order,
@@ -203,6 +212,7 @@ impl LinuxVmLauncher {
             grow: setup.grow_memory,
             vm: None,
             tail: Tail::default(),
+            vmm_tail: Tail::default(),
             signs: Arc::default(),
             report: None,
         }
@@ -272,14 +282,32 @@ impl LinuxVmLauncher {
         Ok(TransientFile(path))
     }
 
+    /// What the guest's console and crosvm last showed, saying the console `did` it.
+    fn console_report(&self, did: &str) -> Option<String> {
+        let tail = self.tail.text();
+        let vmm = self.vmm_tail.text();
+        let mut report = String::new();
+        if !tail.trim().is_empty() {
+            report.push_str(&format!("The Android VM's console {did}:\n{tail}\n"));
+        }
+        if !vmm.trim().is_empty() {
+            report.push_str(&format!("crosvm said:\n{vmm}\n"));
+        }
+        (!report.is_empty()).then(|| {
+            format!(
+                "{report}The whole boot is in {}.",
+                self.console_log.display()
+            )
+        })
+    }
+
     fn finish(&mut self, mut vm: RunningVm) {
         let _ = vm.child.wait();
         drop(vm.console_input.take());
-        drop(vm.qmp.take());
         for reader in vm.readers.drain(..) {
             let _ = reader.join();
         }
-        let _ = std::fs::remove_file(&vm.qmp_socket);
+        let _ = std::fs::remove_file(vm.control.socket());
         running_vms()
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -288,13 +316,7 @@ impl LinuxVmLauncher {
             networking.network.detach();
             *networking.status.lock().unwrap_or_else(|e| e.into_inner()) = None;
         }
-        let tail = self.tail.text();
-        self.report = (!tail.trim().is_empty()).then(|| {
-            format!(
-                "The Android VM's console ended with:\n{tail}\nThe whole boot is in {}.",
-                self.console_log.display()
-            )
-        });
+        self.report = self.console_report("ended with");
     }
 
     fn start_vm(&mut self, secret: &BootSecret) -> Result<(), String> {
@@ -320,8 +342,16 @@ impl LinuxVmLauncher {
             }
             None => (NetworkBackend::None, None, None),
         };
-        let qmp_socket = self.run_dir.join("qmp.sock");
-        let _ = std::fs::remove_file(&qmp_socket);
+        let control_socket = self.run_dir.join("crosvm.sock");
+        let _ = std::fs::remove_file(&control_socket);
+        let sandbox_root = if self.sandbox {
+            // An empty folder the sandbox makes each device's root.
+            let root = self.run_dir.join("sandbox");
+            self.account.make_dir(&root)?;
+            Some(root)
+        } else {
+            None
+        };
         let memory_max_mb = if self.grow { plan.memory_max_mb } else { None };
         let config = VmConfig {
             name: self.name.clone(),
@@ -337,12 +367,13 @@ impl LinuxVmLauncher {
             pstore_disk: self.pstore_disk.clone(),
             guest_cid: self.guest_cid,
             page_reporting_order: self.page_reporting_order,
-            qmp_socket: qmp_socket.clone(),
+            control_socket: control_socket.clone(),
+            sandbox_root,
             network: backend,
-            mac_address: mac.unwrap_or_else(|| crate::qemu::mac_address(self.account.uid)),
+            mac_address: mac.unwrap_or_else(|| crate::crosvm::mac_address(self.account.uid)),
         };
-        let args = config.qemu_args().map_err(|e| e.to_string())?;
-        let mut command = Command::new(&self.qemu);
+        let args = config.crosvm_args().map_err(|e| e.to_string())?;
+        let mut command = Command::new(&self.crosvm);
         command
             .args(&args)
             .stdin(Stdio::piped())
@@ -353,12 +384,13 @@ impl LinuxVmLauncher {
             .map(|tap| Box::new(place_tap(tap)) as BeforeExec);
         self.account.run_as(&mut command, before);
         self.tail = Tail::default();
+        self.vmm_tail = Tail::default();
         *self.signs.lock().unwrap_or_else(|e| e.into_inner()) = BootSigns::default();
         self.report = None;
         let mut child = command.spawn().map_err(|e| {
             format!(
                 "could not start {} for the Android VM: {e}",
-                self.qemu.display()
+                self.crosvm.display()
             )
         })?;
         // The child has its own copy of the tap.
@@ -395,7 +427,7 @@ impl LinuxVmLauncher {
                     err,
                     Some(self.console_log.clone()),
                     None,
-                    self.tail.clone(),
+                    self.vmm_tail.clone(),
                     Arc::clone(&self.signs),
                 )
                 .ok(),
@@ -405,36 +437,34 @@ impl LinuxVmLauncher {
         let mut vm = RunningVm {
             child,
             console_input,
-            qmp: None,
+            control: Control::new(self.crosvm.clone(), control_socket.clone()),
             readers,
-            qmp_socket: qmp_socket.clone(),
             memory: memory_max_mb
                 .map(|max| (u64::from(plan.memory_mb), u64::from(max)))
                 .filter(|(base, max)| max > base),
         };
-        // QEMU answers on its control socket once the machine is made, the initrd read.
-        let deadline = Instant::now() + QMP_WAIT;
-        let qmp = loop {
-            match Qmp::connect(&qmp_socket, Duration::ZERO) {
-                Ok(qmp) => break Ok(qmp),
-                Err(error) => {
-                    if vm.exited() {
-                        break Err("QEMU exited while it started the Android VM".to_string());
-                    }
-                    if Instant::now() >= deadline {
-                        break Err(format!(
-                            "QEMU did not answer on its control socket within {} s: {error}",
-                            QMP_WAIT.as_secs()
-                        ));
-                    }
-                    std::thread::sleep(Duration::from_millis(100));
-                }
+        // crosvm has loaded the kernel and the initrd once the guest kernel prints, and it
+        // serves its control socket by then.
+        let deadline = Instant::now() + START_WAIT;
+        let started = loop {
+            if control_socket.exists() && !self.tail.text().is_empty() {
+                break Ok(());
             }
+            if vm.exited() {
+                break Err("crosvm exited while it started the Android VM".to_string());
+            }
+            if Instant::now() >= deadline {
+                break Err(format!(
+                    "the Android VM did not start within {} s: crosvm opened no control \
+                     socket, or the guest kernel printed nothing",
+                    START_WAIT.as_secs()
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(50));
         };
         drop(initrd);
-        match qmp {
-            Ok(qmp) => {
-                vm.qmp = Some(qmp);
+        match started {
+            Ok(()) => {
                 self.vm = Some(vm);
                 Ok(())
             }
@@ -455,9 +485,9 @@ impl GuestLauncher for LinuxVmLauncher {
             self.finish(vm);
         }
         let mut started = self.start_vm(secret);
-        if started.is_err() && self.grow && self.tail.contains("virtio-mem") {
-            // A QEMU or a host without virtio-mem: the VM keeps the size it starts with.
-            self.memory_growth_failed("QEMU could not make the virtio-mem device");
+        if started.is_err() && self.grow && self.vmm_tail.contains("guest memory") {
+            // A host that cannot map the VM at its largest size: it keeps its starting size.
+            self.memory_growth_failed("crosvm could not make the VM at its largest size");
             started = self.start_vm(secret);
         }
         if started.is_err() {
@@ -478,21 +508,17 @@ impl GuestLauncher for LinuxVmLauncher {
         };
         if !vm.exited() {
             // A frozen guest cannot take the request.
-            if let Some(qmp) = vm.qmp.as_mut() {
-                let _ = qmp.cont();
-            }
+            let _ = vm.control.send(Request::Resume);
             vm.ask_guest_to_power_off();
             if !vm.wait_exit(timeout) {
-                if let Some(qmp) = vm.qmp.as_mut() {
-                    let _ = qmp.quit();
-                }
+                let _ = vm.control.send(Request::Stop);
                 if !vm.wait_exit(QUIT_GRACE) {
                     let _ = vm.child.kill();
                     if !vm.wait_exit(QUIT_GRACE) {
                         let pid = vm.child.id();
                         self.vm = Some(vm);
                         return Err(format!(
-                            "the Android VM (QEMU, process {pid}) did not exit within {} s of \
+                            "the Android VM (crosvm, process {pid}) did not exit within {} s of \
                              being killed",
                             QUIT_GRACE.as_secs()
                         ));
@@ -507,19 +533,13 @@ impl GuestLauncher for LinuxVmLauncher {
     fn exited(&mut self) -> Option<String> {
         let vm = self.vm.as_mut()?;
         let status = vm.child.try_wait().ok().flatten()?;
-        Some(format!("the Android VM exited during boot (QEMU {status})"))
+        Some(format!("the Android VM exited during boot (crosvm {status})"))
     }
 
     fn diagnostics(&mut self) -> Option<String> {
-        self.report.clone().or_else(|| {
-            let tail = self.tail.text();
-            (!tail.trim().is_empty()).then(|| {
-                format!(
-                    "The Android VM's console last showed:\n{tail}\nThe whole boot is in {}.",
-                    self.console_log.display()
-                )
-            })
-        })
+        self.report
+            .clone()
+            .or_else(|| self.console_report("last showed"))
     }
 
     fn vm_id(&self) -> Option<String> {
@@ -535,11 +555,11 @@ impl GuestLauncher for LinuxVmLauncher {
                 return Some(format!("{device} is missing. DSA needs {what}."));
             }
         }
-        if !self.qemu.is_absolute() || !self.qemu.exists() {
+        if !self.crosvm.is_absolute() || !self.crosvm.exists() {
             return Some(format!(
-                "{} is not installed. DSA runs Android with QEMU: install it (the qemu-system \
-                 package for this computer's architecture).",
-                self.qemu.display()
+                "{} is missing. DSA runs Android with the crosvm its package installs: \
+                 reinstall DSA (the desktop-subsystem-for-android package).",
+                self.crosvm.display()
             ));
         }
         self.prerequisite.as_mut().and_then(|check| check())
@@ -562,23 +582,21 @@ impl GuestLauncher for LinuxVmLauncher {
             .agent_refused_for_keys()
     }
 
-    /// Pauses the whole VM. Its memory stays with QEMU, where Linux can reclaim and swap it
+    /// Pauses the whole VM. Its memory stays with crosvm, where Linux can reclaim and swap it
     /// like any process's, and nothing in the guest runs until the thaw.
     fn freeze(&mut self) -> Result<(), String> {
-        let qmp = self
-            .vm
-            .as_mut()
-            .and_then(|vm| vm.qmp.as_mut())
-            .ok_or("the Android VM is not running")?;
-        qmp.stop()
+        let vm = self.vm.as_ref().ok_or("the Android VM is not running")?;
+        vm.control
+            .send(Request::Suspend)
             .map_err(|e| format!("the Android VM could not be paused: {e}"))
     }
 
     fn thaw(&mut self) -> Result<(), String> {
-        let Some(qmp) = self.vm.as_mut().and_then(|vm| vm.qmp.as_mut()) else {
+        let Some(vm) = self.vm.as_ref() else {
             return Ok(());
         };
-        qmp.cont()
+        vm.control
+            .send(Request::Resume)
             .map_err(|e| format!("the Android VM could not be resumed: {e}"))
     }
 
@@ -586,19 +604,22 @@ impl GuestLauncher for LinuxVmLauncher {
         self.vm.as_ref()?.memory
     }
 
+    /// Lets the balloon out to give the guest more, or takes memory back into it.
     fn set_memory_mb(&mut self, mb: u64) -> Result<(), String> {
         let vm = self.vm.as_mut().ok_or("the Android VM is not running")?;
         let (base, max) = vm
             .memory
             .ok_or("the Android VM keeps the size it started with")?;
         let mb = mb.clamp(base, max);
-        let qmp = vm.qmp.as_mut().ok_or("the Android VM is not running")?;
-        qmp.set_plugged(plugged_bytes(mb - base))
+        vm.control
+            .send(Request::Balloon {
+                bytes: balloon_bytes(max, mb),
+            })
             .map_err(|e| format!("the Android VM's memory could not be set to {mb} MiB: {e}"))
     }
 
     fn memory_growth_failed(&mut self, why: &str) {
-        // The guest keeps the memory it started with, and later VMs start without virtio-mem.
+        // The guest keeps the memory it has, and later VMs are made at their starting size.
         self.grow = false;
         eprintln!(
             "uid:{}: memory: the Android VM cannot grow on this computer ({why}); it keeps the \
