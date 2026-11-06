@@ -25,7 +25,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use dsa_host_core::host_api::HostApiClient;
 use dsa_host_core::session::SessionState;
@@ -114,6 +114,51 @@ pub fn window_styles() -> (u32, u32) {
         WS_POPUP,
         WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_NOACTIVATE,
     )
+}
+
+/// How long a widget window waits for its first image from Android, after it opened, before
+/// the window manager logs that it has none. Android draws a widget within a second of being
+/// told its size, so a window still without an image after this shows only its see-through
+/// placeholder, and the log says so.
+pub const NO_FRAME: Duration = Duration::from_secs(10);
+
+/// How often the widget windows are checked for an image that never came.
+pub const NO_FRAME_CHECK: Duration = Duration::from_secs(5);
+
+/// Whether a window that has waited for an image since `waiting_since` (None: it has one) is
+/// overdue at `now`, and not logged yet.
+pub fn frame_overdue(waiting_since: Option<Instant>, noted: bool, now: Instant) -> bool {
+    match waiting_since {
+        Some(since) => !noted && now.saturating_duration_since(since) >= NO_FRAME,
+        None => false,
+    }
+}
+
+/// Where a widget window goes in the z-order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZPlace {
+    /// Right above the desktop: below the window this names, which is right above it.
+    After(isize),
+    /// It is right above the desktop already, or the desktop is the top window; the z-order
+    /// stays.
+    Keep,
+    /// No desktop was found: the bottom of the z-order.
+    Bottom,
+}
+
+/// The z-order a widget window `own` takes: right above the desktop's own window (`desktop`,
+/// the one that holds the desktop icons), with `above_desktop` the window right above that
+/// now. That is below every other window, but not the bottom of the z-order: once a
+/// wallpaper slideshow or "show desktop" has run, the shell moves the icons into a window of
+/// its own above `Progman` that paints the wallpaper, and a window at the bottom is hidden
+/// under it.
+pub fn z_place(desktop: Option<isize>, above_desktop: Option<isize>, own: isize) -> ZPlace {
+    match (desktop, above_desktop) {
+        (None, _) => ZPlace::Bottom,
+        (Some(_), Some(above)) if above == own => ZPlace::Keep,
+        (Some(_), Some(above)) => ZPlace::After(above),
+        (Some(_), None) => ZPlace::Keep,
+    }
 }
 
 /// Where in a widget window a point is, which says what dragging it does.
@@ -517,21 +562,25 @@ mod win {
         ReleaseCapture, SetCapture, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, FindWindowW, GetMessageW,
-        GetWindowRect, LoadCursorW, PostMessageW, PostQuitMessage, RegisterClassExW,
-        RegisterWindowMessageW, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
-        UpdateLayeredWindow, GWLP_HWNDPARENT, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION,
-        HTCLIENT, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, HWND_BOTTOM, HWND_MESSAGE,
-        IDC_ARROW, MA_NOACTIVATE, MINMAXINFO, MSG, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        SWP_NOZORDER, SW_SHOWNOACTIVATE, ULW_ALPHA, WINDOWPOS, WM_APP, WM_CAPTURECHANGED, WM_CLOSE,
-        WM_CONTEXTMENU, WM_DESTROY, WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE,
-        WM_GETMINMAXINFO, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE,
-        WM_NCHITTEST, WM_SIZE, WM_WINDOWPOSCHANGING, WNDCLASSEXW,
+        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, FindWindowExW,
+        FindWindowW, GetMessageW, GetWindow, GetWindowRect, KillTimer, LoadCursorW, PostMessageW,
+        PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SetTimer, SetWindowLongPtrW,
+        SetWindowPos, ShowWindow, TranslateMessage, UpdateLayeredWindow, GWLP_HWNDPARENT,
+        GW_HWNDPREV, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION, HTCLIENT, HTLEFT, HTRIGHT,
+        HTTOP, HTTOPLEFT, HTTOPRIGHT, HWND_BOTTOM, HWND_MESSAGE, IDC_ARROW, MA_NOACTIVATE,
+        MINMAXINFO, MSG, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_SHOWNOACTIVATE,
+        ULW_ALPHA, WINDOWPOS, WM_APP, WM_CAPTURECHANGED, WM_CLOSE, WM_CONTEXTMENU, WM_DESTROY,
+        WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_GETMINMAXINFO, WM_LBUTTONDOWN,
+        WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NCHITTEST, WM_SIZE, WM_TIMER,
+        WM_WINDOWPOSCHANGING, WNDCLASSEXW,
     };
 
+    use std::time::Instant;
+
     use super::{
-        android_density, hit_test, min_window_size, placement_of, reachable_origin, to_frame,
-        window_size, window_styles, Hit, WindowCommand, WindowReport,
+        android_density, frame_overdue, hit_test, min_window_size, placement_of, reachable_origin,
+        to_frame, window_size, window_styles, z_place, Hit, WindowCommand, WindowReport, ZPlace,
+        NO_FRAME, NO_FRAME_CHECK,
     };
     use crate::compositor::log::{note, CompositorLogger};
     use crate::compositor::widget_menu::{self, MenuChoice};
@@ -548,7 +597,14 @@ mod win {
         frame: Option<WidgetFrame>,
         hover: bool,
         pressed: bool,
+        /// Since when the window waits for its first image; None once one came.
+        waiting_since: Option<Instant>,
+        /// Whether the wait was logged already.
+        noted: bool,
     }
+
+    /// The controller's timer that checks for windows still without an image.
+    const NO_FRAME_TIMER: usize = 1;
 
     struct State {
         commands: Receiver<WindowCommand>,
@@ -725,6 +781,15 @@ mod win {
             )));
             return;
         }
+        // SAFETY: a timer of the controller window, killed when it closes.
+        unsafe {
+            SetTimer(
+                controller,
+                NO_FRAME_TIMER,
+                NO_FRAME_CHECK.as_millis() as u32,
+                None,
+            )
+        };
         slot.store(controller as isize, Ordering::SeqCst);
         let _ = ready.send(Ok(()));
         // SAFETY: the usual message loop of this thread's windows.
@@ -752,6 +817,10 @@ mod win {
                 apply_commands();
                 0
             }
+            WM_TIMER if wparam == NO_FRAME_TIMER => {
+                note_missing_frames();
+                0
+            }
             WM_CLOSE => {
                 let windows: Vec<isize> =
                     with_state(|s| s.windows.keys().copied().collect()).unwrap_or_default();
@@ -759,8 +828,11 @@ mod win {
                     // SAFETY: windows of this thread.
                     unsafe { DestroyWindow(window as HWND) };
                 }
-                // SAFETY: the controller is this thread's.
-                unsafe { DestroyWindow(hwnd) };
+                // SAFETY: the controller is this thread's, and so is its timer.
+                unsafe {
+                    KillTimer(hwnd, NO_FRAME_TIMER);
+                    DestroyWindow(hwnd);
+                }
                 0
             }
             WM_DESTROY => {
@@ -783,7 +855,19 @@ mod win {
                 WindowCommand::Frame(frame) => {
                     let hwnd = with_state(|s| {
                         let hwnd = *s.by_id.get(&frame.widget_id)?;
-                        s.windows.get_mut(&hwnd)?.frame = Some(frame);
+                        let window = s.windows.get_mut(&hwnd)?;
+                        if window.noted {
+                            note(
+                                s.logger.as_deref(),
+                                &format!(
+                                    "widget {}: its first image came, {}x{} pixels",
+                                    frame.widget_id, frame.width, frame.height
+                                ),
+                            );
+                        }
+                        window.waiting_since = None;
+                        window.noted = false;
+                        window.frame = Some(frame);
                         Some(hwnd)
                     })
                     .flatten();
@@ -805,6 +889,74 @@ mod win {
                 }
             }
         }
+    }
+
+    /// Logs each widget window that has waited [`NO_FRAME`] for its first image from Android,
+    /// once, so a widget that shows nothing is visible in the log.
+    fn note_missing_frames() {
+        let now = Instant::now();
+        with_state(|s| {
+            for (hwnd, window) in s.windows.iter_mut() {
+                if !frame_overdue(window.waiting_since, window.noted, now) {
+                    continue;
+                }
+                window.noted = true;
+                let waited = window
+                    .waiting_since
+                    .map(|since| now.saturating_duration_since(since).as_secs())
+                    .unwrap_or(NO_FRAME.as_secs());
+                let rect = rect_of(*hwnd as HWND);
+                note(
+                    s.logger.as_deref(),
+                    &format!(
+                        "widget {} ({}) has had no image from Android for {waited} s; its window of {}x{} pixels shows only a see-through placeholder. The service's and the agent's logs say why",
+                        window.widget.widget_id,
+                        window.widget.provider.provider,
+                        rect.right - rect.left,
+                        rect.bottom - rect.top,
+                    ),
+                );
+            }
+        });
+    }
+
+    /// The desktop's own window: the shell's window that holds the desktop icons, which a
+    /// wallpaper slideshow or "show desktop" moves out of `Progman` into a `WorkerW`.
+    fn desktop_window() -> Option<HWND> {
+        let progman = desktop_owner();
+        let defview = wide("SHELLDLL_DefView");
+        let worker = wide("WorkerW");
+        // SAFETY: walks the top-level windows by class; the names outlive the calls.
+        unsafe {
+            if !progman.is_null()
+                && !FindWindowExW(progman, null_mut(), defview.as_ptr(), null()).is_null()
+            {
+                return Some(progman);
+            }
+            let mut after: HWND = null_mut();
+            loop {
+                after = FindWindowExW(null_mut(), after, worker.as_ptr(), null());
+                if after.is_null() {
+                    break;
+                }
+                if !FindWindowExW(after, null_mut(), defview.as_ptr(), null()).is_null() {
+                    return Some(after);
+                }
+            }
+        }
+        (!progman.is_null()).then_some(progman)
+    }
+
+    /// Where `hwnd` goes in the z-order: right above the desktop ([`z_place`]).
+    fn z_place_of(hwnd: HWND) -> ZPlace {
+        let desktop = desktop_window();
+        // SAFETY: reads the window right above the desktop's.
+        let above = desktop.map(|d| unsafe { GetWindow(d, GW_HWNDPREV) });
+        z_place(
+            desktop.map(|d| d as isize),
+            above.filter(|a| !a.is_null()).map(|a| a as isize),
+            hwnd as isize,
+        )
     }
 
     /// Opens the widget's window at its placement, or moves the open one there, and tells
@@ -865,6 +1017,8 @@ mod win {
                             frame: None,
                             hover: false,
                             pressed: false,
+                            waiting_since: Some(Instant::now()),
+                            noted: false,
                         },
                     );
                 });
@@ -883,7 +1037,8 @@ mod win {
             ),
             None => (widget.placement.x, widget.placement.y),
         };
-        // SAFETY: a window of this thread; it goes to the bottom of the z-order.
+        // SAFETY: a window of this thread; it goes right above the desktop, where
+        // WM_WINDOWPOSCHANGING puts it.
         unsafe {
             SetWindowPos(hwnd, HWND_BOTTOM, x, y, width, height, SWP_NOACTIVATE);
             ShowWindow(hwnd, SW_SHOWNOACTIVATE);
@@ -1068,12 +1223,16 @@ mod win {
             }
             WM_MOUSEACTIVATE => MA_NOACTIVATE as LRESULT,
             WM_WINDOWPOSCHANGING => {
-                // Kept below every other window, whatever raises it.
+                // Kept right above the desktop, below every other window, whatever raises it.
                 let pos = lparam as *mut WINDOWPOS;
                 // SAFETY: the system passes a WINDOWPOS it reads back.
                 unsafe {
                     if !pos.is_null() && (*pos).flags & SWP_NOZORDER == 0 {
-                        (*pos).hwndInsertAfter = HWND_BOTTOM;
+                        match z_place_of(hwnd) {
+                            ZPlace::After(above) => (*pos).hwndInsertAfter = above as HWND,
+                            ZPlace::Keep => (*pos).flags |= SWP_NOZORDER,
+                            ZPlace::Bottom => (*pos).hwndInsertAfter = HWND_BOTTOM,
+                        }
                     }
                 }
                 0
@@ -1529,6 +1688,29 @@ mod tests {
         assert_eq!(reachable_origin(3000, 100, 200, 100, &areas), (1720, 100));
         assert_eq!(reachable_origin(100, -500, 200, 100, &areas), (100, 0));
         assert_eq!(reachable_origin(5, 5, 10, 10, &[]), (5, 5));
+    }
+
+    #[test]
+    fn fr12_a_widget_window_sits_right_above_the_desktop_not_under_the_wallpaper() {
+        // The bottom of the z-order is under the shell's wallpaper window once it has one.
+        assert_eq!(z_place(Some(10), Some(20), 30), ZPlace::After(20));
+        assert_eq!(z_place(Some(10), Some(30), 30), ZPlace::Keep);
+        assert_eq!(z_place(Some(10), None, 30), ZPlace::Keep);
+        assert_eq!(z_place(None, None, 30), ZPlace::Bottom);
+    }
+
+    #[test]
+    fn fr12_a_widget_window_without_an_image_is_logged_once_after_a_while() {
+        let start = Instant::now();
+        assert!(!frame_overdue(Some(start), false, start));
+        assert!(!frame_overdue(
+            Some(start),
+            false,
+            start + NO_FRAME - Duration::from_millis(1)
+        ));
+        assert!(frame_overdue(Some(start), false, start + NO_FRAME));
+        assert!(!frame_overdue(Some(start), true, start + NO_FRAME * 3));
+        assert!(!frame_overdue(None, false, start + NO_FRAME * 3));
     }
 
     #[test]

@@ -653,7 +653,7 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
     let facts = ServiceFacts {
         version: crate::VERSION.into(),
         log_dir: None,
-        // The system's package manager updates DSA itself.
+        // The system's package manager updates DSA itself; `dsa update` says so.
         program_updates_available: false,
         image_updates_available: updates.is_some() && config.update.is_some(),
         android_version: config.first_image.as_ref().map(|i| i.version.clone()),
@@ -762,6 +762,7 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
     let identity_config = config.clone();
     let mut service = HostApiService::new(androids.clone(), build)
         .with_data_reset(Arc::new(data_reset))
+        .with_program_updates(Arc::new(crate::package_updates::PackageManagerUpdates))
         .with_settings(Arc::clone(&store), facts)
         .with_host_memory(Arc::clone(&host_memory))
         .with_network({

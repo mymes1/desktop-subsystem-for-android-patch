@@ -1783,6 +1783,10 @@ fn reset_data(invocation: &Invocation, client: &mut HostApiClient) -> Result<Str
     })
 }
 
+/// Where DSA's own updates come from on Linux, where it has no updater of its own.
+const LINUX_PROGRAM_UPDATES: &str =
+    "Program updates: from the system's package manager (software center, apt, dnf or zypper)";
+
 /// The settings, one per line.
 pub fn describe_settings(report: &SettingsReport) -> String {
     let settings = &report.settings;
@@ -1806,10 +1810,16 @@ pub fn describe_settings(report: &SettingsReport) -> String {
             }
         ),
         format!("Clipboard sharing: {}", on_off(settings.clipboard)),
-        format!(
-            "Program updates: {}",
-            available(settings.program_updates, facts.program_updates_available)
-        ),
+        if cfg!(target_os = "linux") {
+            // The .deb and the .rpm add DSA's package repository, so DSA comes with the
+            // system's other updates and the program has no updater of its own there.
+            LINUX_PROGRAM_UPDATES.to_string()
+        } else {
+            format!(
+                "Program updates: {}",
+                available(settings.program_updates, facts.program_updates_available)
+            )
+        },
         format!(
             "Image updates: {}",
             available(settings.image_updates, facts.image_updates_available)

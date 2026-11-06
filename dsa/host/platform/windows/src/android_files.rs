@@ -98,7 +98,10 @@ pub fn door_path(key: &str) -> String {
 /// The registry values of the entry, as (subkey under the entry, value name, value), with
 /// `icon` the program whose icon it shows and `target` the folder it opens. A `None` value
 /// name is the key's default value. Numbers are DWORDs.
-pub fn navigation_values(icon: &str, target: &str) -> Vec<(&'static str, Option<&'static str>, RegValue)> {
+pub fn navigation_values(
+    icon: &str,
+    target: &str,
+) -> Vec<(&'static str, Option<&'static str>, RegValue)> {
     use RegValue::{Dword, Text};
     vec![
         ("", None, Text(NAVIGATION_NAME.into())),
@@ -111,7 +114,11 @@ pub fn navigation_values(icon: &str, target: &str) -> Vec<(&'static str, Option<
             None,
             Text(r"%SystemRoot%\system32\shell32.dll".into()),
         ),
-        ("Instance", Some("CLSID"), Text(FOLDER_SHORTCUT_CLSID.into())),
+        (
+            "Instance",
+            Some("CLSID"),
+            Text(FOLDER_SHORTCUT_CLSID.into()),
+        ),
         // A folder (0x10) that is read only to the shell's own checks (0x01): Explorer takes
         // the real rights from the server.
         ("Instance\\InitPropertyBag", Some("Attributes"), Dword(0x11)),
@@ -210,7 +217,11 @@ mod registry {
         let code = match value {
             super::RegValue::Text(text) => {
                 let data = wide(text);
-                let kind = if text.contains('%') { REG_EXPAND_SZ } else { REG_SZ };
+                let kind = if text.contains('%') {
+                    REG_EXPAND_SZ
+                } else {
+                    REG_SZ
+                };
                 // SAFETY: an open key and data of the length given.
                 unsafe {
                     RegSetValueExW(
@@ -323,9 +334,7 @@ pub fn owner_of_key(key: &str) -> Option<String> {
             &format!("{name}\\{}", navigation_key()),
             KEY_VALUE,
         )?;
-        theirs
-            .eq_ignore_ascii_case(key)
-            .then(|| sid.to_string())
+        theirs.eq_ignore_ascii_case(key).then(|| sid.to_string())
     })
 }
 
@@ -370,10 +379,7 @@ mod tests {
         let door = door_path("ab12");
         assert_eq!(
             door,
-            format!(
-                r"\\127.0.0.1@{}\ab12",
-                dsa_host_core::files_door::DOOR_PORT
-            )
+            format!(r"\\127.0.0.1@{}\ab12", dsa_host_core::files_door::DOOR_PORT)
         );
         let values = navigation_values(r"C:\Program Files\DSA\dsa-app-window.exe", &door);
         let value = |subkey: &str, name: Option<&str>| {

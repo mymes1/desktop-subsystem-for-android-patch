@@ -37,6 +37,7 @@ pub mod launcher;
 #[cfg(target_os = "linux")]
 pub mod memory;
 pub mod network;
+pub mod package_updates;
 #[cfg(target_os = "linux")]
 pub mod performance;
 pub mod pstore;

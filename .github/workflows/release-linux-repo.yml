@@ -1,0 +1,74 @@
+# Publishes DSA's Linux package repositories on GitHub Pages: the apt repository and the
+# dnf and zypper repositories that the .deb and the .rpm register when they are installed.
+# It gathers the .deb and .rpm files attached to every published v<version> release, so
+# every published version stays installable, signs the repositories with
+# .github/scripts/release/build-linux-repo.sh, and deploys the folder to Pages.
+#
+# It runs only by hand, after the packages of a version are attached to its release. The
+# packages must be built with --repo-key set to the public half of the same key. It needs
+# these repository secrets:
+#   DSA_REPO_GPG_KEY          the ASCII-armored secret GPG key that signs the repositories
+#   DSA_REPO_GPG_PASSPHRASE   its passphrase, if it has one
+# Pages must be set to deploy from GitHub Actions.
+
+name: Linux repository release
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release-linux-repo
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the signed package repositories
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev apt-utils rpm createrepo-c gnupg
+
+      - name: Gather the packages of every release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p .scratch/linux-packages
+          gh release list --limit 200 --json tagName --jq '.[].tagName' | grep '^v' | while read -r tag; do
+            gh release download "$tag" --dir .scratch/linux-packages \
+              --pattern '*.deb' --pattern '*.rpm' --skip-existing || true
+          done
+          ls -l .scratch/linux-packages
+
+      - name: Build the repositories
+        env:
+          DSA_REPO_GPG_KEY: ${{ secrets.DSA_REPO_GPG_KEY }}
+          DSA_REPO_GPG_PASSPHRASE: ${{ secrets.DSA_REPO_GPG_PASSPHRASE }}
+        run: |
+          .github/scripts/release/build-linux-repo.sh \
+            --packages .scratch/linux-packages --out .scratch/linux-repo
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .scratch/linux-repo
+
+  deploy:
+    name: Publish the repositories on GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
