@@ -1295,8 +1295,8 @@ mod win {
             } else if decoded.is_some() {
                 window.shown = window.frame.clone();
             }
-            let mut pixels = decoded
-                .unwrap_or_else(|| super::placeholder(width as usize, height as usize, dpi));
+            let mut pixels =
+                decoded.unwrap_or_else(|| super::placeholder(width as usize, height as usize, dpi));
             finish(
                 &mut pixels,
                 width as usize,
@@ -2068,7 +2068,7 @@ mod tests {
     /// desktop.
     #[cfg(windows)]
     #[test]
-    fn fr12_a_placed_widget_window_shows_its_placeholder_at_once_then_its_see_through_image_and_keeps_it() {
+    fn fr12_a_widget_window_shows_a_placeholder_then_a_see_through_image_it_keeps() {
         use windows_sys::Win32::Foundation::{HWND, RECT};
         use windows_sys::Win32::Graphics::Gdi::{MonitorFromRect, MONITOR_DEFAULTTONULL};
         use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -2168,7 +2168,10 @@ mod tests {
             .collect::<Vec<_>>();
         windows.command(frame(rgba_png(8, 2, &[drawn.clone(), drawn].concat())));
         let image = next_presented(1, deadline);
-        assert!(image.committed, "the system did not take the widget's image");
+        assert!(
+            image.committed,
+            "the system did not take the widget's image"
+        );
         assert!(
             image.opaque * 10 >= pixels * 4 && image.opaque * 10 <= pixels * 6,
             "{} of {pixels} pixels are opaque; half the widget's image is see-through",
@@ -2203,7 +2206,10 @@ mod tests {
             if let Some(found) = win::PRESENTED.lock().unwrap().get(seen).copied() {
                 return found;
             }
-            assert!(Instant::now() < deadline, "the widget's window was not drawn again");
+            assert!(
+                Instant::now() < deadline,
+                "the widget's window was not drawn again"
+            );
             std::thread::sleep(Duration::from_millis(20));
         }
     }
