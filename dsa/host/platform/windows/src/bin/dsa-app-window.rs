@@ -207,9 +207,28 @@ fn main() -> std::process::ExitCode {
             || starting = Some(StartingWindow::show(TITLE)),
         )
         .and_then(|()| {
-            android_files::locate(&mut NamedPipeConnector {
+            // The files door first, the address the navigation pane keeps; then the session's
+            // own address. Explorer is only given a path that answers: given one that does not,
+            // it opens the user's Documents instead and says nothing.
+            const WAIT: std::time::Duration = std::time::Duration::from_secs(90);
+            let door = android_files::register_in_navigation_pane();
+            let door_error = match door {
+                Ok(path) => match android_files::reachable(&path, WAIT) {
+                    Ok(()) => return Ok(path),
+                    Err(why) => why,
+                },
+                Err(why) => why,
+            };
+            note(
+                logger.as_deref(),
+                &format!("the files door did not answer: {door_error}"),
+            );
+            let path = android_files::locate(&mut NamedPipeConnector {
                 name: api_pipe.into(),
-            })
+            })?;
+            android_files::reachable(&path, WAIT)
+                .map(|()| path)
+                .map_err(|why| format!("{why} (and the files door: {door_error})"))
         })
         .and_then(|path| android_files::open_in_explorer(&path).map(|()| path));
         drop(starting);

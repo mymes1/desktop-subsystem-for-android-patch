@@ -955,6 +955,13 @@ impl Compositor {
                 &format!("a registry key an earlier version wrote stays: {why}"),
             );
         }
+        // "Android" in Explorer's navigation pane, kept pointing at this user's files door.
+        if let Err(why) = crate::android_files::register_in_navigation_pane() {
+            note(
+                self.logger.as_deref(),
+                &format!("Android is not in Explorer's navigation pane: {why}"),
+            );
+        }
         if !self.show_notifications {
             return None;
         }

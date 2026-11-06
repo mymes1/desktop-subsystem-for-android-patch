@@ -329,6 +329,9 @@ impl UserAndroid for UpdatingAndroid {
     fn android_files(&self) -> Result<String, String> {
         UserAndroid::android_files(&*self.session)
     }
+    fn android_files_with_token(&self, token: &str) -> Result<String, String> {
+        UserAndroid::android_files_with_token(&*self.session, token)
+    }
     fn guest_memory(&self) -> Option<GuestMemoryReport> {
         UserAndroid::guest_memory(&*self.session)
     }

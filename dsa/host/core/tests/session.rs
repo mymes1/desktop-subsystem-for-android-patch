@@ -2509,6 +2509,33 @@ fn fr29_android_files_open_a_loopback_address_and_have_the_guest_serve_them() {
 }
 
 #[test]
+fn fr29_android_files_can_be_served_under_the_users_own_key() {
+    let (session, mut agent, _launcher) = active_session();
+    let (connect, _reached) = fake_adbd();
+    session.set_android_files_connect(connect);
+    let first = session.android_files().unwrap();
+    let Body::AndroidFiles(_) = next_body(&mut agent) else {
+        panic!("expected the guest to be told to serve its files");
+    };
+    // The files door asks for the user's key: the guest is told it, on the same port.
+    let keyed = session.android_files_with_token("feedface").unwrap();
+    let Body::AndroidFiles(files) = next_body(&mut agent) else {
+        panic!("expected the guest to be told the new token");
+    };
+    assert_eq!(files.token, "feedface");
+    assert!(keyed.ends_with("/feedface/"), "{keyed}");
+    assert_eq!(
+        first.rsplit_once('/').map(|_| first.split('/').nth(2)),
+        keyed.rsplit_once('/').map(|_| keyed.split('/').nth(2)),
+        "the loopback port holds"
+    );
+    // Asking again with the same key tells the guest nothing new.
+    assert_eq!(session.android_files_with_token("feedface").unwrap(), keyed);
+    assert_eq!(session.android_files().unwrap(), keyed);
+    nothing_for_the_guest(&mut agent);
+}
+
+#[test]
 fn fr9_a_file_the_agent_cannot_take_is_refused_with_its_reason() {
     use dsa_host_core::files::{FileAction, FileTransfer};
     let (session, mut agent, _launcher) = active_session();
