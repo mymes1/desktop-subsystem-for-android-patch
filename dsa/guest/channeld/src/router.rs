@@ -71,7 +71,12 @@ pub fn agent_caller(context: Option<&str>, cmdline: Option<&[u8]>) -> Result<(),
         .strip_prefix("u:r:")
         .and_then(|rest| rest.split(':').next())
         .unwrap_or_default();
-    if !matches!(domain, "platform_app" | "system_app") {
+    // Android 17 runs a platform app that targets SDK 36 or later in `platform_app_<sdk>`.
+    let platform_app = domain == "platform_app"
+        || domain
+            .strip_prefix("platform_app_")
+            .is_some_and(|sdk| !sdk.is_empty() && sdk.bytes().all(|b| b.is_ascii_digit()));
+    if !platform_app && domain != "system_app" {
         return Err(format!(
             "the caller runs in {context:?}, not as a platform app"
         ));
