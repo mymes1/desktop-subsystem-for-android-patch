@@ -134,7 +134,8 @@
 ; ARM app translation: the daemon writes the package image the host sends to
 ; /data/vendor/dsa/arm-translation (dsa-arm-translation.rc makes the directory, as the system
 ; user the daemon runs as) and removes it when the host says so. init mounts it at the next
-; boot (arm-translation.cil).
+; boot (arm-translation.cil). /data itself carries a label of its own, which the way down passes.
+(allow dsa_channeld system_data_root_file (dir (search)))
 (allow dsa_channeld vendor_data_file (dir (search read open getattr write add_name remove_name)))
 (allow dsa_channeld vendor_data_file (file (create read write open getattr setattr unlink rename)))
 
