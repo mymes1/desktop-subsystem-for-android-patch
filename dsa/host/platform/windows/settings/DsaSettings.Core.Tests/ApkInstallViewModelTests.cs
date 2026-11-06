@@ -61,6 +61,7 @@ internal sealed class ArgsText : ITextSource
         ["ApkWindow_ReasonWithWords"] = 2,
         ["ApkWindow_OpenFailed"] = 2,
         ["ApkWindow_NotApkText"] = 2,
+        ["ApkWindow_LaunchFailedAfterInstall"] = 2,
     };
 
     public string Get(string key) =>
@@ -88,9 +89,12 @@ public class ApkInstallViewModelTests
 
     private const string Installed41 = "{\"version_code\":41,\"version_name\":\"4.1\",\"signers\":[\"AB:CD\"]}";
 
-    private static async Task<ApkInstallViewModel> Loaded(FakeRunner dsa)
+    /// <summary>The processor types of the PC the tests stand for: an x64 PC.</summary>
+    private static readonly string[] X64 = { "x86_64", "x86" };
+
+    private static async Task<ApkInstallViewModel> Loaded(FakeRunner dsa, bool launchWhenReady = false)
     {
-        var vm = new ApkInstallViewModel(dsa, new ArgsText(), Path);
+        var vm = new ApkInstallViewModel(dsa, new ArgsText(), Path, X64) { LaunchWhenReady = launchWhenReady };
         await vm.LoadAsync();
         return vm;
     }
@@ -224,6 +228,112 @@ public class ApkInstallViewModelTests
         await vm.InstallAsync();
         Assert.Equal(ApkInstallPage.Failed, vm.Page);
         Assert.StartsWith("ApkWindow_StartFailed Android did not start: the image is missing", vm.ResultText);
+    }
+
+    [Fact]
+    public void Fr11_the_installer_opens_on_reading_the_file_with_launch_when_ready_on()
+    {
+        var vm = new ApkInstallViewModel(new FakeRunner(), new ArgsText(), Path, X64);
+        Assert.Equal(ApkInstallPage.Reading, vm.Page);
+        Assert.Equal("notes.apk", vm.Title);
+        Assert.False(vm.CanInstall);
+        Assert.False(vm.CanOpen);
+        Assert.False(vm.IsBusy);
+        // As App Installer does, the app opens once it is installed unless the user says not to.
+        Assert.True(vm.LaunchWhenReady);
+        Assert.False(vm.Launched);
+    }
+
+    [Fact]
+    public async Task Fr11_the_installer_shows_the_publisher_and_version_under_the_app_name()
+    {
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", Info()));
+        Assert.Equal("Notes", vm.Title);
+        Assert.StartsWith("ApkWindow_Publisher ApkWindow_Signer v2|AB:CD", vm.PublisherLine);
+        Assert.StartsWith("ApkWindow_VersionChip 4.2", vm.VersionChip);
+        Assert.Equal("", vm.CompatibilityWarning);
+    }
+
+    [Fact]
+    public async Task Fr11_an_unsigned_apk_says_so_where_the_publisher_goes()
+    {
+        var info = Info().Replace("\"signer\":{\"scheme\":\"v2\",\"sha256\":\"AB:CD\"},", "");
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", info));
+        Assert.StartsWith("ApkWindow_Publisher ApkWindow_Unsigned", vm.PublisherLine);
+    }
+
+    [Fact]
+    public async Task Fr11_an_apk_without_code_for_this_processor_is_flagged_before_install()
+    {
+        var info = Info().Replace("\"abis\":[\"x86_64\"]", "\"abis\":[\"arm64-v8a\",\"armeabi-v7a\"]");
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", info));
+        Assert.StartsWith("ApkWindow_AbiWarning arm64-v8a, armeabi-v7a", vm.CompatibilityWarning);
+        // Android decides with its translation package, so the install stays possible.
+        Assert.True(vm.CanInstall);
+
+        var arm = new ApkInstallViewModel(new FakeRunner().Answer($"apk-info {Path} --json", info), new ArgsText(), Path,
+            new[] { "arm64-v8a" });
+        await arm.LoadAsync();
+        Assert.Equal("", arm.CompatibilityWarning);
+    }
+
+    [Fact]
+    public async Task Fr11_launch_when_ready_opens_the_app_once_it_is_installed()
+    {
+        var dsa = new FakeRunner()
+            .Answer($"apk-info {Path} --json", Info("running", "\"new\""))
+            .Answer($"install {Path} --progress --json", "{\"installed\":true}", "stage sending", "progress 100")
+            .Answer("launch com.example.notes", "Launching com.example.notes");
+        var vm = await Loaded(dsa, launchWhenReady: true);
+        await vm.InstallAsync();
+        Assert.Equal(ApkInstallPage.Done, vm.Page);
+        Assert.True(vm.Launched);
+        Assert.Equal("launch com.example.notes", dsa.Calls[^1]);
+    }
+
+    [Fact]
+    public async Task Fr11_without_launch_when_ready_the_done_screen_offers_launch()
+    {
+        var dsa = new FakeRunner()
+            .Answer($"apk-info {Path} --json", Info("running", "\"new\""))
+            .Answer($"install {Path} --progress --json", "{\"installed\":true}");
+        var vm = await Loaded(dsa);
+        await vm.InstallAsync();
+        Assert.Equal(ApkInstallPage.Done, vm.Page);
+        Assert.False(vm.Launched);
+        Assert.True(vm.CanOpen);
+        Assert.DoesNotContain(dsa.Calls, c => c.StartsWith("launch"));
+    }
+
+    [Fact]
+    public async Task Fr11_an_app_that_does_not_open_after_install_stays_on_done_with_the_reason()
+    {
+        var dsa = new FakeRunner()
+            .Answer($"apk-info {Path} --json", Info("running", "\"new\""))
+            .Answer($"install {Path} --progress --json", "{\"installed\":true}")
+            .Fail("launch com.example.notes", "dsa: the window manager is not running");
+        var vm = await Loaded(dsa, launchWhenReady: true);
+        await vm.InstallAsync();
+        Assert.Equal(ApkInstallPage.Done, vm.Page);
+        Assert.False(vm.Launched);
+        Assert.True(vm.CanOpen);
+        Assert.StartsWith("ApkWindow_LaunchFailedAfterInstall Notes|the window manager is not running", vm.ResultText);
+    }
+
+    [Fact]
+    public async Task Fr11_the_progress_state_can_be_cancelled_until_android_has_the_app()
+    {
+        var dsa = new FakeRunner()
+            .Answer($"apk-info {Path} --json", Info("running", "\"new\""))
+            .Answer($"install {Path} --progress --json", "{\"installed\":true}", "stage sending", "progress 30", "stage installing");
+        var vm = await Loaded(dsa);
+        var seen = new List<(ApkInstallPage Page, bool Busy, bool CanCancel)>();
+        vm.PropertyChanged += (_, _) => seen.Add((vm.Page, vm.IsBusy, vm.CanCancel));
+        await vm.InstallAsync();
+        Assert.Contains((ApkInstallPage.Progress, true, true), seen);
+        // Once Android has the whole APK, the install cannot be stopped.
+        Assert.Contains((ApkInstallPage.Progress, true, false), seen);
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]

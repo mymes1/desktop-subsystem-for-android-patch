@@ -54,7 +54,7 @@ class Repository(unittest.TestCase):
         f"{tm.SETTINGS}/Strings.resx",
         f"{tm.SETTINGS}/Strings.ko.resx",
         f"{tm.SETTINGS}/Pages/AboutPage.xaml",
-        f"{tm.SETTINGS}/ApkInstallWindow.xaml.cs",
+        f"{tm.APK_INSTALLER}/InstallerWindow.xaml.cs",
     ]
 
     def setUp(self):
@@ -88,8 +88,8 @@ class Repository(unittest.TestCase):
         self.assertTrue(any("dsa.wxs" in p for p in tm.check(self.root)))
 
     def test_nfr6_apk_install_window_without_notice_fails(self):
-        self.edit(f"{tm.SETTINGS}/ApkInstallWindow.xaml.cs", '"AboutTrademark.Text"', '"Nothing"')
-        self.assertTrue(any("ApkInstallWindow" in p for p in tm.check(self.root)))
+        self.edit(f"{tm.APK_INSTALLER}/InstallerWindow.xaml.cs", '"AboutTrademark.Text"', '"Nothing"')
+        self.assertTrue(any("InstallerWindow" in p for p in tm.check(self.root)))
 
     def test_nfr6_about_page_without_notice_fails(self):
         self.edit(f"{tm.SETTINGS}/Pages/AboutPage.xaml", "AboutIndependent.Text", "AboutSomething.Text")

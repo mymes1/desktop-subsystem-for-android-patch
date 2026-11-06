@@ -686,7 +686,7 @@
     <value>{0}을(를) 바탕 화면에서 제거했습니다.</value>
   </data>
   <data name="ApkWindow_Caption" xml:space="preserve">
-    <value>Android 앱 설치</value>
+    <value>APK 설치 관리자</value>
   </data>
   <data name="ApkWindow_Reading" xml:space="preserve">
     <value>파일을 읽는 중</value>
@@ -707,7 +707,7 @@
     <value>닫기</value>
   </data>
   <data name="ApkWindow_Open" xml:space="preserve">
-    <value>열기</value>
+    <value>실행</value>
   </data>
   <data name="ApkWindow_VersionChip" xml:space="preserve">
     <value>버전 {0}</value>
@@ -773,7 +773,7 @@
     <value>서명되지 않았습니다. Android는 서명된 앱만 설치합니다.</value>
   </data>
   <data name="ApkWindow_PermissionsHeader" xml:space="preserve">
-    <value>요청하는 권한 ({0})</value>
+    <value>권한 ({0})</value>
   </data>
   <data name="ApkWindow_NoPermissions" xml:space="preserve">
     <value>요청하는 권한이 없습니다.</value>
@@ -815,7 +815,7 @@
     <value>{0}을(를) 업데이트했습니다</value>
   </data>
   <data name="ApkWindow_DoneText" xml:space="preserve">
-    <value>지금 열거나, 나중에 시작 메뉴에서 열 수 있습니다.</value>
+    <value>지금 실행하거나, 나중에 시작 메뉴에서 열 수 있습니다.</value>
   </data>
   <data name="ApkWindow_FailedTitle" xml:space="preserve">
     <value>설치하지 못했습니다</value>
@@ -858,6 +858,21 @@
   </data>
   <data name="ApkWindow_Reason_other" xml:space="preserve">
     <value>Android가 앱을 설치하지 않았습니다.</value>
+  </data>
+  <data name="ApkWindow_Publisher" xml:space="preserve">
+    <value>게시자: {0}</value>
+  </data>
+  <data name="ApkWindow_AbiWarning" xml:space="preserve">
+    <value>이 앱에는 {0} 프로세서용 코드만 있고 이 PC의 프로세서용 코드는 없습니다. ARM 변환 패키지가 있어야 안드로이드에서 실행되며, 설치가 거부될 수 있습니다.</value>
+  </data>
+  <data name="ApkWindow_LaunchFailedAfterInstall" xml:space="preserve">
+    <value>{0}이(가) 설치됐지만 열리지 않았습니다. {1}</value>
+  </data>
+  <data name="ApkWindow_LaunchWhenReady" xml:space="preserve">
+    <value>준비되면 실행</value>
+  </data>
+  <data name="ApkWindow_DetailsHeader" xml:space="preserve">
+    <value>세부 정보</value>
   </data>
   <data name="NavLogs.Content" xml:space="preserve">
     <value>Android 로그</value>

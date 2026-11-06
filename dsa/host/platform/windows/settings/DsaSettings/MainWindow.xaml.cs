@@ -83,11 +83,14 @@ public partial class MainWindow : FluentWindow
         if (DroppedFiles(e) is { } files)
         {
             e.Handled = true;
-            // Each APK opens in the APK install window, as it does from Explorer; the bar names
-            // any other file, which is not installed.
+            // Each APK opens in the APK Installer, as it does from Explorer; the bar names any
+            // other file, which is not installed.
             foreach (var apk in files.Where(Dsa.Settings.Core.InstallViewModel.IsApk))
             {
-                ApkInstallWindow.Open(apk);
+                if (Shell.OpenApkInstaller(apk) is { } why)
+                {
+                    await Shell.Tell(App.Text.Get("ApkWindow_Caption"), why);
+                }
             }
             var others = files.Where(f => !Dsa.Settings.Core.InstallViewModel.IsApk(f)).ToList();
             if (others.Count > 0)
