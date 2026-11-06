@@ -564,12 +564,15 @@ jobs:
             [Dsa.Input]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)   # left up
             Start-Sleep -Seconds 1
             Set-Foreground $window
-            for ($i = 0; $i -lt 16; $i++) {
+            # About sits in the pane's footer, and Tab may visit the pane toggle and the page
+            # before it, so the presses go on until every item was in view (at most 40).
+            for ($i = 0; $i -lt 40; $i++) {
               [System.Windows.Forms.SendKeys]::SendWait('{TAB}')
               Start-Sleep -Milliseconds 500
               $shown = Get-ShownItems $window
               Write-Host "Tab $($i + 1): $($shown -join ', ')"
               $shown | ForEach-Object { $seen[$_] = $true }
+              if (-not ($items | Where-Object { -not $seen[$_] })) { break }
             }
             Save-WindowScreen $window "$PWD\screens\settings-$theme-short-pane-keyboard.png"
             $missing = $items | Where-Object { -not $seen[$_] }

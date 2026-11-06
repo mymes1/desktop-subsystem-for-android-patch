@@ -19,3 +19,5 @@ echo "settings scroll check: ok"
 # first, since the ARM64 runner's Start menu takes the keyboard.
 grep -Fq 'function Set-Foreground($Window)' "$workflow"
 test "$(grep -c 'Set-Foreground $window' "$workflow")" -ge 2
+# Tab goes on until every item was in view, since About in the footer can come after the page.
+grep -Fq 'for ($i = 0; $i -lt 40; $i++)' "$workflow"
