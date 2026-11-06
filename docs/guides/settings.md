@@ -1,37 +1,75 @@
-# Settings tour
+# Settings
 
-DSA Settings is the settings app of Desktop Subsystem for Android™ (DSA) on Windows. Open
-it from the Start menu. It follows your theme, accent colour and language (English and
-Korean). It changes nothing on its own: every switch goes through the `dsa` command, so
-`dsa settings` shows the same values and `dsa settings set <name> <value>` changes them.
-Switches take `on` or `off`.
+**DSA Settings** is the settings app of Desktop Subsystem for Android™ (DSA) on Windows.
+Open it from the Start menu. It shows in English or Korean, following your Windows display
+language, and follows your Windows theme.
 
-Settings marked "administrator" belong to the whole computer, so only an administrator
-changes them.
+Every change DSA Settings makes goes through the `dsa` command, so the command line sees
+the same values:
 
-| Page | What it holds | Command line |
+```
+dsa settings                        # every setting and its value
+dsa settings set <name> <value>     # change one; switches take on or off
+```
+
+Some settings apply to every user of the PC, so only an administrator can change them. DSA
+Settings marks them with a shield icon and asks for administrator approval when you change
+one. They are marked "(admin)" below.
+
+## Pages
+
+| Page | What you find there | Command line |
 |---|---|---|
-| General | Start, stop and freeze Android, its state and last error | `dsa start`, `dsa stop`, `dsa freeze`, `dsa status` |
-| Memory | The memory limit (automatic by default), the VM's size, what each part uses | `memory-limit`, `dsa memory` |
-| Apps | Installed apps: details, Android's settings for each, uninstall | `dsa apps list`, `info`, `settings`, `uninstall` |
-| Running in the background | Apps that run with no window: open or stop them | `dsa background`, `stop-without-asking` |
-| Widgets | Add and remove widgets on the desktop | `dsa widgets` |
-| Display & GPU | The GPU windows render on | `render-gpu` (`display`, `integrated`, `discrete` or part of a GPU's name), `dsa gpus` |
-| Android | The Android version, and the ones you can choose | `dsa android version`, `dsa android use` |
-| Updates | DSA and Android image updates (administrator) | `program-updates`, `image-updates`, `dsa update` |
-| Device identity | The manufacturer, model and fingerprint Android reports to apps | `dsa settings device`, `device.<field>`, `dsa settings reset device` |
-| Network | How Android reaches the network, its addresses and DNS | `dsa network`, `advanced-networking` |
-| Advanced | Freeze when idle, web links in Android apps, clipboard, shared folders, developer mode and its adb address, trace switches (administrator), log folders | `freeze`, `links-in-android`, `clipboard`, `file-sharing`, `shared-folders`, `developer-mode`, `adb-port`, `input-trace`, `resize-trace` |
-| Android log | Android's live log | `dsa logcat` |
-| About | Version and licences | |
+| **General** | Android's state, **Start**, **Stop**, **Freeze Android now**, the last problem, **Open my log folder** | `dsa status`, `dsa start`, `dsa stop`, `dsa freeze` |
+| **Memory** | **Memory limit**, the size of Android's VM, what each part uses | `memory-limit`, `dsa memory` |
+| **Apps** | Installed apps: **Open**, **App info**, **Uninstall**, **Resizable**, the size windows open at | `dsa apps`, `dsa app-window` |
+| **Running in the background** | Apps running with no window: **Open**, **Stop**; whether to ask before stopping | `dsa background`, `stop-without-asking` |
+| **Widgets** | Widgets on your desktop, and **Add to desktop** | `dsa widgets` |
+| **Display & GPU** | **Render GPU**, **Restart the window manager** | `render-gpu`, `dsa gpus` |
+| **Android** | The running version, **Version to use** (admin) | `dsa android version`, `dsa android use` |
+| **Updates** | **Update DSA automatically** (admin), **Update the Android image automatically** (admin), **Install now** | `program-updates`, `image-updates`, `dsa update` |
+| **Device identity** | The manufacturer, model and build fingerprint Android reports to apps | `dsa settings device`, `device.<field>` |
+| **Network** | How Android reaches the network, its address, DNS servers and gateway, **Advanced networking** | `dsa network`, `advanced-networking` |
+| **Advanced** | Clipboard, files, web links, freeze when idle, reset, ARM apps, developer mode, traces (admin), log folders | see below |
+| **Android log** | Android's live log, **Save diagnostics** | `dsa logcat`, `dsa logs collect` |
+| **About** | Versions, licences, source code | |
 
-Notes:
+## The Advanced page
 
-- `advanced-networking` (off by default) puts Android on your network as a device of its
-  own instead of behind a private NAT network. It applies at the next start of Android.
-- Device identity changes apply at the next start of Android.
-- `arm-translation off` keeps an installed ARM translation package but starts Android
-  without it.
+| Setting | Default | Command line |
+|---|---|---|
+| **Share the clipboard with Android** | On | `clipboard` |
+| **Share Windows folders with Android** | On | `file-sharing` |
+| **Shared folders** | All six | `shared-folders` |
+| **Freeze Android when idle** | Off | `freeze` |
+| **Open web links in Android apps** | Off | `links-in-android` |
+| **Reset Android's data** | | `dsa reset-data` |
+| **Run apps built only for ARM** | | `arm-translation` |
+| **Developer mode** | Off | `developer-mode`, `adb-port` |
+| **Input trace** (admin) | Off | `input-trace` |
+| **Resize trace** (admin) | Off | `resize-trace` |
+
+## When a change applies
+
+- **Render GPU**: when the window manager starts again, at your next sign-in or when you
+  select **Restart the window manager**.
+- **Memory limit**, **Device identity**, **Advanced networking**, **Run apps built only for
+  ARM** and the Android version: at the next start of Android. To restart Android, stop it
+  on the **General** page, then open an app.
+- Everything else: at once.
+
+## Values the command line takes
+
+- `render-gpu`: `display` (the GPU of the primary monitor, the default), `integrated`,
+  `discrete`, or part of a GPU's name as `dsa gpus` lists it.
+- `memory-limit`: `auto` (the default, up to 3 GB and never more than the PC has), or a
+  size such as `4g` or `3072` (MiB).
+- `shared-folders`: `all`, `none`, or names separated by commas, such as
+  `Documents,Pictures`.
+- `adb-port`: a TCP port from 1 to 65535. The default is 58526.
+- `device.<field>`: `manufacturer`, `brand`, `model`, `device`, `name`, `characteristics`,
+  `fingerprint`, or a part of the fingerprint such as `fingerprint.release`.
+  `dsa settings reset device` puts every value back.
 
 ---
 

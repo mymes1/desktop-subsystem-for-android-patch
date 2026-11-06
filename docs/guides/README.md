@@ -1,26 +1,27 @@
 # DSA user guides
 
-These guides explain how to use Desktop Subsystem for Android™ (DSA): what it does today,
-how to install it, and what to do when something goes wrong. They describe the current
-preview. Anything not finished says so, with its status.
+These guides explain how to install and use Desktop Subsystem for Android™ (DSA), and what
+to do when something goes wrong.
 
 **English** · [한국어](ko/README.md)
 
-| Guide | What it covers |
+They describe the current development version. The latest release can lack some of what
+is described here; its release notes list what it contains. Anything not finished says so.
+
+| Guide | What you can do with it |
 |---|---|
-| [Getting started](getting-started.md) | Installing on Windows, Linux and macOS, and the status of each |
-| [Apps and windows](apps.md) | Opening apps, their windows, notifications, widgets, background apps |
-| [Installing APKs](install-apks.md) | The APK Installer, `dsa install`, and why an install is refused |
-| [Files](files.md) | DSA Files, the "Android" entry in Explorer, the `Host` folder, drag and drop |
-| [Android versions](android-versions.md) | The two supported major versions, and how to choose one |
-| [Settings tour](settings.md) | Every page of DSA Settings and the matching `dsa settings` names |
-| [Memory](memory.md) | Doze, freezing, and how memory goes back to your computer |
-| [Developer mode and adb](developer-mode.md) | Connecting adb to Android |
-| [Troubleshooting and logs](troubleshooting.md) | `dsa` commands for diagnosis, and where logs live |
-| [Uninstalling](uninstall.md) | What uninstalling removes and what it keeps |
+| [Getting started](getting-started.md) | Install DSA on Windows, and see the status on Linux and macOS |
+| [Apps and windows](apps.md) | Open apps, work with their windows, notifications, widgets and background apps |
+| [Installing APKs](install-apks.md) | Install apps from APK files, and find out why an install was refused |
+| [Files](files.md) | Open Android's files in File Explorer, and send files to Android apps |
+| [Android versions](android-versions.md) | See and change which Android version runs |
+| [Settings](settings.md) | Find each setting in DSA Settings and its `dsa settings` name |
+| [Memory](memory.md) | Understand Doze, freezing, and how memory goes back to your PC |
+| [Developer mode and adb](developer-mode.md) | Connect adb to Android |
+| [Troubleshooting and logs](troubleshooting.md) | Diagnose a problem, read Android's log, and file a report |
+| [Uninstalling](uninstall.md) | Remove DSA, and see what is kept |
 
-There is also an [introduction page](intro/index.html) for people new to the project.
-
+New to the project? Start with the [introduction page](intro/index.html).
 
 ---
 
