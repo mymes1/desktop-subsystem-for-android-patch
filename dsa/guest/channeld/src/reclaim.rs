@@ -477,3 +477,48 @@ impl Reclaimer {
         reason
     }
 }
+
+/// The kernel files the reclaimer reads on every check, and which of them could not be read
+/// last time. A file that cannot be read (SELinux refuses it, or the kernel lacks it) is
+/// reported once, loudly, with what the reclaimer loses without it, and again only after it
+/// has been read in between. Reporting it on every check would bury the log; never reporting
+/// it would leave idle memory in the guest with no word of why.
+#[derive(Debug, Default)]
+pub struct ReadFailures {
+    failing: std::collections::BTreeSet<String>,
+}
+
+impl ReadFailures {
+    /// The line to log for this read of `path`, if any: `Some` the first time it fails (at the
+    /// start, or after it was read), `None` while it keeps failing and when it succeeds.
+    /// `loses` says what the reclaimer cannot do without the file.
+    pub fn note<T>(
+        &mut self,
+        path: &str,
+        result: &std::io::Result<T>,
+        loses: &str,
+    ) -> Option<String> {
+        match result {
+            Ok(_) => {
+                self.failing.remove(path);
+                None
+            }
+            Err(error) => {
+                if !self.failing.insert(path.to_string()) {
+                    return None;
+                }
+                let cause = if error.kind() == std::io::ErrorKind::PermissionDenied {
+                    "the SELinux policy does not let dsa-channeld read it (look for an avc \
+                     denial in the kernel log)"
+                        .to_string()
+                } else {
+                    error.to_string()
+                };
+                Some(format!(
+                    "WARNING: cannot read {path}: {cause}. Until it can, {loses}. This is \
+                     reported once."
+                ))
+            }
+        }
+    }
+}
