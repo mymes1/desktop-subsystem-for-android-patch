@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- What the software center shows when the .deb or the .rpm is opened, and for the
+     package once it comes from DSA's package repository. -->
+<component type="desktop-application">
+  <id>io.github.thisisthepy.DSA</id>
+  <name>Desktop Subsystem for Android</name>
+  <summary>Runs Android apps in windows of their own on the desktop</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <developer id="io.github.thisisthepy">
+    <name>thisisthepy</name>
+  </developer>
+  <description>
+    <p>
+      Desktop Subsystem for Android™ (DSA) runs Android in a dedicated lightweight VM and
+      shows each Android task as a desktop window, with the computer's sound, cameras,
+      location, sensors, printers and folders lent to its apps.
+    </p>
+    <p>
+      Installing the package adds DSA's signed package repository, so new versions arrive
+      with the system's other updates. Removing the package removes the repository again.
+    </p>
+    <p>Android is a trademark of Google LLC.</p>
+  </description>
+  <launchable type="desktop-id">dsa.desktop</launchable>
+  <url type="homepage">https://github.com/thisisthepy/desktop-subsystem-for-android</url>
+  <url type="bugtracker">https://github.com/thisisthepy/desktop-subsystem-for-android/issues</url>
+  <categories>
+    <category>System</category>
+  </categories>
+  <provides>
+    <binary>dsa</binary>
+    <binary>dsa-devices</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

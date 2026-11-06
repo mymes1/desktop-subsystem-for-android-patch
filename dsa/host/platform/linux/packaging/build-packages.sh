@@ -3,6 +3,7 @@
 #
 #   build-packages.sh --bin-dir <cargo release folder> --version <x.y.z> --out <folder>
 #                     (--kernel <file> | --placeholder-kernel) [--image-dir <folder>]
+#                     --repo-key <armored public key> [--repo-url <url>]
 #                     [--arch amd64|arm64] [--no-deb] [--no-rpm]
 #
 # The packages install the same things:
@@ -16,6 +17,19 @@
 #   udev rules, modules      /dev/kvm and /dev/vhost-vsock for the service and the user
 #   desktop files            DSA Files, and Open, Share and Install in Android for files
 #   GeoClue                  DSA's entry, so the desktop's agent can let it read the location
+#   AppStream metainfo       what the software center shows when the package is opened
+#   the repository key       /usr/share/keyrings/dsa-archive-keyring.gpg in the .deb,
+#                            /etc/pki/rpm-gpg/RPM-GPG-KEY-dsa in the .rpm
+#
+# Installing either package registers DSA's own signed package repository, the way Chrome
+# and VS Code do: /etc/apt/sources.list.d/dsa.sources on Debian and Ubuntu, and
+# /etc/yum.repos.d/dsa.repo (and /etc/zypp/repos.d/dsa.repo where zypper is) on Fedora and
+# openSUSE. Later versions then come through the package manager and the software center,
+# and DSA has no updater of its own on Linux. The package scripts write the entry, and
+# remove it when the package is removed (not when it is upgraded), as the key goes with the
+# package's files. --repo-key is the public half of the key that signs the repository
+# (.github/scripts/release/build-linux-repo.sh); --repo-url is where that repository is
+# served, GitHub Pages by default.
 #
 # --placeholder-kernel puts an empty kernel in the package, for testing the package before a
 # kernel is built. An image folder is one made by dsa/guest/image/make-image.py, with its
@@ -34,6 +48,8 @@ image_dir=""
 arch=""
 make_deb=1
 make_rpm=1
+repo_key=""
+repo_url="https://thisisthepy.github.io/desktop-subsystem-for-android"
 
 die() {
     echo "build-packages: $*" >&2
@@ -51,6 +67,8 @@ while [[ $# -gt 0 ]]; do
         --arch) arch="$2"; shift 2 ;;
         --no-deb) make_deb=0; shift ;;
         --no-rpm) make_rpm=0; shift ;;
+        --repo-key) repo_key="$2"; shift 2 ;;
+        --repo-url) repo_url="${2%/}"; shift 2 ;;
         *) die "unknown argument $1" ;;
     esac
 done
@@ -74,6 +92,10 @@ if [[ -z "$kernel" && "$placeholder_kernel" -eq 0 ]]; then
     die "name the guest kernel with --kernel (or --placeholder-kernel for a package test)"
 fi
 [[ -x "$bin_dir/dsa" ]] || die "$bin_dir has no dsa"
+[[ -n "$repo_key" && -f "$repo_key" ]] \
+    || die "name the repository's public key (ASCII armored) with --repo-key"
+[[ "$repo_url" =~ ^https?://[^[:space:]]+$ ]] || die "the repository URL $repo_url is not a URL"
+command -v gpg >/dev/null || die "gpg is needed to write the repository keyring"
 
 package=desktop-subsystem-for-android
 mkdir -p "$out"
@@ -179,10 +201,79 @@ install -d "$stage/usr/share/applications" "$stage/etc/geoclue/conf.d"
 install -m 0644 "$here"/desktop/*.desktop "$stage/usr/share/applications/"
 install -m 0644 "$here/geoclue/dsa.conf" "$stage/etc/geoclue/conf.d/90-dsa.conf"
 
+# What the software center shows for the package.
+install -d "$stage/usr/share/metainfo"
+sed -e "s|@VERSION@|$version|g" -e "s|@DATE@|$(date -u +%Y-%m-%d)|g" \
+    "$here/appstream/io.github.thisisthepy.DSA.metainfo.xml" \
+    > "$stage/usr/share/metainfo/io.github.thisisthepy.DSA.metainfo.xml"
+chmod 0644 "$stage/usr/share/metainfo/io.github.thisisthepy.DSA.metainfo.xml"
+
+# The key of DSA's package repository: a binary keyring for apt's Signed-By, and the armored
+# key for dnf and zypper. Each format takes its own below. Both are package files, so
+# removing the package removes the key.
+key_dir="$out/key"
+rm -rf "$key_dir"
+install -d "$key_dir"
+gpg --batch --yes --dearmor --output "$key_dir/dsa-archive-keyring.gpg" "$repo_key"
+chmod 0644 "$key_dir/dsa-archive-keyring.gpg"
+
 # The licence.
 install -d "$stage/usr/share/doc/$package"
 repo_root="$(cd "$here/../../../../.." && pwd)"
 install -m 0644 "$repo_root/LICENSE" "$stage/usr/share/doc/$package/copyright"
+
+# The repository entries the package scripts write. They are not package files: a conffile
+# would stay behind after a removal, and the entry must go with the package.
+read -r -d '' apt_source <<EOF || true
+Types: deb
+URIs: $repo_url/apt
+Suites: stable
+Components: main
+Architectures: $arch
+Signed-By: /usr/share/keyrings/dsa-archive-keyring.gpg
+EOF
+read -r -d '' dnf_repo <<EOF || true
+[dsa]
+name=Desktop Subsystem for Android
+baseurl=$repo_url/rpm/\$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-dsa
+EOF
+read -r -d '' zypp_repo <<EOF || true
+[dsa]
+name=Desktop Subsystem for Android
+baseurl=$repo_url/rpm/$rpm_arch
+enabled=1
+autorefresh=1
+type=rpm-md
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-dsa
+EOF
+deb_add_repo="mkdir -p /etc/apt/sources.list.d
+cat > /etc/apt/sources.list.d/dsa.sources <<'DSA_EOF'
+$apt_source
+DSA_EOF
+chmod 0644 /etc/apt/sources.list.d/dsa.sources"
+deb_remove_repo="rm -f /etc/apt/sources.list.d/dsa.sources"
+rpm_add_repo="if [ -d /etc/yum.repos.d ]; then
+cat > /etc/yum.repos.d/dsa.repo <<'DSA_EOF'
+$dnf_repo
+DSA_EOF
+chmod 0644 /etc/yum.repos.d/dsa.repo
+fi
+if [ -d /etc/zypp/repos.d ]; then
+cat > /etc/zypp/repos.d/dsa.repo <<'DSA_EOF'
+$zypp_repo
+DSA_EOF
+chmod 0644 /etc/zypp/repos.d/dsa.repo
+fi"
+# The key file goes with the package. dnf and zypper import it into rpm's database the first
+# time they read the repository; a scriptlet cannot take it out again, because rpm holds its
+# database while the scriptlet runs.
+rpm_remove_repo="rm -f /etc/yum.repos.d/dsa.repo /etc/zypp/repos.d/dsa.repo"
 
 # What the package scripts do, the same for both formats.
 system_units_text="${system_units[*]:-}"
@@ -239,6 +330,8 @@ if [[ "$make_deb" -eq 1 ]]; then
     deb_root="$out/deb"
     rm -rf "$deb_root"
     cp -a "$stage" "$deb_root"
+    install -d "$deb_root/usr/share/keyrings"
+    install -m 0644 "$key_dir/dsa-archive-keyring.gpg" "$deb_root/usr/share/keyrings/"
     install -d "$deb_root/DEBIAN"
     size_kb="$(du -sk "$stage" | cut -f1)"
     {
@@ -256,9 +349,11 @@ if [[ "$make_deb" -eq 1 ]]; then
         echo "$description" | sed 's/^/ /'
     } > "$deb_root/DEBIAN/control"
     printf '%s\n' /etc/dsa/dsa-hostd.json /etc/geoclue/conf.d/90-dsa.conf > "$deb_root/DEBIAN/conffiles"
-    printf '#!/bin/sh\nset -e\n%s\n' "$after_install" > "$deb_root/DEBIAN/postinst"
+    printf '#!/bin/sh\nset -e\nif [ "$1" = configure ]; then\n%s\nfi\n%s\n' \
+        "$deb_add_repo" "$after_install" > "$deb_root/DEBIAN/postinst"
     printf '#!/bin/sh\nset -e\nif [ "$1" = remove ] || [ "$1" = deconfigure ]; then\n%s\nfi\n' "$before_remove" > "$deb_root/DEBIAN/prerm"
-    printf '#!/bin/sh\nset -e\n%s\n' "$after_remove" > "$deb_root/DEBIAN/postrm"
+    printf '#!/bin/sh\nset -e\nif [ "$1" = remove ] || [ "$1" = purge ]; then\n%s\nfi\n%s\n' \
+        "$deb_remove_repo" "$after_remove" > "$deb_root/DEBIAN/postrm"
     chmod 0755 "$deb_root/DEBIAN/postinst" "$deb_root/DEBIAN/prerm" "$deb_root/DEBIAN/postrm"
     deb="$out/${package}_${version}_${arch}.deb"
     dpkg-deb --root-owner-group --build "$deb_root" "$deb"
@@ -269,9 +364,14 @@ if [[ "$make_rpm" -eq 1 ]]; then
     top="$out/rpmbuild"
     rm -rf "$top"
     mkdir -p "$top/SPECS" "$top/BUILD" "$top/RPMS" "$top/SOURCES" "$top/SRPMS"
+    rpm_stage="$out/rpm-stage"
+    rm -rf "$rpm_stage"
+    cp -a "$stage" "$rpm_stage"
+    install -d "$rpm_stage/etc/pki/rpm-gpg"
+    install -m 0644 "$repo_key" "$rpm_stage/etc/pki/rpm-gpg/RPM-GPG-KEY-dsa"
     files_list="$top/files.list"
     (
-        cd "$stage"
+        cd "$rpm_stage"
         find . -mindepth 1 \( -type f -o -type l \) | sed 's|^\.||' | sort | while read -r path; do
             case "$path" in
                 /etc/*) echo "%config(noreplace) $path" ;;
@@ -285,13 +385,14 @@ if [[ "$make_rpm" -eq 1 ]]; then
         echo "%dir /etc/dsa"
     ) > "$files_list"
     sed -e "s|@NAME@|$package|g" -e "s|@VERSION@|$version|g" \
-        -e "s|@SUMMARY@|$summary|g" -e "s|@STAGE@|$stage|g" -e "s|@FILES@|$files_list|g" \
+        -e "s|@SUMMARY@|$summary|g" -e "s|@STAGE@|$rpm_stage|g" -e "s|@FILES@|$files_list|g" \
         "$here/rpm/dsa.spec.in" > "$top/SPECS/dsa.spec"
     {
         echo "%description"
         echo "$description"
         echo
         echo "%post"
+        echo "$rpm_add_repo"
         echo "$after_install"
         echo
         echo "%preun"
@@ -300,6 +401,9 @@ if [[ "$make_rpm" -eq 1 ]]; then
         echo "fi"
         echo
         echo "%postun"
+        echo 'if [ "$1" -eq 0 ]; then'
+        echo "$rpm_remove_repo"
+        echo "fi"
         echo "$after_remove"
     } >> "$top/SPECS/dsa.spec"
     rpmbuild --define "_topdir $top" --target "$rpm_arch" -bb "$top/SPECS/dsa.spec"

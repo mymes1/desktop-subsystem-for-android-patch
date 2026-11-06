@@ -2,7 +2,9 @@
 # the systemd units are where they belong and valid, the package installs and removes on
 # Ubuntu (the .deb) and Fedora (the .rpm), and the programs run. The kernel and the Android
 # image are built elsewhere, so the packages here carry a placeholder kernel and a small
-# stand-in image laid out like a real one. The Flatpak of the user's half is built too.
+# stand-in image laid out like a real one. The signed apt and dnf repositories the packages
+# register are built too, with a throwaway key, and served locally, so the package manager
+# is seen reading them.
 
 name: Linux package test
 
@@ -13,6 +15,7 @@ on:
     paths:
       - "dsa/**"
       - ".github/workflows/test-linux-package.yml"
+      - ".github/scripts/release/build-linux-repo.sh"
   workflow_dispatch:
 
 concurrency:
@@ -41,7 +44,20 @@ jobs:
       - name: Install the packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm desktop-file-utils
+          sudo apt-get install -y rpm desktop-file-utils gnupg dpkg-dev apt-utils createrepo-c appstream
+
+      # A key made for this run only. The real one is a repository secret that only the
+      # release workflow reads.
+      - name: Make a throwaway repository key
+        run: |
+          export GNUPGHOME="$PWD/.scratch/gnupg"
+          mkdir -p "$GNUPGHOME" && chmod 0700 "$GNUPGHOME"
+          gpg --batch --pinentry-mode loopback --passphrase throwaway \
+            --quick-gen-key 'DSA test repository <test@invalid>' rsa3072 sign 1d
+          gpg --batch --armor --export > .scratch/repo-key.asc
+          gpg --batch --pinentry-mode loopback --passphrase throwaway \
+            --armor --export-secret-keys > .scratch/repo-secret.asc
+          gpgconf --kill all
 
       - name: Build the host programs
         working-directory: dsa
@@ -73,7 +89,8 @@ jobs:
           version="$(grep -m1 '^version' dsa/host/platform/linux/Cargo.toml | cut -d'"' -f2)"
           dsa/host/platform/linux/packaging/build-packages.sh \
             --bin-dir dsa/target/release --version "$version" --arch "${{ matrix.arch }}" \
-            --placeholder-kernel --image-dir .scratch/stand-in-image --out .scratch/packages
+            --placeholder-kernel --image-dir .scratch/stand-in-image --out .scratch/packages \
+            --repo-key .scratch/repo-key.asc --repo-url http://127.0.0.1:8080
           ls -l .scratch/packages
 
       - name: Check the package contents
@@ -88,7 +105,8 @@ jobs:
               /usr/lib/systemd/user/dsa-devices.service /usr/lib/udev/rules.d/70-dsa.rules \
               /usr/lib/modules-load.d/dsa.conf /usr/share/applications/dsa-open.desktop \
               /usr/share/applications/dsa-apk.desktop /etc/geoclue/conf.d/90-dsa.conf \
-              /etc/dsa/dsa-hostd.json /usr/lib/dsa/vm/image/image.json; do
+              /etc/dsa/dsa-hostd.json /usr/lib/dsa/vm/image/image.json \
+              /usr/share/metainfo/io.github.thisisthepy.DSA.metainfo.xml; do
             grep -q "\.$path\$\|\.$path -> " .scratch/deb-contents || { echo "the .deb has no $path"; exit 1; }
             grep -qx "$path" .scratch/rpm-contents || { echo "the .rpm has no $path"; exit 1; }
           done
@@ -97,15 +115,47 @@ jobs:
             arm64) kernel=/usr/lib/dsa/vm/Image ;;
           esac
           grep -qx "$kernel" .scratch/rpm-contents
+          grep -q '\./usr/share/keyrings/dsa-archive-keyring.gpg$' .scratch/deb-contents
+          grep -qx /etc/pki/rpm-gpg/RPM-GPG-KEY-dsa .scratch/rpm-contents
+          # The repository entry is written by the scripts, not shipped as a file, so a
+          # removal cannot leave it behind as a conffile.
+          ! grep -q 'sources.list.d\|yum.repos.d' .scratch/deb-contents .scratch/rpm-contents
+          appstreamcli validate --no-net \
+            .scratch/packages/stage/usr/share/metainfo/io.github.thisisthepy.DSA.metainfo.xml
           for desktop in dsa/host/platform/linux/packaging/desktop/*.desktop; do
             desktop-file-validate "$desktop"
           done
           python3 -c "import json,sys; json.load(open('.scratch/packages/stage/etc/dsa/dsa-hostd.json'))"
 
+      - name: Build the signed repositories
+        run: |
+          DSA_REPO_GPG_KEY="$(cat .scratch/repo-secret.asc)" DSA_REPO_GPG_PASSPHRASE=throwaway \
+            .github/scripts/release/build-linux-repo.sh \
+            --packages .scratch/packages --out .scratch/linux-repo
+          find .scratch/linux-repo -type f | sort
+          test -f .scratch/linux-repo/apt/dists/stable/InRelease
+          test -f .scratch/linux-repo/apt/dists/stable/Release.gpg
+          test -f .scratch/linux-repo/apt/dists/stable/main/binary-${{ matrix.arch }}/Packages.gz
+          ls .scratch/linux-repo/rpm/*/repodata/repomd.xml.asc
+          gpgv --keyring "$PWD/.scratch/linux-repo/dsa-archive-keyring.gpg" \
+            .scratch/linux-repo/apt/dists/stable/InRelease
+
       - name: Install the .deb, check it, and remove it
         run: |
           set -x
+          (cd .scratch/linux-repo && python3 -m http.server 8080 --bind 127.0.0.1 >/dev/null 2>&1 &)
           sudo apt-get install -y "./$(ls .scratch/packages/*.deb)"
+          # The package registered DSA's repository with its key, and apt trusts it.
+          cat /etc/apt/sources.list.d/dsa.sources
+          grep -qx 'Signed-By: /usr/share/keyrings/dsa-archive-keyring.gpg' /etc/apt/sources.list.d/dsa.sources
+          test -f /usr/share/keyrings/dsa-archive-keyring.gpg
+          sudo apt-get update 2>&1 | tee .scratch/apt-update
+          ! grep -qi 'NO_PUBKEY\|not signed\|BADSIG\|127.0.0.1.*Err' .scratch/apt-update
+          apt-cache policy desktop-subsystem-for-android | tee .scratch/apt-policy
+          grep -q '127.0.0.1:8080/apt stable/main' .scratch/apt-policy
+          # An upgrade keeps the entry; only a removal takes it away.
+          sudo apt-get install -y --reinstall "./$(ls .scratch/packages/*.deb)"
+          test -f /etc/apt/sources.list.d/dsa.sources
           dsa --version || dsa --help || true
           test -x /usr/lib/dsa/bin/dsa-devices
           /usr/lib/dsa/bin/dsa-devices --version
@@ -117,6 +167,8 @@ jobs:
           sudo apt-get remove -y desktop-subsystem-for-android
           test ! -e /usr/lib/dsa/bin/dsa
           test ! -e /usr/bin/dsa
+          test ! -e /etc/apt/sources.list.d/dsa.sources
+          test ! -e /usr/share/keyrings/dsa-archive-keyring.gpg
 
       - name: Keep the packages
         uses: actions/upload-artifact@v4
@@ -125,6 +177,13 @@ jobs:
           path: |
             .scratch/packages/*.deb
             .scratch/packages/*.rpm
+
+      - name: Keep the repositories
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-repo-${{ matrix.arch }}
+          path: .scratch/linux-repo
+          include-hidden-files: true
 
   rpm:
     name: Install the .rpm (fedora, ${{ matrix.arch }})
@@ -144,37 +203,36 @@ jobs:
           name: linux-packages-${{ matrix.arch }}
           path: packages
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-repo-${{ matrix.arch }}
+          path: linux-repo
+
       - name: Install the .rpm, check it, and remove it
         run: |
           set -x
+          dnf install -y python3
+          (cd linux-repo && python3 -m http.server 8080 --bind 127.0.0.1 >/dev/null 2>&1 &)
           dnf install -y ./packages/*.rpm
+          # The package registered DSA's repository; dnf reads it, checking the signed
+          # metadata and the signed packages with the key the package installed.
+          cat /etc/yum.repos.d/dsa.repo
+          grep -qx 'gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-dsa' /etc/yum.repos.d/dsa.repo
+          grep -qx 'repo_gpgcheck=1' /etc/yum.repos.d/dsa.repo
+          dnf -y makecache --repo=dsa
+          dnf -y --repo=dsa repoquery desktop-subsystem-for-android | tee repoquery
+          grep -q desktop-subsystem-for-android repoquery
+          rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-dsa
+          rpm -K linux-repo/rpm/*/*.rpm | tee rpm-check
+          grep -q 'digests signatures OK' rpm-check
+          dnf -y reinstall --repo=dsa desktop-subsystem-for-android
+          test -f /etc/yum.repos.d/dsa.repo
           /usr/lib/dsa/bin/dsa-devices --version
           test -L /usr/bin/dsa
           test -f /usr/lib/systemd/user/dsa-devices.service
           rpm -V desktop-subsystem-for-android
           dnf remove -y desktop-subsystem-for-android
           test ! -e /usr/lib/dsa/bin/dsa
+          test ! -e /etc/yum.repos.d/dsa.repo
+          test ! -e /etc/pki/rpm-gpg/RPM-GPG-KEY-dsa
 
-  flatpak:
-    name: Build the Flatpak of the user's half (ubuntu-24.04)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install flatpak-builder and the runtime
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y --noninteractive flathub \
-            org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 \
-            org.freedesktop.Sdk.Extension.rust-stable//24.08
-
-      - name: Build the Flatpak
-        run: |
-          flatpak-builder --user --force-clean \
-            --repo=.scratch/flatpak-repo .scratch/flatpak-build \
-            dsa/host/platform/linux/packaging/flatpak/io.github.thisisthepy.DSA.yml
-          flatpak build-bundle .scratch/flatpak-repo .scratch/dsa.flatpak io.github.thisisthepy.DSA
-          ls -l .scratch/dsa.flatpak
