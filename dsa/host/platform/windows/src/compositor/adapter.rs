@@ -1254,7 +1254,11 @@ mod tests {
         assert_eq!(memory.imported_kb, 2 * 1024);
         assert_eq!(memory.largest_kb, 16 * 1024);
         assert_eq!(
-            (memory.device_local_count, memory.host_visible_count, memory.imported_count),
+            (
+                memory.device_local_count,
+                memory.host_visible_count,
+                memory.imported_count
+            ),
             (9, 2, 1)
         );
         assert_eq!(memory.guest_processes, 5);

@@ -1057,7 +1057,9 @@ impl WindowPresenter {
         // Frames in quick succession say the window is drawing: its swapchain takes all its
         // buffers again. A lone frame of a still window keeps the two it has.
         let now = Instant::now();
-        let since_last = state.last_frame_at.map(|at| now.saturating_duration_since(at));
+        let since_last = state
+            .last_frame_at
+            .map(|at| now.saturating_duration_since(at));
         state.wanted_buffers = buffers_after_frame(state.wanted_buffers, since_last);
         state.last_frame_at = Some(now);
         if state.hidden.frame() == HiddenFrame::Hold {
