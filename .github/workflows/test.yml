@@ -481,7 +481,12 @@ jobs:
           bin="$(swift build -c release --package-path host/platform/macos/settings --scratch-path target/dsa-settings --show-bin-path)"
           test -x "$bin/dsa-settings"
           iconutil -c iconset -o "$RUNNER_TEMP/DSA.iconset" host/platform/macos/packaging/icon/DSA.icns
-          test "$(ls "$RUNNER_TEMP/DSA.iconset" | wc -l | tr -d ' ')" = 10
+          # Every size from 16 to 1024 px, by name: the icon also holds a 64 px image (icp6),
+          # so a count of the files proves nothing either way.
+          ls "$RUNNER_TEMP/DSA.iconset"
+          for size in 16x16 16x16@2x 32x32 32x32@2x 128x128 128x128@2x 256x256 256x256@2x 512x512 512x512@2x; do
+            test -s "$RUNNER_TEMP/DSA.iconset/icon_$size.png"
+          done
           xcrun xcstringstool compile host/platform/macos/settings/Resources/Localizable.xcstrings \
             --output-directory "$RUNNER_TEMP/strings"
           plutil -lint "$RUNNER_TEMP/strings/en.lproj/Localizable.strings" "$RUNNER_TEMP/strings/ko.lproj/Localizable.strings"
