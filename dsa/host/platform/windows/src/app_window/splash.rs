@@ -28,7 +28,7 @@ pub fn image(icon_id: usize, dpi: u32) -> SplashImage {
 
 /// The program's icon `icon_id` (the app's, in an app's copy of the window host), `edge`
 /// pixels square, as rows of premultiplied BGRA pixels. `None` when it cannot be read.
-fn icon_pixels(icon_id: usize, edge: u32) -> Option<(Vec<u8>, (u32, u32))> {
+pub(super) fn icon_pixels(icon_id: usize, edge: u32) -> Option<(Vec<u8>, (u32, u32))> {
     // SAFETY: plain Win32 calls; every handle made here is released here, and GetDIBits
     // writes at most `edge` rows of `edge` 32-bit pixels into a buffer of that size.
     unsafe {
