@@ -183,7 +183,10 @@ mod tests {
     #[test]
     fn nfr2_a_still_window_keeps_two_buffers_and_a_drawing_one_three() {
         use std::time::Duration;
-        assert_eq!(wanted_swapchain_buffers(Duration::ZERO), swapchain_buffers());
+        assert_eq!(
+            wanted_swapchain_buffers(Duration::ZERO),
+            swapchain_buffers()
+        );
         assert_eq!(wanted_swapchain_buffers(Duration::from_millis(500)), 3);
         assert_eq!(wanted_swapchain_buffers(IDLE_SWAPCHAIN_DELAY), 2);
         assert_eq!(wanted_swapchain_buffers(Duration::from_secs(60)), 2);
