@@ -125,6 +125,32 @@ jobs:
           git config --global user.name "CI"
           ./scripts/check.sh
 
+  # The icons, from the master SVGs in dsa/brand/: they render, every shipped icon file is
+  # there, and each holds every size it must, both as committed and as rendered now.
+  brand:
+    name: Check the brand icons
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Check every shipped icon holds every size
+        run: uv run dsa/brand/check.py
+
+      - name: Render every icon from the masters
+        run: |
+          uv run dsa/brand/generate.py --out "$RUNNER_TEMP/brand"
+          uv run dsa/brand/check.py --out "$RUNNER_TEMP/brand"
+
+      - name: Keep the rendered icons
+        uses: actions/upload-artifact@v4
+        with:
+          name: brand-icons
+          path: ${{ runner.temp }}/brand
+
   rust:
     name: Test the Rust code (${{ matrix.os }})
     needs: changes
@@ -425,7 +451,7 @@ jobs:
           target/release/dsa-hostd check "$RUNNER_TEMP/dsa-hostd.json"
 
       # The settings app (SwiftUI): its view models' tests against a fake dsa, then the app
-      # and the icon drawer as the package builds them.
+      # as the package builds it, and the committed icon as iconutil reads it.
       - name: Test the settings app
         run: swift test --package-path host/platform/macos/settings --scratch-path target/dsa-settings
 
@@ -434,9 +460,8 @@ jobs:
           swift build -c release --package-path host/platform/macos/settings --scratch-path target/dsa-settings
           bin="$(swift build -c release --package-path host/platform/macos/settings --scratch-path target/dsa-settings --show-bin-path)"
           test -x "$bin/dsa-settings"
-          "$bin/dsa-icon" "$RUNNER_TEMP/DSA.iconset"
+          iconutil -c iconset -o "$RUNNER_TEMP/DSA.iconset" host/platform/macos/packaging/icon/DSA.icns
           test "$(ls "$RUNNER_TEMP/DSA.iconset" | wc -l | tr -d ' ')" = 10
-          iconutil -c icns -o "$RUNNER_TEMP/DSA.icns" "$RUNNER_TEMP/DSA.iconset"
           xcrun xcstringstool compile host/platform/macos/settings/Resources/Localizable.xcstrings \
             --output-directory "$RUNNER_TEMP/strings"
           plutil -lint "$RUNNER_TEMP/strings/en.lproj/Localizable.strings" "$RUNNER_TEMP/strings/ko.lproj/Localizable.strings"
@@ -795,7 +820,7 @@ jobs:
     name: Report the test result
     if: always()
     needs:
-      [changes, repository, rust, unix-socket, macos-host, linux-host, linux-settings, linux-vm, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
+      [changes, repository, brand, rust, unix-socket, macos-host, linux-host, linux-settings, linux-vm, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

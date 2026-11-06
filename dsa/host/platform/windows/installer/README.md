@@ -117,7 +117,8 @@ only progress; `/install`, `/repair`, `/uninstall` and `/layout [folder]` choose
 do; `/norestart` never restarts; `/log file` writes a log; and `InstallFolder=<folder>
 DataFolder=<folder>` choose the folders.
 
-The logo (`setup-ui/assets/make-logo.py`) is drawn here. The window's text, colours and
+The logo (`setup-ui/assets/logo.ico` and `logo.png`) is rendered from the DSA symbol by
+`dsa/brand/generate.py`. The window's text, colours and
 layout are this project's own.
 
 ## Third-party parts and their licences

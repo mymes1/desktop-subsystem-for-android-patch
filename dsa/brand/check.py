@@ -1,0 +1,151 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+"""Checks that every icon file DSA ships is there and holds every size it must.
+
+    uv run dsa/brand/check.py           # the files where they ship
+    uv run dsa/brand/check.py --out D   # the files a `generate.py --out D` run wrote
+
+Each check prints what is missing and the run fails if anything is.
+"""
+import json
+import struct
+import sys
+from pathlib import Path
+
+import icons
+
+failures = []
+
+
+def fail(message):
+    failures.append(message)
+
+
+def located(out, path):
+    return out / path.relative_to(icons.ROOT) if out else path
+
+
+def png_size(data):
+    if data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        return None
+    return struct.unpack(">II", data[16:24])
+
+
+def ico_sizes(data):
+    if len(data) < 6 or struct.unpack("<HHH", data[:6])[:2] != (0, 1):
+        return None
+    sizes = []
+    for index in range(struct.unpack("<H", data[4:6])[0]):
+        entry = 6 + 16 * index
+        length, offset = struct.unpack("<II", data[entry + 8:entry + 16])
+        size = png_size(data[offset:offset + length])
+        sizes.append(size[0] if size and size[0] == size[1] else None)
+    return sizes
+
+
+def icns_chunks(data):
+    if data[:4] != b"icns":
+        return None
+    chunks, at = {}, 8
+    while at + 8 <= len(data):
+        kind, length = data[at:at + 4], struct.unpack(">I", data[at + 4:at + 8])[0]
+        chunks[kind] = png_size(data[at + 8:at + length])
+        at += max(length, 8)
+    return chunks
+
+
+def read(out, path):
+    path = located(out, path)
+    if not path.is_file() or path.stat().st_size == 0:
+        fail(f"{path.relative_to(out or icons.ROOT)} is missing")
+        return None
+    return path.read_bytes()
+
+
+def fr17_every_windows_icon_holds_every_size(out):
+    files = [path.with_suffix(".ico") for path, _ in icons.WINDOWS_ICONS]
+    files += list(icons.WINDOWS_TRAY.values())
+    for path in files:
+        data = read(out, path)
+        if data is None:
+            continue
+        sizes = ico_sizes(data)
+        if sizes is None:
+            fail(f"{path.name} is not an icon file")
+            continue
+        missing = [s for s in icons.ICO_SIZES if s not in sizes]
+        if missing:
+            fail(f"{path.name} lacks the sizes {missing} (it holds {sizes})")
+    for path, _ in icons.WINDOWS_ICONS:
+        data = read(out, path.with_suffix(".png"))
+        if data is not None and png_size(data) != (256, 256):
+            fail(f"{path.with_suffix('.png').name} is not a 256 px PNG image")
+
+
+def fr17_every_linux_app_has_a_colour_and_a_symbolic_icon(out):
+    for app_id in icons.LINUX_APPS.values():
+        for path in icons.linux_paths(app_id):
+            data = read(out, path)
+            if data is not None and b"<svg" not in data:
+                fail(f"{path.name} is not an SVG image")
+
+
+def fr17_the_macos_icon_holds_every_size_and_its_layers(out):
+    data = read(out, icons.MACOS_ICNS)
+    if data is not None:
+        chunks = icns_chunks(data)
+        if chunks is None:
+            fail("DSA.icns is not an .icns file")
+        else:
+            for kind, points, scale in icons.ICNS_IMAGES:
+                pixels = points * scale
+                if chunks.get(kind) != (pixels, pixels):
+                    fail(f"DSA.icns lacks the {points} pt @{scale}x image ({kind.decode()})")
+    manifest = read(out, icons.MACOS_ICON / "icon.json")
+    if manifest is not None:
+        names = {
+            layer["image-name"]
+            for group in json.loads(manifest)["groups"]
+            for layer in group["layers"]
+        }
+        for name in icons.MACOS_LAYERS:
+            if f"{name}.png" not in names:
+                fail(f"DSA.icon/icon.json does not name the layer {name}.png")
+            layer = read(out, icons.MACOS_ICON / "Assets" / f"{name}.png")
+            size = icons.MACOS_LAYER_SIZE
+            if layer is not None and png_size(layer) != (size, size):
+                fail(f"the layer {name}.png is not {size} px")
+    for path, pixels in icons.MACOS_MENU_BAR:
+        image = read(out, path)
+        if image is not None and png_size(image) != (pixels, pixels):
+            fail(f"{path.name} is not {pixels} px")
+
+
+def fr17_the_readme_logo_is_there(out):
+    data = read(out, icons.README_LOGO)
+    size = icons.README_LOGO_SIZE
+    if data is not None and png_size(data) != (size, size):
+        fail(f"the README logo is not {size} px")
+
+
+def main(argv):
+    out = Path(argv[1]).resolve() if argv[:1] == ["--out"] and len(argv) == 2 else None
+    checks = [
+        fr17_every_windows_icon_holds_every_size,
+        fr17_every_linux_app_has_a_colour_and_a_symbolic_icon,
+        fr17_the_macos_icon_holds_every_size_and_its_layers,
+        fr17_the_readme_logo_is_there,
+    ]
+    for check in checks:
+        before = len(failures)
+        check(out)
+        print(("ok  " if len(failures) == before else "FAIL") + "  " + check.__name__)
+    for message in failures:
+        print("  " + message)
+    sys.exit(1 if failures else 0)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
