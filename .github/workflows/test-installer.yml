@@ -388,11 +388,12 @@ jobs:
           [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
           [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, int data, System.UIntPtr extra);
           [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr window);
+          [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, System.UIntPtr extra);
           '@
           New-Item -ItemType Directory -Force screens | Out-Null
           $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
           $name = [System.Windows.Automation.AutomationElement]::NameProperty
-          $items = 'General', 'Memory', 'Apps', 'Running in the background', 'Widgets', 'Display & GPU', 'Updates', 'Device identity', 'Advanced', 'Android log', 'About'
+          $items = 'General', 'Memory', 'Apps', 'Running in the background', 'Widgets', 'Display & GPU', 'Android', 'Updates', 'Device identity', 'Network', 'Advanced', 'Android log', 'About'
 
           # The navigation item named $Text: the pane is on the left, so a page title of the
           # same name is not it.
@@ -410,9 +411,24 @@ jobs:
           function Get-ShownItems($Window) {
             @($items | Where-Object { Test-InView $Window (Find-Item $Window $_) })
           }
+          # The runner sometimes opens the Start menu over the window (the ARM64 image does), and
+          # then the wheel scrolls the Start menu: it is closed, and the point under the cursor
+          # must belong to DSA Settings before any notch is sent.
           function Wheel-Over($Element, [int]$Notches) {
             $r = $Element.Current.BoundingRectangle
-            [Dsa.Input]::SetCursorPos([int]($r.X + $r.Width / 2), [int]($r.Y + $r.Height / 2)) | Out-Null
+            $x = [int]($r.X + $r.Width / 2); $y = [int]($r.Y + $r.Height / 2)
+            $owner = $Element.Current.ProcessId
+            for ($try = 0; $try -lt 5; $try++) {
+              [Dsa.Input]::SetCursorPos($x, $y) | Out-Null
+              $under = [System.Windows.Automation.AutomationElement]::FromPoint((New-Object System.Windows.Point($x, $y)))
+              if ($under -and $under.Current.ProcessId -eq $owner) { break }
+              Write-Host "the point to wheel over is covered by process $($under.Current.ProcessId); closing it"
+              [Dsa.Input]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)   # Escape down
+              [Dsa.Input]::keybd_event(0x1B, 0, 2, [UIntPtr]::Zero)   # Escape up
+              Get-Process StartMenuExperienceHost, SearchHost -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+              Start-Sleep -Seconds 1
+            }
+            if (-not $under -or $under.Current.ProcessId -ne $owner) { throw "another window covers DSA Settings where the wheel goes" }
             for ($i = 0; $i -lt $Notches; $i++) {
               [Dsa.Input]::mouse_event(0x0800, 0, 0, -120, [UIntPtr]::Zero)   # wheel down
               Start-Sleep -Milliseconds 100
@@ -490,10 +506,11 @@ jobs:
             # The wheel over the page reaches its last card.
             $run = Start-Short 'general'
             $window = $run.Window
-            $text = $window.FindAll($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition(
-              [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text))) |
+            # The page title stays put above the scrolling cards, as in Windows Settings, so the
+            # wheel goes over the first card's title.
+            $text = $window.FindAll($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($name, 'State'))) |
               Where-Object { $_.Current.BoundingRectangle.X -gt ($window.Current.BoundingRectangle.X + 320) } | Select-Object -First 1
-            if (-not $text) { throw "no text on the General page" }
+            if (-not $text) { throw "no State card on the General page" }
             Wheel-Over $text 25
             $last = $window.FindFirst($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($name, 'Refresh')))
             Save-WindowScreen $window "$PWD\screens\settings-$theme-short-page-wheel.png"
