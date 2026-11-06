@@ -42,7 +42,7 @@ pub fn run(read_property: &dyn Fn(&str) -> String, say: &(dyn Fn(&str) + Sync)) 
     // The host's own folders are not served back to it.
     let hidden = crate::share_mount::parse(&read_property(crate::share_mount::PROPERTY))
         .map(|wanted| vec![wanted.location])
-        .unwrap_or_else(|| vec!["Windows".to_string()]);
+        .unwrap_or_else(|| vec![crate::share_mount::LOCATION.to_string()]);
     let config = crate::webdav::Config {
         root: std::path::PathBuf::from(crate::share_mount::STORAGE),
         token,
@@ -150,5 +150,19 @@ mod tests {
             "off"
         );
         assert_eq!(parse("off"), None);
+    }
+
+    /// The server reaches /data/media/0 through /data, which has a label of its own; without
+    /// the rule its sandbox refuses the way down, and every request was answered 403.
+    #[test]
+    fn fr29_the_file_server_may_pass_through_data_to_the_shared_storage() {
+        let policy = include_str!("../../image/sepolicy/files.cil");
+        assert!(
+            policy
+                .lines()
+                .any(|line| line.trim()
+                    == "(allow dsa_files system_data_root_file (dir (search getattr)))"),
+            "files.cil does not let dsa_files pass through /data"
+        );
     }
 }

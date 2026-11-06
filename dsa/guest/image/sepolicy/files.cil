@@ -68,5 +68,7 @@
 (allow dsa_files dsa_shares_prop (file (read open getattr map)))
 (allow dsa_files self (vsock_socket (create bind listen accept read write getattr setattr getopt setopt shutdown)))
 (allow dsa_files system_data_file (dir (search getattr)))
+; The way down to the shared storage: /data itself carries a label of its own.
+(allow dsa_files system_data_root_file (dir (search getattr)))
 (allow dsa_files media_rw_data_file (dir (search getattr read open create write add_name remove_name rmdir rename reparent setattr)))
 (allow dsa_files media_rw_data_file (file (create read write open getattr setattr unlink rename append map)))
