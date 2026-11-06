@@ -461,6 +461,16 @@ class ImageLayoutTests(unittest.TestCase):
                 # When otatools is not supplied, precompiled_sepolicy is removed so the device compiles at boot
                 self.assertNotIn("VENDOR/etc/selinux/precompiled_sepolicy", archive.namelist())
 
+    def test_fr3_the_agent_reaches_the_control_channel_in_android_17s_per_sdk_app_domain(self):
+        rules = make_image.CHANNELD_POLICY.read_text()
+        android17 = "(type platform_app)\n(type platform_app_36)\n"
+        patched = make_image.with_versioned_app_domains(rules, android17)
+        self.assertIn("(allow platform_app_36 dsa_channel_service (service_manager (find)))", patched)
+        self.assertIn("(allow platform_app dsa_channel_service (service_manager (find)))", patched)
+        self.assertNotIn("platform_app_36_36", patched)
+        # Android 16 has no such domain, so nothing is added that its policy cannot compile.
+        self.assertEqual(make_image.with_versioned_app_domains(rules, "(type platform_app)\n"), rules)
+
     def test_pr3_the_graphics_allocator_can_open_the_drm_device(self):
         plat_cil = "(typeattribute hal_graphics_allocator_server)\n(type graphics_device)\n"
         patched = make_image.patch_plat_sepolicy(plat_cil, make_image.SEPOLICY_FRAGMENT.read_text())
