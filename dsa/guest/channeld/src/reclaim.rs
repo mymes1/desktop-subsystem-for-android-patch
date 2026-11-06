@@ -49,6 +49,20 @@ pub const TRIM_PROPERTY: &str = "vendor.dsa.memory.trim";
 /// How much the next working set trim takes, in MiB. The daemon sets it before [`TRIM_PROPERTY`].
 pub const TRIM_SIZE_PROPERTY: &str = "vendor.dsa.memory.trim_size";
 
+/// The property init reads for the size of each of the idle reclaim's four steps that move
+/// cold anonymous pages to zram, in MiB. The daemon sets it before [`RECLAIM_PROPERTY`].
+pub const RECLAIM_STEP_PROPERTY: &str = "vendor.dsa.memory.reclaim_step";
+
+/// The size of each of the idle reclaim's four zram steps, in MiB: together, half of the
+/// guest's anonymous memory, the coldest first. A fixed gigabyte took more than the guest
+/// had, so the hot pages of the processes still running (the system server, the display)
+/// went to zram too and came straight back, each time as a compressed copy and then a
+/// decompressed one, both in pages the host had already been given back. The host's commit
+/// for the VM then rose for seconds after the windows closed instead of falling.
+pub fn reclaim_step_mib(memory: &MemInfo) -> u64 {
+    (memory.anon_pages_kb / 2 / 4 / 1024).max(1)
+}
+
 /// How often the daemon looks at the guest's memory. Free memory reaches the host on the
 /// look after it is freed, so this is how long it can sit in the guest.
 pub const CHECK_INTERVAL: Duration = Duration::from_secs(5);

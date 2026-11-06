@@ -511,3 +511,18 @@ fn nfr2_a_kernel_file_the_reclaimer_cannot_read_is_reported_once() {
     assert_eq!(failures.note("/proc/vmstat", &Ok(String::new()), "x"), None);
     assert!(failures.note("/proc/vmstat", &denied(), "x").is_some());
 }
+
+#[test]
+fn nfr2_an_idle_reclaim_moves_half_the_anonymous_memory_to_zram_not_a_fixed_gigabyte() {
+    use dsa_guest_channeld::reclaim::{reclaim_step_mib, RECLAIM_STEP_PROPERTY};
+    assert!(RECLAIM_STEP_PROPERTY.starts_with("vendor."));
+    // 640 MiB of app memory: four steps of 80 MiB, 320 MiB in all, the coldest first, so the
+    // pages of the processes still running stay resident and are not swapped straight back.
+    let memory = MemInfo {
+        anon_pages_kb: 640 * MIB,
+        ..MemInfo::default()
+    };
+    assert_eq!(reclaim_step_mib(&memory), 80);
+    // A guest with almost none still gets a step init can write.
+    assert_eq!(reclaim_step_mib(&MemInfo::default()), 1);
+}

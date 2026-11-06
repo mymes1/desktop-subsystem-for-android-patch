@@ -1522,6 +1522,10 @@ def add_arm_translation_import(text):
 VENDOR_PROPERTY_CONTEXTS = "VENDOR/etc/selinux/vendor_property_contexts"
 RECLAIM_PROPERTY = "vendor.dsa.memory.reclaim"
 RECLAIM_PROPERTY_CONTEXT = f"{RECLAIM_PROPERTY} u:object_r:dsa_memory_prop:s0 exact bool"
+# How many MiB each of the idle reclaim's four zram steps takes; the daemon sets it before the
+# reclaim property.
+RECLAIM_STEP_PROPERTY = "vendor.dsa.memory.reclaim_step"
+RECLAIM_STEP_PROPERTY_CONTEXT = f"{RECLAIM_STEP_PROPERTY} u:object_r:dsa_memory_prop:s0 exact int"
 # The gentler property for the gradual trim while apps are open: init drops only the page cache.
 TRIM_PROPERTY = "vendor.dsa.memory.trim"
 TRIM_PROPERTY_CONTEXT = f"{TRIM_PROPERTY} u:object_r:dsa_memory_prop:s0 exact bool"
@@ -1685,6 +1689,8 @@ def update_vendor_property_contexts(text):
     lines = text.splitlines()
     if not any(line.split()[:1] == [RECLAIM_PROPERTY] for line in lines):
         lines.append(RECLAIM_PROPERTY_CONTEXT)
+    if not any(line.split()[:1] == [RECLAIM_STEP_PROPERTY] for line in lines):
+        lines.append(RECLAIM_STEP_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [TRIM_PROPERTY] for line in lines):
         lines.append(TRIM_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [TRIM_SIZE_PROPERTY] for line in lines):
