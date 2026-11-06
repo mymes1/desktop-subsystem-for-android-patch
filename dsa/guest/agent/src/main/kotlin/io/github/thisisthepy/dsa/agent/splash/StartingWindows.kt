@@ -36,36 +36,44 @@ class StartingWindows {
 
 /** The surface calls [TaskLeashes] makes. */
 interface LeashSurfaces<L> {
-    /** Puts [leash] at ([x], [y]) in its parent, and removes its crop when [clearCrop]. */
-    fun place(leash: L, x: Int, y: Int, clearCrop: Boolean)
+    /** Puts [leash] at ([x], [y]) in its parent and crops it to [width] by [height] from there. */
+    fun place(leash: L, x: Int, y: Int, width: Int, height: Int)
 
     fun release(leash: L)
 }
 
+/** Where a task's surface goes in its parent, and its size, in display pixels. */
+data class LeashPlace(val x: Int, val y: Int, val width: Int, val height: Int)
+
 /**
  * The surface (leash) of each organized task. The window manager leaves an organized task's
- * surface position and crop to its organizer, so the agent puts it where the window manager
- * would: at the task's position in its parent. The crop the surface had before it was
- * organized holds the task's size at that moment, and nothing would update it, so it is
- * removed; a task's windows lie inside its bounds. Visibility stays with the window manager.
+ * surface position and crop to its organizer, so the agent sets both as the window manager
+ * would: at the task's position in its parent, cropped to the task's size.
+ *
+ * The crop is what the input dispatcher hit-tests by. An app's activity window is touch
+ * modal, and the window manager bounds the area it takes pointer input in by its task's
+ * surface crop. A task surface with no crop is unbounded, so the topmost task would take
+ * every click, wheel turn and hover on the display, at points outside its own window, and
+ * the task under the pointer would get none. The crop follows each change of size, so a
+ * resized task takes input across its new bounds. A task whose size is not known keeps the
+ * crop it has. Visibility stays with the window manager.
  */
 class TaskLeashes<L>(private val surfaces: LeashSurfaces<L>) {
-    private class Entry<L>(val leash: L, var x: Int, var y: Int)
+    private class Entry<L>(val leash: L, var place: LeashPlace)
 
     private val tasks = mutableMapOf<Int, Entry<L>>()
 
-    fun appeared(taskId: Int, leash: L, x: Int, y: Int) {
+    fun appeared(taskId: Int, leash: L, place: LeashPlace) {
         tasks.remove(taskId)?.let { surfaces.release(it.leash) }
-        tasks[taskId] = Entry(leash, x, y)
-        surfaces.place(leash, x, y, clearCrop = true)
+        tasks[taskId] = Entry(leash, place)
+        surfaces.place(leash, place.x, place.y, place.width, place.height)
     }
 
-    fun changed(taskId: Int, x: Int, y: Int) {
+    fun changed(taskId: Int, place: LeashPlace) {
         val entry = tasks[taskId] ?: return
-        if (entry.x == x && entry.y == y) return
-        entry.x = x
-        entry.y = y
-        surfaces.place(entry.leash, x, y, clearCrop = false)
+        if (entry.place == place) return
+        entry.place = place
+        surfaces.place(entry.leash, place.x, place.y, place.width, place.height)
     }
 
     fun vanished(taskId: Int) {
