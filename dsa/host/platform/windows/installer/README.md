@@ -60,6 +60,9 @@ copies only `setup.exe` itself, because the package is embedded in it.)
   (built from `dsa/host/platform/windows/settings/`), so it carries the .NET runtime and
   needs nothing installed first. It changes settings only through the service,
   which keeps them in `C:\ProgramData\DSA\settings` (`settings_dir` in the configuration).
+- Installs the APK Installer (`DsaApkInstaller.exe`) beside it, in the same folder and on the
+  same runtime, without a Start menu shortcut. `.apk` files open in it, and Open with lists it
+  as "APK Installer".
 - Puts the licence bundle and master notice in `C:\Program Files\DSA\licenses\` and
   `C:\Program Files\DSA\NOTICE.txt`.
 - Keeps the image in `image.cab` beside the MSI, because an MSI holds at most 2 GB.

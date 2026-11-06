@@ -520,25 +520,35 @@ old folders once they are empty, so files a user put there stay.
 
 An APK file installs in Android three ways, which all end in the same local API request:
 
-- Opening it in Explorer. The installer associates `.apk` files with `settings\DsaSettings.exe
-  --install-apk "%1"`, which opens the APK install window (`settings/DsaSettings/ApkInstallWindow.xaml`).
-  It looks like setup, from setup's own styles and colours (`installer/setup-ui/Styles.xaml` and
-  `Palette.cs`, linked into the settings app), in the light or the dark theme. Before Android
-  is started it shows what the file says about the app, read on the host by `dsa apk-info`:
-  its name and icon, package, version, the Android versions it is made for, the permissions it
-  asks for in plain words, and the SHA-256 of its signing certificate. When Android runs, it
-  also says whether the APK is a new install, an update (with the installed and the new
-  version) or a downgrade or an APK signed with another key, which it refuses with the reason,
-  as Android would. Install starts Android first when it is not running, checks again, then
-  shows the APK's progress and ends with Open (the app's window) and Close, or with the reason
-  it failed. `dsa-app-window.exe --install-apk`, which earlier releases associated, hands the
-  APK to the same window.
+- Opening it in Explorer. The installer associates `.apk` files with `settings\DsaApkInstaller.exe
+  --install-apk "%1"`, the APK Installer (`settings/DsaApkInstaller/`). It is its own program,
+  not part of the settings app: Explorer, Open with and the taskbar show it as "APK Installer"
+  ("APK 설치 관리자" in Korean) with its own icon, and it sets its own AppUserModelID
+  (`Thisisthepy.DSA.ApkInstaller`), so its windows are their own group in the taskbar. It is a
+  WPF app with WPF UI, like the settings app, and shares the settings app's core
+  (`DsaSettings.Core`), strings and folder, so both use one copy of the .NET runtime. Its window
+  is laid out as App Installer lays out an app package, with Mica and the Windows type ramp:
+  the app's name large at the top left with its package, publisher (the signing certificate,
+  since an APK names no publisher) and version under it, its icon at the top right, then the
+  permissions it asks for in plain words under "Capabilities" and the rest of what the file
+  says under "Details" (version code, the Android versions it is made for, size, processor
+  types, the SHA-256 of its signing certificate). All of it is read on the host by
+  `dsa apk-info` before Android is started. An APK with native code for none of this PC's
+  processor types carries a warning. When Android runs, the window also says whether the APK
+  is a new install, an update (with the installed and the new version) or a downgrade or an
+  APK signed with another key, which it refuses with the reason, as Android would. The footer
+  has "Launch when ready" (on by default) on the left and Install, Update or Reinstall on the
+  right. Install starts Android first when it is not running, checks again, then shows the
+  progress bar and what is happening in place of the checkbox. It ends by opening the app and
+  closing, when "Launch when ready" is on, or with Launch and Close, or with the reason it
+  failed. `DsaSettings.exe --install-apk` and `dsa-app-window.exe --install-apk`, which
+  earlier releases associated, hand the APK to the APK Installer.
 - `dsa install <file.apk>`, which prints the result and exits with code 1 when Android refused
   the APK. Its line then starts with `not installed (<reason>):`. With `--progress` it prints
   each step first (`stage starting`, `stage sending`, `progress <percent>`,
   `stage installing`), which the install window shows.
-- Dropping APK files on the settings app's window, or on an install window. Each APK opens in
-  its own install window.
+- Dropping APK files on the settings app's window, or on the APK Installer's window. Each APK
+  opens in its own APK Installer window.
 
 `dsa apk-info <file.apk>` reads an APK without Android: the binary manifest, the resource table
 (for the name in the default language and the icon in the highest density, or an adaptive

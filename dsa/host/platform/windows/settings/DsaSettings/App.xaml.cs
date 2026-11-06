@@ -19,8 +19,9 @@ public partial class App : Application
     internal static DeviceIdentityViewModel DeviceIdentity { get; } = new(Cli, Service, Text);
     internal static BackgroundViewModel Background { get; } = new(Service, Text);
 
-    /// <summary>The argument that names an APK to install: Explorer opens APK files with it, and
-    /// the app then shows the APK install window instead of the settings.</summary>
+    /// <summary>The argument that names an APK to install. Earlier releases associated APK files
+    /// with the settings app and this argument; the app now hands such an APK on to the APK
+    /// Installer, its own program beside it, and shows no settings.</summary>
     internal const string InstallApkArgument = "--install-apk";
 
     /// <summary>The argument that names an app to uninstall: the UninstallString of each
@@ -48,11 +49,15 @@ public partial class App : Application
         // The text beside every toggle switch, in the language just chosen.
         Resources["ToggleOnText"] = Text.Get("Toggle.On");
         Resources["ToggleOffText"] = Text.Get("Toggle.Off");
-        // The app opens on the settings, or, given an APK, on the APK install window alone.
+        // The app opens on the settings, or, given an APK, hands it to the APK Installer.
         var at = Array.IndexOf(e.Args, InstallApkArgument);
         if (at >= 0 && at + 1 < e.Args.Length)
         {
-            ApkInstallWindow.Open(e.Args[at + 1]);
+            if (Shell.OpenApkInstaller(e.Args[at + 1]) is { } why)
+            {
+                System.Windows.MessageBox.Show(why, Text.Get("ApkWindow_Caption"), MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            Shutdown();
             return;
         }
         // Windows' list of installed apps opens the uninstall window alone, with no console.

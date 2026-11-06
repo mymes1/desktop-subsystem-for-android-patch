@@ -686,7 +686,7 @@
     <value>{0} was removed from your desktop.</value>
   </data>
   <data name="ApkWindow_Caption" xml:space="preserve">
-    <value>Install an Android app</value>
+    <value>APK Installer</value>
   </data>
   <data name="ApkWindow_Reading" xml:space="preserve">
     <value>Reading the file</value>
@@ -707,7 +707,7 @@
     <value>Close</value>
   </data>
   <data name="ApkWindow_Open" xml:space="preserve">
-    <value>Open</value>
+    <value>Launch</value>
   </data>
   <data name="ApkWindow_VersionChip" xml:space="preserve">
     <value>Version {0}</value>
@@ -773,7 +773,7 @@
     <value>Not signed. Android installs only signed apps.</value>
   </data>
   <data name="ApkWindow_PermissionsHeader" xml:space="preserve">
-    <value>Permissions it asks for ({0})</value>
+    <value>Capabilities ({0})</value>
   </data>
   <data name="ApkWindow_NoPermissions" xml:space="preserve">
     <value>It asks for no permissions.</value>
@@ -815,7 +815,7 @@
     <value>{0} is updated</value>
   </data>
   <data name="ApkWindow_DoneText" xml:space="preserve">
-    <value>Open it now, or later from the Start menu.</value>
+    <value>Launch it now, or later from the Start menu.</value>
   </data>
   <data name="ApkWindow_FailedTitle" xml:space="preserve">
     <value>Not installed</value>
@@ -858,6 +858,21 @@
   </data>
   <data name="ApkWindow_Reason_other" xml:space="preserve">
     <value>Android did not install the app.</value>
+  </data>
+  <data name="ApkWindow_Publisher" xml:space="preserve">
+    <value>Publisher: {0}</value>
+  </data>
+  <data name="ApkWindow_AbiWarning" xml:space="preserve">
+    <value>This app has code only for {0} processors, not for this PC's. Android runs it only with an ARM translation package, and may refuse to install it.</value>
+  </data>
+  <data name="ApkWindow_LaunchFailedAfterInstall" xml:space="preserve">
+    <value>{0} is installed, but it did not open. {1}</value>
+  </data>
+  <data name="ApkWindow_LaunchWhenReady" xml:space="preserve">
+    <value>Launch when ready</value>
+  </data>
+  <data name="ApkWindow_DetailsHeader" xml:space="preserve">
+    <value>Details</value>
   </data>
   <data name="NavLogs.Content" xml:space="preserve">
     <value>Android log</value>
