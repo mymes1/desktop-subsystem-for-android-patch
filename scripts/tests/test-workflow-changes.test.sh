@@ -5,7 +5,7 @@
 set -euo pipefail
 
 workflow="$(cd "$(dirname "$0")/../.." && pwd)/.github/workflows/test.yml"
-grep -Fq 'cancel-in-progress: true' "$workflow"
+grep -Fq "github.event_name == 'push' && github.sha" "$workflow"
 grep -Fq -- '--status success --limit 1' "$workflow"
 grep -Fq 'git merge-base --is-ancestor "$before" HEAD' "$workflow"
 grep -Fq 'actions: read' "$workflow"
