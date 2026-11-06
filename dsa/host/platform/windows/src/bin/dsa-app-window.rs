@@ -1,0 +1,366 @@
+//! The app window host of Desktop Subsystem for Android.
+//!
+//! Each Android app runs its own copy of this program,
+//! `%LOCALAPPDATA%\DSA\apps\<package>\<Label>.exe`, which carries the app's name and icon, so
+//! Task Manager and the taskbar show the app as itself. It connects to the DSA Window Manager
+//! in the same session, opens the app's task
+//! windows and shows their frames, and ends when the app's last window closes. Started by the
+//! user rather than the window manager (from the app's Start menu shortcut, say), it starts
+//! Android and the window manager when they are not running, then asks for the app.
+#![windows_subsystem = "windows"]
+
+#[cfg(not(windows))]
+fn main() -> std::process::ExitCode {
+    eprintln!("dsa-app-window runs on Windows only");
+    std::process::ExitCode::FAILURE
+}
+
+#[cfg(windows)]
+fn main() -> std::process::ExitCode {
+    use std::sync::Arc;
+
+    use dsa_host_windows::app_window::launch::{
+        ensure_android, ensure_window_manager, pipe_exists, prepare_app, run_program, tell_user,
+        window_manager_path, StartingWindow, POLL, START_WINDOW_MANAGER,
+    };
+    use dsa_host_windows::app_window::{
+        argument, package_of, run, use_app_user_model_id, HostSetup, PACKAGE_ARGUMENT,
+        PIPE_ARGUMENT, STARTED_BY_WINDOW_MANAGER,
+    };
+    use dsa_host_windows::compositor::current_session;
+    use dsa_host_windows::compositor::hosts::pipe_name;
+    use dsa_host_windows::compositor::log::{default_app_window_log_file, note, CompositorLogger};
+    use dsa_host_windows::pipe::{NamedPipeConnector, SameUserPipeConnector};
+
+    let logger = CompositorLogger::open(default_app_window_log_file())
+        .ok()
+        .map(Arc::new);
+    // Its windows show frames and take touches whether or not one has the focus.
+    if let Err(why) = dsa_host_windows::scheduling::raise_this_process() {
+        note(logger.as_deref(), &why);
+    }
+    dsa_host_windows::compositor::log::input_trace_to(logger.clone());
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let program = std::env::current_exe().unwrap_or_default();
+    // Opened on an .apk file in Explorer: the APK is installed in Android, and the user is told
+    // how that went.
+    if let Some(path) = dsa_host_windows::app_window::apk_install::install_request(&args) {
+        use dsa_host_windows::app_window::apk_install;
+        use dsa_host_windows::app_window::launch::tell_user_done;
+        const TITLE: &str = "Desktop Subsystem for Android";
+        // The install window shows the APK before installing it; the message box below is
+        // for a machine without it.
+        if let Some(window) = apk_install::install_window(&program) {
+            match run_program(&window, &apk_install::install_window_arguments(&path)) {
+                Ok(()) => return std::process::ExitCode::SUCCESS,
+                Err(why) => note(
+                    logger.as_deref(),
+                    &format!("the APK install window did not start ({why}); installing here"),
+                ),
+            }
+        }
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        let window_manager_pipe = pipe_name(current_session());
+        let api_pipe = dsa_host_windows::host_config::DEFAULT_PIPE_NAME;
+        let mut starting = None;
+        let installed = apk_install::open(&path).and_then(|mut apk| {
+            prepare_app(
+                || {
+                    ensure_window_manager(
+                        || pipe_exists(&window_manager_pipe),
+                        || match window_manager_path(Some(program.as_path())) {
+                            Some(window_manager) => run_program(&window_manager, ""),
+                            None => Err("the DSA Window Manager is not installed".into()),
+                        },
+                        START_WINDOW_MANAGER,
+                        POLL,
+                    )
+                },
+                || {
+                    ensure_android(
+                        &mut NamedPipeConnector {
+                            name: api_pipe.into(),
+                        },
+                        || starting = Some(StartingWindow::show(TITLE)),
+                    )
+                },
+            )?;
+            let outcome = apk_install::install(
+                &mut NamedPipeConnector {
+                    name: api_pipe.into(),
+                },
+                &mut apk,
+            );
+            drop(starting.take());
+            outcome
+        });
+        drop(starting);
+        return match installed {
+            Ok(outcome) => {
+                let (text, good) = apk_install::result_text(&name, &outcome);
+                note(
+                    logger.as_deref(),
+                    &format!("{}: {} ({})", path.display(), outcome, outcome.status),
+                );
+                if good {
+                    tell_user_done(TITLE, &text);
+                    std::process::ExitCode::SUCCESS
+                } else {
+                    tell_user(TITLE, &text);
+                    std::process::ExitCode::FAILURE
+                }
+            }
+            Err(why) => {
+                note(
+                    logger.as_deref(),
+                    &format!("{}: not installed: {why}", path.display()),
+                );
+                tell_user(TITLE, &apk_install::failure_text(&name, &why));
+                std::process::ExitCode::FAILURE
+            }
+        };
+    }
+
+    // Opened from a file's context menu in Explorer: the file goes to Android, which asks the
+    // user which app opens it.
+    if let Some((path, action)) = dsa_host_windows::app_window::host_file::file_request(&args) {
+        use dsa_host_windows::app_window::host_file;
+        const TITLE: &str = "Desktop Subsystem for Android";
+        let window_manager_pipe = pipe_name(current_session());
+        let api_pipe = dsa_host_windows::host_config::DEFAULT_PIPE_NAME;
+        let mut starting = None;
+        let sent = host_file::read(&path, action).and_then(|file| {
+            prepare_app(
+                || {
+                    ensure_window_manager(
+                        || pipe_exists(&window_manager_pipe),
+                        || match window_manager_path(Some(program.as_path())) {
+                            Some(window_manager) => run_program(&window_manager, ""),
+                            None => Err("the DSA Window Manager is not installed".into()),
+                        },
+                        START_WINDOW_MANAGER,
+                        POLL,
+                    )
+                },
+                || {
+                    ensure_android(
+                        &mut NamedPipeConnector {
+                            name: api_pipe.into(),
+                        },
+                        || starting = Some(StartingWindow::show(TITLE)),
+                    )
+                },
+            )?;
+            let sent = host_file::send(
+                &mut NamedPipeConnector {
+                    name: api_pipe.into(),
+                },
+                &file,
+            );
+            drop(starting.take());
+            sent
+        });
+        drop(starting);
+        return match sent {
+            Ok(()) => {
+                note(
+                    logger.as_deref(),
+                    &format!("asked Android to {action} {}", path.display()),
+                );
+                std::process::ExitCode::SUCCESS
+            }
+            Err(why) => {
+                note(
+                    logger.as_deref(),
+                    &format!("{}: not sent to Android: {why}", path.display()),
+                );
+                tell_user(
+                    TITLE,
+                    &format!(
+                        "{} could not be opened in Android. {why}.",
+                        path.file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| path.display().to_string())
+                    ),
+                );
+                std::process::ExitCode::FAILURE
+            }
+        };
+    }
+    // Opened from the "DSA Files" Start menu shortcut: Android's shared storage opens in
+    // Explorer, Android starting first when it is not running.
+    if args
+        .iter()
+        .any(|arg| arg == dsa_host_windows::android_files::ANDROID_FILES_ARGUMENT)
+    {
+        use dsa_host_windows::android_files;
+        const TITLE: &str = "Desktop Subsystem for Android";
+        let api_pipe = dsa_host_windows::host_config::DEFAULT_PIPE_NAME;
+        let mut starting = None;
+        let opened = ensure_android(
+            &mut NamedPipeConnector {
+                name: api_pipe.into(),
+            },
+            || starting = Some(StartingWindow::show(TITLE)),
+        )
+        .and_then(|()| {
+            // The files door first, the address the navigation pane keeps; then the session's
+            // own address. Explorer is only given a path that answers: given one that does not,
+            // it opens the user's Documents instead and says nothing.
+            const WAIT: std::time::Duration = std::time::Duration::from_secs(90);
+            let door = android_files::register_in_navigation_pane();
+            let door_error = match door {
+                Ok(path) => match android_files::reachable(&path, WAIT) {
+                    Ok(()) => return Ok(path),
+                    Err(why) => why,
+                },
+                Err(why) => why,
+            };
+            note(
+                logger.as_deref(),
+                &format!("the files door did not answer: {door_error}"),
+            );
+            let path = android_files::locate(&mut NamedPipeConnector {
+                name: api_pipe.into(),
+            })?;
+            android_files::reachable(&path, WAIT)
+                .map(|()| path)
+                .map_err(|why| format!("{why} (and the files door: {door_error})"))
+        })
+        .and_then(|path| android_files::open_in_explorer(&path).map(|()| path));
+        drop(starting);
+        return match opened {
+            Ok(path) => {
+                note(
+                    logger.as_deref(),
+                    &format!("opened Android's files at {path}"),
+                );
+                std::process::ExitCode::SUCCESS
+            }
+            Err(why) => {
+                note(
+                    logger.as_deref(),
+                    &format!("Android's files were not opened: {why}"),
+                );
+                tell_user(
+                    TITLE,
+                    &format!("Android's files could not be opened. {why}."),
+                );
+                std::process::ExitCode::FAILURE
+            }
+        };
+    }
+    let Some(package) = package_of(&program, &args) else {
+        note(
+            logger.as_deref(),
+            &format!(
+                "{} names no Android app; name one with {PACKAGE_ARGUMENT}",
+                program.display()
+            ),
+        );
+        return std::process::ExitCode::FAILURE;
+    };
+    // The app's own ID, which its Start menu shortcut carries too, so the taskbar shows the
+    // app on a button of its own.
+    if let Err(why) = use_app_user_model_id(&package) {
+        note(logger.as_deref(), &why);
+    }
+    let launch = !args.iter().any(|arg| arg == STARTED_BY_WINDOW_MANAGER);
+    let window_manager_pipe =
+        argument(&args, PIPE_ARGUMENT).unwrap_or_else(|| pipe_name(current_session()));
+    let api_pipe = dsa_host_windows::host_config::DEFAULT_PIPE_NAME;
+    // The trace switches are the service's settings, read once before the first trace line.
+    if let Err(why) = dsa_host_windows::compositor::log::read_trace_settings(
+        api_pipe,
+        &format!("dsa-app-window {}", dsa_host_windows::VERSION),
+    ) {
+        note(
+            logger.as_deref(),
+            &format!("the trace settings could not be read ({why}); the traces stay off"),
+        );
+    }
+    let title = program
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| package.clone());
+
+    // Opened by the user (from the Start menu, a pinned button or Windows search): the window
+    // manager and Android are started first when they are not running.
+    let mut starting = None;
+    if launch {
+        let prepared = prepare_app(
+            || {
+                ensure_window_manager(
+                    || pipe_exists(&window_manager_pipe),
+                    || match window_manager_path(Some(program.as_path())) {
+                        Some(window_manager) => run_program(&window_manager, ""),
+                        None => Err("the DSA Window Manager is not installed".into()),
+                    },
+                    START_WINDOW_MANAGER,
+                    POLL,
+                )
+            },
+            || {
+                ensure_android(
+                    &mut NamedPipeConnector {
+                        name: api_pipe.into(),
+                    },
+                    || starting = Some(StartingWindow::show(&title)),
+                )
+            },
+        );
+        if let Err(why) = prepared {
+            note(logger.as_deref(), &format!("{package}: {why}"));
+            drop(starting);
+            tell_user(&title, &format!("{title} could not be opened. {why}."));
+            return std::process::ExitCode::FAILURE;
+        }
+    }
+
+    let listing: Arc<std::sync::Mutex<Vec<_>>> = Arc::default();
+    if let Some(window) = starting {
+        // The waiting window stays until the app's first window opens, so the taskbar never
+        // loses the app in between.
+        let opened = Arc::clone(&listing);
+        let _ = std::thread::Builder::new()
+            .name("dsa-app-window-waiting".into())
+            .spawn(move || {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+                while opened.lock().map(|open| open.is_empty()).unwrap_or(false)
+                    && std::time::Instant::now() < deadline
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                window.close();
+            });
+    }
+
+    let setup = HostSetup {
+        package: package.clone(),
+        launch,
+        connector: Box::new(SameUserPipeConnector {
+            name: window_manager_pipe,
+        }),
+        input: Box::new(NamedPipeConnector {
+            name: api_pipe.into(),
+        }),
+        process_id: std::process::id(),
+        logger: logger.clone(),
+        listing,
+        accessibility: Some(Arc::new(move || {
+            Box::new(NamedPipeConnector {
+                name: api_pipe.into(),
+            }) as Box<dyn dsa_transport::Connector>
+        })),
+    };
+    match run(setup) {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(why) => {
+            note(logger.as_deref(), &format!("{package}: {why}"));
+            std::process::ExitCode::FAILURE
+        }
+    }
+}

@@ -5,11 +5,21 @@
 //! dsa-hostd serve <config.json>    the local API in the foreground, one VM per user
 //! dsa-hostd service <config.json>  the same, as a Windows service
 //! dsa-hostd remove-images <folder> removes the downloaded images (the uninstaller runs it)
+//! dsa-hostd remove-updates <folder> removes the downloaded setup files (the same)
+//! dsa-hostd remove-machine-data <folder> removes the settings, logs and tmp folder (the same)
+//! dsa-hostd remove-user-data       removes every user's shortcuts, files and keys DSA made,
+//!                                  keeping their Android disk (the same)
+//! dsa-hostd stop-programs <folder> ends every DSA program running from the program folder or
+//!                                  from a user's app windows, in every session (the
+//!                                  installer runs it before it replaces the files)
+//! dsa-hostd start-window-managers  starts the window manager beside this program for every
+//!                                  signed-in user (the installer runs it at the end)
 //! ```
 //!
 //! Without a mode it starts one VM, waits for the guest's channel daemon to connect and
 //! pass the protocol handshake, and prints every state change. Commands on standard input:
-//! `start`, `stop`, `status`, `quit`. End of input also quits; quitting stops the VM first.
+//! `start`, `stop`, `freeze`, `status`, `quit`. End of input also quits; quitting stops the
+//! VM first.
 //!
 //! `serve` and `service` answer the local API on a named pipe and run each caller's own
 //! VM. `serve` stops on Ctrl+C. `service` is what the installer registers; it writes its
@@ -51,27 +61,63 @@ mod windows_host {
         SetConsoleCtrlHandler, SetStdHandle, STD_ERROR_HANDLE,
     };
 
+    use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
     use dsa_host_core::handshake::ControlHandshake;
+    use dsa_host_core::power::PowerHub;
     use dsa_host_core::session::{Session, SessionState};
     use dsa_host_windows::account::current_user_sid;
     use dsa_host_windows::android_vm::AndroidVmLauncher;
     use dsa_host_windows::guid::Guid;
-    use dsa_host_windows::host_config::HostConfig;
+    use dsa_host_windows::host_config::{expand_locations, HostConfig};
     use dsa_host_windows::hvsocket::HvSocketListener;
     use dsa_host_windows::vm_listener::VmBoundListener;
     use dsa_host_windows::{scm, service};
     use dsa_transport::Listener;
 
-    const USAGE: &str =
-        "usage: dsa-hostd [serve | service] <config.json> | dsa-hostd remove-images <folder>";
+    const USAGE: &str = "usage: dsa-hostd [serve | service] <config.json> | \
+                         dsa-hostd remove-images <folder> | dsa-hostd remove-updates <folder> | \
+                         dsa-hostd remove-machine-data <folder> | dsa-hostd remove-user-data | \
+                         dsa-hostd stop-programs <folder> | dsa-hostd start-window-managers";
 
     fn build() -> String {
-        format!("dsa-hostd {}", env!("CARGO_PKG_VERSION"))
+        format!("dsa-hostd {}", dsa_host_windows::VERSION)
     }
 
     fn read_config(path: &str) -> Result<HostConfig, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("reading {path}: {e}"))?;
-        HostConfig::parse(&text).map_err(|e| e.to_string())
+        // The installer lets the user choose both folders, so the file names them as
+        // {data} (the file's own folder) and {program} (this program's folder).
+        let data = std::path::Path::new(path)
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default();
+        let program = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
+            .unwrap_or_default();
+        let mut config = HostConfig::parse(&expand_locations(&text, &data, &program))
+            .map_err(|e| e.to_string())?;
+        // Every installation records what its package carries beside the configuration,
+        // which upgrades keep as the user left it.
+        let package_path = data.join(dsa_host_windows::host_config::INSTALLED_PACKAGE_FILE);
+        match std::fs::read_to_string(&package_path) {
+            Ok(text) => match dsa_host_windows::host_config::InstalledPackage::parse(
+                &expand_locations(&text, &data, &program),
+            ) {
+                Ok(package) => {
+                    config.apply_package(&package);
+                }
+                Err(error) => config
+                    .package_notes
+                    .push(format!("ignoring {}: {error}", package_path.display())),
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => config
+                .package_notes
+                .push(format!("reading {}: {error}", package_path.display())),
+        }
+        config.machine_root = Some(data);
+        Ok(config)
     }
 
     pub fn run() -> Result<(), String> {
@@ -83,8 +129,72 @@ mod windows_host {
                 use dsa_host_windows::uninstall::{installer_folder, remove_downloaded_images};
                 remove_downloaded_images(&installer_folder(path))
             }
+            [mode, path] if mode == "remove-updates" => {
+                use dsa_host_windows::uninstall::{installer_folder, remove_downloaded_updates};
+                remove_downloaded_updates(&installer_folder(path))
+            }
+            [mode, path] if mode == "remove-machine-data" => {
+                use dsa_host_windows::paths::MachineRoot;
+                use dsa_host_windows::uninstall::{installer_folder, remove_machine_files};
+                for why in remove_machine_files(&MachineRoot::at(installer_folder(path))) {
+                    eprintln!("{why}");
+                }
+                Ok(())
+            }
+            // remove-start-menu is the name earlier packages used.
+            [mode] if mode == "remove-user-data" || mode == "remove-start-menu" => {
+                remove_every_users_data();
+                Ok(())
+            }
+            [mode, path] if mode == "stop-programs" => {
+                use dsa_host_windows::installer_actions::stop_dsa_programs;
+                use dsa_host_windows::uninstall::installer_folder;
+                for why in stop_dsa_programs(&installer_folder(path)) {
+                    eprintln!("{why}");
+                }
+                Ok(())
+            }
+            [mode] if mode == "start-window-managers" => {
+                let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+                let program = exe.with_file_name("dsa-wm.exe");
+                for why in dsa_host_windows::window_manager::start_for_signed_in_users(&program) {
+                    eprintln!("{why}");
+                }
+                Ok(())
+            }
             [path] if path != "serve" && path != "service" => one_vm(read_config(path)?),
             _ => Err(USAGE.into()),
+        }
+    }
+
+    /// Removes, for every user with a profile, the Start menu shortcuts, files and registry
+    /// keys DSA made for them, keeping their Android disk. A user whose local application data
+    /// was moved is found where it went, and also where it would be by default.
+    fn remove_every_users_data() {
+        use dsa_host_windows::paths::{
+            default_local_app_data, start_menu_programs_in_profile, UserRoot,
+        };
+        use dsa_host_windows::uninstall::remove_user_files;
+        for (sid, profile) in dsa_host_windows::profile::profiles() {
+            let programs = start_menu_programs_in_profile(&profile);
+            let default_local = default_local_app_data(&profile);
+            let local = dsa_host_windows::profile::local_app_data(&sid)
+                .unwrap_or_else(|_| default_local.clone());
+            let mut roots = vec![UserRoot::in_local_app_data(&local)];
+            if local != default_local {
+                roots.push(UserRoot::in_profile(&profile));
+            }
+            for root in &roots {
+                for why in remove_user_files(root, &programs) {
+                    eprintln!("{sid}: {why}");
+                }
+            }
+            for why in dsa_host_windows::user_registry::remove_user_keys(&sid, &local) {
+                eprintln!("{sid}: {why}");
+            }
+            for why in dsa_host_windows::installed_apps::remove_for_user(&sid, &profile) {
+                eprintln!("{why}");
+            }
         }
     }
 
@@ -145,8 +255,18 @@ mod windows_host {
         } else {
             None
         };
-        let launcher =
-            AndroidVmLauncher::new(&config.vm_name, config.vm_config(fallback_sid.as_deref()));
+        let mut vm = config
+            .vm_config(fallback_sid.as_deref())
+            .map_err(|e| e.to_string())?;
+        // Run by hand, this process is in the user's session and sees their monitors.
+        let monitors = dsa_host_windows::monitors::current();
+        let size = display_or_smallest(Some(&monitors));
+        vm.kernel_cmdline = with_display_size(&vm.kernel_cmdline, size);
+        let user = config.user_sid.clone().or(fallback_sid).unwrap_or_default();
+        let console_log = config.console_log_path(&user, &vm.data_disk);
+        println!("the Android console is kept in {}", console_log.display());
+        let traces_input = dsa_host_windows::service::guest_traces_input(&vm.full_kernel_cmdline());
+        let launcher = AndroidVmLauncher::new(&config.vm_name, vm).with_console_log(console_log);
         let service = Guid::vsock_service(config.control_port);
         let listener = VmBoundListener::new(
             launcher.vm_id_slot(),
@@ -154,10 +274,42 @@ mod windows_host {
                 HvSocketListener::bind(vm_id, service).map(|l| Box::new(l) as Box<dyn Listener>)
             }),
         );
+        let log_service = Guid::vsock_service(config.log_port);
+        let log_listener = VmBoundListener::new(
+            launcher.vm_id_slot(),
+            Box::new(move |vm_id| {
+                HvSocketListener::bind(vm_id, log_service).map(|l| Box::new(l) as Box<dyn Listener>)
+            }),
+        );
         let session_config = config.session_config();
         let build = build();
         let handshake = ControlHandshake::new(&build, session_config.connect_timeout);
-        let session = Session::new(launcher, Box::new(listener), handshake, session_config);
+        let session = Arc::new(Session::new(
+            launcher,
+            Box::new(listener),
+            handshake,
+            session_config,
+        ));
+        // Android's log, read with `dsa logcat` through the local API when the service runs it;
+        // here the port is served so the guest's daemon finds the host there.
+        session.serve_log_port(Box::new(log_listener), &build);
+        session.set_clock_trace(Some(dsa_host_core::clock_trace::ClockTrace::new(
+            Arc::new(AtomicBool::new(traces_input)),
+            Arc::new(dsa_host_windows::compositor::log::PerformanceCounterClock),
+            Arc::new(|line: &str| eprintln!("{line}")),
+        )));
+        // The guest's battery follows the computer's power.
+        let power = Arc::new(PowerHub::new());
+        power.attach(&session);
+        let power_stop = Arc::new(AtomicBool::new(false));
+        {
+            let (power, stop) = (Arc::clone(&power), Arc::clone(&power_stop));
+            thread::spawn(move || dsa_host_windows::power::follow(power, stop));
+        }
+        // And the computer's sleep, for as long as this runs.
+        let _sleep_watch = dsa_host_windows::power::watch_sleep(Arc::clone(&power))
+            .map_err(|why| eprintln!("Android will not hear when the computer sleeps: {why}"))
+            .ok();
 
         let events = session.events();
         thread::spawn(move || {
@@ -170,7 +322,7 @@ mod windows_host {
         });
 
         println!(
-            "{build}: starting the Android VM {:?}; commands: start, stop, status, quit",
+            "{build}: starting the Android VM {:?}; commands: start, stop, freeze, status, quit",
             config.vm_name
         );
         session.start();
@@ -178,16 +330,24 @@ mod windows_host {
             match line.map_err(|e| e.to_string())?.trim() {
                 "start" => session.start(),
                 "stop" => session.stop(),
+                "freeze" => {
+                    if let Err(why) = session.freeze() {
+                        println!("not frozen: {why}");
+                    }
+                }
                 "status" => match session.last_reason() {
                     Some(reason) => println!("status: {} (last: {reason})", session.state()),
                     None => println!("status: {}", session.state()),
                 },
                 "quit" => break,
                 "" => {}
-                other => println!("unknown command {other:?}; commands: start, stop, status, quit"),
+                other => println!(
+                    "unknown command {other:?}; commands: start, stop, freeze, status, quit"
+                ),
             }
         }
 
+        power_stop.store(true, Ordering::Relaxed);
         session.stop();
         let grace = Duration::from_secs(config.stop_timeout_secs + 15);
         if !session.wait_for(SessionState::Stopped, grace) {

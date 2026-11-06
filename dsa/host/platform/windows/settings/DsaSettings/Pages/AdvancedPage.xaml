@@ -1,0 +1,242 @@
+<Page
+    x:Class="Dsa.Settings.Pages.AdvancedPage"
+    ScrollViewer.CanContentScroll="False"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:l="clr-namespace:Dsa.Settings">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid Style="{StaticResource PageHeader}">
+            <TextBlock Text="{l:Text AdvancedTitle.Text}" Style="{StaticResource PageTitle}" />
+        </Grid>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Style="{StaticResource PageContent}">
+                <ui:InfoBar Title="{l:Text SettingsErrorBar.Title}" Severity="Error" IsClosable="False"
+                            IsOpen="{Binding HasError, Mode=OneWay}" Message="{Binding Error, Mode=OneWay}" />
+
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Clipboard24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text ClipboardCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text ClipboardCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch x:Name="ClipboardSwitch" IsChecked="{Binding Clipboard, Mode=OneWay}"
+                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnClipboardToggled" />
+                </ui:CardControl>
+
+                <TextBlock Text="{l:Text FilesHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderLink24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text FileSharingCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text FileSharingCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch x:Name="FileSharingSwitch" IsChecked="{Binding FileSharing, Mode=OneWay}"
+                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnFileSharingToggled" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderOpen24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text SharedFoldersCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text SharedFoldersCard.Description}" Style="{StaticResource CardDescription}" />
+                            <WrapPanel Margin="0,6,0,0">
+                                <CheckBox x:Name="ShareDocumentsBox" Tag="Documents" Content="{l:Text Folder_Documents}" Margin="0,0,16,4"
+                                          IsChecked="{Binding ShareDocuments, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                          Click="OnFolderToggled" />
+                                <CheckBox x:Name="ShareDownloadsBox" Tag="Downloads" Content="{l:Text Folder_Downloads}" Margin="0,0,16,4"
+                                          IsChecked="{Binding ShareDownloads, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                          Click="OnFolderToggled" />
+                                <CheckBox x:Name="SharePicturesBox" Tag="Pictures" Content="{l:Text Folder_Pictures}" Margin="0,0,16,4"
+                                          IsChecked="{Binding SharePictures, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                          Click="OnFolderToggled" />
+                                <CheckBox x:Name="ShareMusicBox" Tag="Music" Content="{l:Text Folder_Music}" Margin="0,0,16,4"
+                                          IsChecked="{Binding ShareMusic, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                          Click="OnFolderToggled" />
+                                <CheckBox x:Name="ShareVideosBox" Tag="Videos" Content="{l:Text Folder_Videos}" Margin="0,0,16,4"
+                                          IsChecked="{Binding ShareVideos, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                          Click="OnFolderToggled" />
+                                <CheckBox x:Name="ShareDesktopBox" Tag="Desktop" Content="{l:Text Folder_Desktop}" Margin="0,0,16,4"
+                                          IsChecked="{Binding ShareDesktop, Mode=OneWay}" IsEnabled="{Binding CanChooseFolders, Mode=OneWay}"
+                                          Click="OnFolderToggled" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                </ui:CardControl>
+                <ui:CardAction Icon="{ui:SymbolIcon FolderPeople24}" Click="OnOpenAndroidFiles" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="{l:Text AndroidFilesCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text AndroidFilesCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardAction>
+                <TextBlock Text="{l:Text FilesNote.Text}" Style="{StaticResource Note}" />
+
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Snooze24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text FreezeCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text FreezeCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch x:Name="FreezeSwitch" IsChecked="{Binding Freeze, Mode=OneWay}"
+                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnFreezeToggled" />
+                </ui:CardControl>
+
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Link24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text LinksCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text LinksCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch x:Name="LinksSwitch" IsChecked="{Binding LinksInAndroid, Mode=OneWay}"
+                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnLinksToggled" />
+                </ui:CardControl>
+
+                <TextBlock Text="{l:Text ResetDataHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:InfoBar Title="{l:Text ResetDoneBar.Title}" Message="{l:Text ResetDoneBar.Message}"
+                            Severity="Success" IsClosable="False" IsOpen="{Binding ResetDone, Mode=OneWay}" Margin="0,0,0,4" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowReset24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text ResetDataCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text ResetDataCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
+                                         Visibility="{Binding IsResetting, Converter={StaticResource Visible}}" />
+                        <ui:Button Content="{l:Text ResetDataButton.Content}" Click="OnResetData"
+                                   IsEnabled="{Binding CanResetData, Mode=OneWay}" />
+                    </StackPanel>
+                </ui:CardControl>
+
+                <TextBlock Text="{l:Text ArmHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Apps24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text ArmCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{Binding ArmStatus, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{Binding ArmAbis, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{l:Text ArmCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch x:Name="ArmTranslationSwitch" IsChecked="{Binding ArmTranslation, Mode=OneWay}"
+                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnArmTranslationToggled" />
+                </ui:CardControl>
+                <ui:InfoBar Title="{l:Text ArmRestartBar.Title}" Message="{l:Text ArmRestartBar.Message}"
+                            Severity="Informational" IsClosable="False"
+                            IsOpen="{Binding ArmRestartNeeded, Mode=OneWay}" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Delete24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text ArmRemoveCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text ArmRemoveCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:Button Content="{l:Text ArmRemoveButton.Content}" Click="OnRemoveArmTranslation"
+                               IsEnabled="{Binding CanRemoveArmTranslation, Mode=OneWay}" />
+                </ui:CardControl>
+
+                <TextBlock Text="{l:Text DeveloperHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon DeveloperBoard24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text DeveloperModeCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text DeveloperModeCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch x:Name="DeveloperModeSwitch" IsChecked="{Binding DeveloperMode, Mode=OneWay}"
+                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnDeveloperModeToggled" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon PlugConnected24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text AdbCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text AdbCard.Description}" Style="{StaticResource CardDescription}" />
+                            <ui:TextBox IsTextSelectionEnabled="True" MinHeight="0" Text="{Binding AdbConnect, Mode=OneWay}" FontFamily="Consolas" IsReadOnly="True"
+                                     BorderThickness="0" Background="Transparent" Padding="0,4,0,0"
+                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{l:Text AdbPortLabel.Text}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox x:Name="AdbPortBox" Width="90" Text="{Binding AdbPort, Mode=OneWay}"
+                                 IsEnabled="{Binding CanChange, Mode=OneWay}" LostFocus="OnAdbPortChanged"
+                                 KeyDown="OnAdbPortKeyDown" />
+                    </StackPanel>
+                </ui:CardControl>
+
+                <TextBlock Text="{l:Text DiagnosticsHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Bug24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{l:Text InputTraceCard.Header}" Style="{StaticResource CardTitle}" />
+                                <ui:SymbolIcon Symbol="Shield24" Margin="6,0,0,0" ToolTip="{l:Text AdminShield.ToolTip}" />
+                            </StackPanel>
+                            <TextBlock Text="{l:Text InputTraceCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
+                                   Visibility="{Binding TracesNeedAdministrator, Converter={StaticResource Visible}}"
+                                   Click="OnInputTraceAsAdministrator" />
+                        <ui:ToggleSwitch x:Name="InputTraceSwitch" IsChecked="{Binding InputTrace, Mode=OneWay}"
+                                         IsEnabled="{Binding CanChangeTraces, Mode=OneWay}" Click="OnInputTraceToggled" />
+                    </StackPanel>
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ResizeLarge24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{l:Text ResizeTraceCard.Header}" Style="{StaticResource CardTitle}" />
+                                <ui:SymbolIcon Symbol="Shield24" Margin="6,0,0,0" ToolTip="{l:Text AdminShield.ToolTip}" />
+                            </StackPanel>
+                            <TextBlock Text="{l:Text ResizeTraceCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
+                                   Visibility="{Binding TracesNeedAdministrator, Converter={StaticResource Visible}}"
+                                   Click="OnResizeTraceAsAdministrator" />
+                        <ui:ToggleSwitch x:Name="ResizeTraceSwitch" IsChecked="{Binding ResizeTrace, Mode=OneWay}"
+                                         IsEnabled="{Binding CanChangeTraces, Mode=OneWay}" Click="OnResizeTraceToggled" />
+                    </StackPanel>
+                </ui:CardControl>
+                <TextBlock Text="{l:Text DiagnosticsNote.Text}" Style="{StaticResource Note}" />
+
+                <TextBlock Text="{l:Text LogsHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:CardAction Icon="{ui:SymbolIcon Folder24}" Click="OnOpenUserLogs" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="{l:Text UserLogsCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{l:Text UserLogsCard.Description}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardAction>
+                <ui:CardAction Icon="{ui:SymbolIcon FolderPeople24}" Click="OnOpenServiceLogs">
+                    <StackPanel>
+                        <TextBlock Text="{l:Text ServiceLogsCard.Header}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{Binding LogDir, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                    </StackPanel>
+                </ui:CardAction>
+
+                <TextBlock Text="{l:Text CommandLineHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon WindowConsole20}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text CommandLineCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text CommandLineCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:TextBox IsTextSelectionEnabled="True" MinHeight="0" Text="dsa status | dsa settings | dsa memory" FontFamily="Consolas" IsReadOnly="True"
+                             BorderThickness="0" Background="Transparent" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                </ui:CardControl>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

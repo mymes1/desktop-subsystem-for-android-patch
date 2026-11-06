@@ -1,0 +1,9 @@
+<!-- The camera provider HAL dsa-camera serves: the host computer's cameras. Version 1 is in
+     the compatibility matrix of every supported image. -->
+<manifest version="1.0" type="device">
+    <hal format="aidl">
+        <name>android.hardware.camera.provider</name>
+        <version>1</version>
+        <fqname>ICameraProvider/internal/0</fqname>
+    </hal>
+</manifest>

@@ -1,39 +1,140 @@
 [package]
 name = "dsa-host-windows"
 version = "0.1.0"
-description = "The Windows host: WSL launch and the hvsocket transport"
+description = "The Windows host: the Android VM and the hvsocket transport"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+dsa-exe-resources = { path = "resources" }
 dsa-transport.workspace = true
 dsa-host-core.workspace = true
+dsa-protocol.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ed25519-dalek = "2"
+sha2 = "0.11"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
+    "Win32_Devices_Display",
+    "Win32_Globalization",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    # The VM's network: the host's adapters and the guest's addresses as the host sees them.
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
     "Win32_Networking_WinHttp",
     "Win32_Networking_WinSock",
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_Storage_FileSystem",
     "Win32_Storage_Vhd",
+    # Freeing the path of a known folder the shell gives (the shared folders).
+    "Win32_System_Com",
     "Win32_System_HostComputeSystem",
     "Win32_System_Console",
+    "Win32_System_DataExchange",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Environment",
     "Win32_System_IO",
     "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
     "Win32_System_Pipes",
+    "Win32_System_Power",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Registry",
+    "Win32_System_RemoteDesktop",
     "Win32_System_Services",
+    "Win32_System_SystemInformation",
+    "Win32_System_Performance",
     "Win32_System_Threading",
+    # The time zone, which the user's Android follows.
+    "Win32_System_Time",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Accessibility",
+    "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Shell",
+    "Win32_UI_Input_Ime",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Input_Pointer",
+    "Win32_UI_Input_Touch",
+    # The game controllers the user's Android shows its apps as gamepads.
+    "Win32_UI_Input_XboxController",
+    # Printing the documents of the user's Android: the print dialog and the printer's jobs.
+    "Win32_UI_Controls_Dialogs",
+    "Win32_Storage_Xps",
 ] }
+# Waiting on the PDF renderer's WinRT operations.
+windows-future = "0.3"
+# Direct3D 11, DXGI and DirectComposition, which present each task's frames in its window.
+# They are COM interfaces, which windows-sys does not describe.
+windows-numerics = "0.3"
+# The COM objects of each task window's UI Automation tree: #[implement] names this crate.
+windows-core = "0.62"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    # ReleaseStgMedium, for files dropped on a task window.
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_DirectComposition",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    # The data object a drop carries: its medium names GDI handles.
+    "Win32_Graphics_Gdi",
+    # Decoding the guest's video on the GPU (Media Foundation with Direct3D 11).
+    "Win32_Media_MediaFoundation",
+    "Win32_Security",
+    # Start menu shortcuts: the shell's ShellLink object and its properties.
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    # Dragging an app's files out of its window: the virtual files' memory and formats.
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    # Each task window's UI Automation tree: its providers, VARIANTs and SAFEARRAYs.
+    "Win32_System_Ole",
+    # The key state a drop target is told of (files dropped on a task window).
+    "Win32_System_SystemServices",
+    "Win32_UI_Accessibility",
+    "Win32_System_Variant",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_Shell_PropertiesSystem",
+    # Toast notifications for the notifications of the user's Android.
+    "Data_Xml_Dom",
+    # The computer's location, which the user's Android gets as its GNSS location.
+    "Devices_Geolocation",
+    # The computer's motion and light sensors, for the guest's sensors HAL.
+    "Devices_Sensors",
+    "Foundation",
+    "UI_Notifications",
+    # The cameras the apps in the guest use: where each camera's enclosure places it.
+    "Devices_Enumeration",
+    "Foundation_Collections",
+    # Game controllers that are not Xbox controllers, for the user's Android.
+    "Gaming_Input",
+    # Decoding the PNG frames of the widgets on the desktop.
+    "Win32_Graphics_Imaging",
+    # Printing the documents of the user's Android: Windows' PDF renderer reads them.
+    "Data_Pdf",
+    "Storage",
+    "Storage_Streams",
+    "Win32_System_WinRT",
+    # Playing the guest's sound on the default output device (WASAPI).
+    "Win32_Media_Audio",
+    # Windows' media controls for the media sessions of the user's Android.
+    "Media",
+] }
+
+[build-dependencies]
+dsa-exe-resources = { path = "resources" }
 
 [dev-dependencies]
 dsa-transport = { workspace = true, features = ["conformance"] }
-dsa-protocol.workspace = true
 dsa-host-core = { workspace = true, features = ["conformance"] }
-sha2 = "0.11"

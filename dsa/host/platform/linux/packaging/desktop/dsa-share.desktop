@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Share with an Android app
+Name[ko]=Android 앱과 공유
+Comment=Sends the file to your Android, which asks which app takes it
+Comment[ko]=파일을 Android로 보내고, 어느 앱이 받을지 묻습니다
+Exec=dsa share %f
+Icon=document-send
+Terminal=false
+NoDisplay=true
+MimeType=application/octet-stream;application/pdf;application/zip;text/plain;text/html;text/csv;image/png;image/jpeg;image/gif;image/webp;image/heic;audio/mpeg;audio/ogg;audio/flac;video/mp4;video/webm;video/x-matroska;

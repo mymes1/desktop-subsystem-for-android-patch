@@ -3,23 +3,58 @@
   The DSA package (MSI). build.ps1 builds it; see README.md.
 
   It installs dsa-hostd as the DsaHost service (SYSTEM, started automatically), the dsa
-  command on the system PATH, the service's configuration, the guest kernel and, when the
-  build has one, the first Android image. Uninstalling removes all of that and the Android
-  images the service downloaded since, and keeps each user's Android data.
+  command on the system PATH, the DSA Window Manager (dsa-wm, started at each sign-in) and
+  the app window host it makes each app's window program from, the service's configuration, the guest kernel and, when the
+  build has one, the first Android image. Uninstalling removes all of that, the Android
+  images the service downloaded since, the setup files it downloaded to update DSA, the
+  service's settings, logs and tmp folder, and in every user's profile the files, shortcuts
+  and registry keys DSA made there. Each user's Android disk is in their own profile
+  (%LOCALAPPDATA%\DSA\android.vhdx), so it is not part of the package and stays.
 
-  Build variables (-d): Version, SourceDir (the built binaries and dsa-hostd.json), and,
+  The files follow one layout. The machine's folder (DATAFOLDER, %ProgramData%\DSA by
+  default): dsa-hostd.json, images\, updates\, settings\, logs\, tmp\. Each user's
+  %LOCALAPPDATA%\DSA: android.vhdx, android.image-version, pstore.vhd, apps\, notifications\, logs\,
+  compositor.json, monitors.txt, start-menu.json, tmp\. The Windows host's paths module (src\paths.rs) is
+  the one place that builds them. The settings app (DSA Settings) goes in the program folder's
+  settings folder, with a Start menu shortcut.
+
+  INSTALLFOLDER (the program) and DATAFOLDER (configuration, logs and images) can be set
+  on the command line or from setup.exe's Options. The configuration names them as
+  {program} and {data}, which the service fills in. The package records both, and a later
+  version installed over it (as the service does when it updates DSA) keeps them.
+
+  Build variables (-d): Version, ProductName (with " (test package)" after it for a
+  package that only tests the installer), SourceDir (the built binaries and
+  dsa-hostd.json),
+  SettingsDir (the published settings app), and,
   when an image is bundled, ImageDir and ImageVersion, plus ImageManifest when the image
-  is one make-image.py made (image.json, initrd.img, disk.vhdx) and ImageKernel when it
-  carries its own bzImage.
+  is one make-image.py made (image.json, initrd.img, disk.vhdx) and ImageKernel, the file
+  name of its own kernel, when it carries one. KernelName is the kernel's file name:
+  bzImage for x64, Image for ARM64, the names each kernel build gives it.
+
+  Arch is the package's platform, x64 or arm64, as passed to `wix build -arch`. An arm64
+  package installs only on ARM64 Windows; the x64 one installs wherever it did before.
 -->
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-    <Package Name="Desktop Subsystem for Android"
-             Manufacturer="thisisthepy"
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+    <Package Name="$(ProductName)"
+             Manufacturer="ThisIsThePy"
              Version="$(Version)"
              UpgradeCode="5c08f90f-6eaa-402b-992b-6069634c45e8"
              Scope="perMachine"
+             InstallerVersion="500"
              Compressed="yes">
-        <MajorUpgrade DowngradeErrorMessage="A newer Desktop Subsystem for Android is already installed." />
+        <!-- The new version installs over the old one before the old one is removed, so the
+             files both have stay. Removing the old one first would also remove the
+             configuration after costing had decided to keep it, and leave none. An edited
+             configuration is kept: the package never overwrites it. A package of the same version installs over the one
+             already there too, as a repair would, rather than beside it. -->
+        <MajorUpgrade Schedule="afterInstallExecute"
+                      AllowSameVersionUpgrades="yes"
+                      DowngradeErrorMessage="A newer Desktop Subsystem for Android is already installed." />
+        <!-- The trademark and independence notice, shown in Installed apps (the support
+             information). The licence bundle below carries it too, in NOTICE.txt. -->
+        <Property Id="ARPCOMMENTS" Value="Desktop Subsystem for Android is an independent open source project, not affiliated with, endorsed by or sponsored by Microsoft or Google. Android is a trademark of Google LLC." />
         <Media Id="1" Cabinet="dsa.cab" EmbedCab="yes" />
         <?ifdef ImageVersion ?>
         <!-- An MSI holds at most 2 GB and an image comes close to that, so the image's
@@ -34,12 +69,34 @@
                 <FileSearch Name="vmcompute.exe" />
             </DirectorySearch>
         </Property>
+        <!-- The folders an earlier installation chose. setup.exe always passes folders, its
+             defaults when nobody chose others, so these win: an upgrade, run by the service
+             without anyone to choose, stays where DSA is and finds its data. -->
+        <Property Id="INSTALLFOLDER">
+            <RegistrySearch Id="InstalledProgramFolder" Root="HKLM" Key="SOFTWARE\thisisthepy\DSA" Name="InstallFolder" Type="raw" Bitness="always64" />
+        </Property>
+        <Property Id="DATAFOLDER">
+            <RegistrySearch Id="InstalledDataFolder" Root="HKLM" Key="SOFTWARE\thisisthepy\DSA" Name="DataFolder" Type="raw" Bitness="always64" />
+        </Property>
+
+        <?if $(Arch) = arm64 ?>
+        <!-- The machine's own processor, read from the registry rather than from the
+             process: an emulated process would report what it emulates. -->
+        <Property Id="NATIVEARCH">
+            <RegistrySearch Id="NativeArch" Root="HKLM" Key="SYSTEM\CurrentControlSet\Control\Session Manager\Environment" Name="PROCESSOR_ARCHITECTURE" Type="raw" Bitness="always64" />
+        </Property>
+        <Launch Condition="Installed OR NATIVEARCH = &quot;ARM64&quot;"
+                Message="This is the ARM64 package of Desktop Subsystem for Android, and this PC does not have an ARM64 processor. Install the x64 package instead." />
+        <?endif?>
+
         <Launch Condition="Installed OR VMCOMPUTE"
                 Message="Desktop Subsystem for Android needs the Windows feature Virtual Machine Platform. Turn it on in Settings, System, Optional features, More Windows features (or run: dism /online /enable-feature /featurename:VirtualMachinePlatform /all), restart, and run setup again." />
 
         <StandardDirectory Id="ProgramFiles64Folder">
             <Directory Id="INSTALLFOLDER" Name="DSA">
                 <Directory Id="VMFOLDER" Name="vm" />
+                <Directory Id="LICENSESFOLDER" Name="licenses" />
+                <Directory Id="SETTINGSFOLDER" Name="settings" />
             </Directory>
         </StandardDirectory>
         <StandardDirectory Id="CommonAppDataFolder">
@@ -55,23 +112,234 @@
             </Directory>
         </StandardDirectory>
 
+        <util:CloseApplication Id="CloseWindowManager"
+                               Target="dsa-wm.exe"
+                               CloseMessage="yes"
+                               PromptToContinue="no"
+                               RebootPrompt="no" />
+        <!-- Earlier releases called the window manager dsa-compositor.exe; an upgrade
+             from one closes it too, so its files can be replaced. -->
+        <util:CloseApplication Id="CloseCompositor"
+                               Target="dsa-compositor.exe"
+                               CloseMessage="yes"
+                               PromptToContinue="no"
+                               RebootPrompt="no" />
+
+        <util:CloseApplication Id="CloseSettingsApp"
+                               Target="DsaSettings.exe"
+                               CloseMessage="yes"
+                               PromptToContinue="no"
+                               RebootPrompt="no" />
+
+        <!-- The settings app and the runtimes it carries. Its shortcut is named so that
+             searching the Start menu for DSA or for settings finds it. -->
+        <ComponentGroup Id="SettingsApp" Directory="SETTINGSFOLDER">
+            <Files Include="$(SettingsDir)\**">
+                <Exclude Files="$(SettingsDir)\DsaSettings.exe" />
+            </Files>
+            <Component Id="SettingsExe" Guid="*">
+                <File Id="SettingsExe" Source="$(SettingsDir)\DsaSettings.exe" KeyPath="yes">
+                    <Shortcut Id="SettingsShortcut"
+                              Directory="ProgramMenuFolder"
+                              Name="DSA Settings"
+                              Description="Settings and state of Desktop Subsystem for Android"
+                              WorkingDirectory="SETTINGSFOLDER" />
+                </File>
+            </Component>
+        </ComponentGroup>
+
+        <!-- Every installation, upgrade and repair replaces every file of the package (the
+             "a" of REINSTALLMODE), even one whose version is higher than the package's or
+             one without a version that was changed after it was installed: Windows
+             Installer's own rules would keep those, and an old program beside a new service
+             cannot talk to it. The configuration alone is never overwritten, so an edited one
+             stays. -->
+        <Property Id="REINSTALLMODE" Value="amus" />
         <ComponentGroup Id="Service" Directory="INSTALLFOLDER">
             <Component Id="HostdExe" Guid="*">
                 <File Id="HostdExe" Source="$(SourceDir)\dsa-hostd.exe" KeyPath="yes" />
                 <ServiceInstall Id="DsaHost"
                                 Name="DsaHost"
-                                DisplayName="Desktop Subsystem for Android"
+                                DisplayName="Desktop Subsystem for Android Service"
                                 Description="Runs each user's Android in its own virtual machine and answers the dsa command and the desktop apps."
                                 Type="ownProcess"
                                 Start="auto"
                                 ErrorControl="normal"
                                 Account="LocalSystem"
-                                Arguments="service &quot;[DATAFOLDER]dsa-hostd.json&quot;" />
+                                Arguments="service &quot;[DATAFOLDER]dsa-hostd.json&quot;">
+                    <PermissionEx Sddl="D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;SU)(A;;CCLCRPLORC;;;IU)(A;;CCLCRPLORC;;;AU)" />
+                    <util:ServiceConfig
+                        FirstFailureActionType="restart"
+                        SecondFailureActionType="restart"
+                        ThirdFailureActionType="restart"
+                        RestartServiceDelayInSeconds="5"
+                        ResetPeriodInDays="1" />
+                </ServiceInstall>
                 <ServiceControl Id="DsaHost" Name="DsaHost" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
             </Component>
             <Component Id="DsaExe" Guid="*">
                 <File Id="DsaExe" Source="$(SourceDir)\dsa.exe" KeyPath="yes" />
                 <Environment Id="Path" Name="PATH" Value="[INSTALLFOLDER]" Part="last" Action="set" System="yes" Permanent="no" />
+            </Component>
+            <Component Id="WindowManagerExe" Guid="*">
+                <File Id="WindowManagerExe" Source="$(SourceDir)\dsa-wm.exe" KeyPath="yes" />
+            </Component>
+            <!-- The app window host. The window manager copies it for each Android app into
+                 the user's profile (%LOCALAPPDATA%\DSA\apps\<package>\<Label>.exe), named and drawn as the app. -->
+            <Component Id="AppWindowExe" Guid="*">
+                <!-- The "DSA Files" shortcut opens the shared storage of the user's Android in
+                     Explorer, starting Android when it is not running. -->
+                <File Id="AppWindowExe" Source="$(SourceDir)\dsa-app-window.exe" KeyPath="yes">
+                    <Shortcut Id="AndroidFilesShortcut"
+                              Directory="ProgramMenuFolder"
+                              Name="DSA Files"
+                              Description="Files of your Android, in Explorer"
+                              Arguments="--android-files"
+                              WorkingDirectory="INSTALLFOLDER" />
+                </File>
+            </Component>
+            <!-- Opening an .apk file in Explorer opens the APK install window of the settings
+                 app, which shows what the file is (its name, icon, version, permissions and
+                 signer), then installs it in the user's Android, starting Android when it is not
+                 running, and shows how the install went. The association is the machine's, like the rest of the
+                 installation, so uninstalling removes it for every user at once. A user who
+                 picked another app for .apk files keeps it; DSA is then under Open with. -->
+            <Component Id="ApkFileAssociation" Guid="5e3b8a2c-7d41-4f96-b0c8-2a9e6f1d4c73">
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile"
+                               Type="string" Value="APK app package" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\DefaultIcon"
+                               Type="string" Value="&quot;[INSTALLFOLDER]dsa-app-window.exe&quot;,0" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell"
+                               Type="string" Value="open" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell\open"
+                               Name="MUIVerb" Type="string" Value="Install in Android" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell\open\command"
+                               Type="string" Value="&quot;[SETTINGSFOLDER]DsaSettings.exe&quot; --install-apk &quot;%1&quot;" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.apk"
+                               Type="string" Value="Dsa.ApkFile" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.apk"
+                               Name="Content Type" Type="string" Value="application/vnd.android.package-archive" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.apk\OpenWithProgids"
+                               Name="Dsa.ApkFile" Type="string" Value="" />
+            </Component>
+            <!-- Two entries in the context menu of every file (on Windows 11, under Show more
+                 options): the installed window host sends the file to the user's Android, which
+                 asks which app opens it or takes it. They are the machine's, like the rest of
+                 the installation, so uninstalling removes them for every user at once; entries
+                 written into each user's profile would outlive DSA there. -->
+            <Component Id="OpenFileInAndroid" Guid="9c6f4b1e-5d2a-4f8e-a3b7-1e0d6c9f2a41">
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaOpenInAndroidApp"
+                               Name="MUIVerb" Type="string" Value="Open in an Android app" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaOpenInAndroidApp"
+                               Name="Icon" Type="string" Value="&quot;[INSTALLFOLDER]dsa-app-window.exe&quot;,0" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaOpenInAndroidApp\command"
+                               Type="string" Value="&quot;[INSTALLFOLDER]dsa-app-window.exe&quot; --open-file &quot;%1&quot;" />
+            </Component>
+            <Component Id="ShareFileWithAndroid" Guid="2b8e7d30-6c41-4a9f-9e25-7f3a0b1c8d52">
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaShareWithAndroidApp"
+                               Name="MUIVerb" Type="string" Value="Share with an Android app" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaShareWithAndroidApp"
+                               Name="Icon" Type="string" Value="&quot;[INSTALLFOLDER]dsa-app-window.exe&quot;,0" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaShareWithAndroidApp\command"
+                               Type="string" Value="&quot;[INSTALLFOLDER]dsa-app-window.exe&quot; --share-file &quot;%1&quot;" />
+            </Component>
+            <!-- "Android" in Explorer's navigation pane, as WSL's "Linux" is: a folder shortcut
+                 whose target is the service's files door, a loopback WebDAV address that holds
+                 while Android is stopped and starts it when opened. The machine's entry opens
+                 the door's empty root; the window manager writes each user's own entry, with
+                 the user's key, in the user's classes, where it takes the place of this one,
+                 and uninstalling removes those for every user (user_registry.rs). The
+                 namespace entry and the desktop hiding are the machine's, so uninstalling
+                 takes the entry out of every user's navigation pane at once. -->
+            <Component Id="AndroidNavigationPane" Guid="3d7a1f52-8b6e-4c09-a5d4-6e2f9b0c1a87">
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Type="string" Value="Android" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Name="System.IsPinnedToNameSpaceTree" Type="integer" Value="1" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Name="SortOrderIndex" Type="integer" Value="66" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\DefaultIcon"
+                               Type="string" Value="[INSTALLFOLDER]dsa-app-window.exe,0" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\InProcServer32"
+                               Type="expandable" Value="%SystemRoot%\system32\shell32.dll" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\Instance"
+                               Name="CLSID" Type="string" Value="{0E5AAE11-A475-4c5b-AB00-C66DE400274E}" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\Instance\InitPropertyBag"
+                               Name="Attributes" Type="integer" Value="17" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\Instance\InitPropertyBag"
+                               Name="TargetFolderPath" Type="string" Value="\\127.0.0.1@47591\DavWWWRoot" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\ShellFolder"
+                               Name="FolderValueFlags" Type="integer" Value="40" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\ShellFolder"
+                               Name="Attributes" Type="integer" Value="-260046771" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Type="string" Value="Android" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel"
+                               Name="{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}" Type="integer" Value="1" />
+            </Component>
+            <Component Id="GfxstreamBackendDll" Guid="*">
+                <File Id="GfxstreamBackendDll" Source="$(SourceDir)\gfxstream_backend.dll" KeyPath="yes" />
+            </Component>
+            <Component Id="WindowManagerRun" Guid="c1904da8-fec3-46a3-9d9f-676d1873a52e">
+                <RegistryValue Root="HKLM"
+                               Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+                               Name="DsaWindowManager"
+                               Type="string"
+                               Value="&quot;[INSTALLFOLDER]dsa-wm.exe&quot;"
+                               KeyPath="yes" />
+            </Component>
+            <Component Id="GuestCommunicationCommandService" Guid="6a0a012a-3eb5-44ea-86ad-953e5e01b341">
+                <RegistryKey Root="HKLM"
+                             Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\000015be-facb-11e6-bd58-64006a7986d3"
+                             ForceCreateOnInstall="yes"
+                             ForceDeleteOnUninstall="yes">
+                    <RegistryValue Name="ElementName"
+                                   Type="string"
+                                   Value="Desktop Subsystem for Android Graphics Command Stream"
+                                   KeyPath="yes" />
+                    <PermissionEx Sddl="D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;OW)(A;OICI;GR;;;IU)(A;OICI;GR;;;AU)" />
+                </RegistryKey>
+            </Component>
+            <Component Id="GuestCommunicationProcessPipeService" Guid="5b1a0e1c-5264-42b4-82a1-547dfaaef758">
+                <RegistryKey Root="HKLM"
+                             Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\000015bf-facb-11e6-bd58-64006a7986d3"
+                             ForceCreateOnInstall="yes"
+                             ForceDeleteOnUninstall="yes">
+                    <RegistryValue Name="ElementName"
+                                   Type="string"
+                                   Value="Desktop Subsystem for Android Graphics Process Pipe"
+                                   KeyPath="yes" />
+                    <PermissionEx Sddl="D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;OW)(A;OICI;GR;;;IU)(A;OICI;GR;;;AU)" />
+                </RegistryKey>
+            </Component>
+            <Component Id="GuestCommunicationAudioService" Guid="85d8913c-10f8-40b3-a2a1-0967f1b1e59d">
+                <RegistryKey Root="HKLM"
+                             Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\000015c0-facb-11e6-bd58-64006a7986d3"
+                             ForceCreateOnInstall="yes"
+                             ForceDeleteOnUninstall="yes">
+                    <RegistryValue Name="ElementName"
+                                   Type="string"
+                                   Value="Desktop Subsystem for Android Audio"
+                                   KeyPath="yes" />
+                    <PermissionEx Sddl="D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;OW)(A;OICI;GR;;;IU)(A;OICI;GR;;;AU)" />
+                </RegistryKey>
+            </Component>
+            <!-- The sensor port (5580), where the guest's sensors HAL reads this computer's
+                 sensors from the window manager. -->
+            <Component Id="GuestCommunicationSensorsService" Guid="3f6c2b8e-91d4-4a57-b0e3-7c5d18a9f264">
+                <RegistryKey Root="HKLM"
+                             Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization\GuestCommunicationServices\000015cc-facb-11e6-bd58-64006a7986d3"
+                             ForceCreateOnInstall="yes"
+                             ForceDeleteOnUninstall="yes">
+                    <RegistryValue Name="ElementName"
+                                   Type="string"
+                                   Value="Desktop Subsystem for Android Sensors"
+                                   KeyPath="yes" />
+                    <PermissionEx Sddl="D:P(A;OICI;GA;;;SY)(A;OICI;GA;;;BA)(A;OICI;GA;;;OW)(A;OICI;GR;;;IU)(A;OICI;GR;;;AU)" />
+                </RegistryKey>
+            </Component>
+            <Component Id="NoticeFile" Guid="*">
+                <File Id="NoticeFile" Source="$(SourceDir)\NOTICE.txt" KeyPath="yes" />
             </Component>
         </ComponentGroup>
 
@@ -84,6 +352,17 @@
                     <PermissionEx Sddl="D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;S-1-5-83-0)" />
                 </CreateFolder>
             </Component>
+            <!-- What this package carries (its bundled image, its release lists), replaced by
+                 every installation, while the configuration above keeps the user's edits. -->
+            <Component Id="InstalledPackage" Guid="*">
+                <File Id="InstalledPackage" Source="$(SourceDir)\installed-package.json" KeyPath="yes" />
+                <RemoveFile Id="InstalledPackageOld" Name="installed-package.json" On="install" />
+            </Component>
+            <!-- Where both folders are, for the next version to install into. -->
+            <Component Id="InstalledFolders" Guid="5e6764b9-ac6a-419f-ad0e-f69724d05a5a">
+                <RegistryValue Root="HKLM" Key="SOFTWARE\thisisthepy\DSA" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\thisisthepy\DSA" Name="DataFolder" Type="string" Value="[DATAFOLDER]" />
+            </Component>
             <!-- Folders alone cannot have a generated GUID, so these two have fixed ones. -->
             <Component Id="LogFolder" Directory="LOGFOLDER" Guid="3881831f-c7d6-4709-9747-1f68e230d7e4">
                 <CreateFolder />
@@ -93,10 +372,50 @@
             </Component>
         </ComponentGroup>
 
+        <!-- The licence bundle for all shipped components and dependencies. -->
+        <ComponentGroup Id="Licenses" Directory="LICENSESFOLDER">
+            <Component Id="LicNotice" Guid="*">
+                <File Id="LicNotice" Source="$(SourceDir)\licenses\NOTICE.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicRust" Guid="*">
+                <File Id="LicRust" Source="$(SourceDir)\licenses\rust-crates.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicKernel" Guid="*">
+                <File Id="LicKernel" Source="$(SourceDir)\licenses\kernel-GPL-2.0.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicWix" Guid="*">
+                <File Id="LicWix" Source="$(SourceDir)\licenses\wix-MS-RL.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicSetupUi" Guid="*">
+                <File Id="LicSetupUi" Source="$(SourceDir)\licenses\setup-ui.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicSettingsApp" Guid="*">
+                <File Id="LicSettingsApp" Source="$(SourceDir)\licenses\settings-app.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicGfxstream" Guid="*">
+                <File Id="LicGfxstream" Source="$(SourceDir)\licenses\gfxstream.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicAosp" Guid="*">
+                <File Id="LicAosp" Source="$(SourceDir)\licenses\aosp-notice.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicApache" Guid="*">
+                <File Id="LicApache" Source="$(SourceDir)\licenses\apache-2.0.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicMit" Guid="*">
+                <File Id="LicMit" Source="$(SourceDir)\licenses\mit.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicThirdParty" Guid="*">
+                <File Id="LicThirdParty" Source="$(SourceDir)\licenses\third-party-components.txt" KeyPath="yes" />
+            </Component>
+            <Component Id="LicKernelOffer" Guid="*">
+                <File Id="LicKernelOffer" Source="$(SourceDir)\licenses\kernel-source-offer.txt" KeyPath="yes" />
+            </Component>
+        </ComponentGroup>
+
         <!-- The kernel: readable by everyone and by the VMs. -->
         <ComponentGroup Id="Kernel" Directory="VMFOLDER">
             <Component Id="Kernel" Guid="*">
-                <File Id="Kernel" Source="$(SourceDir)\bzImage" KeyPath="yes" />
+                <File Id="Kernel" Source="$(SourceDir)\$(KernelName)" KeyPath="yes" />
                 <CreateFolder>
                     <PermissionEx Sddl="D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;GRGX;;;BU)(A;OICI;GRGX;;;S-1-5-83-0)" />
                 </CreateFolder>
@@ -109,15 +428,29 @@
             <Component Id="FirstImageManifest" Guid="*">
                 <File Id="FirstImageManifest" Source="$(ImageDir)\image.json" KeyPath="yes" DiskId="2" />
             </Component>
+            <?ifdef ImageSplitDisks ?>
+            <Component Id="FirstImageSystem" Guid="*">
+                <File Id="FirstImageSystem" Source="$(ImageDir)\system.vhdx" KeyPath="yes" DiskId="2" />
+            </Component>
+            <Component Id="FirstImageData" Guid="*">
+                <File Id="FirstImageData" Source="$(ImageDir)\data.vhdx" KeyPath="yes" DiskId="2" />
+            </Component>
+            <?else?>
             <Component Id="FirstImageDisk" Guid="*">
                 <File Id="FirstImageDisk" Source="$(ImageDir)\disk.vhdx" KeyPath="yes" DiskId="2" />
             </Component>
+            <?endif?>
             <Component Id="FirstImageInitrd" Guid="*">
                 <File Id="FirstImageInitrd" Source="$(ImageDir)\initrd.img" KeyPath="yes" DiskId="2" />
             </Component>
             <?ifdef ImageKernel ?>
             <Component Id="FirstImageKernel" Guid="*">
-                <File Id="FirstImageKernel" Source="$(ImageDir)\bzImage" KeyPath="yes" DiskId="2" />
+                <File Id="FirstImageKernel" Source="$(ImageDir)\$(ImageKernel)" KeyPath="yes" DiskId="2" />
+            </Component>
+            <?endif?>
+            <?ifdef ImageNotice ?>
+            <Component Id="FirstImageNotice" Guid="*">
+                <File Id="FirstImageNotice" Source="$(ImageDir)\$(ImageNotice)" KeyPath="yes" DiskId="2" />
             </Component>
             <?endif?>
             <?else?>
@@ -128,20 +461,79 @@
         </ComponentGroup>
         <?endif?>
 
-        <!-- The images the service downloaded are not files of this package, so the service
-             removes them itself; each user's data under users\ stays. -->
+        <!-- The images and setup files the service downloaded are not files of this package,
+             so the service removes them itself; each user's Android disk, in their profile,
+             stays. An upgrade keeps them: the new version goes on with the same images, and
+             reads what the update it came from left in the updates folder. -->
         <CustomAction Id="RemoveImages"
                       FileRef="HostdExe"
                       ExeCommand="remove-images &quot;[IMAGESFOLDER]&quot;"
                       Execute="deferred"
                       Impersonate="no"
                       Return="ignore" />
+        <CustomAction Id="RemoveUpdates"
+                      FileRef="HostdExe"
+                      ExeCommand="remove-updates &quot;[DATAFOLDER]updates&quot;"
+                      Execute="deferred"
+                      Impersonate="no"
+                      Return="ignore" />
+        <!-- The service's settings, logs and tmp folder in DATAFOLDER are not files of this
+             package either. A users folder, where the first releases kept each user's Android
+             disk, stays if a disk could not be moved out of it. -->
+        <CustomAction Id="RemoveMachineData"
+                      FileRef="HostdExe"
+                      ExeCommand="remove-machine-data &quot;[DATAFOLDER]&quot;"
+                      Execute="deferred"
+                      Impersonate="no"
+                      Return="ignore" />
+        <!-- In each user's profile the window manager made a Start menu shortcut for each
+             Android app (only the ones it recorded making are removed), the files in
+             %LOCALAPPDATA%\DSA (app window programs, notification icons, logs, its notes),
+             and the notification keys in the user's classes (the io.github.thisisthepy.dsa-notification
+             protocol and the Thisisthepy.DSA.<package> app IDs, and the dsa-notification and
+             DSA.<package> names earlier versions used). All of it goes, for every user,
+             signed in or not; each user's Android disk (android.vhdx, android.image-version) stays. -->
+        <CustomAction Id="RemoveUserData"
+                      FileRef="HostdExe"
+                      ExeCommand="remove-user-data"
+                      Execute="deferred"
+                      Impersonate="no"
+                      Return="ignore" />
+        <!-- Before any file is replaced or removed: every DSA program still running from the
+             program folder, and each app's window program in every user's profile, in every
+             session. A program left running keeps its file in use, and an old window manager
+             would hold its single-instance lock against the new one. It runs from the package
+             itself, since the installed dsa-hostd may be an older one that cannot do it, or
+             none. Not while an upgrade removes the version before it: the new one has its
+             files in place by then, and its service is running. -->
+        <Binary Id="StopProgramsHost" SourceFile="$(SourceDir)\dsa-hostd.exe" />
+        <CustomAction Id="StopPrograms"
+                      BinaryRef="StopProgramsHost"
+                      ExeCommand="stop-programs &quot;[INSTALLFOLDER]&quot;"
+                      Execute="deferred"
+                      Impersonate="no"
+                      Return="ignore" />
+        <!-- Once the old version is gone too: the window manager again, for every signed-in
+             user, as signing in starts it. -->
+        <CustomAction Id="StartWindowManagers"
+                      FileRef="HostdExe"
+                      ExeCommand="start-window-managers"
+                      Execute="deferred"
+                      Impersonate="no"
+                      Return="ignore" />
         <InstallExecuteSequence>
+            <Custom Action="StopPrograms" After="StopServices" Condition="NOT UPGRADINGPRODUCTCODE" />
+            <Custom Action="StartWindowManagers" After="RemoveExistingProducts" Condition="NOT REMOVE~=&quot;ALL&quot;" />
+            <Custom Action="RemoveUserData" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+            <Custom Action="RemoveMachineData" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
             <Custom Action="RemoveImages" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+            <Custom Action="RemoveUpdates" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
         </InstallExecuteSequence>
 
         <Feature Id="Main" Title="Desktop Subsystem for Android" Level="1">
             <ComponentGroupRef Id="Service" />
+            <ComponentGroupRef Id="SettingsApp" />
+            <ComponentGroupRef Id="Licenses" />
             <ComponentGroupRef Id="Data" />
             <ComponentGroupRef Id="Kernel" />
             <?ifdef ImageVersion ?>

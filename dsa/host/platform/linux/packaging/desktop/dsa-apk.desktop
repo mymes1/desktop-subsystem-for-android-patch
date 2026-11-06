@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Install in Android
+Name[ko]=Android에 설치
+Comment=Installs the app package in your Android
+Comment[ko]=앱 패키지를 Android에 설치합니다
+Exec=dsa install %f
+Icon=package-x-generic
+Terminal=false
+NoDisplay=true
+MimeType=application/vnd.android.package-archive;

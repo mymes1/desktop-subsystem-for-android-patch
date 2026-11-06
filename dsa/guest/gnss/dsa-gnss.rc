@@ -1,0 +1,6 @@
+# The guest's GNSS HAL. While the framework wants locations, the host's location service
+# runs, and each position it finds becomes the guest's GNSS location.
+service vendor.dsa-gnss /vendor/bin/hw/dsa-gnss
+    class hal
+    user gps
+    group system gps

@@ -32,9 +32,22 @@ enum Role {
   ROLE_UNSPECIFIED = 0;
   ROLE_HOST = 1;
   ROLE_GUEST = 2;
+  // The guest's audio HAL, on the audio port. It plays sound and nothing else, so the host
+  // asks it for no secret, and the control port refuses it.
+  ROLE_GUEST_AUDIO = 3;
+  // The guest's video codec HAL, on the video port. It decodes video and nothing else, so the
+  // host asks it for no secret, and the control port refuses it.
+  ROLE_GUEST_VIDEO = 4;
+  // The guest's sensors HAL, on the sensor port. It reads the host's sensors and nothing
+  // else, so the host asks it for no secret, and the control port refuses it.
+  ROLE_GUEST_SENSORS = 10;
+  // The guest's camera provider HAL, on the camera port. It carries camera pictures and
+  // nothing else, so the host asks it for no secret, and the control port refuses it.
+  ROLE_GUEST_CAMERA = 8;
 }
 
-// The first frame on a new connection, sent by the guest.
+// The first frame on a new connection, sent by the guest. The host checks it, then asks the
+// guest to prove it knows this boot's secret (AuthChallenge, AuthProof) before it answers.
 message Hello {
   // ProtocolVersion.PROTOCOL_VERSION_CURRENT of the sender's build.
   uint32 protocol_version = 1;
@@ -57,6 +70,8 @@ enum RejectReason {
   REJECT_REASON_SCHEMA_HASH_MISMATCH = 2;
   REJECT_REASON_UNEXPECTED_ROLE = 3;
   REJECT_REASON_MALFORMED_HELLO = 4;
+  // The guest did not prove it knows this boot's secret.
+  REJECT_REASON_AUTHENTICATION_FAILED = 5;
 }
 
 // The host's answer when it refuses the guest. The host closes the connection after it.
@@ -67,11 +82,2053 @@ message HelloRejected {
   Hello host = 3;
 }
 
+// The host's second frame, once the guest's Hello matches: a fresh random value for this
+// connection alone.
+message AuthChallenge {
+  // 32 random bytes.
+  bytes nonce = 1;
+}
+
+// The guest's answer to AuthChallenge. The secret itself never crosses the connection.
+message AuthProof {
+  // HMAC-SHA256 of the challenge's nonce, keyed with the secret the host gave this boot
+  // (32 bytes).
+  bytes mac = 1;
+}
+
+// A rectangle in guest display pixels: left and top inclusive, right and bottom exclusive.
+message Rect {
+  int32 left = 1;
+  int32 top = 2;
+  int32 right = 3;
+  int32 bottom = 4;
+}
+
+// Guest to host, from the agent: an app task the host shows as one window appeared, or
+// something the window shows about it changed. Every field is sent each time, so the host
+// keeps only the latest.
+message TaskUpdated {
+  // The guest's task ID, unique while the task lives.
+  int32 task_id = 1;
+  // Where the task's window is on the guest's freeform display.
+  Rect bounds = 2;
+  // The package of the task's root activity, for the window's icon and grouping.
+  string package_name = 3;
+  // The title the window shows.
+  string label = 4;
+  // Whether the task has input focus in the guest.
+  bool focused = 5;
+  // The density the task's app draws at, in dots per inch (160 draws one pixel per
+  // density-independent pixel). 0 when the agent cannot read it.
+  uint32 density_dpi = 6;
+  // The largest size the guest can give the task, in guest display pixels: its display's.
+  // A window larger than this could only show the task's frames stretched. 0 when unknown.
+  uint32 max_width = 7;
+  uint32 max_height = 8;
+  // The smallest size the guest gives the task, in guest display pixels: what its activity
+  // declares, else the framework's default. A window smaller than this could only show the
+  // task's frames stretched. 0 when unknown.
+  uint32 min_width = 9;
+  uint32 min_height = 10;
+  // What the task's app told the system about its status bar: whether it asked for dark
+  // icons on a light status bar. The host draws its window's caption buttons in the
+  // matching tone over the app's status bar area.
+  StatusBarAppearance status_bar_appearance = 11;
+  // The status bar color the app set, as 0xAARRGGBB; 0 when it set none or it is fully
+  // transparent. Used only while the appearance is unspecified.
+  fixed32 status_bar_color = 12;
+  // The orientation the task's top activity is locked to, if any. A task locked to portrait
+  // opens as a window taller than it is wide.
+  TaskOrientation orientation = 20;
+  // Whether the task's app asked to fill the screen (the task left the freeform windowing
+  // mode for fullscreen). The host makes the task's window fill its monitor.
+  bool fullscreen = 21;
+  // Whether the task's app went into picture-in-picture. The host makes the task's window a
+  // small window that stays above the others.
+  bool picture_in_picture = 22;
+}
+
+// The orientation a task's top activity asks for.
+enum TaskOrientation {
+  // The activity does not lock its orientation, or the agent could not read it.
+  TASK_ORIENTATION_UNSPECIFIED = 0;
+  // Portrait, reverse portrait, sensor portrait or user portrait.
+  TASK_ORIENTATION_PORTRAIT = 1;
+  // Landscape, reverse landscape, sensor landscape or user landscape.
+  TASK_ORIENTATION_LANDSCAPE = 2;
+}
+
+// Whether an app asked for dark status bar icons (a light status bar) or light ones.
+enum StatusBarAppearance {
+  // The app did not say, or the agent could not read it.
+  STATUS_BAR_APPEARANCE_UNSPECIFIED = 0;
+  // Dark icons on a light status bar (WindowInsetsController's
+  // APPEARANCE_LIGHT_STATUS_BARS).
+  STATUS_BAR_APPEARANCE_LIGHT = 1;
+  // Light icons on a dark status bar.
+  STATUS_BAR_APPEARANCE_DARK = 2;
+}
+
+// Guest to host, from the agent: the task ended; the host closes its window.
+message TaskRemoved {
+  int32 task_id = 1;
+}
+
+// Guest to host, from the hwcomposer: the frames of the task now arrive on the graphics
+// stream as posts to `display_id`. Sent when the pairing begins or changes.
+message TaskFrames {
+  int32 task_id = 1;
+  uint32 display_id = 2;
+}
+
+// Host to guest: the user closed the task's window; the agent ends the task.
+message CloseTask {
+  int32 task_id = 1;
+}
+
+// Host to guest: start the app's launcher activity as a new task in its own window. The
+// agent answers with TaskUpdated once the task is there.
+message LaunchApp {
+  string package_name = 1;
+}
+
+// Host to guest: the user's Stop. The agent ends every process of the app, even one a
+// placed widget or a foreground service keeps running, and the guest gives the memory back.
+message StopApp {
+  string package_name = 1;
+}
+
+// Host to guest: the user resized the task's window; the task takes the window's client
+// size, in guest display pixels. Only the latest size counts: during a live resize the host
+// sends the size it has now, not every size it passed through. The agent keeps the task
+// clear of other tasks, moving it if the new size would overlap one, and reports the
+// result with TaskUpdated.
+//
+// `live` is true while the user is still dragging the window's edge. The task then takes
+// the new size in pixels but keeps the configuration (screen size in dp, smallest width,
+// orientation) it had when the drag began, so its activities lay out again in the same
+// frame instead of being recreated for every step. The first ResizeTask with `live`
+// false, sent when the drag ends even if the size did not change, gives the task the
+// configuration of its final size.
+message ResizeTask {
+  int32 task_id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  bool live = 4;
+}
+
+// Host to guest: the task's window is on a monitor of another scale; the task's app draws
+// at `density_dpi` (160 at a scale of 100%). The host sends the matching ResizeTask right
+// after it, and the agent applies both together, so the app relays out once.
+message SetTaskDensity {
+  int32 task_id = 1;
+  uint32 density_dpi = 2;
+}
+
+// Host to guest: the task's window draws its title bar over the top `height` pixels of the
+// task (guest display pixels, which are the window's). The agent gives the task a top system
+// bar inset of that height (status bars, system bars and caption bar), so the app keeps its
+// toolbar below the caption buttons and draws its status bar background behind them. The
+// host sends it when the window opens and whenever the height changes, as on a move to a
+// monitor of another scale. 0 removes the inset.
+message SetTaskCaption {
+  int32 task_id = 1;
+  uint32 height = 2;
+}
+
+// Guest to host, from the agent: the name and launcher icon of an app the host shows a task
+// of. The host's window for the app carries them, in the taskbar and the task list. The
+// agent sends it before the first TaskUpdated of the app's package on each connection, and
+// again before the next one once the app has had no task, which is how an updated app's new
+// name and icon arrive.
+message AppInfo {
+  string package_name = 1;
+  // The app's own name, as a launcher shows it.
+  string label = 2;
+  // The app's launcher icon, as a square PNG image of at most 256 pixels on a side. Empty
+  // when the app has no icon the agent could draw.
+  bytes icon_png = 3;
+}
+
+// Guest to host, from the agent: an app a launcher lists is installed in the guest, or
+// something about it changed: its name, icon, version or size. The host shows it in its own
+// start menu and its list of installed apps. The agent sends it on each connection for every
+// such app, and again whenever the app is installed again or updated, or the host asks
+// (RefreshApps) and the app's sizes changed; the InstalledApps that follows says which apps
+// are still there.
+message InstalledApp {
+  string package_name = 1;
+  // The app's own name, as a launcher shows it.
+  string label = 2;
+  // The app's launcher icon, as a square PNG image of at most 256 pixels on a side. Empty
+  // when the app has no icon the agent could draw.
+  bytes icon_png = 3;
+  // The installed version, as the package manager reports it.
+  string version_name = 4;
+  int64 version_code = 5;
+  // When the app was first installed and last updated, in milliseconds since the Unix epoch.
+  uint64 first_install_time_ms = 6;
+  uint64 last_update_time_ms = 7;
+  // True for an app that is part of the Android image, which cannot be uninstalled.
+  bool system_app = 8;
+  // The storage the app takes, in bytes: its code, its data and its cache. Zero when the
+  // agent could not read them.
+  uint64 app_bytes = 9;
+  uint64 data_bytes = 10;
+  uint64 cache_bytes = 11;
+}
+
+// Host to guest: read the installed apps again, sizes included, and send the InstalledApp of
+// each one that changed, then InstalledApps, even when nothing changed, so the host knows its
+// list is fresh.
+message RefreshApps {}
+
+// Host to guest: open Android's own settings for an app (its permissions, storage and
+// notifications) as a new task in its own window. An empty `package_name` opens the list of
+// every installed app instead.
+message OpenAppSettings {
+  string package_name = 1;
+}
+
+// Whether an app was uninstalled, and if not, why. The reasons are stable, so the host can say
+// in the user's language what went wrong; the message beside them gives the guest's own words.
+enum UninstallStatus {
+  UNINSTALL_STATUS_UNSPECIFIED = 0;
+  // The app is gone.
+  UNINSTALL_STATUS_SUCCESS = 1;
+  // No app of that package is installed.
+  UNINSTALL_STATUS_NOT_INSTALLED = 2;
+  // The app is part of the Android image; only apps the user installed can be uninstalled.
+  UNINSTALL_STATUS_SYSTEM_APP = 3;
+  // Android refused: the app is a device administrator, or a policy keeps it.
+  UNINSTALL_STATUS_BLOCKED = 4;
+  // Anything else. The message says what.
+  UNINSTALL_STATUS_OTHER = 5;
+}
+
+// Host to guest: uninstall a user app. The agent does it through the package installer and
+// answers with UninstallResult of the same `request_id`.
+message UninstallApp {
+  uint32 request_id = 1;
+  string package_name = 2;
+}
+
+// Guest to host, from the agent: how an UninstallApp went.
+message UninstallResult {
+  uint32 request_id = 1;
+  string package_name = 2;
+  UninstallStatus status = 3;
+  // The guest's own words, for the log and a bug report.
+  string message = 4;
+}
+
+// Guest to host, from the agent: every app a launcher lists, by package, in package order.
+// It follows the InstalledApp of each app it names that the host has not been told about on
+// this connection. The agent sends it on each connection and whenever an app is installed,
+// updated or removed; an app it no longer names has been removed. Each app goes in a message
+// of its own, so no message has to carry every icon at once.
+message InstalledApps {
+  repeated string package_names = 1;
+}
+
+// What a pointer did.
+enum PointerAction {
+  POINTER_ACTION_UNSPECIFIED = 0;
+  // The pointer touched down, or a mouse's first button went down.
+  POINTER_ACTION_DOWN = 1;
+  // The pointer moved while down, or a mouse's buttons changed while one stays down.
+  POINTER_ACTION_MOVE = 2;
+  // The pointer lifted, or a mouse's last button went up.
+  POINTER_ACTION_UP = 3;
+  // The gesture ended without completing, as when the host window lost the pointer. The
+  // guest drops it rather than acting on it.
+  POINTER_ACTION_CANCEL = 4;
+  // The wheel turned; `scroll_x` and `scroll_y` say how far.
+  POINTER_ACTION_SCROLL = 5;
+  // The pointer moved over the window without touching it (a mouse with no button down,
+  // or a pen in range).
+  POINTER_ACTION_HOVER_MOVE = 6;
+  // The pointer left the window, or a pen went out of range.
+  POINTER_ACTION_HOVER_EXIT = 7;
+}
+
+// What kind of pointer it is.
+enum PointerTool {
+  POINTER_TOOL_UNSPECIFIED = 0;
+  POINTER_TOOL_MOUSE = 1;
+  POINTER_TOOL_TOUCH = 2;
+  POINTER_TOOL_PEN = 3;
+  // A pen's eraser end.
+  POINTER_TOOL_ERASER = 4;
+}
+
+// Host to guest: pointer input in a task's window. One message per event, sent as it
+// happens; the agent injects it into the task at once.
+message PointerEvent {
+  int32 task_id = 1;
+  PointerAction action = 2;
+  PointerTool tool = 3;
+  // Tells the fingers of one touch apart. Stays the same from DOWN to UP.
+  uint32 pointer_id = 4;
+  // The position relative to the task's top left corner, in guest display pixels.
+  float x = 5;
+  float y = 6;
+  // The buttons held down after this event, as a set of bits: 1 primary, 2 secondary,
+  // 4 tertiary (middle), 8 back, 16 forward, 32 a pen's first barrel button, 64 its second.
+  uint32 buttons = 7;
+  // From 0 to 1. A mouse sends 1 while a button is down; a pen sends what it measures.
+  float pressure = 8;
+  // For SCROLL: how far the wheel turned, in notches. Positive `scroll_y` scrolls up,
+  // positive `scroll_x` scrolls right.
+  float scroll_x = 9;
+  float scroll_y = 10;
+}
+
+// What a key did.
+enum KeyAction {
+  KEY_ACTION_UNSPECIFIED = 0;
+  // The key went down, or, with a `repeat_count` above 0, the host repeats it while it is held.
+  KEY_ACTION_DOWN = 1;
+  // The key came up.
+  KEY_ACTION_UP = 2;
+}
+
+// Host to guest: a key pressed or released in a task's window while the window has the
+// keyboard focus. One message per event, sent as it happens; the agent injects it into the
+// task at once.
+message KeyEvent {
+  int32 task_id = 1;
+  KeyAction action = 2;
+  // The guest's key code (android.view.KeyEvent.KEYCODE_*), which the host maps its own keys
+  // to, so the guest passes it through unchanged.
+  uint32 key_code = 3;
+  // How many times the host has repeated the key since it went down: 0 for the press itself.
+  uint32 repeat_count = 4;
+  // The modifiers and locks in effect after this event, as the guest's meta state bits
+  // (android.view.KeyEvent.META_*): Shift, Ctrl, Alt and Meta, each with its left or right
+  // side, and Caps Lock, Num Lock and Scroll Lock.
+  uint32 meta_state = 5;
+  // When the host saw the event, in milliseconds of the host's own clock, which wraps around.
+  // Only the difference between two events means anything.
+  uint32 event_time_ms = 6;
+  // Set on an UP the user did not make: the window lost the keyboard focus while the key was
+  // held. The guest releases the key without acting on it.
+  bool canceled = 7;
+}
+
+// Host to guest: the text the host's input method is composing in a task's window, while the
+// window has the keyboard focus. Each message replaces the whole composition: the agent puts
+// `text` into the focused editor as its composing text (underlined, not yet typed), in place
+// of the previous composition. An empty `text` removes the composition: the user deleted it
+// or the input method canceled it.
+message ImeComposition {
+  int32 task_id = 1;
+  string text = 2;
+  // Where the cursor is in `text`, in UTF-16 code units from its start: 0 before the first
+  // character, the length of `text` after the last.
+  uint32 cursor = 3;
+}
+
+// Host to guest: text the user typed in a task's window: what the host's input method
+// committed, or a character a key typed without one. The agent commits it to the focused
+// editor, in place of the composition if there is one, and the composition ends.
+message ImeCommit {
+  int32 task_id = 1;
+  string text = 2;
+}
+
+// Host to guest: the host's input method deletes text around the cursor of the focused editor
+// in a task, as an input method does when it reconverts or corrects what was typed:
+// `before_length` UTF-16 code units before the cursor (or the selection) and `after_length`
+// after it. The agent deletes them in the editor, keeping any composition.
+message ImeDeleteSurrounding {
+  int32 task_id = 1;
+  uint32 before_length = 2;
+  uint32 after_length = 3;
+}
+
+// Guest to host, from the agent: where the cursor of the editor focused in a task is, in the
+// task's own pixels from its top left corner (where a pointer event's place is measured from),
+// so the host can put its input method's windows (the candidate list, say) beside it. Sent
+// when the editor gains the focus and when its cursor moves.
+message ImeCursor {
+  int32 task_id = 1;
+  Rect cursor = 2;
+}
+
+// Host to guest: whether the guest's screen is on. The host turns it off once no task window
+// has been shown (every window closed or minimized) for the time the host is configured to
+// wait, and on again as soon as a window is shown. While it is off the agent turns the
+// guest's display off and puts the device into Doze; when it is on again the agent wakes the
+// device and the display. The agent takes the screen to be on when it connects; the host
+// sends this on each change after that.
+message ScreenState {
+  bool on = 1;
+}
+
+// Host to guest: the host computer's power, which the agent makes the guest's battery state
+// match. Sent once after the connection opens, when the host knows it, and on each change.
+message PowerState {
+  // Whether the host runs on AC power; false while it runs on its battery.
+  bool ac_online = 1;
+  // Whether the host has a battery. A host without one is reported to the guest as a full
+  // battery on AC power.
+  bool battery_present = 2;
+  // The battery's charge, from 0 to 100.
+  uint32 battery_percent = 3;
+  // Whether the battery is charging.
+  bool charging = 4;
+  // Whether the host's battery saver is on; the guest's battery saver follows it.
+  bool power_saver = 5;
+}
+
+// Guest to host, from the control daemon: how much memory the guest has and how hard it
+// works to find more. The host grows the VM's memory by hot-adding it when the guest runs
+// short, and gives it back when the guest no longer needs it. Sent every few seconds while
+// the guest is short, and at least every 30 seconds otherwise.
+message GuestMemoryPressure {
+  uint64 mem_total_kb = 1;
+  uint64 mem_available_kb = 2;
+  // The share of the last 10 seconds some task waited for memory (PSI "some avg10"), in
+  // hundredths of a percent.
+  uint32 stall_centipercent = 3;
+}
+
+// Host to guest: whether the host computer is short of memory. While it is, the guest gives
+// memory back the way a phone's low memory killer would, cheapest first: the agent ends the
+// cached app processes (apps the user is not using), and the control daemon then has the
+// guest drop its clean caches, so free page reporting returns the pages to the host. Sent
+// when it changes, and once after the agent connects while the host is short.
+message HostMemory {
+  bool low = 1;
+}
+
+// Host to guest: the host computer is about to sleep (sleep, hibernate or modern standby) or
+// has just woken. Before it sleeps the host turns the guest's screen off (ScreenState), then
+// sends this with `asleep` set; the control daemon writes every file's pending data to disk
+// and answers with GuestSleepReady. The host waits for that answer for at most two seconds.
+// When the host wakes it sends this with `asleep` clear and its wall clock, which the agent
+// sets as the guest's time, since the guest's clock stood still or drifted while the host
+// slept. A guest frozen or not connected when the host wakes is sent it once it can hear.
+message HostSleep {
+  bool asleep = 1;
+  // On waking: the host's wall clock, in milliseconds since the Unix epoch (UTC). Zero when
+  // `asleep` is set.
+  uint64 host_unix_time_ms = 2;
+}
+
+// Guest to host, from the control daemon: the answer to HostSleep with `asleep` set, sent
+// once the guest's pending file data is on its disk.
+message GuestSleepReady {}
+
+// What a PowerHint is about.
+enum PowerHintKind {
+  POWER_HINT_KIND_UNSPECIFIED = 0;
+  // A power mode, which stays on until the guest turns it off.
+  POWER_HINT_KIND_MODE = 1;
+  // A boost, which lasts for a while and then ends by itself.
+  POWER_HINT_KIND_BOOST = 2;
+}
+
+// Guest to host, from the guest's power HAL: the framework turned a power mode on or off, or
+// asked for a boost. The host runs the guest's processors faster or more frugally to match.
+// The HAL sends every mode that is on each time it subscribes to the channel, and the
+// channel daemon each time the host connects, so a host that connects again learns them.
+message PowerHint {
+  PowerHintKind kind = 1;
+  // The mode or the boost, by its value in android.hardware.power's Mode or Boost.
+  int32 id = 2;
+  // A mode: whether it is now on.
+  bool enabled = 3;
+  // A boost: how long it lasts, in milliseconds. 0 asks for the host's usual length; a
+  // negative value ends the boost now.
+  int32 duration_ms = 4;
+}
+
+// Guest to host, from the guest's GNSS HAL: whether the framework wants locations now
+// (between its start and stop of the GNSS engine), and how often. The host runs its own
+// location service only while one is wanted, and sends a LocationFix each time it has a
+// new position. The HAL sends this again each time it subscribes to the channel, and the
+// channel daemon each time the host connects, so a host that connects again knows. When the
+// HAL's process dies, the daemon tells the host that no location is wanted any longer.
+message LocationRequest {
+  bool active = 1;
+  // How often the framework wants a location, in milliseconds. 0 lets the host choose.
+  uint32 interval_ms = 2;
+}
+
+// Whether the host lets DSA read its location.
+enum LocationAccess {
+  LOCATION_ACCESS_UNSPECIFIED = 0;
+  // The host's location service runs for DSA.
+  LOCATION_ACCESS_ALLOWED = 1;
+  // The user turned location off for DSA (or for the whole computer) in the host's privacy
+  // settings. No fix comes until they turn it on again.
+  LOCATION_ACCESS_DENIED = 2;
+  // The host has no way to find its location now: no location device, or the service failed.
+  LOCATION_ACCESS_UNAVAILABLE = 3;
+}
+
+// Host to guest: whether the host can give the guest locations, sent when a location is
+// wanted and each time it changes while one is. A guest told DENIED or UNAVAILABLE gets no
+// fix until it is told ALLOWED again.
+message LocationStatus {
+  LocationAccess access = 1;
+  // Why, in words for the guest's log. Empty when there is nothing to add.
+  string detail = 2;
+}
+
+// Host to guest: one position from the host's location service, which the GNSS HAL hands to
+// the framework as the guest's GNSS location. Each `has_` flag says whether the value after
+// it is known; a value that is not known is left out of the guest's location.
+message LocationFix {
+  double latitude_degrees = 1;
+  double longitude_degrees = 2;
+  // The radius of 68% confidence around the position, in meters. 0 when unknown.
+  float horizontal_accuracy_meters = 3;
+  bool has_altitude = 4;
+  // Above the WGS84 ellipsoid, in meters.
+  double altitude_meters = 5;
+  // In meters; 0 when unknown.
+  float vertical_accuracy_meters = 6;
+  bool has_speed = 7;
+  float speed_meters_per_second = 8;
+  bool has_bearing = 9;
+  // Degrees east of true north, from 0 up to 360.
+  float bearing_degrees = 10;
+  // When the host's location service took the position, in milliseconds since the Unix
+  // epoch (UTC).
+  uint64 unix_time_ms = 11;
+}
+
+// Guest to host, from the agent: whether the guest's device is in Doze (the device idle
+// controller's deep idle state). The host takes the device not to be in Doze when the agent
+// connects; the agent sends this on each change after that.
+message DeviceIdle {
+  bool idle = 1;
+}
+
+// Text on a clipboard, in either direction. Host to guest: the user's host clipboard got new
+// text, which becomes the guest's primary clip. Guest to host: the guest's primary clip changed
+// to text, which becomes the user's host clipboard. Neither side sends back what it was just
+// given. A sender drops text longer than 256 KiB of UTF-8 instead of cutting it, so a paste is
+// either the whole text or nothing.
+message ClipboardText {
+  string text = 1;
+}
+
+// Host to guest: whether the clipboards are shared. The agent takes them to be shared when it
+// connects; the host says so when they are not, and on every change after that. While they
+// are not, the agent sends no ClipboardText and ignores the host's.
+message ClipboardSharing {
+  bool on = 1;
+}
+
+// Host to guest: whether the user turned developer mode on. While it is on, the guest's adbd
+// listens on vsock port 5555, which the host bridges to a port on its loopback address;
+// while it is off, adbd is stopped. A guest boots with it off; the host says so when it is on,
+// each time the agent connects, and on every change after that. The control daemon handles it,
+// not the agent.
+message DeveloperMode {
+  bool on = 1;
+}
+
+// Host to guest, to the control daemon: an ARM translation package's system image (erofs)
+// follows in ArmTranslationChunk messages of the same `transfer_id`, in order. The daemon
+// writes it to the user's disk beside any package already there, checks its length and
+// SHA-256 once it has all `size` bytes, and only then puts it in the old one's place. It
+// answers each chunk with ArmTranslationState. The guest uses the package from its next boot,
+// when the host says one is installed. One transfer at a time; a new one drops an unfinished
+// one.
+message ArmTranslationInstall {
+  uint32 transfer_id = 1;
+  uint64 size = 2;
+  // The SHA-256 digest of the whole image.
+  bytes sha256 = 3;
+}
+
+// Host to guest: part of the image an ArmTranslationInstall announced.
+message ArmTranslationChunk {
+  uint32 transfer_id = 1;
+  // Where `data` starts in the image.
+  uint64 offset = 2;
+  bytes data = 3;
+}
+
+// Host to guest, to the control daemon: remove the installed ARM translation package. The
+// guest goes on using a package it has mounted until it restarts. Answered with
+// ArmTranslationState.
+message ArmTranslationRemove {}
+
+// Host to guest, to the control daemon: asks for ArmTranslationState.
+message ArmTranslationQuery {}
+
+// Guest to host, from the control daemon: where ARM translation stands in the guest. It
+// answers each of the messages above.
+message ArmTranslationState {
+  // The transfer this answers, or 0.
+  uint32 transfer_id = 1;
+  // How many bytes of that transfer the daemon has written.
+  uint64 received = 2;
+  // The transfer is complete and its image checked and in place.
+  bool done = 3;
+  // Non-empty when the transfer or the removal failed: why, in words a person can act on. A
+  // failed transfer leaves the package that was there before.
+  string error = 4;
+  // A package image is on the user's disk.
+  bool installed = 5;
+  // This boot runs with a package laid over the system: the bridge library is in place.
+  bool active = 6;
+  // The ABIs the package manager installs apps for (ro.product.cpu.abilist).
+  string abilist = 7;
+}
+
+// Guest to host, from the agent: a notification an app posted, or a new version of one it
+// posted before under the same key, which replaces it. Only notifications a person would see
+// come: not the ongoing notice of a foreground service, and not a group's summary, whose
+// members come one by one. The icon is a PNG image of at most 96 pixels on a side and 64 KiB;
+// a larger one is left out.
+message GuestNotification {
+  // Android's key of the notification: unique in the guest while it is posted.
+  string key = 1;
+  // The package that posted it.
+  string package_name = 2;
+  // The posting app's name, as the guest shows it.
+  string app_label = 3;
+  string title = 4;
+  string text = 5;
+  // The notification's large icon, else the app's icon, as a PNG image; empty for none.
+  bytes icon_png = 6;
+  // The importance of its channel, as Android numbers it (NotificationManager.IMPORTANCE_*):
+  // 1 minimum, 2 low, 3 default, 4 high.
+  int32 importance = 7;
+  // Whether the app asked for it to interrupt: a high importance channel or a high
+  // priority. Such a notification reaches the host while the guest is in Doze too.
+  bool high_priority = 8;
+  // Whether the user may dismiss it. A notification that is not stays until the app removes
+  // it, and the host does not ask the guest to remove it.
+  bool clearable = 9;
+  // When it was posted, in milliseconds since the Unix epoch, as the app gave it.
+  int64 when_millis = 10;
+}
+
+// Guest to host, from the agent: the notification with this key is gone from the guest,
+// because the app removed it, the user opened it, or the host asked.
+message NotificationRemoved {
+  string key = 1;
+}
+
+// Host to guest: the user clicked the notification with this key on the host. The agent runs
+// the notification's content intent, as clicking it in the guest would. A key the guest does
+// not have is answered with NotificationRemoved.
+message NotificationClicked {
+  string key = 1;
+}
+
+// Host to guest: the user dismissed the notification with this key on the host. The agent
+// cancels it in the guest. A key the guest does not have is answered with NotificationRemoved.
+message NotificationDismissed {
+  string key = 1;
+}
+
+// Guest to host, from the agent: an app runs a foreground service, so it keeps running with
+// no window. Sent when the service's ongoing notification is posted and each time it
+// changes; the latest one replaces the earlier ones of the package. The icon is the app's,
+// a PNG image of at most 96 pixels on a side and 64 KiB; a larger one is left out.
+message BackgroundApp {
+  string package_name = 1;
+  // The app's name, as the guest shows it.
+  string app_label = 2;
+  bytes icon_png = 3;
+  // The ongoing notification's title and text ("Playing", "Downloading 3 files").
+  string title = 4;
+  string text = 5;
+  // The titles of the ongoing notification's actions, in its order ("Pause", "Next"). The
+  // host names one by its index in BackgroundAppAction. At most 8.
+  repeated string actions = 6;
+}
+
+// Guest to host, from the agent: the package runs no foreground service any more, because the
+// service ended, the app was stopped, or its process died.
+message BackgroundAppGone {
+  string package_name = 1;
+}
+
+// What the user did with an app that runs in the background, on the host.
+enum BackgroundAppCommand {
+  BACKGROUND_APP_COMMAND_UNSPECIFIED = 0;
+  // Opens the app: the agent runs the ongoing notification's content intent, else the app's
+  // launcher activity.
+  BACKGROUND_APP_COMMAND_OPEN = 1;
+  // Runs the ongoing notification's action with the index in `action`.
+  BACKGROUND_APP_COMMAND_ACTION = 2;
+  // Stops the app: the agent force-stops its package, which ends its services and processes,
+  // and answers with BackgroundAppGone (and MediaSessionGone when it had a session).
+  BACKGROUND_APP_COMMAND_STOP = 3;
+}
+
+// Host to guest: the user acted on an app that runs in the background. A package the guest
+// does not run in the background is answered with BackgroundAppGone, except a stop, which
+// the agent carries out for any package but its own and the system's.
+message BackgroundAppAction {
+  string package_name = 1;
+  BackgroundAppCommand command = 2;
+  int32 action = 3;
+}
+
+// The state of a media session's playback, as Android's PlaybackState reports it, folded to
+// what a host's media controls show.
+enum MediaPlayback {
+  MEDIA_PLAYBACK_UNSPECIFIED = 0;
+  MEDIA_PLAYBACK_STOPPED = 1;
+  MEDIA_PLAYBACK_PLAYING = 2;
+  MEDIA_PLAYBACK_PAUSED = 3;
+}
+
+// Guest to host, from the agent: an app's active media session, sent when it becomes active
+// and each time its metadata or playback state changes. One per package: the latest replaces
+// the earlier one. The art is a PNG image of at most 256 pixels on a side and 256 KiB; a
+// larger one is left out.
+message MediaSession {
+  string package_name = 1;
+  string app_label = 2;
+  string title = 3;
+  string artist = 4;
+  string album = 5;
+  bytes art_png = 6;
+  MediaPlayback playback = 7;
+  // Which commands the session takes now.
+  bool can_play = 8;
+  bool can_pause = 9;
+  bool can_next = 10;
+  bool can_previous = 11;
+}
+
+// Guest to host, from the agent: the package has no active media session any more.
+message MediaSessionGone {
+  string package_name = 1;
+}
+
+// A command for a media session, as a host's media keys and controls send it.
+enum MediaCommand {
+  MEDIA_COMMAND_UNSPECIFIED = 0;
+  MEDIA_COMMAND_PLAY = 1;
+  MEDIA_COMMAND_PAUSE = 2;
+  MEDIA_COMMAND_NEXT = 3;
+  MEDIA_COMMAND_PREVIOUS = 4;
+  MEDIA_COMMAND_STOP = 5;
+}
+
+// Host to guest: runs the command on the package's media session, through its transport
+// controls. A package with no active session is answered with MediaSessionGone.
+message MediaControl {
+  string package_name = 1;
+  MediaCommand command = 2;
+}
+
+// Host to guest: asks the agent for a GuestMemory report now, instead of at its next
+// periodic one.
+message RequestGuestMemory {}
+
+// One guest process's share of the guest's memory.
+message ProcessMemory {
+  int32 pid = 1;
+  // The process name, as the guest's process list shows it.
+  string name = 2;
+  // Its proportional set size in KiB: its private pages plus its share of the pages it
+  // shares with other processes.
+  uint64 pss_kb = 3;
+  // How much of it is swapped out to compressed memory, proportionally, in KiB.
+  uint64 swap_pss_kb = 4;
+}
+
+// Guest to host, from the agent: how the guest uses its memory. Sent every few minutes, and
+// in answer to RequestGuestMemory. Sizes are in KiB, as the guest kernel counts them, and 0
+// when the guest cannot read the value.
+message GuestMemory {
+  uint64 mem_total_kb = 1;
+  uint64 mem_free_kb = 2;
+  uint64 mem_available_kb = 3;
+  uint64 buffers_kb = 4;
+  // The page cache: file contents kept in memory, which the guest can drop when clean.
+  uint64 cached_kb = 5;
+  // Process memory that no file backs.
+  uint64 anon_pages_kb = 6;
+  uint64 shmem_kb = 7;
+  // Kernel caches the kernel can free on demand.
+  uint64 slab_reclaimable_kb = 8;
+  uint64 swap_total_kb = 9;
+  uint64 swap_free_kb = 10;
+  // Compressed swap (zram): the size of the pages stored in it, and the memory it takes to
+  // hold them compressed.
+  uint64 zram_original_kb = 11;
+  uint64 zram_used_kb = 12;
+  // The proportional set size of the processes the guest's activity manager runs (the apps
+  // and the system server) together. Native daemons are not counted.
+  uint64 total_pss_kb = 13;
+  // The processes with the largest proportional set size, largest first, at most 10.
+  repeated ProcessMemory top_processes = 14;
+  // What the kernel itself holds, from /proc/meminfo: slab it cannot free (SUnreclaim),
+  // kernel stacks, page tables, vmalloc, per-CPU areas, and the contiguous memory area (CMA)
+  // set aside for drivers.
+  uint64 slab_unreclaimable_kb = 15;
+  uint64 kernel_stack_kb = 16;
+  uint64 page_tables_kb = 17;
+  uint64 vmalloc_used_kb = 18;
+  uint64 percpu_kb = 19;
+  uint64 cma_total_kb = 20;
+  // Huge pages reserved (HugePages_Total times Hugepagesize).
+  uint64 hugetlb_kb = 21;
+  // The memory the kernel was given, counted from its online memory blocks; what it gave to
+  // MemTotal is this less what it reserved at boot (its own code, page structures, swiotlb,
+  // pstore). 0 when the guest cannot read it.
+  uint64 mem_online_kb = 22;
+}
+
+// From the agent to the guest's control daemon, on each connection to it: the agent has
+// subscribed and takes the host's frames. It stops at the daemon, which tells the host with
+// GuestBoot and notices when the agent's process dies.
+message AgentConnected {}
+
+// Guest to host, from the control daemon: how far the guest has got. The daemon connects long
+// before Android has finished starting, so a connection says only that the kernel and init
+// run. Sent on each connection and on each change.
+message GuestBoot {
+  // Android has finished booting (sys.boot_completed).
+  bool boot_completed = 1;
+  // The agent is connected to the daemon, so the host's requests reach it.
+  bool agent_connected = 2;
+}
+
+// Whether an APK was installed, and if not, why. The reasons are stable, so the host can say
+// in the user's language what went wrong; the message beside them gives the guest's own words.
+enum InstallStatus {
+  INSTALL_STATUS_UNSPECIFIED = 0;
+  // The app is installed.
+  INSTALL_STATUS_SUCCESS = 1;
+  // The app does not run on this device: its ABI, its minimum Android version or a feature it
+  // requires is not there.
+  INSTALL_STATUS_INCOMPATIBLE = 2;
+  // An app of the same package is installed, signed with another key. Uninstall it first.
+  INSTALL_STATUS_CONFLICTING_SIGNATURE = 3;
+  // The file is not an APK the guest can read, or it is not signed.
+  INSTALL_STATUS_INVALID_APK = 4;
+  // The guest has no room for the app.
+  INSTALL_STATUS_INSUFFICIENT_STORAGE = 5;
+  // A newer version of the app is installed.
+  INSTALL_STATUS_DOWNGRADE = 6;
+  // A policy of the guest does not allow the app.
+  INSTALL_STATUS_BLOCKED = 7;
+  // Anything else, including a transfer that did not arrive whole. The message says what.
+  INSTALL_STATUS_OTHER = 8;
+}
+
+// Host to guest: install an APK, whose content follows in ApkChunk messages of the same
+// `transfer_id`, in order. The agent writes them into an install session as they come and
+// commits it once it has all `size` bytes. The host sends at most a few chunks ahead of the
+// agent's InstallProgress, and one install at a time.
+message InstallApk {
+  // Unique among the installs of one connection.
+  uint32 transfer_id = 1;
+  // The file's name on the host, for the guest's log.
+  string name = 2;
+  // The APK's length in bytes.
+  uint64 size = 3;
+}
+
+// Host to guest: part of the APK an InstallApk announced.
+message ApkChunk {
+  uint32 transfer_id = 1;
+  // Where `data` starts in the APK.
+  uint64 offset = 2;
+  bytes data = 3;
+}
+
+// Host to guest: asks whether a package is installed, and at which version and with which
+// signing certificates, so the host can tell a new install from an update, a downgrade or an
+// APK signed with another key before it sends the APK. The agent answers with PackageState of
+// the same `request_id`.
+message QueryPackage {
+  uint32 request_id = 1;
+  string package_name = 2;
+}
+
+// Guest to host, from the agent: the answer to QueryPackage.
+message PackageState {
+  uint32 request_id = 1;
+  // False when the package is not installed for the guest's user; the fields below are then
+  // empty.
+  bool installed = 2;
+  // The installed version, as PackageInfo.getLongVersionCode says.
+  int64 version_code = 3;
+  string version_name = 4;
+  // The SHA-256 digest of each certificate the installed package is signed with now, in
+  // the order the package manager lists them.
+  repeated bytes signer_sha256 = 5;
+}
+
+// Guest to host, from the agent: an app in the guest opened a web link, which the host opens
+// in the user's default browser. Only http and https links are sent; the host checks the link
+// again and drops anything else, so an app in the guest can never make the host run a
+// program. The agent sends none while links open in the guest (LinkHandling).
+message OpenLink {
+  string url = 1;
+}
+
+// Host to guest: where the web links that apps in the guest open go. The agent takes them to
+// go to the host when it connects; the host says so when they do not, and on every change
+// after that. While they go to the host, the agent is the guest's browser. A link that an
+// installed app has verified as its own (an Android App Link) still opens in that app, which
+// the guest decides by itself.
+message LinkHandling {
+  // True when links open in an app in the guest, as on a phone.
+  bool in_guest = 1;
+}
+
+// What the user wants done with a file the host sends.
+enum FileAction {
+  FILE_ACTION_UNSPECIFIED = 0;
+  // Open it in an app the user picks.
+  FILE_ACTION_VIEW = 1;
+  // Share it with an app the user picks.
+  FILE_ACTION_SEND = 2;
+}
+
+// Host to guest: a file from the host, whose content follows in FileChunk messages of the
+// same `transfer_id`, in order. Once the agent has all `size` bytes, it asks the user which
+// app opens (or takes) the file, and that app shows as a task window. The host sends at most
+// a few chunks ahead of the agent's FileProgress, so the guest is never handed more than it
+// has taken.
+message OpenFile {
+  // Unique among the transfers of one connection.
+  uint32 transfer_id = 1;
+  // The file's name, without any folder. Its extension gives its type.
+  string name = 2;
+  // The file's length in bytes.
+  uint64 size = 3;
+  FileAction action = 4;
+  // The app to share the file with, when the user dropped it on that app's window: the agent
+  // sends it to that app (ACTION_SEND with the package set), and asks the user to pick one
+  // only when that app does not take it. Empty to let the user pick.
+  string package = 5;
+}
+
+// Host to guest: part of the content of a file an OpenFile announced.
+message FileChunk {
+  uint32 transfer_id = 1;
+  // Where `data` starts in the file.
+  uint64 offset = 2;
+  bytes data = 3;
+}
+
+// Host to guest: stop an install whose APK will not arrive whole. The agent abandons its
+// install session and answers with InstallResult.
+message CancelInstall {
+  uint32 transfer_id = 1;
+}
+
+// Guest to host, from the agent: how many bytes of an APK the agent has written. Sent after
+// each chunk, which is what lets the host send the next ones.
+message InstallProgress {
+  uint32 transfer_id = 1;
+  uint64 received = 2;
+}
+
+// Guest to host, from the agent: the end of an install, whichever way it went. It may come at
+// any point of the transfer, as when the agent cannot open an install session.
+message InstallResult {
+  uint32 transfer_id = 1;
+  InstallStatus status = 2;
+  // The package that was installed, or that the APK is, when the guest says.
+  string package_name = 3;
+  // The guest's own words on what happened; empty when it gave none.
+  string message = 4;
+}
+
+// Guest to host, from the agent: how far a transfer has got. Sent after each chunk the agent
+// has stored. When `received` is the file's whole size, the agent has asked the user which
+// app takes it. A non-empty `error` ends the transfer: it says, in words a person can act on,
+// why the agent could not take the file.
+message FileProgress {
+  uint32 transfer_id = 1;
+  uint64 received = 2;
+  string error = 3;
+}
+
+// Host to guest: which of the user's host folders their Android shows in its shared storage.
+// The control daemon has the guest mount each one at `<location>/<folder>` under shared
+// storage (/storage/emulated/0), over a file server (9P2000.L) on the host's vsock `port`; it
+// takes them all away when `on` is false, or a folder when it is no longer named. The agent
+// gets it too, and has the media scanner look at the folders once they are there. The host
+// sends it each time the agent connects, and on every change after that. A guest boots with
+// no folders shared.
+//
+// Each connection to `port` starts with the host's 32-byte nonce; the guest answers with the
+// 32-byte HMAC-SHA256 of "file-share:" and the nonce, keyed with the boot's secret, so only the
+// guest's own daemon reaches the user's files. The 9P conversation follows on the same stream,
+// and its attach names the folder (`aname`).
+message FileSharing {
+  bool on = 1;
+  uint32 port = 2;
+  // The folder in shared storage the host's folders go under, such as "Windows".
+  string location = 3;
+  // The folders, by the names the host gives them: "Documents", "Downloads", "Pictures",
+  // "Music", "Videos", "Desktop".
+  repeated string folders = 4;
+}
+
+// Host to guest, to the control daemon: serve Android's shared storage to the host, so the
+// user can see it in the host's file manager. The daemon listens on the vsock `port` for the
+// host and answers WebDAV requests whose path starts with "/<token>/", and no others. A new
+// AndroidFiles replaces the last one; a `port` of 0 stops the server.
+message AndroidFiles {
+  uint32 port = 1;
+  string token = 2;
+}
+
+// One thing an app drags out of its window: a file (a content URI the app granted read
+// access to) or text. The host never learns the URI or any path in the guest, only what it
+// needs to make a file of the same name and content.
+message DragItem {
+  // The file's name, without any folder, as the content provider names it. Empty for text.
+  string name = 1;
+  // The file's length in bytes, when the provider says (`size_known`).
+  uint64 size = 2;
+  bool size_known = 3;
+  // The MIME type the app gave, such as image/jpeg or text/plain.
+  string mime_type = 4;
+  // Whether this item is text rather than a file, and the text itself.
+  bool is_text = 5;
+  string text = 6;
+}
+
+// Host to guest, to the agent: the pointer left task `task_id`'s window with a button held,
+// at (`x`, `y`) relative to the task, the last place inside it. If an app is dragging with
+// DRAG_FLAG_GLOBAL, the agent ends the drag in the guest on a window of its own, takes read
+// access to what it carries, and answers DragOffer with its items; otherwise DragOffer with
+// none, and the guest's pointer is left as it was.
+message DragOut {
+  uint32 request_id = 1;
+  int32 task_id = 2;
+  float x = 3;
+  float y = 4;
+  PointerTool tool = 5;
+  uint32 pointer_id = 6;
+}
+
+// Guest to host, from the agent: what the drag a DragOut asked about carries. No items means
+// no app was dragging anything the host can take; a non-empty `error` says why, in words a
+// person can act on. The drag stays open in the guest until DragEnd.
+message DragOffer {
+  uint32 request_id = 1;
+  // Names the drag in DragRead and DragEnd. Unique among the drags of one connection.
+  uint32 drag_id = 2;
+  repeated DragItem items = 3;
+  string error = 4;
+}
+
+// Host to guest, to the agent: up to `length` bytes of item `item` of drag `drag_id`, from
+// `offset`. The host reads each file in order, as the host app it was dropped on copies it,
+// so the guest never holds more than one read's worth.
+message DragRead {
+  uint32 request_id = 1;
+  uint32 drag_id = 2;
+  uint32 item = 3;
+  uint64 offset = 4;
+  uint32 length = 5;
+}
+
+// Guest to host, from the agent: the answer to a DragRead. `end` says the file ends after
+// `data`. A non-empty `error` ends the read: the file cannot be read further.
+message DragData {
+  uint32 request_id = 1;
+  bytes data = 2;
+  bool end = 3;
+  string error = 4;
+}
+
+// Host to guest, to the agent: the drag is over on the host, dropped or cancelled. The agent
+// closes what it read and gives back its access to the drag's content, so nothing stays open.
+message DragEnd {
+  uint32 drag_id = 1;
+  bool dropped = 2;
+}
+
+// Host to guest, to the control daemon: a probe that pairs the host's clock with the guest's,
+// so trace lines from both can be put on one time line. The daemon answers at once with
+// ClockAnswer and passes the probe to no one else. Sent only while the host traces input.
+message ClockProbe {
+  // When the host sent the probe, in nanoseconds on its monotonic clock, which every host
+  // process shares.
+  uint64 host_sent_ns = 1;
+}
+
+// The video port (vsock 5569): the guest's codec HAL opens one connection for each decoder.
+// After the handshake (a Hello of ROLE_GUEST_VIDEO, which needs no secret) the host sends
+// VideoCapabilities. The HAL then sends VideoDecoderOpen and, once the host answers with
+// VideoDecoderOpened, the stream's packets in decode order. The host decodes them on its
+// hardware decoder and sends each picture back as a VideoFrame, in presentation order. Every
+// message on the port is one of these.
+
+// A video coding format.
+enum VideoCodec {
+  VIDEO_CODEC_UNSPECIFIED = 0;
+  // H.264 (AVC), Annex B byte stream.
+  VIDEO_CODEC_H264 = 1;
+  // H.265 (HEVC), Annex B byte stream.
+  VIDEO_CODEC_HEVC = 2;
+  // VP9, one frame (or superframe) per packet.
+  VIDEO_CODEC_VP9 = 3;
+  // AV1, one temporal unit per packet, low overhead bitstream format.
+  VIDEO_CODEC_AV1 = 4;
+}
+
+// One format the host decodes, and the largest picture it decodes in it.
+message VideoCodecSupport {
+  VideoCodec codec = 1;
+  uint32 max_width = 2;
+  uint32 max_height = 3;
+}
+
+// Host to guest, first on each connection: the formats the host's hardware decodes. A
+// format not listed is not decoded on the host.
+message VideoCapabilities {
+  repeated VideoCodecSupport codecs = 1;
+}
+
+// Guest to host: open a decoder for `codec`. `width` and `height` are the stream's coded
+// size as the app gave it, or 0 when it is not known yet; the bitstream has the last word.
+message VideoDecoderOpen {
+  VideoCodec codec = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+}
+
+// Host to guest: the answer to VideoDecoderOpen. When `ok` is false, `error` says, in words
+// a person can act on, why there is no decoder, and the host closes the connection.
+message VideoDecoderOpened {
+  bool ok = 1;
+  string error = 2;
+}
+
+// Guest to host: one access unit of the stream, in decode order. `frame_index` is the
+// guest's, and comes back on the picture it becomes.
+message VideoPacket {
+  uint64 frame_index = 1;
+  int64 timestamp_us = 2;
+  bytes data = 3;
+  // Codec configuration (parameter sets) rather than a picture.
+  bool codec_config = 4;
+  // The last packet: the host outputs every picture still held, then a VideoFrame with
+  // `end_of_stream` set.
+  bool end_of_stream = 5;
+}
+
+// Host to guest: one decoded picture, in presentation order, as 8-bit 4:2:0 with the luma
+// plane then the interleaved chroma plane (NV12), each row `stride` bytes long. `width` and
+// `height` are the visible size; the planes are `stride` by `height` and `stride` by
+// `height / 2` (rounded up) bytes. A frame with `end_of_stream` set carries no picture.
+message VideoFrame {
+  uint64 frame_index = 1;
+  int64 timestamp_us = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 stride = 5;
+  bytes nv12 = 6;
+  bool end_of_stream = 7;
+}
+
+// Guest to host: drop every packet and picture held, as for a seek. The host answers with
+// VideoFlushed once nothing from before is left to send.
+message VideoFlush {}
+
+// Host to guest: the answer to VideoFlush.
+message VideoFlushed {}
+
+// Host to guest: the decoder failed; `error` says how. The connection stays open, and the
+// next packet after a key frame may decode again.
+message VideoError {
+  string error = 1;
+}
+
+// The sensor port: the host's motion and light sensors, shown to the guest by its sensors
+// HAL. The HAL opens the connection with a Hello of ROLE_GUEST_SENSORS; the host answers
+// HelloAccepted and then a SensorList. The host runs a sensor only while the HAL has it on
+// (SensorActivate), and stops every sensor when the connection ends.
+
+// A sensor the host can show to the guest. Values reach the guest in Android's units and on
+// Android's axes: the host converts them.
+enum SensorKind {
+  SENSOR_KIND_UNSPECIFIED = 0;
+  // Acceleration including gravity, in m/s^2: x, y, z.
+  SENSOR_KIND_ACCELEROMETER = 1;
+  // Rate of rotation, in rad/s: x, y, z.
+  SENSOR_KIND_GYROSCOPE = 2;
+  // The device's orientation as a unit quaternion: x, y, z, w.
+  SENSOR_KIND_ROTATION_VECTOR = 3;
+  // Illuminance, in lux.
+  SENSOR_KIND_LIGHT = 4;
+}
+
+// One sensor this computer has. `max_range` and `resolution` are in the kind's units;
+// `min_interval_us` is the shortest time between readings it gives.
+message SensorDescription {
+  SensorKind kind = 1;
+  string name = 2;
+  string vendor = 3;
+  float max_range = 4;
+  float resolution = 5;
+  uint32 min_interval_us = 6;
+}
+
+// Host to guest, on the sensor port: the sensors this computer has. A sensor it does not
+// have, or that the host's privacy settings do not let DSA read, is not in the list. Sent once, after
+// HelloAccepted.
+message SensorList {
+  repeated SensorDescription sensors = 1;
+}
+
+// Guest to host, on the sensor port: start the sensor, with a reading about every
+// `interval_us`, or stop it.
+message SensorActivate {
+  SensorKind kind = 1;
+  bool enabled = 2;
+  uint32 interval_us = 3;
+}
+
+// One reading. `timestamp_us` is on the host's monotonic clock, so the guest can space the
+// readings that arrive together; `values` are in the order SensorKind gives.
+message SensorReading {
+  SensorKind kind = 1;
+  uint64 timestamp_us = 2;
+  repeated float values = 3;
+}
+
+// Host to guest, on the sensor port: the readings since the last message, oldest first.
+message SensorReadings {
+  repeated SensorReading readings = 1;
+}
+
+// Guest to host, from the control daemon: the answer to a ClockProbe, sent as soon as the
+// probe is read.
+message ClockAnswer {
+  // The probe's host_sent_ns, unchanged.
+  uint64 host_sent_ns = 1;
+  // When the daemon read the probe, in nanoseconds on the guest's CLOCK_MONOTONIC, the clock
+  // the guest's trace lines use.
+  uint64 guest_mono_ns = 2;
+}
+
+// Host to guest: asks the agent for the widgets the apps in the guest offer. The agent
+// answers with one or more WidgetProviders of the same `request_id`, the last one marked
+// `complete`.
+message ListWidgetProviders {
+  uint32 request_id = 1;
+}
+
+// One widget an app in the guest offers, as a gallery shows it.
+message WidgetProvider {
+  // The provider's component, as `package/class` (ComponentName.flattenToString).
+  string provider = 1;
+  string package_name = 2;
+  // The widget's name, as the app labels it.
+  string label = 3;
+  // The widget's preview, else the app's icon, as a PNG image of at most 160 pixels on a
+  // side and 48 KiB. Empty when there is none, or it is larger.
+  bytes preview_png = 4;
+  // Sizes in density-independent pixels (dp). The minimum is the smallest the widget may be
+  // made; the default is the size it is placed at; a maximum of 0 means no limit.
+  uint32 min_width_dp = 5;
+  uint32 min_height_dp = 6;
+  uint32 default_width_dp = 7;
+  uint32 default_height_dp = 8;
+  uint32 max_width_dp = 9;
+  uint32 max_height_dp = 10;
+  // How the widget may be resized: 1 horizontally, 2 vertically, 3 both, 0 not at all.
+  uint32 resize_mode = 11;
+  // Whether the app asks the user to set the widget up when it is placed.
+  bool needs_configuration = 12;
+  // The name of the app that offers the widget, as a launcher shows it. Empty when unknown.
+  string app_label = 13;
+}
+
+// Guest to host, from the agent: part of the answer to ListWidgetProviders. Each message is
+// kept under 256 KiB, so a long list comes in several; `complete` marks the last.
+message WidgetProviders {
+  uint32 request_id = 1;
+  repeated WidgetProvider providers = 2;
+  bool complete = 3;
+}
+
+// Host to guest: place a new widget of `provider`. The agent allocates a widget ID, binds it
+// to the provider, runs the provider's configuration activity when it has one (which shows
+// as a task window), and answers with WidgetAdded.
+message AddWidget {
+  uint32 request_id = 1;
+  string provider = 2;
+}
+
+// Guest to host, from the agent: the answer to AddWidget. A `widget_id` above 0 is the new
+// widget, which a WidgetUpdated describes before this; else `error` says, in words a person
+// can act on, why it was not placed.
+message WidgetAdded {
+  uint32 request_id = 1;
+  int32 widget_id = 2;
+  string error = 3;
+}
+
+// Guest to host, from the agent: a placed widget, sent when it is placed and for each one on
+// every connection. Every field is sent each time.
+message WidgetUpdated {
+  int32 widget_id = 1;
+  WidgetProvider provider = 2;
+}
+
+// Guest to host, from the agent: every placed widget, in ID order. Sent on each connection
+// after the WidgetUpdated of each, and whenever one is removed; a widget it no longer names
+// is gone, as when its app was uninstalled.
+message WidgetList {
+  repeated int32 widget_ids = 1;
+}
+
+// Host to guest: the user removed the widget. The agent deletes its widget ID and answers
+// with WidgetList.
+message RemoveWidget {
+  int32 widget_id = 1;
+}
+
+// Host to guest: the size of the widget's host window. The agent draws the widget at `width`
+// by `height` pixels at `density_dpi` (160 at a scale of 100%), and tells the widget's app
+// its size in dp, so a widget with layouts for several sizes picks the one that fits.
+message ResizeWidget {
+  int32 widget_id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 density_dpi = 4;
+  uint32 width_dp = 5;
+  uint32 height_dp = 6;
+}
+
+// Guest to host, from the agent: what the widget shows now, as a PNG image of `width` by
+// `height` pixels with an alpha channel. Sent only when it changed, at most a few times a
+// second, and at most once a second while the guest is in Doze. At most 512 KiB: a larger
+// image is not sent.
+message WidgetFrame {
+  int32 widget_id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  bytes png = 4;
+}
+
+// Host to guest: pointer input in the widget's host window. The agent hands it to the
+// widget's view, so its click actions and lists work as they do on a phone.
+message WidgetPointer {
+  int32 widget_id = 1;
+  PointerAction action = 2;
+  uint32 pointer_id = 3;
+  // The position from the widget's top left corner, in the pixels it is drawn at.
+  float x = 4;
+  float y = 5;
+}
+
+// Host to guest, to the agent: whether a host accessibility client (a screen reader, an
+// inspection tool) wants the accessibility tree of a task's window. While one does (`on`),
+// the agent reads the task's accessibility nodes and sends them as AccessibilityTree
+// messages: a full tree first, then changes. Once no task is watched, the agent's
+// accessibility service is off and reads nothing, so a user who uses no such client pays
+// nothing for it. The host says `on` again for every watched task each time the agent
+// connects, and a repeated `on` makes the agent send a full tree again.
+message AccessibilityWatch {
+  int32 task_id = 1;
+  bool on = 2;
+}
+
+// What can be done to an accessibility node, as the host asks it and as a node says it
+// supports.
+enum NodeAction {
+  NODE_ACTION_UNSPECIFIED = 0;
+  // Press it, as a tap would, without touching the screen.
+  NODE_ACTION_CLICK = 1;
+  NODE_ACTION_LONG_CLICK = 2;
+  // Replace an editable node's text with AccessibilityAction.text.
+  NODE_ACTION_SET_TEXT = 3;
+  // Scroll a scrollable node by a page, forward (down or right) or backward.
+  NODE_ACTION_SCROLL_FORWARD = 4;
+  NODE_ACTION_SCROLL_BACKWARD = 5;
+  // Give it the input focus.
+  NODE_ACTION_FOCUS = 6;
+  // Give it the accessibility focus, which a screen reader's cursor follows.
+  NODE_ACTION_ACCESSIBILITY_FOCUS = 7;
+  // Select it, as an item of a list or a tab.
+  NODE_ACTION_SELECT = 8;
+}
+
+// The range a slider or a progress bar has, and where it stands in it.
+message NodeRange {
+  float min = 1;
+  float max = 2;
+  float current = 3;
+}
+
+// One accessibility node of a task, as the guest's accessibility framework describes it.
+message AccessibilityNode {
+  // Unique among the nodes of one tree epoch, never 0. A node keeps its ID for as long as
+  // the epoch lasts.
+  uint32 id = 1;
+  // The node's children, in order. Every child is a node of the same tree.
+  repeated uint32 child_ids = 2;
+  // The Android class the node says it is (android.widget.Button, say), from which the host
+  // works out its role.
+  string class_name = 3;
+  string text = 4;
+  string content_description = 5;
+  // What an empty editable node asks for.
+  string hint = 6;
+  // The resource name of the node's view (com.android.settings:id/title), when it has one.
+  string view_id = 7;
+  // Where the node is, in pixels of the task's window: (0, 0) is the window's top left.
+  Rect bounds = 8;
+  bool checkable = 9;
+  bool checked = 10;
+  bool selected = 11;
+  bool enabled = 12;
+  bool focusable = 13;
+  bool focused = 14;
+  bool scrollable = 15;
+  bool clickable = 16;
+  bool long_clickable = 17;
+  bool editable = 18;
+  bool password = 19;
+  bool heading = 20;
+  // Set for a slider or a progress bar.
+  NodeRange range = 21;
+  // What the node can do, in the order of NodeAction.
+  repeated NodeAction actions = 22;
+  // The node's state in words, when the app gives one ("On", "50 percent").
+  string state_description = 23;
+}
+
+// Guest to host, from the agent: a task's accessibility tree, or what changed in it. A full
+// tree (`full`) replaces whatever the host had and starts a new epoch; node IDs of earlier
+// epochs mean nothing in it. A change carries the epoch it applies to, each node that is new
+// or changed (whole), and the IDs of the nodes that are gone. The agent sends a few of these
+// a second at most, however fast the task's content changes.
+message AccessibilityTree {
+  int32 task_id = 1;
+  uint32 epoch = 2;
+  bool full = 3;
+  // The nodes that have no parent in the task (the root of each of its windows), in order.
+  repeated uint32 root_ids = 4;
+  repeated AccessibilityNode nodes = 5;
+  repeated uint32 removed_ids = 6;
+  // The node with the input focus, or 0 for none.
+  uint32 focused_id = 7;
+}
+
+// Host to guest, to the agent: do something to a node of a task, for a host accessibility
+// client (an Invoke from a screen reader, say). The agent answers with
+// AccessibilityActionResult.
+message AccessibilityAction {
+  int32 task_id = 1;
+  // The epoch the node's ID belongs to. An action for an earlier epoch is refused, because
+  // its ID may now name another node.
+  uint32 epoch = 2;
+  uint32 node_id = 3;
+  NodeAction action = 4;
+  // The new text, for NODE_ACTION_SET_TEXT.
+  string text = 5;
+  // Names the action in its answer.
+  uint32 request_id = 6;
+}
+
+// Guest to host, from the agent: what came of an AccessibilityAction.
+message AccessibilityActionResult {
+  int32 task_id = 1;
+  uint32 request_id = 2;
+  // True when the node did it.
+  bool done = 3;
+  // Why it was not done, in words a person can act on. Empty when it was.
+  string error = 4;
+}
+
+// The audio port (vsock 5568): the guest's audio HAL plays one output stream per connection
+// through the host's default output device. The HAL sends the Hello with ROLE_GUEST_AUDIO,
+// the host answers HelloAccepted or HelloRejected, and the HAL then opens the stream with
+// AudioOutputOpen. The host plays every open stream; the platform's mixer sums them.
+//
+// A connection that opens with AudioInputOpen instead is an input stream: the host records
+// the default capture device while the connection is open, and sends what it records as
+// AudioPcm.
+
+// The sample formats a stream can carry. Little-endian, interleaved.
+enum AudioSampleFormat {
+  AUDIO_SAMPLE_FORMAT_UNSPECIFIED = 0;
+  AUDIO_SAMPLE_FORMAT_S16LE = 1;
+}
+
+// Guest to host, first after the handshake: the stream's format. The host closes the
+// connection when it cannot play the format.
+message AudioOutputOpen {
+  // Frames per second. The guest uses 48000.
+  uint32 sample_rate = 1;
+  // The guest uses 2 (left, right).
+  uint32 channel_count = 2;
+  AudioSampleFormat format = 3;
+  // How many frames the guest sends at a time, so the host can size its buffer.
+  uint32 frames_per_burst = 4;
+  // Names the stream in the host's log, such as "primary".
+  string name = 5;
+}
+
+// Host to guest: the stream is open, and how much sound the host keeps queued before the
+// device plays it.
+message AudioOutputReady {
+  // The frames the host holds back to absorb late deliveries, at the stream's rate.
+  uint32 buffered_frames = 1;
+  // The output device's own latency in frames at the stream's rate, 0 when not known.
+  uint32 device_frames = 2;
+}
+
+// Sound, in the stream's format. Guest to host on an output stream: sound to play. Host to
+// guest on an input stream: sound recorded.
+message AudioPcm {
+  // The index, counted from the stream's first frame, of the first frame in `data`. A gap
+  // after the end of the last AudioPcm is silence the guest did not send (its own underrun).
+  uint64 position = 1;
+  // Whole frames in the stream's format.
+  bytes data = 2;
+}
+
+// Guest to host, first after the handshake on an input stream: the format to record in. The
+// host opens the default capture device and answers AudioInputOpened. It closes the device
+// when the connection closes.
+message AudioInputOpen {
+  // Frames per second. The guest uses 48000.
+  uint32 sample_rate = 1;
+  // The guest uses 2 (left, right).
+  uint32 channel_count = 2;
+  AudioSampleFormat format = 3;
+  // How many frames the guest reads at a time.
+  uint32 frames_per_burst = 4;
+  // Names the stream in the host's log, such as "primary".
+  string name = 5;
+}
+
+// Host to guest: whether the capture device opened. When it did not (the user turned the
+// microphone off in the host's privacy settings, or there is no microphone), `error` says
+// why and the host closes the connection.
+message AudioInputOpened {
+  // Empty when the device records.
+  string error = 1;
+  // The capture device's own latency in frames at the stream's rate, 0 when not known.
+  uint32 device_frames = 2;
+}
+
+// What the guest asks of a stream.
+enum AudioOutputCommand {
+  AUDIO_OUTPUT_COMMAND_UNSPECIFIED = 0;
+  // Play what arrives.
+  AUDIO_OUTPUT_COMMAND_START = 1;
+  // Hold what is queued, and play nothing until the next START.
+  AUDIO_OUTPUT_COMMAND_PAUSE = 2;
+  // Drop what is queued and not yet played.
+  AUDIO_OUTPUT_COMMAND_FLUSH = 3;
+  // Drop what is queued and let the device go idle until the next START.
+  AUDIO_OUTPUT_COMMAND_STANDBY = 4;
+}
+
+// Guest to host: a change of the stream's state.
+message AudioOutputControl {
+  AudioOutputCommand command = 1;
+}
+
+// The guest's log, as logd keeps it in memory. A record's buffer is logd's log ID plus one,
+// so 0 stays "unspecified".
+enum LogBuffer {
+  LOG_BUFFER_UNSPECIFIED = 0;
+  LOG_BUFFER_MAIN = 1;
+  LOG_BUFFER_RADIO = 2;
+  LOG_BUFFER_EVENTS = 3;
+  LOG_BUFFER_SYSTEM = 4;
+  LOG_BUFFER_CRASH = 5;
+  LOG_BUFFER_STATS = 6;
+  LOG_BUFFER_SECURITY = 7;
+  LOG_BUFFER_KERNEL = 8;
+}
+
+// Host to guest, to the channel daemon: what the guest's log stream carries from now on.
+// While `on`, the daemon reads logd and sends the records that pass on the log port (a
+// vsock port of its own, so a busy log never delays input or window messages). With `on`
+// false the daemon closes its logd reader and sends nothing, so a guest whose log nobody
+// reads pays nothing for it. The host says this again each time the daemon connects.
+message LogStream {
+  bool on = 1;
+  // Bit (1 << LogBuffer) for each buffer to read.
+  uint32 buffers = 2;
+  // The least Android priority to send (2 verbose to 7 fatal); 0 sends every record.
+  uint32 min_priority = 3;
+  // How many of the newest records logd holds to send first when the stream starts.
+  uint32 tail = 4;
+}
+
+// Host to guest, to the channel daemon: sends what logd holds now, once, on the log port, as
+// LogRecords carrying this request_id, the last of them with `end` set.
+message LogDump {
+  uint32 request_id = 1;
+  uint32 buffers = 2;
+  uint32 min_priority = 3;
+}
+
+// One record of the guest's log.
+message LogRecord {
+  LogBuffer buffer = 1;
+  // Android's priority: 2 verbose, 3 debug, 4 info, 5 warning, 6 error, 7 fatal.
+  uint32 priority = 2;
+  // When it was logged, by the guest's wall clock, in nanoseconds since the Unix epoch.
+  uint64 time_ns = 3;
+  int32 pid = 4;
+  int32 tid = 5;
+  uint32 uid = 6;
+  string tag = 7;
+  string message = 8;
+  // Not 0: this record stands for that many records the guest dropped, because they came
+  // faster than the host read them.
+  uint64 dropped = 9;
+}
+
+// Guest to host, on the log port: records of the stream (request_id 0) or of a dump.
+message LogRecords {
+  uint32 request_id = 1;
+  repeated LogRecord records = 2;
+  // The last frame of a dump.
+  bool end = 3;
+  // Why a dump ended early, or why the stream could not read logd.
+  string error = 4;
+}
+
+// Host to guest, to the channel daemon and the agent: gathers the guest's diagnostics now.
+// Both send what they gather as DiagnosticsFile on the log port (the agent through the
+// daemon), and the daemon ends it with DiagnosticsDone. Nothing is written to the guest's
+// disk for it.
+message CollectDiagnostics {
+  uint32 request_id = 1;
+}
+
+// Guest to host, on the log port: one piece of one file of the diagnostics.
+message DiagnosticsFile {
+  uint32 request_id = 1;
+  // The file's path in the archive, such as "android/pstore/console-ramoops-0".
+  string name = 2;
+  bytes data = 3;
+  // The file's last piece.
+  bool last = 4;
+}
+
+// Guest to host, on the log port: the diagnostics are complete. `error` names what could not
+// be gathered, if anything; the rest was sent.
+message DiagnosticsDone {
+  uint32 request_id = 1;
+  string error = 2;
+}
+
+// What became of a print job the guest handed the host.
+enum PrintOutcome {
+  PRINT_OUTCOME_UNSPECIFIED = 0;
+  // The host sent it to the printer the user picked.
+  PRINT_OUTCOME_PRINTED = 1;
+  // The user canceled the host's print dialog, or the job was withdrawn before it printed.
+  PRINT_OUTCOME_CANCELED = 2;
+  // It could not be printed; the message says why.
+  PRINT_OUTCOME_FAILED = 3;
+}
+
+// Guest to host, from the agent's print service: a print job an app queued, whose document
+// follows as PrintJobChunk pieces in order. The document is a PDF of `size` bytes, at most
+// 128 MiB. The host shows its print dialog once the whole document has arrived, and answers
+// with PrintJobResult. The settings are what the user chose in Android's print dialog.
+message PrintJob {
+  // The agent's number for the job, unique while the agent's connection lasts.
+  uint32 job_id = 1;
+  // The app that printed, and its name as the guest shows it; empty when unknown.
+  string package_name = 2;
+  string app_label = 3;
+  // The document's name, as the app gave it.
+  string document_name = 4;
+  uint64 size = 5;
+  // The document's pages; 0 when the app did not say.
+  uint32 page_count = 6;
+  uint32 copies = 7;
+  bool color = 8;
+  bool duplex = 9;
+  bool landscape = 10;
+  // The paper's size, in thousandths of an inch; 0 when unknown.
+  uint32 media_width_mils = 11;
+  uint32 media_height_mils = 12;
+}
+
+// Guest to host: one piece of a print job's document. Pieces come in order, each at most
+// 256 KiB, and the one that reaches the job's size ends it.
+message PrintJobChunk {
+  uint32 job_id = 1;
+  uint64 offset = 2;
+  bytes data = 3;
+}
+
+// Guest to host: the job was canceled in Android, by the app or the user, before the host
+// answered it. The host drops it, or leaves it unprinted if its dialog is already open, and
+// sends no result for it.
+message PrintJobCancel {
+  uint32 job_id = 1;
+}
+
+// Host to guest: what became of a print job. The agent ends the job in Android's print
+// spooler the same way: completed, canceled, or failed with the message.
+message PrintJobResult {
+  uint32 job_id = 1;
+  PrintOutcome outcome = 2;
+  string message = 3;
+}
+
+// The camera port (vsock 5572): the guest's camera provider HAL opens one connection to list
+// the host's cameras and one for each camera an app opens. After the handshake (a Hello of
+// ROLE_GUEST_CAMERA, which needs no secret) the host sends CameraList. The HAL may then send
+// CameraOpen; once the host answers with CameraOpened, it sends the camera's pictures as
+// CameraFrame until the HAL sends CameraStop or closes the connection. The host holds the
+// camera open only between CameraOpen and CameraStop, so the computer's camera light and its
+// in-use indicator show only while an app uses it. Every message on the port is one of these.
+
+// Where a camera faces, as the host computer's enclosure reports it.
+enum CameraFacing {
+  CAMERA_FACING_UNSPECIFIED = 0;
+  // On the side of the screen, facing the user.
+  CAMERA_FACING_FRONT = 1;
+  // On the back of the screen, facing away from the user.
+  CAMERA_FACING_BACK = 2;
+  // A camera the enclosure does not place: a USB camera, or one whose place is unknown.
+  CAMERA_FACING_EXTERNAL = 3;
+}
+
+// One picture size a camera delivers, and the frame rates it delivers it at.
+message CameraMode {
+  uint32 width = 1;
+  uint32 height = 2;
+  uint32 max_fps = 3;
+  uint32 min_fps = 4;
+}
+
+// One camera of the host computer.
+message CameraDevice {
+  // The host's name for it, unchanged while the camera stays plugged in. Opaque to the guest.
+  string id = 1;
+  // The name the computer gives it, such as "Integrated Camera".
+  string name = 2;
+  CameraFacing facing = 3;
+  // The clockwise angle, 0, 90, 180 or 270, a picture must turn to stand upright on the
+  // screen in its natural orientation.
+  uint32 sensor_orientation = 4;
+  repeated CameraMode modes = 5;
+}
+
+// Host to guest, first on each connection: the cameras an app in the guest may use now. A
+// camera the user has blocked in the computer's privacy settings is not listed, nor is one
+// that cannot be opened.
+message CameraList {
+  repeated CameraDevice cameras = 1;
+}
+
+// Guest to host: start the camera `id` at about `width` by `height` and `fps` frames a
+// second. Sent again on the same connection, it changes the size or rate.
+message CameraOpen {
+  string id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 fps = 4;
+}
+
+// Host to guest: the answer to CameraOpen, with the size and rate the pictures come in. When
+// `ok` is false, `error` says, in words a person can act on, why the camera did not start
+// (the user has blocked it, another program holds it, it was unplugged).
+message CameraOpened {
+  bool ok = 1;
+  string error = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 fps = 5;
+}
+
+// Host to guest: one picture, as 8-bit 4:2:0 with the luma plane then the interleaved
+// chroma plane (NV12), each row `stride` bytes long, laid out as in VideoFrame.
+message CameraFrame {
+  // Counts the pictures of this connection, from 0.
+  uint64 sequence = 1;
+  // When the camera took it, in nanoseconds on a clock of the host's that only goes forward
+  // while the camera runs.
+  uint64 timestamp_ns = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 stride = 5;
+  bytes nv12 = 6;
+}
+
+// Guest to host: stop the camera and let it go. The connection stays open for a new
+// CameraOpen.
+message CameraStop {}
+
+// Guest to host: a still picture of `width` by `height`, encoded as JPEG at `quality` (1 to
+// 100), made from the newest picture of the running camera.
+message CameraStill {
+  uint32 request_id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  uint32 quality = 4;
+}
+
+// Host to guest: the answer to CameraStill. `jpeg` is empty and `error` says why when there
+// is no picture.
+message CameraStillTaken {
+  uint32 request_id = 1;
+  bytes jpeg = 2;
+  string error = 3;
+}
+
+// Host to guest: the running camera failed or went away (unplugged, or blocked by the user);
+// `error` says how. No more pictures come until a new CameraOpen succeeds.
+message CameraError {
+  string error = 1;
+}
+
+// Host to guest: the host's system settings, which the agent makes the guest's. Sent once
+// after the agent connects, when the host knows them, and on each change. Every field is sent
+// each time. The user does not change these in the guest: the host's are the guest's.
+message SystemSettings {
+  // The host's time zone as an IANA name, such as "Asia/Seoul". Empty when the host cannot
+  // name it; the guest's then stays as it is.
+  string time_zone = 1;
+  // The host's display languages as BCP 47 tags, preferred first, such as "ko-KR". The guest's
+  // system languages become these. Empty leaves the guest's as they are.
+  repeated string locales = 2;
+  // The locale the host formats dates, times and numbers by, as a BCP 47 tag. Empty when it
+  // is the first of `locales`.
+  string regional_format = 3;
+  // Whether the host shows times on a 24-hour clock.
+  bool time_24_hour = 4;
+  // The first day of the week in the host's regional format: 1 is Monday through 7, Sunday.
+  // 0 when the host does not say.
+  uint32 first_day_of_week = 5;
+  // Whether the host's apps use the dark theme. The guest's night mode follows it.
+  bool dark_mode = 6;
+  // The host's accent color as 0xAARRGGBB, which becomes the seed of the guest's dynamic
+  // colors. 0 when the host has none.
+  fixed32 accent_color = 7;
+}
+
+// Host to guest, for the control daemon: a game controller was connected to the host, or was
+// already there when the guest connected. The daemon makes it a gamepad input device in the
+// guest, which apps see as any USB or Bluetooth gamepad.
+message GamepadConnected {
+  // Names the controller until it is disconnected.
+  uint32 pad_id = 1;
+  // The controller's name, for the guest's input device.
+  string name = 2;
+  // The USB vendor and product IDs the guest's device reports. 0 when the host does not know
+  // them.
+  uint32 vendor_id = 3;
+  uint32 product_id = 4;
+  // Whether the controller can rumble, so the guest's device offers force feedback.
+  bool rumble = 5;
+}
+
+// Host to guest, for the control daemon: the controller was disconnected; its device in the
+// guest goes away.
+message GamepadDisconnected {
+  uint32 pad_id = 1;
+}
+
+// Host to guest, for the control daemon: the state of every button, stick and trigger of a
+// controller. Sent when any of them changes.
+message GamepadState {
+  uint32 pad_id = 1;
+  // The buttons held, one bit each: see GamepadButton.
+  uint32 buttons = 2;
+  // The sticks, from -32768 (left, or up) to 32767 (right, or down).
+  sint32 left_x = 3;
+  sint32 left_y = 4;
+  sint32 right_x = 5;
+  sint32 right_y = 6;
+  // The triggers, from 0 (released) to 255 (fully pressed).
+  uint32 left_trigger = 7;
+  uint32 right_trigger = 8;
+}
+
+// The bits of GamepadState.buttons.
+enum GamepadButton {
+  GAMEPAD_BUTTON_NONE = 0;
+  GAMEPAD_BUTTON_A = 1;
+  GAMEPAD_BUTTON_B = 2;
+  GAMEPAD_BUTTON_X = 4;
+  GAMEPAD_BUTTON_Y = 8;
+  GAMEPAD_BUTTON_LEFT_SHOULDER = 16;
+  GAMEPAD_BUTTON_RIGHT_SHOULDER = 32;
+  GAMEPAD_BUTTON_BACK = 64;
+  GAMEPAD_BUTTON_START = 128;
+  GAMEPAD_BUTTON_GUIDE = 256;
+  GAMEPAD_BUTTON_LEFT_THUMB = 512;
+  GAMEPAD_BUTTON_RIGHT_THUMB = 1024;
+  GAMEPAD_BUTTON_DPAD_UP = 2048;
+  GAMEPAD_BUTTON_DPAD_DOWN = 4096;
+  GAMEPAD_BUTTON_DPAD_LEFT = 8192;
+  GAMEPAD_BUTTON_DPAD_RIGHT = 16384;
+}
+
+// Guest to host, from the control daemon: an app plays a rumble effect on a controller, or
+// stops it (both strengths 0). The host runs the controller's motors at these strengths for
+// `duration_ms`, or until the next GamepadRumble for the controller.
+message GamepadRumble {
+  uint32 pad_id = 1;
+  // The strong (low frequency) and weak (high frequency) motors, from 0 to 65535.
+  uint32 strong = 2;
+  uint32 weak = 3;
+  // How long the effect lasts, in milliseconds; 0 until the next GamepadRumble.
+  uint32 duration_ms = 4;
+}
+
 // The one message type on the wire. Each frame carries exactly one.
 message Envelope {
   oneof body {
     Hello hello = 1;
     HelloAccepted hello_accepted = 2;
     HelloRejected hello_rejected = 3;
+    AuthChallenge auth_challenge = 4;
+    AuthProof auth_proof = 5;
+    TaskUpdated task_updated = 6;
+    TaskRemoved task_removed = 7;
+    TaskFrames task_frames = 8;
+    CloseTask close_task = 9;
+    LaunchApp launch_app = 10;
+    ResizeTask resize_task = 11;
+    SetTaskDensity set_task_density = 12;
+    PointerEvent pointer_event = 13;
+    AppInfo app_info = 15;
+    KeyEvent key_event = 16;
+    ImeComposition ime_composition = 17;
+    ImeCommit ime_commit = 18;
+    ImeDeleteSurrounding ime_delete_surrounding = 377;
+    ImeCursor ime_cursor = 19;
+    RequestGuestMemory request_guest_memory = 20;
+    GuestMemory guest_memory = 21;
+    InstalledApp installed_app = 22;
+    InstalledApps installed_apps = 23;
+    AgentConnected agent_connected = 24;
+    GuestBoot guest_boot = 25;
+    ClipboardText clipboard_text = 26;
+    ClipboardSharing clipboard_sharing = 27;
+    ClockProbe clock_probe = 28;
+    ClockAnswer clock_answer = 29;
+    ScreenState screen_state = 40;
+    PowerState power_state = 41;
+    PowerHint power_hint = 110;
+    DeveloperMode developer_mode = 140;
+    ArmTranslationInstall arm_translation_install = 150;
+    ArmTranslationChunk arm_translation_chunk = 151;
+    ArmTranslationRemove arm_translation_remove = 152;
+    ArmTranslationQuery arm_translation_query = 153;
+    ArmTranslationState arm_translation_state = 154;
+    DeviceIdle device_idle = 42;
+    HostMemory host_memory = 43;
+    HostSleep host_sleep = 44;
+    GuestSleepReady guest_sleep_ready = 45;
+    InstallApk install_apk = 60;
+    ApkChunk apk_chunk = 61;
+    CancelInstall cancel_install = 62;
+    InstallProgress install_progress = 63;
+    InstallResult install_result = 64;
+    QueryPackage query_package = 65;
+    PackageState package_state = 66;
+    UninstallApp uninstall_app = 67;
+    UninstallResult uninstall_result = 68;
+    RefreshApps refresh_apps = 69;
+    OpenAppSettings open_app_settings = 30;
+    OpenLink open_link = 50;
+    LinkHandling link_handling = 51;
+    OpenFile open_file = 52;
+    FileChunk file_chunk = 53;
+    FileProgress file_progress = 54;
+    GuestNotification notification = 70;
+    NotificationRemoved notification_removed = 71;
+    NotificationClicked notification_clicked = 72;
+    NotificationDismissed notification_dismissed = 73;
+    BackgroundApp background_app = 74;
+    BackgroundAppGone background_app_gone = 75;
+    BackgroundAppAction background_app_action = 76;
+    MediaSession media_session = 77;
+    MediaSessionGone media_session_gone = 78;
+    MediaControl media_control = 79;
+    ListWidgetProviders list_widget_providers = 90;
+    WidgetProviders widget_providers = 91;
+    AddWidget add_widget = 92;
+    WidgetAdded widget_added = 93;
+    WidgetUpdated widget_updated = 94;
+    WidgetList widget_list = 95;
+    RemoveWidget remove_widget = 96;
+    ResizeWidget resize_widget = 97;
+    WidgetFrame widget_frame = 98;
+    WidgetPointer widget_pointer = 99;
+    AccessibilityWatch accessibility_watch = 80;
+    AccessibilityTree accessibility_tree = 81;
+    AccessibilityAction accessibility_action = 82;
+    AccessibilityActionResult accessibility_action_result = 83;
+    AudioOutputOpen audio_output_open = 100;
+    AudioOutputReady audio_output_ready = 101;
+    AudioPcm audio_pcm = 102;
+    AudioOutputControl audio_output_control = 103;
+    AudioInputOpen audio_input_open = 104;
+    AudioInputOpened audio_input_opened = 105;
+    VideoCapabilities video_capabilities = 120;
+    VideoDecoderOpen video_decoder_open = 121;
+    VideoDecoderOpened video_decoder_opened = 122;
+    VideoPacket video_packet = 123;
+    VideoFrame video_frame = 124;
+    VideoFlush video_flush = 125;
+    VideoFlushed video_flushed = 126;
+    VideoError video_error = 127;
+    LogStream log_stream = 130;
+    LogDump log_dump = 131;
+    LogRecords log_records = 132;
+    CollectDiagnostics collect_diagnostics = 133;
+    DiagnosticsFile diagnostics_file = 134;
+    DiagnosticsDone diagnostics_done = 135;
+    StopApp stop_app = 136;
+    PrintJob print_job = 220;
+    PrintJobChunk print_job_chunk = 221;
+    PrintJobCancel print_job_cancel = 222;
+    PrintJobResult print_job_result = 223;
+    GuestMemoryPressure guest_memory_pressure = 141;
+    LocationRequest location_request = 200;
+    LocationStatus location_status = 201;
+    LocationFix location_fix = 202;
+    SensorList sensor_list = 240;
+    SensorActivate sensor_activate = 241;
+    SensorReadings sensor_readings = 242;
+    CameraList camera_list = 260;
+    CameraOpen camera_open = 261;
+    CameraOpened camera_opened = 262;
+    CameraFrame camera_frame = 263;
+    CameraStop camera_stop = 264;
+    CameraStill camera_still = 265;
+    CameraStillTaken camera_still_taken = 266;
+    CameraError camera_error = 267;
+    SetTaskCaption set_task_caption = 155;
+    SystemSettings system_settings = 340;
+    GamepadConnected gamepad_connected = 341;
+    GamepadDisconnected gamepad_disconnected = 342;
+    GamepadState gamepad_state = 343;
+    GamepadRumble gamepad_rumble = 344;
+    FileSharing file_sharing = 290;
+    AndroidFiles android_files = 291;
+    DragOut drag_out = 350;
+    DragOffer drag_offer = 351;
+    DragRead drag_read = 352;
+    DragData drag_data = 353;
+    DragEnd drag_end = 354;
   }
 }

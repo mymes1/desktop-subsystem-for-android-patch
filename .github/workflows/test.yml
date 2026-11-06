@@ -1,4 +1,4 @@
-# The fast quality gate. Runs on every pull request, whatever its base.
+# The fast quality gate. Runs on every push to develop, and on the release pull request into main.
 #
 # The repository checks (the planning documents are present on develop, no em dashes,
 # README files do not link documents that main does not have, the release sync script
@@ -8,27 +8,100 @@
 name: Test
 
 on:
-  # Every pull request, whatever its base. Work lands on develop through pull requests,
-  # and the release pull request into main is gated by the same run.
+  # Features are integrated on develop and fixed there, so develop is what is tested. The
+  # release pull request into main is gated by the same run.
+  push:
+    branches: [develop]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
+  # A newer push to develop holds every older one, so only the newest is checked. Runs
+  # that never finish are avoided by checking compile and lint before each push.
   group: test-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  # Which parts a pull request touches, so each job below runs only when its part changed.
+  # A change to this workflow, or a run by hand, runs every job. A pull request that only
+  # touches documents runs just the repository checks. A skipped job counts as passed, and
+  # "Report the test result" always reports, so a skipped job never holds a merge back.
+  changes:
+    name: Find the parts that changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.find.outputs.rust }}
+      unix: ${{ steps.find.outputs.unix }}
+      macos: ${{ steps.find.outputs.macos }}
+      linux: ${{ steps.find.outputs.linux }}
+      agent: ${{ steps.find.outputs.agent }}
+      apk: ${{ steps.find.outputs.apk }}
+      protocol: ${{ steps.find.outputs.protocol }}
+      settings: ${{ steps.find.outputs.settings }}
+      hwcomposer: ${{ steps.find.outputs.hwcomposer }}
+      codec2: ${{ steps.find.outputs.codec2 }}
+      power: ${{ steps.find.outputs.power }}
+      gnss: ${{ steps.find.outputs.gnss }}
+      sensors: ${{ steps.find.outputs.sensors }}
+      camera: ${{ steps.find.outputs.camera }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history, so a push can be compared with the commit before it.
+          fetch-depth: 0
+
+      - name: Compare with the base
+        id: find
+        run: |
+          before="${{ github.event.before }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/changed"
+          elif [[ "${{ github.event_name }}" == "push" && -n "$before" && ! "$before" =~ ^0+$ ]] && git cat-file -e "$before" 2>/dev/null; then
+            git diff --name-only "$before" HEAD > "$RUNNER_TEMP/changed"
+          else
+            echo ".github/workflows/test.yml" > "$RUNNER_TEMP/changed"
+          fi
+          cat "$RUNNER_TEMP/changed"
+          # Prints true when a changed file matches the pattern, or this workflow changed.
+          part() {
+            if grep -qE "^(\.github/workflows/test\.yml$|$1)" "$RUNNER_TEMP/changed"; then
+              echo "$2=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$2=false" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          part 'dsa/(Cargo\.(toml|lock)|deny\.toml|protocol/|host/|guest/(transport|channeld)/)' rust
+          part 'dsa/(Cargo\.(toml|lock)|protocol/|host/(core|platform/unix|platform/linux|cli)/)' unix
+          part 'dsa/(Cargo\.(toml|lock)|protocol/|host/(core|platform/(unix|macos)|cli)/|host/platform/windows/src/(gpt|pstore_disk)\.rs|kernel/)' macos
+          part 'dsa/(Cargo\.(toml|lock)|protocol/|host/(core|platform/unix|platform/linux)/)' linux
+          part 'dsa/(guest/agent|protocol)/' agent
+          part 'dsa/(Cargo\.(toml|lock)|host/(core|cli)/)|\.github/scripts/apk/' apk
+          part 'dsa/protocol/' protocol
+          part 'dsa/host/platform/windows/settings/' settings
+          part 'dsa/(guest/hwcomposer|protocol)/' hwcomposer
+          part 'dsa/(guest/codec2|protocol)/' codec2
+          part 'dsa/(guest/power|protocol)/' power
+          part 'dsa/(guest/gnss|protocol)/' gnss
+          part 'dsa/(guest/sensors|protocol)/' sensors
+          part 'dsa/(guest/camera|protocol)/' camera
+
   repository:
     name: Check the repository rules
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           # The release sync test builds throwaway repositories; it needs git, not history.
           fetch-depth: 1
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Run the repository checks
         run: |
@@ -38,16 +111,33 @@ jobs:
 
   rust:
     name: Test the Rust code (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # windows-11-arm builds and tests the host for aarch64-pc-windows-msvc, the target
+        # of ARM64 Windows PCs, next to the x64 build on windows-latest.
+        os: [ubuntu-latest, windows-latest, windows-11-arm]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: dsa
     steps:
       - uses: actions/checkout@v4
+
+      # The ARM64 runner image does not always carry a Rust toolchain, so it gets one here,
+      # with the components the steps below use.
+      - name: Set up Rust for ARM64 Windows
+        if: matrix.os == 'windows-11-arm'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Show the host target
+        run: rustc -vV
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -55,10 +145,31 @@ jobs:
       - name: Lint
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      - name: Check license policy with cargo-deny
+        if: runner.os == 'Linux'
+        run: |
+          curl -sSL https://github.com/EmbarkStudios/cargo-deny/releases/download/0.16.4/cargo-deny-0.16.4-x86_64-unknown-linux-musl.tar.gz | tar -xz --strip-components=1 -C /usr/local/bin cargo-deny-0.16.4-x86_64-unknown-linux-musl/cargo-deny
+          cargo deny --all-features check --config deny.toml licenses
+
       # On Windows this includes the transport suite over real Hyper-V sockets (host to
       # host through the loopback partition).
       - name: Run the tests
         run: cargo test --workspace
+
+      # Pictures of the top of a light and a dark app window as the task window draws its
+      # title bar, kept with the run.
+      - name: Draw the title bar pictures
+        if: runner.os == 'Windows'
+        env:
+          DSA_CAPTION_PICTURES: ${{ github.workspace }}/.scratch/caption-pictures
+        run: cargo test -p dsa-host-core --lib fr22_pictures_of_a_light_and_a_dark_app_window
+
+      - name: Keep the title bar pictures
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: caption-pictures
+          path: .scratch/caption-pictures
 
       # Registers dsa-hostd as a real Windows service, reaches it through its named pipe and
       # stops it. The runner's account is an administrator, which this needs.
@@ -78,7 +189,10 @@ jobs:
 
   unix-socket:
     name: Test the local API and dsa over Unix sockets (macos-latest)
+    needs: changes
+    if: needs.changes.outputs.unix == 'true'
     runs-on: macos-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: dsa
@@ -87,11 +201,278 @@ jobs:
 
       # Linux runs this in the job above; macOS reads the peer's user another way.
       - name: Run the tests
-        run: cargo test --no-fail-fast -p dsa-transport -p dsa-host-unix -p dsa-cli
+        run: cargo test --no-fail-fast -p dsa-transport -p dsa-host-unix -p dsa-cli -p dsa-host-linux
+
+  # The Linux host's compositor in a real Wayland session: a headless compositor stands in
+  # for the desktop. With no DSA service to reach, the compositor connects to the display,
+  # takes the seat, says it is waiting for the service and keeps running, as it must on a
+  # desktop where the service starts later.
+  linux-host:
+    name: Run the Linux compositor in a headless Wayland session (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.linux == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: dsa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install a headless Wayland compositor and libxkbcommon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y weston libxkbcommon0
+
+      - name: Run the Linux host's tests
+        run: cargo test --no-fail-fast -p dsa-host-linux
+
+      - name: Build the compositor
+        run: cargo build -p dsa-host-linux --bin dsa-compositor
+
+      # The lock file this build resolved, so a change of dependencies can be committed from it.
+      - name: Keep the resolved Cargo.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock-linux-host
+          path: dsa/Cargo.lock
+
+      - name: Run the compositor against the headless session
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime"
+          mkdir -p -m 0700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=wayland-dsa --idle-time=0 &
+          for _ in $(seq 50); do
+            [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
+            sleep 0.2
+          done
+          export WAYLAND_DISPLAY=wayland-dsa
+          export DSA_SOCKET="$RUNNER_TEMP/no-service.sock"
+          export XDG_DATA_HOME="$RUNNER_TEMP/data"
+          set +e
+          timeout 5 target/debug/dsa-compositor 2> "$RUNNER_TEMP/compositor.log"
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/compositor.log"
+          if [[ $code -ne 124 ]]; then
+            echo "::error::the compositor exited (code $code) instead of waiting for the service"
+            exit 1
+          fi
+          grep -q "waiting for the DSA service" "$RUNNER_TEMP/compositor.log"
+
+      - name: Check a second compositor in the same session leaves the first alone
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime2"
+          mkdir -p -m 0700 "$XDG_RUNTIME_DIR"
+          exec 9> "$XDG_RUNTIME_DIR/dsa-compositor.lock"
+          flock -n 9
+          timeout 5 target/debug/dsa-compositor
+
+  # The macOS host on Apple silicon: its tests, the vsock transport over socket pairs, and
+  # dsa-hostd signed with the virtualization entitlement and checked by the framework itself.
+  # GitHub's macOS runners are VMs without nested virtualization, so no Android boots here.
+  macos-host:
+    name: Test the macOS host (macos-14)
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
+    runs-on: macos-14
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: dsa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the host target
+        run: rustc -vV
+
+      # "Test the Rust code" fails on formatting already; here it must not hide what the
+      # build and the tests say.
+      - name: Check formatting
+        continue-on-error: true
+        run: cargo fmt -p dsa-host-macos -p dsa-cli --check
+
+      - name: Lint
+        run: cargo clippy -p dsa-host-macos -p dsa-cli --all-targets -- -D warnings
+
+      - name: Run the tests
+        run: cargo test --no-fail-fast -p dsa-host-macos -p dsa-cli
+
+      # The lock file as cargo resolved it here, for a change that adds dependencies on
+      # a machine that cannot build the macOS host.
+      - name: Keep the resolved lock file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock-macos
+          path: dsa/Cargo.lock
+
+      - name: Build and sign dsa-hostd
+        run: |
+          cargo build --release -p dsa-host-macos --bin dsa-hostd
+          codesign --force --sign - --options runtime \
+            --entitlements host/platform/macos/dsa-hostd.entitlements target/release/dsa-hostd
+          codesign --display --entitlements - target/release/dsa-hostd | tee "$RUNNER_TEMP/entitlements"
+          grep -q com.apple.security.virtualization "$RUNNER_TEMP/entitlements"
+          target/release/dsa-hostd version
+
+      # A stand-in image: an arm64 Image header, an initrd and raw disks. The framework
+      # validates the VM made from it, which needs the entitlement and the device set the
+      # host uses, without starting it.
+      - name: Have the framework validate the VM
+        run: |
+          image="$RUNNER_TEMP/image"
+          mkdir -p "$image"
+          head -c 4096 /dev/zero > "$image/Image"
+          printf 'ARM\x64' | dd of="$image/Image" bs=1 seek=56 conv=notrunc status=none
+          head -c 4096 /dev/zero > "$image/initrd.img"
+          mkfile -n 64m "$image/system.img"
+          mkfile -n 64m "$image/data.img"
+          echo '{"version": "0-ci", "arch": "arm64", "kernel_cmdline": "init=/init androidboot.boot_devices=vmbus console=ttyAMA0", "files": {"system.img": {}, "data.img": {}}}' > "$image/image.json"
+          echo "{\"image_dir\": \"$image\", \"data_dir\": \"$RUNNER_TEMP/user\"}" > "$RUNNER_TEMP/dsa-hostd.json"
+          target/release/dsa-hostd check "$RUNNER_TEMP/dsa-hostd.json"
+
+  # The Linux host's VM and its ports: the vsock suite over vsock loopback standing in for a
+  # guest, and the launcher against the crosvm DSA ships, under KVM: the runner's own kernel
+  # for the control socket's commands, and the published Android image until its control
+  # daemon connects.
+  linux-vm:
+    name: Test the Linux host's VM under KVM (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.linux == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: dsa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Keep the VM programs between runs
+        uses: actions/cache@v4
+        with:
+          path: .scratch/vm-programs
+          key: linux-vm-programs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsa/host/platform/linux/crosvm/**', 'dsa/graphics/host/**', 'dsa/graphics/patches/**', '.github/scripts/linux-vm/**') }}
+
+      - name: Build crosvm, passt and gfxstream's renderer
+        working-directory: .
+        run: bash .github/scripts/linux-vm/build-vm-programs.sh .scratch/vm-programs
+
+      # Where the package puts them, so the package's AppArmor profile lets crosvm and passt
+      # make their sandboxes' user namespaces, as on an installed system.
+      - name: Install the VM programs as the package does
+        working-directory: .
+        run: |
+          sudo install -d /usr/lib/dsa/bin
+          sudo install -m 0755 .scratch/vm-programs/crosvm .scratch/vm-programs/passt .scratch/vm-programs/libgfxstream_backend.so /usr/lib/dsa/bin/
+          sudo install -m 0644 dsa/host/platform/linux/packaging/apparmor/dsa-vm /etc/apparmor.d/dsa-vm
+          sudo apparmor_parser -r -W /etc/apparmor.d/dsa-vm
+          /usr/lib/dsa/bin/crosvm version
+          echo "DSA_CROSVM=/usr/lib/dsa/bin/crosvm" >> "$GITHUB_ENV"
+
+      # The runner's user gets KVM and vhost-vsock, as a desktop user has them.
+      - name: Load KVM, vhost-vsock and vsock loopback
+        run: |
+          sudo modprobe vhost_vsock
+          sudo modprobe vsock_loopback
+          sudo chmod 666 /dev/kvm /dev/vhost-vsock
+          ls -l /dev/kvm /dev/vhost-vsock
+
+      - name: Give crosvm a kernel to boot
+        run: |
+          kernel="$RUNNER_TEMP/vmlinuz"
+          sudo cp "/boot/vmlinuz-$(uname -r)" "$kernel"
+          sudo chmod 644 "$kernel"
+          echo "DSA_CROSVM_TEST_KERNEL=$kernel" >> "$GITHUB_ENV"
+
+      - name: Download the newest published Android image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh release list -R "${{ github.repository }}" -L 50 --json tagName -q '[.[] | select(.tagName | startswith("android-17"))][0].tagName')"
+          echo "image release: $tag"
+          image="$RUNNER_TEMP/image"
+          mkdir -p "$image"
+          for file in image.json bzImage initrd.img system.vhdx data.vhdx; do
+            gh release download "$tag" -R "${{ github.repository }}" -p "$file" -D "$image"
+          done
+          ls -l "$image"
+          echo "DSA_CROSVM_TEST_IMAGE=$image" >> "$GITHUB_ENV"
+
+      - name: Build the service and dsa
+        run: cargo build -p dsa-host-linux -p dsa-cli
+
+      - name: Run the tests
+        run: cargo test -p dsa-host-linux --features vsock-loopback-tests -- --nocapture
+
+      - name: Keep the Android VM's console
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-vm-console
+          path: /tmp/crosvm-test-*/console.log
+          if-no-files-found: ignore
+
+  agent:
+    name: Test the guest agent (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: dsa/guest/agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up a JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # The unit tests, and the release build, which compiles the agent against the
+      # generated protocol and channel code.
+      - name: Run the tests and build the agent
+        run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
+
+  # The host's APK reader against APKs the Android SDK's own tools make (aapt2, zipalign,
+  # apksigner), not only against the ones its unit tests write.
+  apk-reader:
+    name: Read APKs made by the Android SDK (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.apk == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make the test APKs
+        run: .github/scripts/apk/make-test-apks.sh .scratch/test-apks
+
+      - name: Build dsa
+        working-directory: dsa
+        run: cargo build -q -p dsa-cli
+
+      - name: Read them with dsa apk-info
+        run: .github/scripts/apk/check-apk-info.sh dsa/target/debug/dsa .scratch/test-apks
+
+      - name: Keep the APKs and what dsa said of them
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-apks
+          path: .scratch/test-apks
 
   protocol:
     name: Check the generated protocol code (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.protocol == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -111,12 +492,203 @@ jobs:
           if [[ -n "$(git status --porcelain -- protocol)" ]]; then
             git status --short -- protocol
             git diff -- protocol | head -200
-            echo "::error::the generated protocol code does not match control.proto or host_api.proto; run dsa-protocol-codegen and commit the result"
+            # The whole difference, as a patch to apply, because the generated Java and C++
+            # sources are too long to read from the log.
+            git add -N -- protocol
+            git diff --binary -- protocol > "$RUNNER_TEMP/generated-protocol.patch"
+            echo "::error::the generated protocol code does not match control.proto, host_api.proto or window_host.proto; run dsa-protocol-codegen and commit the result"
             exit 1
           fi
+
+      - name: Keep the generated protocol code that differs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-protocol
+          path: ${{ runner.temp }}/generated-protocol.patch
+          if-no-files-found: ignore
 
       - name: Check the Java codec against the vectors
         run: dsa/protocol/java/test.sh
 
       - name: Check the C++ codec against the vectors
         run: dsa/protocol/cpp/test.sh
+
+  settings-app:
+    name: Test and build the settings app (${{ matrix.os }}, ${{ matrix.rid }})
+    needs: changes
+    if: needs.changes.outputs.settings == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, rid: win-x64 }
+          - { os: windows-11-arm, rid: win-arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: dsa/host/platform/windows/settings
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # The view models and the reading of dsa's JSON, against a fake dsa.
+      - name: Run the view model tests
+        run: dotnet test DsaSettings.Core.Tests/DsaSettings.Core.Tests.csproj -c Release
+
+      # The WPF app itself, as the installer publishes it.
+      - name: Build the app
+        run: dotnet publish DsaSettings/DsaSettings.csproj -c Release -r ${{ matrix.rid }} -o ../../../../target/settings-app
+
+  hwcomposer:
+    name: Test the guest hwcomposer's task rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.hwcomposer == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The channel messages go through the generated protobuf-lite codec, built against the
+      # 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/hwcomposer/test.sh
+
+  audio:
+    name: Test the guest audio module (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The audio port's messages go through the generated protobuf-lite codec, built
+      # against the 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/audio/test.sh
+
+  codec2:
+    name: Test the guest codec HAL's rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.codec2 == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The video port's messages go through the generated protobuf-lite codec, built against
+      # the 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/codec2/test.sh
+
+  power-hal:
+    name: Test the guest power and health HALs' rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.power == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The channel messages go through the generated protobuf-lite codec, built against the
+      # 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/power/test.sh
+
+  gnss-hal:
+    name: Test the guest GNSS HAL's rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.gnss == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The channel messages go through the generated protobuf-lite codec, built against the
+      # 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/gnss/test.sh
+
+  sensors:
+    name: Test the guest sensors HAL's rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.sensors == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The sensor port's messages go through the generated protobuf-lite codec, built against
+      # the 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/sensors/test.sh
+
+  camera:
+    name: Test the guest camera HAL's rules (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.camera == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The camera port's messages go through the generated protobuf-lite codec, built
+      # against the 3.21 runtime Ubuntu 24.04 ships.
+      - name: Install the protobuf runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
+
+      - name: Run the tests
+        run: dsa/guest/camera/test.sh
+
+  # One check that always reports: it fails when any job failed or was cancelled, and passes
+  # when every job passed or was skipped because its part did not change.
+  result:
+    name: Report the test result
+    if: always()
+    needs:
+      [changes, repository, rust, unix-socket, macos-host, linux-host, linux-vm, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check every job passed or was skipped
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "::error::a test job failed or was cancelled"
+            exit 1
+          fi

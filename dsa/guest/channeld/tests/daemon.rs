@@ -7,11 +7,14 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use dsa_guest_channeld::{connect, run, ChannelError, ChannelEvent, RetryPolicy};
+use dsa_guest_channeld::{
+    connect, pump, run, ChannelError, ChannelEvent, Credentials, RetryPolicy,
+};
+use dsa_protocol::auth::BootSecret;
 use dsa_protocol::control::{RejectReason, Role};
 use dsa_protocol::handshake::{host_accept, local_hello};
 use dsa_transport::memory::{self, MemoryConnector, MemoryListener};
-use dsa_transport::{Connection, Connector, Listener, TransportError};
+use dsa_transport::{Connection, Connector, FrameSender, Listener, TransportError};
 
 const WAIT: Duration = Duration::from_secs(10);
 
@@ -20,6 +23,18 @@ fn fast() -> RetryPolicy {
         first_delay: Duration::from_millis(5),
         max_delay: Duration::from_millis(20),
         attempt_timeout: WAIT,
+    }
+}
+
+/// The secret the host gave this boot.
+fn secret() -> BootSecret {
+    BootSecret::from_bytes([0x11; 32])
+}
+
+fn credentials(hello: dsa_protocol::control::Hello) -> Credentials {
+    Credentials {
+        hello,
+        secret: secret(),
     }
 }
 
@@ -33,6 +48,7 @@ fn host_accepts(listener: &mut MemoryListener) -> Box<dyn Connection> {
     host_accept(
         connection.as_mut(),
         &local_hello(Role::Host, "dsa-hostd test"),
+        &secret(),
         WAIT,
     )
     .expect("accepted");
@@ -73,7 +89,7 @@ fn fr2_the_daemon_connects_once_the_host_listens() {
     let host = thread::spawn(move || host_accepts(&mut listener));
     let stop = AtomicBool::new(false);
     let (_connection, host_hello) =
-        connect(&mut flaky, &guest_hello(), fast(), &stop).expect("connects");
+        connect(&mut flaky, &credentials(guest_hello()), fast(), &stop).expect("connects");
     assert_eq!(host_hello.build, "dsa-hostd test");
     assert_eq!(
         attempts.load(Ordering::Relaxed),
@@ -89,14 +105,14 @@ fn fr2_a_refusing_host_is_not_retried() {
     let host = thread::spawn(move || {
         let mut connection = listener.accept(WAIT).unwrap();
         let host = local_hello(Role::Host, "dsa-hostd test");
-        let _ = host_accept(connection.as_mut(), &host, WAIT);
+        let _ = host_accept(connection.as_mut(), &host, &secret(), WAIT);
         // A second attempt would show up here.
         listener.accept(Duration::from_millis(200)).is_ok()
     });
     let mut stale = guest_hello();
     stale.schema_hash = vec![0x11; 32];
     let stop = AtomicBool::new(false);
-    match connect(&mut connector, &stale, fast(), &stop) {
+    match connect(&mut connector, &credentials(stale.clone()), fast(), &stop) {
         Err(ChannelError::Refused { reason, detail }) => {
             assert_eq!(reason, RejectReason::SchemaHashMismatch);
             assert!(detail.contains("different protocol definition"), "{detail}");
@@ -128,7 +144,7 @@ fn fr2_stopping_ends_the_retries() {
         })
     };
     assert_eq!(
-        connect(&mut flaky, &guest_hello(), fast(), &stop).err(),
+        connect(&mut flaky, &credentials(guest_hello()), fast(), &stop).err(),
         Some(ChannelError::Stopped)
     );
     stopper.join().unwrap();
@@ -146,7 +162,7 @@ fn fr2_frames_flow_both_ways_and_a_lost_channel_is_reconnected() {
         thread::spawn(move || {
             run(
                 &mut connector,
-                &guest_hello(),
+                &credentials(guest_hello()),
                 fast(),
                 &to_guest_tx,
                 &from_guest_rx,
@@ -185,4 +201,162 @@ fn fr2_frames_flow_both_ways_and_a_lost_channel_is_reconnected() {
 
     stop.store(true, Ordering::Relaxed);
     assert_eq!(daemon.join().unwrap(), ChannelError::Stopped);
+}
+
+/// A connection whose host says nothing until the test lets it, however long the wait asked.
+struct SilentHost {
+    release: mpsc::Receiver<()>,
+    sent: mpsc::Sender<Vec<u8>>,
+}
+
+struct SilentHostSender(mpsc::Sender<Vec<u8>>);
+
+impl FrameSender for SilentHostSender {
+    fn send(&mut self, frame: &[u8]) -> Result<(), TransportError> {
+        self.0
+            .send(frame.to_vec())
+            .map_err(|_| TransportError::Closed)
+    }
+}
+
+impl Connection for SilentHost {
+    fn send(&mut self, frame: &[u8]) -> Result<(), TransportError> {
+        self.sent
+            .send(frame.to_vec())
+            .map_err(|_| TransportError::Closed)
+    }
+    fn recv(&mut self, _timeout: Option<Duration>) -> Result<Vec<u8>, TransportError> {
+        let _ = self.release.recv();
+        Err(TransportError::Closed)
+    }
+    fn close(&mut self) {}
+    fn try_clone_sender(&self) -> Option<Box<dyn FrameSender>> {
+        Some(Box::new(SilentHostSender(self.sent.clone())))
+    }
+}
+
+#[test]
+fn fr5_a_frame_for_the_host_does_not_wait_for_the_hosts_next_frame() {
+    let (release, released) = mpsc::channel();
+    let (sent_tx, sent) = mpsc::channel();
+    let (to_host, from_guest) = mpsc::channel();
+    let (to_guest, _from_host) = mpsc::channel();
+    let pumping = thread::spawn(move || {
+        let stop = AtomicBool::new(false);
+        let mut host = SilentHost {
+            release: released,
+            sent: sent_tx,
+        };
+        pump(&mut host, &to_guest, &from_guest, &stop)
+    });
+    // Let the pump settle into its wait for the host.
+    thread::sleep(Duration::from_millis(100));
+    to_host.send(vec![1, 2, 3]).unwrap();
+    let frame = sent.recv_timeout(Duration::from_secs(2));
+    release.send(()).unwrap();
+    assert_eq!(frame.expect("the frame goes at once"), vec![1, 2, 3]);
+    assert_eq!(pumping.join().unwrap(), TransportError::Closed);
+}
+
+#[test]
+fn fr5_the_daemon_answers_a_clock_probe_itself_with_the_guests_clock() {
+    use dsa_protocol::control::envelope::Body;
+    use dsa_protocol::control::{ClockProbe, Envelope};
+
+    let (mut listener, mut connector) = memory::pair();
+    let (to_guest_tx, to_guest_rx) = mpsc::channel();
+    // Nobody in the guest sends or reads anything: the answer waits on no one.
+    let (_from_guest_tx, from_guest_rx) = mpsc::channel::<Vec<u8>>();
+    let (events_tx, _events_rx) = mpsc::channel();
+    let stop = Arc::new(AtomicBool::new(false));
+    let daemon = {
+        let stop = Arc::clone(&stop);
+        thread::spawn(move || {
+            run(
+                &mut connector,
+                &credentials(guest_hello()),
+                fast(),
+                &to_guest_tx,
+                &from_guest_rx,
+                &events_tx,
+                &stop,
+            )
+        })
+    };
+    let mut host = host_accepts(&mut listener);
+    let before = dsa_guest_channeld::guest_monotonic();
+    host.send(&dsa_protocol::encode(&Envelope {
+        body: Some(Body::ClockProbe(ClockProbe {
+            host_sent_ns: 1_234_567,
+        })),
+    }))
+    .unwrap();
+    let answer = dsa_protocol::decode(&host.recv(Some(WAIT)).unwrap()).unwrap();
+    let after = dsa_guest_channeld::guest_monotonic();
+    let Some(Body::ClockAnswer(answer)) = answer.body else {
+        panic!("the daemon did not answer the probe: {answer:?}");
+    };
+    assert_eq!(answer.host_sent_ns, 1_234_567);
+    assert!(answer.guest_mono_ns >= before.as_nanos() as u64);
+    assert!(answer.guest_mono_ns <= after.as_nanos() as u64);
+    // The probe is the daemon's own; the guest's clients never see it.
+    assert!(to_guest_rx
+        .recv_timeout(Duration::from_millis(200))
+        .is_err());
+
+    stop.store(true, Ordering::Relaxed);
+    assert_eq!(daemon.join().unwrap(), ChannelError::Stopped);
+}
+
+#[test]
+fn fr5_only_a_clock_probe_gets_an_answer() {
+    let frame = dsa_protocol::encode(&dsa_protocol::control::Envelope {
+        body: Some(dsa_protocol::control::envelope::Body::ScreenState(
+            dsa_protocol::control::ScreenState { on: true },
+        )),
+    });
+    assert_eq!(
+        dsa_guest_channeld::clock_answer(&frame, Duration::from_secs(1)),
+        None
+    );
+    assert_eq!(
+        dsa_guest_channeld::clock_answer(b"not a message", Duration::from_secs(1)),
+        None
+    );
+}
+
+#[test]
+fn fr10_the_daemon_writes_the_guests_data_and_answers_before_the_host_sleeps() {
+    use dsa_protocol::control::{envelope::Body, Envelope, GuestSleepReady, HostSleep};
+    let frame = |asleep: bool, ms: u64| {
+        dsa_protocol::encode(&Envelope {
+            body: Some(Body::HostSleep(HostSleep {
+                asleep,
+                host_unix_time_ms: ms,
+            })),
+        })
+    };
+    let written = AtomicBool::new(false);
+    let answer = dsa_guest_channeld::sleep_answer(&frame(true, 0), || {
+        written.store(true, Ordering::Relaxed)
+    })
+    .expect("an answer to the host");
+    assert!(written.load(Ordering::Relaxed), "the data is written first");
+    assert_eq!(
+        dsa_protocol::decode(&answer).unwrap().body,
+        Some(Body::GuestSleepReady(GuestSleepReady {}))
+    );
+    // The word that the host woke, with its clock, goes on to the agent.
+    let woke = AtomicBool::new(false);
+    assert_eq!(
+        dsa_guest_channeld::sleep_answer(&frame(false, 1_700_000_000_000), || {
+            woke.store(true, Ordering::Relaxed)
+        }),
+        None
+    );
+    assert!(!woke.load(Ordering::Relaxed));
+    assert_eq!(
+        dsa_guest_channeld::sleep_answer(b"not a message", || {}),
+        None
+    );
 }

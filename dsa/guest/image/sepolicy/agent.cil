@@ -1,0 +1,38 @@
+; Desktop Subsystem for Android (DSA)
+; The agent (a platform-signed privileged app, platform_app) puts the guest into Doze when no
+; task window is shown on the host, and makes the guest's battery follow the host's. It does
+; so through the shell commands of the device idle controller ("deviceidle force-idle") and
+; the battery service ("battery set ..."), which it calls over binder with the DEVICE_POWER
+; permission, as the shell would. A shell command call hands system_server three file
+; descriptors: /dev/null for input, and the write ends of a pipe the agent reads the
+; command's output and errors from.
+
+; Finding the services. The activity manager's "kill-all" ends cached apps when the guest goes
+; to sleep with no task open, under the KILL_ALL_BACKGROUND_PROCESSES permission.
+(allow platform_app deviceidle_service (service_manager (find)))
+(allow platform_app battery_service (service_manager (find)))
+(allow platform_app activity_service (service_manager (find)))
+; The graphics service, which the input trace reads apps' frame timings from. It writes them
+; into the agent's pipe the way a shell command's output is written, below.
+(allow platform_app gfxinfo_service (service_manager (find)))
+
+; system_server takes the descriptors the agent hands it, and writes the command's output.
+(allow system_server platform_app (fd (use)))
+(allow system_server platform_app (fifo_file (write getattr)))
+
+; SurfaceFlinger, which the input trace reads the timings of apps' layers from
+; ("dumpsys SurfaceFlinger --list" and "--latency <layer>"). Every app may find its service
+; already; the rule is here so the trace does not depend on that. SurfaceFlinger writes the
+; dump into the agent's pipe, as system_server does above.
+(allow platform_app surfaceflinger_service (service_manager (find)))
+(allow surfaceflinger platform_app (fd (use)))
+(allow surfaceflinger platform_app (fifo_file (write getattr)))
+
+; The agent's part of the diagnostics the host gathers on request: the dumps of the services a
+; problem report most often needs, written into the agent's pipe as above, and the dropbox,
+; which the agent reads with READ_LOGS.
+(allow platform_app window_service (service_manager (find)))
+(allow platform_app meminfo_service (service_manager (find)))
+(allow platform_app cpuinfo_service (service_manager (find)))
+(allow platform_app power_service (service_manager (find)))
+(allow platform_app dropbox_service (service_manager (find)))

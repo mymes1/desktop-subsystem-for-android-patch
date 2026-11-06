@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The guest agent. coreApp makes it start in the core-only boot stages too; persistent makes
+  the activity manager start it at boot and restart it if it dies. The host is the shell: the
+  agent reports tasks and acts on the host's requests, and its activities are the guest's
+  invisible home (platform/HomeActivity.kt), which Android requires and nobody sees, and the
+  guest's browser while web links go to the host (platform/LinkActivity.kt), which shows
+  nothing. Its first service is the guest's input method (platform/HostInputMethod.kt), which
+  shows nothing and types what the host's input method composes. Its other service is its
+  notification listener (platform/AndroidNotifications.kt), which hands the guest's
+  notifications to the host. An accessibility service (platform/HostAccessibilityService.kt)
+  is enabled only while a host accessibility client watches a task. It is also the guest's
+  widget host (platform/AndroidWidgets.kt), which draws the widgets the user placed on the
+  host's desktop. Its print service (platform/HostPrintService.kt) sends what apps print to the
+  host's printers.
+  Every permission here is also in privapp-permissions-dsa-agent.xml.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    coreApp="true">
+
+    <!-- Listening to task changes; moving and resizing tasks and setting their density. -->
+    <uses-permission android:name="android.permission.MANAGE_ACTIVITY_TASKS" />
+    <!-- Seeing every app's tasks, not only its own. -->
+    <uses-permission android:name="android.permission.REAL_GET_TASKS" />
+    <!-- Ending a task the host closed. -->
+    <uses-permission android:name="android.permission.REMOVE_TASKS" />
+    <!-- Starting the app the host launched while no window of the agent is in front. -->
+    <uses-permission android:name="android.permission.START_ACTIVITIES_FROM_BACKGROUND" />
+    <!-- Turning freeform windows on. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <!-- Turning click sounds off: nothing carries the guest's sound to the host. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <!-- Making the display a freeform display. -->
+    <uses-permission android:name="android.permission.INTERNAL_SYSTEM_WINDOW" />
+    <!-- Injecting the pointer input of each task's host window into the task. -->
+    <uses-permission android:name="android.permission.INJECT_EVENTS" />
+    <!-- Reading the label and launcher activity of any app. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!--
+      Turning the screen off and on, forcing Doze while no task window is shown on the host,
+      and setting the battery and battery saver to the host's.
+    -->
+    <uses-permission android:name="android.permission.DEVICE_POWER" />
+    <!-- Ending cached apps when the guest goes to sleep with no task open. -->
+    <uses-permission android:name="android.permission.KILL_ALL_BACKGROUND_PROCESSES" />
+    <!-- Ending an app's processes when its last window closes, or when the host says Stop. -->
+    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
+    <!-- Turning off the phone-only apps a desktop does not use, if the build has them. -->
+    <uses-permission android:name="android.permission.CHANGE_COMPONENT_ENABLED_STATE" />
+    <!--
+      Reading apps' frame timings for the input trace, as dumpsys gfxinfo does: the graphics
+      service asks for both, as every dump of app usage does.
+    -->
+    <uses-permission android:name="android.permission.DUMP" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    <!--
+      Reading the system's dropbox (tombstones, ANR traces, crashes, the boot before's kernel
+      log) for the diagnostics the host gathers on request; DUMP and PACKAGE_USAGE_STATS above
+      are needed for it too.
+    -->
+    <uses-permission android:name="android.permission.READ_LOGS" />
+    <!-- Installing the APKs the host sends, without asking the user to confirm each one. -->
+    <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
+    <!-- Uninstalling an app the user removes on the host, without asking again in the guest. -->
+    <uses-permission android:name="android.permission.DELETE_PACKAGES" />
+
+    <!--
+      Making the agent the guest's browser while web links go to the host, and giving the
+      role back to a browser app when the user keeps links in the guest.
+    -->
+    <uses-permission android:name="android.permission.MANAGE_ROLE_HOLDERS" />
+    <!--
+      Allowing the agent's own notification listener at start, as Settings does when a person
+      allows one: the guest has no screen to ask on.
+    -->
+    <uses-permission android:name="android.permission.MANAGE_NOTIFICATION_LISTENERS" />
+    <!--
+      Placing the widgets the user picks on the host without asking them to allow each one:
+      the guest has no screen to ask on.
+    -->
+    <uses-permission android:name="android.permission.BIND_APPWIDGET" />
+    <!--
+      Setting the guest's clock to the host's when the host wakes from sleep: the guest's
+      clock stands still or drifts while the host sleeps.
+    -->
+    <uses-permission android:name="android.permission.SET_TIME" />
+    <!--
+      Stopping an app that runs in the background when the user stops it from the host's
+      notification area or the settings app, as Settings' "Force stop" does.
+    -->
+    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
+    <!--
+      Following the host's system settings: its time zone (SET_TIME_ZONE), its display
+      languages and regional format (CHANGE_CONFIGURATION), its dark theme
+      (MODIFY_DAY_NIGHT_MODE) and its accent color as the seed of the dynamic colors
+      (CHANGE_OVERLAY_PACKAGES, for the overlay that carries the palette).
+    -->
+    <uses-permission android:name="android.permission.SET_TIME_ZONE" />
+    <uses-permission android:name="android.permission.CHANGE_CONFIGURATION" />
+    <uses-permission android:name="android.permission.MODIFY_DAY_NIGHT_MODE" />
+    <uses-permission android:name="android.permission.CHANGE_OVERLAY_PACKAGES" />
+    <!--
+      Joining the host's network: Wi-Fi turned on and the host's network saved for every app,
+      as Settings does, because the guest has no setup wizard to do it.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.NETWORK_SETTINGS" />
+
+    <application
+        android:name=".platform.AgentApplication"
+        android:allowBackup="false"
+        android:defaultToDeviceProtectedStorage="true"
+        android:directBootAware="true"
+        android:label="@string/app_name"
+        android:persistent="true">
+
+        <!--
+          The guest's home: no content, transparent, never in recents, and not in the launcher
+          category, so it is in no app list. It stays in the agent's process (no
+          android:process), which is always running, so it never starts cold. It keeps every
+          configuration change instead of being recreated for it, and one instance is enough.
+        -->
+        <activity
+            android:name=".platform.HomeActivity"
+            android:configChanges="density|fontScale|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:resumeWhilePausing="true"
+            android:stateNotNeeded="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          The guest's browser while web links go to the host: it shows nothing, hands each
+          http and https link to the agent, which sends it to the host, and finishes at once.
+          A link an installed app has verified as its own (an App Link) never comes here:
+          Android opens it in that app.
+        -->
+        <activity
+            android:name=".platform.LinkActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Runs a widget's setup when the user places it: it shows nothing, starts the setup of
+          the widget's app, which shows as a task window, and finishes with its answer. It is
+          not exported: only the agent starts it.
+        -->
+        <activity
+            android:name=".platform.WidgetConfigureActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!--
+          The files the host sends, read only, to the app the user picks. Not exported: an app
+          reads a file only through the permission granted with the intent that offers it.
+        -->
+        <provider
+            android:name=".platform.HostFileProvider"
+            android:authorities="io.github.thisisthepy.dsa.agent.hostfiles"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!--
+          The guest's only input method. It is no keyboard: it has no view and is never shown,
+          and it puts the text the host's input method composes and commits into the focused
+          editor. BIND_INPUT_METHOD keeps every caller but the input method manager out.
+        -->
+        <service
+            android:name=".platform.HostInputMethod"
+            android:exported="true"
+            android:label="@string/input_method_name"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/host_input_method" />
+        </service>
+
+        <!--
+          The agent's notification listener. Only the notification manager may bind it, and it
+          runs in the agent's process, which is always running.
+        -->
+        <service
+            android:name=".platform.HostNotificationListener"
+            android:exported="true"
+            android:label="@string/notification_listener_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!--
+          The guest's print service: it offers the host's printers in Android's print dialog
+          and hands each job's PDF to the agent, which sends it to the host, where the host's
+          print dialog picks the printer (platform/HostPrintService.kt). Only the print spooler
+          may bind it, and it runs in the agent's process.
+        -->
+        <service
+            android:name=".platform.HostPrintService"
+            android:exported="true"
+            android:label="@string/print_service_name"
+            android:permission="android.permission.BIND_PRINT_SERVICE">
+            <intent-filter>
+                <action android:name="android.printservice.PrintService" />
+            </intent-filter>
+        </service>
+
+        <!--
+          Reads the nodes of the tasks a host accessibility client (a screen reader) watches,
+          so the host can show them in each task window's accessibility tree. The agent
+          enables it only while the host watches a task and disables it after; it shows
+          nothing. BIND_ACCESSIBILITY_SERVICE keeps every caller but the system out.
+        -->
+        <service
+            android:name=".platform.HostAccessibilityService"
+            android:exported="true"
+            android:label="@string/accessibility_service_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/host_accessibility_service" />
+        </service>
+    </application>
+</manifest>

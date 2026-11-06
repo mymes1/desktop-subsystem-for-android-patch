@@ -87,7 +87,10 @@ type CreateComputeSystem = unsafe extern "system" fn(
     *mut HCS_SYSTEM,
 ) -> HRESULT;
 type SystemOperation = unsafe extern "system" fn(HCS_SYSTEM, HCS_OPERATION, PCWSTR) -> HRESULT;
+type ModifyComputeSystem =
+    unsafe extern "system" fn(HCS_SYSTEM, HCS_OPERATION, PCWSTR, *mut c_void) -> HRESULT;
 type CloseComputeSystem = unsafe extern "system" fn(HCS_SYSTEM);
+type GrantVmAccess = unsafe extern "system" fn(PCWSTR, PCWSTR) -> HRESULT;
 type SetComputeSystemCallback = unsafe extern "system" fn(
     HCS_SYSTEM,
     HCS_EVENT_OPTIONS,
@@ -104,9 +107,13 @@ struct Api {
     start_compute_system: SystemOperation,
     shut_down_compute_system: SystemOperation,
     terminate_compute_system: SystemOperation,
+    pause_compute_system: SystemOperation,
+    resume_compute_system: SystemOperation,
     get_compute_system_properties: SystemOperation,
+    modify_compute_system: ModifyComputeSystem,
     close_compute_system: CloseComputeSystem,
     set_compute_system_callback: SetComputeSystemCallback,
+    grant_vm_access: GrantVmAccess,
 }
 
 fn wide(text: &str) -> Vec<u16> {
@@ -160,12 +167,16 @@ fn load() -> Result<Api, HcsError> {
         start_compute_system: function!("HcsStartComputeSystem", SystemOperation),
         shut_down_compute_system: function!("HcsShutDownComputeSystem", SystemOperation),
         terminate_compute_system: function!("HcsTerminateComputeSystem", SystemOperation),
+        pause_compute_system: function!("HcsPauseComputeSystem", SystemOperation),
+        resume_compute_system: function!("HcsResumeComputeSystem", SystemOperation),
         get_compute_system_properties: function!("HcsGetComputeSystemProperties", SystemOperation),
+        modify_compute_system: function!("HcsModifyComputeSystem", ModifyComputeSystem),
         close_compute_system: function!("HcsCloseComputeSystem", CloseComputeSystem),
         set_compute_system_callback: function!(
             "HcsSetComputeSystemCallback",
             SetComputeSystemCallback
         ),
+        grant_vm_access: function!("HcsGrantVmAccess", GrantVmAccess),
     })
 }
 
@@ -353,6 +364,48 @@ impl ComputeSystem {
         .map(drop)
     }
 
+    /// Changes a running VM's settings with an HCS modify request (a JSON document naming
+    /// a `ResourcePath`, a `RequestType` and the `Settings`).
+    pub fn modify(&self, request: &str, timeout: Duration) -> Result<(), HcsError> {
+        let request_w = wide(request);
+        let function = self.api.modify_compute_system;
+        run_operation(self.api, "HcsModifyComputeSystem", timeout, |operation| {
+            // SAFETY: a live handle, a live operation, a NUL-terminated string and no
+            // identity token.
+            unsafe {
+                function(
+                    self.handle,
+                    operation,
+                    request_w.as_ptr(),
+                    std::ptr::null_mut(),
+                )
+            }
+        })
+        .map(drop)
+    }
+
+    /// Pauses the VM: its virtual processors stop where they are and its memory is kept.
+    pub fn pause(&self, timeout: Duration) -> Result<(), HcsError> {
+        self.system_operation(
+            "HcsPauseComputeSystem",
+            self.api.pause_compute_system,
+            None,
+            timeout,
+        )
+        .map(drop)
+    }
+
+    /// Lets a paused VM run again.
+    pub fn resume(&self, timeout: Duration) -> Result<(), HcsError> {
+        self.system_operation(
+            "HcsResumeComputeSystem",
+            self.api.resume_compute_system,
+            None,
+            timeout,
+        )
+        .map(drop)
+    }
+
     /// Waits at most `timeout` for the VM to exit. Returns whether it has.
     pub fn wait_exited(&self, timeout: Duration) -> bool {
         let exited = self.exit.exited.lock().unwrap_or_else(|e| e.into_inner());
@@ -385,4 +438,23 @@ impl Drop for ComputeSystem {
         // SAFETY: closed once.
         unsafe { (self.api.close_compute_system)(self.handle) };
     }
+}
+
+/// Lets the VM of compute system `id` open the file at `path`, by adding that VM's own
+/// account to the file's access list. A user's disk in their profile is closed to everyone
+/// else, VMs included, so the VM is given this one file and nothing around it, as WSL does
+/// for each distribution's disk.
+pub fn grant_vm_access(id: &str, path: &std::path::Path) -> Result<(), HcsError> {
+    let api = api()?;
+    let (id_w, path_w) = (wide(id), wide(&path.to_string_lossy()));
+    // SAFETY: two NUL-terminated strings.
+    let hresult = unsafe { (api.grant_vm_access)(id_w.as_ptr(), path_w.as_ptr()) };
+    if hresult < 0 {
+        return Err(HcsError::Call {
+            what: "HcsGrantVmAccess",
+            hresult,
+            detail: path.display().to_string(),
+        });
+    }
+    Ok(())
 }

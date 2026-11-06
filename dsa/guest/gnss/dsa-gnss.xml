@@ -1,0 +1,9 @@
+<!-- The GNSS HAL dsa-gnss serves. Version 4 is in the compatibility matrix of every
+     supported image. -->
+<manifest version="1.0" type="device">
+    <hal format="aidl">
+        <name>android.hardware.gnss</name>
+        <version>4</version>
+        <fqname>IGnss/default</fqname>
+    </hal>
+</manifest>

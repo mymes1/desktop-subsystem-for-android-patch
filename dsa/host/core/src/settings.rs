@@ -1,0 +1,1016 @@
+//! The settings a user changes from the settings app, kept by the service.
+//!
+//! Six of them are the user's own: the GPU their window manager renders on, whether their
+//! Android may be frozen when idle, whether their clipboard is shared with it, whether web
+//! links open in apps in their Android instead of the host's browser, and developer mode
+//! (whether adb reaches their Android) with the loopback port adb connects to, and file sharing
+//! (which of their host folders their Android shows in its shared storage). The others are the
+//! machine's, shared by every user: whether the service updates DSA itself, whether it
+//! downloads new Android images, and whether DSA's processes write the input trace and the
+//! per-stage resize trace to their logs.
+//!
+//! Clients read and change them through the local API only. The service keeps them in its
+//! own folder, which users cannot write to, so the values a client sees are the values the
+//! service acts on.
+//!
+//! ```text
+//! <dir>/machine.json          {"program_updates": true, "image_updates": true,
+//!                              "input_trace": false, "resize_trace": false}
+//! <dir>/users/<user>.json     {"render_gpu": "display", "freeze": false, "clipboard": true,
+//!                              "links_in_android": false, "developer_mode": false,
+//!                              "adb_port": 58526, "arm_translation": true,
+//!                              "file_sharing": true,
+//!                              "shared_folders": ["Documents", "Pictures"],
+//!                              "advanced_networking": false}
+//! <dir>/users/<user>.app-windows.json
+//!                             the user's window settings for each app
+//! <dir>/users/<user>.arm-translation.json
+//!                             the ARM translation package the user installed, if any
+//! ```
+//!
+//! A missing file means the defaults. A user who has never saved settings starts from what
+//! the platform finds for them (on Windows, the render GPU in the window manager's own
+//! `compositor.json`), so a choice made before the settings app existed is kept.
+
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+
+use serde::{Deserialize, Serialize};
+
+use crate::app_windows::AppWindowSettings;
+use crate::arm_translation::Package;
+use crate::file_share;
+
+/// The longest render GPU value accepted, in characters.
+const MAX_RENDER_GPU: usize = 128;
+
+/// The loopback port adb connects to in developer mode unless the user picks another: the one
+/// Windows Subsystem for Android used, which adb users and tools already know.
+pub const DEFAULT_ADB_PORT: u16 = 58526;
+
+/// The settings as a client sees them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Settings {
+    /// `display` (the default), `integrated`, `discrete`, or part of a GPU's name.
+    pub render_gpu: String,
+    /// Whether the user's Android may be frozen when idle. Off by default.
+    pub freeze: bool,
+    /// Whether the web links apps in the user's Android open go to apps in it rather than to
+    /// the host's default browser. Off by default.
+    pub links_in_android: bool,
+    /// The most memory the user's Android may have, in MiB. 0 (the default) is automatic:
+    /// the service's default size.
+    pub memory_limit_mb: u32,
+    /// Whether text copied on the host can be pasted in the user's Android, and the reverse.
+    /// On by default.
+    pub clipboard: bool,
+    /// Whether stopping an app that runs in the background skips the question that confirms
+    /// it. Off by default, so the first stop asks.
+    pub stop_without_asking: bool,
+    /// Whether the user's Android joins the host's LAN as a device of its own, rather than
+    /// sitting behind the NAT network the service makes for its VM. Off by default; it applies
+    /// from the next start of Android.
+    pub advanced_networking: bool,
+    /// Whether the service updates DSA itself.
+    pub program_updates: bool,
+    /// Whether the service downloads new Android images.
+    pub image_updates: bool,
+    /// Whether every DSA process writes the input trace to its log. The machine's; off by
+    /// default.
+    pub input_trace: bool,
+    /// Whether every DSA process writes each stage of each resize to its log. The machine's;
+    /// off by default.
+    pub resize_trace: bool,
+    /// Whether adb reaches the user's Android through the host's loopback address. Off by
+    /// default.
+    pub developer_mode: bool,
+    /// The port on `127.0.0.1` adb connects to in developer mode. [`DEFAULT_ADB_PORT`] by
+    /// default.
+    pub adb_port: u16,
+    /// Whether the user's Android uses an installed ARM translation package, from its next
+    /// start. On by default; it does nothing while no package is installed.
+    pub arm_translation: bool,
+    /// Whether the user's host folders show in their Android's shared storage. On by default.
+    pub file_sharing: bool,
+    /// The host folders shared while file sharing is on, by name, in the order of
+    /// [`file_share::FOLDERS`]. All of them by default.
+    pub shared_folders: Vec<String>,
+}
+
+impl Default for Settings {
+    fn default() -> Settings {
+        Settings {
+            render_gpu: "display".into(),
+            freeze: false,
+            links_in_android: false,
+            memory_limit_mb: 0,
+            clipboard: true,
+            stop_without_asking: false,
+            advanced_networking: false,
+            program_updates: true,
+            image_updates: true,
+            input_trace: false,
+            resize_trace: false,
+            developer_mode: false,
+            adb_port: DEFAULT_ADB_PORT,
+            arm_translation: true,
+            file_sharing: true,
+            shared_folders: file_share::all_folders(),
+        }
+    }
+}
+
+/// The machine's share of the settings, which the update loops read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MachineSettings {
+    #[serde(default = "yes")]
+    pub program_updates: bool,
+    #[serde(default = "yes")]
+    pub image_updates: bool,
+    #[serde(default)]
+    pub input_trace: bool,
+    #[serde(default)]
+    pub resize_trace: bool,
+}
+
+impl Default for MachineSettings {
+    fn default() -> MachineSettings {
+        MachineSettings {
+            program_updates: true,
+            image_updates: true,
+            input_trace: false,
+            resize_trace: false,
+        }
+    }
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn display() -> String {
+    "display".into()
+}
+
+fn default_adb_port() -> u16 {
+    DEFAULT_ADB_PORT
+}
+
+/// The adb port as kept: 0, which a client sends for "the default", becomes
+/// [`DEFAULT_ADB_PORT`].
+pub fn normalise_adb_port(port: u16) -> u16 {
+    if port == 0 {
+        DEFAULT_ADB_PORT
+    } else {
+        port
+    }
+}
+
+/// One user's share of the settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserSettings {
+    #[serde(default = "display")]
+    pub render_gpu: String,
+    #[serde(default)]
+    pub freeze: bool,
+    #[serde(default)]
+    pub links_in_android: bool,
+    #[serde(default)]
+    pub memory_limit_mb: u32,
+    #[serde(default = "yes")]
+    pub clipboard: bool,
+    #[serde(default)]
+    pub developer_mode: bool,
+    #[serde(default = "default_adb_port")]
+    pub adb_port: u16,
+    #[serde(default = "yes")]
+    pub arm_translation: bool,
+    #[serde(default)]
+    pub stop_without_asking: bool,
+    #[serde(default = "yes")]
+    pub file_sharing: bool,
+    #[serde(default = "file_share::all_folders")]
+    pub shared_folders: Vec<String>,
+    #[serde(default)]
+    pub advanced_networking: bool,
+}
+
+impl Default for UserSettings {
+    fn default() -> UserSettings {
+        UserSettings {
+            render_gpu: display(),
+            freeze: false,
+            links_in_android: false,
+            memory_limit_mb: 0,
+            clipboard: true,
+            developer_mode: false,
+            adb_port: DEFAULT_ADB_PORT,
+            arm_translation: true,
+            stop_without_asking: false,
+            file_sharing: true,
+            shared_folders: file_share::all_folders(),
+            advanced_networking: false,
+        }
+    }
+}
+
+impl UserSettings {
+    /// The user's share of `settings`, as kept, with `render_gpu` and `shared_folders`
+    /// already checked.
+    fn from_settings(
+        settings: &Settings,
+        render_gpu: String,
+        shared_folders: Vec<String>,
+    ) -> UserSettings {
+        UserSettings {
+            render_gpu,
+            freeze: settings.freeze,
+            links_in_android: settings.links_in_android,
+            memory_limit_mb: settings.memory_limit_mb,
+            clipboard: settings.clipboard,
+            developer_mode: settings.developer_mode,
+            adb_port: normalise_adb_port(settings.adb_port),
+            arm_translation: settings.arm_translation,
+            stop_without_asking: settings.stop_without_asking,
+            file_sharing: settings.file_sharing,
+            shared_folders,
+            advanced_networking: settings.advanced_networking,
+        }
+    }
+}
+
+/// Checks a render GPU value and writes it the way it is kept: the three keywords in lower
+/// case, a GPU name as given without the spaces around it.
+pub fn normalise_render_gpu(value: &str) -> Result<String, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(
+            "the render GPU is empty; use display, integrated, discrete or part of a GPU's name"
+                .into(),
+        );
+    }
+    if trimmed.chars().count() > MAX_RENDER_GPU {
+        return Err(format!(
+            "the render GPU is longer than {MAX_RENDER_GPU} characters; use part of the GPU's name"
+        ));
+    }
+    if trimmed.chars().any(char::is_control) {
+        return Err("the render GPU contains a control character".into());
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    Ok(match lower.as_str() {
+        "display" | "integrated" | "discrete" => lower,
+        _ => trimmed.to_string(),
+    })
+}
+
+/// The name a user's files in the service's folder start with. The identity becomes a file
+/// name, so only the characters SIDs and Unix user IDs use are accepted.
+pub(crate) fn user_file_stem(user: &str) -> Result<String, String> {
+    if user.is_empty()
+        || user.len() > 200
+        || !user
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == ':' || c == '_')
+    {
+        return Err(format!(
+            "{user:?} is not a user identity the service keeps settings for"
+        ));
+    }
+    Ok(user.replace(':', "_"))
+}
+
+/// Where the service keeps the settings.
+pub trait SettingsStore: Send + Sync {
+    /// The settings of `user`, an identity as the transport reports it.
+    fn get(&self, user: &str) -> Result<Settings, String>;
+    /// Replaces the settings of `user` and the machine's with `settings`, and returns them as
+    /// they are now. An invalid value changes nothing.
+    fn set(&self, user: &str, settings: &Settings) -> Result<Settings, String>;
+    /// The machine's settings, for the update loops. The defaults when they cannot be read.
+    fn machine(&self) -> MachineSettings;
+    /// Replaces the machine's settings alone, as the service does itself (bringing over a
+    /// choice an earlier release kept elsewhere), with no user to act for.
+    fn set_machine(&self, machine: MachineSettings) -> Result<(), String>;
+    /// The ARM translation package `user` has installed, if any.
+    fn arm_translation(&self, user: &str) -> Result<Option<Package>, String>;
+    /// Records the ARM translation package `user` has installed, or that there is none.
+    fn set_arm_translation(&self, user: &str, package: Option<&Package>) -> Result<(), String>;
+    /// The window settings of `user` for every app that has any, by package name.
+    fn app_windows(&self, user: &str) -> Result<Vec<AppWindowSettings>, String> {
+        let _ = user;
+        Ok(Vec::new())
+    }
+    /// Replaces the window settings of `user` for every app.
+    fn set_app_windows(&self, user: &str, apps: &[AppWindowSettings]) -> Result<(), String> {
+        let _ = (user, apps);
+        Err("this service keeps no window settings for apps".into())
+    }
+}
+
+/// Finds the render GPU a user chose before they first saved settings, if any.
+pub type PreviousRenderGpu = Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
+
+/// The settings in JSON files in the service's own folder.
+pub struct FileSettings {
+    dir: PathBuf,
+    previous_render_gpu: Option<PreviousRenderGpu>,
+    lock: Mutex<()>,
+}
+
+impl FileSettings {
+    pub fn new(dir: impl Into<PathBuf>) -> FileSettings {
+        FileSettings {
+            dir: dir.into(),
+            previous_render_gpu: None,
+            lock: Mutex::new(()),
+        }
+    }
+
+    /// Starts a user who has never saved settings from the render GPU `previous` finds.
+    pub fn with_previous_render_gpu(mut self, previous: PreviousRenderGpu) -> FileSettings {
+        self.previous_render_gpu = Some(previous);
+        self
+    }
+
+    fn machine_file(&self) -> PathBuf {
+        self.dir.join("machine.json")
+    }
+
+    fn user_file(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self
+            .dir
+            .join("users")
+            .join(format!("{}.json", user_file_stem(user)?)))
+    }
+
+    fn app_windows_file(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self
+            .dir
+            .join("users")
+            .join(format!("{}.app-windows.json", user_file_stem(user)?)))
+    }
+
+    fn arm_translation_file(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self
+            .dir
+            .join("users")
+            .join(format!("{}.arm-translation.json", user_file_stem(user)?)))
+    }
+
+    fn read_machine(&self) -> Result<MachineSettings, String> {
+        read_json(&self.machine_file()).map(Option::unwrap_or_default)
+    }
+
+    fn read_user(&self, user: &str) -> Result<UserSettings, String> {
+        match read_json::<UserSettings>(&self.user_file(user)?)? {
+            Some(settings) => Ok(settings),
+            None => Ok(UserSettings {
+                render_gpu: self
+                    .previous_render_gpu
+                    .as_ref()
+                    .and_then(|previous| previous(user))
+                    .and_then(|value| normalise_render_gpu(&value).ok())
+                    .unwrap_or_else(display),
+                ..UserSettings::default()
+            }),
+        }
+    }
+}
+
+pub(crate) fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<Option<T>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => serde_json::from_str(&text)
+            .map(Some)
+            .map_err(|e| format!("the settings in {} are not usable: {e}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("reading the settings {}: {e}", path.display())),
+    }
+}
+
+/// Writes `value` to `path` through a file beside it, so a reader never sees half a file.
+pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+    }
+    let text = serde_json::to_string_pretty(value).expect("settings serialise");
+    let partial = path.with_extension("json.partial");
+    std::fs::write(&partial, text).map_err(|e| format!("writing {}: {e}", partial.display()))?;
+    std::fs::rename(&partial, path).map_err(|e| format!("replacing {}: {e}", path.display()))
+}
+
+/// A user's settings and the machine's, as a client sees them together.
+fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
+    Settings {
+        render_gpu: mine.render_gpu,
+        freeze: mine.freeze,
+        links_in_android: mine.links_in_android,
+        memory_limit_mb: mine.memory_limit_mb,
+        clipboard: mine.clipboard,
+        stop_without_asking: mine.stop_without_asking,
+        advanced_networking: mine.advanced_networking,
+        program_updates: machine.program_updates,
+        image_updates: machine.image_updates,
+        input_trace: machine.input_trace,
+        resize_trace: machine.resize_trace,
+        developer_mode: mine.developer_mode,
+        adb_port: normalise_adb_port(mine.adb_port),
+        arm_translation: mine.arm_translation,
+        file_sharing: mine.file_sharing,
+        // A folder name a later release no longer knows is dropped rather than refused, so
+        // a file kept by another release still reads.
+        shared_folders: file_share::normalise_folders(&mine.shared_folders)
+            .unwrap_or_else(|_| file_share::known_folders(&mine.shared_folders)),
+    }
+}
+
+/// The machine's share of `settings`.
+fn machine_part(settings: &Settings) -> MachineSettings {
+    MachineSettings {
+        program_updates: settings.program_updates,
+        image_updates: settings.image_updates,
+        input_trace: settings.input_trace,
+        resize_trace: settings.resize_trace,
+    }
+}
+
+impl SettingsStore for FileSettings {
+    fn get(&self, user: &str) -> Result<Settings, String> {
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let mine = self.read_user(user)?;
+        let machine = self.read_machine()?;
+        Ok(combine(mine, machine))
+    }
+
+    fn set(&self, user: &str, settings: &Settings) -> Result<Settings, String> {
+        let render_gpu = normalise_render_gpu(&settings.render_gpu)?;
+        let shared_folders = file_share::normalise_folders(&settings.shared_folders)?;
+        let user_file = self.user_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        write_json(
+            &user_file,
+            &UserSettings::from_settings(settings, render_gpu.clone(), shared_folders.clone()),
+        )?;
+        write_json(&self.machine_file(), &machine_part(settings))?;
+        Ok(Settings {
+            render_gpu,
+            adb_port: normalise_adb_port(settings.adb_port),
+            shared_folders,
+            ..settings.clone()
+        })
+    }
+
+    fn machine(&self) -> MachineSettings {
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        self.read_machine().unwrap_or_else(|why| {
+            eprintln!("settings: {why}; using the defaults");
+            MachineSettings::default()
+        })
+    }
+
+    fn set_machine(&self, machine: MachineSettings) -> Result<(), String> {
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        write_json(&self.machine_file(), &machine)
+    }
+
+    fn arm_translation(&self, user: &str) -> Result<Option<Package>, String> {
+        let file = self.arm_translation_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        read_json(&file)
+    }
+
+    fn set_arm_translation(&self, user: &str, package: Option<&Package>) -> Result<(), String> {
+        let file = self.arm_translation_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        match package {
+            Some(package) => write_json(&file, package),
+            None => match std::fs::remove_file(&file) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(format!("removing {}: {e}", file.display())),
+            },
+        }
+    }
+
+    fn app_windows(&self, user: &str) -> Result<Vec<AppWindowSettings>, String> {
+        let file = self.app_windows_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        read_json(&file).map(Option::unwrap_or_default)
+    }
+
+    fn set_app_windows(&self, user: &str, apps: &[AppWindowSettings]) -> Result<(), String> {
+        let file = self.app_windows_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        write_json(&file, &apps)
+    }
+}
+
+/// Settings kept in memory, for tests and for a service that keeps no folder.
+#[derive(Default)]
+pub struct MemorySettings {
+    users: Mutex<std::collections::HashMap<String, UserSettings>>,
+    machine: Mutex<MachineSettings>,
+    arm_translation: Mutex<std::collections::HashMap<String, Package>>,
+    app_windows: Mutex<std::collections::HashMap<String, Vec<AppWindowSettings>>>,
+}
+
+impl SettingsStore for MemorySettings {
+    fn get(&self, user: &str) -> Result<Settings, String> {
+        let mine = self
+            .users
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(user)
+            .cloned()
+            .unwrap_or_default();
+        Ok(combine(mine, self.machine()))
+    }
+
+    fn set(&self, user: &str, settings: &Settings) -> Result<Settings, String> {
+        let render_gpu = normalise_render_gpu(&settings.render_gpu)?;
+        let shared_folders = file_share::normalise_folders(&settings.shared_folders)?;
+        self.users.lock().unwrap_or_else(|e| e.into_inner()).insert(
+            user.to_string(),
+            UserSettings::from_settings(settings, render_gpu.clone(), shared_folders.clone()),
+        );
+        *self.machine.lock().unwrap_or_else(|e| e.into_inner()) = machine_part(settings);
+        Ok(Settings {
+            render_gpu,
+            adb_port: normalise_adb_port(settings.adb_port),
+            shared_folders,
+            ..settings.clone()
+        })
+    }
+
+    fn machine(&self) -> MachineSettings {
+        *self.machine.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn set_machine(&self, machine: MachineSettings) -> Result<(), String> {
+        *self.machine.lock().unwrap_or_else(|e| e.into_inner()) = machine;
+        Ok(())
+    }
+
+    fn arm_translation(&self, user: &str) -> Result<Option<Package>, String> {
+        Ok(self
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(user)
+            .cloned())
+    }
+
+    fn set_arm_translation(&self, user: &str, package: Option<&Package>) -> Result<(), String> {
+        let mut packages = self
+            .arm_translation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        match package {
+            Some(package) => packages.insert(user.to_string(), package.clone()),
+            None => packages.remove(user),
+        };
+        Ok(())
+    }
+
+    fn app_windows(&self, user: &str) -> Result<Vec<AppWindowSettings>, String> {
+        Ok(self
+            .app_windows
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(user)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    fn set_app_windows(&self, user: &str, apps: &[AppWindowSettings]) -> Result<(), String> {
+        self.app_windows
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(user.to_string(), apps.to_vec());
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("dsa-settings-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn fr17_settings_default_to_the_display_gpu_freeze_off_and_updates_on() {
+        let dir = scratch("defaults");
+        let store = FileSettings::new(&dir);
+        let settings = store.get("S-1-5-21-1-2-3-1001").unwrap();
+        assert_eq!(settings, Settings::default());
+        assert_eq!(settings.render_gpu, "display");
+        assert!(
+            !settings.freeze,
+            "freeze is off unless the user turns it on"
+        );
+        assert_eq!(store.machine(), MachineSettings::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr29_file_sharing_is_on_with_every_folder_by_default() {
+        let dir = scratch("sharing-default");
+        let settings = FileSettings::new(&dir).get("S-1-5-21-1-2-3-1001").unwrap();
+        assert!(settings.file_sharing);
+        assert_eq!(settings.shared_folders, file_share::all_folders());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr29_chosen_folders_are_kept_and_an_unknown_one_is_refused() {
+        let dir = scratch("sharing-chosen");
+        let store = FileSettings::new(&dir);
+        let user = "S-1-5-21-1-2-3-1001";
+        let chosen = Settings {
+            file_sharing: false,
+            shared_folders: vec!["pictures".into(), "Documents".into(), "Pictures".into()],
+            ..Settings::default()
+        };
+        let kept = store.set(user, &chosen).unwrap();
+        assert_eq!(kept.shared_folders, ["Documents", "Pictures"]);
+        let again = FileSettings::new(&dir).get(user).unwrap();
+        assert!(!again.file_sharing);
+        assert_eq!(again.shared_folders, ["Documents", "Pictures"]);
+        let unknown = Settings {
+            shared_folders: vec!["C:\\".into()],
+            ..Settings::default()
+        };
+        assert!(store.set(user, &unknown).is_err());
+        assert_eq!(
+            store.get(user).unwrap().shared_folders,
+            ["Documents", "Pictures"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr17_saved_settings_are_read_back_per_user_and_per_machine() {
+        let dir = scratch("saved");
+        let store = FileSettings::new(&dir);
+        let saved = store
+            .set(
+                "S-1-5-21-1-2-3-1001",
+                &Settings {
+                    render_gpu: " Discrete ".into(),
+                    freeze: true,
+                    links_in_android: true,
+                    memory_limit_mb: 0,
+                    clipboard: false,
+                    stop_without_asking: false,
+                    advanced_networking: false,
+                    program_updates: false,
+                    image_updates: true,
+                    input_trace: true,
+                    resize_trace: false,
+                    developer_mode: true,
+                    adb_port: 5037,
+                    arm_translation: false,
+                    file_sharing: false,
+                    shared_folders: vec!["Pictures".into()],
+                },
+            )
+            .unwrap();
+        assert_eq!(saved.render_gpu, "discrete");
+
+        let again = FileSettings::new(&dir);
+        let mine = again.get("S-1-5-21-1-2-3-1001").unwrap();
+        assert_eq!(mine.render_gpu, "discrete");
+        assert!(mine.freeze);
+        assert!(!mine.clipboard);
+        assert!(!mine.program_updates);
+        // Another user has their own GPU and freeze, and shares the machine's updates.
+        let theirs = again.get("S-1-5-21-1-2-3-1002").unwrap();
+        assert_eq!(theirs.render_gpu, "display");
+        assert!(!theirs.freeze);
+        assert!(theirs.clipboard);
+        assert!(!theirs.program_updates);
+        assert!(!again.machine().program_updates);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr17_an_invalid_render_gpu_changes_nothing() {
+        let dir = scratch("invalid");
+        let store = FileSettings::new(&dir);
+        for bad in ["", "   ", "a\nb", &"x".repeat(MAX_RENDER_GPU + 1)] {
+            let error = store
+                .set(
+                    "uid:1000",
+                    &Settings {
+                        render_gpu: bad.to_string(),
+                        program_updates: false,
+                        ..Settings::default()
+                    },
+                )
+                .unwrap_err();
+            assert!(error.contains("render GPU"), "{error}");
+        }
+        assert!(store.machine().program_updates);
+        assert!(!dir.exists(), "nothing was written");
+    }
+
+    #[test]
+    fn fr9_links_open_on_the_host_by_default_and_the_choice_is_kept() {
+        let dir = scratch("links");
+        let store = FileSettings::new(&dir);
+        assert!(!store.get("uid:1000").unwrap().links_in_android);
+        // A file saved before the setting existed keeps links on the host.
+        std::fs::create_dir_all(dir.join("users")).unwrap();
+        std::fs::write(
+            dir.join("users").join("uid_1001.json"),
+            r#"{"render_gpu": "display", "freeze": true}"#,
+        )
+        .unwrap();
+        assert!(!store.get("uid:1001").unwrap().links_in_android);
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    links_in_android: true,
+                    memory_limit_mb: 0,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert!(again.get("uid:1000").unwrap().links_in_android);
+        assert!(!again.get("uid:1001").unwrap().links_in_android);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr13_clipboard_sharing_is_on_by_default_and_kept_when_turned_off() {
+        let dir = scratch("clipboard");
+        let store = FileSettings::new(&dir);
+        assert!(store.get("uid:1000").unwrap().clipboard);
+        // A file saved before the setting existed keeps it on.
+        std::fs::create_dir_all(dir.join("users")).unwrap();
+        std::fs::write(
+            dir.join("users").join("uid_1001.json"),
+            r#"{"render_gpu": "display", "freeze": true}"#,
+        )
+        .unwrap();
+        assert!(store.get("uid:1001").unwrap().clipboard);
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    clipboard: false,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        assert!(!FileSettings::new(&dir).get("uid:1000").unwrap().clipboard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr24_stopping_asks_by_default_and_do_not_ask_again_is_kept() {
+        let dir = scratch("stop");
+        let store = FileSettings::new(&dir);
+        assert!(!store.get("uid:1000").unwrap().stop_without_asking);
+        // A file saved before the setting existed asks.
+        std::fs::create_dir_all(dir.join("users")).unwrap();
+        std::fs::write(
+            dir.join("users").join("uid_1001.json"),
+            r#"{"render_gpu": "display", "clipboard": false}"#,
+        )
+        .unwrap();
+        assert!(!store.get("uid:1001").unwrap().stop_without_asking);
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    stop_without_asking: true,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert!(again.get("uid:1000").unwrap().stop_without_asking);
+        assert!(!again.get("uid:1001").unwrap().stop_without_asking);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr28_advanced_networking_is_off_by_default_and_kept_per_user() {
+        let dir = scratch("network");
+        let store = FileSettings::new(&dir);
+        assert!(!store.get("uid:1000").unwrap().advanced_networking);
+        // A file saved before the setting existed stays on NAT.
+        std::fs::create_dir_all(dir.join("users")).unwrap();
+        std::fs::write(
+            dir.join("users").join("uid_1001.json"),
+            r#"{"render_gpu": "display"}"#,
+        )
+        .unwrap();
+        assert!(!store.get("uid:1001").unwrap().advanced_networking);
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    advanced_networking: true,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert!(again.get("uid:1000").unwrap().advanced_networking);
+        assert!(!again.get("uid:1001").unwrap().advanced_networking);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr19_trace_switches_are_machine_settings_off_by_default() {
+        let dir = scratch("traces");
+        let store = FileSettings::new(&dir);
+        let settings = store.get("uid:1000").unwrap();
+        assert!(!settings.input_trace && !settings.resize_trace);
+        // A file saved before the switches existed keeps them off.
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("machine.json"), r#"{"program_updates": true}"#).unwrap();
+        assert!(!store.machine().input_trace);
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    input_trace: true,
+                    resize_trace: true,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert!(again.machine().input_trace && again.machine().resize_trace);
+        // The machine's: another user sees them on too.
+        assert!(again.get("uid:1001").unwrap().input_trace);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr17_a_gpu_name_keeps_its_case() {
+        assert_eq!(normalise_render_gpu(" RTX 4050 ").unwrap(), "RTX 4050");
+        assert_eq!(normalise_render_gpu("INTEGRATED").unwrap(), "integrated");
+    }
+
+    #[test]
+    fn fr17_a_user_without_settings_keeps_the_gpu_chosen_before() {
+        let dir = scratch("previous");
+        let store = FileSettings::new(&dir).with_previous_render_gpu(Box::new(|user| {
+            (user == "S-1-5-21-1-2-3-1001").then(|| "RTX".to_string())
+        }));
+        assert_eq!(store.get("S-1-5-21-1-2-3-1001").unwrap().render_gpu, "RTX");
+        assert_eq!(
+            store.get("S-1-5-21-1-2-3-1002").unwrap().render_gpu,
+            "display"
+        );
+        // Once saved, the saved value wins.
+        store
+            .set(
+                "S-1-5-21-1-2-3-1001",
+                &Settings {
+                    render_gpu: "display".into(),
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            store.get("S-1-5-21-1-2-3-1001").unwrap().render_gpu,
+            "display"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr20_developer_mode_is_off_by_default_on_port_58526_and_kept_per_user() {
+        let dir = scratch("developer-mode");
+        let store = FileSettings::new(&dir);
+        let fresh = store.get("uid:1000").unwrap();
+        assert!(!fresh.developer_mode);
+        assert_eq!(fresh.adb_port, 58526);
+        let saved = store
+            .set(
+                "uid:1000",
+                &Settings {
+                    developer_mode: true,
+                    adb_port: 0,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        assert!(saved.developer_mode);
+        assert_eq!(saved.adb_port, 58526, "0 means the default port");
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    developer_mode: true,
+                    adb_port: 5037,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert!(again.get("uid:1000").unwrap().developer_mode);
+        assert_eq!(again.get("uid:1000").unwrap().adb_port, 5037);
+        assert!(
+            !again.get("uid:1001").unwrap().developer_mode,
+            "the user's own"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr25_arm_translation_is_on_by_default_and_its_package_is_kept_per_user() {
+        let dir = scratch("arm-translation");
+        let store = FileSettings::new(&dir);
+        assert!(store.get("uid:1000").unwrap().arm_translation);
+        assert_eq!(store.arm_translation("uid:1000").unwrap(), None);
+        let package = Package {
+            name: "Translator".into(),
+            version: "1".into(),
+            library: "libtranslator.so".into(),
+            abis: vec!["arm64-v8a".into()],
+            license: "Apache-2.0".into(),
+        };
+        store
+            .set_arm_translation("uid:1000", Some(&package))
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert_eq!(again.arm_translation("uid:1000").unwrap(), Some(package));
+        assert_eq!(again.arm_translation("uid:1001").unwrap(), None);
+        again.set_arm_translation("uid:1000", None).unwrap();
+        assert_eq!(again.arm_translation("uid:1000").unwrap(), None);
+        // Removing what is not there is not an error.
+        again.set_arm_translation("uid:1000", None).unwrap();
+        let off = again
+            .set(
+                "uid:1000",
+                &Settings {
+                    arm_translation: false,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        assert!(!off.arm_translation);
+        assert!(
+            !FileSettings::new(&dir)
+                .get("uid:1000")
+                .unwrap()
+                .arm_translation
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr17_a_user_identity_never_leaves_the_settings_folder() {
+        let dir = scratch("identity");
+        let store = FileSettings::new(&dir);
+        for bad in ["..\\..\\x", "../x", "a/b", ""] {
+            assert!(store.get(bad).is_err(), "{bad:?}");
+        }
+        assert!(store.get("uid:501").is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr17_a_broken_settings_file_is_reported() {
+        let dir = scratch("broken");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("machine.json"), "{").unwrap();
+        let store = FileSettings::new(&dir);
+        assert!(store.get("uid:1000").unwrap_err().contains("not usable"));
+        assert_eq!(store.machine(), MachineSettings::default());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr31_a_run_mode_kept_by_an_earlier_release_is_ignored_and_dropped() {
+        let dir = scratch("run-mode-gone");
+        std::fs::create_dir_all(dir.join("users")).unwrap();
+        let file = dir.join("users").join("uid_1000.json");
+        std::fs::write(
+            &file,
+            r#"{"render_gpu": "discrete", "run_mode": "as-needed", "stop_after_secs": 300, "keep_for_notifications": true}"#,
+        )
+        .unwrap();
+        let store = FileSettings::new(&dir);
+        let mine = store.get("uid:1000").unwrap();
+        assert_eq!(mine.render_gpu, "discrete", "the rest of the file still reads");
+        store.set("uid:1000", &mine).unwrap();
+        let kept = std::fs::read_to_string(&file).unwrap();
+        for gone in ["run_mode", "stop_after_secs", "keep_for_notifications"] {
+            assert!(!kept.contains(gone), "{gone} is dropped: {kept}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

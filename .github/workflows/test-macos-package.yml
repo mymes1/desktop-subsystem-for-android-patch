@@ -1,0 +1,114 @@
+# Builds the macOS host, checks its code on macOS (the parts that call the macOS frameworks
+# build only there), and packages it: DSA.app signed with the virtualization entitlement,
+# in an installer package and a disk image. The package is checked for what it must carry.
+name: macOS package test
+
+on:
+  # Only develop is built and tested: features are integrated there and fixed there.
+  push:
+    branches: [develop]
+    paths:
+      - "dsa/host/platform/macos/**"
+      - "dsa/host/core/**"
+      - "dsa/host/platform/unix/**"
+      - "dsa/protocol/**"
+      - "dsa/Cargo.toml"
+      - "dsa/Cargo.lock"
+      - ".github/workflows/test-macos-package.yml"
+  workflow_dispatch:
+
+concurrency:
+  # A newer push to develop holds every older one, so only the newest is checked. Runs
+  # that never finish are avoided by checking compile and lint before each push.
+  group: test-macos-package-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build and package the macOS host (macos, arm64)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: dsa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint the macOS host
+        run: cargo clippy -p dsa-host-macos --all-targets -- -D warnings
+
+      - name: Run the macOS host's tests
+        run: cargo test -p dsa-host-macos
+
+      - name: Build the macOS host's programs
+        run: cargo build --release -p dsa-host-macos -p dsa-cli
+
+      - name: Package DSA.app, the installer package and the disk image
+        run: |
+          bash host/platform/macos/packaging/build-app.sh 0.1.0 target/release ../.scratch/macos-package
+
+      - name: Check the bundle, its signature and its entitlements
+        working-directory: .scratch/macos-package
+        run: |
+          plutil -lint DSA.app/Contents/Info.plist
+          test "$(plutil -extract CFBundleExecutable raw DSA.app/Contents/Info.plist)" = dsa-app-window
+          test -x DSA.app/Contents/MacOS/dsa-app-window
+          test -x DSA.app/Contents/MacOS/dsa
+          # The window manager ships beside the service, which starts it through its agent.
+          test -x DSA.app/Contents/MacOS/dsa-wm
+          test -x DSA.app/Contents/MacOS/dsa-hostd
+          DSA.app/Contents/MacOS/dsa-wm version | grep -Fq dsa-wm
+          # The device lender ships beside them too, with its identity and the reasons for
+          # its camera, microphone and location prompts embedded in it.
+          test -x DSA.app/Contents/MacOS/dsa-devices
+          DSA.app/Contents/MacOS/dsa-devices version | grep -Fq dsa-devices
+          otool -s __TEXT __info_plist DSA.app/Contents/MacOS/dsa-devices | grep -Fq '__info_plist'
+          codesign -d -vv DSA.app/Contents/MacOS/dsa-devices > devices-sign.txt 2>&1
+          grep -Fxq 'Identifier=org.thisisthepy.dsa.devices' devices-sign.txt
+          grep -Eq 'Info.plist entries=[1-9]' devices-sign.txt
+          devices_plist="$GITHUB_WORKSPACE/dsa/host/platform/macos/packaging/dsa-devices-Info.plist"
+          plutil -lint "$devices_plist"
+          for key in NSCameraUsageDescription NSMicrophoneUsageDescription NSLocationWhenInUseUsageDescription; do
+            plutil -extract "$key" raw "$devices_plist" > /dev/null
+            plutil -extract "$key" raw DSA.app/Contents/Info.plist > /dev/null
+          done
+          codesign -d --entitlements - --xml DSA.app/Contents/MacOS/dsa-devices > devices-entitlements.plist
+          for key in com.apple.security.device.camera com.apple.security.device.audio-input com.apple.security.personal-information.location; do
+            # plutil reads dots as a key path, so the keys are found as text.
+            tr -d ' \t\n' < devices-entitlements.plist | grep -Fq "<key>$key</key><true/>"
+          done
+          codesign --verify --strict DSA.app
+          codesign -d --entitlements - --xml DSA.app > entitlements.plist
+          tr -d ' \t\n' < entitlements.plist \
+            | grep -Fq '<key>com.apple.security.virtualization</key><true/>'
+          lipo -archs DSA.app/Contents/MacOS/dsa-app-window | grep -Fq arm64
+
+      - name: Check the installer package installs DSA.app into Applications
+        working-directory: .scratch/macos-package
+        run: |
+          pkgutil --check-signature DSA-0.1.0.pkg || true
+          pkgutil --payload-files DSA-0.1.0.pkg | grep -Fq './DSA.app/Contents/MacOS/dsa-app-window'
+          pkgutil --payload-files DSA-0.1.0.pkg | grep -Fq './DSA.app/Contents/Info.plist'
+          pkgutil --payload-files DSA-0.1.0.pkg | grep -Fq './DSA.app/Contents/MacOS/dsa-devices'
+
+      - name: Check the disk image holds DSA.app
+        working-directory: .scratch/macos-package
+        run: |
+          hdiutil verify DSA-0.1.0.dmg
+          mount="$(mktemp -d "$RUNNER_TEMP/dsa-dmg.XXXXXX")"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" DSA-0.1.0.dmg
+          test -x "$mount/DSA.app/Contents/MacOS/dsa-app-window"
+          codesign --verify --strict "$mount/DSA.app"
+          hdiutil detach "$mount"
+
+      - name: Keep the package and the disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsa-macos-package
+          path: |
+            .scratch/macos-package/DSA-0.1.0.pkg
+            .scratch/macos-package/DSA-0.1.0.dmg
+          if-no-files-found: error

@@ -347,3 +347,251 @@ fn fr14_nothing_new_is_staged_while_an_image_is_on_trial() {
         .unwrap_err();
     assert!(matches!(error, UpdateError::Refused(_)), "{error}");
 }
+
+#[test]
+fn fr14_an_image_that_failed_under_another_dsa_build_is_tried_again() {
+    // A failure recorded before builds were recorded (0.1.0) is not held against the image.
+    let (store, root, manifest) = staged_store();
+    let mut guest = FakeGuest {
+        broken: vec!["16.0.2".into()],
+        booted: vec![],
+        halts: 0,
+    };
+    trial::start(&store, &mut guest, Duration::from_secs(120)).unwrap();
+    assert_eq!(store.state().unwrap().failed, ["16.0.2"]);
+    let first = installed("ignored", 1, 1);
+    let store = ImageStore::open_as(&root, &first, "dsa-hostd 0.1.1").unwrap();
+    let state = store.state().unwrap();
+    assert!(state.failed.is_empty(), "{state:?}");
+    assert_eq!(
+        decide(&state.current, &manifest, &state.failed),
+        Decision::Apply(manifest.images[0].clone())
+    );
+
+    // The same build remembers its own failure; the next build tries the image again.
+    store
+        .stage(
+            &manifest.images[0],
+            &manifest,
+            &serving(&[("16.0.2", b"second image")]),
+        )
+        .unwrap();
+    trial::start(&store, &mut guest, Duration::from_secs(120)).unwrap();
+    let same = ImageStore::open_as(&root, &first, "dsa-hostd 0.1.1").unwrap();
+    assert_eq!(same.state().unwrap().failed, ["16.0.2"]);
+    let next = ImageStore::open_as(&root, &first, "dsa-hostd 0.1.2").unwrap();
+    assert!(next.state().unwrap().failed.is_empty());
+}
+
+/// An image folder made the way make-image.py lays one out, with a real VHDX signature when
+/// `real` is set and a stand-in's text otherwise.
+fn put_image(root: &Path, version: &str, major: u32, build: u64, real: bool) {
+    let dir = root.join("images").join(version);
+    std::fs::create_dir_all(&dir).unwrap();
+    let disk: &[u8] = if real {
+        b"vhdxfile and the rest of a disk"
+    } else {
+        b"a disk"
+    };
+    std::fs::write(dir.join("disk.vhdx"), disk).unwrap();
+    std::fs::write(dir.join("initrd.img"), b"a ramdisk").unwrap();
+    let manifest = serde_json::json!({
+        "version": version,
+        "android_major": major,
+        "build": build,
+        "files": {
+            "disk.vhdx": {"size": disk.len()},
+            "initrd.img": {"size": 9},
+        },
+    });
+    std::fs::write(dir.join("image.json"), manifest.to_string()).unwrap();
+}
+
+#[test]
+fn fr14_an_image_whose_disk_is_not_a_disk_is_not_usable() {
+    use dsa_host_core::update::store::image_is_usable;
+    let first = installed("16.0.1", 16, 1);
+    let (_store, root) = fresh_store(&first);
+    put_image(&root, "16.0.2", 16, 2, true);
+    put_image(&root, "17.0.0-1", 17, 1, false);
+    assert!(image_is_usable(&root.join("images").join("16.0.2")));
+    assert!(!image_is_usable(&root.join("images").join("17.0.0-1")));
+    assert!(!image_is_usable(&root.join("images").join("missing")));
+    // A file shorter than image.json says is a broken copy.
+    std::fs::write(
+        root.join("images").join("16.0.2").join("initrd.img"),
+        b"short",
+    )
+    .unwrap();
+    assert!(!image_is_usable(&root.join("images").join("16.0.2")));
+}
+
+#[test]
+fn fr27_an_image_of_another_architecture_is_not_usable() {
+    use dsa_host_core::update::store::{guest_arch, image_is_usable};
+    let first = installed("16.0.1", 16, 1);
+    let (_store, root) = fresh_store(&first);
+    put_image(&root, "17.0.0-1", 17, 1, true);
+    put_image(&root, "17.0.0-2", 17, 2, true);
+    let set_arch = |version: &str, arch: &str| {
+        let path = root.join("images").join(version).join("image.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        manifest["arch"] = serde_json::json!(arch);
+        std::fs::write(&path, manifest.to_string()).unwrap();
+    };
+    let other = if guest_arch() == "arm64" {
+        "x86_64"
+    } else {
+        "arm64"
+    };
+    set_arch("17.0.0-1", guest_arch());
+    set_arch("17.0.0-2", other);
+    assert!(image_is_usable(&root.join("images").join("17.0.0-1")));
+    assert!(
+        !image_is_usable(&root.join("images").join("17.0.0-2")),
+        "an {other} image on an {} host",
+        guest_arch()
+    );
+    let expected = if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        "x86_64"
+    };
+    assert_eq!(guest_arch(), expected);
+}
+
+#[test]
+fn fr14_a_current_image_that_cannot_boot_falls_back_to_a_usable_one() {
+    use dsa_host_core::update::store::Recovery;
+    let first = installed("none", 0, 0);
+    let (store, root) = fresh_store(&first);
+    put_image(&root, "16.0.2", 16, 2, true);
+    put_image(&root, "16.0.3", 16, 3, true);
+    put_image(&root, "17.0.0-1", 17, 1, false);
+    let mut state = store.state().unwrap();
+    state.current = installed("17.0.0-1", 17, 1);
+    std::fs::write(root.join("state.json"), serde_json::to_vec(&state).unwrap()).unwrap();
+
+    let recovery = store.recover(&first).unwrap();
+    assert_eq!(
+        recovery,
+        Recovery::Moved {
+            broken: installed("17.0.0-1", 17, 1),
+            current: installed("16.0.3", 16, 3),
+        }
+    );
+    assert_eq!(store.state().unwrap().current, installed("16.0.3", 16, 3));
+    assert_eq!(store.recover(&first).unwrap(), Recovery::Usable);
+}
+
+#[test]
+fn fr14_with_no_usable_image_the_installed_image_is_current_again() {
+    use dsa_host_core::update::store::Recovery;
+    // The real package bundles no image: the service then downloads its first one.
+    let first = installed("none", 0, 0);
+    let (store, root) = fresh_store(&first);
+    put_image(&root, "17.0.0-1", 17, 1, false);
+    let mut state = store.state().unwrap();
+    state.current = installed("17.0.0-1", 17, 1);
+    state.on_trial = true;
+    std::fs::write(root.join("state.json"), serde_json::to_vec(&state).unwrap()).unwrap();
+
+    let recovery = store.recover(&first).unwrap();
+    assert_eq!(
+        recovery,
+        Recovery::Moved {
+            broken: installed("17.0.0-1", 17, 1),
+            current: first.clone(),
+        }
+    );
+    let state = store.state().unwrap();
+    assert_eq!(state.current, first);
+    assert!(!state.on_trial);
+    // Nothing better than the installed image itself: it stays as it is.
+    assert_eq!(
+        store.recover(&first).unwrap(),
+        Recovery::NothingBetter { broken: first }
+    );
+}
+
+#[test]
+fn fr15_an_upgrade_that_bundles_a_newer_image_boots_it_on_trial() {
+    // An older installation's state names its own image; the newer installer put a newer
+    // one beside it.
+    let old = installed("17.0.0-1", 17, 1);
+    let (store, root) = fresh_store(&old);
+    put_image(&root, "17.0.0-1", 17, 1, true);
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    let bundled = installed("17.0.0-5", 17, 5);
+
+    assert!(store.adopt_bundled(&bundled).unwrap());
+    let state = store.state().unwrap();
+    assert_eq!(state.current, bundled);
+    assert_eq!(state.previous, Some(old.clone()));
+    assert!(state.on_trial, "the bundled image has not booted here yet");
+    // Adopted once: starting again changes nothing.
+    assert!(!store.adopt_bundled(&bundled).unwrap());
+
+    // A bundled image that does not boot goes back to the one before it and is not adopted
+    // again by the same build, even with its files put back.
+    assert_eq!(store.roll_back().unwrap(), old);
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    assert!(!store.adopt_bundled(&bundled).unwrap());
+    assert_eq!(store.state().unwrap().current, old);
+}
+
+#[test]
+fn fr15_a_bundled_image_that_is_older_or_incomplete_is_not_adopted() {
+    let current = installed("17.0.0-7", 17, 7);
+    let (store, root) = fresh_store(&current);
+    put_image(&root, "17.0.0-7", 17, 7, true);
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    put_image(&root, "17.0.0-9", 17, 9, false);
+    // Older than what the updates already brought.
+    assert!(!store.adopt_bundled(&installed("17.0.0-5", 17, 5)).unwrap());
+    // Newer, but its files are not complete.
+    assert!(!store.adopt_bundled(&installed("17.0.0-9", 17, 9)).unwrap());
+    // No image at all (a package that bundles none).
+    assert!(!store.adopt_bundled(&installed("none", 0, 0)).unwrap());
+    let state = store.state().unwrap();
+    assert_eq!(state.current, current);
+    assert!(!state.on_trial);
+}
+
+#[test]
+fn fr15_an_old_image_the_upgrade_removed_is_not_kept_as_previous() {
+    // Removing the older package took the image it installed with it.
+    let old = installed("17.0.0-1", 17, 1);
+    let (store, root) = fresh_store(&old);
+    std::fs::remove_dir_all(root.join("images").join("17.0.0-1")).unwrap();
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    assert!(store.adopt_bundled(&installed("17.0.0-5", 17, 5)).unwrap());
+    let state = store.state().unwrap();
+    assert_eq!(state.current, installed("17.0.0-5", 17, 5));
+    assert_eq!(state.previous, None);
+}
+
+#[test]
+fn fr15_a_bundled_image_replaces_an_update_still_on_trial_keeping_the_good_one() {
+    let good = installed("17.0.0-1", 17, 1);
+    let (store, root) = fresh_store(&good);
+    put_image(&root, "17.0.0-1", 17, 1, true);
+    put_image(&root, "17.0.0-2", 17, 2, true);
+    put_image(&root, "17.0.0-5", 17, 5, true);
+    let mut state = store.state().unwrap();
+    state.current = installed("17.0.0-2", 17, 2);
+    state.previous = Some(good.clone());
+    state.on_trial = true;
+    std::fs::write(root.join("state.json"), serde_json::to_vec(&state).unwrap()).unwrap();
+
+    assert!(store.adopt_bundled(&installed("17.0.0-5", 17, 5)).unwrap());
+    let state = store.state().unwrap();
+    assert_eq!(state.current, installed("17.0.0-5", 17, 5));
+    assert_eq!(
+        state.previous,
+        Some(good),
+        "the last image known to boot stays"
+    );
+    assert!(state.on_trial);
+}

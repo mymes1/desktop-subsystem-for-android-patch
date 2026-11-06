@@ -1,0 +1,179 @@
+//! The DSA Window Manager (`dsa-wm`), the user-session compositor of Desktop Subsystem for Android.
+//!
+//! Runs in the user session without a console window, accepts guest graphics streams
+//! on Hyper-V sockets (ports 5566 and 5567), shows one window per Android task with that
+//! task's frames, reconnects when the VM restarts, and exits cleanly on sign-out.
+#![windows_subsystem = "windows"]
+
+#[cfg(not(windows))]
+fn main() -> std::process::ExitCode {
+    eprintln!("dsa-wm runs on Windows only");
+    std::process::ExitCode::FAILURE
+}
+
+#[cfg(windows)]
+fn main() {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    use dsa_host_core::host_api::HostApiClient;
+    use dsa_host_windows::compositor::adapter::GfxstreamAdapter;
+    use dsa_host_windows::compositor::display_gpu::{adapter_names, display_sources};
+    use dsa_host_windows::compositor::log::{default_log_file, CompositorLogger};
+    use dsa_host_windows::compositor::shutdown::SignOutListener;
+    use dsa_host_windows::compositor::single_instance::SingleInstanceMutex;
+    use dsa_host_windows::compositor::{Compositor, CompositorConfig};
+    use dsa_host_windows::pipe::NamedPipeConnector;
+    use dsa_host_windows::render_gpu::{
+        choose, describe_outcome, describe_request, render_gpu_setting, CompositorSettings,
+    };
+
+    // The window manager runs itself with this argument to find which video formats the GPU
+    // decodes, so the decoders never load into the long-running process until they are used.
+    if std::env::args().any(|arg| arg == dsa_host_windows::video_decoder::PROBE_ARGUMENT) {
+        use std::io::Write;
+        let report = dsa_host_windows::video_decoder::probe_here();
+        let _ = std::io::stdout().write_all(report.as_bytes());
+        return;
+    }
+
+    // The same for the cameras: Media Foundation and the camera drivers load only into this
+    // child until an app opens a camera.
+    let args: Vec<String> = std::env::args().collect();
+    if args
+        .iter()
+        .any(|arg| arg == dsa_host_windows::camera_capture::LIST_ARGUMENT)
+    {
+        use std::io::Write;
+        let known = dsa_host_windows::camera_capture::known_links(&args);
+        let report = dsa_host_windows::camera_capture::list_here(&known);
+        let _ = std::io::stdout().write_all(report.as_bytes());
+        return;
+    }
+
+    let log_file = default_log_file();
+    let logger = CompositorLogger::open(&log_file).ok().map(Arc::new);
+
+    // Windows runs `dsa-wm --notification <uri>` when the user clicks a notification's toast:
+    // the click goes to the service, and this process ends without starting another window
+    // manager.
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(at) = args
+        .iter()
+        .position(|arg| arg == dsa_host_windows::compositor::notifications::ARGUMENT)
+    {
+        let uri = args.get(at + 1).map(String::as_str).unwrap_or("");
+        let mut connector = NamedPipeConnector {
+            name: CompositorConfig::default().pipe_name,
+        };
+        if let Err(why) = dsa_host_windows::compositor::notifications::activate(uri, &mut connector)
+        {
+            if let Some(log) = &logger {
+                log.log(&format!("a clicked notification did not open: {why}"));
+            }
+        }
+        return;
+    }
+
+    dsa_host_windows::compositor::log::input_trace_to(logger.clone());
+
+    let config = CompositorConfig::default();
+
+    // Enforce single instance per user session.
+    // No window of its own, yet every frame passes through this process.
+    if let Err(why) = dsa_host_windows::scheduling::raise_this_process() {
+        if let Some(log) = &logger {
+            log.log(&why);
+        }
+    }
+
+    let _instance_guard = match SingleInstanceMutex::acquire(&config.mutex_name) {
+        Ok(guard) => guard,
+        Err(why) => {
+            if let Some(log) = &logger {
+                log.log(&format!("exiting: {why}"));
+            }
+            return;
+        }
+    };
+
+    if let Some(log) = &logger {
+        log.log(&format!(
+            "dsa-wm starting (version {})",
+            dsa_host_windows::VERSION
+        ));
+    }
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let _signout = SignOutListener::start(Arc::clone(&stop));
+
+    // The GPU the renderer runs on: the one driving the primary monitor unless the user's
+    // settings name another. It is chosen once, before the renderer starts. The settings are
+    // the service's; the window manager's own compositor.json counts only when the service
+    // cannot be asked.
+    let log = |message: &str| {
+        if let Some(log) = &logger {
+            log.log(message);
+        }
+    };
+    let compositor_settings = dsa_host_windows::paths::UserRoot::current()
+        .map(|root| root.compositor_settings())
+        .unwrap_or_else(|| std::path::PathBuf::from("compositor.json"));
+    let from_service = (|| {
+        let mut connector = NamedPipeConnector {
+            name: config.pipe_name.clone(),
+        };
+        let mut client = HostApiClient::connect(
+            &mut connector,
+            &format!("dsa-wm {}", dsa_host_windows::VERSION),
+            std::time::Duration::from_secs(5),
+        )
+        .map_err(|e| e.to_string())?;
+        client
+            .settings()
+            .map(|report| {
+                // The trace switches too, before the first trace line.
+                dsa_host_windows::compositor::log::use_trace_settings(
+                    report.settings.input_trace,
+                    report.settings.resize_trace,
+                );
+                report.settings.render_gpu
+            })
+            .map_err(|e| e.to_string())
+    })();
+    let (render_gpu, notes) = render_gpu_setting(from_service, || {
+        CompositorSettings::load(&compositor_settings)
+    });
+    for note in &notes {
+        log(note);
+    }
+    let settings = CompositorSettings { render_gpu };
+    let sources = display_sources().unwrap_or_else(|why| {
+        log(&why);
+        Vec::new()
+    });
+    let request = choose(&settings.render_gpu, &sources);
+    log(&describe_request(
+        &settings.render_gpu,
+        &request,
+        &adapter_names(),
+    ));
+
+    let renderer = Arc::new(GfxstreamAdapter::on_gpu(None, &request));
+    for note in renderer.notes() {
+        log(note);
+    }
+    match renderer.renderer_gpu() {
+        Some(gpu) => log(&describe_outcome(&request, &gpu)),
+        None if renderer.is_available() => {
+            log("the graphics backend does not say which GPU it renders on")
+        }
+        None => {}
+    }
+    let mut compositor = Compositor::new(config, renderer.clone()).with_display_presenter(renderer);
+    if let Some(log) = logger {
+        compositor = compositor.with_logger(log);
+    }
+
+    compositor.run(stop);
+}

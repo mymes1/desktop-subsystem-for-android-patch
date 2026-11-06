@@ -1,0 +1,93 @@
+diff --git a/block/partitions/cmdline.c b/block/partitions/cmdline.c
+--- a/block/partitions/cmdline.c
++++ b/block/partitions/cmdline.c
+@@ -28,12 +28,14 @@
+ 	char name[BDEVNAME_SIZE]; /* partition name, such as 'rootfs' */
+ 	sector_t from;
+ 	sector_t size;
++	char uuid[PARTITION_META_INFO_UUIDLTH];
+ 	int flags;
+ 	struct cmdline_subpart *next_subpart;
+ };
+ 
+ struct cmdline_parts {
+-	char name[BDEVNAME_SIZE]; /* block device, such as 'mmcblk0' */
++	/* block device, such as 'mmcblk0', or the disk's GPT GUID */
++	char name[UUID_STRING_LEN + 1];
+ 	unsigned int nr_subparts;
+ 	struct cmdline_subpart *subpart;
+ 	struct cmdline_parts *next_parts;
+@@ -79,6 +81,17 @@
+ 			goto fail;
+ 		}
+ 
++		/* A name may carry its GPT-style UUID as name:uuid. */
++		char *uuid = strchr(next, ':');
++		if (uuid) {
++			*uuid++ = '\0';
++			if (strlen(uuid) != UUID_STRING_LEN) {
++				pr_warn("cmdline partition UUID is invalid.");
++				ret = -EINVAL;
++				goto fail;
++			}
++			strscpy(new_subpart->uuid, uuid, sizeof(new_subpart->uuid));
++		}
+ 		strscpy(new_subpart->name, next, sizeof(new_subpart->name));
+ 	} else
+ 		new_subpart->name[0] = '\0';
+@@ -243,6 +256,8 @@
+ 	info = &state->parts[slot].info;
+ 
+ 	strscpy(info->volname, subpart->name, sizeof(info->volname));
++	if (subpart->uuid[0])
++		strscpy(info->uuid, subpart->uuid, sizeof(info->uuid));
+ 
+ 	snprintf(tmp, sizeof(tmp), "(%s)", info->volname);
+ 	strlcat(state->pp_buf, tmp, PAGE_SIZE);
+@@ -345,6 +360,26 @@
+ }
+ 
+ /*
++ * Writes the disk GUID from the GPT header into guid, or an empty string when the disk
++ * has no GPT. A disk's kernel name follows probe order, which a hypervisor attaching
++ * several disks does not keep stable; the GUID is written into the disk itself.
++ */
++static void cmdline_disk_guid(struct parsed_partitions *state, char *guid)
++{
++	unsigned int lba_sectors = queue_logical_block_size(state->disk->queue) >> 9;
++	Sector sect;
++	unsigned char *header;
++
++	guid[0] = '\0';
++	header = read_part_sector(state, lba_sectors, &sect);
++	if (!header)
++		return;
++	if (!memcmp(header, "EFI PART", 8))
++		snprintf(guid, UUID_STRING_LEN + 1, "%pUl", header + 56);
++	put_dev_sector(sect);
++}
++
++/*
+  * Purpose: allocate cmdline partitions.
+  * Returns:
+  * -1 if unable to read the partition table
+@@ -355,6 +390,7 @@
+ {
+ 	sector_t disk_size;
+ 	struct cmdline_parts *parts;
++	char guid[UUID_STRING_LEN + 1];
+ 
+ 	if (cmdline) {
+ 		if (bdev_parts)
+@@ -371,6 +407,11 @@
+ 		return 0;
+ 
+ 	parts = cmdline_parts_find(bdev_parts, state->disk->disk_name);
++	if (!parts) {
++		cmdline_disk_guid(state, guid);
++		if (guid[0])
++			parts = cmdline_parts_find(bdev_parts, guid);
++	}
+ 	if (!parts)
+ 		return 0;
+ 

@@ -1,0 +1,78 @@
+<Page
+    x:Class="Dsa.Settings.Pages.DeviceIdentityPage"
+    ScrollViewer.CanContentScroll="False"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:l="clr-namespace:Dsa.Settings">
+    <Page.Resources>
+        <!-- One value: its name and what it is for, the box, and what is wrong with what is
+             typed. An empty box shows what Android reports without a change. -->
+        <DataTemplate x:Key="FieldCard">
+            <ui:CardControl Margin="0,0,0,4">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Label}" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="{Binding Description}" Style="{StaticResource CardDescription}" />
+                        <TextBlock Text="{Binding Problem, Mode=OneWay}" Style="{StaticResource CardDescription}"
+                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                   Visibility="{Binding HasProblem, Converter={StaticResource Visible}}" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:TextBox Width="320" Text="{Binding Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="{Binding Placeholder, Mode=OneWay}" ClearButtonEnabled="True"
+                            AutomationProperties.Name="{Binding Label}" />
+            </ui:CardControl>
+        </DataTemplate>
+    </Page.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid Style="{StaticResource PageHeader}">
+            <TextBlock Text="{l:Text IdentityTitle.Text}" Style="{StaticResource PageTitle}" />
+        </Grid>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Style="{StaticResource PageContent}">
+                <TextBlock Text="{l:Text IdentityIntro.Text}" Style="{StaticResource Note}" />
+
+                <ProgressBar IsIndeterminate="True" Margin="0,8,0,0"
+                             Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
+                <ui:InfoBar Title="{l:Text IdentityWarning.Title}" Message="{l:Text IdentityWarning.Message}"
+                            Severity="Warning" IsClosable="False" IsOpen="True" Margin="0,8,0,0" />
+                <ui:InfoBar Title="{l:Text SettingsErrorBar.Title}" Severity="Error" IsClosable="False"
+                            IsOpen="{Binding HasError, Mode=OneWay}" Message="{Binding Error, Mode=OneWay}" />
+                <ui:InfoBar Title="{l:Text IdentityDoneBar.Title}" Severity="Success" IsClosable="False"
+                            IsOpen="{Binding HasMessage, Mode=OneWay}" Message="{Binding Message, Mode=OneWay}" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                    <ui:Button Content="{l:Text IdentitySaveButton.Content}" Appearance="Primary" Icon="{ui:SymbolIcon Save24}"
+                               IsEnabled="{Binding CanSave, Mode=OneWay}" Click="OnSave" />
+                    <ui:Button Content="{l:Text IdentityResetButton.Content}" Margin="8,0,0,0" Icon="{ui:SymbolIcon ArrowReset24}"
+                               IsEnabled="{Binding CanReset, Mode=OneWay}" Click="OnReset" />
+                    <ui:Button Content="{l:Text IdentityRestartButton.Content}" Margin="8,0,0,0" Icon="{ui:SymbolIcon ArrowClockwise24}"
+                               IsEnabled="{Binding CanRestart, Mode=OneWay}"
+                               Visibility="{Binding NeedsRestart, Converter={StaticResource Visible}}" Click="OnRestart" />
+                </StackPanel>
+
+                <TextBlock Text="{l:Text IdentityNamesHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ItemsControl ItemsSource="{Binding Names, Mode=OneWay}" ItemTemplate="{StaticResource FieldCard}" />
+
+                <TextBlock Text="{l:Text IdentityFingerprintHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Fingerprint24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text IdentityPreview.Text}" Style="{StaticResource CardTitle}" />
+                            <ui:TextBox IsTextSelectionEnabled="True" MinHeight="0" Text="{Binding FingerprintPreview, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas"
+                                     BorderThickness="0" Background="Transparent" TextWrapping="Wrap"
+                                     Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                </ui:CardControl>
+                <ItemsControl ItemsSource="{Binding FingerprintParts, Mode=OneWay}" ItemTemplate="{StaticResource FieldCard}" />
+                <ContentControl Content="{Binding WholeFingerprint, Mode=OneWay}" ContentTemplate="{StaticResource FieldCard}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

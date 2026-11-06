@@ -3,7 +3,11 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use dsa_host_windows::host_config::HostConfig;
+use dsa_host_windows::host_config::{
+    expand_locations, host_sized_memory_mb, page_reporting_order_for_build, profile_disk,
+    HostConfig,
+};
+use dsa_host_windows::vm::GuestArch;
 
 const MINIMAL: &str = r#"{
   "kernel": "C:\\Program Files\\DSA\\vm\\bzImage",
@@ -16,15 +20,51 @@ fn fr2_a_minimal_configuration_gets_working_defaults() {
     let config = HostConfig::parse(MINIMAL).unwrap();
     assert_eq!(config.vm_name, "dsa-android");
     assert_eq!(config.control_port, 5000);
+    assert_eq!(config.log_port, 5001);
     let session = config.session_config();
     assert_eq!(session.connect_timeout, Duration::from_secs(120));
     assert_eq!(session.stop_timeout, Duration::from_secs(30));
-    let vm = config.vm_config(Some("S-1-5-21-1-2-3-1001"));
+    let vm = config.vm_config(Some("S-1-5-21-1-2-3-1001")).unwrap();
     assert_eq!(vm.kernel, PathBuf::from(r"C:\Program Files\DSA\vm\bzImage"));
-    assert_eq!(vm.memory_mb, 4096);
-    assert_eq!(vm.page_reporting_order, 9);
+    // Without memory_mb and without a user limit, the VM keeps its 3 GiB default.
+    assert_eq!(vm.memory_mb, host_sized_memory_mb(0));
+    assert_eq!(vm.memory_mb, 3072);
+    assert!([5, 9].contains(&vm.page_reporting_order));
     assert_eq!(vm.socket_sids, ["S-1-5-21-1-2-3-1001"]);
-    vm.to_hcs_document().expect("the defaults make a valid VM");
+    vm.to_hcs_document_for(GuestArch::X86_64)
+        .expect("the defaults make a valid VM");
+}
+
+#[test]
+fn fr10_android_dozes_after_half_a_minute_without_a_window_and_never_freezes_by_default() {
+    let session = HostConfig::parse(MINIMAL).unwrap().session_config();
+    assert_eq!(session.doze_delay, Duration::from_secs(30));
+    assert_eq!(session.freeze_after, None);
+}
+
+#[test]
+fn fr10_freezing_after_a_time_in_doze_is_a_setting() {
+    let json = MINIMAL.replace(
+        "\n}",
+        ",\n  \"doze_delay_secs\": 5,\n  \"freeze_after_minutes\": 60\n}",
+    );
+    let session = HostConfig::parse(&json).unwrap().session_config();
+    assert_eq!(session.doze_delay, Duration::from_secs(5));
+    assert_eq!(session.freeze_after, Some(Duration::from_secs(3600)));
+}
+
+#[test]
+fn nfr2_free_pages_are_reported_in_the_smallest_pieces_the_host_takes() {
+    assert_eq!(page_reporting_order_for_build(None), 9);
+    assert_eq!(page_reporting_order_for_build(Some((19045, 3392))), 9);
+    assert_eq!(page_reporting_order_for_build(Some((19045, 3393))), 5);
+    assert_eq!(page_reporting_order_for_build(Some((22000, 1969))), 9);
+    assert_eq!(page_reporting_order_for_build(Some((22000, 1970))), 5);
+    assert_eq!(page_reporting_order_for_build(Some((26300, 0))), 5);
+    let pinned = MINIMAL.replace("\n}", ",\n  \"page_reporting_order\": 9\n}");
+    let config = HostConfig::parse(&pinned).unwrap();
+    let vm = config.vm_config(Some("S-1-5-21-1-2-3-1001")).unwrap();
+    assert_eq!(vm.page_reporting_order, 9);
 }
 
 #[test]
@@ -32,7 +72,10 @@ fn fr2_a_user_named_in_the_file_wins_over_the_running_user() {
     let json = MINIMAL.replace("\n}", ",\n  \"user_sid\": \"S-1-5-21-9-9-9-1002\"\n}");
     let config = HostConfig::parse(&json).unwrap();
     assert_eq!(
-        config.vm_config(Some("S-1-5-21-1-2-3-1001")).socket_sids,
+        config
+            .vm_config(Some("S-1-5-21-1-2-3-1001"))
+            .unwrap()
+            .socket_sids,
         ["S-1-5-21-9-9-9-1002"]
     );
 }
@@ -57,9 +100,41 @@ fn fr2_the_example_configuration_is_valid() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("dsa-hostd.example.json");
     let config = HostConfig::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
     config
-        .vm_config(Some("S-1-5-21-1-2-3-1001"))
-        .to_hcs_document()
+        .vm_config_with(Some("S-1-5-21-1-2-3-1001"), &profiles)
+        .unwrap()
+        .to_hcs_document_for(GuestArch::X86_64)
         .expect("the example describes a valid VM");
+}
+
+#[test]
+fn fr19_the_example_configuration_keeps_each_users_disk_in_their_profile() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("dsa-hostd.example.json");
+    let config = HostConfig::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(
+        config.data_dir, None,
+        "an installation keeps no disks in the machine's folder"
+    );
+    let alice = config
+        .user_vm_with("S-1-5-21-1-2-3-1001", &profiles)
+        .unwrap();
+    assert_eq!(
+        alice.config.data_disk,
+        PathBuf::from(r"C:\Users\alice\AppData\Local\DSA\android.vhdx")
+    );
+}
+
+#[test]
+fn fr19_the_machine_root_is_the_configuration_files_folder() {
+    let mut config = HostConfig::parse(PROFILES).unwrap();
+    config.machine_root = Some(PathBuf::from(r"D:\Data\DSA"));
+    assert_eq!(
+        config.machine_root().tmp(),
+        PathBuf::from(r"D:\Data\DSA\tmp")
+    );
+    assert_eq!(
+        config.settings_dir(),
+        PathBuf::from(r"D:\Data\DSA\settings")
+    );
 }
 
 const SERVICE: &str = r#"{
@@ -83,7 +158,11 @@ fn pr5_each_user_gets_their_own_vm_data_disk_and_socket_access() {
     assert_ne!(alice.config.data_disk, bob.config.data_disk);
     assert_eq!(bob.config.socket_sids, ["S-1-5-21-1-2-3-1002"]);
     assert_eq!(alice.data_disk_size_gb, 64);
-    alice.config.to_hcs_document().expect("a valid VM");
+    assert!(!alice.disk_in_profile);
+    alice
+        .config
+        .to_hcs_document_for(GuestArch::X86_64)
+        .expect("a valid VM");
 }
 
 #[test]
@@ -94,24 +173,61 @@ fn pr5_a_caller_that_is_not_a_sid_gets_no_vm() {
     }
 }
 
+/// Profiles as Windows would report them, for the tests.
+fn profiles(sid: &str) -> Result<PathBuf, String> {
+    match sid {
+        "S-1-5-21-1-2-3-1001" => Ok(PathBuf::from(r"C:\Users\alice\AppData\Local")),
+        "S-1-5-21-1-2-3-1002" => Ok(PathBuf::from(r"D:\Profiles\bob\Local")),
+        _ => Err(format!("Windows has no profile folder for {sid}")),
+    }
+}
+
+const PROFILES: &str = r#"{
+  "kernel": "C:\\Program Files\\DSA\\vm\\bzImage",
+  "system_image": "C:\\Program Files\\DSA\\vm\\system.vhdx"
+}"#;
+
 #[test]
-fn pr5_serving_users_needs_a_data_folder() {
-    let config = HostConfig::parse(MINIMAL).unwrap();
+fn pr5_each_users_disk_is_in_their_own_profile_without_a_data_folder() {
+    let config = HostConfig::parse(PROFILES).unwrap();
+    let alice = config
+        .user_vm_with("S-1-5-21-1-2-3-1001", &profiles)
+        .unwrap();
+    assert_eq!(
+        alice.config.data_disk,
+        PathBuf::from(r"C:\Users\alice\AppData\Local\DSA\android.vhdx")
+    );
+    assert!(alice.disk_in_profile);
+    let bob = config
+        .user_vm_with("S-1-5-21-1-2-3-1002", &profiles)
+        .unwrap();
+    assert_eq!(
+        bob.config.data_disk,
+        PathBuf::from(r"D:\Profiles\bob\Local\DSA\android.vhdx")
+    );
+    // A user Windows has no profile for gets no VM, and is told why.
     let error = config
-        .user_vm("S-1-5-21-1-2-3-1001")
+        .user_vm_with("S-1-5-21-1-2-3-1003", &profiles)
         .unwrap_err()
         .to_string();
-    assert!(error.contains("data_dir"), "{error}");
+    assert!(error.contains("no profile folder"), "{error}");
 }
 
 #[test]
-fn fr2_a_configuration_without_any_data_disk_is_reported() {
-    let json = r#"{"kernel": "C:\\k", "system_image": "C:\\s.vhdx"}"#;
-    let error = HostConfig::parse(json).unwrap_err().to_string();
-    assert!(
-        error.contains("data_disk") && error.contains("data_dir"),
-        "{error}"
+fn fr2_one_vm_by_hand_keeps_its_disk_in_the_users_profile_without_a_data_disk() {
+    let config = HostConfig::parse(PROFILES).unwrap();
+    let vm = config
+        .vm_config_with(Some("S-1-5-21-1-2-3-1001"), &profiles)
+        .unwrap();
+    assert_eq!(
+        vm.data_disk,
+        PathBuf::from(r"C:\Users\alice\AppData\Local\DSA\android.vhdx")
     );
+    let error = config
+        .vm_config_with(None, &profiles)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("user_sid"), "{error}");
 }
 
 #[test]
@@ -166,6 +282,21 @@ fn fr14_the_vm_boots_the_image_folder_it_is_given() {
 }
 
 #[test]
+fn fr27_an_arm64_image_boots_its_own_kernel_named_image() {
+    let config = HostConfig::parse(UPDATING).unwrap();
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("arm64-image-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Image"), b"arm64 kernel").unwrap();
+    assert_eq!(
+        config.image_files(Some(&dir)).kernel,
+        dir.join("Image"),
+        "an arm64 image's kernel is named Image"
+    );
+}
+
+#[test]
 fn fr14_an_untrusted_key_or_a_missing_first_image_is_reported() {
     let bad_key = UPDATING.replace("17cb79fb", "zzcb79fb");
     let error = HostConfig::parse(&bad_key).unwrap_err().to_string();
@@ -211,14 +342,19 @@ fn fr14_an_image_made_from_aosp_boots_from_one_disk_made_from_its_template() {
     vm.system_image = files.system_image;
     vm.initrd = files.initrd;
     vm.kernel_cmdline = files.kernel_cmdline;
-    let document = vm.to_hcs_document().unwrap();
+    let document = vm.to_hcs_document_for(GuestArch::X86_64).unwrap();
     let attachments = &document["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"];
+    // The user's disk, then the pstore disk every user VM keeps beside it.
     assert_eq!(
         attachments.as_object().unwrap().len(),
-        1,
-        "only the user's disk"
+        2,
+        "only the user's disk and its pstore disk"
     );
     assert_eq!(attachments["0"]["ReadOnly"], false);
+    assert_eq!(
+        attachments["1"]["Path"].as_str().map(PathBuf::from),
+        user.config.pstore_disk
+    );
     let kernel = &document["VirtualMachine"]["Chipset"]["LinuxKernelDirect"];
     assert!(kernel["KernelCmdLine"]
         .as_str()
@@ -228,4 +364,381 @@ fn fr14_an_image_made_from_aosp_boots_from_one_disk_made_from_its_template() {
         .as_str()
         .unwrap()
         .ends_with("initrd.img"));
+}
+
+#[test]
+fn fr1_the_folders_chosen_at_installation_fill_in_the_configuration() {
+    let text = r#"{
+  "kernel": "{program}\\vm\\bzImage",
+  "images_dir": "{data}\\images",
+  "first_image": {"version": "none", "android_major": 0, "build": 0},
+  "log_file": "{data}\\logs\\dsa-hostd.log"
+}"#;
+    let expanded = expand_locations(
+        text,
+        &PathBuf::from(r"D:\Android Data\"),
+        &PathBuf::from(r"E:\Apps\DSA"),
+    );
+    let config = HostConfig::parse(&expanded).unwrap();
+    assert_eq!(config.kernel, PathBuf::from(r"E:\Apps\DSA\vm\bzImage"));
+    assert_eq!(
+        config.images_dir,
+        Some(PathBuf::from(r"D:\Android Data\images"))
+    );
+    assert_eq!(
+        config.log_file,
+        Some(PathBuf::from(r"D:\Android Data\logs\dsa-hostd.log"))
+    );
+}
+
+const SELF_UPDATING: &str = r#"{
+  "kernel": "C:\\Program Files\\DSA\\vm\\bzImage",
+  "images_dir": "C:\\ProgramData\\DSA\\images",
+  "first_image": {"version": "16.0.1", "android_major": 16, "build": 1},
+  "log_file": "C:\\ProgramData\\DSA\\logs\\dsa-hostd.log",
+  "update": {
+    "list_url": "https://example.invalid/dsa/images.json",
+    "program_list_url": "https://example.invalid/dsa/program.json",
+    "program_dir": "C:\\ProgramData\\DSA\\updates",
+    "trusted_keys": ["17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce"]
+  }
+}"#;
+
+#[test]
+fn fr15_the_program_list_and_the_folder_for_setup_files_come_from_the_configuration() {
+    let config = HostConfig::parse(SELF_UPDATING).unwrap();
+    let settings = config.program_settings("0.1.0").unwrap().unwrap();
+    assert_eq!(
+        settings.list_url.as_deref(),
+        Some("https://example.invalid/dsa/program.json")
+    );
+    assert!(settings.enabled, "on unless a setting turns it off");
+    assert_eq!(settings.keys.len(), 1);
+    assert_eq!(settings.dir, PathBuf::from(r"C:\ProgramData\DSA\updates"));
+    assert_eq!(
+        settings.log_dir,
+        PathBuf::from(r"C:\ProgramData\DSA\logs"),
+        "setup logs go beside the service's"
+    );
+    assert_eq!(settings.running, "0.1.0");
+    assert_eq!(settings.stop_timeout, Duration::from_secs(30 + 15));
+}
+
+#[test]
+fn fr15_a_setting_turns_updating_dsa_off() {
+    let off = SELF_UPDATING.replace(
+        r#""program_dir""#,
+        r#""program": false,
+    "program_dir""#,
+    );
+    let settings = HostConfig::parse(&off)
+        .unwrap()
+        .program_settings("0.1.0")
+        .unwrap()
+        .unwrap();
+    assert!(!settings.enabled);
+}
+
+#[test]
+fn fr15_without_a_program_folder_dsa_does_not_update_itself() {
+    // An older configuration names no program list: nothing changes for it.
+    let config = HostConfig::parse(UPDATING).unwrap();
+    assert!(config.program_settings("0.1.0").unwrap().is_none());
+    // A program list needs the folder the setup files are downloaded to.
+    let no_dir = SELF_UPDATING.replace(
+        r#"    "program_dir": "C:\\ProgramData\\DSA\\updates",
+"#,
+        "",
+    );
+    let error = HostConfig::parse(&no_dir).unwrap_err().to_string();
+    assert!(error.contains("program_dir"), "{error}");
+}
+
+#[test]
+fn fr2_each_users_console_is_kept_in_the_service_log_folder() {
+    let config = HostConfig::parse(SELF_UPDATING).unwrap();
+    let alice = config
+        .user_vm_with("S-1-5-21-1-2-3-1001", &profiles)
+        .unwrap();
+    assert_eq!(
+        alice.console_log,
+        PathBuf::from(r"C:\ProgramData\DSA\logs\android-S-1-5-21-1-2-3-1001.log")
+    );
+    assert_eq!(
+        alice.config.console_pipe.as_deref(),
+        Some(r"\\.\pipe\dsa-console-dsa-android-S-1-5-21-1-2-3-1001")
+    );
+    assert_eq!(alice.config.image_version.as_deref(), Some("16.0.1"));
+    let bob = config
+        .user_vm_with("S-1-5-21-1-2-3-1002", &profiles)
+        .unwrap();
+    assert_ne!(alice.console_log, bob.console_log);
+    assert_ne!(alice.config.console_pipe, bob.config.console_pipe);
+}
+
+#[test]
+fn fr2_without_a_service_log_the_console_is_kept_beside_the_users_disk() {
+    let config = HostConfig::parse(PROFILES).unwrap();
+    let alice = config
+        .user_vm_with("S-1-5-21-1-2-3-1001", &profiles)
+        .unwrap();
+    assert_eq!(
+        alice.console_log,
+        PathBuf::from(r"C:\Users\alice\AppData\Local\DSA\android-S-1-5-21-1-2-3-1001.log")
+    );
+    assert_eq!(alice.config.image_version, None, "no versioned image");
+}
+
+#[test]
+fn fr1_user_profile_resolution_and_vm_config_leave_wslconfig_untouched() {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("fr1-wslconfig-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    let wslconfig = dir.join(".wslconfig");
+    let original = b"[wsl2]
+kernel=C:\\WSL\\bzImage
+memory=8GB
+processors=4
+";
+    std::fs::write(&wslconfig, original).unwrap();
+
+    let local_dir = dir.join("AppData").join("Local");
+    let profile_dir = local_dir.clone();
+    let lookup_profile = move |sid: &str| -> Result<PathBuf, String> {
+        if sid == "S-1-5-21-1-2-3-1001" {
+            Ok(profile_dir.clone())
+        } else {
+            Err("no profile".into())
+        }
+    };
+
+    let config = HostConfig::parse(PROFILES).unwrap();
+    let alice = config
+        .user_vm_with("S-1-5-21-1-2-3-1001", &lookup_profile)
+        .unwrap();
+
+    assert_eq!(alice.config.data_disk, profile_disk(&local_dir));
+    assert!(alice.disk_in_profile);
+
+    let vm = config
+        .vm_config_with(Some("S-1-5-21-1-2-3-1001"), &lookup_profile)
+        .unwrap();
+    assert_eq!(vm.data_disk, profile_disk(&local_dir));
+
+    let current = std::fs::read(&wslconfig).unwrap();
+    assert_eq!(
+        current, original,
+        "the user's .wslconfig must remain byte-identical"
+    );
+}
+
+#[test]
+fn fr14_an_image_with_two_disks_attaches_system_image_and_data_disk() {
+    let config = HostConfig::parse(UPDATING).unwrap();
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("aosp-two-disk-image-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("image.json"),
+        r#"{"version": "17.0.0-16373615", "kernel_cmdline": "androidboot.boot_devices=vmbus androidboot.fstab_suffix=dsa", "files": {"system.vhdx": {}, "data.vhdx": {}}}"#,
+    )
+    .unwrap();
+    let files = config.image_files(Some(&dir));
+    assert_eq!(files.system_image, Some(dir.join("system.vhdx")));
+    assert_eq!(files.disk_template, Some(dir.join("data.vhdx")));
+    assert_eq!(files.initrd, Some(dir.join("initrd.img")));
+    assert_eq!(
+        files.kernel_cmdline,
+        "androidboot.boot_devices=vmbus androidboot.fstab_suffix=dsa"
+    );
+
+    let user = config.user_vm("S-1-5-21-1-2-3-1001").unwrap();
+    let mut vm = user.config.clone();
+    vm.system_image = files.system_image;
+    vm.initrd = files.initrd;
+    vm.kernel_cmdline = files.kernel_cmdline;
+    let document = vm.to_hcs_document_for(GuestArch::X86_64).unwrap();
+    let attachments = &document["VirtualMachine"]["Devices"]["Scsi"]["0"]["Attachments"];
+    // The system and data disks, then the pstore disk every user VM keeps.
+    assert_eq!(
+        attachments.as_object().unwrap().len(),
+        3,
+        "both system and data disks, and the pstore disk"
+    );
+    assert_eq!(attachments["0"]["ReadOnly"], true);
+    assert_eq!(attachments["1"]["ReadOnly"], false);
+    assert_eq!(
+        attachments["2"]["Path"].as_str().map(PathBuf::from),
+        user.config.pstore_disk
+    );
+    let kernel = &document["VirtualMachine"]["Chipset"]["LinuxKernelDirect"];
+    assert!(kernel["KernelCmdLine"]
+        .as_str()
+        .unwrap()
+        .contains("androidboot.boot_devices=vmbus"));
+}
+
+#[test]
+fn fr1_a_test_package_says_what_it_is_and_a_real_one_does_not() {
+    assert!(!HostConfig::parse(MINIMAL).unwrap().test_package);
+    let test = MINIMAL.replace("\"kernel\":", "\"test_package\": true,\n  \"kernel\":");
+    assert!(HostConfig::parse(&test).unwrap().test_package);
+}
+
+/// A configuration a test package left behind: a local mirror for its release lists and the
+/// image that package bundled. The user then raised the check interval by hand.
+const LEFT_BY_A_TEST_PACKAGE: &str = r#"{
+  "kernel": "C:\\Program Files\\DSA\\vm\\bzImage",
+  "images_dir": "C:\\ProgramData\\DSA\\images",
+  "first_image": {"version": "17.0.0-1", "android_major": 17, "build": 1},
+  "test_package": true,
+  "update": {
+    "list_url": "D:\\a\\dsa\\mirror\\images.json",
+    "program_list_url": "D:\\a\\dsa\\mirror\\program.json",
+    "program_dir": "C:\\ProgramData\\DSA\\updates",
+    "check_interval_hours": 48,
+    "trusted_keys": ["17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce"]
+  }
+}"#;
+
+const REAL_PACKAGE: &str = r#"{
+  "first_image": {"version": "17.0.0-5", "android_major": 17, "build": 5},
+  "update": {
+    "list_url": "https://example.invalid/dsa/images.json",
+    "program_list_url": "https://example.invalid/dsa/program.json",
+    "program_dir": "C:\\ProgramData\\DSA\\updates",
+    "trusted_keys": ["8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"]
+  }
+}"#;
+
+#[test]
+fn fr15_an_upgrade_names_the_image_its_package_bundled() {
+    use dsa_host_windows::host_config::InstalledPackage;
+    let mut config = HostConfig::parse(UPDATING).unwrap();
+    let package = InstalledPackage::parse(REAL_PACKAGE).unwrap();
+    config.apply_package(&package);
+    assert_eq!(
+        config.bundled_image.as_ref().map(|i| i.version.as_str()),
+        Some("17.0.0-5")
+    );
+    // The kept configuration still names the first installation's image.
+    assert_eq!(config.first_image.as_ref().unwrap().version, "16.0.1");
+
+    // A package that bundles no image names none.
+    let mut config = HostConfig::parse(UPDATING).unwrap();
+    let none = REAL_PACKAGE.replace(
+        r#""version": "17.0.0-5", "android_major": 17, "build": 5"#,
+        r#""version": "none", "android_major": 0, "build": 0"#,
+    );
+    config.apply_package(&InstalledPackage::parse(&none).unwrap());
+    assert_eq!(config.bundled_image, None);
+}
+
+#[test]
+fn fr15_a_test_packages_configuration_does_not_survive_a_real_upgrade_silently() {
+    use dsa_host_windows::host_config::InstalledPackage;
+    let mut config = HostConfig::parse(LEFT_BY_A_TEST_PACKAGE).unwrap();
+    let notes = config.apply_package(&InstalledPackage::parse(REAL_PACKAGE).unwrap());
+    let update = config.update.as_ref().unwrap();
+    assert_eq!(update.list_url, "https://example.invalid/dsa/images.json");
+    assert_eq!(
+        update.program_list_url.as_deref(),
+        Some("https://example.invalid/dsa/program.json")
+    );
+    assert_eq!(
+        update.trusted_keys,
+        vec!["8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c".to_string()]
+    );
+    assert_eq!(
+        update.check_interval_hours, 48,
+        "the user's own choice stays"
+    );
+    assert!(!config.test_package);
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.contains(r"D:\\a\\dsa\\mirror\\images.json")),
+        "{notes:?}"
+    );
+    assert_eq!(config.package_notes, notes);
+}
+
+#[test]
+fn fr15_a_release_list_the_user_chose_is_kept_and_reported() {
+    use dsa_host_windows::host_config::InstalledPackage;
+    let mut config = HostConfig::parse(SELF_UPDATING).unwrap();
+    let notes = config.apply_package(&InstalledPackage::parse(REAL_PACKAGE).unwrap());
+    assert_eq!(
+        config.update.as_ref().unwrap().trusted_keys,
+        vec!["17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce".to_string()],
+        "a web address the configuration names is the user's choice"
+    );
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    // The same lists: nothing to say.
+    let mut config = HostConfig::parse(SELF_UPDATING).unwrap();
+    let same = SELF_UPDATING.replace(
+        r#""kernel": "C:\\Program Files\\DSA\\vm\\bzImage",
+  "images_dir": "C:\\ProgramData\\DSA\\images",
+"#,
+        "",
+    );
+    let same = same.replace(
+        r#"  "log_file": "C:\\ProgramData\\DSA\\logs\\dsa-hostd.log",
+"#,
+        "",
+    );
+    assert!(config
+        .apply_package(&InstalledPackage::parse(&same).unwrap())
+        .is_empty());
+}
+
+#[cfg(windows)]
+#[test]
+fn fr15_the_service_boots_the_newer_image_an_upgrade_bundled() {
+    use dsa_host_windows::host_config::InstalledPackage;
+    use dsa_host_windows::service::open_updates;
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join(format!("fr15-bundled-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let images = dir.join("images");
+    for (version, build) in [("17.0.0-1", 1), ("17.0.0-5", 5)] {
+        let folder = images.join("images").join(version);
+        std::fs::create_dir_all(&folder).unwrap();
+        let disk = b"vhdxfile and the rest of a disk";
+        std::fs::write(folder.join("disk.vhdx"), disk).unwrap();
+        let manifest = serde_json::json!({
+            "version": version, "android_major": 17, "build": build,
+            "files": {"disk.vhdx": {"size": disk.len()}},
+        });
+        std::fs::write(folder.join("image.json"), manifest.to_string()).unwrap();
+    }
+    // The state the first installation left: its own image, booted and confirmed.
+    std::fs::write(
+        images.join("state.json"),
+        r#"{"current": {"version": "17.0.0-1", "android_major": 17, "build": 1}}"#,
+    )
+    .unwrap();
+    let mut config = HostConfig::parse(
+        &serde_json::json!({
+            "kernel": dir.join("bzImage"),
+            "images_dir": images,
+            "first_image": {"version": "17.0.0-1", "android_major": 17, "build": 1},
+        })
+        .to_string(),
+    )
+    .unwrap();
+    config.apply_package(&InstalledPackage::parse(REAL_PACKAGE).unwrap());
+
+    let updates = open_updates(&config, "test").unwrap().unwrap();
+    let state = updates.store.state().unwrap();
+    assert_eq!(state.current.version, "17.0.0-5");
+    assert_eq!(state.previous.unwrap().version, "17.0.0-1");
+    assert!(state.on_trial);
+    // The next start keeps it.
+    let updates = open_updates(&config, "test").unwrap().unwrap();
+    assert_eq!(updates.store.state().unwrap().current.version, "17.0.0-5");
 }

@@ -1,0 +1,3 @@
+# Started with every user's desktop session.
+enable dsa-devices.service
+enable dsa-compositor.service

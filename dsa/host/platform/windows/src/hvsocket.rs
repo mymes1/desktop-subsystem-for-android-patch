@@ -11,14 +11,18 @@ use std::mem::{size_of, zeroed};
 use std::sync::OnceLock;
 use std::time::Duration;
 
-use dsa_transport::stream::{accept_with_timeout, FramedConnection, StreamSocket};
+use dsa_transport::stream::{
+    accept_with_timeout, FramedConnection, RawStreamConnection, StreamSocket,
+};
 use dsa_transport::{Connection, Connector, Listener, TransportError};
 use windows_sys::Win32::Networking::WinSock::{
     accept, bind, closesocket, connect, ioctlsocket, listen, recv, send, setsockopt, shutdown,
-    socket, WSAGetLastError, WSAPoll, WSAStartup, FIONBIO, INVALID_SOCKET, POLLRDNORM, SD_BOTH,
-    SOCKADDR, SOCKET, SOCKET_ERROR, SOCK_STREAM, SOMAXCONN, WSADATA, WSAEAFNOSUPPORT,
-    WSAEPROTONOSUPPORT, WSAESOCKTNOSUPPORT, WSAPOLLFD,
+    socket, WSADuplicateSocketW, WSAGetLastError, WSAPoll, WSASocketW, WSAStartup, FIONBIO,
+    FROM_PROTOCOL_INFO, INVALID_SOCKET, POLLRDNORM, SD_BOTH, SOCKADDR, SOCKET, SOCKET_ERROR,
+    SOCK_STREAM, SOMAXCONN, WSADATA, WSAEAFNOSUPPORT, WSAEPROTONOSUPPORT, WSAESOCKTNOSUPPORT,
+    WSAPOLLFD, WSAPROTOCOL_INFOW,
 };
+use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 
 use crate::guid::Guid;
 
@@ -201,6 +205,35 @@ impl StreamSocket for HvSocket {
         // SAFETY: shutting down an owned socket.
         unsafe { shutdown(self.raw, SD_BOTH) };
     }
+
+    fn try_clone(&self) -> io::Result<HvSocket> {
+        // SAFETY: an all-zero WSAPROTOCOL_INFOW is a valid out-parameter.
+        let mut info: WSAPROTOCOL_INFOW = unsafe { zeroed() };
+        // SAFETY: duplicating an owned socket into this same process.
+        if unsafe { WSADuplicateSocketW(self.raw, GetCurrentProcessId(), &mut info) }
+            == SOCKET_ERROR
+        {
+            return Err(last_error());
+        }
+        // SAFETY: info describes the socket duplicated above.
+        let raw = unsafe {
+            WSASocketW(
+                FROM_PROTOCOL_INFO,
+                FROM_PROTOCOL_INFO,
+                FROM_PROTOCOL_INFO,
+                &info,
+                0,
+                0,
+            )
+        };
+        if raw == INVALID_SOCKET {
+            return Err(last_error());
+        }
+        Ok(HvSocket {
+            raw,
+            read_timeout: self.read_timeout,
+        })
+    }
 }
 
 /// Listens for connections from a VM (or from the host, with [`Guid::LOOPBACK`]).
@@ -250,6 +283,75 @@ impl Listener for HvSocketListener {
         accepted.set_nonblocking(false)?;
         Ok(Box::new(FramedConnection::new(accepted)))
     }
+}
+
+/// Listens on Hyper-V sockets and yields [RawStreamConnection]s without framing.
+pub struct RawHvSocketListener {
+    socket: HvSocket,
+}
+
+impl RawHvSocketListener {
+    /// Listens on service_id for connections from the partition m_id.
+    pub fn bind(vm_id: Guid, service_id: Guid) -> Result<RawHvSocketListener, TransportError> {
+        let listener = HvSocketListener::bind(vm_id, service_id)?;
+        Ok(RawHvSocketListener {
+            socket: listener.socket,
+        })
+    }
+}
+
+impl Listener for RawHvSocketListener {
+    fn accept(&mut self, timeout: Duration) -> Result<Box<dyn Connection>, TransportError> {
+        let accepted = accept_with_timeout(timeout, || {
+            // SAFETY: the peer address is not requested.
+            let raw =
+                unsafe { accept(self.socket.raw, std::ptr::null_mut(), std::ptr::null_mut()) };
+            if raw == INVALID_SOCKET {
+                Err(last_error())
+            } else {
+                Ok(HvSocket::from_raw(raw))
+            }
+        })?;
+        // An accepted socket inherits non-blocking mode; reads use timeouts instead.
+        accepted.set_nonblocking(false)?;
+        Ok(Box::new(RawStreamConnection::new(accepted)))
+    }
+}
+
+impl dsa_host_core::adb_bridge::BridgeStream for HvSocket {
+    fn try_clone_stream(&self) -> io::Result<Box<dyn dsa_host_core::adb_bridge::BridgeStream>> {
+        Ok(Box::new(StreamSocket::try_clone(self)?))
+    }
+
+    fn shutdown_stream(&self) {
+        // SAFETY: shutting down an owned socket.
+        unsafe { shutdown(self.raw, SD_BOTH) };
+    }
+}
+
+/// Opens a plain byte stream (no framing) to a service in a VM, such as the guest's adbd for
+/// developer mode's bridge.
+pub fn connect_stream(
+    vm_id: Guid,
+    service_id: Guid,
+    timeout: Duration,
+) -> io::Result<Box<dyn dsa_host_core::adb_bridge::BridgeStream>> {
+    let socket = HvSocket::new().map_err(|error| io::Error::other(error.to_string()))?;
+    let millis = timeout.as_millis().clamp(1, u32::MAX as u128) as u32;
+    socket.set_option_u32(HV_PROTOCOL_RAW, HVSOCKET_CONNECT_TIMEOUT, millis)?;
+    let address = sockaddr(vm_id, service_id);
+    // SAFETY: address is a valid SOCKADDR_HV of the size passed.
+    let connected = unsafe {
+        connect(
+            socket.raw,
+            &address as *const SockaddrHv as *const SOCKADDR,
+            size_of::<SockaddrHv>() as i32,
+        )
+    };
+    if connected == SOCKET_ERROR {
+        return Err(last_error());
+    }
+    Ok(Box::new(socket))
 }
 
 /// Connects to a service in a VM (or on the host, with [`Guid::LOOPBACK`]).

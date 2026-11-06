@@ -1,0 +1,65 @@
+[package]
+name = "dsa-host-linux"
+version = "0.1.0"
+description = "The Linux host: the Android VM in crosvm over KVM, vsock, the host's devices, and one Wayland window per Android task"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+# Runs the VM's vsock suite over vsock loopback (CID 1), standing in for a guest. Needs the
+# vsock_loopback kernel module, so it is opt-in; CI loads the module and turns this on.
+vsock-loopback-tests = []
+
+[[bin]]
+name = "dsa-devices"
+path = "src/bin/dsa-devices.rs"
+
+[[bin]]
+name = "dsa-compositor"
+path = "src/bin/dsa-compositor.rs"
+
+# The service. Its name differs from the other hosts' dsa-hostd because every host is built in
+# one workspace, where two programs of one name would overwrite each other.
+[[bin]]
+name = "dsa-linux-hostd"
+path = "src/bin/dsa-linux-hostd.rs"
+
+[dependencies]
+dsa-transport.workspace = true
+dsa-host-core.workspace = true
+dsa-protocol.workspace = true
+# The local API's socket and paths, and the VHDX reader for the image's disks.
+dsa-host-unix = { path = "../unix" }
+# The service's configuration file.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# The session bus and the system bus: GeoClue2, UPower, logind, iio-sensor-proxy, the
+# desktop portals and the notification service. Pure Rust, so the host links no D-Bus C
+# library.
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
+# Camera pictures that come as Motion JPEG, decoded to pixels.
+zune-jpeg = "0.4"
+zune-core = "0.4"
+# Still pictures for the guest's camera, encoded from the newest picture.
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# The compositor's Wayland client, pure Rust, and the protocols it speaks (xdg-shell,
+# decorations, text-input-v3, tablet-v2, cursor-shape).
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "unstable", "staging"] }
+# The layer shell, for picture-in-picture windows that stay above the others.
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+# Picture-in-picture windows through XWayland on desktops without a layer shell, with their
+# GPU frames as DRI3 pixmaps. Pure Rust.
+x11rb = { version = "0.13", features = ["dri3", "render"] }
+# gfxstream's host renderer and libxkbcommon, loaded at run time.
+libloading = "0.8"
+
+[dev-dependencies]
+dsa-transport = { workspace = true, features = ["conformance"] }

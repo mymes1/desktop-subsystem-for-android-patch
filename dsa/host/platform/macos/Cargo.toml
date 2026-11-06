@@ -1,0 +1,32 @@
+[package]
+name = "dsa-host-macos"
+version = "0.1.0"
+description = "The macOS host: the Android VM on Apple's Virtualization framework, its vsock transport, the per-user agent, task windows, input, shell integration and host devices"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+dsa-transport.workspace = true
+dsa-host-core.workspace = true
+dsa-protocol.workspace = true
+dsa-host-unix = { path = "../unix" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# The Virtualization framework through objc2's generated bindings, so the whole host is one
+# Rust program built by cargo, with no Swift toolchain or helper process between the
+# service and its VM. The windows, input, shell and devices reach the other framework
+# classes through the Objective-C runtime by name.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+objc2 = "0.6"
+block2 = "0.6"
+dispatch2 = "0.3"
+objc2-foundation = "0.3"
+objc2-virtualization = "0.3"
+
+[dev-dependencies]
+dsa-transport = { workspace = true, features = ["conformance"] }
+dsa-host-core = { workspace = true, features = ["conformance"] }

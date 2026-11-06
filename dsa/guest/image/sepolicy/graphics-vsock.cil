@@ -1,0 +1,28 @@
+; Desktop Subsystem for Android (DSA)
+; Allows app domains, surfaceflinger, and graphics HAL servers to create and
+; connect AF_VSOCK sockets to the host graphics remoting ports.
+
+(allow appdomain self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+(allow surfaceflinger self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+(allow hal_graphics_allocator_server self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+(allow hal_graphics_composer_server self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+(allow bootanim self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+
+; system_server draws its own windows through HWUI (the pointer location overlay, the ANR and
+; crash dialogs, the shutdown dialog, drag shadows). EGL is ANGLE over the Vulkan driver, which
+; reaches the host renderer over vsock. Refused that socket, eglInitialize fails, the
+; RenderThread aborts with EGL_NOT_INITIALIZED, and the whole framework restarts.
+(allow system_server self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+(allow system_server gpu_device (dir (search)))
+(allow system_server gpu_device (chr_file (open read write ioctl getattr map)))
+
+; The allocator (minigbm) allocates buffers on the guest's DRM device, which is
+; vgem under Hyper-V and labelled graphics_device, not the gpu_device the
+; Cuttlefish policy grants it.
+(allow hal_graphics_allocator_server graphics_device (dir (search)))
+(allow hal_graphics_allocator_server graphics_device (chr_file (open read write ioctl getattr map)))
+
+; The DRM cards are relabelled gpu_device so every graphics client may open them. Cuttlefish's
+; init script waits for /dev/dri/card0 as vendor_init, which may check only graphics_device.
+; Refused, the wait times out after five seconds and holds up early boot.
+(allow vendor_init gpu_device (chr_file (getattr)))

@@ -9,9 +9,42 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use dsa_protocol::control::{
-    envelope::Body, Envelope, Hello, HelloAccepted, HelloRejected, RejectReason, Role,
+    envelope::Body, AccessibilityAction, AccessibilityActionResult, AccessibilityNode,
+    AccessibilityTree, AccessibilityWatch, AgentConnected, ApkChunk, AppInfo, AuthChallenge,
+    AuthProof, CancelInstall, ClipboardSharing, ClipboardText, ClockAnswer, ClockProbe, CloseTask,
+    DeviceIdle, Envelope, FileAction, FileChunk, FileProgress, GuestBoot, GuestMemory,
+    GuestNotification, Hello, HelloAccepted, HelloRejected, ImeCommit, ImeComposition, ImeCursor,
+    InstallApk, InstallProgress, InstallResult, InstallStatus, KeyAction, KeyEvent, LaunchApp,
+    LinkHandling, NodeAction, NodeRange, NotificationClicked, NotificationDismissed,
+    NotificationRemoved, OpenFile, OpenLink, PackageState, PointerAction, PointerEvent,
+    PointerTool, PowerHint, PowerHintKind, PowerState, ProcessMemory, QueryPackage, Rect,
+    RejectReason, RequestGuestMemory, ResizeTask, Role, ScreenState, SetTaskDensity, TaskFrames,
+    TaskRemoved, TaskUpdated,
 };
+use dsa_protocol::control::{
+    AddWidget, ListWidgetProviders, RemoveWidget, ResizeWidget, WidgetAdded, WidgetFrame,
+    WidgetList, WidgetPointer, WidgetProvider, WidgetProviders, WidgetUpdated,
+};
+use dsa_protocol::control::{
+    CameraDevice, CameraFacing, CameraFrame, CameraList, CameraMode, CameraOpen, CameraStill,
+};
+use dsa_protocol::control::{
+    CollectDiagnostics, DiagnosticsDone, DiagnosticsFile, LocationAccess, LocationFix,
+    LocationRequest, LocationStatus, LogBuffer, LogDump, LogRecord, LogRecords, LogStream,
+    VideoCapabilities, VideoCodec, VideoCodecSupport, VideoDecoderOpen, VideoFlush, VideoFrame,
+    VideoPacket,
+};
+use dsa_protocol::control::{
+    PrintJob, PrintJobCancel, PrintJobChunk, PrintJobResult, PrintOutcome,
+};
+use dsa_protocol::control::{
+    SensorActivate, SensorDescription, SensorKind, SensorList, SensorReading, SensorReadings,
+};
+use dsa_protocol::control::{UninstallApp, UninstallResult, UninstallStatus};
 use dsa_protocol::{decode, encode};
+
+/// The key of the notification in the notification cases.
+const CHAT_KEY: &str = "0|com.example.chat|1|null|10100";
 
 fn vectors_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../vectors/control.vectors")
@@ -36,6 +69,25 @@ fn host_hello() -> Hello {
 }
 
 /// Every case, by name. The other languages' tests mirror this list exactly.
+/// The clock widget of the widget cases.
+fn clock_provider() -> WidgetProvider {
+    WidgetProvider {
+        provider: "com.example.clock/.ClockWidget".into(),
+        package_name: "com.example.clock".into(),
+        label: "Clock".into(),
+        preview_png: vec![0x89, b'P', b'N', b'G'],
+        min_width_dp: 110,
+        min_height_dp: 40,
+        default_width_dp: 180,
+        default_height_dp: 110,
+        max_width_dp: 0,
+        max_height_dp: 0,
+        resize_mode: 3,
+        needs_configuration: false,
+        app_label: String::new(),
+    }
+}
+
 fn cases() -> BTreeMap<&'static str, Envelope> {
     let wrap = |body| Envelope { body: Some(body) };
     BTreeMap::from([
@@ -62,6 +114,1006 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
                 reason: RejectReason::SchemaHashMismatch as i32,
                 detail: "스키마가 다릅니다 (schema differs)".into(),
                 host: Some(host_hello()),
+            })),
+        ),
+        (
+            "auth_challenge",
+            wrap(Body::AuthChallenge(AuthChallenge {
+                nonce: (0x40u8..0x60).collect(),
+            })),
+        ),
+        (
+            "auth_proof",
+            wrap(Body::AuthProof(AuthProof {
+                mac: (0x60u8..0x80).collect(),
+            })),
+        ),
+        (
+            "task_updated",
+            wrap(Body::TaskUpdated(TaskUpdated {
+                task_id: 42,
+                bounds: Some(Rect {
+                    left: 100,
+                    top: 80,
+                    right: 1180,
+                    bottom: 800,
+                }),
+                package_name: "com.example.notes".into(),
+                label: "메모 (Notes)".into(),
+                focused: true,
+                ..TaskUpdated::default()
+            })),
+        ),
+        (
+            "task_updated_density",
+            wrap(Body::TaskUpdated(TaskUpdated {
+                task_id: 42,
+                bounds: Some(Rect {
+                    left: 0,
+                    top: 0,
+                    right: 1096,
+                    bottom: 1948,
+                }),
+                package_name: "com.example.notes".into(),
+                density_dpi: 320,
+                max_width: 3840,
+                max_height: 2160,
+                ..TaskUpdated::default()
+            })),
+        ),
+        (
+            "resize_task",
+            wrap(Body::ResizeTask(ResizeTask {
+                task_id: 42,
+                width: 1280,
+                height: 720,
+                live: false,
+            })),
+        ),
+        (
+            "set_task_density",
+            wrap(Body::SetTaskDensity(SetTaskDensity {
+                task_id: 42,
+                density_dpi: 240,
+            })),
+        ),
+        (
+            "task_updated_negative_origin",
+            wrap(Body::TaskUpdated(TaskUpdated {
+                task_id: 7,
+                bounds: Some(Rect {
+                    left: -40,
+                    top: -10,
+                    right: 600,
+                    bottom: 400,
+                }),
+                ..TaskUpdated::default()
+            })),
+        ),
+        (
+            "task_removed",
+            wrap(Body::TaskRemoved(TaskRemoved { task_id: 42 })),
+        ),
+        (
+            "video_capabilities",
+            wrap(Body::VideoCapabilities(VideoCapabilities {
+                codecs: vec![VideoCodecSupport {
+                    codec: VideoCodec::H264 as i32,
+                    max_width: 4096,
+                    max_height: 2304,
+                }],
+            })),
+        ),
+        (
+            "video_decoder_open",
+            wrap(Body::VideoDecoderOpen(VideoDecoderOpen {
+                codec: VideoCodec::H264 as i32,
+                width: 1280,
+                height: 720,
+            })),
+        ),
+        ("video_flush", wrap(Body::VideoFlush(VideoFlush {}))),
+        (
+            "camera_list",
+            wrap(Body::CameraList(CameraList {
+                cameras: vec![CameraDevice {
+                    id: "front".into(),
+                    name: "Integrated Camera".into(),
+                    facing: CameraFacing::Front as i32,
+                    sensor_orientation: 90,
+                    modes: vec![CameraMode {
+                        width: 1280,
+                        height: 720,
+                        max_fps: 30,
+                        min_fps: 15,
+                    }],
+                }],
+            })),
+        ),
+        (
+            "camera_open",
+            wrap(Body::CameraOpen(CameraOpen {
+                id: "front".into(),
+                width: 1280,
+                height: 720,
+                fps: 30,
+            })),
+        ),
+        (
+            "camera_frame",
+            wrap(Body::CameraFrame(CameraFrame {
+                sequence: 7,
+                timestamp_ns: 33_333_333,
+                width: 2,
+                height: 2,
+                stride: 2,
+                nv12: vec![0x10, 0x10, 0x10, 0x10, 0x80, 0x80],
+            })),
+        ),
+        (
+            "camera_still",
+            wrap(Body::CameraStill(CameraStill {
+                request_id: 4,
+                width: 1920,
+                height: 1080,
+                quality: 95,
+            })),
+        ),
+        (
+            "video_frame",
+            wrap(Body::VideoFrame(VideoFrame {
+                frame_index: 3,
+                timestamp_us: 100_000,
+                width: 2,
+                height: 2,
+                stride: 2,
+                nv12: vec![0x10, 0x10, 0x10, 0x10, 0x80, 0x80],
+                end_of_stream: false,
+            })),
+        ),
+        (
+            "video_packet",
+            wrap(Body::VideoPacket(VideoPacket {
+                frame_index: 3,
+                timestamp_us: 100_000,
+                data: vec![0, 0, 0, 1, 0x65],
+                codec_config: false,
+                end_of_stream: false,
+            })),
+        ),
+        (
+            "task_frames",
+            wrap(Body::TaskFrames(TaskFrames {
+                task_id: 42,
+                display_id: 3,
+            })),
+        ),
+        (
+            "close_task",
+            wrap(Body::CloseTask(CloseTask { task_id: 42 })),
+        ),
+        (
+            "launch_app",
+            wrap(Body::LaunchApp(LaunchApp {
+                package_name: "com.example.notes".into(),
+            })),
+        ),
+        (
+            "app_info",
+            wrap(Body::AppInfo(AppInfo {
+                package_name: "com.example.notes".into(),
+                label: "Notes".into(),
+                icon_png: vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
+            })),
+        ),
+        (
+            "pointer_event_mouse_secondary_down",
+            wrap(Body::PointerEvent(PointerEvent {
+                task_id: 42,
+                action: PointerAction::Down as i32,
+                tool: PointerTool::Mouse as i32,
+                pointer_id: 0,
+                x: 120.5,
+                y: 64.25,
+                buttons: 2,
+                pressure: 1.0,
+                ..PointerEvent::default()
+            })),
+        ),
+        (
+            "pointer_event_touch_move",
+            wrap(Body::PointerEvent(PointerEvent {
+                task_id: 7,
+                action: PointerAction::Move as i32,
+                tool: PointerTool::Touch as i32,
+                pointer_id: 3,
+                x: 10.0,
+                y: 1023.75,
+                pressure: 0.5,
+                ..PointerEvent::default()
+            })),
+        ),
+        (
+            "pointer_event_scroll",
+            wrap(Body::PointerEvent(PointerEvent {
+                task_id: 42,
+                action: PointerAction::Scroll as i32,
+                tool: PointerTool::Mouse as i32,
+                x: 300.0,
+                y: 200.0,
+                scroll_x: 0.5,
+                scroll_y: -1.0,
+                ..PointerEvent::default()
+            })),
+        ),
+        (
+            "pointer_event_pen_hover",
+            wrap(Body::PointerEvent(PointerEvent {
+                task_id: 42,
+                action: PointerAction::HoverMove as i32,
+                tool: PointerTool::Pen as i32,
+                pointer_id: 1,
+                x: 0.0,
+                y: 599.0,
+                buttons: 32,
+                ..PointerEvent::default()
+            })),
+        ),
+        (
+            "key_event_ctrl_a_down",
+            wrap(Body::KeyEvent(KeyEvent {
+                task_id: 42,
+                action: KeyAction::Down as i32,
+                key_code: 29,
+                meta_state: 0x3000,
+                event_time_ms: 123_456,
+                ..KeyEvent::default()
+            })),
+        ),
+        (
+            "key_event_backspace_repeat",
+            wrap(Body::KeyEvent(KeyEvent {
+                task_id: 42,
+                action: KeyAction::Down as i32,
+                key_code: 67,
+                repeat_count: 3,
+                event_time_ms: 500,
+                ..KeyEvent::default()
+            })),
+        ),
+        (
+            "key_event_canceled_up",
+            wrap(Body::KeyEvent(KeyEvent {
+                task_id: 7,
+                action: KeyAction::Up as i32,
+                key_code: 66,
+                meta_state: 0x10_0000,
+                event_time_ms: 4_294_967_000,
+                canceled: true,
+                ..KeyEvent::default()
+            })),
+        ),
+        (
+            "ime_composition_korean",
+            wrap(Body::ImeComposition(ImeComposition {
+                task_id: 42,
+                text: "\u{d55c}".into(),
+                cursor: 1,
+            })),
+        ),
+        (
+            "ime_composition_removed",
+            wrap(Body::ImeComposition(ImeComposition {
+                task_id: 7,
+                ..ImeComposition::default()
+            })),
+        ),
+        (
+            "ime_commit_korean",
+            wrap(Body::ImeCommit(ImeCommit {
+                task_id: 42,
+                text: "\u{d55c}\u{ae00}".into(),
+            })),
+        ),
+        (
+            "ime_cursor",
+            wrap(Body::ImeCursor(ImeCursor {
+                task_id: 42,
+                cursor: Some(Rect {
+                    left: 100,
+                    top: 200,
+                    right: 102,
+                    bottom: 240,
+                }),
+            })),
+        ),
+        (
+            "screen_state_off",
+            wrap(Body::ScreenState(ScreenState { on: false })),
+        ),
+        (
+            "screen_state_on",
+            wrap(Body::ScreenState(ScreenState { on: true })),
+        ),
+        (
+            "power_state_on_battery",
+            wrap(Body::PowerState(PowerState {
+                ac_online: false,
+                battery_present: true,
+                battery_percent: 57,
+                charging: false,
+                power_saver: true,
+            })),
+        ),
+        (
+            "power_hint_launch_mode",
+            wrap(Body::PowerHint(PowerHint {
+                kind: PowerHintKind::Mode as i32,
+                id: 5,
+                enabled: true,
+                duration_ms: 0,
+            })),
+        ),
+        (
+            "power_hint_interaction_boost",
+            wrap(Body::PowerHint(PowerHint {
+                kind: PowerHintKind::Boost as i32,
+                id: 0,
+                enabled: false,
+                duration_ms: 80,
+            })),
+        ),
+        (
+            "location_request_active",
+            wrap(Body::LocationRequest(LocationRequest {
+                active: true,
+                interval_ms: 1000,
+            })),
+        ),
+        (
+            "location_status_denied",
+            wrap(Body::LocationStatus(LocationStatus {
+                access: LocationAccess::Denied as i32,
+                detail: String::new(),
+            })),
+        ),
+        (
+            "location_fix",
+            wrap(Body::LocationFix(LocationFix {
+                latitude_degrees: 37.5,
+                longitude_degrees: 127.0,
+                horizontal_accuracy_meters: 10.0,
+                has_altitude: true,
+                altitude_meters: 50.0,
+                vertical_accuracy_meters: 3.0,
+                has_speed: true,
+                speed_meters_per_second: 2.5,
+                has_bearing: true,
+                bearing_degrees: 90.0,
+                unix_time_ms: 1_700_000_000_000,
+            })),
+        ),
+        (
+            "device_idle",
+            wrap(Body::DeviceIdle(DeviceIdle { idle: true })),
+        ),
+        (
+            "clipboard_text",
+            wrap(Body::ClipboardText(ClipboardText {
+                text: "hello \u{c548}\u{b155}".into(),
+            })),
+        ),
+        (
+            "clipboard_sharing_off",
+            wrap(Body::ClipboardSharing(ClipboardSharing { on: false })),
+        ),
+        (
+            "notification",
+            wrap(Body::Notification(GuestNotification {
+                key: CHAT_KEY.into(),
+                package_name: "com.example.chat".into(),
+                app_label: "Chat".into(),
+                title: "Ann".into(),
+                text: "\u{c548}\u{b155}".into(),
+                icon_png: vec![0x89, b'P', b'N', b'G'],
+                importance: 4,
+                high_priority: true,
+                clearable: true,
+                when_millis: 1_700_000_000_000,
+            })),
+        ),
+        (
+            "notification_removed",
+            wrap(Body::NotificationRemoved(NotificationRemoved {
+                key: CHAT_KEY.into(),
+            })),
+        ),
+        (
+            "notification_clicked",
+            wrap(Body::NotificationClicked(NotificationClicked {
+                key: CHAT_KEY.into(),
+            })),
+        ),
+        (
+            "notification_dismissed",
+            wrap(Body::NotificationDismissed(NotificationDismissed {
+                key: CHAT_KEY.into(),
+            })),
+        ),
+        (
+            "install_apk",
+            wrap(Body::InstallApk(InstallApk {
+                transfer_id: 3,
+                name: "notes.apk".into(),
+                size: 1000,
+            })),
+        ),
+        (
+            "apk_chunk",
+            wrap(Body::ApkChunk(ApkChunk {
+                transfer_id: 3,
+                offset: 131_072,
+                data: vec![1, 2, 3],
+            })),
+        ),
+        (
+            "cancel_install",
+            wrap(Body::CancelInstall(CancelInstall { transfer_id: 3 })),
+        ),
+        (
+            "install_progress",
+            wrap(Body::InstallProgress(InstallProgress {
+                transfer_id: 3,
+                received: 131_072,
+            })),
+        ),
+        (
+            "query_package",
+            wrap(Body::QueryPackage(QueryPackage {
+                request_id: 7,
+                package_name: "com.example.notes".into(),
+            })),
+        ),
+        (
+            "uninstall_app",
+            wrap(Body::UninstallApp(UninstallApp {
+                request_id: 7,
+                package_name: "com.example.notes".into(),
+            })),
+        ),
+        (
+            "uninstall_result",
+            wrap(Body::UninstallResult(UninstallResult {
+                request_id: 7,
+                package_name: "com.example.notes".into(),
+                status: UninstallStatus::SystemApp as i32,
+                message: "system".into(),
+            })),
+        ),
+        (
+            "package_state_installed",
+            wrap(Body::PackageState(PackageState {
+                request_id: 7,
+                installed: true,
+                version_code: 42,
+                version_name: "1.2".into(),
+                signer_sha256: vec![(0u8..32).collect()],
+            })),
+        ),
+        (
+            "install_result_success",
+            wrap(Body::InstallResult(InstallResult {
+                transfer_id: 3,
+                status: InstallStatus::Success as i32,
+                package_name: "com.example.notes".into(),
+                message: String::new(),
+            })),
+        ),
+        (
+            "install_result_conflicting_signature",
+            wrap(Body::InstallResult(InstallResult {
+                transfer_id: 3,
+                status: InstallStatus::ConflictingSignature as i32,
+                package_name: "com.example.notes".into(),
+                message: "INSTALL_FAILED_UPDATE_INCOMPATIBLE".into(),
+            })),
+        ),
+        (
+            "agent_connected",
+            wrap(Body::AgentConnected(AgentConnected {})),
+        ),
+        (
+            "guest_boot",
+            wrap(Body::GuestBoot(GuestBoot {
+                boot_completed: true,
+                agent_connected: true,
+            })),
+        ),
+        (
+            "clock_probe",
+            wrap(Body::ClockProbe(ClockProbe {
+                host_sent_ns: 1_234_567_890_123,
+            })),
+        ),
+        (
+            "clock_answer",
+            wrap(Body::ClockAnswer(ClockAnswer {
+                host_sent_ns: 1_234_567_890_123,
+                guest_mono_ns: 987_654_321_098,
+            })),
+        ),
+        (
+            "hello_rejected_authentication",
+            wrap(Body::HelloRejected(HelloRejected {
+                reason: RejectReason::AuthenticationFailed as i32,
+                detail: "no proof".into(),
+                host: None,
+            })),
+        ),
+        (
+            "request_guest_memory",
+            wrap(Body::RequestGuestMemory(RequestGuestMemory {})),
+        ),
+        (
+            "guest_memory",
+            wrap(Body::GuestMemory(GuestMemory {
+                mem_total_kb: 4015356,
+                cached_kb: 1503112,
+                zram_used_kb: 30720,
+                total_pss_kb: 330000,
+                top_processes: vec![ProcessMemory {
+                    pid: 500,
+                    name: "system".into(),
+                    pss_kb: 180000,
+                    swap_pss_kb: 1000,
+                }],
+                ..GuestMemory::default()
+            })),
+        ),
+        (
+            "open_link",
+            wrap(Body::OpenLink(OpenLink {
+                url: "https://example.com/".into(),
+            })),
+        ),
+        (
+            "link_handling",
+            wrap(Body::LinkHandling(LinkHandling { in_guest: true })),
+        ),
+        (
+            "drag_offer",
+            wrap(Body::DragOffer(dsa_protocol::control::DragOffer {
+                request_id: 7,
+                drag_id: 2,
+                items: vec![
+                    dsa_protocol::control::DragItem {
+                        name: "a.txt".into(),
+                        size: 5,
+                        size_known: true,
+                        mime_type: "text/plain".into(),
+                        ..Default::default()
+                    },
+                    dsa_protocol::control::DragItem {
+                        is_text: true,
+                        text: "hi".into(),
+                        ..Default::default()
+                    },
+                ],
+                error: String::new(),
+            })),
+        ),
+        (
+            "drag_read",
+            wrap(Body::DragRead(dsa_protocol::control::DragRead {
+                request_id: 7,
+                drag_id: 2,
+                item: 1,
+                offset: 65536,
+                length: 65536,
+            })),
+        ),
+        (
+            "open_file",
+            wrap(Body::OpenFile(OpenFile {
+                transfer_id: 3,
+                name: "photo.jpg".into(),
+                size: 1000,
+                action: FileAction::Send as i32,
+                package: String::new(),
+            })),
+        ),
+        (
+            "file_chunk",
+            wrap(Body::FileChunk(FileChunk {
+                transfer_id: 3,
+                offset: 131072,
+                data: vec![1, 2, 3],
+            })),
+        ),
+        (
+            "file_progress",
+            wrap(Body::FileProgress(FileProgress {
+                transfer_id: 3,
+                received: 1000,
+                error: "storage is full".into(),
+            })),
+        ),
+        (
+            "list_widget_providers",
+            wrap(Body::ListWidgetProviders(ListWidgetProviders {
+                request_id: 7,
+            })),
+        ),
+        (
+            "widget_providers",
+            wrap(Body::WidgetProviders(WidgetProviders {
+                request_id: 7,
+                providers: vec![clock_provider()],
+                complete: true,
+            })),
+        ),
+        (
+            "add_widget",
+            wrap(Body::AddWidget(AddWidget {
+                request_id: 8,
+                provider: "com.example.clock/.ClockWidget".into(),
+            })),
+        ),
+        (
+            "widget_added",
+            wrap(Body::WidgetAdded(WidgetAdded {
+                request_id: 8,
+                widget_id: 12,
+                error: String::new(),
+            })),
+        ),
+        (
+            "widget_added_refused",
+            wrap(Body::WidgetAdded(WidgetAdded {
+                request_id: 9,
+                widget_id: 0,
+                error: "the user canceled the widget's setup".into(),
+            })),
+        ),
+        (
+            "widget_updated",
+            wrap(Body::WidgetUpdated(WidgetUpdated {
+                widget_id: 12,
+                provider: Some(clock_provider()),
+            })),
+        ),
+        (
+            "widget_list",
+            wrap(Body::WidgetList(WidgetList {
+                widget_ids: vec![12, 15],
+            })),
+        ),
+        (
+            "remove_widget",
+            wrap(Body::RemoveWidget(RemoveWidget { widget_id: 12 })),
+        ),
+        (
+            "resize_widget",
+            wrap(Body::ResizeWidget(ResizeWidget {
+                widget_id: 12,
+                width: 360,
+                height: 220,
+                density_dpi: 240,
+                width_dp: 240,
+                height_dp: 146,
+            })),
+        ),
+        (
+            "widget_frame",
+            wrap(Body::WidgetFrame(WidgetFrame {
+                widget_id: 12,
+                width: 2,
+                height: 1,
+                png: vec![0x89, b'P', b'N', b'G'],
+            })),
+        ),
+        (
+            "widget_pointer",
+            wrap(Body::WidgetPointer(WidgetPointer {
+                widget_id: 12,
+                action: PointerAction::Down as i32,
+                pointer_id: 0,
+                x: 10.5,
+                y: 20.25,
+            })),
+        ),
+        (
+            "accessibility_watch_on",
+            wrap(Body::AccessibilityWatch(AccessibilityWatch {
+                task_id: 42,
+                on: true,
+            })),
+        ),
+        (
+            "accessibility_watch_off",
+            wrap(Body::AccessibilityWatch(AccessibilityWatch {
+                task_id: 42,
+                on: false,
+            })),
+        ),
+        (
+            "accessibility_tree_full",
+            wrap(Body::AccessibilityTree(AccessibilityTree {
+                task_id: 42,
+                epoch: 1,
+                full: true,
+                root_ids: vec![1],
+                nodes: vec![
+                    AccessibilityNode {
+                        id: 1,
+                        child_ids: vec![2, 3],
+                        class_name: "android.widget.FrameLayout".into(),
+                        bounds: Some(Rect {
+                            left: 0,
+                            top: 0,
+                            right: 400,
+                            bottom: 600,
+                        }),
+                        enabled: true,
+                        ..AccessibilityNode::default()
+                    },
+                    AccessibilityNode {
+                        id: 2,
+                        class_name: "android.widget.TextView".into(),
+                        text: "Network & internet".into(),
+                        bounds: Some(Rect {
+                            left: 0,
+                            top: 0,
+                            right: 400,
+                            bottom: 80,
+                        }),
+                        enabled: true,
+                        clickable: true,
+                        actions: vec![
+                            NodeAction::Click as i32,
+                            NodeAction::AccessibilityFocus as i32,
+                        ],
+                        ..AccessibilityNode::default()
+                    },
+                    AccessibilityNode {
+                        id: 3,
+                        class_name: "android.widget.SeekBar".into(),
+                        content_description: "Volume".into(),
+                        bounds: Some(Rect {
+                            left: 16,
+                            top: 100,
+                            right: 384,
+                            bottom: 140,
+                        }),
+                        enabled: true,
+                        focusable: true,
+                        range: Some(NodeRange {
+                            min: 0.0,
+                            max: 100.0,
+                            current: 50.0,
+                        }),
+                        actions: vec![
+                            NodeAction::ScrollForward as i32,
+                            NodeAction::ScrollBackward as i32,
+                        ],
+                        state_description: "50 percent".into(),
+                        ..AccessibilityNode::default()
+                    },
+                ],
+                removed_ids: vec![],
+                focused_id: 3,
+            })),
+        ),
+        (
+            "accessibility_tree_delta",
+            wrap(Body::AccessibilityTree(AccessibilityTree {
+                task_id: 42,
+                epoch: 1,
+                full: false,
+                root_ids: vec![1],
+                nodes: vec![AccessibilityNode {
+                    id: 2,
+                    child_ids: vec![],
+                    class_name: "android.widget.EditText".into(),
+                    text: "Wi-Fi".into(),
+                    content_description: String::new(),
+                    hint: "Name".into(),
+                    view_id: "com.android.settings:id/title".into(),
+                    bounds: Some(Rect {
+                        left: 0,
+                        top: 0,
+                        right: 400,
+                        bottom: 80,
+                    }),
+                    checkable: true,
+                    checked: true,
+                    selected: true,
+                    enabled: true,
+                    focusable: true,
+                    focused: true,
+                    scrollable: true,
+                    clickable: true,
+                    long_clickable: true,
+                    editable: true,
+                    password: true,
+                    heading: true,
+                    range: None,
+                    actions: vec![
+                        NodeAction::Click as i32,
+                        NodeAction::LongClick as i32,
+                        NodeAction::SetText as i32,
+                        NodeAction::Focus as i32,
+                        NodeAction::Select as i32,
+                    ],
+                    state_description: String::new(),
+                }],
+                removed_ids: vec![3],
+                focused_id: 0,
+            })),
+        ),
+        (
+            "accessibility_action",
+            wrap(Body::AccessibilityAction(AccessibilityAction {
+                task_id: 42,
+                epoch: 1,
+                node_id: 2,
+                action: NodeAction::SetText as i32,
+                text: "hello".into(),
+                request_id: 7,
+            })),
+        ),
+        (
+            "accessibility_action_result",
+            wrap(Body::AccessibilityActionResult(AccessibilityActionResult {
+                task_id: 42,
+                request_id: 7,
+                done: false,
+                error: "the node is gone".into(),
+            })),
+        ),
+        (
+            "log_stream_on",
+            wrap(Body::LogStream(LogStream {
+                on: true,
+                buffers: 50,
+                min_priority: 4,
+                tail: 500,
+            })),
+        ),
+        (
+            "log_stream_off",
+            wrap(Body::LogStream(LogStream::default())),
+        ),
+        (
+            "log_dump",
+            wrap(Body::LogDump(LogDump {
+                request_id: 7,
+                buffers: 50,
+                min_priority: 2,
+            })),
+        ),
+        (
+            "log_records",
+            wrap(Body::LogRecords(LogRecords {
+                request_id: 0,
+                records: vec![
+                    LogRecord {
+                        buffer: LogBuffer::Main as i32,
+                        priority: 4,
+                        time_ns: 1_700_000_000_123_456_789,
+                        pid: 1234,
+                        tid: 1240,
+                        uid: 1000,
+                        tag: "ActivityManager".into(),
+                        message: "Start proc 1234".into(),
+                        dropped: 0,
+                    },
+                    LogRecord {
+                        dropped: 12,
+                        ..LogRecord::default()
+                    },
+                ],
+                end: false,
+                error: String::new(),
+            })),
+        ),
+        (
+            "log_records_dump_end",
+            wrap(Body::LogRecords(LogRecords {
+                request_id: 7,
+                records: Vec::new(),
+                end: true,
+                error: String::new(),
+            })),
+        ),
+        (
+            "collect_diagnostics",
+            wrap(Body::CollectDiagnostics(CollectDiagnostics {
+                request_id: 3,
+            })),
+        ),
+        (
+            "diagnostics_file",
+            wrap(Body::DiagnosticsFile(DiagnosticsFile {
+                request_id: 3,
+                name: "android/pstore/console-ramoops-0".into(),
+                data: b"boot".to_vec(),
+                last: true,
+            })),
+        ),
+        (
+            "diagnostics_done",
+            wrap(Body::DiagnosticsDone(DiagnosticsDone {
+                request_id: 3,
+                error: "the agent did not answer".into(),
+            })),
+        ),
+        (
+            "print_job",
+            wrap(Body::PrintJob(PrintJob {
+                job_id: 5,
+                package_name: "com.example.docs".into(),
+                app_label: "Docs".into(),
+                document_name: "Report".into(),
+                size: 1000,
+                page_count: 3,
+                copies: 2,
+                color: true,
+                duplex: true,
+                landscape: false,
+                media_width_mils: 8268,
+                media_height_mils: 11693,
+            })),
+        ),
+        (
+            "print_job_chunk",
+            wrap(Body::PrintJobChunk(PrintJobChunk {
+                job_id: 5,
+                offset: 262_144,
+                data: vec![1, 2, 3],
+            })),
+        ),
+        (
+            "print_job_cancel",
+            wrap(Body::PrintJobCancel(PrintJobCancel { job_id: 5 })),
+        ),
+        (
+            "print_job_result",
+            wrap(Body::PrintJobResult(PrintJobResult {
+                job_id: 5,
+                outcome: PrintOutcome::Failed as i32,
+                message: "out of paper".into(),
+            })),
+        ),
+        (
+            "sensor_list",
+            wrap(Body::SensorList(SensorList {
+                sensors: vec![SensorDescription {
+                    kind: SensorKind::Gyroscope as i32,
+                    name: "Gyro".into(),
+                    vendor: String::new(),
+                    max_range: 2.0,
+                    resolution: 0.0,
+                    min_interval_us: 16000,
+                }],
+            })),
+        ),
+        (
+            "sensor_activate",
+            wrap(Body::SensorActivate(SensorActivate {
+                kind: SensorKind::Accelerometer as i32,
+                enabled: true,
+                interval_us: 20000,
+            })),
+        ),
+        (
+            "sensor_readings",
+            wrap(Body::SensorReadings(SensorReadings {
+                readings: vec![SensorReading {
+                    kind: SensorKind::Light as i32,
+                    timestamp_us: 1000,
+                    values: vec![2.5],
+                }],
             })),
         ),
     ])

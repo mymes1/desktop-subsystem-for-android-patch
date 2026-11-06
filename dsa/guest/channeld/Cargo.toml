@@ -11,12 +11,18 @@ publish.workspace = true
 # Runs the daemon over vsock loopback (CID 1); needs the vsock_loopback kernel module.
 vsock-loopback-tests = []
 
+[[bin]]
+name = "dsa-channeld"
+path = "src/main.rs"
+
 [dependencies]
 dsa-transport.workspace = true
 dsa-protocol.workspace = true
+sha2 = "0.11"
+
+[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
+dsa-guest-transport = { path = "../transport" }
+libc = "0.2"
 
 [dev-dependencies]
 dsa-protocol-schema.workspace = true
-
-[target.'cfg(target_os = "linux")'.dev-dependencies]
-dsa-guest-transport = { path = "../transport" }

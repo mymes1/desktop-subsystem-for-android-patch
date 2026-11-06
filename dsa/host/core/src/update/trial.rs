@@ -19,6 +19,10 @@ pub trait Boot {
     ) -> Result<(), String>;
     /// Stops the guest, whatever state it is in.
     fn halt(&mut self);
+    /// Whether the failure [`boot`](Self::boot) just reported says anything about the image.
+    fn image_to_blame(&self) -> bool {
+        true
+    }
 }
 
 /// How a start ended.
@@ -34,6 +38,18 @@ pub enum Outcome {
         failed: InstalledImage,
         reason: String,
         image: InstalledImage,
+    },
+    /// The new image did not boot and there is no image to go back to: it was the first
+    /// one since an installation without a bundled image.
+    GaveUp {
+        failed: InstalledImage,
+        reason: String,
+    },
+    /// The image on trial did not get ready, for a cause that says nothing about it. The guest
+    /// keeps running, and the image stays on trial: neither kept nor given up.
+    Undecided {
+        image: InstalledImage,
+        reason: String,
     },
 }
 
@@ -54,9 +70,19 @@ pub fn start(
                 confirmed: state.on_trial,
             })
         }
+        Err(reason) if state.on_trial && !guest.image_to_blame() => Ok(Outcome::Undecided {
+            image: state.current,
+            reason,
+        }),
         Err(reason) if state.on_trial => {
             guest.halt();
             let image = store.roll_back()?;
+            if !store.has_image(&image.version) {
+                return Ok(Outcome::GaveUp {
+                    failed: state.current,
+                    reason,
+                });
+            }
             guest
                 .boot(&image, &store.image_dir(&image.version), timeout)
                 .map_err(|why| {

@@ -1,0 +1,128 @@
+; Desktop Subsystem for Android (DSA)
+; The guest's control channel daemon (/vendor/bin/dsa-channeld): init starts it in its own
+; domain, it reads the boot's secret from /proc/bootconfig and connects to the host over
+; vsock. It serves the agent and the hwcomposer over binder, so those domains may call it
+; and it may call them back; nothing else is granted to any other domain. Apps in particular
+; still cannot read /proc/bootconfig, which is what keeps the secret the daemon's alone.
+
+(type dsa_channeld)
+(roletype object_r dsa_channeld)
+(typeattributeset domain (dsa_channeld))
+
+(type dsa_channeld_exec)
+(roletype object_r dsa_channeld_exec)
+(typeattributeset file_type (dsa_channeld_exec))
+(typeattributeset exec_type (dsa_channeld_exec))
+(typeattributeset vendor_file_type (dsa_channeld_exec))
+
+; init starts it and it moves into its own domain.
+(typetransition init dsa_channeld_exec process dsa_channeld)
+(allow init dsa_channeld_exec (file (read getattr map execute open)))
+(allow init dsa_channeld (process (transition siginh rlimitinh)))
+(dontaudit init dsa_channeld (process (noatsecure)))
+(allow dsa_channeld dsa_channeld_exec (file (entrypoint read getattr map execute open)))
+(allow dsa_channeld init (fd (use)))
+
+; Its messages go to the kernel log through the descriptor init opens for it
+; (stdio_to_kmsg opens /dev/kmsg_debug).
+(allow dsa_channeld kmsg_device (chr_file (write append getattr)))
+(allow dsa_channeld kmsg_debug_device (chr_file (write append getattr)))
+
+; The boot's secret.
+(allow dsa_channeld proc_bootconfig (file (read open getattr)))
+
+; The control channel.
+(allow dsa_channeld self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+
+; The binder service the agent and the hwcomposer reach the daemon through,
+; io.github.thisisthepy.dsa.channel.IChannel/default on /dev/binder, which
+; vendor_service_contexts labels dsa_channel_service. Only the daemon may register it.
+(type dsa_channel_service)
+(roletype object_r dsa_channel_service)
+(typeattributeset service_manager_type (dsa_channel_service))
+(typeattributeset hal_service_type (dsa_channel_service))
+
+(allow dsa_channeld binder_device (chr_file (ioctl read write open getattr map)))
+(allow dsa_channeld servicemanager (binder (call transfer)))
+(allow servicemanager dsa_channeld (binder (call transfer)))
+; servicemanager reads the caller's context to check it.
+(allow servicemanager dsa_channeld (dir (search)))
+(allow servicemanager dsa_channeld (file (read open)))
+(allow servicemanager dsa_channeld (process (getattr)))
+(allow dsa_channeld dsa_channel_service (service_manager (add find)))
+
+; Its clients: the agent, a platform-signed system app (system_app with the system user ID,
+; platform_app without), and the hwcomposer. They find the service and call it; the daemon
+; calls back the listeners they hand it.
+(allow system_app dsa_channel_service (service_manager (find)))
+(allow platform_app dsa_channel_service (service_manager (find)))
+(allow hal_graphics_composer_server dsa_channel_service (service_manager (find)))
+(allow system_app dsa_channeld (binder (call transfer)))
+(allow platform_app dsa_channeld (binder (call transfer)))
+(allow hal_graphics_composer_server dsa_channeld (binder (call transfer)))
+(allow dsa_channeld system_app (binder (call transfer)))
+(allow dsa_channeld platform_app (binder (call transfer)))
+(allow dsa_channeld hal_graphics_composer_server (binder (call transfer)))
+
+; A caller that says it is the agent has its process name read, from /proc/<pid>/cmdline.
+; Reading it checks getattr as well, which the kernel would otherwise refuse and log each time.
+(allow dsa_channeld system_app (dir (search)))
+(allow dsa_channeld system_app (file (read open getattr)))
+(allow dsa_channeld platform_app (dir (search)))
+(allow dsa_channeld platform_app (file (read open getattr)))
+; An app's process carries MLS categories (s0:c512,c768), and without this the kernel refuses the
+; read even though the rules above allow it. What the daemon may touch is still only what this
+; file allows.
+(typeattributeset mlstrustedsubject (dsa_channeld))
+
+; vendor.dsa.boot_completed (vendor_property_contexts): init sets it to 1 when Android has
+; finished booting, and the daemon reads it to tell the host. Nothing else may set it.
+(type dsa_boot_prop)
+(roletype object_r dsa_boot_prop)
+(typeattributeset property_type (dsa_boot_prop))
+(typeattributeset vendor_property_type (dsa_boot_prop))
+(allow vendor_init dsa_boot_prop (property_service (set)))
+(allow vendor_init dsa_boot_prop (file (read open getattr map)))
+(allow dsa_channeld dsa_boot_prop (file (read open getattr map)))
+
+; Handing idle memory back to the host: the daemon reads how the guest uses its memory and,
+; when it should drop its caches, sets vendor.dsa.memory.reclaim (its type, dsa_memory_prop,
+; is in memory.cil). init's vendor scripts do the rest (dsa-channeld.rc).
+(allow dsa_channeld proc_meminfo (file (read open getattr)))
+(allow dsa_channeld property_socket (sock_file (write)))
+(allow dsa_channeld init (unix_stream_socket (connectto)))
+(allow dsa_channeld dsa_memory_prop (property_service (set)))
+(allow dsa_channeld dsa_memory_prop (file (read open getattr map)))
+
+; The gradual trim skips a guest under memory pressure, which the daemon reads from the
+; kernel's pressure stall information.
+(allow dsa_channeld proc_pressure_mem (file (read open getattr)))
+
+; Developer mode: the daemon sets vendor.dsa.adb (its type, dsa_adb_prop, is in adb.cil) as
+; the host says, and init starts or stops adbd (dsa-channeld.rc).
+(allow dsa_channeld dsa_adb_prop (property_service (set)))
+(allow dsa_channeld dsa_adb_prop (file (read open getattr map)))
+; Android's log, read only while the host asks for it, through logd's reader socket
+; (/dev/socket/logdr, a sequenced-packet socket); the records go to the host on the log port,
+; which the vsock rules above already cover. The daemon runs as the system user, which logd
+; lets read every app's log. It writes no log of its own anywhere.
+(allow dsa_channeld self (unix_stream_socket (create connect read write getattr setopt shutdown)))
+(allow dsa_channeld logdr_socket (sock_file (write)))
+(allow dsa_channeld logd (unix_stream_socket (connectto)))
+
+; What the kernel kept of the boot before in pstore (/sys/fs/pstore), for the diagnostics the
+; host asks for. A record the host has is unlinked, which erases it from the pstore disk; the
+; daemon first makes the folder, which init leaves read only to it, writable to it.
+(allow dsa_channeld pstorefs (dir (search read open getattr setattr write remove_name)))
+(allow dsa_channeld pstorefs (file (read open getattr unlink)))
+
+; ARM app translation: the daemon writes the package image the host sends to
+; /data/vendor/dsa/arm-translation (dsa-arm-translation.rc makes the directory, as the system
+; user the daemon runs as) and removes it when the host says so. init mounts it at the next
+; boot (arm-translation.cil).
+(allow dsa_channeld vendor_data_file (dir (search read open getattr write add_name remove_name)))
+(allow dsa_channeld vendor_data_file (file (create read write open getattr setattr unlink rename)))
+
+; The host's game controllers: the daemon makes each one a gamepad on /dev/uinput, reports its
+; buttons, sticks and triggers there, and reads the rumble effects apps play on it.
+(allow dsa_channeld uhid_device (chr_file (ioctl read write open getattr)))
