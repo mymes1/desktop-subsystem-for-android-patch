@@ -1176,6 +1176,105 @@ struct AndroidFilesDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 AndroidFilesDefaultTypeInternal _AndroidFiles_default_instance_;
+PROTOBUF_CONSTEXPR DragItem::DragItem(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.mime_type_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.text_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.size_)*/uint64_t{0u}
+  , /*decltype(_impl_.size_known_)*/false
+  , /*decltype(_impl_.is_text_)*/false
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct DragItemDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR DragItemDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~DragItemDefaultTypeInternal() {}
+  union {
+    DragItem _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DragItemDefaultTypeInternal _DragItem_default_instance_;
+PROTOBUF_CONSTEXPR DragOut::DragOut(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_.task_id_)*/0
+  , /*decltype(_impl_.x_)*/0
+  , /*decltype(_impl_.y_)*/0
+  , /*decltype(_impl_.tool_)*/0
+  , /*decltype(_impl_.pointer_id_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct DragOutDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR DragOutDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~DragOutDefaultTypeInternal() {}
+  union {
+    DragOut _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DragOutDefaultTypeInternal _DragOut_default_instance_;
+PROTOBUF_CONSTEXPR DragOffer::DragOffer(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.items_)*/{}
+  , /*decltype(_impl_.error_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_.drag_id_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct DragOfferDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR DragOfferDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~DragOfferDefaultTypeInternal() {}
+  union {
+    DragOffer _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DragOfferDefaultTypeInternal _DragOffer_default_instance_;
+PROTOBUF_CONSTEXPR DragRead::DragRead(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_.drag_id_)*/0u
+  , /*decltype(_impl_.offset_)*/uint64_t{0u}
+  , /*decltype(_impl_.item_)*/0u
+  , /*decltype(_impl_.length_)*/0u
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct DragReadDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR DragReadDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~DragReadDefaultTypeInternal() {}
+  union {
+    DragRead _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DragReadDefaultTypeInternal _DragRead_default_instance_;
+PROTOBUF_CONSTEXPR DragData::DragData(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.data_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.error_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.request_id_)*/0u
+  , /*decltype(_impl_.end_)*/false
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct DragDataDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR DragDataDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~DragDataDefaultTypeInternal() {}
+  union {
+    DragData _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DragDataDefaultTypeInternal _DragData_default_instance_;
+PROTOBUF_CONSTEXPR DragEnd::DragEnd(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.drag_id_)*/0u
+  , /*decltype(_impl_.dropped_)*/false
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct DragEndDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR DragEndDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~DragEndDefaultTypeInternal() {}
+  union {
+    DragEnd _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DragEndDefaultTypeInternal _DragEnd_default_instance_;
 PROTOBUF_CONSTEXPR ClockProbe::ClockProbe(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.host_sent_ns_)*/uint64_t{0u}
@@ -23879,6 +23978,1838 @@ std::string AndroidFiles::GetTypeName() const {
 
 // ===================================================================
 
+class DragItem::_Internal {
+ public:
+};
+
+DragItem::DragItem(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.DragItem)
+}
+DragItem::DragItem(const DragItem& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  DragItem* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , decltype(_impl_.mime_type_){}
+    , decltype(_impl_.text_){}
+    , decltype(_impl_.size_){}
+    , decltype(_impl_.size_known_){}
+    , decltype(_impl_.is_text_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_name().empty()) {
+    _this->_impl_.name_.Set(from._internal_name(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.mime_type_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.mime_type_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_mime_type().empty()) {
+    _this->_impl_.mime_type_.Set(from._internal_mime_type(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.text_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.text_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_text().empty()) {
+    _this->_impl_.text_.Set(from._internal_text(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.size_, &from._impl_.size_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.is_text_) -
+    reinterpret_cast<char*>(&_impl_.size_)) + sizeof(_impl_.is_text_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.DragItem)
+}
+
+inline void DragItem::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , decltype(_impl_.mime_type_){}
+    , decltype(_impl_.text_){}
+    , decltype(_impl_.size_){uint64_t{0u}}
+    , decltype(_impl_.size_known_){false}
+    , decltype(_impl_.is_text_){false}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.mime_type_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.mime_type_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.text_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.text_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+DragItem::~DragItem() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.DragItem)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void DragItem::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.name_.Destroy();
+  _impl_.mime_type_.Destroy();
+  _impl_.text_.Destroy();
+}
+
+void DragItem::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void DragItem::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.DragItem)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.name_.ClearToEmpty();
+  _impl_.mime_type_.ClearToEmpty();
+  _impl_.text_.ClearToEmpty();
+  ::memset(&_impl_.size_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.is_text_) -
+      reinterpret_cast<char*>(&_impl_.size_)) + sizeof(_impl_.is_text_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* DragItem::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string name = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 size = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.size_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool size_known = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.size_known_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string mime_type = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_mime_type();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // bool is_text = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.is_text_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string text = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
+          auto str = _internal_mutable_text();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* DragItem::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.DragItem)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string name = 1;
+  if (!this->_internal_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.DragItem.name");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_name(), target);
+  }
+
+  // uint64 size = 2;
+  if (this->_internal_size() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(2, this->_internal_size(), target);
+  }
+
+  // bool size_known = 3;
+  if (this->_internal_size_known() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(3, this->_internal_size_known(), target);
+  }
+
+  // string mime_type = 4;
+  if (!this->_internal_mime_type().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_mime_type().data(), static_cast<int>(this->_internal_mime_type().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.DragItem.mime_type");
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_mime_type(), target);
+  }
+
+  // bool is_text = 5;
+  if (this->_internal_is_text() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(5, this->_internal_is_text(), target);
+  }
+
+  // string text = 6;
+  if (!this->_internal_text().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_text().data(), static_cast<int>(this->_internal_text().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.DragItem.text");
+    target = stream->WriteStringMaybeAliased(
+        6, this->_internal_text(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.DragItem)
+  return target;
+}
+
+size_t DragItem::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.DragItem)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string name = 1;
+  if (!this->_internal_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_name());
+  }
+
+  // string mime_type = 4;
+  if (!this->_internal_mime_type().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_mime_type());
+  }
+
+  // string text = 6;
+  if (!this->_internal_text().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_text());
+  }
+
+  // uint64 size = 2;
+  if (this->_internal_size() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_size());
+  }
+
+  // bool size_known = 3;
+  if (this->_internal_size_known() != 0) {
+    total_size += 1 + 1;
+  }
+
+  // bool is_text = 5;
+  if (this->_internal_is_text() != 0) {
+    total_size += 1 + 1;
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void DragItem::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const DragItem*>(
+      &from));
+}
+
+void DragItem::MergeFrom(const DragItem& from) {
+  DragItem* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.DragItem)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_name().empty()) {
+    _this->_internal_set_name(from._internal_name());
+  }
+  if (!from._internal_mime_type().empty()) {
+    _this->_internal_set_mime_type(from._internal_mime_type());
+  }
+  if (!from._internal_text().empty()) {
+    _this->_internal_set_text(from._internal_text());
+  }
+  if (from._internal_size() != 0) {
+    _this->_internal_set_size(from._internal_size());
+  }
+  if (from._internal_size_known() != 0) {
+    _this->_internal_set_size_known(from._internal_size_known());
+  }
+  if (from._internal_is_text() != 0) {
+    _this->_internal_set_is_text(from._internal_is_text());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void DragItem::CopyFrom(const DragItem& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.DragItem)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool DragItem::IsInitialized() const {
+  return true;
+}
+
+void DragItem::InternalSwap(DragItem* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.name_, lhs_arena,
+      &other->_impl_.name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.mime_type_, lhs_arena,
+      &other->_impl_.mime_type_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.text_, lhs_arena,
+      &other->_impl_.text_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DragItem, _impl_.is_text_)
+      + sizeof(DragItem::_impl_.is_text_)
+      - PROTOBUF_FIELD_OFFSET(DragItem, _impl_.size_)>(
+          reinterpret_cast<char*>(&_impl_.size_),
+          reinterpret_cast<char*>(&other->_impl_.size_));
+}
+
+std::string DragItem::GetTypeName() const {
+  return "dsa.control.v1.DragItem";
+}
+
+
+// ===================================================================
+
+class DragOut::_Internal {
+ public:
+};
+
+DragOut::DragOut(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.DragOut)
+}
+DragOut::DragOut(const DragOut& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  DragOut* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.request_id_){}
+    , decltype(_impl_.task_id_){}
+    , decltype(_impl_.x_){}
+    , decltype(_impl_.y_){}
+    , decltype(_impl_.tool_){}
+    , decltype(_impl_.pointer_id_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.request_id_, &from._impl_.request_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.pointer_id_) -
+    reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.pointer_id_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.DragOut)
+}
+
+inline void DragOut::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.request_id_){0u}
+    , decltype(_impl_.task_id_){0}
+    , decltype(_impl_.x_){0}
+    , decltype(_impl_.y_){0}
+    , decltype(_impl_.tool_){0}
+    , decltype(_impl_.pointer_id_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+DragOut::~DragOut() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.DragOut)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void DragOut::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void DragOut::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void DragOut::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.DragOut)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.request_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.pointer_id_) -
+      reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.pointer_id_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* DragOut::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // int32 task_id = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.task_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // float x = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 29)) {
+          _impl_.x_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else
+          goto handle_unusual;
+        continue;
+      // float y = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 37)) {
+          _impl_.y_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.PointerTool tool = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_tool(static_cast<::dsa::control::v1::PointerTool>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 pointer_id = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
+          _impl_.pointer_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* DragOut::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.DragOut)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // int32 task_id = 2;
+  if (this->_internal_task_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(2, this->_internal_task_id(), target);
+  }
+
+  // float x = 3;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_x = this->_internal_x();
+  uint32_t raw_x;
+  memcpy(&raw_x, &tmp_x, sizeof(tmp_x));
+  if (raw_x != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(3, this->_internal_x(), target);
+  }
+
+  // float y = 4;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_y = this->_internal_y();
+  uint32_t raw_y;
+  memcpy(&raw_y, &tmp_y, sizeof(tmp_y));
+  if (raw_y != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(4, this->_internal_y(), target);
+  }
+
+  // .dsa.control.v1.PointerTool tool = 5;
+  if (this->_internal_tool() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      5, this->_internal_tool(), target);
+  }
+
+  // uint32 pointer_id = 6;
+  if (this->_internal_pointer_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(6, this->_internal_pointer_id(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.DragOut)
+  return target;
+}
+
+size_t DragOut::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.DragOut)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  // int32 task_id = 2;
+  if (this->_internal_task_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_task_id());
+  }
+
+  // float x = 3;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_x = this->_internal_x();
+  uint32_t raw_x;
+  memcpy(&raw_x, &tmp_x, sizeof(tmp_x));
+  if (raw_x != 0) {
+    total_size += 1 + 4;
+  }
+
+  // float y = 4;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_y = this->_internal_y();
+  uint32_t raw_y;
+  memcpy(&raw_y, &tmp_y, sizeof(tmp_y));
+  if (raw_y != 0) {
+    total_size += 1 + 4;
+  }
+
+  // .dsa.control.v1.PointerTool tool = 5;
+  if (this->_internal_tool() != 0) {
+    total_size += 1 +
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_tool());
+  }
+
+  // uint32 pointer_id = 6;
+  if (this->_internal_pointer_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_pointer_id());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void DragOut::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const DragOut*>(
+      &from));
+}
+
+void DragOut::MergeFrom(const DragOut& from) {
+  DragOut* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.DragOut)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  if (from._internal_task_id() != 0) {
+    _this->_internal_set_task_id(from._internal_task_id());
+  }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_x = from._internal_x();
+  uint32_t raw_x;
+  memcpy(&raw_x, &tmp_x, sizeof(tmp_x));
+  if (raw_x != 0) {
+    _this->_internal_set_x(from._internal_x());
+  }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_y = from._internal_y();
+  uint32_t raw_y;
+  memcpy(&raw_y, &tmp_y, sizeof(tmp_y));
+  if (raw_y != 0) {
+    _this->_internal_set_y(from._internal_y());
+  }
+  if (from._internal_tool() != 0) {
+    _this->_internal_set_tool(from._internal_tool());
+  }
+  if (from._internal_pointer_id() != 0) {
+    _this->_internal_set_pointer_id(from._internal_pointer_id());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void DragOut::CopyFrom(const DragOut& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.DragOut)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool DragOut::IsInitialized() const {
+  return true;
+}
+
+void DragOut::InternalSwap(DragOut* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DragOut, _impl_.pointer_id_)
+      + sizeof(DragOut::_impl_.pointer_id_)
+      - PROTOBUF_FIELD_OFFSET(DragOut, _impl_.request_id_)>(
+          reinterpret_cast<char*>(&_impl_.request_id_),
+          reinterpret_cast<char*>(&other->_impl_.request_id_));
+}
+
+std::string DragOut::GetTypeName() const {
+  return "dsa.control.v1.DragOut";
+}
+
+
+// ===================================================================
+
+class DragOffer::_Internal {
+ public:
+};
+
+DragOffer::DragOffer(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.DragOffer)
+}
+DragOffer::DragOffer(const DragOffer& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  DragOffer* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.items_){from._impl_.items_}
+    , decltype(_impl_.error_){}
+    , decltype(_impl_.request_id_){}
+    , decltype(_impl_.drag_id_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_error().empty()) {
+    _this->_impl_.error_.Set(from._internal_error(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.request_id_, &from._impl_.request_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.drag_id_) -
+    reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.drag_id_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.DragOffer)
+}
+
+inline void DragOffer::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.items_){arena}
+    , decltype(_impl_.error_){}
+    , decltype(_impl_.request_id_){0u}
+    , decltype(_impl_.drag_id_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+DragOffer::~DragOffer() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.DragOffer)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void DragOffer::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.items_.~RepeatedPtrField();
+  _impl_.error_.Destroy();
+}
+
+void DragOffer::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void DragOffer::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.DragOffer)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.items_.Clear();
+  _impl_.error_.ClearToEmpty();
+  ::memset(&_impl_.request_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.drag_id_) -
+      reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.drag_id_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* DragOffer::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 drag_id = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.drag_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .dsa.control.v1.DragItem items = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_items(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<26>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // string error = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_error();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* DragOffer::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.DragOffer)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // uint32 drag_id = 2;
+  if (this->_internal_drag_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_drag_id(), target);
+  }
+
+  // repeated .dsa.control.v1.DragItem items = 3;
+  for (unsigned i = 0,
+      n = static_cast<unsigned>(this->_internal_items_size()); i < n; i++) {
+    const auto& repfield = this->_internal_items(i);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+        InternalWriteMessage(3, repfield, repfield.GetCachedSize(), target, stream);
+  }
+
+  // string error = 4;
+  if (!this->_internal_error().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_error().data(), static_cast<int>(this->_internal_error().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.DragOffer.error");
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_error(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.DragOffer)
+  return target;
+}
+
+size_t DragOffer::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.DragOffer)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated .dsa.control.v1.DragItem items = 3;
+  total_size += 1UL * this->_internal_items_size();
+  for (const auto& msg : this->_impl_.items_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // string error = 4;
+  if (!this->_internal_error().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_error());
+  }
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  // uint32 drag_id = 2;
+  if (this->_internal_drag_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_drag_id());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void DragOffer::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const DragOffer*>(
+      &from));
+}
+
+void DragOffer::MergeFrom(const DragOffer& from) {
+  DragOffer* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.DragOffer)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  _this->_impl_.items_.MergeFrom(from._impl_.items_);
+  if (!from._internal_error().empty()) {
+    _this->_internal_set_error(from._internal_error());
+  }
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  if (from._internal_drag_id() != 0) {
+    _this->_internal_set_drag_id(from._internal_drag_id());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void DragOffer::CopyFrom(const DragOffer& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.DragOffer)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool DragOffer::IsInitialized() const {
+  return true;
+}
+
+void DragOffer::InternalSwap(DragOffer* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.items_.InternalSwap(&other->_impl_.items_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.error_, lhs_arena,
+      &other->_impl_.error_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DragOffer, _impl_.drag_id_)
+      + sizeof(DragOffer::_impl_.drag_id_)
+      - PROTOBUF_FIELD_OFFSET(DragOffer, _impl_.request_id_)>(
+          reinterpret_cast<char*>(&_impl_.request_id_),
+          reinterpret_cast<char*>(&other->_impl_.request_id_));
+}
+
+std::string DragOffer::GetTypeName() const {
+  return "dsa.control.v1.DragOffer";
+}
+
+
+// ===================================================================
+
+class DragRead::_Internal {
+ public:
+};
+
+DragRead::DragRead(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.DragRead)
+}
+DragRead::DragRead(const DragRead& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  DragRead* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.request_id_){}
+    , decltype(_impl_.drag_id_){}
+    , decltype(_impl_.offset_){}
+    , decltype(_impl_.item_){}
+    , decltype(_impl_.length_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.request_id_, &from._impl_.request_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.length_) -
+    reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.length_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.DragRead)
+}
+
+inline void DragRead::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.request_id_){0u}
+    , decltype(_impl_.drag_id_){0u}
+    , decltype(_impl_.offset_){uint64_t{0u}}
+    , decltype(_impl_.item_){0u}
+    , decltype(_impl_.length_){0u}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+DragRead::~DragRead() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.DragRead)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void DragRead::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void DragRead::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void DragRead::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.DragRead)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.request_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.length_) -
+      reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.length_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* DragRead::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 drag_id = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.drag_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 item = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.item_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint64 offset = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 length = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.length_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* DragRead::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.DragRead)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // uint32 drag_id = 2;
+  if (this->_internal_drag_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(2, this->_internal_drag_id(), target);
+  }
+
+  // uint32 item = 3;
+  if (this->_internal_item() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(3, this->_internal_item(), target);
+  }
+
+  // uint64 offset = 4;
+  if (this->_internal_offset() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt64ToArray(4, this->_internal_offset(), target);
+  }
+
+  // uint32 length = 5;
+  if (this->_internal_length() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(5, this->_internal_length(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.DragRead)
+  return target;
+}
+
+size_t DragRead::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.DragRead)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  // uint32 drag_id = 2;
+  if (this->_internal_drag_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_drag_id());
+  }
+
+  // uint64 offset = 4;
+  if (this->_internal_offset() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(this->_internal_offset());
+  }
+
+  // uint32 item = 3;
+  if (this->_internal_item() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_item());
+  }
+
+  // uint32 length = 5;
+  if (this->_internal_length() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_length());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void DragRead::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const DragRead*>(
+      &from));
+}
+
+void DragRead::MergeFrom(const DragRead& from) {
+  DragRead* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.DragRead)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  if (from._internal_drag_id() != 0) {
+    _this->_internal_set_drag_id(from._internal_drag_id());
+  }
+  if (from._internal_offset() != 0) {
+    _this->_internal_set_offset(from._internal_offset());
+  }
+  if (from._internal_item() != 0) {
+    _this->_internal_set_item(from._internal_item());
+  }
+  if (from._internal_length() != 0) {
+    _this->_internal_set_length(from._internal_length());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void DragRead::CopyFrom(const DragRead& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.DragRead)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool DragRead::IsInitialized() const {
+  return true;
+}
+
+void DragRead::InternalSwap(DragRead* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DragRead, _impl_.length_)
+      + sizeof(DragRead::_impl_.length_)
+      - PROTOBUF_FIELD_OFFSET(DragRead, _impl_.request_id_)>(
+          reinterpret_cast<char*>(&_impl_.request_id_),
+          reinterpret_cast<char*>(&other->_impl_.request_id_));
+}
+
+std::string DragRead::GetTypeName() const {
+  return "dsa.control.v1.DragRead";
+}
+
+
+// ===================================================================
+
+class DragData::_Internal {
+ public:
+};
+
+DragData::DragData(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.DragData)
+}
+DragData::DragData(const DragData& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  DragData* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.data_){}
+    , decltype(_impl_.error_){}
+    , decltype(_impl_.request_id_){}
+    , decltype(_impl_.end_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.data_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.data_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_data().empty()) {
+    _this->_impl_.data_.Set(from._internal_data(), 
+      _this->GetArenaForAllocation());
+  }
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_error().empty()) {
+    _this->_impl_.error_.Set(from._internal_error(), 
+      _this->GetArenaForAllocation());
+  }
+  ::memcpy(&_impl_.request_id_, &from._impl_.request_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.end_) -
+    reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.end_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.DragData)
+}
+
+inline void DragData::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.data_){}
+    , decltype(_impl_.error_){}
+    , decltype(_impl_.request_id_){0u}
+    , decltype(_impl_.end_){false}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.data_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.data_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.error_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.error_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+DragData::~DragData() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.DragData)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void DragData::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.data_.Destroy();
+  _impl_.error_.Destroy();
+}
+
+void DragData::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void DragData::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.DragData)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.data_.ClearToEmpty();
+  _impl_.error_.ClearToEmpty();
+  ::memset(&_impl_.request_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.end_) -
+      reinterpret_cast<char*>(&_impl_.request_id_)) + sizeof(_impl_.end_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* DragData::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 request_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.request_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bytes data = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_data();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool end = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.end_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string error = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_error();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* DragData::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.DragData)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_request_id(), target);
+  }
+
+  // bytes data = 2;
+  if (!this->_internal_data().empty()) {
+    target = stream->WriteBytesMaybeAliased(
+        2, this->_internal_data(), target);
+  }
+
+  // bool end = 3;
+  if (this->_internal_end() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(3, this->_internal_end(), target);
+  }
+
+  // string error = 4;
+  if (!this->_internal_error().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_error().data(), static_cast<int>(this->_internal_error().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.DragData.error");
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_error(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.DragData)
+  return target;
+}
+
+size_t DragData::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.DragData)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // bytes data = 2;
+  if (!this->_internal_data().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
+        this->_internal_data());
+  }
+
+  // string error = 4;
+  if (!this->_internal_error().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_error());
+  }
+
+  // uint32 request_id = 1;
+  if (this->_internal_request_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_request_id());
+  }
+
+  // bool end = 3;
+  if (this->_internal_end() != 0) {
+    total_size += 1 + 1;
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void DragData::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const DragData*>(
+      &from));
+}
+
+void DragData::MergeFrom(const DragData& from) {
+  DragData* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.DragData)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_data().empty()) {
+    _this->_internal_set_data(from._internal_data());
+  }
+  if (!from._internal_error().empty()) {
+    _this->_internal_set_error(from._internal_error());
+  }
+  if (from._internal_request_id() != 0) {
+    _this->_internal_set_request_id(from._internal_request_id());
+  }
+  if (from._internal_end() != 0) {
+    _this->_internal_set_end(from._internal_end());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void DragData::CopyFrom(const DragData& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.DragData)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool DragData::IsInitialized() const {
+  return true;
+}
+
+void DragData::InternalSwap(DragData* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.data_, lhs_arena,
+      &other->_impl_.data_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.error_, lhs_arena,
+      &other->_impl_.error_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DragData, _impl_.end_)
+      + sizeof(DragData::_impl_.end_)
+      - PROTOBUF_FIELD_OFFSET(DragData, _impl_.request_id_)>(
+          reinterpret_cast<char*>(&_impl_.request_id_),
+          reinterpret_cast<char*>(&other->_impl_.request_id_));
+}
+
+std::string DragData::GetTypeName() const {
+  return "dsa.control.v1.DragData";
+}
+
+
+// ===================================================================
+
+class DragEnd::_Internal {
+ public:
+};
+
+DragEnd::DragEnd(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.DragEnd)
+}
+DragEnd::DragEnd(const DragEnd& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  DragEnd* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.drag_id_){}
+    , decltype(_impl_.dropped_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  ::memcpy(&_impl_.drag_id_, &from._impl_.drag_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.dropped_) -
+    reinterpret_cast<char*>(&_impl_.drag_id_)) + sizeof(_impl_.dropped_));
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.DragEnd)
+}
+
+inline void DragEnd::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.drag_id_){0u}
+    , decltype(_impl_.dropped_){false}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+}
+
+DragEnd::~DragEnd() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.DragEnd)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void DragEnd::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void DragEnd::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void DragEnd::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.DragEnd)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&_impl_.drag_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.dropped_) -
+      reinterpret_cast<char*>(&_impl_.drag_id_)) + sizeof(_impl_.dropped_));
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* DragEnd::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 drag_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.drag_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool dropped = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.dropped_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* DragEnd::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.DragEnd)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 drag_id = 1;
+  if (this->_internal_drag_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteUInt32ToArray(1, this->_internal_drag_id(), target);
+  }
+
+  // bool dropped = 2;
+  if (this->_internal_dropped() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(2, this->_internal_dropped(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.DragEnd)
+  return target;
+}
+
+size_t DragEnd::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.DragEnd)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 drag_id = 1;
+  if (this->_internal_drag_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(this->_internal_drag_id());
+  }
+
+  // bool dropped = 2;
+  if (this->_internal_dropped() != 0) {
+    total_size += 1 + 1;
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void DragEnd::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const DragEnd*>(
+      &from));
+}
+
+void DragEnd::MergeFrom(const DragEnd& from) {
+  DragEnd* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.DragEnd)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_drag_id() != 0) {
+    _this->_internal_set_drag_id(from._internal_drag_id());
+  }
+  if (from._internal_dropped() != 0) {
+    _this->_internal_set_dropped(from._internal_dropped());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void DragEnd::CopyFrom(const DragEnd& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.DragEnd)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool DragEnd::IsInitialized() const {
+  return true;
+}
+
+void DragEnd::InternalSwap(DragEnd* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DragEnd, _impl_.dropped_)
+      + sizeof(DragEnd::_impl_.dropped_)
+      - PROTOBUF_FIELD_OFFSET(DragEnd, _impl_.drag_id_)>(
+          reinterpret_cast<char*>(&_impl_.drag_id_),
+          reinterpret_cast<char*>(&other->_impl_.drag_id_));
+}
+
+std::string DragEnd::GetTypeName() const {
+  return "dsa.control.v1.DragEnd";
+}
+
+
+// ===================================================================
+
 class ClockProbe::_Internal {
  public:
 };
@@ -42021,6 +43952,11 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::GamepadRumble& gamepad_rumble(const Envelope* msg);
   static const ::dsa::control::v1::FileSharing& file_sharing(const Envelope* msg);
   static const ::dsa::control::v1::AndroidFiles& android_files(const Envelope* msg);
+  static const ::dsa::control::v1::DragOut& drag_out(const Envelope* msg);
+  static const ::dsa::control::v1::DragOffer& drag_offer(const Envelope* msg);
+  static const ::dsa::control::v1::DragRead& drag_read(const Envelope* msg);
+  static const ::dsa::control::v1::DragData& drag_data(const Envelope* msg);
+  static const ::dsa::control::v1::DragEnd& drag_end(const Envelope* msg);
 };
 
 const ::dsa::control::v1::Hello&
@@ -42542,6 +44478,26 @@ Envelope::_Internal::file_sharing(const Envelope* msg) {
 const ::dsa::control::v1::AndroidFiles&
 Envelope::_Internal::android_files(const Envelope* msg) {
   return *msg->_impl_.body_.android_files_;
+}
+const ::dsa::control::v1::DragOut&
+Envelope::_Internal::drag_out(const Envelope* msg) {
+  return *msg->_impl_.body_.drag_out_;
+}
+const ::dsa::control::v1::DragOffer&
+Envelope::_Internal::drag_offer(const Envelope* msg) {
+  return *msg->_impl_.body_.drag_offer_;
+}
+const ::dsa::control::v1::DragRead&
+Envelope::_Internal::drag_read(const Envelope* msg) {
+  return *msg->_impl_.body_.drag_read_;
+}
+const ::dsa::control::v1::DragData&
+Envelope::_Internal::drag_data(const Envelope* msg) {
+  return *msg->_impl_.body_.drag_data_;
+}
+const ::dsa::control::v1::DragEnd&
+Envelope::_Internal::drag_end(const Envelope* msg) {
+  return *msg->_impl_.body_.drag_end_;
 }
 void Envelope::set_allocated_hello(::dsa::control::v1::Hello* hello) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -44493,6 +46449,81 @@ void Envelope::set_allocated_android_files(::dsa::control::v1::AndroidFiles* and
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.android_files)
 }
+void Envelope::set_allocated_drag_out(::dsa::control::v1::DragOut* drag_out) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (drag_out) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(drag_out);
+    if (message_arena != submessage_arena) {
+      drag_out = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, drag_out, submessage_arena);
+    }
+    set_has_drag_out();
+    _impl_.body_.drag_out_ = drag_out;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.drag_out)
+}
+void Envelope::set_allocated_drag_offer(::dsa::control::v1::DragOffer* drag_offer) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (drag_offer) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(drag_offer);
+    if (message_arena != submessage_arena) {
+      drag_offer = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, drag_offer, submessage_arena);
+    }
+    set_has_drag_offer();
+    _impl_.body_.drag_offer_ = drag_offer;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.drag_offer)
+}
+void Envelope::set_allocated_drag_read(::dsa::control::v1::DragRead* drag_read) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (drag_read) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(drag_read);
+    if (message_arena != submessage_arena) {
+      drag_read = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, drag_read, submessage_arena);
+    }
+    set_has_drag_read();
+    _impl_.body_.drag_read_ = drag_read;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.drag_read)
+}
+void Envelope::set_allocated_drag_data(::dsa::control::v1::DragData* drag_data) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (drag_data) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(drag_data);
+    if (message_arena != submessage_arena) {
+      drag_data = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, drag_data, submessage_arena);
+    }
+    set_has_drag_data();
+    _impl_.body_.drag_data_ = drag_data;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.drag_data)
+}
+void Envelope::set_allocated_drag_end(::dsa::control::v1::DragEnd* drag_end) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (drag_end) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(drag_end);
+    if (message_arena != submessage_arena) {
+      drag_end = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, drag_end, submessage_arena);
+    }
+    set_has_drag_end();
+    _impl_.body_.drag_end_ = drag_end;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.drag_end)
+}
 Envelope::Envelope(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
@@ -45158,6 +47189,31 @@ Envelope::Envelope(const Envelope& from)
     case kAndroidFiles: {
       _this->_internal_mutable_android_files()->::dsa::control::v1::AndroidFiles::MergeFrom(
           from._internal_android_files());
+      break;
+    }
+    case kDragOut: {
+      _this->_internal_mutable_drag_out()->::dsa::control::v1::DragOut::MergeFrom(
+          from._internal_drag_out());
+      break;
+    }
+    case kDragOffer: {
+      _this->_internal_mutable_drag_offer()->::dsa::control::v1::DragOffer::MergeFrom(
+          from._internal_drag_offer());
+      break;
+    }
+    case kDragRead: {
+      _this->_internal_mutable_drag_read()->::dsa::control::v1::DragRead::MergeFrom(
+          from._internal_drag_read());
+      break;
+    }
+    case kDragData: {
+      _this->_internal_mutable_drag_data()->::dsa::control::v1::DragData::MergeFrom(
+          from._internal_drag_data());
+      break;
+    }
+    case kDragEnd: {
+      _this->_internal_mutable_drag_end()->::dsa::control::v1::DragEnd::MergeFrom(
+          from._internal_drag_end());
       break;
     }
     case BODY_NOT_SET: {
@@ -45979,6 +48035,36 @@ void Envelope::clear_body() {
     case kAndroidFiles: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.android_files_;
+      }
+      break;
+    }
+    case kDragOut: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.drag_out_;
+      }
+      break;
+    }
+    case kDragOffer: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.drag_offer_;
+      }
+      break;
+    }
+    case kDragRead: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.drag_read_;
+      }
+      break;
+    }
+    case kDragData: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.drag_data_;
+      }
+      break;
+    }
+    case kDragEnd: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.drag_end_;
       }
       break;
     }
@@ -47038,6 +49124,46 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.DragOut drag_out = 350;
+      case 350:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 242)) {
+          ptr = ctx->ParseMessage(_internal_mutable_drag_out(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.DragOffer drag_offer = 351;
+      case 351:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 250)) {
+          ptr = ctx->ParseMessage(_internal_mutable_drag_offer(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.DragRead drag_read = 352;
+      case 352:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 2)) {
+          ptr = ctx->ParseMessage(_internal_mutable_drag_read(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.DragData drag_data = 353;
+      case 353:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr = ctx->ParseMessage(_internal_mutable_drag_data(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .dsa.control.v1.DragEnd drag_end = 354;
+      case 354:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr = ctx->ParseMessage(_internal_mutable_drag_end(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       // .dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;
       case 377:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 202)) {
@@ -47978,6 +50104,41 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::gamepad_rumble(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.DragOut drag_out = 350;
+  if (_internal_has_drag_out()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(350, _Internal::drag_out(this),
+        _Internal::drag_out(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.DragOffer drag_offer = 351;
+  if (_internal_has_drag_offer()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(351, _Internal::drag_offer(this),
+        _Internal::drag_offer(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.DragRead drag_read = 352;
+  if (_internal_has_drag_read()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(352, _Internal::drag_read(this),
+        _Internal::drag_read(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.DragData drag_data = 353;
+  if (_internal_has_drag_data()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(353, _Internal::drag_data(this),
+        _Internal::drag_data(this).GetCachedSize(), target, stream);
+  }
+
+  // .dsa.control.v1.DragEnd drag_end = 354;
+  if (_internal_has_drag_end()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(354, _Internal::drag_end(this),
+        _Internal::drag_end(this).GetCachedSize(), target, stream);
+  }
+
   // .dsa.control.v1.ImeDeleteSurrounding ime_delete_surrounding = 377;
   if (_internal_has_ime_delete_surrounding()) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -48912,6 +51073,41 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.android_files_);
       break;
     }
+    // .dsa.control.v1.DragOut drag_out = 350;
+    case kDragOut: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.drag_out_);
+      break;
+    }
+    // .dsa.control.v1.DragOffer drag_offer = 351;
+    case kDragOffer: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.drag_offer_);
+      break;
+    }
+    // .dsa.control.v1.DragRead drag_read = 352;
+    case kDragRead: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.drag_read_);
+      break;
+    }
+    // .dsa.control.v1.DragData drag_data = 353;
+    case kDragData: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.drag_data_);
+      break;
+    }
+    // .dsa.control.v1.DragEnd drag_end = 354;
+    case kDragEnd: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.drag_end_);
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -49588,6 +51784,31 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_android_files());
       break;
     }
+    case kDragOut: {
+      _this->_internal_mutable_drag_out()->::dsa::control::v1::DragOut::MergeFrom(
+          from._internal_drag_out());
+      break;
+    }
+    case kDragOffer: {
+      _this->_internal_mutable_drag_offer()->::dsa::control::v1::DragOffer::MergeFrom(
+          from._internal_drag_offer());
+      break;
+    }
+    case kDragRead: {
+      _this->_internal_mutable_drag_read()->::dsa::control::v1::DragRead::MergeFrom(
+          from._internal_drag_read());
+      break;
+    }
+    case kDragData: {
+      _this->_internal_mutable_drag_data()->::dsa::control::v1::DragData::MergeFrom(
+          from._internal_drag_data());
+      break;
+    }
+    case kDragEnd: {
+      _this->_internal_mutable_drag_end()->::dsa::control::v1::DragEnd::MergeFrom(
+          from._internal_drag_end());
+      break;
+    }
     case BODY_NOT_SET: {
       break;
     }
@@ -49926,6 +52147,30 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::FileSharing >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::AndroidFiles*
 Arena::CreateMaybeMessage< ::dsa::control::v1::AndroidFiles >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::AndroidFiles >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::DragItem*
+Arena::CreateMaybeMessage< ::dsa::control::v1::DragItem >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::DragItem >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::DragOut*
+Arena::CreateMaybeMessage< ::dsa::control::v1::DragOut >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::DragOut >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::DragOffer*
+Arena::CreateMaybeMessage< ::dsa::control::v1::DragOffer >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::DragOffer >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::DragRead*
+Arena::CreateMaybeMessage< ::dsa::control::v1::DragRead >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::DragRead >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::DragData*
+Arena::CreateMaybeMessage< ::dsa::control::v1::DragData >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::DragData >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::DragEnd*
+Arena::CreateMaybeMessage< ::dsa::control::v1::DragEnd >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::DragEnd >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::ClockProbe*
 Arena::CreateMaybeMessage< ::dsa::control::v1::ClockProbe >(Arena* arena) {

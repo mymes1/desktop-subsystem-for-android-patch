@@ -1086,6 +1086,74 @@ message AndroidFiles {
   string token = 2;
 }
 
+// One thing an app drags out of its window: a file (a content URI the app granted read
+// access to) or text. The host never learns the URI or any path in the guest, only what it
+// needs to make a file of the same name and content.
+message DragItem {
+  // The file's name, without any folder, as the content provider names it. Empty for text.
+  string name = 1;
+  // The file's length in bytes, when the provider says (`size_known`).
+  uint64 size = 2;
+  bool size_known = 3;
+  // The MIME type the app gave, such as image/jpeg or text/plain.
+  string mime_type = 4;
+  // Whether this item is text rather than a file, and the text itself.
+  bool is_text = 5;
+  string text = 6;
+}
+
+// Host to guest, to the agent: the pointer left task `task_id`'s window with a button held,
+// at (`x`, `y`) relative to the task, the last place inside it. If an app is dragging with
+// DRAG_FLAG_GLOBAL, the agent ends the drag in the guest on a window of its own, takes read
+// access to what it carries, and answers DragOffer with its items; otherwise DragOffer with
+// none, and the guest's pointer is left as it was.
+message DragOut {
+  uint32 request_id = 1;
+  int32 task_id = 2;
+  float x = 3;
+  float y = 4;
+  PointerTool tool = 5;
+  uint32 pointer_id = 6;
+}
+
+// Guest to host, from the agent: what the drag a DragOut asked about carries. No items means
+// no app was dragging anything the host can take; a non-empty `error` says why, in words a
+// person can act on. The drag stays open in the guest until DragEnd.
+message DragOffer {
+  uint32 request_id = 1;
+  // Names the drag in DragRead and DragEnd. Unique among the drags of one connection.
+  uint32 drag_id = 2;
+  repeated DragItem items = 3;
+  string error = 4;
+}
+
+// Host to guest, to the agent: up to `length` bytes of item `item` of drag `drag_id`, from
+// `offset`. The host reads each file in order, as the host app it was dropped on copies it,
+// so the guest never holds more than one read's worth.
+message DragRead {
+  uint32 request_id = 1;
+  uint32 drag_id = 2;
+  uint32 item = 3;
+  uint64 offset = 4;
+  uint32 length = 5;
+}
+
+// Guest to host, from the agent: the answer to a DragRead. `end` says the file ends after
+// `data`. A non-empty `error` ends the read: the file cannot be read further.
+message DragData {
+  uint32 request_id = 1;
+  bytes data = 2;
+  bool end = 3;
+  string error = 4;
+}
+
+// Host to guest, to the agent: the drag is over on the host, dropped or cancelled. The agent
+// closes what it read and gives back its access to the drag's content, so nothing stays open.
+message DragEnd {
+  uint32 drag_id = 1;
+  bool dropped = 2;
+}
+
 // Host to guest, to the control daemon: a probe that pairs the host's clock with the guest's,
 // so trace lines from both can be put on one time line. The daemon answers at once with
 // ClockAnswer and passes the probe to no one else. Sent only while the host traces input.
@@ -2057,5 +2125,10 @@ message Envelope {
     GamepadRumble gamepad_rumble = 344;
     FileSharing file_sharing = 290;
     AndroidFiles android_files = 291;
+    DragOut drag_out = 350;
+    DragOffer drag_offer = 351;
+    DragRead drag_read = 352;
+    DragData drag_data = 353;
+    DragEnd drag_end = 354;
   }
 }

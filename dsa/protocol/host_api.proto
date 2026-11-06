@@ -274,6 +274,61 @@ message FileChunk {
   bytes data = 1;
 }
 
+// One thing an app drags out of its window: a file or text. Only the file's name, never a
+// path in Android, reaches the host.
+message DragItem {
+  // The file's name, without any folder. Empty for text.
+  string name = 1;
+  // The file's length in bytes, when Android says (`size_known`).
+  uint64 size = 2;
+  bool size_known = 3;
+  string mime_type = 4;
+  // Whether this item is text rather than a file, and the text itself.
+  bool is_text = 5;
+  string text = 6;
+}
+
+// The pointer left the window of task `task_id` with a button held, at (`x`, `y`) relative
+// to the task. If an app in the caller's Android is dragging something the host can take,
+// Android ends its drag and the service answers DragOffer with what it carries, which the
+// client then drags on the host; otherwise DragOffer with no items. Android must be running.
+message DragOut {
+  int32 task_id = 1;
+  float x = 2;
+  float y = 3;
+  PointerTool tool = 4;
+  uint32 pointer_id = 5;
+}
+
+// What a drag out of a window carries. No items: nothing to drag on the host.
+message DragOffer {
+  // Names the drag in ReadDrag and EndDrag.
+  uint32 drag_id = 1;
+  repeated DragItem items = 2;
+}
+
+// Reads up to `length` bytes (at most 256 KiB) of item `item` of drag `drag_id`, from
+// `offset`. The service answers DragData.
+message ReadDrag {
+  uint32 drag_id = 1;
+  uint32 item = 2;
+  uint64 offset = 3;
+  uint32 length = 4;
+}
+
+// Part of a dragged file. `end` says the file ends after `data`.
+message DragData {
+  bytes data = 1;
+  bool end = 2;
+}
+
+// Ends drag `drag_id`, dropped or cancelled, so Android closes what it read and gives back
+// its access to the drag's content. The service answers Done.
+message EndDrag {
+  uint32 drag_id = 1;
+  bool dropped = 2;
+}
+
 // Turns the connection into the caller's clipboard: after the answer (Done), the client sends
 // a ClipboardText each time the user's host clipboard gets new text, and the service sends a
 // ClipboardText each time the caller's Android copies text, which the client puts on the host
@@ -1645,6 +1700,9 @@ message Request {
     SetAppWindowSettings set_app_window_settings = 303;
     GetAndroidFiles get_android_files = 90;
     ResetData reset_data = 310;
+    DragOut drag_out = 320;
+    ReadDrag read_drag = 321;
+    EndDrag end_drag = 322;
   }
 }
 
@@ -1671,6 +1729,8 @@ message Response {
     BackgroundApps background_apps = 18;
     AppWindowSettingsList app_window_settings = 300;
     AndroidFilesLocation android_files = 90;
+    DragOffer drag_offer = 320;
+    DragData drag_data = 321;
   }
 }
 

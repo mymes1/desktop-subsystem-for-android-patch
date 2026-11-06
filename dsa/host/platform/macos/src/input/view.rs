@@ -12,9 +12,11 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::OnceLock;
 
+use dsa_host_core::drag::LeaveWatch;
 use dsa_host_core::ime::ImeCursor;
 use dsa_host_core::input::{
-    ContactPhase, InputEvent, PointerMapper, PointerTool, WindowGeometry, WindowInput,
+    ContactPhase, InputEvent, MouseButton, PointerMapper, PointerTool, WindowGeometry,
+    WindowInput,
 };
 use dsa_host_core::keys::{keycode, KeyInput, KeyMapper};
 use objc2::msg_send;
@@ -33,6 +35,9 @@ pub trait InputSink {
     fn input(&mut self, event: InputEvent);
     /// Files were dropped on the window: the guest's app is offered them.
     fn files_dropped(&mut self, paths: Vec<PathBuf>);
+    /// A press of the left button left the window at (`x`, `y`) of the task, the last place
+    /// inside it: an app may be dragging something out.
+    fn drag_left(&mut self, x: f32, y: f32);
     /// Where the cursor of the editor focused in the task is, for the input method's
     /// candidate window; `None` when the guest has not said.
     fn ime_cursor(&self) -> Option<ImeCursor>;
@@ -53,6 +58,8 @@ struct ViewState {
     pointer: PointerMapper,
     keys: KeyMapper,
     text: TextInputClient,
+    /// When a press of the left button leaves the view.
+    leave: LeaveWatch,
 }
 
 thread_local! {
@@ -166,6 +173,9 @@ unsafe fn mouse_button(view: &AnyObject, event: *mut AnyObject, down: bool) {
     let number: isize = msg_send![event, buttonNumber];
     let control = modifier_flags(event) & FLAG_CONTROL != 0;
     if let Some(button) = button(number, control) {
+        if button == MouseButton::Left {
+            with_state(view, |state| state.leave.pressed(down));
+        }
         pointer(
             view,
             WindowInput::MouseButton {
@@ -211,6 +221,13 @@ unsafe extern "C-unwind" fn mouse_moved(this: &AnyObject, _: Sel, event: *mut An
         return;
     }
     pointer(this, WindowInput::MouseMove { position });
+    let geometry = geometry(this);
+    with_state(this, |state| {
+        if let Some(inside) = state.leave.moved(position, geometry.client) {
+            let (x, y) = geometry.to_guest(inside);
+            state.sink.drag_left(x, y);
+        }
+    });
 }
 
 unsafe extern "C-unwind" fn mouse_exited(this: &AnyObject, _: Sel, _event: *mut AnyObject) {
@@ -606,6 +623,19 @@ fn view_class() -> Result<&'static AnyClass, String> {
                 sel!(performDragOperation:),
                 perform_drag as unsafe extern "C-unwind" fn(_, _, _) -> _,
             );
+            // The source of an app's drag out of the window.
+            b.add_method(
+                sel!(draggingSession:sourceOperationMaskForDraggingContext:),
+                super::drag_source::source_operations
+                    as unsafe extern "C-unwind" fn(_, _, _, _) -> _,
+            );
+            b.add_method(
+                sel!(draggingSession:endedAtPoint:operation:),
+                super::drag_source::session_ended as unsafe extern "C-unwind" fn(_, _, _, _, _),
+            );
+            if let Some(protocol) = AnyProtocol::get(c"NSDraggingSource") {
+                b.add_protocol(protocol);
+            }
             Ok(b.register())
         })
         .clone()
@@ -650,6 +680,7 @@ pub fn make(
             pointer: PointerMapper::new(task_id),
             keys: KeyMapper::new(task_id),
             text: TextInputClient::new(task_id),
+            leave: LeaveWatch::default(),
         };
         VIEWS.with(|views| {
             views.borrow_mut().insert(
