@@ -31,6 +31,62 @@ class ImageLayoutTests(unittest.TestCase):
         cil = (Path(__file__).parent / "sepolicy" / "channeld.cil").read_text()
         self.assertRegex(cil, r"\(allow dsa_channeld pstorefs \(dir \([^)]*\bsetattr\b[^)]*\bremove_name\b")
         self.assertRegex(cil, r"\(allow dsa_channeld pstorefs \(file \([^)]*\bunlink\b")
+
+    # The SELinux type and class of every kernel file dsa-channeld opens, as the guest's kernel
+    # labels it. A path the daemon opens that is not listed here fails the test below, so a
+    # new read cannot ship without its rule (the refused /proc/vmstat read went unnoticed).
+    CHANNELD_KERNEL_PATHS = {
+        "/proc/bootconfig": [("proc_bootconfig", "file")],
+        "/sys/fs/pstore": [("pstorefs", "dir"), ("pstorefs", "file")],
+        "/proc/meminfo": [("proc_meminfo", "file")],
+        "/proc/pressure/memory": [("proc_pressure_mem", "file")],
+        "/proc/vmstat": [("proc_vmstat", "file")],
+        # The process listing and each app process's /proc/<pid>/cmdline.
+        "/proc": [("proc", "dir"), ("appdomain", "dir"), ("appdomain", "file")],
+        "/proc/{}/cmdline": [("appdomain", "file")],
+    }
+    # The modes init runs the same binary in, each in a domain of its own.
+    CHANNELD_SOURCE_DOMAINS = {
+        "share_mount.rs": ("dsa_sharemount", "files.cil"),
+        "android_files.rs": ("dsa_files", "files.cil"),
+        "webdav.rs": ("dsa_files", "files.cil"),
+    }
+
+    def test_nfr2_every_kernel_file_channeld_opens_has_an_allow_rule(self):
+        here = Path(__file__).parent
+        src = here.parent / "channeld" / "src"
+        literal = re.compile(r'"(/(?:proc|sys)(?:/[^"]*)?)"')
+        found = 0
+        for source in sorted(src.glob("*.rs")):
+            domain, policy_file = self.CHANNELD_SOURCE_DOMAINS.get(
+                source.name, ("dsa_channeld", "channeld.cil")
+            )
+            policy = (here / "sepolicy" / policy_file).read_text()
+            for number, line in enumerate(source.read_text().splitlines(), 1):
+                if line.strip().startswith("//"):
+                    continue
+                for path in literal.findall(line):
+                    if path.startswith("/proc/self/"):
+                        # A process's own /proc entries are every domain's to read.
+                        continue
+                    where = f"{source.name}:{number} opens {path}"
+                    self.assertIn(
+                        path,
+                        self.CHANNELD_KERNEL_PATHS,
+                        f"{where}, which this test does not know: add its SELinux type here "
+                        f"and an allow rule for {domain} to sepolicy/{policy_file}",
+                    )
+                    found += 1
+                    for target, cls in self.CHANNELD_KERNEL_PATHS[path]:
+                        perm = "search" if cls == "dir" else "read"
+                        self.assertRegex(
+                            policy,
+                            rf"\(allow\s+{domain}\s+{target}\s+\(\s*{cls}\s+\([^)]*\b{perm}\b",
+                            f"{where}, but sepolicy/{policy_file} does not let {domain} "
+                            f"{perm} {target} ({cls})",
+                        )
+        self.assertGreaterEqual(found, 5, "the scan found none of the daemon's kernel reads")
+
     def test_fr1_selects_vendor_apexes_without_the_cuttlefish_launcher(self):
         cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         self.assertIn("androidboot.boot_devices=vmbus", cmdline)
@@ -1974,6 +2030,13 @@ class GuestMemoryTests(unittest.TestCase):
             self.assertNotRegex(policy, r"\(allow \S+ proc \(file \([^)]*write")
             # The agent reads zram's statistics for its memory report.
             self.assertIn("(allow platform_app sysfs_zram (file (read open getattr)))", policy)
+            # And the online memory blocks, which plain sysfs would keep from it.
+            self.assertIn(
+                '(genfscon sysfs "/devices/system/memory" (u object_r dsa_sysfs_memory', policy
+            )
+            for app in ("system_app", "platform_app"):
+                self.assertIn(f"(allow {app} dsa_sysfs_memory (dir (search read open getattr)))", policy)
+                self.assertIn(f"(allow {app} dsa_sysfs_memory (file (read open getattr)))", policy)
 
     def test_fr5_the_audio_hal_and_software_codecs_can_share_memory_through_memfds(self):
         # Refused, libcutils falls back to an ashmem device DSA's kernel does not have: audio

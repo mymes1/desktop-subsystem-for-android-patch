@@ -486,3 +486,26 @@ fn nfr2_the_router_names_each_app_whose_last_task_ended() {
     assert_eq!(router.take_closed_packages(), ["org.example.b"]);
     assert!(router.take_closed_packages().is_empty());
 }
+
+#[test]
+fn nfr2_a_kernel_file_the_reclaimer_cannot_read_is_reported_once() {
+    use dsa_guest_channeld::reclaim::ReadFailures;
+    use std::io::{Error, ErrorKind};
+    fn denied() -> std::io::Result<String> {
+        Err(Error::from(ErrorKind::PermissionDenied))
+    }
+    let mut failures = ReadFailures::default();
+    let first = failures
+        .note("/proc/vmstat", &denied(), "the trim cannot see refaults")
+        .expect("the first failure is reported");
+    assert!(first.contains("/proc/vmstat"), "{first}");
+    assert!(first.contains("SELinux"), "{first}");
+    for _ in 0..10 {
+        assert_eq!(failures.note("/proc/vmstat", &denied(), "x"), None);
+    }
+    // Another file is a report of its own.
+    assert!(failures.note("/proc/pressure/memory", &denied(), "x").is_some());
+    // Read once, then failing again, it is reported again.
+    assert_eq!(failures.note("/proc/vmstat", &Ok(String::new()), "x"), None);
+    assert!(failures.note("/proc/vmstat", &denied(), "x").is_some());
+}
