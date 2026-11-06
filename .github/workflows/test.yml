@@ -515,12 +515,17 @@ jobs:
           sudo chmod 666 /dev/kvm /dev/vhost-vsock
           ls -l /dev/kvm /dev/vhost-vsock
 
+      # With an init that loads the virtio balloon driver and idles, so the VM can be
+      # resized through its balloon.
       - name: Give crosvm a kernel to boot
+        working-directory: .
         run: |
           kernel="$RUNNER_TEMP/vmlinuz"
           sudo cp "/boot/vmlinuz-$(uname -r)" "$kernel"
           sudo chmod 644 "$kernel"
+          bash .github/scripts/linux-vm-test/make-test-initrd.sh "$(uname -r)" "$RUNNER_TEMP/test-initrd.img"
           echo "DSA_CROSVM_TEST_KERNEL=$kernel" >> "$GITHUB_ENV"
+          echo "DSA_CROSVM_TEST_INITRD=$RUNNER_TEMP/test-initrd.img" >> "$GITHUB_ENV"
 
       - name: Download the newest published Android image
         env:
