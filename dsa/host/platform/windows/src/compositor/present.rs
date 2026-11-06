@@ -49,8 +49,9 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::caption::band_fill;
 use dsa_host_core::compositor::frame_buffers::{
-    content_region, frame_scale, sample_points, swapchain_buffers, swapchain_change,
-    uniform_colour, HiddenBuffers, HiddenFrame, SwapchainChange, SAMPLE_GRID,
+    buffers_after_frame, content_region, frame_scale, sample_points, swapchain_buffers,
+    swapchain_change, uniform_colour, wanted_swapchain_buffers, HiddenBuffers, HiddenFrame,
+    SwapchainChange, SAMPLE_GRID,
 };
 use dsa_host_core::compositor::frame_follow::{Arrival, FrameFollow};
 use dsa_host_core::compositor::present_watch::{FrameStatistics, PresentWatch};
@@ -379,6 +380,12 @@ struct State {
     swapchain: Option<IDXGISwapChain2>,
     /// The size of the swapchain's buffers: the texture's, not a frame's.
     buffers: Option<(u32, u32)>,
+    /// How many buffers the swapchain has, and how many it is to have: three while frames
+    /// come, two once the window is still (`wanted_swapchain_buffers`).
+    buffer_count: u32,
+    wanted_buffers: u32,
+    /// When the last frame came.
+    last_frame_at: Option<Instant>,
     /// The size of the last frame shown: the swapchain's source size.
     frame: (u32, u32),
     /// The client size last proposed for the window, which the guest is asked for.
@@ -567,6 +574,9 @@ impl WindowPresenter {
                 splash_image: None,
                 swapchain: None,
                 buffers: None,
+                buffer_count: 0,
+                wanted_buffers: swapchain_buffers(),
+                last_frame_at: None,
                 frame: (0, 0),
                 asked: view,
                 committed: None,
@@ -833,6 +843,7 @@ impl WindowPresenter {
             return;
         }
         self.trace_shown(&mut state);
+        self.release_idle_buffer(&mut state);
         if let Some(((width, height), waited)) = state.latency.stuck(Instant::now()) {
             note(
                 self.logger.as_deref(),
@@ -842,6 +853,31 @@ impl WindowPresenter {
                     waited.as_millis()
                 ),
             );
+        }
+    }
+
+    /// A shown window that has had no frame for a while gives its swapchain's third buffer
+    /// back: the swapchain is resized to two buffers and the newest frame shown again from the
+    /// shared texture, since resizing drops what the buffers held. The next frame makes the
+    /// third buffer again. A window that keeps a frame for a size it is about to take is left
+    /// alone, so the kept frame is not lost.
+    fn release_idle_buffer(&self, state: &mut State) {
+        if state.hidden.hidden() || state.swapchain.is_none() || state.follow.kept().is_some() {
+            return;
+        }
+        let Some(quiet) = state.last_frame_at.map(|at| at.elapsed()) else {
+            return;
+        };
+        let wanted = wanted_swapchain_buffers(quiet);
+        if wanted >= state.buffer_count {
+            return;
+        }
+        let Some((texture, size, region)) = state.newest.clone() else {
+            return;
+        };
+        state.wanted_buffers = wanted;
+        if let Err(why) = self.present_locked(state, &texture, size, region, false) {
+            note(self.logger.as_deref(), &why);
         }
     }
 
@@ -952,6 +988,7 @@ impl WindowPresenter {
         }
         state.swapchain = None;
         state.buffers = None;
+        state.buffer_count = 0;
         state.committed = None;
         state.frame = (0, 0);
         state.presents.forget();
@@ -1017,6 +1054,12 @@ impl WindowPresenter {
         }
         let region = content_region(content, texture.size);
         state.newest = Some((texture.texture.clone(), texture.size, region));
+        // Frames in quick succession say the window is drawing: its swapchain takes all its
+        // buffers again. A lone frame of a still window keeps the two it has.
+        let now = Instant::now();
+        let since_last = state.last_frame_at.map(|at| now.saturating_duration_since(at));
+        state.wanted_buffers = buffers_after_frame(state.wanted_buffers, since_last);
+        state.last_frame_at = Some(now);
         if state.hidden.frame() == HiddenFrame::Hold {
             // Nothing is shown in a minimized window; the frame waits in the texture.
             return Ok(());
@@ -1763,7 +1806,15 @@ impl WindowPresenter {
             let started = Instant::now();
             // The buffers follow the texture, which keeps its size while the window is
             // resized; only the source size follows the frame.
-            let change = swapchain_change(state.buffers, texture_size);
+            let mut change = swapchain_change(state.buffers, texture_size);
+            if change == SwapchainChange::Keep
+                && state.swapchain.is_some()
+                && state.buffer_count != state.wanted_buffers
+            {
+                // The size fits, but a still window lets a buffer go or a drawing one takes
+                // it back.
+                change = SwapchainChange::Resize(texture_size);
+            }
             match change {
                 SwapchainChange::Create((buffer_width, buffer_height)) => {
                     let desc = DXGI_SWAP_CHAIN_DESC1 {
@@ -1776,7 +1827,7 @@ impl WindowPresenter {
                             Quality: 0,
                         },
                         BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
-                        BufferCount: swapchain_buffers(),
+                        BufferCount: state.wanted_buffers,
                         // The only scaling a composition swapchain takes; the visual's
                         // transform does the scaling.
                         Scaling: DXGI_SCALING_STRETCH,
@@ -1800,6 +1851,7 @@ impl WindowPresenter {
                             .map_err(|e| failed("showing a task window's swapchain", e))?;
                     }
                     state.swapchain = Some(swapchain);
+                    state.buffer_count = state.wanted_buffers;
                     // The content is new: the first present commits it.
                     state.committed = None;
                 }
@@ -1807,13 +1859,14 @@ impl WindowPresenter {
                     if let Some(swapchain) = &state.swapchain {
                         swapchain
                             .ResizeBuffers(
-                                0,
+                                state.wanted_buffers,
                                 buffer_width,
                                 buffer_height,
                                 DXGI_FORMAT_UNKNOWN,
                                 DXGI_SWAP_CHAIN_FLAG(0),
                             )
                             .map_err(|e| failed("resizing a task window's swapchain", e))?;
+                        state.buffer_count = state.wanted_buffers;
                     }
                 }
                 SwapchainChange::Keep => {}
