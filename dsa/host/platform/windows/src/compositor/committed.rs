@@ -199,4 +199,65 @@ mod tests {
         drop(block);
         compact_heaps();
     }
+
+    #[test]
+    fn nfr2_a_give_back_while_other_threads_allocate_corrupts_no_heap() {
+        use std::sync::atomic::AtomicBool;
+        use std::sync::Arc;
+        let stop = Arc::new(AtomicBool::new(false));
+        let workers: Vec<_> = (0..8)
+            .map(|seed| {
+                let stop = Arc::clone(&stop);
+                std::thread::spawn(move || {
+                    let mut kept: Vec<Vec<u8>> = Vec::new();
+                    let mut n = seed as usize;
+                    while !stop.load(Ordering::Relaxed) {
+                        n = n.wrapping_mul(1103515245).wrapping_add(12345);
+                        let mut block = vec![seed as u8; 16 + n % 200_000];
+                        block.resize(block.len() + n % 4096, 1);
+                        kept.push(block);
+                        if kept.len() > 64 {
+                            kept.drain(..32);
+                        }
+                    }
+                    kept.len()
+                })
+            })
+            .collect();
+        for _ in 0..200 {
+            compact_heaps();
+            let found = breakdown(None, None, (None, None));
+            assert!(found.walked_private_kb > 0);
+        }
+        stop.store(true, Ordering::Relaxed);
+        for worker in workers {
+            worker.join().expect("a worker thread survives the give-backs");
+        }
+    }
+
+    #[test]
+    fn nfr2_the_counting_allocator_keeps_the_global_alloc_contract() {
+        // Alignment, zeroing and a growing and shrinking realloc go to the system allocator
+        // unchanged, and the count returns to where it was.
+        let a = CountingAllocator;
+        let before = LIVE_BYTES.load(Ordering::Relaxed);
+        for align in [1usize, 8, 64, 4096] {
+            let layout = Layout::from_size_align(100, align).unwrap();
+            // SAFETY: a non-zero layout, freed with the layout it was made with.
+            unsafe {
+                let p = a.alloc_zeroed(layout);
+                assert!(!p.is_null());
+                assert_eq!(p as usize % align, 0);
+                assert!(std::slice::from_raw_parts(p, 100).iter().all(|b| *b == 0));
+                let grown = a.realloc(p, layout, 10_000);
+                assert!(!grown.is_null());
+                assert_eq!(grown as usize % align, 0);
+                let grown_layout = Layout::from_size_align(10_000, align).unwrap();
+                let shrunk = a.realloc(grown, grown_layout, 10);
+                assert!(!shrunk.is_null());
+                a.dealloc(shrunk, Layout::from_size_align(10, align).unwrap());
+            }
+        }
+        assert_eq!(LIVE_BYTES.load(Ordering::Relaxed), before);
+    }
 }
