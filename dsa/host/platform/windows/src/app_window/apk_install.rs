@@ -1,9 +1,9 @@
 //! Installing an APK opened in Explorer.
 //!
-//! The installer associates `.apk` files with the APK install window of the settings app,
-//! which it runs with [`INSTALL_APK_ARGUMENT`] and the file's path when the user opens one.
+//! The installer associates `.apk` files with the APK Installer
+//! (`settings\DsaApkInstaller.exe`), which it runs with [`INSTALL_APK_ARGUMENT`] and the file's path when the user opens one.
 //! Earlier releases associated them with the window host instead, with the same argument; the
-//! window host hands such an APK on to the install window ([`install_window`]) when it is
+//! window host hands such an APK on to the APK Installer ([`install_window`]) when it is
 //! installed. Without it, the window host opens the APK itself, makes sure the window manager
 //! and Android run (as when an app is opened from the Start menu), streams the APK to the
 //! service, and tells the user how the install ended in a message box. An installed app then
@@ -24,10 +24,10 @@ pub const INSTALL_APK_ARGUMENT: &str = "--install-apk";
 /// The build the window host names itself by when it installs an APK.
 const BUILD: &str = "dsa-app-window install";
 
-/// The APK install window beside the window host at `program`: the settings app in the
-/// program folder's `settings` folder, where the installer puts it. None when it is not there.
+/// The APK Installer beside the window host at `program`: its own program in the
+/// program folder's `settings` folder, beside the settings app. None when it is not there.
 pub fn install_window(program: &Path) -> Option<PathBuf> {
-    let window = program.parent()?.join("settings").join("DsaSettings.exe");
+    let window = program.parent()?.join("settings").join("DsaApkInstaller.exe");
     window.is_file().then_some(window)
 }
 
@@ -98,15 +98,15 @@ mod tests {
     }
 
     #[test]
-    fn fr11_an_apk_opened_through_the_window_host_goes_to_the_install_window() {
+    fn fr11_an_apk_opened_through_the_window_host_goes_to_the_apk_installer() {
         let dir = std::env::temp_dir().join(format!("dsa-install-window-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("settings")).unwrap();
         let program = dir.join("dsa-app-window.exe");
         assert_eq!(install_window(&program), None);
-        std::fs::write(dir.join("settings").join("DsaSettings.exe"), b"MZ").unwrap();
+        std::fs::write(dir.join("settings").join("DsaApkInstaller.exe"), b"MZ").unwrap();
         assert_eq!(
             install_window(&program),
-            Some(dir.join("settings").join("DsaSettings.exe"))
+            Some(dir.join("settings").join("DsaApkInstaller.exe"))
         );
         assert_eq!(
             install_window_arguments(Path::new(r"C:\Users\me\My Notes.apk")),

@@ -220,6 +220,14 @@ jobs:
           if (-not (Test-Path $shortcut)) { throw "there is no Start menu shortcut $shortcut" }
           $target = (New-Object -ComObject WScript.Shell).CreateShortcut($shortcut).TargetPath
           if ($target -ne $exe) { throw "the Start menu shortcut points at '$target', not $exe" }
+          # The APK Installer is its own program beside it, with its own name and no shortcut.
+          $installer = "$env:PROGRAM_DIR\settings\DsaApkInstaller.exe"
+          if (-not (Test-Path $installer)) { throw "DsaApkInstaller.exe is not installed in $env:PROGRAM_DIR\settings" }
+          $info = (Get-Item $installer).VersionInfo
+          Write-Host "DsaApkInstaller.exe: $($info.FileDescription) | $($info.ProductName) | $($info.ProductVersion)"
+          if ($info.FileDescription -cne 'APK Installer') { throw "DsaApkInstaller.exe calls itself '$($info.FileDescription)'" }
+          if ($info.ProductVersion -notlike '0.0.9*') { throw "DsaApkInstaller.exe says it is version '$($info.ProductVersion)', not 0.0.9" }
+          if (Test-Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\APK Installer.lnk") { throw "the APK Installer has a Start menu shortcut" }
 
           $dsa = "$env:PROGRAM_DIR\dsa.exe"
           $settings = & $dsa settings --json
@@ -518,13 +526,16 @@ jobs:
       - name: fr11_double_clicking_an_apk_opens_the_install_window
         run: |
           . .github/scripts/installer/setup-ui.ps1
+          # The APK Installer's window keeps this id.
           $script:WindowId = 'ApkInstallWindow'
           New-Item -ItemType Directory -Force screens | Out-Null
           $apks = (Resolve-Path .scratch/test-apks).Path
           Set-Content -Path "$apks\broken.apk" -Value 'not an apk' -NoNewline
           $command =(Get-ItemProperty 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Dsa.ApkFile\shell\open\command').'(default)'
           Write-Host "the .apk association runs: $command"
-          if ($command -notlike "*\settings\DsaSettings.exe`" --install-apk `"%1`"") { throw "the .apk association runs $command" }
+          if ($command -notlike "*\settings\DsaApkInstaller.exe`" --install-apk `"%1`"") { throw "the .apk association runs $command" }
+          $friendly = (Get-ItemProperty 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\Applications\DsaApkInstaller.exe').FriendlyAppName
+          if ($friendly -cne 'APK Installer') { throw "Open with names the APK Installer '$friendly'" }
           function Open-Apk([string]$Name) {
             # What Explorer runs for a double-clicked APK.
             $line = $command.Replace('%1', "$apks\$Name")
@@ -536,6 +547,13 @@ jobs:
           function Close-Apk($Process) {
             if (-not $Process.HasExited) { Stop-Process -Id $Process.Id -Force }
             $Process.WaitForExit(10000) | Out-Null
+          }
+          # Turns "Launch when ready" on or off; off keeps the window on its done screen.
+          function Set-LaunchWhenReady([bool]$On) {
+            $box = Wait-SetupControl LaunchWhenReady -Seconds 90
+            $toggle = $box.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+            $want = if ($On) { [System.Windows.Automation.ToggleState]::On } else { [System.Windows.Automation.ToggleState]::Off }
+            if ($toggle.Current.ToggleState -ne $want) { $toggle.Toggle() }
           }
           function Expect-Text([string]$Id, [string]$Like) {
             $text = Get-SetupText $Id
@@ -554,7 +572,7 @@ jobs:
             try {
               Wait-SetupControl InstallButton -Enabled -Seconds 90 | Out-Null
             } catch {
-              if ($app.HasExited) { Write-Host "DsaSettings.exe exited with code $($app.ExitCode)" }
+              if ($app.HasExited) { Write-Host "DsaApkInstaller.exe exited with code $($app.ExitCode)" }
               Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = '.NET Runtime', 'Application Error' } -MaxEvents 4 -ErrorAction SilentlyContinue |
                 ForEach-Object { Write-Host $_.Message }
               throw
@@ -579,6 +597,7 @@ jobs:
             # Installing starts Android, finds the app installed already, and shows both versions.
             $env:FAKE_DSA_SCENARIO = 'update'
             $app = Open-Apk notes.apk
+            Set-LaunchWhenReady $false
             Invoke-SetupButton InstallButton -Seconds 90
             Wait-SetupControl ProgressTitle | Out-Null
             Save-SetupScreen "$PWD\screens\apk-$theme-starting-android.png"
@@ -1072,6 +1091,7 @@ jobs:
             Copy-Item "dsa\target\$env:RUST_TARGET\release\$name" "$program\$name"
           }
           Copy-Item dsa\target\installer\settings-app\DsaSettings.exe "$program\settings\DsaSettings.exe"
+          Copy-Item dsa\target\installer\settings-app\DsaApkInstaller.exe "$program\settings\DsaApkInstaller.exe"
           foreach ($name in 'gfxstream_backend.dll', 'NOTICE.txt', 'licenses\NOTICE.txt', 'licenses\gfxstream.txt', "vm\$env:KERNEL_NAME") {
             Set-Content "$program\$name" 'a stale copy' -NoNewline
           }
@@ -1247,7 +1267,7 @@ jobs:
           Write-Host "the package's platform: $template"
           if ($template -notlike 'Arm64;*') { throw "the arm64 package's platform is '$template'" }
           # IMAGE_FILE_MACHINE_ARM64 is 0xAA64, at the PE header's machine field.
-          foreach ($program in Get-ChildItem dsa\target\installer\stage\*.exe, dsa\target\installer\settings-app\DsaSettings.exe) {
+          foreach ($program in Get-ChildItem dsa\target\installer\stage\*.exe, dsa\target\installer\settings-app\DsaSettings.exe, dsa\target\installer\settings-app\DsaApkInstaller.exe) {
             $bytes = [System.IO.File]::ReadAllBytes($program.FullName)
             $pe = [BitConverter]::ToInt32($bytes, 0x3c)
             $machine = [BitConverter]::ToUInt16($bytes, $pe + 4)
