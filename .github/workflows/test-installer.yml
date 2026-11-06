@@ -139,7 +139,9 @@ jobs:
             Set-AppTheme -Dark:($theme -eq 'dark')
             $setup = Start-Process 'dsa\target\installer\setup-test-0.0.9.exe' -ArgumentList '/log', "$PWD\first-$theme.log" -PassThru
             $null = $setup.Handle
-            Wait-SetupControl InstallButton -Enabled | Out-Null
+            # The first start on a fresh runner can take minutes (the 2025 image took 130 seconds
+            # to show its window), so the first screen gets longer than later ones.
+            Wait-SetupControl InstallButton -Enabled -Seconds 300 | Out-Null
             Save-SetupScreen "$PWD\screens\$theme-install.png"
             $publisher = Get-SetupText HeroPublisher
             if ($publisher -cne 'ThisIsThePy') { throw "the first screen names the publisher '$publisher', not ThisIsThePy" }
@@ -412,23 +414,65 @@ jobs:
             @($items | Where-Object { Test-InView $Window (Find-Item $Window $_) })
           }
           # The runner sometimes opens the Start menu over the window (the ARM64 image does), and
-          # then the wheel scrolls the Start menu: it is closed, and the point under the cursor
-          # must belong to DSA Settings before any notch is sent.
+          # then the wheel scrolls the Start menu. The wheel goes only to a point where DSA
+          # Settings is under the cursor: a point across the element that nothing covers, or,
+          # when every point is covered, one cleared by closing what covers it.
+          Add-Type -Namespace Dsa -Name Cover -MemberDefinition @'
+          [DllImport("user32.dll")] public static extern System.IntPtr WindowFromPoint(POINT point);
+          [DllImport("user32.dll")] public static extern System.IntPtr GetAncestor(System.IntPtr window, uint flags);
+          [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(System.IntPtr window, System.Text.StringBuilder name, int size);
+          [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr window, out uint process);
+          [DllImport("user32.dll")] public static extern bool PostMessage(System.IntPtr window, uint message, System.IntPtr w, System.IntPtr l);
+          [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
+          '@
+          function Get-Cover([int]$X, [int]$Y) {
+            $point = New-Object Dsa.Cover+POINT
+            $point.X = $X; $point.Y = $Y
+            $root = [Dsa.Cover]::GetAncestor([Dsa.Cover]::WindowFromPoint($point), 2)   # GA_ROOT
+            $class = New-Object System.Text.StringBuilder 256
+            [Dsa.Cover]::GetClassName($root, $class, 256) | Out-Null
+            $id = [uint32]0
+            [Dsa.Cover]::GetWindowThreadProcessId($root, [ref]$id) | Out-Null
+            $process = Get-Process -Id $id -ErrorAction SilentlyContinue
+            @{ Window = $root; Class = $class.ToString(); ProcessId = [int]$id; Process = $process.ProcessName }
+          }
           function Wheel-Over($Element, [int]$Notches) {
             $r = $Element.Current.BoundingRectangle
-            $x = [int]($r.X + $r.Width / 2); $y = [int]($r.Y + $r.Height / 2)
             $owner = $Element.Current.ProcessId
-            for ($try = 0; $try -lt 5; $try++) {
-              [Dsa.Input]::SetCursorPos($x, $y) | Out-Null
-              $under = [System.Windows.Automation.AutomationElement]::FromPoint((New-Object System.Windows.Point($x, $y)))
-              if ($under -and $under.Current.ProcessId -eq $owner) { break }
-              Write-Host "the point to wheel over is covered by process $($under.Current.ProcessId); closing it"
+            $y = [int]($r.Y + $r.Height / 2)
+            $xs = 0.5, 0.15, 0.3, 0.7, 0.85 | ForEach-Object { [int]($r.X + $r.Width * $_) }
+            $found = $null
+            for ($try = 0; $try -lt 6 -and -not $found; $try++) {
+              foreach ($x in $xs) {
+                $cover = Get-Cover $x $y
+                if ($cover.ProcessId -eq $owner) { $found = $x; break }
+              }
+              if ($found) { break }
+              $cover = Get-Cover $xs[0] $y
+              Write-Host "the point to wheel over is covered by window class '$($cover.Class)' of process $($cover.Process) ($($cover.ProcessId)); closing it"
               [Dsa.Input]::keybd_event(0x1B, 0, 0, [UIntPtr]::Zero)   # Escape down
               [Dsa.Input]::keybd_event(0x1B, 0, 2, [UIntPtr]::Zero)   # Escape up
-              Get-Process StartMenuExperienceHost, SearchHost -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+              Get-Process StartMenuExperienceHost, SearchHost, ShellExperienceHost -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+              if ($try -ge 2) {
+                # Escape and closing the Start menu's hosts did not clear it: whatever window
+                # covers the point is closed, and a shell window is cleared by restarting the shell.
+                if ($cover.Process -eq 'explorer') {
+                  Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+                } elseif ($cover.Process -notin 'csrss', 'dwm', 'winlogon', 'System', 'Idle', '') {
+                  [Dsa.Cover]::PostMessage($cover.Window, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null   # WM_CLOSE
+                  Stop-Process -Id $cover.ProcessId -Force -ErrorAction SilentlyContinue
+                }
+                Start-Sleep -Seconds 3
+              }
+              [Dsa.Input]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle) | Out-Null
               Start-Sleep -Seconds 1
             }
-            if (-not $under -or $under.Current.ProcessId -ne $owner) { throw "another window covers DSA Settings where the wheel goes" }
+            if (-not $found) {
+              Save-WindowScreen $window "$PWD\screens\settings-covered.png"
+              throw "another window covers DSA Settings where the wheel goes"
+            }
+            [Dsa.Input]::SetCursorPos($found, $y) | Out-Null
+            Start-Sleep -Milliseconds 200
             for ($i = 0; $i -lt $Notches; $i++) {
               [Dsa.Input]::mouse_event(0x0800, 0, 0, -120, [UIntPtr]::Zero)   # wheel down
               Start-Sleep -Milliseconds 100
