@@ -3,7 +3,7 @@
 //! The host says which folders it shares (`FileSharing`); the daemon writes that to the
 //! property [`PROPERTY`] ([`property_value`]), and init runs `dsa-channeld --share-mount` as
 //! root, which mounts each folder with the kernel's 9p file system at
-//! `/data/media/0/<location>/<folder>` and takes away the ones no longer shared ([`plan`]).
+//! `/data/media/0/<location>/<folder>` (the location is [`LOCATION`]) and takes away the ones no longer shared ([`plan`]).
 //! Android's shared storage (`/storage/emulated/0`) is served from `/data/media/0` by the
 //! media provider, so a mounted folder shows there for every app, under the storage
 //! permissions Android gives each app. Mounts made under `/data/media` reach the media
@@ -25,6 +25,23 @@ pub const STORAGE: &str = "/data/media/0";
 
 /// The owner and group of the mount points: Android's `media_rw`, which owns the storage.
 pub const MEDIA_RW: u32 = 1023;
+
+/// The folder the host's folders go under when the host names none: `Host`, on every host.
+pub const LOCATION: &str = "Host";
+
+/// Where earlier versions put the host's folders, one folder per kind of host. Each is
+/// emptied of the mount points left in it and taken away once empty ([`leftovers`]).
+pub const OLD_LOCATIONS: [&str; 3] = ["Windows", "Linux", "Mac"];
+
+/// The names a host's shared folder has, which are the only mount points [`leftovers`] takes.
+const FOLDER_NAMES: [&str; 6] = [
+    "Documents",
+    "Downloads",
+    "Pictures",
+    "Music",
+    "Videos",
+    "Desktop",
+];
 
 /// What the host shares, as the property carries it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,6 +153,24 @@ pub fn plan(wanted: Option<&Wanted>, mounted: &[String], storage: &str) -> Plan 
     }
 }
 
+/// The folders an earlier location left behind under `storage`, in the order they are taken
+/// away: each old mount point, then the old location itself. `location` is the one in use,
+/// which is never among them. Only empty folders are taken away, so a folder the user made
+/// there, or put files in, stays.
+pub fn leftovers(storage: &str, location: &str) -> Vec<String> {
+    let storage = storage.trim_end_matches('/');
+    OLD_LOCATIONS
+        .iter()
+        .filter(|old| **old != location)
+        .flat_map(|old| {
+            FOLDER_NAMES
+                .iter()
+                .map(move |folder| format!("{storage}/{old}/{folder}"))
+                .chain(std::iter::once(format!("{storage}/{old}")))
+        })
+        .collect()
+}
+
 /// The mount options for a folder on the socket `fd`.
 pub fn mount_options(fd: i32, folder: &str) -> String {
     format!(
@@ -179,6 +214,15 @@ fn apply(wanted: Option<&Wanted>, say: &dyn Fn(&str)) {
             if let Some(parent) = std::path::Path::new(target).parent() {
                 let _ = std::fs::remove_dir(parent);
             }
+        }
+    }
+    // The folders an earlier version mounted under another name. Their mounts went with the
+    // plan above, or with the last shutdown; the empty folders go now.
+    let location = wanted.map_or(LOCATION, |wanted| wanted.location.as_str());
+    for old in leftovers(STORAGE, location) {
+        let path = std::path::Path::new(&old);
+        if path.is_dir() && std::fs::remove_dir(path).is_ok() {
+            say(&format!("took away the old folder {old}"));
         }
     }
     let Some(wanted) = wanted else {
@@ -311,7 +355,7 @@ mod tests {
         FileSharing {
             on,
             port: 5590,
-            location: "Windows".into(),
+            location: "Host".into(),
             folders: folders.iter().map(|f| f.to_string()).collect(),
         }
     }
@@ -319,12 +363,12 @@ mod tests {
     #[test]
     fn fr29_the_host_sharing_becomes_a_property_and_back() {
         let value = property_value(&sharing(true, &["Documents", "Pictures"]));
-        assert_eq!(value, "5590 Windows Documents,Pictures");
+        assert_eq!(value, "5590 Host Documents,Pictures");
         assert_eq!(
             parse(&value),
             Some(Wanted {
                 port: 5590,
-                location: "Windows".into(),
+                location: "Host".into(),
                 folders: vec!["Documents".into(), "Pictures".into()],
             })
         );
@@ -337,22 +381,22 @@ mod tests {
     fn fr29_a_folder_name_that_leaves_the_storage_is_never_mounted() {
         assert_eq!(
             property_value(&sharing(true, &["..", "a/b", "Pictures"])),
-            "5590 Windows Pictures"
+            "5590 Host Pictures"
         );
         let mut outside = sharing(true, &["Pictures"]);
         outside.location = "../../system".into();
         assert_eq!(property_value(&outside), "off");
         assert_eq!(parse("5590 .. Pictures"), None);
         assert_eq!(
-            parse("5590 Windows ..,Pictures").map(|w| w.folders),
+            parse("5590 Host ..,Pictures").map(|w| w.folders),
             Some(vec!["Pictures".to_string()])
         );
     }
 
     #[test]
     fn fr29_turning_sharing_off_takes_every_mount_away() {
-        let mounts = "dsa-Documents /data/media/0/Windows/Documents 9p rw 0 0\n\
-                      dsa-Pictures /data/media/0/Windows/Pictures 9p rw 0 0\n\
+        let mounts = "dsa-Documents /data/media/0/Host/Documents 9p rw 0 0\n\
+                      dsa-Pictures /data/media/0/Host/Pictures 9p rw 0 0\n\
                       /dev/block/dm-5 /data ext4 rw 0 0\n";
         let now = mounted(mounts, STORAGE);
         assert_eq!(now.len(), 2);
@@ -360,17 +404,17 @@ mod tests {
         assert_eq!(off.unmount, now);
         assert!(off.mount.is_empty());
 
-        let wanted = parse("5590 Windows Pictures,Music").unwrap();
+        let wanted = parse("5590 Host Pictures,Music").unwrap();
         let changed = plan(Some(&wanted), &now, STORAGE);
         assert_eq!(
             changed.unmount,
-            vec!["/data/media/0/Windows/Documents".to_string()]
+            vec!["/data/media/0/Host/Documents".to_string()]
         );
         assert_eq!(
             changed.mount,
             vec![(
                 "Music".to_string(),
-                "/data/media/0/Windows/Music".to_string()
+                "/data/media/0/Host/Music".to_string()
             )]
         );
     }
@@ -381,5 +425,33 @@ mod tests {
         assert!(options.contains("trans=fd,rfdno=7,wfdno=7"), "{options}");
         assert!(options.contains("version=9p2000.L"), "{options}");
         assert!(options.contains("aname=Pictures"), "{options}");
+    }
+
+    #[test]
+    fn fr29_the_old_windows_folder_is_moved_to_host() {
+        // A guest that mounted the host's folders under Windows/ before: those mounts are taken
+        // away, the new ones go under Host/, and the empty old folders go too.
+        let mounts = "dsa-Documents /data/media/0/Windows/Documents 9p rw 0 0\n";
+        let now = mounted(mounts, STORAGE);
+        let wanted = parse("5590 Host Documents").unwrap();
+        let moved = plan(Some(&wanted), &now, STORAGE);
+        assert_eq!(moved.unmount, vec!["/data/media/0/Windows/Documents".to_string()]);
+        assert_eq!(
+            moved.mount,
+            vec![(
+                "Documents".to_string(),
+                "/data/media/0/Host/Documents".to_string()
+            )]
+        );
+        let old = leftovers(STORAGE, LOCATION);
+        assert!(old.contains(&"/data/media/0/Windows/Documents".to_string()));
+        assert!(old.contains(&"/data/media/0/Linux".to_string()));
+        let windows = old.iter().position(|p| p == "/data/media/0/Windows").unwrap();
+        let documents = old
+            .iter()
+            .position(|p| p == "/data/media/0/Windows/Documents")
+            .unwrap();
+        assert!(documents < windows, "a folder goes before the one it is in");
+        assert!(old.iter().all(|p| !p.starts_with("/data/media/0/Host")));
     }
 }

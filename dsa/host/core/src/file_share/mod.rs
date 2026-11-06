@@ -33,6 +33,10 @@ pub const SHARE_PORT: u32 = 5590;
 /// The vsock port the guest serves its shared storage on.
 pub const ANDROID_FILES_PORT: u32 = 5591;
 
+/// The folder in Android's shared storage the user's host folders go under, on every host:
+/// `Host/Documents`, `Host/Pictures` and so on.
+pub const LOCATION: &str = "Host";
+
 /// The folders a user can share, by the names the guest shows them under, in the order a
 /// client lists them.
 pub const FOLDERS: [&str; 6] = [
@@ -110,7 +114,7 @@ pub trait ShareHost: Send + Sync {
         let _ = path;
         None
     }
-    /// The folder in Android's shared storage the shared folders go under, such as "Windows".
+    /// The folder in Android's shared storage the shared folders go under, normally [`LOCATION`].
     fn location(&self) -> String;
 }
 

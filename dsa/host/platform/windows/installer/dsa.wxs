@@ -243,6 +243,40 @@
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaShareWithAndroidApp\command"
                                Type="string" Value="&quot;[INSTALLFOLDER]dsa-app-window.exe&quot; --share-file &quot;%1&quot;" />
             </Component>
+            <!-- "Android" in Explorer's navigation pane, as WSL's "Linux" is: a folder shortcut
+                 whose target is the service's files door, a loopback WebDAV address that holds
+                 while Android is stopped and starts it when opened. The machine's entry opens
+                 the door's empty root; the window manager writes each user's own entry, with
+                 the user's key, in the user's classes, where it takes the place of this one,
+                 and uninstalling removes those for every user (user_registry.rs). The
+                 namespace entry and the desktop hiding are the machine's, so uninstalling
+                 takes the entry out of every user's navigation pane at once. -->
+            <Component Id="AndroidNavigationPane" Guid="3d7a1f52-8b6e-4c09-a5d4-6e2f9b0c1a87">
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Type="string" Value="Android" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Name="System.IsPinnedToNameSpaceTree" Type="integer" Value="1" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Name="SortOrderIndex" Type="integer" Value="66" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\DefaultIcon"
+                               Type="string" Value="[INSTALLFOLDER]dsa-app-window.exe,0" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\InProcServer32"
+                               Type="expandable" Value="%SystemRoot%\system32\shell32.dll" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\Instance"
+                               Name="CLSID" Type="string" Value="{0E5AAE11-A475-4c5b-AB00-C66DE400274E}" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\Instance\InitPropertyBag"
+                               Name="Attributes" Type="integer" Value="17" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\Instance\InitPropertyBag"
+                               Name="TargetFolderPath" Type="string" Value="\\127.0.0.1@47591\DavWWWRoot" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\ShellFolder"
+                               Name="FolderValueFlags" Type="integer" Value="40" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\ShellFolder"
+                               Name="Attributes" Type="integer" Value="-260046771" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Type="string" Value="Android" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel"
+                               Name="{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}" Type="integer" Value="1" />
+            </Component>
             <Component Id="GfxstreamBackendDll" Guid="*">
                 <File Id="GfxstreamBackendDll" Source="$(SourceDir)\gfxstream_backend.dll" KeyPath="yes" />
             </Component>

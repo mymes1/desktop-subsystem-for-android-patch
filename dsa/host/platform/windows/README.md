@@ -481,7 +481,7 @@ the APK install window instead, as opening it would. Folders are not sent.
 ### Sharing folders with Android
 
 The user's Documents, Downloads, Pictures, Music, Videos and Desktop folders show in Android's
-shared storage under `Windows/<folder>`, all of them unless the user chooses fewer, and none
+shared storage under `Host/<folder>`, all of them unless the user chooses fewer, and none
 while file sharing is off (`dsa settings set file-sharing on|off`,
 `dsa settings set shared-folders Documents,Pictures`, or the Advanced page of DSA Settings).
 The service serves each folder to the guest with a 9P2000.L file server on a Hyper-V socket
@@ -497,6 +497,24 @@ storage as WebDAV on vsock port 5591, the service bridges a loopback port to it,
 opens it through Windows' WebDAV redirector as `\\127.0.0.1@<port>\<token>`
 (`src/android_files.rs`). The token changes with each session. The redirector is the WebClient
 service, which Windows starts the first time such a path is opened.
+
+Android's storage also has its own entry, "Android", in Explorer's navigation pane, as WSL's
+"Linux" does. It is a shell folder shortcut whose target is the service's files door,
+`\\127.0.0.1@47591\<key>`: one loopback port the service opens when it starts, so the address
+holds while Android is stopped and across restarts. Opening it starts Android and waits for its
+storage. The key is the user's own, made by the window manager the first time it runs and kept
+beside the entry in the user's classes (`HKCU\Software\Classes\CLSID\{6F1D4E2A-...}`), which
+only that user and the service can read; the door answers a key nobody has with 403. The
+installer registers the entry for the machine and uninstalling removes it, with each user's own
+copy.
+
+The Start menu entry opens the same place, and checks first that it answers: given a path that
+does not answer, Explorer opens the user's Documents instead and says nothing, so DSA shows an
+error dialog with the reason.
+
+The guest's folder for the host's folders was `Windows/` before (`Linux/` and `Mac/` on those
+hosts). It is `Host/` on every host now; the guest takes the old mounts away and removes the
+old folders once they are empty, so files a user put there stay.
 
 ## Installing APKs
 

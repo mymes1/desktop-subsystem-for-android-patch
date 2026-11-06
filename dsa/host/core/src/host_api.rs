@@ -219,6 +219,13 @@ pub trait UserAndroid: Send + Sync {
     fn android_files(&self) -> Result<String, String> {
         Err("this Android does not show its files on the host".into())
     }
+    /// As [`UserAndroid::android_files`], with the shared storage served under `token`, the
+    /// first segment of every path, instead of one the session makes up. The files door uses
+    /// the user's own key here, so the address it keeps does not change between sessions.
+    fn android_files_with_token(&self, token: &str) -> Result<String, String> {
+        let _ = token;
+        Err("this Android does not show its files on the host".into())
+    }
     /// The notifications of this Android from now on. `None` when it does not report them.
     fn watch_notifications(&self) -> Option<Receiver<NotificationEvent>> {
         None
@@ -562,6 +569,9 @@ impl UserAndroid for Session {
     }
     fn android_files(&self) -> Result<String, String> {
         Session::android_files(self)
+    }
+    fn android_files_with_token(&self, token: &str) -> Result<String, String> {
+        Session::android_files_with_token(self, token)
     }
     fn watch_notifications(&self) -> Option<Receiver<NotificationEvent>> {
         Some(Session::watch_notifications(self))

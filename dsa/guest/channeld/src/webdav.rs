@@ -401,8 +401,16 @@ fn xml_escape(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// How many symbolic links one path may follow before it is refused as a loop.
+const MAX_LINKS: usize = 40;
+
 /// Where `names` lead in the storage, checked to stay inside it once every link is followed.
 /// A path that does not exist yet is checked through its folder.
+///
+/// The walk starts at the storage and goes down one name at a time, following each link by
+/// hand. It never resolves the storage's own folders above it, nor asks the C library's
+/// `realpath`, which on Android reads `/proc/self/fd`: the server's sandbox may not look at
+/// `/data` or `/proc`, and a check that needs them refused every request with 403.
 fn resolve(config: &Config, names: &[String]) -> Result<PathBuf, u16> {
     if names
         .first()
@@ -410,33 +418,70 @@ fn resolve(config: &Config, names: &[String]) -> Result<PathBuf, u16> {
     {
         return Err(404);
     }
-    let root = fs::canonicalize(&config.root).map_err(|e| status_of(&e))?;
-    let mut path = root.clone();
-    for name in names {
-        path.push(name);
-    }
-    match fs::canonicalize(&path) {
-        Ok(resolved) if resolved.starts_with(&root) => Ok(resolved),
-        Ok(_) => Err(403),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            let parent = path.parent().ok_or(403u16)?;
-            match fs::canonicalize(parent) {
-                Ok(folder) if folder.starts_with(&root) => {
-                    // A dangling link that points outside is still outside.
-                    if fs::symlink_metadata(&path).is_ok() {
-                        return Err(403);
-                    }
-                    Ok(folder.join(path.file_name().ok_or(403u16)?))
-                }
-                Ok(_) => Err(403),
-                Err(error) => Err(match error.kind() {
-                    io::ErrorKind::NotFound => 409,
-                    _ => status_of(&error),
-                }),
+    let root = lexical(&config.root);
+    fs::symlink_metadata(&root).map_err(|e| status_of(&e))?;
+    // The names still to walk, last one at the end of the list.
+    let mut pending: Vec<std::ffi::OsString> = names.iter().rev().map(Into::into).collect();
+    let mut at = root.clone();
+    let mut links = 0;
+    while let Some(name) = pending.pop() {
+        if name == ".." {
+            if at == root {
+                return Err(403);
             }
+            at.pop();
+            continue;
         }
-        Err(error) => Err(status_of(&error)),
+        if name == "." || name.is_empty() {
+            continue;
+        }
+        let next = at.join(&name);
+        match fs::symlink_metadata(&next) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                links += 1;
+                if links > MAX_LINKS {
+                    return Err(403);
+                }
+                let target = fs::read_link(&next).map_err(|e| status_of(&e))?;
+                let rest: Vec<std::ffi::OsString> = if target.is_absolute() {
+                    let target = lexical(&target);
+                    let Ok(inside) = target.strip_prefix(&root) else {
+                        return Err(403);
+                    };
+                    at = root.clone();
+                    inside.iter().map(Into::into).collect()
+                } else {
+                    target.iter().map(Into::into).collect()
+                };
+                pending.extend(rest.into_iter().rev());
+            }
+            Ok(_) => at = next,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                if !pending.is_empty() {
+                    // A folder on the way is missing.
+                    return Err(409);
+                }
+                return Ok(next);
+            }
+            Err(error) => return Err(status_of(&error)),
+        }
     }
+    Ok(at)
+}
+
+/// `path` with `.` and `..` taken out by their names alone.
+fn lexical(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 /// The href of `names`, with a trailing slash for a folder.
@@ -461,6 +506,20 @@ pub fn handle(request: &Request, body: &mut Body<'_>, config: &Config) -> Respon
         return Response::new(200).with(
             "Allow",
             "OPTIONS, PROPFIND, PROPPATCH, GET, HEAD, PUT, DELETE, MKCOL, COPY, MOVE, LOCK, UNLOCK",
+        );
+    }
+    // Windows' WebDAV redirector looks at the server's root before the share under it, and
+    // takes a refusal there as "no WebDAV server here". The root is answered as an empty
+    // folder: it names nothing, not even the token.
+    if request.path.split('/').all(str::is_empty) && request.method == "PROPFIND" {
+        let _ = body.text();
+        return Response::xml(
+            207,
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?><D:multistatus xmlns:D=\"DAV:\">\
+             <D:response><D:href>/</D:href><D:propstat><D:prop><D:displayname/>\
+             <D:resourcetype><D:collection/></D:resourcetype></D:prop>\
+             <D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>"
+                .into(),
         );
     }
     let Some(names) = names_of(&request.path, &config.token) else {
@@ -528,7 +587,6 @@ fn propfind(
     xml.push_str(&entry_xml(config, names, path)?);
     let depth = request.header("Depth").unwrap_or("1");
     if depth != "0" && path.is_dir() {
-        let root = fs::canonicalize(&config.root)?;
         let mut children: Vec<String> = fs::read_dir(path)?
             .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
             .collect();
@@ -538,13 +596,12 @@ fn propfind(
                 continue;
             }
             let child_path = path.join(&child);
-            // A link that leads outside the storage is not listed.
-            match fs::canonicalize(&child_path) {
-                Ok(resolved) if resolved.starts_with(&root) => {}
-                _ => continue,
-            }
             let mut child_names = names.to_vec();
             child_names.push(child);
+            // A link that leads outside the storage is not listed.
+            if resolve(config, &child_names).is_err() {
+                continue;
+            }
             if let Ok(entry) = entry_xml(config, &child_names, &child_path) {
                 xml.push_str(&entry);
             }

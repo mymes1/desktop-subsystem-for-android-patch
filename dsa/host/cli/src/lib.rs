@@ -2006,6 +2006,9 @@ fn android_files(invocation: &Invocation, client: &mut HostApiClient) -> Result<
     let url = client.android_files().map_err(|e| e.to_string())?;
     let path = files_path(&url);
     if invocation.command == Command::FilesOpen {
+        // Explorer given a path that does not answer opens the user's Documents instead.
+        #[cfg(windows)]
+        dsa_host_windows::android_files::reachable(&path, std::time::Duration::from_secs(90))?;
         #[cfg(windows)]
         dsa_host_windows::android_files::open_in_explorer(&path)?;
         #[cfg(target_os = "macos")]

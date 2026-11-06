@@ -938,6 +938,24 @@ where
             None => android,
         }
     }));
+    // Android's files at the address Explorer's navigation pane keeps: open for as long as the
+    // service runs, whether or not anyone's Android is.
+    let _files_door = match dsa_host_core::files_door::FilesDoor::start(
+        dsa_host_core::files_door::DOOR_PORT,
+        Arc::new(crate::android_files::owner_of_key),
+        androids.clone(),
+        dsa_host_core::files_door::START_WAIT,
+    ) {
+        Ok(door) => Some(door),
+        Err(why) => {
+            eprintln!(
+                "{build}: Android's files cannot be shown in Explorer's navigation pane: \
+                 loopback port {} is taken: {why}",
+                dsa_host_core::files_door::DOOR_PORT
+            );
+            None
+        }
+    };
     take_old_trace_markers(&config, &*store, build);
     let host_memory: Arc<dyn HostMemory> = Arc::new(WindowsHostMemory);
     let mut service = HostApiService::new(androids.clone(), build)

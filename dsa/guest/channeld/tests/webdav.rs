@@ -32,7 +32,7 @@ fn storage(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("dsa-webdav-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("Storage").join("Pictures")).unwrap();
-    std::fs::create_dir_all(dir.join("Storage").join("Windows").join("Documents")).unwrap();
+    std::fs::create_dir_all(dir.join("Storage").join("Host").join("Documents")).unwrap();
     std::fs::write(
         dir.join("Storage").join("Pictures").join("cat.jpg"),
         b"meow",
@@ -46,7 +46,7 @@ fn config(dir: &std::path::Path) -> Config {
     Config {
         root: dir.join("Storage"),
         token: "tok".into(),
-        hidden: vec!["Windows".into()],
+        hidden: vec!["Host".into()],
     }
 }
 
@@ -95,7 +95,7 @@ fn fr29_the_host_lists_reads_and_writes_androids_shared_storage() {
         "{answered}"
     );
     assert!(
-        !answered.contains("Windows"),
+        !answered.contains("Host"),
         "the host's own folders are left out: {answered}"
     );
     assert!(answered.contains("HTTP/1.1 200 OK\r\n"), "{answered}");
@@ -117,7 +117,7 @@ fn fr29_requests_out_of_androids_storage_are_refused() {
         "GET /tok/../secret.txt HTTP/1.1\r\n\r\n",
         "GET /tok/%2E%2E/secret.txt HTTP/1.1\r\n\r\n",
         "GET /other/Pictures/cat.jpg HTTP/1.1\r\n\r\n",
-        "GET /tok/Windows/Documents HTTP/1.1\r\n\r\n",
+        "GET /tok/Host/Documents HTTP/1.1\r\n\r\n",
         "DELETE /tok/ HTTP/1.1\r\n\r\n",
     ] {
         let answered = exchange(&config, request.as_bytes());
@@ -150,5 +150,57 @@ fn fr29_a_symbolic_link_out_of_androids_storage_is_refused() {
     assert!(answered.starts_with("HTTP/1.1 403"), "{answered}");
     let listed = exchange(&config, b"PROPFIND /tok/ HTTP/1.1\r\nDepth: 1\r\n\r\n");
     assert!(!listed.contains("way%20out"), "{listed}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Explorer reaches `\\127.0.0.1@<port>\<token>` through Windows' WebDAV redirector, which
+/// looks at the server's root and at the share without a trailing slash, at depth 0, before
+/// it lists anything. A 403 to either makes Explorer give up and open another folder.
+#[test]
+fn fr29_the_webdav_redirectors_first_requests_are_answered() {
+    let dir = storage("redirector");
+    let config = config(&dir);
+    let root = exchange(
+        &config,
+        b"PROPFIND / HTTP/1.1\r\nDepth: 0\r\nContent-Length: 0\r\n\r\n",
+    );
+    assert!(root.starts_with("HTTP/1.1 207"), "{root}");
+    assert!(!root.contains("tok"), "the root names no token: {root}");
+    let share = exchange(
+        &config,
+        b"PROPFIND /tok HTTP/1.1\r\nDepth: 0\r\nContent-Length: 0\r\n\r\n",
+    );
+    assert!(share.starts_with("HTTP/1.1 207"), "{share}");
+    assert!(share.contains("<D:collection/>"), "{share}");
+    let listed = exchange(
+        &config,
+        b"PROPFIND /tok/ HTTP/1.1\r\nDepth: 1\r\nContent-Length: 0\r\n\r\n",
+    );
+    assert!(listed.starts_with("HTTP/1.1 207"), "{listed}");
+    assert!(listed.contains("/tok/Pictures/"), "{listed}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// On Android the server runs in a sandbox that may not look at `/data` or `/proc`. Resolving
+/// a path through the C library's `realpath` needs both, so every request was refused with
+/// 403. Here the storage sits under a folder the server may pass through but not read, the
+/// nearest a test can come to that sandbox, and a link inside the storage is followed by hand.
+#[cfg(unix)]
+#[test]
+fn fr29_androids_storage_is_served_without_looking_above_it() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = storage("above");
+    std::os::unix::fs::symlink("Pictures", dir.join("Storage").join("Photos")).unwrap();
+    let config = config(&dir);
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o100)).unwrap();
+    let listed = exchange(
+        &config,
+        b"PROPFIND /tok/Photos/ HTTP/1.1\r\nDepth: 1\r\nContent-Length: 0\r\n\r\n",
+    );
+    let read = exchange(&config, b"GET /tok/Photos/cat.jpg HTTP/1.1\r\n\r\n");
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(listed.starts_with("HTTP/1.1 207"), "{listed}");
+    assert!(listed.contains("cat.jpg"), "{listed}");
+    assert!(read.contains("\r\n\r\nmeow"), "{read}");
     let _ = std::fs::remove_dir_all(&dir);
 }
