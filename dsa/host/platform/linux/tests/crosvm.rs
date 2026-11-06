@@ -2,10 +2,10 @@
 //!
 //! Two runs, each when CI gives it what it needs:
 //! - `DSA_CROSVM` names the crosvm to run, `DSA_CROSVM_TEST_KERNEL` a kernel to boot and
-//!   `DSA_CROSVM_TEST_INITRD` an initrd whose init brings up the virtio balloon driver and
-//!   idles: the command line it builds is one crosvm takes, and the VM can be resized through
-//!   the balloon, suspended, resumed and stopped through the control socket. The kernel need
-//!   not reach Android.
+//!   `DSA_CROSVM_TEST_INITRD` an initrd whose init brings up the virtio balloon and virtio-mem
+//!   drivers and idles: the command line it builds is one crosvm takes, and the VM can be
+//!   resized through its virtio-mem device, suspended, resumed and stopped through the control
+//!   socket. The kernel need not reach Android.
 //! - `DSA_CROSVM_TEST_IMAGE` names a published Android image folder as well: the real image
 //!   boots under crosvm until the guest's control daemon connects on its vsock port.
 //!
@@ -110,12 +110,12 @@ fn fr2_crosvm_starts_resizes_freezes_and_stops_the_vm() {
         .unwrap_or_else(|why| panic!("{why}\n{:?}", launcher.diagnostics()));
     assert!(launcher.vm_id().is_some());
     assert_eq!(launcher.memory_range_mb(), Some((512, 1024)));
-    // crosvm refuses to resize the VM until the guest's balloon driver is up.
+    // Retried while the guest's drivers come up; crosvm takes a virtio-mem request at once.
     let deadline = Instant::now() + Duration::from_secs(60);
     while let Err(why) = launcher.set_memory_mb(768) {
         if Instant::now() >= deadline {
             panic!(
-                "the guest's balloon driver was not up within 60 s: {why}\n{:?}",
+                "the VM could not be resized within 60 s: {why}\n{:?}",
                 launcher.diagnostics()
             );
         }
