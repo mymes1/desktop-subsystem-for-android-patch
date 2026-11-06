@@ -143,7 +143,11 @@ fn decode_png(png: &[u8]) -> Result<(usize, usize, usize, Vec<u8>), String> {
         2 => 3,
         4 => 2,
         6 => 4,
-        other => return Err(format!("the PNG has colour type {other}, which is not checked")),
+        other => {
+            return Err(format!(
+                "the PNG has colour type {other}, which is not checked"
+            ))
+        }
     };
     if depth != 8 || interlace != 0 {
         return Err(format!(
@@ -243,9 +247,13 @@ fn drawing_failed(line: &str) -> bool {
 
 #[test]
 fn fr12_the_log_check_finds_a_failed_drawing_and_a_null_listener() {
-    assert!(drawing_failed("W DsaAgent: drawing widget 12 failed; trying again"));
+    assert!(drawing_failed(
+        "W DsaAgent: drawing widget 12 failed; trying again"
+    ));
     assert!(drawing_failed("drawing widget 1 failed"));
-    assert!(!drawing_failed("drawing widget 1 with the GPU failed; drawing it in software"));
+    assert!(!drawing_failed(
+        "drawing widget 1 with the GPU failed; drawing it in software"
+    ));
     assert!(!drawing_failed("drawing widget failed"));
 }
 
@@ -280,7 +288,10 @@ fn fr12_the_picture_check_tells_a_drawn_widget_from_a_blank_one() {
         height: 1,
         png,
     };
-    assert_eq!(blank(&frame(png([[255, 255, 255, 255], [0, 0, 0, 0]]))), None);
+    assert_eq!(
+        blank(&frame(png([[255, 255, 255, 255], [0, 0, 0, 0]]))),
+        None
+    );
     assert!(blank(&frame(png([[9, 9, 9, 0], [0, 0, 0, 0]]))).is_some());
     assert!(blank(&frame(png([[9, 9, 9, 255], [9, 9, 9, 255]]))).is_some());
     assert!(blank(&frame(b"not a png".to_vec())).is_some());
@@ -320,9 +331,16 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
         eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
     });
     if let Err(why) = ready {
-        fail(format!("Android did not become ready: {why}"), &service, &[]);
+        fail(
+            format!("Android did not become ready: {why}"),
+            &service,
+            &[],
+        );
     }
-    eprintln!("Android was ready {} s after the start", started.elapsed().as_secs());
+    eprintln!(
+        "Android was ready {} s after the start",
+        started.elapsed().as_secs()
+    );
 
     // The guest log, read from now on: Android sends it only while something reads it.
     let log: Arc<Mutex<Vec<String>>> = Arc::default();
