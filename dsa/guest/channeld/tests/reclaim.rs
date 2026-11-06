@@ -504,7 +504,9 @@ fn nfr2_a_kernel_file_the_reclaimer_cannot_read_is_reported_once() {
         assert_eq!(failures.note("/proc/vmstat", &denied(), "x"), None);
     }
     // Another file is a report of its own.
-    assert!(failures.note("/proc/pressure/memory", &denied(), "x").is_some());
+    assert!(failures
+        .note("/proc/pressure/memory", &denied(), "x")
+        .is_some());
     // Read once, then failing again, it is reported again.
     assert_eq!(failures.note("/proc/vmstat", &Ok(String::new()), "x"), None);
     assert!(failures.note("/proc/vmstat", &denied(), "x").is_some());
