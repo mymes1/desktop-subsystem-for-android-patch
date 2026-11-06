@@ -91,7 +91,6 @@ pub mod power;
 pub mod power_hints;
 pub mod print;
 pub mod resize_trace;
-pub mod run_mode;
 pub mod sensors;
 pub mod session;
 pub mod settings;

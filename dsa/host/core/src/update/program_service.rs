@@ -775,9 +775,6 @@ impl UserAndroid for WithProgramStatus {
     fn freeze_when_idle(&self, on: bool) {
         self.android.freeze_when_idle(on)
     }
-    fn run_mode(&self, policy: crate::run_mode::RunModePolicy) {
-        self.android.run_mode(policy)
-    }
     fn links_in_android(&self, on: bool) {
         self.android.links_in_android(on)
     }
