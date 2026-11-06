@@ -213,8 +213,10 @@ DSA_GFX_EXPORT int dsa_gfx_set_display_iosurface_callbacks(dsa_display_iosurface
                                                            dsa_display_pixels_fn fallback,
                                                            void* context);
 /* The display's frames are shown nowhere now: the presentation lets go of what it holds for
- * it (on macOS, the imported IOSurfaces), so their memory goes back. Does nothing when there
- * is nothing to let go of. */
+ * it (on Windows, the Direct3D texture it imported; on macOS, the imported IOSurfaces), so
+ * their memory goes back at once. A closed task draws no more frames, so without this the
+ * import, and the embedder's texture behind it, would stay until the backend stops. Does
+ * nothing when there is nothing to let go of. */
 DSA_GFX_EXPORT void dsa_gfx_forget_display(uint32_t display_id);
 
 /* Writes the LUID of the GPU the renderer runs on (8 bytes, as a Windows LUID). Returns 0 on

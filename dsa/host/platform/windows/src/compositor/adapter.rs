@@ -114,6 +114,12 @@ pub trait DisplayPresenter: Send + Sync {
 
     /// The LUID of the GPU the frames are on, so the sink's textures are made on the same one.
     fn adapter_luid(&self) -> Option<[u8; 8]>;
+
+    /// `display_id` lost its window: the renderer lets go of the texture it copies that
+    /// display's frames into now, instead of keeping it until a frame that never comes.
+    fn forget_display(&self, display_id: u32) {
+        let _ = display_id;
+    }
 }
 
 /// The sink registered with the native backend, kept alive while it is registered.
@@ -214,6 +220,11 @@ pub trait GfxBackend: Send + Sync {
     fn gpu(&self) -> Option<RendererGpu> {
         None
     }
+
+    /// Lets go of the texture the renderer copies `display_id`'s frames into.
+    fn forget_display(&self, display_id: u32) {
+        let _ = display_id;
+    }
 }
 
 /// Native backend loaded from `gfxstream_backend.dll`.
@@ -234,6 +245,9 @@ pub struct NativeBackend {
     fn_get_adapter_luid: Option<unsafe extern "C" fn(*mut u8) -> c_int>,
     /// Absent from a backend built before the render GPU could be chosen.
     fn_get_gpu_info: Option<GetGpuInfoFn>,
+    /// Absent from a backend built before a closed display's texture was let go at once: it
+    /// keeps the texture until the next frame for the display, as before.
+    fn_forget_display: Option<unsafe extern "C" fn(u32)>,
 }
 
 // SAFETY: HMODULE is owned and accessed across threads safely through the loaded function pointers.
@@ -279,6 +293,7 @@ impl NativeBackend {
                 Self::get_symbol(handle, b"dsa_gfx_select_gpu\0").ok();
             let fn_get_gpu_info: Option<GetGpuInfoFn> =
                 Self::get_symbol(handle, b"dsa_gfx_get_gpu_info\0").ok();
+            let fn_forget_display = Self::get_symbol(handle, b"dsa_gfx_forget_display\0").ok();
 
             let note = select_gpu(fn_select_gpu, request);
 
@@ -300,6 +315,7 @@ impl NativeBackend {
                     fn_set_display_callbacks,
                     fn_get_adapter_luid,
                     fn_get_gpu_info,
+                    fn_forget_display,
                 },
                 note,
             ))
@@ -445,6 +461,13 @@ impl GfxBackend for NativeBackend {
             return None;
         }
         Some(renderer_gpu(&info))
+    }
+
+    fn forget_display(&self, display_id: u32) {
+        if let Some(forget_display) = self.fn_forget_display {
+            // SAFETY: the backend takes any display ID; one it does not know is ignored.
+            unsafe { forget_display(display_id) }
+        }
     }
 }
 
@@ -683,6 +706,12 @@ impl DisplayPresenter for GfxstreamAdapter {
             .as_ref()
             .and_then(|backend| backend.adapter_luid())
     }
+
+    fn forget_display(&self, display_id: u32) {
+        if let Some(backend) = &self.backend {
+            backend.forget_display(display_id);
+        }
+    }
 }
 
 impl Drop for GfxstreamAdapter {
@@ -839,6 +868,7 @@ mod tests {
     #[derive(Default)]
     struct PresentingBackend {
         callbacks: Mutex<Option<(DisplayTargetFn, DisplayFrameFn, usize)>>,
+        forgotten: Mutex<Vec<u32>>,
     }
 
     impl PresentingBackend {
@@ -897,6 +927,20 @@ mod tests {
         fn adapter_luid(&self) -> Option<[u8; 8]> {
             Some([1, 2, 3, 4, 5, 6, 7, 8])
         }
+        fn forget_display(&self, display_id: u32) {
+            self.forgotten.lock().unwrap().push(display_id);
+        }
+    }
+
+    #[test]
+    fn nfr2_a_display_that_lost_its_window_is_forgotten_by_the_renderer() {
+        let backend = Arc::new(PresentingBackend::default());
+        let adapter = GfxstreamAdapter::with_backend(backend.clone());
+        DisplayPresenter::forget_display(&adapter, 7);
+        assert_eq!(*backend.forgotten.lock().unwrap(), vec![7]);
+        // Without a backend there is nothing to forget, and nothing goes wrong.
+        let none = GfxstreamAdapter::new(Some(PathBuf::from("nonexistent_path_to_dll.dll")));
+        DisplayPresenter::forget_display(&none, 7);
     }
 
     /// A sink that shows display 3 only, and records what it was shown.

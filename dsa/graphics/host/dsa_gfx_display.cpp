@@ -69,6 +69,8 @@ struct Presenter {
     std::condition_variable wake;
     /* The newest frame set for each display, waiting to be shown. */
     std::map<uint32_t, PendingFrame> pending;
+    /* Displays that lost their window: their imported textures go on the next pass. */
+    std::vector<uint32_t> forget;
     bool stopping = false;
     std::thread thread;
 
@@ -445,15 +447,29 @@ void present(Presenter& presenter, uint32_t display_id, const PendingFrame& fram
 void run(Presenter* presenter) {
     for (;;) {
         std::map<uint32_t, PendingFrame> frames;
+        std::vector<uint32_t> forget;
         {
             std::unique_lock<std::mutex> lock(presenter->mutex);
             presenter->wake.wait(lock, [presenter] {
-                return presenter->stopping || !presenter->pending.empty();
+                return presenter->stopping || !presenter->pending.empty() ||
+                       !presenter->forget.empty();
             });
             if (presenter->stopping) {
                 break;
             }
             frames.swap(presenter->pending);
+            forget.swap(presenter->forget);
+        }
+        if (!forget.empty()) {
+            if (VkEmulation* emu = emulation()) {
+                for (uint32_t display_id : forget) {
+                    auto it = presenter->targets.find(display_id);
+                    if (it != presenter->targets.end()) {
+                        destroy_target(*emu, it->second);
+                        presenter->targets.erase(it);
+                    }
+                }
+            }
         }
         for (const auto& [display_id, frame] : frames) {
             present(*presenter, display_id, frame);
@@ -522,6 +538,18 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_callbacks2(dsa_display_target_
     return 0;
 }
 
+extern "C" DSA_GFX_EXPORT void dsa_gfx_forget_display(uint32_t display_id) {
+    std::lock_guard<std::mutex> lock(s_presenter_mutex);
+    Presenter* presenter = s_presenter;
+    if (!presenter) {
+        return;
+    }
+    std::lock_guard<std::mutex> frames(presenter->mutex);
+    presenter->pending.erase(display_id);
+    presenter->forget.push_back(display_id);
+    presenter->wake.notify_one();
+}
+
 extern "C" DSA_GFX_EXPORT int dsa_gfx_get_adapter_luid(uint8_t luid[8]) {
     VkEmulation* emu = emulation();
     if (!emu || !luid) {
@@ -562,8 +590,6 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_set_display_iosurface_callbacks(
     dsa_display_iosurface_fn, dsa_display_iosurface_frame_fn, dsa_display_pixels_fn, void*) {
     return -1;
 }
-
-extern "C" DSA_GFX_EXPORT void dsa_gfx_forget_display(uint32_t) {}
 
 void dsa_gfx_display_shutdown(void) { stop_presenter(); }
 
