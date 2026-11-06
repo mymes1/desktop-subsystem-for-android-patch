@@ -87,6 +87,135 @@ class ImageLayoutTests(unittest.TestCase):
                         )
         self.assertGreaterEqual(found, 5, "the scan found none of the daemon's kernel reads")
 
+    # Every folder on the way down to a place on /data the daemon uses, with the label the
+    # Android 16 and 17 file_contexts give it. /data/media is media_userdir_file, not the
+    # storage's own label; a policy without it refused every request to the file server.
+    CHANNELD_DATA_PATHS = {
+        "/data/media/0": ["system_data_root_file", "media_userdir_file", "media_rw_data_file"],
+        "/data/vendor/dsa/arm-translation": ["system_data_root_file", "vendor_data_file"],
+    }
+
+    # What each file system call in the file sharing jobs asks of the storage's label
+    # (media_rw_data_file), as {class: permissions}. A call not listed here fails the test, so
+    # a new operation cannot ship without its rule.
+    STORAGE_CALLS = {
+        "dsa_files": {
+            "fs::symlink_metadata": {"dir": "getattr", "file": "getattr", "lnk_file": "getattr"},
+            "fs::metadata": {"dir": "search getattr", "file": "getattr"},
+            ".is_dir": {"dir": "getattr", "file": "getattr"},
+            ".exists": {"dir": "getattr", "file": "getattr"},
+            "fs::read_link": {"lnk_file": "read"},
+            "fs::read_dir": {"dir": "search read open"},
+            "File::open": {"file": "read open"},
+            "File::create": {"dir": "search write add_name", "file": "create write open"},
+            "fs::create_dir": {"dir": "create write add_name"},
+            "fs::remove_file": {"dir": "write remove_name", "file": "unlink", "lnk_file": "unlink"},
+            "fs::remove_dir_all": {
+                "dir": "search read open write remove_name rmdir",
+                "file": "unlink",
+                "lnk_file": "unlink",
+            },
+            "fs::rename": {
+                "dir": "write add_name remove_name rename reparent",
+                "file": "rename",
+                "lnk_file": "rename",
+            },
+            "fs::copy": {"dir": "write add_name", "file": "create read write open getattr setattr"},
+            "File::from": {},
+        },
+        "dsa_sharemount": {
+            ".is_dir": {"dir": "getattr"},
+            "fs::remove_dir": {"dir": "write remove_name rmdir"},
+            "DirBuilder::new": {"dir": "search create write add_name"},
+            "chown": {"dir": "setattr"},
+            "libc::mount": {"dir": "mounton"},
+            "fs::read_to_string": {},
+            "File::from": {},
+        },
+    }
+
+    @staticmethod
+    def _production_lines(source):
+        """The lines of a Rust source above its test module, without comments."""
+        for number, line in enumerate(source.read_text().splitlines(), 1):
+            if line.strip().startswith("#[cfg(test)]"):
+                return
+            if not line.strip().startswith("//"):
+                yield number, line
+
+    @staticmethod
+    def _granted(policy, domain, target):
+        """{class: set of permissions} the policy allows `domain` on `target`."""
+        granted = {}
+        rule = rf"\(allow\s+{domain}\s+{target}\s+\(\s*(\w+)\s+\(([^)]*)\)\s*\)\s*\)"
+        for cls, perms in re.findall(rule, policy):
+            granted.setdefault(cls, set()).update(perms.split())
+        return granted
+
+    def test_fr29_every_place_on_data_channeld_uses_can_be_reached(self):
+        here = Path(__file__).parent
+        literal = re.compile(r'"(/(?:data|storage|sdcard|mnt)(?:/[^"]*)?)"')
+        found = 0
+        for source in sorted((here.parent / "channeld" / "src").glob("*.rs")):
+            domain, policy_file = self.CHANNELD_SOURCE_DOMAINS.get(
+                source.name, ("dsa_channeld", "channeld.cil")
+            )
+            policy = (here / "sepolicy" / policy_file).read_text()
+            for number, line in self._production_lines(source):
+                for path in literal.findall(line):
+                    where = f"{source.name}:{number} uses {path}"
+                    known = [p for p in self.CHANNELD_DATA_PATHS if path.startswith(p)]
+                    self.assertTrue(
+                        known,
+                        f"{where}, which this test does not know: add the label of every "
+                        f"folder on its way here and allow {domain} to search them in "
+                        f"sepolicy/{policy_file}",
+                    )
+                    found += 1
+                    for target in self.CHANNELD_DATA_PATHS[known[0]]:
+                        self.assertIn(
+                            "search",
+                            self._granted(policy, domain, target).get("dir", set()),
+                            f"{where}, but sepolicy/{policy_file} does not let {domain} "
+                            f"search {target} (dir) on the way",
+                        )
+        self.assertGreaterEqual(found, 2, "the scan found none of the daemon's places on /data")
+
+    def test_fr29_the_file_sharing_jobs_are_allowed_exactly_the_storage_calls_they_make(self):
+        here = Path(__file__).parent
+        policy = (here / "sepolicy" / "files.cil").read_text()
+        call = re.compile(r"(\b(?:fs|File|DirBuilder|libc)::\w+|\.is_dir|\.exists|\bchown)\(")
+        for domain, calls in self.STORAGE_CALLS.items():
+            needed = {}
+            sources = [s for s, (d, _) in self.CHANNELD_SOURCE_DOMAINS.items() if d == domain]
+            for name in sources:
+                source = here.parent / "channeld" / "src" / name
+                for number, line in self._production_lines(source):
+                    if line.lstrip().startswith("use "):
+                        continue
+                    for used in call.findall(line):
+                        if used.startswith("libc::") and used != "libc::mount":
+                            # Sockets and unmounts, which other rules cover.
+                            continue
+                        self.assertIn(
+                            used,
+                            calls,
+                            f"{name}:{number} calls {used}, which this test does not know: say "
+                            f"what it asks of media_rw_data_file and allow it to {domain} in "
+                            "sepolicy/files.cil",
+                        )
+                        for cls, perms in calls[used].items():
+                            needed.setdefault(cls, set()).update(perms.split())
+            granted = self._granted(policy, domain, "media_rw_data_file")
+            granted.pop("filesystem", None)
+            for cls in sorted(set(needed) | set(granted)):
+                self.assertEqual(
+                    granted.get(cls, set()),
+                    needed.get(cls, set()),
+                    f"sepolicy/files.cil gives {domain} on media_rw_data_file ({cls}) other "
+                    "permissions than its calls need",
+                )
+
     def test_fr1_selects_vendor_apexes_without_the_cuttlefish_launcher(self):
         cmdline = make_image.kernel_cmdline(f"blkdevparts={make_image.SYSTEM_DISK_GUID}:1@0(misc)")
         self.assertIn("androidboot.boot_devices=vmbus", cmdline)
