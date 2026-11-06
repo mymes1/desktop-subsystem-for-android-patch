@@ -38,7 +38,9 @@ NOTICES = {
     "README.md": (TRADEMARK, INDEPENDENT),
     "docs/locales/README_ko.md": (TRADEMARK, INDEPENDENT),
     f"{SETUP_UI}/Text.cs": (TRADEMARK, INDEPENDENT),
-    f"{WINDOWS}/installer/dsa.wxs": (TRADEMARK, INDEPENDENT),
+    # The package's comments are localized: each language's strings carry the notice.
+    f"{WINDOWS}/installer/dsa.en-us.wxl": (TRADEMARK, INDEPENDENT),
+    f"{WINDOWS}/installer/dsa.ko-kr.wxl": (TRADEMARK, INDEPENDENT),
     f"{SETTINGS}/Strings.resx": (TRADEMARK, INDEPENDENT),
     f"{SETTINGS}/Strings.ko.resx": (TRADEMARK, INDEPENDENT),
 }
@@ -47,6 +49,8 @@ NOTICES = {
 NOTICE_KEYS = {
     f"{SETTINGS}/Pages/AboutPage.xaml": ["AboutTrademark.Text", "AboutIndependent.Text"],
     f"{APK_INSTALLER}/InstallerWindow.xaml.cs": ["AboutTrademark.Text"],
+    # The package shows its localized comments, which carry the notice.
+    f"{WINDOWS}/installer/dsa.wxs": ["!(loc.ArpComments)"],
 }
 
 # Resource keys whose value is a name: window titles and the product's own name.
