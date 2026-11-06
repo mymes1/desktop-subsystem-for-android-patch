@@ -907,14 +907,6 @@ where
             Ok(android) => {
                 let settings = factory_store.get(sid).ok();
                 android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
-                // So is the run mode: "As needed" after five minutes unless they chose otherwise.
-                let defaults = dsa_host_core::settings::Settings::default();
-                let chosen = settings.as_ref().unwrap_or(&defaults);
-                android.run_mode(dsa_host_core::run_mode::RunModePolicy::of(
-                    chosen.run_mode,
-                    chosen.stop_after_secs,
-                    chosen.keep_for_notifications,
-                ));
                 android.share_clipboard(settings.as_ref().is_none_or(|s| s.clipboard));
                 android.links_in_android(settings.as_ref().is_some_and(|s| s.links_in_android));
                 // So is file sharing, on with every folder unless they chose otherwise.

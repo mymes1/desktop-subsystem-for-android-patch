@@ -55,22 +55,6 @@ public partial class AdvancedPage : Page
         }
     }
 
-    private async void OnContinuousToggled(object sender, RoutedEventArgs e) =>
-        await ViewModel.SetContinuousAsync(ContinuousSwitch.IsChecked == true);
-
-    private async void OnStopAfterChanged(object sender, SelectionChangedEventArgs e)
-    {
-        // The list is rebuilt whenever the settings change, which also lands here; only a
-        // choice that differs from the setting is sent.
-        if (StopAfterBox.SelectedItem is StopAfterChoice choice && ViewModel.Loaded && !ViewModel.IsBusy)
-        {
-            await ViewModel.SetStopAfterAsync(choice.Secs);
-        }
-    }
-
-    private async void OnKeepForNotificationsToggled(object sender, RoutedEventArgs e) =>
-        await ViewModel.SetKeepForNotificationsAsync(KeepForNotificationsSwitch.IsChecked == true);
-
     /// <summary>Asks first, saying what is lost, then resets Android's data.</summary>
     private async void OnResetData(object sender, RoutedEventArgs e)
     {

@@ -140,7 +140,6 @@ use crate::notifications::{self, Notification, NotificationAction, NotificationE
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
-use crate::run_mode::{IdleStop, RunModePolicy, Usage};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation, TaskRequest, TaskTable,
@@ -207,9 +206,6 @@ pub enum StopReason {
     /// What the guest cannot run without was lost while it ran and did not come back. The
     /// guest was stopped so that it does not crash-loop; a new start waits for it.
     PrerequisiteLost(String),
-    /// The run mode is "As needed" and nothing used Android for this long: no app window, no
-    /// app in the background and no widget. The next app launch starts it again.
-    Unused(Duration),
 }
 
 impl fmt::Display for StopReason {
@@ -240,11 +236,6 @@ impl fmt::Display for StopReason {
             }
             StopReason::ChannelLost(why) => write!(f, "the control channel was lost: {why}"),
             StopReason::StopFailed(why) => write!(f, "the guest did not stop: {why}"),
-            StopReason::Unused(after) => write!(
-                f,
-                "stopped because no app used Android for {} s",
-                after.as_secs()
-            ),
             StopReason::PrerequisiteLost(why) => {
                 write!(
                     f,
@@ -580,8 +571,6 @@ enum Command {
     HostSleep(Sender<()>),
     /// The host woke, with its wall clock then.
     HostWoke(SystemTime),
-    /// The user's run mode changed.
-    RunMode(RunModePolicy),
 }
 
 struct Shared {
@@ -1173,8 +1162,6 @@ impl Session {
             host_asleep: None,
             sleep_waiters: Vec::new(),
             clock_pending: None,
-            run_mode: RunModePolicy::default(),
-            idle_stop: IdleStop::default(),
         };
         let worker = thread::Builder::new()
             .name("dsa-session".into())
@@ -1426,13 +1413,6 @@ impl Session {
     /// ([`SessionConfig::freeze_after`], or [`DEFAULT_FREEZE_AFTER`]), or never.
     pub fn freeze_when_idle(&self, on: bool) {
         self.freeze_after(on.then_some(self.freeze_delay));
-    }
-
-    /// Applies the user's run mode: in "As needed" the guest stops once nothing has used it for
-    /// the policy's wait; in "Continuous" it stays in Doze. "As needed" with five minutes is
-    /// the default.
-    pub fn set_run_mode(&self, policy: RunModePolicy) {
-        let _ = self.commands.send(Command::RunMode(policy));
     }
 
     /// Asks the session to start. Ignored unless the session is `Stopped`.
@@ -3068,10 +3048,6 @@ struct Worker {
     /// The host's wall clock when it woke, and when that was, while the guest has yet to be
     /// told: it was frozen or its agent was not connected.
     clock_pending: Option<(SystemTime, Instant)>,
-    /// The user's run mode.
-    run_mode: RunModePolicy,
-    /// Since when nothing has used the running guest, for the "As needed" stop.
-    idle_stop: IdleStop,
 }
 
 impl Worker {
@@ -3104,7 +3080,6 @@ impl Worker {
                         Ok(Command::HostMemoryLow(low)) => self.set_host_memory_low(low),
                         Ok(Command::System(input)) => self.system_input(input),
                         Ok(Command::FreezeAfter(after)) => self.config.freeze_after = after,
-                        Ok(Command::RunMode(policy)) => self.run_mode = policy,
                         Ok(Command::LinksInAndroid(on)) => self.set_links_in_android(on),
                         Ok(Command::HostClipboard(text)) => self.host_clipboard(text),
                         Ok(Command::ShareClipboard(on)) => self.share_clipboard(on),
@@ -3136,7 +3111,6 @@ impl Worker {
                         Ok(Command::HostMemoryLow(low)) => self.set_host_memory_low(low),
                         Ok(Command::System(input)) => self.system_input(input),
                         Ok(Command::FreezeAfter(after)) => self.config.freeze_after = after,
-                        Ok(Command::RunMode(policy)) => self.run_mode = policy,
                         Ok(Command::LinksInAndroid(on)) => self.set_links_in_android(on),
                         Ok(Command::HostClipboard(text)) => self.host_clipboard(text),
                         Ok(Command::ShareClipboard(on)) => self.share_clipboard(on),
@@ -3197,10 +3171,6 @@ impl Worker {
             }
             Command::FreezeAfter(after) => {
                 self.config.freeze_after = after;
-                true
-            }
-            Command::RunMode(policy) => {
-                self.run_mode = policy;
                 true
             }
             Command::Power(state) => {
@@ -4048,54 +4018,6 @@ impl Worker {
         Ok(())
     }
 
-    /// Stops a guest nothing has used for the run mode's wait, when the run mode is "As
-    /// needed". Returns true once it has stopped. Only a guest that has finished booting is
-    /// stopped, and nothing moves on while the host sleeps.
-    fn tick_run_mode(&mut self) -> bool {
-        if self.host_asleep.is_some()
-            || !matches!(
-                self.state(),
-                SessionState::Active | SessionState::Dozing | SessionState::Frozen
-            )
-        {
-            self.idle_stop.reset();
-            return false;
-        }
-        let background_apps = self
-            .shared
-            .background
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .apps()
-            .len();
-        let widgets = self
-            .shared
-            .widgets
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .widgets
-            .len();
-        let usage = Usage {
-            windows_shown: self.shown,
-            background_apps,
-            widgets,
-            notifications: self.notifications.len(),
-        };
-        let now = Instant::now();
-        self.idle_stop.observe(&self.run_mode, usage, now);
-        if !self.idle_stop.due(&self.run_mode, now) {
-            return false;
-        }
-        let after = self.run_mode.stop_after;
-        eprintln!(
-            "lifecycle: no app used Android for {} s, so it stops until an app is opened",
-            after.as_secs()
-        );
-        self.idle_stop.reset();
-        self.stop(StopReason::Unused(after));
-        true
-    }
-
     /// Moves the lifecycle on with time: the screen goes off once no window has been shown
     /// for the doze delay, and a guest in Doze is frozen after `freeze_after`, when set.
     fn tick_lifecycle(&mut self) {
@@ -4574,10 +4496,6 @@ impl Worker {
                 self.config.freeze_after = after;
                 true
             }
-            Command::RunMode(policy) => {
-                self.run_mode = policy;
-                true
-            }
             Command::Power(state) => {
                 self.set_power(state);
                 true
@@ -4646,9 +4564,6 @@ impl Worker {
                 return;
             }
             self.tick_lifecycle();
-            if self.tick_run_mode() {
-                return;
-            }
             self.tick_clock();
             self.offer_host_clipboard();
             self.tick_notifications();

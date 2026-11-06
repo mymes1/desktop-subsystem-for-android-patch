@@ -588,7 +588,6 @@ fn template_reset(
 #[test]
 fn fr31_a_data_reset_stops_android_and_gives_it_a_fresh_disk_keeping_the_image_and_settings() {
     use dsa_host_core::host_api::{HostApiService, ServiceFacts};
-    use dsa_host_core::run_mode::RunMode;
     use dsa_host_core::settings::{Settings, SettingsStore};
     use dsa_host_core::widgets::WidgetPlacements;
     let dir = reset_scratch("fresh");
@@ -609,7 +608,6 @@ fn fr31_a_data_reset_stops_android_and_gives_it_a_fresh_disk_keeping_the_image_a
 
     let store = Arc::new(dsa_host_core::settings::MemorySettings::default());
     let chosen = Settings {
-        run_mode: RunMode::Continuous,
         clipboard: false,
         ..Settings::default()
     };
@@ -714,49 +712,4 @@ fn fr31_a_service_that_cannot_reset_says_so() {
         }
         other => panic!("expected the service to refuse, got {other:?}"),
     }
-}
-
-#[test]
-fn fr31_the_run_mode_is_kept_and_reaches_the_callers_android_at_once() {
-    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
-    use dsa_host_core::run_mode::{RunMode, RunModePolicy};
-    use dsa_host_core::settings::Settings;
-    let store = Arc::new(dsa_host_core::settings::MemorySettings::default());
-    let androids = Arc::new(FakeAndroids::default());
-    let (listener, connector) = local::pair();
-    let service = HostApiService::new(androids.clone(), "test service")
-        .with_settings(store, ServiceFacts::default());
-    let _service = RunningService::start_service(Box::new(listener), service);
-    let mut client = HostApiClient::connect(&mut As(connector, "alice"), "a", WAIT).unwrap();
-    let fresh = client.settings().unwrap().settings;
-    assert_eq!(fresh.run_mode, RunMode::AsNeeded);
-    assert_eq!(fresh.stop_after_secs, 300);
-    assert!(!fresh.keep_for_notifications);
-
-    let changed = client
-        .set_settings(&Settings {
-            run_mode: RunMode::Continuous,
-            stop_after_secs: 900,
-            keep_for_notifications: true,
-            ..fresh
-        })
-        .unwrap()
-        .settings;
-    assert_eq!(changed.run_mode, RunMode::Continuous);
-    assert_eq!(changed.stop_after_secs, 900);
-    assert!(changed.keep_for_notifications);
-    assert_eq!(
-        androids
-            .of("alice")
-            .unwrap()
-            .run_modes
-            .lock()
-            .unwrap()
-            .last(),
-        Some(&RunModePolicy {
-            mode: RunMode::Continuous,
-            stop_after: Duration::from_secs(900),
-            keep_for_notifications: true,
-        })
-    );
 }

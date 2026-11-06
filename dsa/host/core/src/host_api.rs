@@ -89,7 +89,6 @@ use crate::memory::{
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent};
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
-use crate::run_mode::{RunMode, RunModePolicy};
 use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
 use crate::settings::{Settings, SettingsStore};
 use crate::system_settings::SystemSettings;
@@ -167,10 +166,6 @@ pub trait UserAndroid: Send + Sync {
     /// user's freeze setting says.
     fn freeze_when_idle(&self, on: bool) {
         let _ = on;
-    }
-    /// Applies the user's run mode: whether this Android stops once nothing uses it.
-    fn run_mode(&self, policy: RunModePolicy) {
-        let _ = policy;
     }
     /// Freezes this Android until a task window is shown again.
     fn freeze(&self) -> Result<(), TaskRequestError> {
@@ -519,9 +514,6 @@ impl UserAndroid for Session {
     }
     fn freeze_when_idle(&self, on: bool) {
         Session::freeze_when_idle(self, on)
-    }
-    fn run_mode(&self, policy: RunModePolicy) {
-        Session::set_run_mode(self, policy)
     }
     fn guest_memory(&self) -> Option<GuestMemoryReport> {
         Session::guest_memory(self)
@@ -3831,9 +3823,6 @@ impl HostApiService {
             file_sharing: wanted.file_sharing,
             shared_folders: wanted.shared_folders,
             advanced_networking: wanted.advanced_networking,
-            run_mode: run_mode_from_wire(wanted.run_mode),
-            stop_after_secs: wanted.stop_after_secs,
-            keep_for_notifications: wanted.keep_for_notifications,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -3881,11 +3870,6 @@ impl HostApiService {
                 // settings at once.
                 if let Ok(android) = self.androids.android(&peer.user) {
                     android.freeze_when_idle(settings.freeze);
-                    android.run_mode(RunModePolicy::of(
-                        settings.run_mode,
-                        settings.stop_after_secs,
-                        settings.keep_for_notifications,
-                    ));
                     android.share_clipboard(settings.clipboard);
                     android.links_in_android(settings.links_in_android);
                     android.share_folders(settings.file_sharing, settings.shared_folders.clone());
@@ -3972,29 +3956,15 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         shared_folders: settings.shared_folders.clone(),
         advanced_networking: settings.advanced_networking,
         network: None,
-        run_mode: run_mode_to_wire(settings.run_mode) as i32,
-        stop_after_secs: settings.stop_after_secs,
-        keep_for_notifications: settings.keep_for_notifications,
+        // The protocol still has fields for a run mode setting that no longer exists; empty.
+        run_mode: 0,
+        stop_after_secs: 0,
+        keep_for_notifications: false,
         program_updates_available: facts.program_updates_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
         log_dir: facts.log_dir.clone().unwrap_or_default(),
         android_version: facts.android_version.clone().unwrap_or_default(),
-    }
-}
-
-fn run_mode_to_wire(mode: RunMode) -> types::RunMode {
-    match mode {
-        RunMode::AsNeeded => types::RunMode::AsNeeded,
-        RunMode::Continuous => types::RunMode::Continuous,
-    }
-}
-
-/// A run mode from the wire. One this side does not know is "As needed", the default.
-fn run_mode_from_wire(mode: i32) -> RunMode {
-    match types::RunMode::try_from(mode) {
-        Ok(types::RunMode::Continuous) => RunMode::Continuous,
-        _ => RunMode::AsNeeded,
     }
 }
 
@@ -4019,9 +3989,6 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             file_sharing: settings.file_sharing,
             shared_folders: settings.shared_folders,
             advanced_networking: settings.advanced_networking,
-            run_mode: run_mode_from_wire(settings.run_mode),
-            stop_after_secs: crate::run_mode::normalise_stop_after_secs(settings.stop_after_secs),
-            keep_for_notifications: settings.keep_for_notifications,
         },
         facts: ServiceFacts {
             version: settings.version,
