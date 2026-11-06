@@ -130,6 +130,15 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn("setDisplayColorBuffer", source)
         self.assertIn("dsa_gfx_display.cpp", CMAKE_FILE.read_text(encoding="utf-8"))
 
+    def test_nfr2_a_display_that_lost_its_window_lets_its_texture_go_at_once(self):
+        source = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
+        windows = source[source.index("#ifdef _WIN32"):source.index("#else /* !_WIN32 */")]
+        # Windows has a real forget, not a stub: the import is destroyed on the next pass.
+        self.assertNotIn("dsa_gfx_forget_display(uint32_t) {}", windows)
+        self.assertIn("dsa_gfx_forget_display(uint32_t display_id)", windows)
+        self.assertIn("presenter->forget.empty()", windows)
+        self.assertIn("presenter->targets.erase(it);", windows)
+
     def test_fr4_only_the_region_a_frame_fills_is_copied(self):
         source = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
         # The guest's buffers keep their size while a window is resized; the display's size

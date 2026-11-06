@@ -3,7 +3,7 @@
 //! The window manager holds the renderer and every task's frames. While windows are shown
 //! that memory is in use; once the last one has closed or been minimized, most of it is not,
 //! but Windows takes it back only when it runs short, so until then it counts as the window
-//! manager's. When no task window has been shown for a while ([`IdleTrim`]), the window
+//! manager's. As soon as no task window is shown ([`IdleTrim`]), the window
 //! manager asks the GPU driver to free what it keeps for its device beyond live resources, and
 //! empties its working set: pages it touches again come back on their own, and the rest go to
 //! the standby list, free for anything else on the host. The renderer itself stays: the
