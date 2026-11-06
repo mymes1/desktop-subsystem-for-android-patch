@@ -114,8 +114,8 @@ pub struct AndroidVmConfig {
     /// SIDs, besides SYSTEM, allowed to bind and connect Hyper-V sockets to this VM: the user
     /// the VM runs for.
     pub socket_sids: Vec<String>,
-    /// Free page reporting granularity, as a page order (5 is 128 KiB, 9 is 2 MiB). WSL uses
-    /// 5 on recent Windows builds and 9 on older ones.
+    /// Free page reporting granularity, as a page order (0 is 4 KiB, 5 is 128 KiB, 9 is
+    /// 2 MiB). DSA uses 0 on Windows builds with small backing pages and 9 on older ones.
     pub page_reporting_order: u8,
     /// The named pipe (`\\.\pipe\...`) HCS connects the guest's serial console to. The
     /// host must serve it before the VM starts; without it the VM has no serial port.
@@ -289,9 +289,9 @@ impl AndroidVmConfig {
         if self.processors == 0 {
             return Err(ConfigError("the VM needs at least one processor".into()));
         }
-        if !(5..=10).contains(&self.page_reporting_order) {
+        if self.page_reporting_order > 10 {
             return Err(ConfigError(format!(
-                "page reporting order {} is outside 5 to 10",
+                "page reporting order {} is outside 0 to 10",
                 self.page_reporting_order
             )));
         }
