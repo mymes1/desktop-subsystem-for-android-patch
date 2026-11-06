@@ -234,6 +234,25 @@ fn blank(frame: &WidgetFrame) -> Option<String> {
     None
 }
 
+/// Why a widget's picture has no see-through pixel, or None when it has one. The digital
+/// clock draws its text over the wallpaper, so what it leaves undrawn must stay transparent,
+/// not come out black.
+fn opaque_everywhere(frame: &WidgetFrame) -> Option<String> {
+    let (_, _, channels, pixels) = match decode_png(&frame.png) {
+        Ok(decoded) => decoded,
+        Err(why) => return Some(why),
+    };
+    if channels != 2 && channels != 4 {
+        return Some(format!("the picture has {channels} channels and so no alpha"));
+    }
+    let px: Vec<&[u8]> = pixels.chunks(channels).collect();
+    if px.iter().any(|p| p[channels - 1] == 0) {
+        return None;
+    }
+    let clearest = px.iter().map(|p| p[channels - 1]).min().unwrap_or(255);
+    Some(format!("no pixel is see-through; the most transparent has an alpha of {clearest}"))
+}
+
 /// Whether a guest log line says a widget failed to draw (`drawing widget 3 failed`).
 fn drawing_failed(line: &str) -> bool {
     let mut rest = line;
@@ -298,6 +317,13 @@ fn fr12_the_picture_check_tells_a_drawn_widget_from_a_blank_one() {
     assert!(blank(&frame(png([[9, 9, 9, 0], [0, 0, 0, 0]]))).is_some());
     assert!(blank(&frame(png([[9, 9, 9, 255], [9, 9, 9, 255]]))).is_some());
     assert!(blank(&frame(b"not a png".to_vec())).is_some());
+
+    // A clock's text over the wallpaper has see-through pixels; one drawn on black has none.
+    assert_eq!(
+        opaque_everywhere(&frame(png([[255, 255, 255, 255], [0, 0, 0, 0]]))),
+        None
+    );
+    assert!(opaque_everywhere(&frame(png([[255, 255, 255, 255], [0, 0, 0, 255]]))).is_some());
 }
 
 #[test]
@@ -437,6 +463,17 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
                     fail(
                         format!(
                             "widget {id} sent a blank {}x{} picture: {why}",
+                            frame.width, frame.height
+                        ),
+                        &service,
+                        &log.lock().unwrap(),
+                    );
+                }
+                if let Some(why) = opaque_everywhere(&frame) {
+                    let _ = std::fs::write(dir.join("opaque.png"), &frame.png);
+                    fail(
+                        format!(
+                            "widget {id} sent a {}x{} picture with no see-through pixel, so the clock covers the wallpaper: {why}",
                             frame.width, frame.height
                         ),
                         &service,
