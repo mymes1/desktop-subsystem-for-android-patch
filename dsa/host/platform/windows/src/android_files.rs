@@ -120,7 +120,11 @@ pub fn navigation_values(
         // Shown in the navigation pane, after Quick access, OneDrive and This PC.
         ("", Some("System.IsPinnedToNameSpaceTree"), Dword(1)),
         ("", Some("SortOrderIndex"), Dword(0x42)),
-        ("DefaultIcon", None, Text(format!("{icon},0"))),
+        (
+            "DefaultIcon",
+            None,
+            Text(format!("{icon},-{}", dsa_exe_resources::FILES_ICON_GROUP_ID)),
+        ),
         (
             "InProcServer32",
             None,
@@ -299,7 +303,7 @@ pub fn register_in_navigation_pane() -> Result<String, String> {
     .as_deref()
         == Some(target.as_str())
         && registry::text(HKEY_CURRENT_USER, &format!("{base}\\DefaultIcon"), "").as_deref()
-            == Some(format!("{icon},0").as_str())
+            == Some(format!("{icon},-{}", dsa_exe_resources::FILES_ICON_GROUP_ID).as_str())
         && registry::text(HKEY_CURRENT_USER, &base, "InfoTip").is_some();
     if unchanged {
         return Ok(target);
@@ -429,7 +433,7 @@ mod tests {
         assert_eq!(
             value("DefaultIcon", None),
             Some(RegValue::Text(
-                r"C:\Program Files\DSA\dsa-app-window.exe,0".into()
+                r"C:\Program Files\DSA\dsa-app-window.exe,-2".into()
             ))
         );
     }

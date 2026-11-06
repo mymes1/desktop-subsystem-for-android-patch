@@ -119,6 +119,12 @@ pub const RT_VERSION: u16 = 16;
 pub const ICON_GROUP_ID: u16 = 1;
 /// The ID of the version information.
 pub const VERSION_ID: u16 = 1;
+/// The ID of the second icon group the installed window host carries: the icon of Android's
+/// entry in Explorer's navigation pane (DSA Files), which the entry names as
+/// `dsa-app-window.exe,-2`.
+pub const FILES_ICON_GROUP_ID: u16 = 2;
+/// The `RT_ICON` ID of the Files icon's first image, clear of the program icon's images.
+pub const FILES_ICON_FIRST_IMAGE_ID: u16 = 101;
 
 /// The strings of one language's version information.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -353,6 +359,36 @@ pub fn string_table(strings: &[(u16, &str)], language: u16) -> Vec<Resource> {
             }
         })
         .collect()
+}
+
+/// The resources of a further icon from the `.ico` file `file`: its images, numbered from
+/// `first_id`, and the icon group `group_id` that lists them.
+pub fn icon_resources(
+    file: &[u8],
+    group_id: u16,
+    first_id: u16,
+) -> Result<Vec<Resource>, String> {
+    let images = parse_ico(file)?;
+    if images.is_empty() {
+        return Err("the icon file holds no image".into());
+    }
+    let mut resources: Vec<Resource> = images
+        .iter()
+        .enumerate()
+        .map(|(index, image)| Resource {
+            kind: RT_ICON,
+            id: first_id + index as u16,
+            language: 0,
+            data: image.data.clone(),
+        })
+        .collect();
+    resources.push(Resource {
+        kind: RT_GROUP_ICON,
+        id: group_id,
+        language: 0,
+        data: icon_group(&images, first_id),
+    });
+    Ok(resources)
 }
 
 /// The English and Korean string tables of the words in [`shell`].
@@ -605,6 +641,20 @@ mod tests {
         assert!(images.len() >= 4);
         assert!(images.iter().any(|image| image.width == 32));
         assert!(parse_ico(b"nonsense").is_err());
+    }
+
+    #[test]
+    fn fr29_the_files_icon_is_a_second_icon_group_with_every_size() {
+        let file = include_bytes!("../icons/files.ico");
+        let resources =
+            icon_resources(file, FILES_ICON_GROUP_ID, FILES_ICON_FIRST_IMAGE_ID).unwrap();
+        let images: Vec<_> = resources.iter().filter(|r| r.kind == RT_ICON).collect();
+        assert_eq!(images.len(), 8);
+        assert_eq!(images[0].id, FILES_ICON_FIRST_IMAGE_ID);
+        let group = resources.iter().find(|r| r.kind == RT_GROUP_ICON).unwrap();
+        assert_eq!(group.id, FILES_ICON_GROUP_ID);
+        assert_eq!(&group.data[4..6], &8u16.to_le_bytes());
+        assert!(icon_resources(b"nonsense", 2, 101).is_err());
     }
 
     #[test]

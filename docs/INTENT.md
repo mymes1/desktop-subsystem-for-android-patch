@@ -275,10 +275,10 @@ VM을 만드는 일은 대부분 높은 권한이 필요하다. 그래서 그 �
 2026-11-06 소유자가 결정한 내용이다.
 
 - 상징은 하나다. DSA의 상징(모양과 색)은 모든 운영체제에서 같고, 그것을 각 운영체제의 디자인 언어로 그린다. 사용자는 어느 운영체제에서도 같은 제품으로 알아보고, 아이콘은 그 운영체제의 다른 앱 옆에서 어색하지 않다.
-- 상징의 디자인 자체는 정하지 않았다. 소유자가 여러 제안 가운데서 고른다. 고르기 전까지 아이콘 파일은 임시 그림으로 만들되 아래의 형식, 크기, 쓰는 곳은 지금 따른다.
-- Windows: Fluent 2 스타일이다. 입체감 있는 그라데이션, 부드러운 그림자, 둥근 모서리로, Windows 11 기본 앱과 WSA의 분위기를 따른다. WSA의 아이콘을 베끼지 않고 Microsoft의 상표를 쓰지 않는다. `.ico`에 16, 20, 24, 32, 40, 48, 64, 256 px를 담고, 작은 크기는 축소하지 않고 손으로 다듬는다. 알림 영역 아이콘은 단색이고, 밝은 작업 표시줄용과 어두운 작업 표시줄용을 따로 둔다.
-- macOS: Apple HIG(Big Sur 이후)의 둥근 사각형(squircle) 바탕이다. `.icns`에 16 px부터 1024 px까지 담는다. Tahoe의 Liquid Glass가 쓸 수 있게 레이어로 나눠 만든다. 메뉴 막대 아이콘은 템플릿 이미지라 시스템이 색을 입힌다.
-- Linux: GNOME HIG와 Adwaita 스타일이다. 크기 조절 가능한 SVG와 symbolic SVG를 두고, AppStream 메타데이터에 아이콘을 싣는다.
+- 상징은 2026-11-06 소유자가 여러 제안 가운데서 고른 것이다. 둥근 모서리의 앱 창 하나이고, 창 위로 짧은 안테나 두 개가 바깥쪽으로 비스듬히 솟는다. 몸체는 짙은 초록(#1c8a63에서 #05392a로 가는 그라데이션)이다. 제목 표시줄은 밝은 초록 그라데이션(#9af8c4, #47e08c, #1fb066)이고 몸체 위에 작은 그림자를 드리운다. 제목 표시줄 오른쪽에 짙은 점 두 개가 있고, 몸체 아래쪽에 반투명한 안쪽 판이 있다. 전체에 두 겹의 그림자가 있고, 위쪽 가장자리의 흰 선은 없다. 원본은 [`dsa/brand/symbol.svg`](../dsa/brand/symbol.svg)다.
+- Windows: Fluent 2 스타일이다. 입체감 있는 그라데이션, 부드러운 그림자, 둥근 모서리로, Windows 11 기본 앱과 WSA의 분위기를 따른다. WSA의 아이콘을 베끼지 않고 Microsoft의 상표를 쓰지 않는다. 공통 상징을 그대로 쓴다. `.ico`에 16, 20, 24, 32, 40, 48, 64, 256 px를 담고, 작은 크기는 축소하지 않고 손으로 다듬는다. 24 px 이하는 점과 안쪽 판을 빼고 안테나를 굵게 한 그림이다([`dsa/brand/symbol-small.svg`](../dsa/brand/symbol-small.svg)). 알림 영역 아이콘은 단색이고, 밝은 작업 표시줄용과 어두운 작업 표시줄용을 따로 둔다.
+- macOS: Apple HIG(Big Sur 이후)의 둥근 사각형(squircle, 지수 5의 초타원) 바탕이다. 바탕은 짙은 초록 그라데이션(#14674b에서 #0a3e2e)이고, 그 위에 흰 창 하나가 아래쪽 두께를 보이며 놓인다. 창의 제목 표시줄과 안테나는 밝은 초록이다. 모든 macOS 버전에 이 아이콘 하나를 쓴다([`dsa/brand/macos.svg`](../dsa/brand/macos.svg)). `.icns`에 16 px부터 1024 px까지 담는다. Tahoe의 Liquid Glass가 쓸 수 있게 레이어로 나눠 만든다. 메뉴 막대 아이콘은 템플릿 이미지라 시스템이 색을 입힌다.
+- Linux: GNOME HIG와 Adwaita 스타일이다. 아래 두께(#08402f)가 있는 초록 판(#2fd37c) 위에 흰 제목 표시줄과 흰 안테나, 짙은 몸체의 창을 둔다([`dsa/brand/linux.svg`](../dsa/brand/linux.svg)). symbolic 아이콘은 같은 창 모양을 한 색으로 그리고 안쪽 판을 비운다([`dsa/brand/linux-symbolic.svg`](../dsa/brand/linux-symbolic.svg)). 크기 조절 가능한 SVG와 symbolic SVG를 두고, AppStream 메타데이터에 아이콘을 싣는다.
 - 딸린 앱(설정, APK 설치 관리자, 파일)의 아이콘은 공통 상징에 작은 배지를 붙인 것이다. 그래서 같은 제품의 일부로 보이면서 서로 구별된다.
 - 안드로이드 로봇(Bugdroid)은 상징으로 쓰지 않는다. 상징이 Google의 것으로 보이면 안 되고, 로봇은 Google의 브랜드 가이드라인을 따라야 하기 때문이다. 안드로이드 초록색이나 로봇을 조금이라도 쓰면 가이드라인의 조건을 지키고, 그것을 싣는 곳에 "The Android robot is reproduced or modified from work created and shared by Google and used according to terms described in the Creative Commons 3.0 Attribution License." 문구를 둔다. 상표 표기는 D11과 NFR-6을 따른다.
 - 설정 화면도 운영체제마다 그 운영체제의 설정 앱처럼 만든다. Windows는 WPF와 WPF-UI로 Windows 11 설정 스타일을 따른다(WPF를 유지한다). macOS는 시스템 설정 스타일의 네이티브 설정 창(SwiftUI와 AppKit)이다. Linux는 GTK4와 libadwaita로 GNOME 설정 스타일을 따른다.

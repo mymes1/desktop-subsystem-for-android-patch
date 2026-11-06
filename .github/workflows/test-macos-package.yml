@@ -77,10 +77,13 @@ jobs:
           # The layered Icon Composer source of the icon, with each layer it names.
           # plutil -lint reads only property lists, so the JSON is checked with jq.
           jq -e .groups DSA.icon/icon.json > /dev/null
-          test -s DSA.icon/Assets/front-window.png
-          test -s DSA.icon/Assets/back-window.png
-          grep -Fq front-window.png DSA.icon/icon.json
-          grep -Fq back-window.png DSA.icon/icon.json
+          test -s DSA.icon/Assets/window.png
+          test -s DSA.icon/Assets/title-bar.png
+          grep -Fq window.png DSA.icon/icon.json
+          grep -Fq title-bar.png DSA.icon/icon.json
+          # The menu bar's template image, at 1x and 2x.
+          test -s DSA.app/Contents/Resources/MenuBarTemplate.png
+          test -s DSA.app/Contents/Resources/MenuBarTemplate@2x.png
           # The icon holds every size from 16 to 1024 px.
           test "$(plutil -extract CFBundleIconFile raw DSA.app/Contents/Info.plist)" = DSA
           iconutil -c iconset -o icon-check.iconset DSA.app/Contents/Resources/DSA.icns
