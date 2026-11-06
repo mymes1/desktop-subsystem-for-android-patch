@@ -752,7 +752,7 @@ jobs:
           sudo apt-get update
           for try in 1 2 3; do
             timeout 300 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-              weston libxkbcommon0 mesa-vulkan-drivers libvulkan1 && break
+              weston libxkbcommon0 mesa-vulkan-drivers libvulkan1 dbus-daemon && break
             test "$try" -lt 3 || exit 1
           done
 
@@ -761,8 +761,15 @@ jobs:
         timeout-minutes: 12
         working-directory: dsa
         run: |
-          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime"
-          mkdir -p -m 0700 "$XDG_RUNTIME_DIR"
+          # The service finds the user's session in /run/user/<uid>, as on a desktop.
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          sudo mkdir -p "$XDG_RUNTIME_DIR"
+          sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"
+          chmod 0700 "$XDG_RUNTIME_DIR"
+          export GFXSTREAM_BACKEND_PATH=/usr/lib/dsa/bin/libgfxstream_backend.so
+          # A session bus at the place a desktop has it.
+          dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --fork
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
           weston --backend=headless --socket=wayland-dsa --idle-time=0 --width=1920 --height=1080 &
           for _ in $(seq 50); do
             [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
@@ -779,6 +786,7 @@ jobs:
           path: |
             /tmp/widget-test-*/hostd.log
             /tmp/widget-test-*/compositor.log
+            /tmp/widget-test-*/devices.log
             /tmp/widget-test-*/first.png
             ~/.local/share/dsa/**/*.log
           if-no-files-found: ignore

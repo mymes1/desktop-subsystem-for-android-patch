@@ -341,6 +341,20 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
             .expect("starting dsa-compositor"),
         log: dir.join("compositor.log"),
     };
+    // The user's devices for Android (sound, sensors, location), as the desktop session runs
+    // them.
+    let devices_log = std::fs::File::create(dir.join("devices.log")).unwrap();
+    let _devices = Service {
+        child: Command::new(env!("CARGO_BIN_EXE_dsa-devices"))
+            .arg("--socket")
+            .arg(&socket)
+            .stdin(Stdio::null())
+            .stdout(devices_log.try_clone().unwrap())
+            .stderr(devices_log)
+            .spawn()
+            .expect("starting dsa-devices"),
+        log: dir.join("devices.log"),
+    };
     let mut first = client(&socket, Duration::from_secs(30));
     let boot = deadline.saturating_duration_since(Instant::now()) - FIRST_FRAME - NEXT_FRAME;
     let ready = first.ensure_running(boot, Duration::from_secs(2), |state| {
