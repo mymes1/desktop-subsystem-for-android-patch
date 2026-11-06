@@ -1226,7 +1226,6 @@ mod win {
         }
     }
 
-
     /// Keeps every pixel clickable and draws the move band while the pointer is over the
     /// window.
     fn finish(pixels: &mut [u8], width: usize, height: usize, dpi: u32, hover: bool) {
@@ -1714,7 +1713,9 @@ mod tests {
         assert_eq!(alpha(0, 0), 0);
         assert_eq!(alpha(width - 1, height - 1), 0);
         // Premultiplied: no colour exceeds its alpha.
-        assert!(pixels.chunks_exact(4).all(|p| p[..3].iter().all(|&c| c <= p[3])));
+        assert!(pixels
+            .chunks_exact(4)
+            .all(|p| p[..3].iter().all(|&c| c <= p[3])));
         // A tiny window still gets one.
         assert!(!all_clear(&placeholder(3, 2, 96)));
     }
