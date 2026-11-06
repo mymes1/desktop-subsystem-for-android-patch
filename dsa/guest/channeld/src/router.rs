@@ -240,6 +240,8 @@ pub struct Router {
     diagnostics: Mutex<Option<Sender<Vec<u8>>>>,
     /// How many times an app's last task has ended, and the wake-up for whoever waits on it.
     apps_closed: (Mutex<u64>, Condvar),
+    /// The packages whose last task ended since the reclaim last asked.
+    closed_packages: Mutex<Vec<String>>,
 }
 
 /// Turns the guest's developer mode (adbd) on or off, as the host says.
@@ -272,6 +274,7 @@ impl Router {
             gamepads: None,
             diagnostics: Mutex::new(None),
             apps_closed: (Mutex::new(0), Condvar::new()),
+            closed_packages: Mutex::new(Vec::new()),
         }
     }
 
@@ -297,7 +300,16 @@ impl Router {
         *guard
     }
 
-    fn app_closed(&self) {
+    /// The packages whose last task ended since the last call, oldest first.
+    pub fn take_closed_packages(&self) -> Vec<String> {
+        std::mem::take(&mut *self.closed_packages.lock().unwrap_or_else(|e| e.into_inner()))
+    }
+
+    fn app_closed(&self, package: &str) {
+        self.closed_packages
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(package.to_string());
         let (count, wake) = &self.apps_closed;
         *count.lock().unwrap_or_else(|e| e.into_inner()) += 1;
         wake.notify_all();
@@ -609,7 +621,7 @@ impl Router {
                 if let Some(task) = state.tasks.remove(&removed.task_id) {
                     if !state.tasks.values().any(|t| t.package == task.package) {
                         state.apps.remove(&task.package);
-                        self.app_closed();
+                        self.app_closed(&task.package);
                     }
                 }
                 state.deliver(&frame, Some(sender));
