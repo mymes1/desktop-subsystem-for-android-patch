@@ -556,7 +556,7 @@ fn fr29_file_sharing_reaches_the_switch_and_the_agent() {
     let sharing = dsa_protocol::control::FileSharing {
         on: true,
         port: 5590,
-        location: "Windows".into(),
+        location: "Host".into(),
         folders: vec!["Pictures".into()],
     };
     let sent = frame(Body::FileSharing(sharing.clone()));

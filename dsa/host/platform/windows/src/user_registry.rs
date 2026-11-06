@@ -1,5 +1,6 @@
 //! The registry keys the window manager writes in each user's own classes: the protocol a
-//! click on a notification launches, and the AppUserModelID of each app that posted one.
+//! click on a notification launches, the AppUserModelID of each app that posted one, and the
+//! "Android" entry of Explorer's navigation pane.
 //! Uninstalling removes them for every user, signed in or not.
 //!
 //! What a program writes to `HKCU\Software\Classes` lands in the user's `UsrClass.dat`, which
@@ -29,7 +30,7 @@ fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-fn open(root: HKEY, path: &str) -> Option<HKEY> {
+pub(crate) fn open(root: HKEY, path: &str) -> Option<HKEY> {
     let path = wide(path);
     let mut key: HKEY = std::ptr::null_mut();
     // SAFETY: a NUL-terminated path; the key is closed by the caller.
@@ -37,7 +38,7 @@ fn open(root: HKEY, path: &str) -> Option<HKEY> {
     (code == ERROR_SUCCESS).then_some(key)
 }
 
-fn subkeys(key: HKEY) -> Vec<String> {
+pub(crate) fn subkeys(key: HKEY) -> Vec<String> {
     let mut names = Vec::new();
     for index in 0.. {
         let mut name = [0u16; 256];
@@ -79,11 +80,16 @@ fn delete_tree(key: HKEY, name: &str) -> Result<(), String> {
 /// Removes DSA's keys from one user's classes, opened as `classes`: those of this version and
 /// those of the names earlier versions used.
 fn remove_from(classes: HKEY) -> Vec<String> {
-    remove_named(
+    let mut problems = remove_named(
         classes,
         &[PROTOCOL, OLD_PROTOCOL],
         &[APP_ID_PREFIX, OLD_APP_ID_PREFIX],
-    )
+    );
+    // "Android" in Explorer's navigation pane, with the user's key for the files door.
+    if let Err(why) = delete_tree(classes, &crate::android_files::navigation_key()) {
+        problems.push(why);
+    }
+    problems
 }
 
 /// Removes the protocol keys `protocols`, and the AppUserModelId keys whose names start with

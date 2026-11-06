@@ -812,6 +812,9 @@ impl UserAndroid for WithProgramStatus {
     fn android_files(&self) -> Result<String, String> {
         self.android.android_files()
     }
+    fn android_files_with_token(&self, token: &str) -> Result<String, String> {
+        self.android.android_files_with_token(token)
+    }
     fn guest_memory(&self) -> Option<GuestMemoryReport> {
         self.android.guest_memory()
     }
