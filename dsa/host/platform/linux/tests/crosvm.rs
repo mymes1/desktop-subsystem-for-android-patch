@@ -173,14 +173,26 @@ fn fr2_the_published_image_boots_under_crosvm_until_its_daemon_connects() {
     launcher
         .start(&secret)
         .unwrap_or_else(|why| panic!("{why}\n{:?}", launcher.diagnostics()));
-    let connected = daemon.accept_stream(Duration::from_secs(600));
+    // Waited for in short steps, so a VM that exits during boot fails the test at once
+    // instead of after the whole 600 s.
+    let deadline = Instant::now() + Duration::from_secs(600);
+    let connected = loop {
+        match daemon.accept_stream(Duration::from_secs(2)) {
+            Ok(stream) => break Ok(stream),
+            Err(why) => {
+                if let Some(exit) = launcher.exited() {
+                    break Err(format!("{exit} after {} s", started.elapsed().as_secs()));
+                }
+                if Instant::now() >= deadline {
+                    break Err(format!("the guest's daemon did not connect within 600 s: {why:?}"));
+                }
+            }
+        }
+    };
     let report = launcher.diagnostics();
     let stopped = launcher.stop(Duration::from_secs(30));
     if let Err(why) = &connected {
-        panic!(
-            "the guest's daemon did not connect within 600 s: {why:?}\n{}",
-            report.unwrap_or_default()
-        );
+        panic!("{why}\n{}", report.unwrap_or_default());
     }
     eprintln!(
         "the guest's daemon connected {} s after the start",
