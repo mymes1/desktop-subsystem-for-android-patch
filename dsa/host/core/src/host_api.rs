@@ -3956,10 +3956,6 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         shared_folders: settings.shared_folders.clone(),
         advanced_networking: settings.advanced_networking,
         network: None,
-        // The protocol still has fields for a run mode setting that no longer exists; empty.
-        run_mode: 0,
-        stop_after_secs: 0,
-        keep_for_notifications: false,
         program_updates_available: facts.program_updates_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
