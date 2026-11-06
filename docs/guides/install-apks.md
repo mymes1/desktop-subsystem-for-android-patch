@@ -1,61 +1,66 @@
 # Installing APKs
 
-Desktop Subsystem for Android™ (DSA) does not ship an app store. You install apps from APK
-files. This page describes the Windows host.
+Desktop Subsystem for Android™ (DSA) ships no app store. You install apps from APK files,
+with the APK Installer or the `dsa` command. This page describes DSA on Windows.
 
-## With the APK Installer
+## Install with the APK Installer
 
-Double-click an `.apk` file in Explorer. It opens in the **APK Installer**, a program of
-its own with its own taskbar group.
+1. Double-click an `.apk` file in File Explorer. It opens in the **APK Installer**.
+2. Check what the APK is. The window shows it without starting Android:
+   - the app's name, icon, package and version;
+   - the publisher, taken from the signing certificate, because an APK names no publisher;
+   - under **Capabilities**, the permissions it asks for;
+   - under **Details**, the Android versions it is made for, its size, its processor types
+     and its certificate's SHA-256.
 
-The window shows what the APK is before Android even starts: the app's name, package,
-publisher (the signing certificate, since an APK names no publisher), version and icon, the
-permissions it asks for under **Capabilities**, and more under **Details** (version code,
-the Android versions it is made for, size, processor types, the SHA-256 of its
-certificate). An APK with no native code for this PC's processor carries a warning.
+   When the APK has code only for another processor type, the window warns you.
+3. Select **Install**. When the app is installed already, the button reads **Update** or
+   **Install again**. Android starts first when it is not running.
+4. With **Launch when ready** ticked (the default), the app opens once it is installed and
+   the installer closes. Otherwise select **Launch**, or open the app later from the Start
+   menu.
 
-When Android is running, the window also says whether this is a new install, an update, or
-something Android would refuse (a downgrade, or an app signed with another key), with the
-reason.
+While Android is running, the window also says whether the file is a new install, an
+update, the same version again, or something Android refuses: an older version, or the same
+app signed with another key.
 
-Click **Install** (or **Update**, **Reinstall**). Android starts first when it is not
-running. With **Launch when ready** ticked (the default), the app opens when it is
-installed and the installer closes.
+You can also drop APK files on the APK Installer, on DSA Settings, or on an app's window.
+Each APK opens in an installer window of its own.
 
-You can also drop APK files on the APK Installer's window or on DSA Settings. Each opens in
-its own installer window. An APK dropped on an app window goes to the installer too.
-
-## From the command line
+## Install from the command line
 
 ```
-dsa apk-info app.apk          # what the APK is, read on this PC without Android
-dsa install app.apk           # install it
-dsa install app.apk --progress
+dsa apk-info app.apk            # what the APK is; reads the file without starting Android
+dsa install app.apk             # install it; starts Android when it is not running
+dsa install app.apk --progress  # also print each step
 ```
 
-`dsa install` exits with code 1 when Android refuses the APK, and its line starts with
+When Android refuses the APK, `dsa install` exits with code 1, and its message starts with
 `not installed (<reason>):`.
 
 ## Why an install is refused
 
-| Reason | Meaning |
-|---|---|
-| `incompatible` | The APK cannot run on this Android or this processor |
-| `conflicting-signature` | An app with this package is installed, signed with another key |
-| `downgrade` | The installed version is newer |
-| `invalid-apk` | The file is not a valid APK |
-| `insufficient-storage` | Android has no room for it |
-| `blocked` | Android's policy blocks it |
-| `other` | Anything else; Android's own message follows |
+| Reason | Meaning | What to do |
+|---|---|---|
+| `incompatible` | The app needs another processor type, a newer Android version, or a feature this device lacks | See [Apps built only for ARM](apps.md#apps-built-only-for-arm), or [Android versions](android-versions.md) |
+| `conflicting-signature` | The app is installed already, signed with another key | Uninstall the installed app first |
+| `downgrade` | A newer version of the app is installed | Uninstall the installed app first |
+| `invalid-apk` | The file is not a signed APK that Android can read | Get the APK again |
+| `insufficient-storage` | Android has no room for the app | Free space in Android |
+| `blocked` | A policy of this Android does not allow the app | |
+| `other` | Anything else; Android's own message follows | |
 
-APKs up to 2 GiB are accepted, one install at a time. An installed app appears in the
-Start menu like every other app.
+An APK can be up to 2 GiB. Installs run one at a time: a second one waits for the first.
 
-## Removing an app
+## Uninstall an app
 
-Uninstall it from Windows Settings > Apps > Installed apps, from the **Apps** page of DSA
-Settings, or with `dsa apps uninstall <package>`.
+Use any of these:
 
+- Windows **Settings** > **Apps** > **Installed apps**.
+- The **Apps** page of DSA Settings: **Uninstall** next to the app.
+- `dsa apps uninstall <package>`.
+
+Apps that are part of Android cannot be uninstalled.
 
 ---
 

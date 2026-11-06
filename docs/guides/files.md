@@ -1,54 +1,61 @@
 # Files
 
-Desktop Subsystem for Android™ (DSA) moves files between your computer and Android in both
-directions. This page describes the Windows host; on Linux the same pieces exist as the
-"DSA Files" menu entry and "Open", "Share" and "Install in Android" file actions, which are
-not released yet.
+Desktop Subsystem for Android™ (DSA) lets you open Android's files in File Explorer, share
+your Windows folders with Android apps, and send a file to an Android app. This page
+describes DSA on Windows.
 
-## Android's files on your computer
+## Open Android's files in File Explorer
 
-Android's shared storage opens in Explorer from:
+Use any of these. Each starts Android when it is not running.
 
-- the **"Android"** entry in Explorer's navigation pane, next to "This PC", as WSL's
-  "Linux" entry is. It works while Android is stopped: opening it starts Android and
-  waits for its storage;
-- the **DSA Files** Start menu entry;
-- the **Android files** button in DSA Settings;
-- `dsa files open` (`dsa files` says where it is).
+- **Android** in the navigation pane of File Explorer, the way WSL shows **Linux** there.
+- **DSA Files** in the Start menu.
+- **Android files** on the **Advanced** page of DSA Settings.
+- `dsa files open`. `dsa files` says where the storage is, without opening it.
 
-Explorer reaches it through Windows' WebDAV client (the WebClient service), which Windows
-starts the first time. If the storage does not answer, DSA shows an error with the reason
-rather than leaving Explorer on another folder.
+You see Android's shared storage: the files Android apps saved, such as photos and
+downloads. You can copy files in and out as in any folder. File Explorer reaches the storage
+through Windows' WebDAV client. If the storage does not answer, DSA shows an error with the
+reason.
 
-## Your folders in Android
+## Share your Windows folders with Android apps
 
 Your Documents, Downloads, Pictures, Music, Videos and Desktop folders show in Android's
-shared storage under `Host/<folder>`, so Android apps can open and save files there.
-Android reaches them as you: Windows applies your own rights to every file.
+shared storage under `Host`, such as `Host/Pictures`. Android apps can open and save files
+there. An app needs Android's storage permission first, and Windows lets it do only what
+your own account may do.
 
-- Choose fewer folders on the **Advanced** page of DSA Settings, or
-  `dsa settings set shared-folders Documents,Pictures`.
-- Turn sharing off with `dsa settings set file-sharing off`. No folder is shared then.
+Sharing is on by default. To change it, open the **Advanced** page of DSA Settings:
 
-Earlier versions used a folder named `Windows` instead of `Host`. Android removes the
-old folders once they are empty, so files you put there stay.
+- Turn off **Share Windows folders with Android** to share no folder.
+- Under **Shared folders**, clear a folder to stop sharing it. It leaves Android at once.
 
-## Sending a file to an Android app
+From the command line:
 
-- **Drag and drop** a file from Explorer onto an app's window. It goes to that app. An APK
-  dropped on a window goes to the APK Installer instead. Folders are not sent.
-- Right-click a file in Explorer and choose **Open in an Android app** or **Share with an
-  Android app** (on Windows 11, under "Show more options"). Android asks which app takes it.
-- `dsa open <file>` and `dsa share <file>` do the same.
+```
+dsa settings set shared-folders Documents,Pictures   # only these; also all or none
+dsa settings set file-sharing off                     # share no folder
+```
 
-Files up to 64 MiB can be sent this way; a larger file is refused before anything is sent.
-To move larger files, put them in a shared folder under `Host` instead.
+Earlier versions used a folder named `Windows` instead of `Host`. Android removes the old
+folder once it is empty, so files you saved there stay.
 
-## From Android to your computer
+## Send a file to an Android app
 
-Save a file in Android under `Host/<folder>` and it is in that folder on your computer.
-Or open the "Android" entry in Explorer and drag files out of Android's storage.
+- **Drag and drop.** Drag a file from File Explorer onto an app's window. The file goes to
+  that app. An APK goes to the APK Installer instead. Folders are not sent.
+- **Context menu.** Right-click a file and select **Open in an Android app** or **Share with
+  an Android app**. On Windows 11 they are under **Show more options**. Android then asks
+  which app takes the file.
+- **Command line.** `dsa open <file>` and `dsa share <file>`.
 
+These send files up to 64 MiB. A larger file is refused before anything is sent. To give an
+app a larger file, put it in a shared folder instead.
+
+## Get a file from Android
+
+- Save it in Android under `Host/<folder>`. It is then in that folder on your PC.
+- Or open **Android** in File Explorer and copy the file out.
 
 ---
 

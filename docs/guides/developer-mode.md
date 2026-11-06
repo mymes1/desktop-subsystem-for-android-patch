@@ -1,30 +1,44 @@
 # Developer mode and adb
 
-Desktop Subsystem for Android™ (DSA) lets the Android Debug Bridge (adb) on your computer
-reach your Android. It is off by default.
+Developer mode lets the Android Debug Bridge (adb) on your PC connect to your Android in
+Desktop Subsystem for Android™ (DSA). It is off by default.
 
-1. Turn on **Developer mode** on the **Advanced** page of DSA Settings, or run
+adb is not part of DSA. Get it from the Android SDK Platform-Tools.
+
+## Connect adb
+
+1. Open the **Advanced** page of DSA Settings and turn on **Developer mode**. Or run
    `dsa settings set developer-mode on`.
-2. With Android running, connect:
+2. Start Android, if it is not running: `dsa start --wait`.
+3. Connect:
 
    ```
    adb connect 127.0.0.1:58526
    adb devices
    ```
 
-   There is no prompt to accept in Android. The port listens only on this computer, so
-   other machines cannot reach it. `dsa status` prints the address while developer mode
-   is on.
-3. Turn it off when you are done: `dsa settings set developer-mode off`.
+   Android does not ask you to allow the connection. The port answers only on this PC, so
+   other computers cannot connect.
+4. When you are done, turn **Developer mode** off again, or run
+   `dsa settings set developer-mode off`.
 
-To use another port: `dsa settings set adb-port 5555`.
+**Connect adb** on the **Advanced** page shows the exact command, and `dsa settings` prints
+it on the `Developer mode` line.
 
-adb itself is not part of DSA. Get it from the Android SDK Platform-Tools.
+## Use another port
 
-DSA never uses adb for its own work: windows, input and installs go over its own control
+The default port is 58526. To change it, edit **Port** under **Connect adb**, or run:
+
+```
+dsa settings set adb-port 5555
+```
+
+## What developer mode does not change
+
+DSA never uses adb for its own work. Windows, input and installs use DSA's own control
 channel, so everything works the same with developer mode off.
 
-For Android's log you do not need adb: see [Troubleshooting](troubleshooting.md).
+To read Android's log you do not need adb. See [Troubleshooting](troubleshooting.md).
 
 ---
 
