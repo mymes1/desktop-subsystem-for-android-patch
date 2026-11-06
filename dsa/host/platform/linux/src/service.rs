@@ -465,6 +465,7 @@ pub fn create_user_android(
             notices: Arc::clone(&updates.notices),
             boot_timeout: updates.boot_timeout,
             trial_running: Arc::clone(&updates.trial_running),
+            rollback: Default::default(),
         }),
     })
 }
