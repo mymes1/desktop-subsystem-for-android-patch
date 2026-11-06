@@ -271,6 +271,9 @@ class WidgetManager(
     /** Whether a start was refused and is being tried again. */
     private var waiting = false
 
+    /** Whether the host connected before the widget host started, so it is told once it has. */
+    private var missedConnection = false
+
     /** Whether a later start is scheduled already. */
     private var startScheduled = false
 
@@ -289,7 +292,11 @@ class WidgetManager(
         this.post = post
         this.later = later
         try {
-            platform.whenReady { post { begin() } }
+            // Ready already: the widget host starts now, as part of this call. Ready later:
+            // it starts on the agent's thread then.
+            var calling = true
+            platform.whenReady { if (calling) begin() else post { begin() } }
+            calling = false
         } catch (e: Exception) {
             log.warn("cannot hear when the user is unlocked; starting the widget host by trying", e)
             begin()
@@ -326,7 +333,8 @@ class WidgetManager(
             val size = sizes[id] ?: platform.info(id)?.let(WidgetSize::defaultOf) ?: continue
             show(id, size)
         }
-        if (waiting && isConnected()) announce()
+        if ((waiting || missedConnection) && isConnected()) announce()
+        missedConnection = false
         waiting = false
     }
 
@@ -368,7 +376,10 @@ class WidgetManager(
     /** The host connected: it hears of every placed widget and what each shows now. */
     fun connected() {
         lastFrame.clear()
-        if (!started) return
+        if (!started) {
+            missedConnection = true
+            return
+        }
         announce()
         for ((id, image) in drawn.toList()) {
             if (id in shown) frame(id, image.width, image.height, image.png)
