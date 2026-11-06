@@ -5,7 +5,9 @@
 # Usage: build-app.sh <version> <programs folder> <output folder> [renderer dylib]
 #
 # The programs folder holds the release builds (dsa-app-window, dsa, and the service, window
-# manager and device lender programs when they are built). DSA_SIGN_IDENTITY names the Developer ID
+# manager and device lender programs when they are built). The settings app (dsa-settings)
+# and the icon drawer (dsa-icon) are taken from there too, or built from the Swift package in
+# ../settings when they are not. DSA_SIGN_IDENTITY names the Developer ID
 # to sign with; without it the bundle is signed ad hoc, which runs on the machine that
 # built it and is ready to be signed for distribution. DSA_INSTALLER_IDENTITY signs the
 # package the same way.
@@ -29,8 +31,25 @@ sed "s/@VERSION@/$version/g" "$here/Info.plist" > "$app/Contents/Info.plist"
 plutil -lint "$app/Contents/Info.plist"
 printf 'APPL????' > "$app/Contents/PkgInfo"
 
-# The window host is required: it is the bundle's executable and the template each app's
-# own bundle copies. The others are taken when they were built.
+# The bundle's executable is the settings app (SwiftUI): its window, its menu bar item and its
+# Dock icon are what opening DSA.app shows. It and the icon drawer are built here from the
+# Swift package beside this folder unless the programs folder already holds them.
+settings_package="$here/../settings"
+if [[ ! -x "$programs/dsa-settings" || ! -x "$programs/dsa-icon" ]]; then
+    scratch="$root/dsa/target/dsa-settings"
+    swift build -c release --package-path "$settings_package" --scratch-path "$scratch" \
+        --product dsa-settings
+    swift build -c release --package-path "$settings_package" --scratch-path "$scratch" \
+        --product dsa-icon
+    swift_bin="$(swift build -c release --package-path "$settings_package" --scratch-path "$scratch" --show-bin-path)"
+else
+    swift_bin="$programs"
+fi
+cp "$swift_bin/dsa-settings" "$app/Contents/MacOS/"
+
+# The window host is required: it is the template each app's own bundle copies, and the
+# window manager runs it for an app that has no bundle. The others are taken when they were
+# built.
 cp "$programs/dsa-app-window" "$app/Contents/MacOS/"
 for program in dsa dsa-hostd dsa-wm dsa-devices; do
     if [[ -f "$programs/$program" ]]; then
@@ -79,6 +98,26 @@ JSON
 fi
 cp "$root/LICENSE" "$app/Contents/Resources/licenses/DSA.txt"
 
+# The app icon: the placeholder drawn at every size, from 16 to 1024 px, in one .icns.
+iconset="$out/DSA.iconset"
+rm -rf "$iconset"
+"$swift_bin/dsa-icon" "$iconset"
+iconutil -c icns -o "$app/Contents/Resources/DSA.icns" "$iconset"
+rm -rf "$iconset"
+
+# The settings app's texts: its String Catalog compiled to the English and Korean string
+# tables the bundle looks up in the user's language.
+xcrun xcstringstool compile "$settings_package/Resources/Localizable.xcstrings" \
+    --output-directory "$app/Contents/Resources"
+for language in en ko; do
+    table="$app/Contents/Resources/$language.lproj/Localizable.strings"
+    if [[ ! -s "$table" ]]; then
+        echo "the String Catalog gave no $language table ($table)" >&2
+        exit 1
+    fi
+    plutil -lint "$table"
+done
+
 identity="${DSA_SIGN_IDENTITY:--}"
 sign() {
     codesign --force --timestamp=none --options runtime \
@@ -90,7 +129,7 @@ for library in "$app/Contents/Frameworks"/*.dylib; do
     codesign --force --timestamp=none --sign "$identity" "$library"
 done
 for program in "$app/Contents/MacOS"/*; do
-    [[ "$(basename "$program")" == dsa-app-window ]] && continue
+    [[ "$(basename "$program")" == dsa-settings ]] && continue
     sign "$program"
 done
 sign "$app"
