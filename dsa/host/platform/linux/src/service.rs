@@ -731,13 +731,14 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
     let factory_build = build.to_string();
     let factory_store = Arc::clone(&store);
     let factory_networks = Arc::clone(&networks);
+    let factory_updates = updates.clone();
     let androids = Arc::new(PerUser::new(move |user: &str| {
         let android = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             create_user_android(
                 &factory_config,
                 &factory_build,
                 user,
-                updates.as_ref(),
+                factory_updates.as_ref(),
                 Some(power.as_ref()),
                 network_of(&factory_networks, user),
             )

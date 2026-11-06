@@ -188,7 +188,9 @@ jobs:
           if ($entry.Publisher -cne 'ThisIsThePy') { throw "the package names its publisher '$($entry.Publisher)', not ThisIsThePy" }
           $out = & "$env:PROGRAM_DIR\dsa.exe" status 2>&1
           Write-Host $out
-          if ($LASTEXITCODE -ne 0 -or -not ($out -match '^Android: Stopped')) { throw "dsa status: $out" }
+          # The window manager starts a stopped Android at sign-in, so Android may already be
+          # starting by the time status is asked for.
+          if ($LASTEXITCODE -ne 0 -or -not ($out -match '^Android: (Stopped|Starting|Active|Dozing)')) { throw "dsa status: $out" }
           $acl = (Get-Acl $env:DATA_DIR).Sddl
           Write-Host $acl
           if ($acl -notmatch 'S-1-5-83-0') { throw "the VMs cannot read the data folder" }
