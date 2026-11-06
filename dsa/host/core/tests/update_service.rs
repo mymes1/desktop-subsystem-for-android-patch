@@ -352,7 +352,10 @@ fn fr14_a_stop_asked_for_during_the_rollback_does_not_cancel_it() {
     // What `dsa start --wait` reads meanwhile: Android is still starting, and why.
     assert_eq!(android.state(), SessionState::Starting);
     let problem = android.problem().unwrap_or_default();
-    assert!(problem.contains("going back to the previous one"), "{problem}");
+    assert!(
+        problem.contains("going back to the previous one"),
+        "{problem}"
+    );
     // `dsa stop`, or a restart from the tray, in the middle of the rollback.
     android.stop();
 
