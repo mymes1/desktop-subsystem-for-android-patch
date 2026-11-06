@@ -70,7 +70,10 @@ impl Default for Page {
 impl Page {
     pub fn new() -> Page {
         let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let banner = adw::Banner::builder().revealed(false).use_markup(false).build();
+        let banner = adw::Banner::builder()
+            .revealed(false)
+            .use_markup(false)
+            .build();
         let prefs = adw::PreferencesPage::new();
         prefs.set_vexpand(true);
         root.append(&banner);
@@ -329,8 +332,7 @@ pub fn open_folder(ctx: &Shared, path: &std::path::Path) {
 
 /// Opens `uri` in the program the desktop opens it with.
 pub fn open_uri(ctx: &Shared, uri: &str) {
-    if let Err(error) = gio::AppInfo::launch_default_for_uri(uri, None::<&gio::AppLaunchContext>)
-    {
+    if let Err(error) = gio::AppInfo::launch_default_for_uri(uri, None::<&gio::AppLaunchContext>) {
         tell(ctx, &tr("The folder could not be opened"), error.message());
     }
 }

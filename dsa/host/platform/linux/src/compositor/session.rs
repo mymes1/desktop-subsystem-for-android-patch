@@ -274,7 +274,10 @@ fn ask_drag_out(to_main: ToMain, out: DragOut, serial: u32) {
                 }
             }
             Ok(None) => {}
-            Err(why) => log(&format!("a drag out of task {} did not start: {why}", out.task_id)),
+            Err(why) => log(&format!(
+                "a drag out of task {} did not start: {why}",
+                out.task_id
+            )),
         }
     });
 }

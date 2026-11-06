@@ -72,12 +72,26 @@ pub fn general(ctx: &Shared) -> gtk::Widget {
             stop.set_sensitive(controls.can_stop);
             freeze.set_sensitive(controls.can_freeze);
             state_label.set_label(&view::state_text(
-                status.map(|s| s.state).unwrap_or(crate::model::State::Unknown),
+                status
+                    .map(|s| s.state)
+                    .unwrap_or(crate::model::State::Unknown),
             ));
             for (row, label, value) in [
-                (&problem_row, &problem_label, status.and_then(|s| s.problem.clone())),
-                (&reason_row, &reason_label, status.and_then(|s| s.last_reason.clone())),
-                (&notice_row, &notice_label, status.and_then(|s| s.update_notice.clone())),
+                (
+                    &problem_row,
+                    &problem_label,
+                    status.and_then(|s| s.problem.clone()),
+                ),
+                (
+                    &reason_row,
+                    &reason_label,
+                    status.and_then(|s| s.last_reason.clone()),
+                ),
+                (
+                    &notice_row,
+                    &notice_label,
+                    status.and_then(|s| s.update_notice.clone()),
+                ),
             ] {
                 row.set_visible(value.is_some());
                 label.set_label(value.as_deref().unwrap_or_default());
@@ -98,9 +112,13 @@ pub fn general(ctx: &Shared) -> gtk::Widget {
             let show = show.clone();
             request(&ctx, |c| c.status(), move |r| show(r));
             let log_dir = log_dir.clone();
-            request(&ctx, |c| c.settings(), move |r: Result<Settings, _>| {
-                *log_dir.borrow_mut() = r.ok().and_then(|s| s.log_dir);
-            });
+            request(
+                &ctx,
+                |c| c.settings(),
+                move |r: Result<Settings, _>| {
+                    *log_dir.borrow_mut() = r.ok().and_then(|s| s.log_dir);
+                },
+            );
         })
     };
     {
@@ -218,81 +236,93 @@ pub fn memory(ctx: &Shared) -> gtk::Widget {
             let (total_label, vm_label) = (total_label.clone(), vm_label.clone());
             let (available_label, level) = (available_label.clone(), level.clone());
             let available_row = available_row.clone();
-            request(&ctx, |c| c.memory(), move |r| {
-                page.show_failure(&tr("The memory could not be measured"), r.as_ref().err());
-                host_rows.clear();
-                guest_rows.clear();
-                kernel_rows.clear();
-                process_rows.clear();
-                let Ok(memory) = r else { return };
-                total_label.set_label(&view::size_kb(memory.host_total_kb));
-                vm_label.set_label(&match (view::vm_size_kb(&memory), memory.vm_beyond_guest_kb) {
-                    (Some(vm), Some(beyond)) => trf(
-                        "{0}: used by Android {1}, free, not yet returned {2}",
-                        &[
-                            &view::size_kb(vm),
-                            &view::size_kb(vm.saturating_sub(beyond)),
-                            &view::size_kb(beyond),
-                        ],
-                    ),
-                    (Some(vm), None) => view::size_kb(vm),
-                    (None, _) => String::new(),
-                });
-                if memory.host.is_empty() {
-                    host_rows.note(&tr(
-                        "Android is not running, so it takes no memory on this computer.",
-                    ));
-                }
-                for row in view::host_rows(&memory) {
-                    host_rows.add(&memory_row(&row));
-                }
-                match &memory.guest {
-                    None => {
-                        available_row.set_visible(false);
-                        guest_rows.note(&tr("No report yet. Android reports how it uses its memory a few minutes after it starts."));
-                    }
-                    Some(guest) => {
-                        available_row.set_visible(true);
-                        available_row.set_subtitle(&trf(
-                            "Reported {0} seconds ago",
-                            &[&guest.age_seconds.to_string()],
+            request(
+                &ctx,
+                |c| c.memory(),
+                move |r| {
+                    page.show_failure(&tr("The memory could not be measured"), r.as_ref().err());
+                    host_rows.clear();
+                    guest_rows.clear();
+                    kernel_rows.clear();
+                    process_rows.clear();
+                    let Ok(memory) = r else { return };
+                    total_label.set_label(&view::size_kb(memory.host_total_kb));
+                    vm_label.set_label(
+                        &match (view::vm_size_kb(&memory), memory.vm_beyond_guest_kb) {
+                            (Some(vm), Some(beyond)) => trf(
+                                "{0}: used by Android {1}, free, not yet returned {2}",
+                                &[
+                                    &view::size_kb(vm),
+                                    &view::size_kb(vm.saturating_sub(beyond)),
+                                    &view::size_kb(beyond),
+                                ],
+                            ),
+                            (Some(vm), None) => view::size_kb(vm),
+                            (None, _) => String::new(),
+                        },
+                    );
+                    if memory.host.is_empty() {
+                        host_rows.note(&tr(
+                            "Android is not running, so it takes no memory on this computer.",
                         ));
-                        available_label.set_label(&trf(
-                            "{0} available of {1}",
-                            &[
-                                &view::size_kb(guest.available_kb),
-                                &view::size_kb(guest.total_kb),
-                            ],
-                        ));
-                        level.set_value(view::guest_used_fraction(guest));
-                        for row in view::guest_rows(guest) {
-                            guest_rows.add(&memory_row(&row));
+                    }
+                    for row in view::host_rows(&memory) {
+                        host_rows.add(&memory_row(&row));
+                    }
+                    match &memory.guest {
+                        None => {
+                            available_row.set_visible(false);
+                            guest_rows.note(&tr("No report yet. Android reports how it uses its memory a few minutes after it starts."));
                         }
-                        for row in view::kernel_rows(guest) {
-                            kernel_rows.add(&memory_row(&row));
-                        }
-                        for row in view::process_rows(guest) {
-                            process_rows.add(&memory_row(&row));
+                        Some(guest) => {
+                            available_row.set_visible(true);
+                            available_row.set_subtitle(&trf(
+                                "Reported {0} seconds ago",
+                                &[&guest.age_seconds.to_string()],
+                            ));
+                            available_label.set_label(&trf(
+                                "{0} available of {1}",
+                                &[
+                                    &view::size_kb(guest.available_kb),
+                                    &view::size_kb(guest.total_kb),
+                                ],
+                            ));
+                            level.set_value(view::guest_used_fraction(guest));
+                            for row in view::guest_rows(guest) {
+                                guest_rows.add(&memory_row(&row));
+                            }
+                            for row in view::kernel_rows(guest) {
+                                kernel_rows.add(&memory_row(&row));
+                            }
+                            for row in view::process_rows(guest) {
+                                process_rows.add(&memory_row(&row));
+                            }
                         }
                     }
-                }
-                kernel_rows.group.set_visible(memory.guest.as_ref().is_some_and(|g| g.kernel.is_some()));
-                process_rows.group.set_visible(memory.guest.is_some());
-            });
+                    kernel_rows
+                        .group
+                        .set_visible(memory.guest.as_ref().is_some_and(|g| g.kernel.is_some()));
+                    process_rows.group.set_visible(memory.guest.is_some());
+                },
+            );
             let limit = limit.clone();
             let current_limit = current_limit.clone();
-            request(&ctx, |c| c.settings(), move |r| {
-                if let Ok(settings) = r {
-                    current_limit.set(settings.memory_limit_mb);
-                    let choices = view::memory_limit_choices(settings.memory_limit_mb);
-                    let index = choices
-                        .iter()
-                        .position(|(_, mb)| *mb == settings.memory_limit_mb)
-                        .unwrap_or(0);
-                    let labels: Vec<String> = choices.into_iter().map(|(l, _)| l).collect();
-                    limit.set(&labels, index as u32);
-                }
-            });
+            request(
+                &ctx,
+                |c| c.settings(),
+                move |r| {
+                    if let Ok(settings) = r {
+                        current_limit.set(settings.memory_limit_mb);
+                        let choices = view::memory_limit_choices(settings.memory_limit_mb);
+                        let index = choices
+                            .iter()
+                            .position(|(_, mb)| *mb == settings.memory_limit_mb)
+                            .unwrap_or(0);
+                        let labels: Vec<String> = choices.into_iter().map(|(l, _)| l).collect();
+                        limit.set(&labels, index as u32);
+                    }
+                },
+            );
         })
     };
     {
@@ -373,28 +403,38 @@ pub fn display(ctx: &Shared) -> gtk::Widget {
 
     {
         let page = page.clone();
-        request(ctx, |c| c.settings(), move |r| {
-            page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
-            if let Ok(settings) = r {
-                let mut labels: Vec<String> =
-                    view::render_gpu_choices().into_iter().map(|(_, l)| l).collect();
-                let index = view::render_gpu_index(&settings.render_gpu);
-                if index == labels.len() {
-                    labels.push(settings.render_gpu.clone());
+        request(
+            ctx,
+            |c| c.settings(),
+            move |r| {
+                page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+                if let Ok(settings) = r {
+                    let mut labels: Vec<String> = view::render_gpu_choices()
+                        .into_iter()
+                        .map(|(_, l)| l)
+                        .collect();
+                    let index = view::render_gpu_index(&settings.render_gpu);
+                    if index == labels.len() {
+                        labels.push(settings.render_gpu.clone());
+                    }
+                    *setting.borrow_mut() = settings.render_gpu;
+                    combo.set(&labels, index as u32);
                 }
-                *setting.borrow_mut() = settings.render_gpu;
-                combo.set(&labels, index as u32);
-            }
-        });
+            },
+        );
     }
-    request(ctx, |c| c.gpus(), move |r| {
-        let name = r
-            .ok()
-            .and_then(|gpus| gpus.into_iter().find(|(_, primary)| *primary))
-            .map(|(name, _)| name)
-            .unwrap_or_else(|| tr("Chosen by the window manager when it starts"));
-        display_label.set_label(&name);
-    });
+    request(
+        ctx,
+        |c| c.gpus(),
+        move |r| {
+            let name = r
+                .ok()
+                .and_then(|gpus| gpus.into_iter().find(|(_, primary)| *primary))
+                .map(|(name, _)| name)
+                .unwrap_or_else(|| tr("Chosen by the window manager when it starts"));
+            display_label.set_label(&name);
+        },
+    );
     page.root.clone().upcast()
 }
 
@@ -406,9 +446,14 @@ pub fn android(ctx: &Shared) -> gtk::Widget {
     let (build_row, build_label) = value_row(&tr("Build"), "");
     let (patch_row, patch_label) = value_row(&tr("Security patch level"), "");
     let (notice_row, notice_label) = value_row(&tr("Update"), "");
-    let (switching_row, switching_label) =
-        value_row(&tr("Changing the Android version"), "");
-    for row in [&version_row, &build_row, &patch_row, &notice_row, &switching_row] {
+    let (switching_row, switching_label) = value_row(&tr("Changing the Android version"), "");
+    for row in [
+        &version_row,
+        &build_row,
+        &patch_row,
+        &notice_row,
+        &switching_row,
+    ] {
         running.add(row);
     }
     page.add(&running);
@@ -434,7 +479,8 @@ pub fn android(ctx: &Shared) -> gtk::Widget {
     page.add(&choose);
 
     let show: Rc<dyn Fn(Result<AndroidVersion, crate::api::Failure>)> = {
-        let (page, info, combo, picked) = (page.clone(), info.clone(), combo.clone(), picked.clone());
+        let (page, info, combo, picked) =
+            (page.clone(), info.clone(), combo.clone(), picked.clone());
         Rc::new(move |r: Result<AndroidVersion, crate::api::Failure>| {
             page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
             let Ok(version) = r else { return };
@@ -442,7 +488,10 @@ pub fn android(ctx: &Shared) -> gtk::Widget {
             version_row.set_subtitle(&version.version);
             build_label.set_label(&version.build_id.clone().unwrap_or_else(|| tr("Unknown")));
             patch_label.set_label(
-                &version.security_patch.clone().unwrap_or_else(|| tr("Unknown")),
+                &version
+                    .security_patch
+                    .clone()
+                    .unwrap_or_else(|| tr("Unknown")),
             );
             notice_row.set_visible(version.notice.is_some());
             notice_label.set_label(version.notice.as_deref().unwrap_or_default());
@@ -584,16 +633,22 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
 
     {
         let page = page.clone();
-        request(ctx, |c| c.settings(), move |r| {
-            page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
-            if let (Ok(settings), Some(switch)) = (r, image_switch.borrow().as_ref()) {
-                switch.set(settings.image_updates);
-                switch.row.set_sensitive(settings.image_updates_available);
-                if !settings.image_updates_available {
-                    switch.row.set_subtitle(&tr("This installation does not offer image updates."));
+        request(
+            ctx,
+            |c| c.settings(),
+            move |r| {
+                page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+                if let (Ok(settings), Some(switch)) = (r, image_switch.borrow().as_ref()) {
+                    switch.set(settings.image_updates);
+                    switch.row.set_sensitive(settings.image_updates_available);
+                    if !settings.image_updates_available {
+                        switch
+                            .row
+                            .set_subtitle(&tr("This installation does not offer image updates."));
+                    }
                 }
-            }
-        });
+            },
+        );
     }
     page.root.clone().upcast()
 }
@@ -654,11 +709,15 @@ pub fn about(ctx: &Shared) -> gtk::Widget {
     );
     page.add(&notices);
 
-    request(ctx, |c| c.settings(), move |r| {
-        if let Ok(settings) = r {
-            service_label.set_label(&settings.version);
-            image_label.set_label(&settings.android_version.unwrap_or_else(|| tr("Unknown")));
-        }
-    });
+    request(
+        ctx,
+        |c| c.settings(),
+        move |r| {
+            if let Ok(settings) = r {
+                service_label.set_label(&settings.version);
+                image_label.set_label(&settings.android_version.unwrap_or_else(|| tr("Unknown")));
+            }
+        },
+    );
     page.root.clone().upcast()
 }

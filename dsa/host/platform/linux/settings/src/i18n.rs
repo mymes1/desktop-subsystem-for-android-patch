@@ -59,8 +59,7 @@ mod gnu {
         #[link_name = "bindtextdomain"]
         fn c_bindtextdomain(domain: *const c_char, dir: *const c_char) -> *mut c_char;
         #[link_name = "bind_textdomain_codeset"]
-        fn c_bind_textdomain_codeset(domain: *const c_char, codeset: *const c_char)
-            -> *mut c_char;
+        fn c_bind_textdomain_codeset(domain: *const c_char, codeset: *const c_char) -> *mut c_char;
     }
 
     pub fn init(domain: &str, dir: &str) {

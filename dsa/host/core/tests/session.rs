@@ -2474,7 +2474,10 @@ fn fr29_a_file_dragged_out_of_a_window_reaches_the_host_whole_with_its_name() {
     );
     let offer = asking.join().unwrap().expect("an answer").expect("a drag");
     assert_eq!(offer.drag_id, 5);
-    assert_eq!(offer.items[0].name, "holiday.jpg", "no path reaches the host");
+    assert_eq!(
+        offer.items[0].name, "holiday.jpg",
+        "no path reaches the host"
+    );
     assert_eq!(offer.items[0].size, Some(content.len() as u64));
 
     let copying = {
@@ -4659,5 +4662,9 @@ fn fr31_a_session_is_never_stopped_for_idle_time_after_the_last_window_closes() 
         "an idle Android stays in Doze, so the next app opens without a boot"
     );
     assert_eq!(session.last_reason(), None, "nothing stopped it");
-    assert_eq!(launcher.0.lock().unwrap().freezes, 0, "and nothing froze it");
+    assert_eq!(
+        launcher.0.lock().unwrap().freezes,
+        0,
+        "and nothing froze it"
+    );
 }

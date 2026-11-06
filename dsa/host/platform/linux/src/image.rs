@@ -215,8 +215,8 @@ mod making {
         match template {
             Some(template) => write_raw_disk(template, disk)?,
             None => {
-                let file = File::create(disk)
-                    .map_err(|e| format!("creating {}: {e}", disk.display()))?;
+                let file =
+                    File::create(disk).map_err(|e| format!("creating {}: {e}", disk.display()))?;
                 file.set_len(u64::from(size_gb) << 30)
                     .map_err(|e| format!("sizing {}: {e}", disk.display()))?;
             }

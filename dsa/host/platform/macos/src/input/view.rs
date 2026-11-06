@@ -15,8 +15,7 @@ use std::sync::OnceLock;
 use dsa_host_core::drag::LeaveWatch;
 use dsa_host_core::ime::ImeCursor;
 use dsa_host_core::input::{
-    ContactPhase, InputEvent, MouseButton, PointerMapper, PointerTool, WindowGeometry,
-    WindowInput,
+    ContactPhase, InputEvent, MouseButton, PointerMapper, PointerTool, WindowGeometry, WindowInput,
 };
 use dsa_host_core::keys::{keycode, KeyInput, KeyMapper};
 use objc2::msg_send;

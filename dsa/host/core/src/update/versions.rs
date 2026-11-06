@@ -33,7 +33,9 @@ pub fn supported_majors() -> Vec<u32> {
 
 /// The newest Android major version this build supports: what a new installation runs.
 pub fn newest_major() -> u32 {
-    *supported_majors().last().expect("at least one supported version")
+    *supported_majors()
+        .last()
+        .expect("at least one supported version")
 }
 
 /// Which images a computer takes.

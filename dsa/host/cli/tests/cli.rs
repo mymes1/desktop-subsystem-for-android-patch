@@ -2205,8 +2205,15 @@ fn fr30_dsa_app_window_changes_and_resets_an_apps_window_settings() {
 
 #[test]
 fn fr31_there_is_no_run_mode_setting_to_stop_an_idle_android() {
-    for name in ["run-mode continuous", "stop-after 5m", "keep-for-notifications on"] {
-        assert!(parse(&args(&format!("settings set {name}"))).is_err(), "{name}");
+    for name in [
+        "run-mode continuous",
+        "stop-after 5m",
+        "keep-for-notifications on",
+    ] {
+        assert!(
+            parse(&args(&format!("settings set {name}"))).is_err(),
+            "{name}"
+        );
     }
 }
 

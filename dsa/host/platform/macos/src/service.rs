@@ -618,9 +618,7 @@ pub fn serve(
         );
         if let Err(why) = thread::Builder::new()
             .name("dsa-updates".into())
-            .spawn(move || {
-                check_for_updates(config, store, notices, check, settings, worker, stop)
-            })
+            .spawn(move || check_for_updates(config, store, notices, check, settings, worker, stop))
         {
             eprintln!("{build}: starting the update check failed: {why}");
         }

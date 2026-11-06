@@ -19,9 +19,9 @@ pub fn problem_text(failure: &Failure) -> String {
         Problem::Unreadable => {
             tr("The answer of the dsa command could not be read. Reinstall DSA.")
         }
-        Problem::NotAuthorized => tr(
-            "The setting was not changed, because an administrator's permission was not given.",
-        ),
+        Problem::NotAuthorized => {
+            tr("The setting was not changed, because an administrator's permission was not given.")
+        }
     };
     if failure.detail.is_empty() || failure.problem == Problem::NotAuthorized {
         words
@@ -138,7 +138,10 @@ pub fn guest_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
         row(tr("Shared memory"), String::new(), guest.shmem_kb),
         row(
             tr("Compressed memory"),
-            trf("Holds {0} of pages, compressed", &[&size_kb(guest.zram_original_kb)]),
+            trf(
+                "Holds {0} of pages, compressed",
+                &[&size_kb(guest.zram_original_kb)],
+            ),
             guest.zram_used_kb,
         ),
         row(tr("Free"), String::new(), guest.free_kb),
@@ -157,7 +160,11 @@ pub fn kernel_rows(guest: &GuestMemory) -> Vec<MemoryRow> {
         ),
         row(tr("Thread stacks"), String::new(), k.kernel_stack_kb),
         row(tr("Page tables"), String::new(), k.page_tables_kb),
-        row(tr("Kernel mappings (vmalloc)"), String::new(), k.vmalloc_used_kb),
+        row(
+            tr("Kernel mappings (vmalloc)"),
+            String::new(),
+            k.vmalloc_used_kb,
+        ),
         row(tr("Per-CPU data"), String::new(), k.percpu_kb),
         row(
             tr("Drivers"),
@@ -234,7 +241,10 @@ pub fn memory_limit_choices(current_mb: u32) -> Vec<(String, u32)> {
 /// The render GPU choices, as `settings set render-gpu` takes them, and their labels.
 pub fn render_gpu_choices() -> Vec<(&'static str, String)> {
     vec![
-        ("display", tr("The GPU of the primary monitor (recommended)")),
+        (
+            "display",
+            tr("The GPU of the primary monitor (recommended)"),
+        ),
         ("integrated", tr("Integrated GPU")),
         ("discrete", tr("Discrete GPU (for example, for games)")),
     ]
@@ -273,7 +283,10 @@ pub fn android_choices(info: &AndroidVersion) -> Vec<AndroidChoice> {
     let mut choices = vec![AndroidChoice {
         channel: "latest".into(),
         major: newest,
-        label: trf("Always the newest (now Android {0})", &[&newest.to_string()]),
+        label: trf(
+            "Always the newest (now Android {0})",
+            &[&newest.to_string()],
+        ),
     }];
     let mut majors = info.supported.clone();
     majors.sort_unstable_by(|a, b| b.cmp(a));
@@ -343,9 +356,8 @@ pub fn app_detail(app: &App) -> String {
 
 /// The sizes an app's windows can open at: Android's choice first, then phones and tablets.
 pub fn start_size_choices() -> Vec<(String, Option<(u32, u32)>)> {
-    let size = |key: &str, w: u32, h: u32| {
-        (trf(key, &[&w.to_string(), &h.to_string()]), Some((w, h)))
-    };
+    let size =
+        |key: &str, w: u32, h: u32| (trf(key, &[&w.to_string(), &h.to_string()]), Some((w, h)));
     vec![
         (tr("Opens at the size Android chooses"), None),
         size("Phone, portrait ({0} × {1})", 412, 915),
@@ -391,9 +403,10 @@ pub fn install_reason(status: &str) -> String {
 pub fn arm_status(arm: &ArmTranslation) -> String {
     match &arm.package {
         None => tr("Not supported: no ARM translation package is installed."),
-        Some((name, version, _)) if !arm.enabled => {
-            trf("Not supported: {0} {1} is installed but turned off.", &[name, version])
-        }
+        Some((name, version, _)) if !arm.enabled => trf(
+            "Not supported: {0} {1} is installed but turned off.",
+            &[name, version],
+        ),
         Some((name, version, license)) => {
             let license = if license.is_empty() {
                 tr("licence not given")

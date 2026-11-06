@@ -123,8 +123,8 @@ use crate::background::{
 };
 use crate::clipboard;
 use crate::clock_trace::ClockTrace;
-use crate::file_share::{self, ShareHost, Sharing, SharingNow};
 use crate::drag::{self, DragChunk, DragItem, DragOffer, DragOut, DragRead};
+use crate::file_share::{self, ShareHost, Sharing, SharingNow};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadRumble, GamepadTable};
 use crate::guest_log::{

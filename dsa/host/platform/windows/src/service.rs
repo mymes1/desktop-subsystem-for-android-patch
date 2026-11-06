@@ -598,10 +598,7 @@ fn check_for_updates(
         // Turned off in the settings, the list is not read, except for the first image,
         // without which no Android can start. A minute later it looks again, so turning
         // updates back on takes effect soon.
-        if !waiting_for_first
-            && !updates.store.switch_pending()
-            && !store.machine().image_updates
-        {
+        if !waiting_for_first && !updates.store.switch_pending() && !store.machine().image_updates {
             next = Instant::now() + SETTINGS_RECHECK;
             continue;
         }
@@ -895,6 +892,12 @@ where
     let factory_build = build.to_string();
     let factory_status = program.as_ref().map(|_| Arc::clone(&program_status));
     let factory_store = Arc::clone(&store);
+    let version_store = updates.as_ref().map(|updates| StoreVersions {
+        store: Arc::clone(&updates.store),
+        notices: Arc::clone(&updates.notices),
+        check_now: Arc::clone(&updates.check_now),
+        shared_by_users: true,
+    });
     let androids = Arc::new(PerUser::new(move |sid: &str| {
         let android = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             create_user_android(
@@ -1016,13 +1019,8 @@ where
     if let Some(source) = android_version {
         service = service.with_android_version(source);
     }
-    if let Some(updates) = &updates {
-        service = service.with_android_versions(Arc::new(StoreVersions {
-            store: Arc::clone(&updates.store),
-            notices: Arc::clone(&updates.notices),
-            check_now: Arc::clone(&updates.check_now),
-            shared_by_users: true,
-        }));
+    if let Some(versions) = version_store {
+        service = service.with_android_versions(Arc::new(versions));
     }
     if let Some(settings) = program {
         let check_interval = config

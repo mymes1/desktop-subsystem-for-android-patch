@@ -235,8 +235,8 @@ use dsa_host_core::host_api::{
 };
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::session::SessionState;
-use dsa_host_core::update::versions::{Channel, VersionReport};
 use dsa_host_core::tasks::{AppInfo, Task};
+use dsa_host_core::update::versions::{Channel, VersionReport};
 use dsa_host_core::widgets::{Widget, WidgetEvent, WidgetProvider};
 use dsa_transport::Connector;
 use serde_json::{json, Value};

@@ -67,8 +67,12 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
 
     let known: Rc<RefCell<Option<Identity>>> = Rc::default();
     let update_preview = {
-        let (entries, known, preview, save) =
-            (entries.clone(), known.clone(), preview.clone(), save.clone());
+        let (entries, known, preview, save) = (
+            entries.clone(),
+            known.clone(),
+            preview.clone(),
+            save.clone(),
+        );
         Rc::new(move || {
             let known = known.borrow();
             let value = |key: &str| {
@@ -105,8 +109,12 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
         entry.connect_changed(move |_| update_preview());
     }
     let show: Rc<dyn Fn(Result<Identity, crate::api::Failure>)> = {
-        let (page, entries, known, update_preview) =
-            (page.clone(), entries.clone(), known.clone(), update_preview.clone());
+        let (page, entries, known, update_preview) = (
+            page.clone(),
+            entries.clone(),
+            known.clone(),
+            update_preview.clone(),
+        );
         Rc::new(move |r: Result<Identity, crate::api::Failure>| {
             page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
             let Ok(identity) = r else { return };
@@ -134,11 +142,15 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
             let ctx2 = ctx.clone();
             let restart = restart.clone();
             let (saved, saved_restart) = (saved.to_string(), saved_restart.to_string());
-            request(&ctx, |c| c.status(), move |r| {
-                let running = r.is_ok_and(|s| view::controls(Some(&s)).can_stop);
-                restart.set_visible(running);
-                ctx2.toast(if running { &saved_restart } else { &saved });
-            });
+            request(
+                &ctx,
+                |c| c.status(),
+                move |r| {
+                    let running = r.is_ok_and(|s| view::controls(Some(&s)).can_stop);
+                    restart.set_visible(running);
+                    ctx2.toast(if running { &saved_restart } else { &saved });
+                },
+            );
         })
     };
     {
@@ -213,14 +225,18 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
         restart.connect_clicked(move |button| {
             button.set_sensitive(false);
             let (ctx2, page, button) = (ctx.clone(), page.clone(), button.clone());
-            request(&ctx, |c| c.stop().and_then(|_| c.start()), move |r| {
-                button.set_sensitive(true);
-                page.show_failure(&tr("Something went wrong"), r.as_ref().err());
-                if r.is_ok() {
-                    button.set_visible(false);
-                    ctx2.toast(&tr("Android started again with this identity."));
-                }
-            });
+            request(
+                &ctx,
+                |c| c.stop().and_then(|_| c.start()),
+                move |r| {
+                    button.set_sensitive(true);
+                    page.show_failure(&tr("Something went wrong"), r.as_ref().err());
+                    if r.is_ok() {
+                        button.set_visible(false);
+                        ctx2.toast(&tr("Android started again with this identity."));
+                    }
+                },
+            );
         });
     }
     request(ctx, |c| c.identity(), move |r| show(r));
@@ -276,7 +292,9 @@ pub fn network(ctx: &Shared) -> gtk::Widget {
                 network.map(|n| n.addresses.as_slice()).unwrap_or_default(),
             ));
             dns.set_label(&view::list_or_none(
-                network.map(|n| n.dns_servers.as_slice()).unwrap_or_default(),
+                network
+                    .map(|n| n.dns_servers.as_slice())
+                    .unwrap_or_default(),
             ));
             gateway.set_label(&network.map(|n| n.gateway.clone()).unwrap_or_default());
             let why = network.and_then(|n| n.problem.clone());
@@ -314,12 +332,16 @@ pub fn network(ctx: &Shared) -> gtk::Widget {
         let (ctx, show, switch) = (ctx.clone(), show.clone(), switch.clone());
         Rc::new(move || {
             let (show, switch) = (show.clone(), switch.clone());
-            request(&ctx, |c| c.settings(), move |r| {
-                if let (Ok(settings), Some(s)) = (r.as_ref(), switch.borrow().as_ref()) {
-                    s.set(settings.advanced_networking);
-                }
-                show(r);
-            });
+            request(
+                &ctx,
+                |c| c.settings(),
+                move |r| {
+                    if let (Ok(settings), Some(s)) = (r.as_ref(), switch.borrow().as_ref()) {
+                        s.set(settings.advanced_networking);
+                    }
+                    show(r);
+                },
+            );
         })
     };
     {
@@ -357,7 +379,9 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
             page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
             let Ok(now) = r else {
                 // Put every switch back where the service has it.
-                if let (Some(s), Some(now)) = (switches.borrow().as_ref(), settings.borrow().as_ref()) {
+                if let (Some(s), Some(now)) =
+                    (switches.borrow().as_ref(), settings.borrow().as_ref())
+                {
                     apply(s, now);
                 }
                 return;
@@ -409,7 +433,11 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
                     .unwrap_or_default();
                 let wanted = view::toggle_folder(&current, folder, on);
                 let show = show.clone();
-                request(&ctx, move |c| c.set_shared_folders(&wanted), move |r| show(r));
+                request(
+                    &ctx,
+                    move |c| c.set_shared_folders(&wanted),
+                    move |r| show(r),
+                );
             });
             folders_row.add_row(&switch.row);
             (folder, switch)
@@ -425,9 +453,13 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         let (ctx, page) = (ctx.clone(), page.clone());
         android_files.connect_activated(move |_| {
             let page = page.clone();
-            request(&ctx, |c| c.open_android_files(), move |r| {
-                page.show_failure(&tr("The folder could not be opened"), r.as_ref().err());
-            });
+            request(
+                &ctx,
+                |c| c.open_android_files(),
+                move |r| {
+                    page.show_failure(&tr("The folder could not be opened"), r.as_ref().err());
+                },
+            );
         });
     }
     let links = user_switch(
@@ -450,7 +482,9 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     arm_group.add(&arm_status_row);
     let arm_restart = action_row(
         &tr("Restart Android to apply"),
-        &tr("Android started before this change. Stop and start Android for ARM apps to follow it."),
+        &tr(
+            "Android started before this change. Stop and start Android for ARM apps to follow it.",
+        ),
     );
     arm_restart.set_visible(false);
     arm_group.add(&arm_restart);
@@ -465,14 +499,16 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     let show_arm: Rc<dyn Fn(Result<crate::model::ArmTranslation, crate::api::Failure>)> = {
         let (page, arm_restart, arm_remove_row) =
             (page.clone(), arm_restart.clone(), arm_remove_row.clone());
-        Rc::new(move |r: Result<crate::model::ArmTranslation, crate::api::Failure>| {
-            page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
-            let Ok(status) = r else { return };
-            arm_status.set_label(&view::arm_status(&status));
-            arm_status_row.set_subtitle(&view::arm_abis(&status));
-            arm_restart.set_visible(status.restart_needed);
-            arm_remove_row.set_sensitive(status.package.is_some());
-        })
+        Rc::new(
+            move |r: Result<crate::model::ArmTranslation, crate::api::Failure>| {
+                page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+                let Ok(status) = r else { return };
+                arm_status.set_label(&view::arm_status(&status));
+                arm_status_row.set_subtitle(&view::arm_abis(&status));
+                arm_restart.set_visible(status.restart_needed);
+                arm_remove_row.set_sensitive(status.package.is_some());
+            },
+        )
     };
     {
         let (ctx, show_arm) = (ctx.clone(), show_arm.clone());
@@ -635,13 +671,17 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     });
     {
         let (show, port) = (show.clone(), port.clone());
-        request(ctx, |c| c.settings(), move |r| {
-            if let Ok(settings) = r.as_ref() {
-                port.set_text(&settings.adb_port.to_string());
-                adb_command.set_label(&settings.adb_connect());
-            }
-            show(r);
-        });
+        request(
+            ctx,
+            |c| c.settings(),
+            move |r| {
+                if let Ok(settings) = r.as_ref() {
+                    port.set_text(&settings.adb_port.to_string());
+                    adb_command.set_label(&settings.adb_connect());
+                }
+                show(r);
+            },
+        );
     }
     page.root.clone().upcast()
 }

@@ -374,9 +374,8 @@ impl ImageStore {
             }
         }
         let mut state = self.state().map_err(store)?;
-        let target = versions::target_major(channel, &supported).ok_or_else(|| {
-            ChooseError::Unsupported("no Android version is supported".into())
-        })?;
+        let target = versions::target_major(channel, &supported)
+            .ok_or_else(|| ChooseError::Unsupported("no Android version is supported".into()))?;
         let older = target < state.current.android_major;
         if older && !erase_data {
             return Err(ChooseError::DataWouldBeLost(format!(

@@ -14,12 +14,12 @@ use std::sync::Arc;
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 
-use common::{request, Ctx, Shared};
 use crate::api::{is_administrator, Elevated, LocalApi};
 use crate::i18n::{tr, trf};
 use crate::model::Client;
 use crate::pages::Page;
 use crate::view;
+use common::{request, Ctx, Shared};
 
 /// What the command line asked for: the page to open on, and APKs to install.
 #[derive(Debug, Default, Clone)]
@@ -119,7 +119,10 @@ fn build(app: &adw::Application, start: &Start) {
         .child(&list)
         .build();
     sidebar_view.set_content(Some(&sidebar_scroll));
-    split.set_sidebar(Some(&adw::NavigationPage::new(&sidebar_view, &tr("DSA Settings"))));
+    split.set_sidebar(Some(&adw::NavigationPage::new(
+        &sidebar_view,
+        &tr("DSA Settings"),
+    )));
 
     {
         let (ctx, split) = (ctx.clone(), split.clone());
@@ -199,7 +202,10 @@ fn install(ctx: &Shared, paths: Vec<String>) {
         common::tell(
             ctx,
             &tr("Not installed"),
-            &trf("Only APK files can be installed: {0}", &[&others.join(", ")]),
+            &trf(
+                "Only APK files can be installed: {0}",
+                &[&others.join(", ")],
+            ),
         );
     }
     for apk in apks {
@@ -209,27 +215,35 @@ fn install(ctx: &Shared, paths: Vec<String>) {
             .unwrap_or_else(|| apk.clone());
         ctx.toast(&trf("Installing {0} in Android…", &[&name]));
         let ctx2 = ctx.clone();
-        request(ctx, move |c| c.install(&apk), move |r| match r {
-            Ok(outcome) if outcome.done => ctx2.toast(&trf(
-                "{0} is installed ({1}). Open it from the app grid.",
-                &[&name, outcome.package.as_deref().unwrap_or_default()],
-            )),
-            Ok(outcome) => common::tell(
-                &ctx2,
-                &tr("Not installed"),
-                &trf(
-                    "{0} was not installed: {1} ({2})",
-                    &[&name, &view::install_reason(&outcome.status), &outcome.detail],
+        request(
+            ctx,
+            move |c| c.install(&apk),
+            move |r| match r {
+                Ok(outcome) if outcome.done => ctx2.toast(&trf(
+                    "{0} is installed ({1}). Open it from the app grid.",
+                    &[&name, outcome.package.as_deref().unwrap_or_default()],
+                )),
+                Ok(outcome) => common::tell(
+                    &ctx2,
+                    &tr("Not installed"),
+                    &trf(
+                        "{0} was not installed: {1} ({2})",
+                        &[
+                            &name,
+                            &view::install_reason(&outcome.status),
+                            &outcome.detail,
+                        ],
+                    ),
                 ),
-            ),
-            Err(failure) => common::tell(
-                &ctx2,
-                &tr("Not installed"),
-                &trf(
-                    "{0} did not reach Android. {1}",
-                    &[&name, &view::problem_text(&failure)],
+                Err(failure) => common::tell(
+                    &ctx2,
+                    &tr("Not installed"),
+                    &trf(
+                        "{0} did not reach Android. {1}",
+                        &[&name, &view::problem_text(&failure)],
+                    ),
                 ),
-            ),
-        });
+            },
+        );
     }
 }

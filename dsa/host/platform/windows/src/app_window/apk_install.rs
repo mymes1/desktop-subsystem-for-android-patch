@@ -27,7 +27,10 @@ const BUILD: &str = "dsa-app-window install";
 /// The APK Installer beside the window host at `program`: its own program in the
 /// program folder's `settings` folder, beside the settings app. None when it is not there.
 pub fn install_window(program: &Path) -> Option<PathBuf> {
-    let window = program.parent()?.join("settings").join("DsaApkInstaller.exe");
+    let window = program
+        .parent()?
+        .join("settings")
+        .join("DsaApkInstaller.exe");
     window.is_file().then_some(window)
 }
 
