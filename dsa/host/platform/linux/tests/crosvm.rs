@@ -184,7 +184,9 @@ fn fr2_the_published_image_boots_under_crosvm_until_its_daemon_connects() {
                     break Err(format!("{exit} after {} s", started.elapsed().as_secs()));
                 }
                 if Instant::now() >= deadline {
-                    break Err(format!("the guest's daemon did not connect within 600 s: {why:?}"));
+                    break Err(format!(
+                        "the guest's daemon did not connect within 600 s: {why:?}"
+                    ));
                 }
             }
         }
