@@ -231,7 +231,9 @@ mod tests {
         }
         stop.store(true, Ordering::Relaxed);
         for worker in workers {
-            worker.join().expect("a worker thread survives the give-backs");
+            worker
+                .join()
+                .expect("a worker thread survives the give-backs");
         }
     }
 
