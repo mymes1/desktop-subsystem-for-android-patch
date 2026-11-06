@@ -175,6 +175,64 @@ class HostRendererSmokeTests(unittest.TestCase):
             lib.stream_renderer_teardown()
 
 
+def probe_init_without_vulkan(dll_path):
+    """Starts the renderer on Vulkan in a process that has no Vulkan driver, and prints what
+    stream_renderer_init returned. Runs in a process of its own, so that a crash shows up as
+    the process dying rather than taking the test runner with it."""
+    if hasattr(os, "add_dll_directory"):
+        os.add_dll_directory(str(Path(dll_path).parent))
+    lib = ctypes.CDLL(dll_path)
+    lib.stream_renderer_init.argtypes = [ctypes.POINTER(StreamRendererParam), ctypes.c_uint64]
+    lib.stream_renderer_init.restype = ctypes.c_int
+    lib.stream_renderer_teardown.argtypes = []
+    lib.stream_renderer_teardown.restype = None
+    cookie = ctypes.c_uint64(0x1234)
+    flags = STREAM_RENDERER_FLAGS_USE_VK_BIT | STREAM_RENDERER_FLAGS_USE_SURFACELESS_BIT
+    params_list = [
+        StreamRendererParam(STREAM_RENDERER_PARAM_USER_DATA, ctypes.addressof(cookie)),
+        StreamRendererParam(
+            STREAM_RENDERER_PARAM_FENCE_CALLBACK,
+            ctypes.cast(dummy_fence_callback, ctypes.c_void_p).value,
+        ),
+        StreamRendererParam(STREAM_RENDERER_PARAM_RENDERER_FLAGS, flags),
+        StreamRendererParam(STREAM_RENDERER_PARAM_WIN0_WIDTH, 256),
+        StreamRendererParam(STREAM_RENDERER_PARAM_WIN0_HEIGHT, 256),
+    ]
+    params_array = (StreamRendererParam * len(params_list))(*params_list)
+    result = lib.stream_renderer_init(params_array, len(params_list))
+    if result == 0:
+        lib.stream_renderer_teardown()
+    print(json.dumps({"init": result}))
+
+
+class RendererWithoutVulkanTests(unittest.TestCase):
+    def test_pr3_renderer_survives_a_host_without_a_vulkan_driver(self):
+        env_path = os.environ.get("GFXSTREAM_BACKEND_PATH")
+        if not env_path or not Path(env_path).exists():
+            self.skipTest("GFXSTREAM_BACKEND_PATH is not set or library does not exist.")
+        env = dict(os.environ)
+        # The loader finds no driver: the one manifest it is pointed at does not exist.
+        missing = str(Path(env_path).resolve().parent / "no-such-vulkan-driver.json")
+        env["VK_ICD_FILENAMES"] = missing
+        env["VK_DRIVER_FILES"] = missing
+        env.pop("ANDROID_EMU_VK_ICD", None)
+        done = subprocess.run(
+            [sys.executable, __file__, "--probe-init-without-vulkan",
+             str(Path(env_path).resolve())],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env=env,
+        )
+        # Starting may fail, but with an answer, not a crash.
+        self.assertGreaterEqual(
+            done.returncode, 0, f"the renderer died with signal {-done.returncode}:\n{done.stderr}"
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        result = json.loads(done.stdout.strip().splitlines()[-1])
+        self.assertIsInstance(result["init"], int)
+
+
 class RenderGpuSelectionTests(unittest.TestCase):
     def run_probe(self, rule, argument):
         env_path = os.environ.get("GFXSTREAM_BACKEND_PATH")
@@ -210,5 +268,7 @@ class RenderGpuSelectionTests(unittest.TestCase):
 if __name__ == "__main__":
     if len(sys.argv) == 5 and sys.argv[1] == "--probe-gpu":
         probe_gpu_selection(sys.argv[2], int(sys.argv[3]), sys.argv[4])
+    elif len(sys.argv) == 3 and sys.argv[1] == "--probe-init-without-vulkan":
+        probe_init_without_vulkan(sys.argv[2])
     else:
         unittest.main()
