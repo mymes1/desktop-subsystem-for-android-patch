@@ -12,7 +12,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use adw::prelude::*;
-use gtk::{gdk, gio, glib};
+use gtk::{gdk, glib};
 
 use crate::api::{is_administrator, Elevated, LocalApi};
 use crate::i18n::{tr, trf};
