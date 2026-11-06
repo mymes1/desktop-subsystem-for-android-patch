@@ -112,7 +112,8 @@ jobs:
           dsa/host/platform/linux/packaging/build-packages.sh \
             --bin-dir dsa/target/release --version "$version" --arch "${{ matrix.arch }}" \
             --placeholder-kernel --image-dir .scratch/stand-in-image --out .scratch/packages \
-            --repo-key .scratch/repo-key.asc --repo-url http://127.0.0.1:8080 \n            --vm-programs .scratch/vm-programs --licenses .scratch/licenses
+            --repo-key .scratch/repo-key.asc --repo-url http://127.0.0.1:8080 \
+            --vm-programs .scratch/vm-programs --licenses .scratch/licenses
           ls -l .scratch/packages
 
       - name: Check the package contents
@@ -132,7 +133,8 @@ jobs:
               /etc/apparmor.d/dsa-vm \
               /usr/share/doc/desktop-subsystem-for-android/crosvm-crates.txt \
               /usr/share/doc/desktop-subsystem-for-android/passt-source.tar.gz \
-              /usr/share/doc/desktop-subsystem-for-android/licenses/crosvm-crates.txt \n              /usr/share/metainfo/io.github.thisisthepy.DSA.metainfo.xml; do
+              /usr/share/doc/desktop-subsystem-for-android/licenses/crosvm-crates.txt \
+              /usr/share/metainfo/io.github.thisisthepy.DSA.metainfo.xml; do
             grep -q "\.$path\$\|\.$path -> " .scratch/deb-contents || { echo "the .deb has no $path"; exit 1; }
             grep -qx "$path" .scratch/rpm-contents || { echo "the .rpm has no $path"; exit 1; }
           done
