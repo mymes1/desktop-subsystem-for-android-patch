@@ -25,8 +25,9 @@
 //! Between those, and whether or not the host is short, the guest keeps only its working set:
 //! all the page cache beyond a target goes back in one trim of the coldest pages, on the next
 //! look that finds it, while the guest is not under memory pressure. Only an app that has just
-//! opened holds the trim back for a while, because it is still reading its files. An app that
-//! closes holds nothing back: its cache goes on the next look. The target follows the
+//! opened holds the trim back for a while, because it is still reading its files, and that
+//! protects only its own memory: an app that closes has what it left returned the moment its
+//! processes exit ([`Reclaimer::app_closed`]), whatever else is opening. The target follows the
 //! guest's own signal, the evicted file pages it reads back (`workingset_refault_file`): cache
 //! that returns soon after a trim was in use, so the target rises; while none returns, it falls
 //! back to its floor.
@@ -51,6 +52,27 @@ pub const TRIM_SIZE_PROPERTY: &str = "vendor.dsa.memory.trim_size";
 /// How often the daemon looks at the guest's memory. Free memory reaches the host on the
 /// look after it is freed, so this is how long it can sit in the guest.
 pub const CHECK_INTERVAL: Duration = Duration::from_secs(5);
+
+/// The longest the reclaim after an app closes waits for that app's processes to exit. The
+/// agent ends them as the window closes, so they are normally gone within milliseconds; one
+/// it keeps running (a widget, a foreground service) does not hold the reclaim back longer.
+pub const EXIT_WAIT_LIMIT: Duration = Duration::from_secs(2);
+
+/// How often the wait for a closed app's processes looks again.
+pub const EXIT_POLL: Duration = Duration::from_millis(20);
+
+/// Whether one of `cmdlines` (the contents of `/proc/<pid>/cmdline`) is a process of
+/// `package`: Android names an app's processes after its package, and its other processes
+/// `<package>:<name>`.
+pub fn package_running(cmdlines: &[String], package: &str) -> bool {
+    cmdlines.iter().any(|line| {
+        let name = line.split('\0').next().unwrap_or("");
+        name == package
+            || name
+                .strip_prefix(package)
+                .is_some_and(|rest| rest.starts_with(':'))
+    })
+}
 
 /// The fields of `/proc/meminfo` the decision uses, in KiB.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -157,6 +179,8 @@ pub enum Reason {
     Gradual,
     /// The host is short of memory.
     HostShort,
+    /// An app's last window closed: what it held goes back now, whatever else is opening.
+    AppClosed,
 }
 
 /// The decision's settings.
@@ -309,6 +333,40 @@ impl Reclaimer {
     /// How much the last [`Reason::Gradual`] asks for, in whole MiB.
     pub fn trim_mib(&self) -> u64 {
         self.trim_kb / 1024
+    }
+
+    /// What to do the moment an app's last window has closed and its processes have exited,
+    /// with `tasks` tasks still open. It never waits. An app that opened a moment ago keeps
+    /// its own working set: the trim then takes page cache only, above the floor, so the new
+    /// app's memory stays resident. Otherwise everything the closed app left goes back in a
+    /// full reclaim ([`Reason::AppClosed`]). `None` only when there is nothing to take.
+    pub fn app_closed(&mut self, now: Duration, tasks: usize, memory: &MemInfo) -> Option<Reason> {
+        // The closed app's cache is not the working set any more, and the refaults it caused
+        // say nothing about the apps left.
+        self.target_kb = self.policy.keep_cache_kb;
+        self.refaulting = false;
+        self.last_tasks = Some(tasks);
+        let opening = tasks > 0
+            && self
+                .tasks_changed
+                .is_some_and(|at| now.saturating_sub(at) < self.policy.settle_after);
+        if opening {
+            let excess = memory.droppable_kb().saturating_sub(self.target_kb);
+            self.trim_kb = excess.min(self.policy.max_trim_kb) / 1024 * 1024;
+            if self.trim_kb == 0 {
+                return None;
+            }
+            self.last_trim = Some(now);
+            return Some(Reason::Gradual);
+        }
+        if tasks == 0 {
+            self.idle_since.get_or_insert(now);
+            self.idle_reclaimed = true;
+        }
+        self.last_reclaim = Some(now);
+        self.last_trim = Some(now);
+        self.measure_floor = true;
+        Some(Reason::AppClosed)
     }
 
     /// Takes in whether the host is short of memory, for the decisions that follow.
