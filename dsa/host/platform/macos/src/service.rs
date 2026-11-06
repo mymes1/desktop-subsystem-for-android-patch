@@ -527,6 +527,7 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
                 config.update.as_ref().map_or(300, |u| u.boot_timeout_secs),
             ),
             trial_running: Arc::new(AtomicBool::new(false)),
+            rollback: Default::default(),
         }),
     })
 }
