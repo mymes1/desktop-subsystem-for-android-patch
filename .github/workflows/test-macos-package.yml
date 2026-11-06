@@ -75,7 +75,8 @@ jobs:
           codesign --verify --strict "$helper"
           test -s "$helper/Contents/Resources/DSA.icns"
           # The layered Icon Composer source of the icon, with each layer it names.
-          plutil -lint DSA.icon/icon.json
+          # plutil -lint reads only property lists, so the JSON is checked with jq.
+          jq -e .groups DSA.icon/icon.json > /dev/null
           test -s DSA.icon/Assets/front-window.png
           test -s DSA.icon/Assets/back-window.png
           grep -Fq front-window.png DSA.icon/icon.json
