@@ -1,0 +1,527 @@
+import AppKit
+import DsaSettingsCore
+import SwiftUI
+
+/// Apps: every app installed in Android, to find, open, see in Android's own settings,
+/// uninstall, or change how its windows size; and Android's own list of apps.
+struct AppsPage: View {
+    @ObservedObject var vm: AppsViewModel
+
+    var body: some View {
+        Form {
+            Section {
+                Text(T("AppsIntro.Text")).font(.callout).foregroundStyle(.secondary)
+            }
+            BannerSection(shown: vm.error != nil, kind: .error, title: T("AppsErrorBar.Title"), message: vm.error ?? "")
+            BannerSection(shown: vm.message != nil, kind: .success, title: T("AppsDoneBar.Title"), message: vm.message ?? "")
+            Section {
+                LinkRow(title: T("AppsManageCard.Title"), detail: T("AppsManageCard.Description"), enabled: !vm.isBusy) {
+                    Task { await vm.manage() }
+                }
+            }
+            Section {
+                HStack {
+                    TextField(T("AppsSearch.PlaceholderText"), text: $vm.search)
+                        .textFieldStyle(.roundedBorder)
+                    Text(vm.count).foregroundStyle(.secondary).monospacedDigit()
+                }
+                if vm.hasNoApps {
+                    Text(T("AppsNone.Text")).foregroundStyle(.secondary)
+                }
+                if vm.hasNoMatches {
+                    Text(T("AppsNoMatch.Text")).foregroundStyle(.secondary)
+                }
+                ForEach(vm.rows) { row in
+                    AppRowView(vm: vm, row: row)
+                }
+            } header: {
+                HStack {
+                    Text(T("AppsInstalledHeader.Text"))
+                    if vm.isBusy {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+            }
+        }
+        .settingsPage()
+        .toolbar {
+            Button { Task { await vm.refresh() } } label: { Label(T("AppsRefreshButton.Content"), systemImage: "arrow.clockwise") }
+                .disabled(vm.isBusy)
+        }
+        .task {
+            await vm.refresh()
+            await vm.loadWindowSettings()
+        }
+    }
+}
+
+/// One app: its icon, name and details, its window settings, and what can be done with it.
+struct AppRowView: View {
+    @ObservedObject var vm: AppsViewModel
+    let row: AppRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                PngImage(data: row.icon)
+                RowLabel(title: row.label, detail: row.detail)
+                Spacer()
+                Text(row.size).foregroundStyle(.secondary).monospacedDigit()
+            }
+            HStack {
+                Toggle(T("AppsResizable.Content"), isOn: Binding(
+                    get: { row.resizable },
+                    set: { value in Task { await vm.setResizable(row.package, value) } }))
+                    .toggleStyle(.checkbox)
+                    .help(T("AppsResizable.ToolTip"))
+                    .disabled(vm.isBusy)
+                Picker(T("AppsStartSize.ToolTip"), selection: Binding(
+                    get: { row.startSizeIndex },
+                    set: { index in Task { await vm.setStartSize(row.package, index) } })) {
+                    if row.startSizeIndex < 0 {
+                        Text(vm.windowOf(row.package).startSizeArgument).tag(-1)
+                    }
+                    ForEach(Array(vm.startSizeChoices.enumerated()), id: \.offset) { item in
+                        Text(item.element.label).tag(item.offset)
+                    }
+                }
+                .labelsHidden()
+                .help(T("AppsStartSize.ToolTip"))
+                .frame(maxWidth: 260)
+                .disabled(vm.isBusy)
+                Spacer()
+                Button(T("AppsOpenButton.Content")) { Task { await vm.open(row.package) } }
+                Button(T("AppsInfoButton.Content")) { Task { await vm.info(row.package) } }
+                Button(T("AppsUninstallButton.Content")) { uninstall() }
+                    .disabled(!row.canUninstall || vm.isBusy)
+                    .help(row.uninstallTip ?? "")
+            }
+            .disabled(vm.isBusy)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func uninstall() {
+        let label = vm.labelOf(row.package)
+        guard Shell.confirm(Format.fill(T("AppsUninstallConfirmTitle"), [label]),
+                            Format.fill(T("AppsUninstallConfirmBody"), [label]),
+                            T("AppsUninstallButton.Content")) else {
+            return
+        }
+        Task { await vm.uninstall(row.package) }
+    }
+}
+
+/// Running in the background: the apps that keep running with no window, and whether a stop
+/// from the menu bar asks first.
+struct BackgroundPage: View {
+    @ObservedObject var vm: BackgroundViewModel
+
+    var body: some View {
+        Form {
+            Section {
+                Text(T("BackgroundIntro.Text")).font(.callout).foregroundStyle(.secondary)
+            }
+            BannerSection(shown: vm.error != nil, kind: .error, title: T("BackgroundErrorBar.Title"), message: vm.error ?? "")
+            BannerSection(shown: vm.message != nil, kind: .success, title: T("BackgroundDoneBar.Title"), message: vm.message ?? "")
+            Section {
+                if vm.hasNone {
+                    Text(T("BackgroundNone.Text")).foregroundStyle(.secondary)
+                }
+                ForEach(vm.apps) { app in
+                    HStack(spacing: 10) {
+                        PngImage(data: app.icon)
+                        RowLabel(title: app.label, detail: app.detail)
+                        Spacer()
+                        Button(T("BackgroundOpenButton.Content")) { Task { await vm.open(app.package) } }
+                        Button(T("BackgroundStopButton.Content")) { Task { await vm.stop(app.package) } }
+                    }
+                    .disabled(vm.isBusy)
+                }
+            } header: {
+                HStack {
+                    Text(T("BackgroundAppsHeader.Text"))
+                    if vm.isBusy {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+            }
+            Section(T("BackgroundStoppingHeader.Text")) {
+                SwitchRow(title: T("BackgroundAskCard.Header"), detail: T("BackgroundAskCard.Description"),
+                          isOn: vm.askBeforeStop, enabled: !vm.isBusy, set: { await vm.setAskBeforeStop($0) })
+            }
+        }
+        .settingsPage()
+        .toolbar {
+            Button { Task { await vm.refresh() } } label: { Label(T("BackgroundRefreshButton.Content"), systemImage: "arrow.clockwise") }
+                .disabled(vm.isBusy)
+        }
+        .task { await vm.refresh() }
+    }
+}
+
+/// Widgets: the widgets placed on the desktop and the ones the apps offer. While the page is
+/// shown it watches the placed widgets, so one placed or removed elsewhere shows at once.
+struct WidgetsPage: View {
+    @ObservedObject var vm: WidgetsViewModel
+
+    var body: some View {
+        Form {
+            Section {
+                Text(T("WidgetsIntro.Text")).font(.callout).foregroundStyle(.secondary)
+            }
+            BannerSection(shown: vm.error != nil, kind: .error, title: T("WidgetsErrorBar.Title"), message: vm.error ?? "")
+            BannerSection(shown: vm.message != nil, kind: .success, title: T("WidgetsDoneBar.Title"), message: vm.message ?? "")
+            Section {
+                if vm.hasNoPlaced {
+                    Text(T("WidgetsPlacedNone.Text")).foregroundStyle(.secondary)
+                }
+                ForEach(vm.placed) { widget in
+                    HStack {
+                        RowLabel(title: widget.label, detail: widget.app + "\n" + widget.detail)
+                        Spacer()
+                        Button(T("WidgetsRemoveButton.Content")) { Task { await vm.remove(widget.id) } }
+                            .disabled(vm.isBusy)
+                    }
+                }
+            } header: {
+                HStack {
+                    Text(T("WidgetsPlacedHeader.Text"))
+                    if vm.isBusy {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+            }
+            Section(T("WidgetsGalleryHeader.Text")) {
+                if vm.hasNoOffers {
+                    Text(T("WidgetsGalleryNone.Text")).foregroundStyle(.secondary)
+                }
+                ForEach(vm.offers) { offer in
+                    HStack(spacing: 10) {
+                        PngImage(data: offer.preview, size: 56, placeholder: "rectangle.3.group")
+                        RowLabel(title: offer.label, detail: offer.app + "\n" + offer.detail)
+                        Spacer()
+                        Button(T("WidgetsAddButton.Content")) { Task { await vm.add(offer.provider) } }
+                            .disabled(vm.isBusy)
+                    }
+                }
+            }
+        }
+        .settingsPage()
+        .toolbar {
+            Button { Task { await vm.refresh() } } label: { Label(T("WidgetsRefreshButton.Content"), systemImage: "arrow.clockwise") }
+                .disabled(vm.isBusy)
+        }
+        .task {
+            await vm.refresh()
+            // The watch runs dsa as a child process; leaving the page cancels it, which ends dsa.
+            await vm.watch(retry: 5)
+        }
+    }
+}
+
+/// One value of the device identity: its box, with Android's own value as the hint.
+struct IdentityFieldRow: View {
+    @ObservedObject var vm: DeviceIdentityViewModel
+    let key: String
+
+    var body: some View {
+        let field = vm.field(key)
+        let problem = vm.problem(field)
+        VStack(alignment: .leading, spacing: 4) {
+            LabeledContent {
+                TextField(field.placeholder, text: Binding(get: { vm.field(key).value }, set: { vm.edit(key, $0) }))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 320)
+                    .disabled(vm.isBusy)
+            } label: {
+                RowLabel(title: vm.label(field), detail: vm.detail(field))
+            }
+            if !problem.isEmpty {
+                Text(problem).font(.callout).foregroundStyle(.red)
+            }
+        }
+    }
+}
+
+/// Device identity: the names and build fingerprint Android reports to its apps.
+struct DeviceIdentityPage: View {
+    @ObservedObject var vm: DeviceIdentityViewModel
+
+    var body: some View {
+        Form {
+            Section {
+                Text(T("IdentityIntro.Text")).font(.callout).foregroundStyle(.secondary)
+                Banner(kind: .warning, title: T("IdentityWarning.Title"), message: T("IdentityWarning.Message"))
+            }
+            BannerSection(shown: vm.error != nil, kind: .error, title: T("SettingsErrorBar.Title"), message: vm.error ?? "")
+            BannerSection(shown: vm.message != nil, kind: .success, title: T("IdentityDoneBar.Title"), message: vm.message ?? "")
+            Section {
+                HStack {
+                    if vm.isBusy {
+                        ProgressView().controlSize(.small)
+                    }
+                    Spacer()
+                    if vm.needsRestart {
+                        Button(T("IdentityRestartButton.Content")) { Task { await vm.restart() } }.disabled(!vm.canRestart)
+                    }
+                    Button(T("IdentityResetButton.Content")) {
+                        guard Shell.confirm(T("IdentityResetConfirmTitle"), T("IdentityResetConfirmBody"), T("IdentityResetButton.Content")) else {
+                            return
+                        }
+                        Task { await vm.reset() }
+                    }
+                    .disabled(!vm.canReset)
+                    Button(T("IdentitySaveButton.Content")) { Task { await vm.save() } }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!vm.canSave)
+                }
+            }
+            Section(T("IdentityNamesHeader.Text")) {
+                ForEach(vm.names) { IdentityFieldRow(vm: vm, key: $0.key) }
+            }
+            Section(T("IdentityFingerprintHeader.Text")) {
+                LabeledContent(T("IdentityPreview.Text")) {
+                    Text(vm.fingerprintPreview).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                }
+                ForEach(vm.fingerprintParts) { IdentityFieldRow(vm: vm, key: $0.key) }
+                IdentityFieldRow(vm: vm, key: vm.wholeFingerprint.key)
+            }
+        }
+        .settingsPage()
+        .task { await vm.load() }
+    }
+}
+
+/// Network: how Android reaches the network now, and the advanced networking switch.
+struct NetworkPage: View {
+    @ObservedObject var vm: SettingsViewModel
+
+    var body: some View {
+        Form {
+            BannerSection(shown: vm.error != nil, kind: .error, title: T("SettingsErrorBar.Title"), message: vm.error ?? "")
+            Section {
+                HStack {
+                    RowLabel(title: T("NetworkStatusCard.Header"), detail: vm.networkModeText)
+                    Spacer()
+                    Button(T("NetworkRefreshButton.Content")) { Task { await vm.refreshNetwork() } }
+                }
+                if vm.hasNetworkProblem {
+                    Banner(kind: .warning, title: T("NetworkProblemBar.Title"), message: vm.networkProblem)
+                }
+                if vm.hasNetworkDetails {
+                    LabeledContent(T("NetworkAddressLabel.Text")) { Text(vm.networkAddresses).textSelection(.enabled) }
+                    LabeledContent(T("NetworkDnsLabel.Text")) { Text(vm.networkDns).textSelection(.enabled) }
+                    LabeledContent(T("NetworkGatewayLabel.Text")) { Text(vm.networkGateway).textSelection(.enabled) }
+                }
+            }
+            Section(T("NetworkAdvancedHeader.Text")) {
+                SwitchRow(title: T("AdvancedNetworkingCard.Header"), detail: T("AdvancedNetworkingCard.Description"),
+                          isOn: vm.advancedNetworking, enabled: vm.canChange, set: { await vm.setAdvancedNetworking($0) })
+                if vm.networkRestartNeeded {
+                    Banner(kind: .info, title: T("NetworkRestartBar.Title"), message: T("NetworkRestartBar.Message"))
+                }
+            }
+        }
+        .settingsPage()
+        .task {
+            await vm.load()
+            await vm.refreshNetwork()
+        }
+    }
+}
+
+/// Advanced: the clipboard, file sharing, links, freezing, resetting the data, ARM apps,
+/// developer mode, the traces, the logs and the command line.
+struct AdvancedPage: View {
+    @ObservedObject var vm: SettingsViewModel
+    @State private var adbPort = ""
+
+    var body: some View {
+        Form {
+            BannerSection(shown: vm.error != nil, kind: .error, title: T("SettingsErrorBar.Title"), message: vm.error ?? "")
+            Section {
+                SwitchRow(title: T("ClipboardCard.Header"), detail: T("ClipboardCard.Description"),
+                          isOn: vm.clipboard, enabled: vm.canChange, set: { await vm.setClipboard($0) })
+            }
+            Section(T("FilesHeader.Text")) {
+                SwitchRow(title: T("FileSharingCard.Header"), detail: T("FileSharingCard.Description"),
+                          isOn: vm.fileSharing, enabled: vm.canChange, set: { await vm.setFileSharing($0) })
+                VStack(alignment: .leading, spacing: 6) {
+                    RowLabel(title: T("SharedFoldersCard.Header"), detail: T("SharedFoldersCard.Description"))
+                    HStack(spacing: 14) {
+                        ForEach(SettingsInfo.allFolders, id: \.self) { folder in
+                            Toggle(T("Folder_\(folder)"), isOn: Binding(
+                                get: { vm.isFolderShared(folder) },
+                                set: { shared in Task { await vm.setFolderShared(folder, shared) } }))
+                                .toggleStyle(.checkbox)
+                        }
+                    }
+                    .disabled(!vm.canChooseFolders)
+                }
+                LinkRow(title: T("AndroidFilesCard.Header"), detail: T("AndroidFilesCard.Description")) {
+                    Task { await vm.openAndroidFiles() }
+                }
+                Text(T("FilesNote.Text")).font(.callout).foregroundStyle(.secondary)
+            }
+            Section {
+                SwitchRow(title: T("FreezeCard.Header"), detail: T("FreezeCard.Description"),
+                          isOn: vm.freeze, enabled: vm.canChange, set: { await vm.setFreeze($0) })
+                SwitchRow(title: T("LinksCard.Header"), detail: T("LinksCard.Description"),
+                          isOn: vm.linksInAndroid, enabled: vm.canChange, set: { await vm.setLinksInAndroid($0) })
+            }
+            Section(T("ResetDataHeader.Text")) {
+                if vm.resetDone {
+                    Banner(kind: .success, title: T("ResetDoneBar.Title"), message: T("ResetDoneBar.Message"))
+                }
+                ButtonRow(title: T("ResetDataCard.Header"), detail: T("ResetDataCard.Description"),
+                          action: T("ResetDataButton.Content"), enabled: vm.canResetData, busy: vm.isResetting) {
+                    guard Shell.confirm(T("ResetDataConfirm.Title"), vm.resetWarning, T("ResetDataConfirm.Action")) else {
+                        return
+                    }
+                    Task { await vm.resetData() }
+                }
+            }
+            Section(T("ArmHeader.Text")) {
+                SwitchRow(title: T("ArmCard.Header"), detail: vm.armStatus + "\n" + vm.armAbis + "\n" + T("ArmCard.Description"),
+                          isOn: vm.armTranslation, enabled: vm.canChange, set: { await vm.setArmTranslation($0) })
+                if vm.armRestartNeeded {
+                    Banner(kind: .info, title: T("ArmRestartBar.Title"), message: T("ArmRestartBar.Message"))
+                }
+                ButtonRow(title: T("ArmRemoveCard.Header"), detail: T("ArmRemoveCard.Description"),
+                          action: T("ArmRemoveButton.Content"), enabled: vm.canRemoveArmTranslation) {
+                    Task { await vm.removeArmTranslation() }
+                }
+            }
+            Section(T("DeveloperHeader.Text")) {
+                SwitchRow(title: T("DeveloperModeCard.Header"), detail: T("DeveloperModeCard.Description"),
+                          isOn: vm.developerMode, enabled: vm.canChange, set: { await vm.setDeveloperMode($0) })
+                LabeledContent {
+                    Text(vm.adbConnect).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                } label: {
+                    RowLabel(title: T("AdbCard.Header"), detail: T("AdbCard.Description"))
+                }
+                LabeledContent(T("AdbPortLabel.Text")) {
+                    TextField("", text: $adbPort)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 90)
+                        .onSubmit { Task { await vm.setAdbPort(adbPort) } }
+                        .disabled(!vm.canChange)
+                }
+            }
+            Section(T("DiagnosticsHeader.Text")) {
+                AdministratorSwitchRow(
+                    title: T("InputTraceCard.Header"), detail: T("InputTraceCard.Description"), isOn: vm.inputTrace,
+                    canChange: vm.canChangeTraces, needsAdministrator: vm.tracesNeedAdministrator, set: { await vm.setInputTrace($0) }) {
+                    Task { await changeAsAdministrator(vm, ["settings", "set", "input-trace", vm.inputTrace ? "off" : "on"]) }
+                }
+                AdministratorSwitchRow(
+                    title: T("ResizeTraceCard.Header"), detail: T("ResizeTraceCard.Description"), isOn: vm.resizeTrace,
+                    canChange: vm.canChangeTraces, needsAdministrator: vm.tracesNeedAdministrator, set: { await vm.setResizeTrace($0) }) {
+                    Task { await changeAsAdministrator(vm, ["settings", "set", "resize-trace", vm.resizeTrace ? "off" : "on"]) }
+                }
+                Text(T("DiagnosticsNote.Text")).font(.callout).foregroundStyle(.secondary)
+            }
+            Section(T("LogsHeader.Text")) {
+                LinkRow(title: T("UserLogsCard.Header"), detail: T("UserLogsCard.Description")) {
+                    Shell.open(folder: Shell.userLogFolder)
+                }
+                LinkRow(title: T("ServiceLogsCard.Header"), detail: vm.logDir) {
+                    Shell.open(folder: Shell.serviceLogFolder(vm.logDir))
+                }
+            }
+            Section(T("CommandLineHeader.Text")) {
+                LabeledContent {
+                    Text("dsa status | dsa settings | dsa memory").font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                } label: {
+                    RowLabel(title: T("CommandLineCard.Header"), detail: T("CommandLineCard.Description"))
+                }
+            }
+        }
+        .settingsPage()
+        .task {
+            await vm.load()
+            adbPort = String(vm.adbPort)
+        }
+        .onChange(of: vm.adbPort) { port in adbPort = String(port) }
+    }
+}
+
+/// Android log: Android's log as it comes, filtered by priority and text, which can be paused,
+/// and saving the diagnostics.
+struct LogsPage: View {
+    @ObservedObject var vm: LogViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(T("LogsNote.Text")).font(.callout).foregroundStyle(.secondary)
+            if let error = vm.error {
+                Banner(kind: .error, title: T("LogsErrorBar.Title"), message: error)
+            }
+            if let status = vm.status {
+                Banner(kind: vm.isSaving ? .info : .success, title: T("LogsStatusBar.Title"), message: status)
+            }
+            HStack {
+                TextField(T("LogsFilter.PlaceholderText"), text: $vm.filter).textFieldStyle(.roundedBorder)
+                Picker("", selection: $vm.priority) {
+                    ForEach(LogViewModel.priorities, id: \.self) { priority in
+                        Text(T("Logs_Priority_\(priority)")).tag(priority)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 140)
+                Toggle(T("LogsPause.Content"), isOn: $vm.paused).toggleStyle(.button)
+            }
+            ScrollViewReader { reader in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(vm.lines) { line in
+                            Text(line.text)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(color(line.priority))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id(line.id)
+                        }
+                    }
+                    .padding(8)
+                }
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
+                .onChange(of: vm.lines.count) { _ in
+                    // The newest line stays in view while the log is not paused.
+                    if !vm.paused, let last = vm.lines.last {
+                        reader.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
+            }
+            if vm.paused {
+                Text(vm.pausedText).font(.callout).foregroundStyle(.secondary)
+            }
+        }
+        .padding(20)
+        .toolbar {
+            Button {
+                if let path = Shell.askDiagnosticsPath() {
+                    Task { await vm.saveDiagnostics(path) }
+                }
+            } label: {
+                Label(T("LogsSaveButton.Content"), systemImage: "square.and.arrow.down")
+            }
+            .disabled(!vm.canSave)
+        }
+        // Android reads its log for this page only while the page is shown.
+        .onAppear { vm.start() }
+        .onDisappear { vm.stop() }
+    }
+
+    private func color(_ priority: String) -> Color {
+        switch priority {
+        case "E", "F": return .red
+        case "W": return .orange
+        case "V", "D": return .secondary
+        default: return .primary
+        }
+    }
+}

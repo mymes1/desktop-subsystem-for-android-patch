@@ -348,6 +348,23 @@ jobs:
           echo "{\"image_dir\": \"$image\", \"data_dir\": \"$RUNNER_TEMP/user\"}" > "$RUNNER_TEMP/dsa-hostd.json"
           target/release/dsa-hostd check "$RUNNER_TEMP/dsa-hostd.json"
 
+      # The settings app (SwiftUI): its view models' tests against a fake dsa, then the app
+      # and the icon drawer as the package builds them.
+      - name: Test the settings app
+        run: swift test --package-path host/platform/macos/settings --scratch-path target/dsa-settings
+
+      - name: Build the settings app
+        run: |
+          swift build -c release --package-path host/platform/macos/settings --scratch-path target/dsa-settings
+          bin="$(swift build -c release --package-path host/platform/macos/settings --scratch-path target/dsa-settings --show-bin-path)"
+          test -x "$bin/dsa-settings"
+          "$bin/dsa-icon" "$RUNNER_TEMP/DSA.iconset"
+          test "$(ls "$RUNNER_TEMP/DSA.iconset" | wc -l | tr -d ' ')" = 10
+          iconutil -c icns -o "$RUNNER_TEMP/DSA.icns" "$RUNNER_TEMP/DSA.iconset"
+          xcrun xcstringstool compile host/platform/macos/settings/Resources/Localizable.xcstrings \
+            --output-directory "$RUNNER_TEMP/strings"
+          plutil -lint "$RUNNER_TEMP/strings/en.lproj/Localizable.strings" "$RUNNER_TEMP/strings/ko.lproj/Localizable.strings"
+
   # The Linux host's VM and its ports: the vsock suite over vsock loopback standing in for a
   # guest, and the launcher against the crosvm DSA ships, under KVM: the runner's own kernel
   # for the control socket's commands, and the published Android image until its control
