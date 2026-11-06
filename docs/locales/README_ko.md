@@ -125,6 +125,12 @@ dsa logs collect -o diag.zip        # 문제 보고에 필요한 모든 것을 z
 인자 없이 `dsa`를 실행하면 모든 명령이 나옵니다. 안드로이드 로그는 메모리에만 있고, 누군가
 읽는 동안에만 호스트로 흐릅니다. 문제를 보고할 때 `diag.zip`을 첨부해 주세요.
 
+## 사용 안내서
+
+설치, 앱과 창, APK, 파일, Android 버전, 설정, 메모리, 개발자 모드, 문제 해결, 제거를 차례대로
+설명하는 안내서가 [docs/guides/ko](../guides/ko/README.md)에 있습니다.
+[소개 페이지](../guides/intro/index.html#ko)는 처음 접하는 분께 프로젝트를 설명합니다.
+
 ## 아키텍처
 
 ```mermaid
