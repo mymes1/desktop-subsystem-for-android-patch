@@ -718,13 +718,20 @@ jobs:
       - name: Write the lists
         id: write
         run: |
+          # The supported versions are written once, in dsa/android-versions.json; an image
+          # of another version is a mistake in the inputs, not a version to offer.
           for arch in x86_64 arm64; do
             list=images.json
             [[ "$arch" == arm64 ]] && list=images-arm64.json
-            jq -n --arg arch "$arch" --slurpfile inputs dsa/guest/image/inputs.json \
+            jq -n --slurpfile versions dsa/android-versions.json \
               --slurpfile images <(jq -s . entries/*-"$arch".json) \
-              '{format: 1, supported_majors: ([$inputs[0].images[] | select((.arch // "x86_64") == $arch) | .android_major] | unique), images: $images[0]}' \
+              '{format: 1, supported_majors: ($versions[0].supported_majors | unique), images: $images[0]}' \
               > "$list"
+            stray="$(jq '[.supported_majors as $s | .images[] | select(.android_major as $m | $s | index($m) | not) | .version]' "$list")"
+            if [[ "$stray" != "[]" ]]; then
+              echo "::error::$list has images of unsupported versions: $stray"
+              exit 1
+            fi
             cat "$list"
           done
           # The installer's first screen names the newest Android the list supports.

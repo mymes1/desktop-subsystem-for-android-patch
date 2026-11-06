@@ -2294,3 +2294,77 @@ fn fr15_settings_say_where_program_updates_come_from() {
         assert!(line.contains("does not update it"), "{line}");
     }
 }
+
+/// Android versions kept in memory: 17 runs, and 16 can be chosen.
+#[derive(Default)]
+struct FakeVersions(std::sync::Mutex<dsa_host_core::update::versions::Channel>);
+
+impl dsa_host_core::update::versions::AndroidVersions for FakeVersions {
+    fn needs_administrator(&self) -> bool {
+        false
+    }
+    fn report(&self) -> Result<dsa_host_core::update::versions::VersionReport, String> {
+        use dsa_host_core::update::versions::{target_major, VersionReport};
+        let channel = *self.0.lock().unwrap();
+        Ok(VersionReport {
+            version: "17.0.0-16373615-8".into(),
+            android_major: 17,
+            build: 1637361508,
+            build_id: Some("16373615".into()),
+            security_patch: Some("2026-06-05".into()),
+            channel,
+            supported_majors: vec![16, 17],
+            target_major: target_major(channel, &[16, 17]).unwrap(),
+            on_trial: false,
+            notice: None,
+        })
+    }
+    fn choose(
+        &self,
+        channel: dsa_host_core::update::versions::Channel,
+        erase_data: bool,
+    ) -> Result<
+        dsa_host_core::update::versions::VersionReport,
+        dsa_host_core::update::versions::ChooseError,
+    > {
+        use dsa_host_core::update::versions::{Channel, ChooseError};
+        if channel == Channel::Major(16) && !erase_data {
+            return Err(ChooseError::DataWouldBeLost("16 is older".into()));
+        }
+        *self.0.lock().unwrap() = channel;
+        self.report().map_err(ChooseError::Store)
+    }
+}
+
+#[test]
+fn fr14_dsa_android_shows_the_version_and_moves_down_only_with_erase_data() {
+    use dsa_host_core::host_api::HostApiService;
+    use dsa_host_core::update::versions::Channel;
+    let ((listener, _, _), endpoint) = local_pair();
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_android_versions(Arc::new(FakeVersions::default()));
+    let _service = RunningService::start_service(listener, service);
+
+    let shown = stdout(&dsa(&endpoint, "android version"));
+    assert!(shown.contains("Android 17 (17.0.0-16373615-8)"), "{shown}");
+    assert!(shown.contains("security patch 2026-06-05"), "{shown}");
+    assert!(shown.contains("Supported: Android 16, 17"), "{shown}");
+    let json = json_of(&dsa(&endpoint, "android --json"));
+    assert_eq!(json["android_major"], 17);
+    assert_eq!(json["channel"], "latest");
+
+    let refused = dsa(&endpoint, "android use 16");
+    assert!(!refused.status.success());
+    let warning = stderr(&refused);
+    assert!(warning.contains("accounts"), "{warning}");
+    assert!(warning.contains("--erase-data"), "{warning}");
+    let moved = json_of(&dsa(&endpoint, "android use 16 --erase-data --json"));
+    assert_eq!(moved["channel"], "16");
+    assert_eq!(moved["target_major"], 16);
+
+    let parsed = parse(&args("android use latest")).unwrap();
+    assert_eq!(parsed.command, Cmd::AndroidUse);
+    assert_eq!(parsed.android, Some(Channel::Latest));
+    assert!(parse(&args("android use seventeen")).is_err());
+    assert!(parse(&args("android use")).is_err());
+}

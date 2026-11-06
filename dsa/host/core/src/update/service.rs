@@ -10,7 +10,8 @@ use std::time::{Duration, Instant};
 use ed25519_dalek::VerifyingKey;
 
 use super::manifest::{self, ImageEntry};
-use super::policy::{decide, Decision, InstalledImage};
+use super::policy::{decide_for, Decision, InstalledImage};
+use super::versions::{AndroidVersions, Channel, ChooseError, VersionReport};
 use super::store::{Fetch, ImageStore};
 use super::trial::{self, Boot, Outcome};
 use super::UpdateError;
@@ -41,6 +42,58 @@ impl UpdateNotices {
     }
     pub fn get(&self) -> Option<String> {
         self.0.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+}
+
+/// A request for the update service to check for images now rather than at its next turn,
+/// set when the user chooses another Android version.
+#[derive(Default)]
+pub struct CheckNow(AtomicBool);
+
+impl CheckNow {
+    pub fn request(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+    /// Whether a check was asked for since the last call.
+    pub fn take(&self) -> bool {
+        self.0.swap(false, Ordering::SeqCst)
+    }
+}
+
+/// The Android version of a service that keeps its images in `store`.
+pub struct StoreVersions {
+    pub store: Arc<ImageStore>,
+    pub notices: Arc<UpdateNotices>,
+    pub check_now: Arc<CheckNow>,
+    /// Whether every user of the computer boots from `store`, so that only an administrator
+    /// may choose for them all. A store a user keeps for themselves is theirs to choose.
+    pub shared_by_users: bool,
+}
+
+impl AndroidVersions for StoreVersions {
+    fn needs_administrator(&self) -> bool {
+        self.shared_by_users
+    }
+
+    fn report(&self) -> Result<VersionReport, String> {
+        self.store
+            .report(self.notices.get())
+            .map_err(|e| e.to_string())
+    }
+
+    fn choose(&self, channel: Channel, erase_data: bool) -> Result<VersionReport, ChooseError> {
+        self.store.choose(channel, erase_data)?;
+        if self.store.switch_pending() {
+            let report = self.report().map_err(ChooseError::Store)?;
+            let notice = format!(
+                "Android {} is chosen; the service downloads it now and it is used the next \
+                 time Android starts",
+                report.target_major
+            );
+            self.notices.set(notice);
+        }
+        self.check_now.request();
+        self.report().map_err(ChooseError::Store)
     }
 }
 
@@ -106,12 +159,19 @@ pub fn check_reporting(
         .map_err(|e| UpdateError::BadSignature(format!("fetching the signature: {e}")))?;
     let signature = String::from_utf8_lossy(&signature);
     let manifest = manifest::verify(&list, &signature, keys)?;
+    let moved_up = store.follow_supported(&manifest.supported_majors)?;
     let state = store.state()?;
     if state.on_trial {
-        return Ok(None);
+        return Ok(moved_up);
     }
-    match decide(&state.current, &manifest, &state.failed) {
-        Decision::UpToDate => Ok(None),
+    match decide_for(
+        &state.current,
+        &manifest,
+        &state.failed,
+        state.channel,
+        state.older_allowed,
+    ) {
+        Decision::UpToDate => Ok(moved_up),
         Decision::Unsupported(why) => Ok(Some(why)),
         Decision::Apply(image) => {
             let total = image.files.iter().map(|file| file.size).sum();

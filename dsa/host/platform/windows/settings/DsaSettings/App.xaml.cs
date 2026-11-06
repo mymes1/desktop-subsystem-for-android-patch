@@ -18,6 +18,7 @@ public partial class App : Application
     internal static WidgetsViewModel Widgets { get; } = new(Service, Text, Cli);
     internal static DeviceIdentityViewModel DeviceIdentity { get; } = new(Cli, Service, Text);
     internal static BackgroundViewModel Background { get; } = new(Service, Text);
+    internal static AndroidVersionViewModel AndroidVersion { get; } = new(Cli, Text);
 
     /// <summary>The argument that names an APK to install. Earlier releases associated APK files
     /// with the settings app and this argument; the app now hands such an APK on to the APK

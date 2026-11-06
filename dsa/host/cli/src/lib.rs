@@ -235,6 +235,7 @@ use dsa_host_core::host_api::{
 };
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::session::SessionState;
+use dsa_host_core::update::versions::{Channel, VersionReport};
 use dsa_host_core::tasks::{AppInfo, Task};
 use dsa_host_core::widgets::{Widget, WidgetEvent, WidgetProvider};
 use dsa_transport::Connector;
@@ -251,7 +252,8 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | remove] | files [open]> \
-     arm-translation [status | install <folder> | remove] | reset-data --yes> \
+     arm-translation [status | install <folder> | remove] | reset-data --yes | \
+     android [version | use <major>|latest [--erase-data]]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
 pub mod device;
@@ -315,6 +317,10 @@ pub enum Command {
     FilesOpen,
     /// Erase the user's Android data, once [`Invocation::yes`] confirms it.
     ResetData,
+    /// Show the Android version that runs and the ones that can be chosen.
+    AndroidVersion,
+    /// Choose the Android version [`Invocation::android`] names.
+    AndroidUse,
 }
 
 /// What `dsa app-window` does.
@@ -631,6 +637,11 @@ pub struct Invocation {
     pub point: Option<(u32, u32)>,
     /// `dsa reset-data --yes`: the user confirmed that their Android data goes.
     pub yes: bool,
+    /// `dsa android use <major>`: the version to follow.
+    pub android: Option<Channel>,
+    /// `dsa android use <major> --erase-data`: the user agreed that moving to an older Android
+    /// erases its data.
+    pub erase_data: bool,
 }
 
 /// Whether `name` can be an Android package name: dot-separated parts of letters, digits
@@ -657,6 +668,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
     let mut app_window: Option<AppWindowAction> = None;
     let mut json = false;
     let mut yes = false;
+    let mut android = None;
+    let mut erase_data = false;
     let mut progress = false;
     let mut buffers: u32 = 0;
     let mut tags = Vec::new();
@@ -898,6 +911,34 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             }
             "--json" => json = true,
             "--yes" if command == Some(Command::ResetData) => yes = true,
+            "android" if command.is_none() => {
+                let action = match args.peek() {
+                    Some(next) if next.starts_with("--") => None,
+                    _ => args.next().map(String::as_str),
+                };
+                command = Some(match action {
+                    None | Some("version") => Command::AndroidVersion,
+                    Some("use") => {
+                        let chosen = args.next().ok_or(
+                            "dsa android use needs the Android major version, such as 17, or \
+                             latest; dsa android version lists the supported ones",
+                        )?;
+                        android = Some(Channel::parse(chosen).ok_or_else(|| {
+                            format!(
+                                "{chosen:?} is not an Android major version; give a number such \
+                                 as 17, or latest"
+                            )
+                        })?);
+                        Command::AndroidUse
+                    }
+                    Some(other) => {
+                        return Err(format!(
+                            "dsa android takes version or use <major>, not {other:?}\n{USAGE}"
+                        ))
+                    }
+                });
+            }
+            "--erase-data" if command == Some(Command::AndroidUse) => erase_data = true,
             "reset-data" if command.is_none() => command = Some(Command::ResetData),
             "--progress" if command == Some(Command::Install) => progress = true,
             "--wait-first-frame" if command == Some(Command::Launch) => wait_first_frame = true,
@@ -1038,6 +1079,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
         wait_first_frame,
         point,
         yes,
+        android,
+        erase_data,
     })
 }
 
@@ -1780,6 +1823,93 @@ fn reset_data(invocation: &Invocation, client: &mut HostApiClient) -> Result<Str
     } else {
         "Android's data was reset; the next start boots Android as it was first installed"
             .to_string()
+    })
+}
+
+/// What moving to an older Android major erases, as the command line and the settings app
+/// say it.
+pub const OLDER_ANDROID_WARNING: &str = "Android cannot read data a newer version wrote, so \
+     moving to an older Android version erases the Android data of every user of this \
+     computer: every app they installed, the accounts they signed in to and the data of every \
+     app. Each user's Android starts as it was first installed. DSA's settings stay. This \
+     cannot be undone.";
+
+/// The version report as JSON, for `dsa android version --json` and the settings app.
+pub fn android_versions_json(report: &VersionReport) -> Value {
+    json!({
+        "version": report.version,
+        "android_major": report.android_major,
+        "build": report.build,
+        "build_id": report.build_id,
+        "security_patch": report.security_patch,
+        "channel": match report.channel {
+            Channel::Latest => "latest".to_string(),
+            Channel::Major(major) => major.to_string(),
+        },
+        "supported_majors": report.supported_majors,
+        "target_major": report.target_major,
+        "on_trial": report.on_trial,
+        "notice": report.notice,
+    })
+}
+
+/// The version report in words.
+pub fn android_versions_text(report: &VersionReport) -> String {
+    let mut lines = vec![format!(
+        "Android {} ({}), build {}, security patch {}",
+        report.android_major,
+        report.version,
+        report.build_id.as_deref().unwrap_or("unknown"),
+        report.security_patch.as_deref().unwrap_or("unknown"),
+    )];
+    lines.push(match report.channel {
+        Channel::Latest => format!(
+            "Follows: the newest supported version (Android {})",
+            report.target_major
+        ),
+        Channel::Major(major) => format!("Follows: Android {major}"),
+    });
+    let supported: Vec<String> = report
+        .supported_majors
+        .iter()
+        .map(|m| m.to_string())
+        .collect();
+    lines.push(format!("Supported: Android {}", supported.join(", ")));
+    if report.target_major != report.android_major {
+        lines.push(format!(
+            "Moving to Android {}: it is used once its image is downloaded and Android starts \
+             again",
+            report.target_major
+        ));
+    } else if report.on_trial {
+        lines.push("The image is new and is kept once Android has started from it".into());
+    }
+    if let Some(notice) = &report.notice {
+        lines.push(format!("Update: {notice}"));
+    }
+    lines.join("\n")
+}
+
+/// `dsa android version` and `dsa android use`.
+fn android_version(invocation: &Invocation, client: &mut HostApiClient) -> Result<String, String> {
+    let report = match (invocation.command, invocation.android) {
+        (Command::AndroidUse, Some(channel)) => {
+            match client.use_android_version(channel, invocation.erase_data) {
+                Err(why) if why.data_would_be_lost() => {
+                    return Err(format!(
+                        "{OLDER_ANDROID_WARNING}\nRun dsa android use {} --erase-data to move.",
+                        channel.to_wire()
+                    ))
+                }
+                other => other.map_err(|e| e.to_string())?,
+            }
+        }
+        _ => client.android_versions().map_err(|e| e.to_string())?,
+    };
+    Ok(if invocation.json {
+        android_versions_json(&report).to_string()
+    } else {
+        android_versions_text(&report)
     })
 }
 
@@ -2990,6 +3120,9 @@ pub fn run_with_starter(
             });
         }
         Command::ResetData => return reset_data(invocation, &mut client),
+        Command::AndroidVersion | Command::AndroidUse => {
+            return android_version(invocation, &mut client)
+        }
         Command::Memory => {
             let memory = client.memory().map_err(|e| e.to_string())?;
             return Ok(if invocation.json {

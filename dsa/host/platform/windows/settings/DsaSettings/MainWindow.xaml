@@ -58,6 +58,8 @@
                                        Icon="{ui:SymbolIcon Apps24}" />
                 <ui:NavigationViewItem Content="{l:Text NavDisplay.Content}" TargetPageType="{x:Type pages:DisplayPage}"
                                        Icon="{ui:SymbolIcon Desktop24}" />
+                <ui:NavigationViewItem Content="{l:Text NavAndroid.Content}" TargetPageType="{x:Type pages:AndroidPage}"
+                                       Icon="{ui:SymbolIcon Phone24}" />
                 <ui:NavigationViewItem Content="{l:Text NavUpdates.Content}" TargetPageType="{x:Type pages:UpdatesPage}"
                                        Icon="{ui:SymbolIcon ArrowSync24}" />
                 <ui:NavigationViewItem Content="{l:Text NavIdentity.Content}" TargetPageType="{x:Type pages:DeviceIdentityPage}"
