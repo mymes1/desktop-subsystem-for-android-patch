@@ -158,10 +158,8 @@ mod tests {
     fn fr29_the_file_server_may_pass_through_data_to_the_shared_storage() {
         let policy = include_str!("../../image/sepolicy/files.cil");
         assert!(
-            policy
-                .lines()
-                .any(|line| line.trim()
-                    == "(allow dsa_files system_data_root_file (dir (search getattr)))"),
+            policy.lines().any(|line| line.trim()
+                == "(allow dsa_files system_data_root_file (dir (search getattr)))"),
             "files.cil does not let dsa_files pass through /data"
         );
     }

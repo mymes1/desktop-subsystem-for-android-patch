@@ -15,9 +15,13 @@
 # - A licence from `policy.separate_program` (GPL) is allowed only for a program that runs
 #   on its own and is not linked with DSA code (`distribution = "separate-program"`), with
 #   its corresponding source shipped beside it in every release that ships it
-#   (`shipped_source`, the notice that says where). The guest kernel is the one such component:
+#   (`shipped_source`, the notice that says where). The guest kernel is one such component:
 #   it runs in its own virtual machine, and DSA talks to it only through system calls and
-#   devices, never by linking.
+#   devices, never by linking. passt, the Linux host's user-mode NAT, is the other: it runs as
+#   its own process and crosvm reaches it only through a vhost-user socket.
+#
+# crosvm's own crates are not in Cargo.lock: dsa/host/platform/linux/crosvm/check-licenses.py
+# lists them for the build DSA ships and fails on any GPL, LGPL or AGPL one.
 
 [policy]
 allow = [
@@ -37,7 +41,7 @@ allow = [
     "Zlib",
 ]
 weak_copyleft = ["MS-RL"]
-separate_program = ["GPL-2.0-only", "GPL-2.0-only WITH Linux-syscall-note"]
+separate_program = ["GPL-2.0-only", "GPL-2.0-only WITH Linux-syscall-note", "GPL-2.0-or-later"]
 
 # The setup program (setup.exe and DsaSetup.exe).
 
@@ -131,6 +135,33 @@ license = "Apache-2.0"
 part = "graphics"
 distribution = "linked"
 source = "https://android.googlesource.com/"
+
+# The Linux host's VM (/usr/lib/dsa/bin), from dsa/host/platform/linux/crosvm/build.sh.
+
+[[component]]
+name = "crosvm"
+version = "b1aa4d87ea41273aad8be3ac8e37ba7d86b9b1c4"
+license = "BSD-3-Clause"
+part = "linux"
+distribution = "separate-program"
+notice = "Every crate and shared library crosvm links, with its licence, is listed in crosvm-crates.txt."
+source = "https://chromium.googlesource.com/crosvm/crosvm"
+
+[[component]]
+name = "minijail (linked into crosvm)"
+license = "BSD-3-Clause"
+part = "linux"
+distribution = "linked"
+source = "https://chromium.googlesource.com/chromiumos/platform/minijail"
+
+[[component]]
+name = "passt"
+version = "2026_09_25.df90211"
+license = "GPL-2.0-or-later AND BSD-3-Clause"
+part = "linux"
+distribution = "separate-program"
+source = "https://passt.top/passt"
+shipped_source = "passt-source.tar.gz, installed beside these notices"
 
 # The guest image: AOSP, DSA's own guest programs and what they are built from.
 

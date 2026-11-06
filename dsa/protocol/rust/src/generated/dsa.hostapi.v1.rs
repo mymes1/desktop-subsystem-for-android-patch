@@ -217,6 +217,82 @@ pub struct FileChunk {
     #[prost(bytes = "vec", tag = "1")]
     pub data: ::prost::alloc::vec::Vec<u8>,
 }
+/// One thing an app drags out of its window: a file or text. Only the file's name, never a
+/// path in Android, reaches the host.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DragItem {
+    /// The file's name, without any folder. Empty for text.
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    /// The file's length in bytes, when Android says (`size_known`).
+    #[prost(uint64, tag = "2")]
+    pub size: u64,
+    #[prost(bool, tag = "3")]
+    pub size_known: bool,
+    #[prost(string, tag = "4")]
+    pub mime_type: ::prost::alloc::string::String,
+    /// Whether this item is text rather than a file, and the text itself.
+    #[prost(bool, tag = "5")]
+    pub is_text: bool,
+    #[prost(string, tag = "6")]
+    pub text: ::prost::alloc::string::String,
+}
+/// The pointer left the window of task `task_id` with a button held, at (`x`, `y`) relative
+/// to the task. If an app in the caller's Android is dragging something the host can take,
+/// Android ends its drag and the service answers DragOffer with what it carries, which the
+/// client then drags on the host; otherwise DragOffer with no items. Android must be running.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct DragOut {
+    #[prost(int32, tag = "1")]
+    pub task_id: i32,
+    #[prost(float, tag = "2")]
+    pub x: f32,
+    #[prost(float, tag = "3")]
+    pub y: f32,
+    #[prost(enumeration = "PointerTool", tag = "4")]
+    pub tool: i32,
+    #[prost(uint32, tag = "5")]
+    pub pointer_id: u32,
+}
+/// What a drag out of a window carries. No items: nothing to drag on the host.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DragOffer {
+    /// Names the drag in ReadDrag and EndDrag.
+    #[prost(uint32, tag = "1")]
+    pub drag_id: u32,
+    #[prost(message, repeated, tag = "2")]
+    pub items: ::prost::alloc::vec::Vec<DragItem>,
+}
+/// Reads up to `length` bytes (at most 256 KiB) of item `item` of drag `drag_id`, from
+/// `offset`. The service answers DragData.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReadDrag {
+    #[prost(uint32, tag = "1")]
+    pub drag_id: u32,
+    #[prost(uint32, tag = "2")]
+    pub item: u32,
+    #[prost(uint64, tag = "3")]
+    pub offset: u64,
+    #[prost(uint32, tag = "4")]
+    pub length: u32,
+}
+/// Part of a dragged file. `end` says the file ends after `data`.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DragData {
+    #[prost(bytes = "vec", tag = "1")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bool, tag = "2")]
+    pub end: bool,
+}
+/// Ends drag `drag_id`, dropped or cancelled, so Android closes what it read and gives back
+/// its access to the drag's content. The service answers Done.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct EndDrag {
+    #[prost(uint32, tag = "1")]
+    pub drag_id: u32,
+    #[prost(bool, tag = "2")]
+    pub dropped: bool,
+}
 /// Turns the connection into the caller's clipboard: after the answer (Done), the client sends
 /// a ClipboardText each time the user's host clipboard gets new text, and the service sends a
 /// ClipboardText each time the caller's Android copies text, which the client puts on the host
@@ -1344,21 +1420,6 @@ pub struct Settings {
     /// change it.
     #[prost(message, optional, tag = "20")]
     pub network: ::core::option::Option<NetworkStatus>,
-    /// Whether the caller's Android stops once nothing uses it. RUN_MODE_AS_NEEDED, the
-    /// default, stops it `stop_after_secs` after the last app window closed, while no app runs
-    /// in the background and no widget is placed; RUN_MODE_CONTINUOUS keeps it running in Doze.
-    /// It applies at once.
-    #[prost(enumeration = "RunMode", tag = "310")]
-    pub run_mode: i32,
-    /// How long nothing may use the caller's Android in RUN_MODE_AS_NEEDED before it stops, in
-    /// seconds. 0 in a request means the default, 300; the service keeps it from 10 seconds to a
-    /// day.
-    #[prost(uint32, tag = "311")]
-    pub stop_after_secs: u32,
-    /// Whether an app with a notification shown keeps the caller's Android running in
-    /// RUN_MODE_AS_NEEDED. Off by default.
-    #[prost(bool, tag = "312")]
-    pub keep_for_notifications: bool,
 }
 /// How the caller's Android reaches the network.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1797,7 +1858,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1919,6 +1980,12 @@ pub mod request {
         GetAndroidFiles(super::GetAndroidFiles),
         #[prost(message, tag = "310")]
         ResetData(super::ResetData),
+        #[prost(message, tag = "320")]
+        DragOut(super::DragOut),
+        #[prost(message, tag = "321")]
+        ReadDrag(super::ReadDrag),
+        #[prost(message, tag = "322")]
+        EndDrag(super::EndDrag),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1927,7 +1994,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -1975,6 +2042,10 @@ pub mod response {
         AppWindowSettings(super::AppWindowSettingsList),
         #[prost(message, tag = "90")]
         AndroidFiles(super::AndroidFilesLocation),
+        #[prost(message, tag = "320")]
+        DragOffer(super::DragOffer),
+        #[prost(message, tag = "321")]
+        DragData(super::DragData),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -2716,35 +2787,6 @@ impl StatusBarAppearance {
             "STATUS_BAR_APPEARANCE_UNSPECIFIED" => Some(Self::Unspecified),
             "STATUS_BAR_APPEARANCE_LIGHT" => Some(Self::Light),
             "STATUS_BAR_APPEARANCE_DARK" => Some(Self::Dark),
-            _ => None,
-        }
-    }
-}
-/// Whether a user's Android stops once nothing uses it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-#[repr(i32)]
-pub enum RunMode {
-    /// Stop once nothing has used it for a while. The default.
-    AsNeeded = 0,
-    /// Keep it running, in Doze while it is idle.
-    Continuous = 1,
-}
-impl RunMode {
-    /// String value of the enum field names used in the ProtoBuf definition.
-    ///
-    /// The values are not transformed in any way and thus are considered stable
-    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-    pub fn as_str_name(&self) -> &'static str {
-        match self {
-            Self::AsNeeded => "RUN_MODE_AS_NEEDED",
-            Self::Continuous => "RUN_MODE_CONTINUOUS",
-        }
-    }
-    /// Creates an enum from field names used in the ProtoBuf definition.
-    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-        match value {
-            "RUN_MODE_AS_NEEDED" => Some(Self::AsNeeded),
-            "RUN_MODE_CONTINUOUS" => Some(Self::Continuous),
             _ => None,
         }
     }

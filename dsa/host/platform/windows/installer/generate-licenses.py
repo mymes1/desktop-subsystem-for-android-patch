@@ -565,9 +565,10 @@ It incorporates or links against the following third-party components:
 
 SETTINGS_APP_NOTICE = """DSA Settings
 
-The settings app (settings\\DsaSettings.exe) is developed as part of Desktop Subsystem for
-Android and is licensed under the Apache License, Version 2.0. It is a self-contained WPF
-app: its folder carries the runtime it is built on.
+The settings app (settings\\DsaSettings.exe) and the APK Installer
+(settings\\DsaApkInstaller.exe) are developed as part of Desktop Subsystem for Android and are
+licensed under the Apache License, Version 2.0. They are self-contained WPF apps that share
+one folder: it carries the runtime both are built on.
 
 It incorporates the following third-party components:
 - .NET runtime and WPF (8.0):
@@ -682,9 +683,10 @@ def is_allowed_expression(expr: str, allow_list: set) -> bool:
 # Where each part of DSA is shipped, for the third-party notice.
 PART_TITLES = {
     "setup": "Setup program (setup.exe, DsaSetup.exe)",
-    "settings": "Settings app (settings\\DsaSettings.exe)",
+    "settings": "Settings app and APK Installer (settings\\DsaSettings.exe, DsaApkInstaller.exe)",
     "graphics": "Host graphics path (gfxstream_backend.dll)",
     "guest": "Guest image (vm\\bzImage and the Android image)",
+    "linux": "Linux host's VM (/usr/lib/dsa/bin/crosvm and passt)",
 }
 DISTRIBUTIONS = {"linked", "build-only", "aggregate", "separate-program"}
 
@@ -864,7 +866,7 @@ def parse_cargo_lock(lock_path: Path):
 
 
 def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | None = None,
-                    release_tag: str | None = None):
+                    release_tag: str | None = None, crosvm_crates: Path | None = None):
     allow_list = load_deny_allow_list(workspace_dir)
     lock_path = workspace_dir / "Cargo.lock"
     if not lock_path.exists():
@@ -929,6 +931,9 @@ def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | No
     (out_dir / "mit.txt").write_text(MIT_TEXT, encoding="utf-8")
     (out_dir / "third-party-components.txt").write_text(components_notice(workspace_dir), encoding="utf-8")
     (out_dir / "kernel-source-offer.txt").write_text(kernel_source_notice(workspace_dir, release_tag), encoding="utf-8")
+    if crosvm_crates:
+        # The Linux packages' crosvm: every crate and library it links, from its own build.
+        (out_dir / "crosvm-crates.txt").write_text(crosvm_crates.read_text(encoding="utf-8"), encoding="utf-8")
 
     # 3. Master NOTICE.txt
     master_lines = [
@@ -981,7 +986,7 @@ def generate_bundle(workspace_dir: Path, out_dir: Path, master_notice: Path | No
         "   - License: Apache License 2.0, GNU General Public License v2.0, BSD, MIT",
         "   - Detailed attribution notices: carried alongside each image release asset",
         "",
-        "5. Settings App (settings\\DsaSettings.exe)",
+        "5. Settings App and APK Installer (settings\\DsaSettings.exe, DsaApkInstaller.exe)",
         "   - .NET runtime and WPF, WPF UI (lepoco/wpfui)",
         "   - License: MIT License",
         "   - Full details: see licenses/settings-app.txt",
@@ -1020,6 +1025,8 @@ def main():
     parser.add_argument("--out-dir", type=Path, default=Path(__file__).resolve().parents[4] / "dsa/target/installer/stage/licenses")
     parser.add_argument("--master-notice", type=Path, default=None)
     parser.add_argument("--check-only", action="store_true")
+    parser.add_argument("--crosvm-crates", type=Path, default=None,
+                        help="the crate list dsa/host/platform/linux/crosvm/check-licenses.py wrote for the shipped crosvm")
     parser.add_argument("--release-tag", default=None,
                         help="the GitHub release this build is published as; the kernel source notice names its asset")
     args = parser.parse_args()
@@ -1053,7 +1060,7 @@ def main():
         print(f"All {len(lock_packages)} Rust dependencies comply with the licence policy.")
         return
 
-    generate_bundle(args.workspace, args.out_dir, args.master_notice, args.release_tag)
+    generate_bundle(args.workspace, args.out_dir, args.master_notice, args.release_tag, args.crosvm_crates)
 
 
 if __name__ == "__main__":

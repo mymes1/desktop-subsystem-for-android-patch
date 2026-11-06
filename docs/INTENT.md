@@ -116,13 +116,19 @@ VM 안에서도 CPU 연산과 메모리 접근은 하드웨어 가상화로 거�
 
 | 계층 | Windows | Linux | macOS |
 |---|---|---|---|
-| 안드로이드 실행 위치 | 전용 경량 VM (HCS) | VM 없이 호스트 커널 위 컨테이너 | 전용 경량 VM (Apple Virtualization) |
-| 전송 계층 | hvsocket | 유닉스 소켓 | vsock |
-| GPU | 원격 → 호스트 Vulkan | 원격 불필요, 호스트 GPU 직접 | 원격 → MoltenVK |
+| 안드로이드 실행 위치 | 전용 경량 VM (HCS) | 전용 경량 VM (KVM 위의 crosvm) | 전용 경량 VM (Apple Virtualization) |
+| 전송 계층 | hvsocket | vsock (vhost-vsock) | vsock |
+| GPU | 원격 → 호스트 Vulkan | 원격 → 호스트 Vulkan (gfxstream) | 원격 → MoltenVK |
 | 창 | Win32 + DirectComposition | Wayland | NSWindow + Metal |
 | IME | TSF | Wayland 텍스트 입력 | macOS 텍스트 입력 |
 
-호스트 코드는 공통 계층(`host/core`)과 플랫폼 계층(`host/platform/<os>`)으로 나눈다. Linux와 macOS는 계획 단계이고 구현하지 않았다. Apple Silicon과 Windows on ARM에서는 대부분의 안드로이드 앱이 번역 계층 없이 돈다.
+호스트 코드는 공통 계층(`host/core`)과 플랫폼 계층(`host/platform/<os>`)으로 나눈다. Apple Silicon과 Windows on ARM에서는 대부분의 안드로이드 앱이 번역 계층 없이 돈다.
+
+Linux 호스트의 VM:
+- 안드로이드는 사용자마다 전용 crosvm VM에서 KVM 위로 돈다. 게스트와 호스트는 vsock(vhost-vsock)으로 잇고, 포트는 Hyper-V와 같다.
+- VMM은 crosvm(BSD-3-Clause)이다. 이유는 셋이다. ChromeOS와 Android Virtualization Framework(AVF)가 안드로이드 게스트를 이 VMM으로 돌려 검증했다. gfxstream을 일급으로 지원한다. virtio-balloon의 빈 페이지 보고(free page reporting)로 게스트가 놓은 메모리를 호스트에 돌려준다.
+- crosvm은 고정한 업스트림 리비전에서 빌드한다. 저장소에 소스를 넣지 않고, 스크립트가 그 리비전을 `.scratch`로 받아 CI에서 빌드한다. 바이너리는 DSA의 deb와 rpm 패키지에 함께 싣는다. 배포판의 VMM에 기대지 않는다.
+- QEMU는 쓰지 않는다. 안드로이드 게스트로 검증된 경로가 아니고, GPL이라 함께 실을 수 없어 배포판 패키지에 기대야 했다.
 
 ### D10. 언어
 
@@ -291,6 +297,7 @@ VM이나 컨테이너를 만드는 일은 대부분 높은 권한이 필요하�
 | Linux 패키지를 Flatpak으로 | 샌드박스 앱이라 시스템 서비스와 `/dev/kvm`, `/dev/vhost-vsock` 장치 권한을 설치할 수 없어, 서비스를 배포판 패키지로 따로 깔아야 한다 | D22 |
 | Linux에서 서비스가 직접 새 패키지를 받아 설치하기 | 패키지 관리자를 우회해 시스템 업데이트와 두 경로가 된다 | D22 |
 | Waydroid의 이미지와 도구를 의존성으로 쓰기 | LXC 컨테이너와 LineageOS를 전제로 해서 전용 VM, AOSP 이미지와 맞지 않고, 도구가 GPL-3.0이다 | D17 |
+| Linux 호스트의 VMM으로 QEMU | 안드로이드 게스트로 검증된 경로가 아니고, GPL-2.0이라 DSA 패키지에 싣지 못해 배포판 버전에 묶인다 | D9 |
 | 32비트 앱 지원 | 32비트 Zygote와 런타임이 메모리를 늘리고, 공개 AOSP Cuttlefish 타깃이 64비트 전용이다 | D8, D14 |
 | 임시 CPU 프레임 복사 경로 | M2(그래픽 원격)가 완성되면 버려질 중복 구현 비용이 든다 | D19 |
 | 태스크마다 가상 디스플레이 두기 | 가상 디스플레이 관리 오버헤드가 크고, D3의 단일 freeform 디스플레이와 에이전트 메타데이터로 레이어를 묶는 편이 단순하다 | D3, D19 |

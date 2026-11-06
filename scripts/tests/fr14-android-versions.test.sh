@@ -53,13 +53,20 @@ else:
 for line in re.findall(r"'\[(\"[0-9]+\"(?:, \"[0-9]+\")*)\]'", test):
     check(".github/workflows/test-image.yml (all)", [int(m) for m in re.findall(r"[0-9]+", line)])
 
-for path, row in (("README.md", "| Versions |"), ("docs/locales/README_ko.md", "| 버전 |")):
-    lines = [line for line in open(path, encoding="utf-8") if line.startswith(row)]
-    if len(lines) != 1:
-        fail(f"{path} has no single row starting {row!r}")
-        continue
-    # The row names the versions as two-digit numbers and no other number.
-    check(path, [int(n) for n in re.findall(r"\b([0-9]{2})\b", lines[0])])
+# The README sentence that names today's versions, in each language.
+for path, pattern in (("README.md", r"today Android ([0-9]+) and Android ([0-9]+)"),
+                      ("docs/locales/README_ko.md", r"지금은 Android ([0-9]+)과 Android\s+([0-9]+)")):
+    found = re.search(pattern, open(path, encoding="utf-8").read())
+    if not found:
+        fail(f"{path} does not name the supported versions as expected")
+    else:
+        check(path, [int(n) for n in found.groups()])
+
+# The README timeline's list: the majors DSA has started supporting and still supports.
+import tomllib
+timeline = tomllib.load(open(".github/scripts/readme/android-versions.toml", "rb"))
+started = [a["major"] for a in timeline["android"] if "dsa_start" in a and "dsa_end" not in a]
+check(".github/scripts/readme/android-versions.toml (supported now)", started)
 
 if failed:
     sys.exit(1)

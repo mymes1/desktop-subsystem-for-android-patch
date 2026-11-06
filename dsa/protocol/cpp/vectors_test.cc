@@ -424,6 +424,27 @@ std::map<std::string, v1::Envelope> Cases() {
   cases["open_link"].mutable_open_link()->set_url("https://example.com/");
   cases["link_handling"].mutable_link_handling()->set_in_guest(true);
   {
+    v1::DragOffer* offer = cases["drag_offer"].mutable_drag_offer();
+    offer->set_request_id(7);
+    offer->set_drag_id(2);
+    v1::DragItem* file = offer->add_items();
+    file->set_name("a.txt");
+    file->set_size(5);
+    file->set_size_known(true);
+    file->set_mime_type("text/plain");
+    v1::DragItem* text = offer->add_items();
+    text->set_is_text(true);
+    text->set_text("hi");
+  }
+  {
+    v1::DragRead* read = cases["drag_read"].mutable_drag_read();
+    read->set_request_id(7);
+    read->set_drag_id(2);
+    read->set_item(1);
+    read->set_offset(65536);
+    read->set_length(65536);
+  }
+  {
     v1::OpenFile* open = cases["open_file"].mutable_open_file();
     open->set_transfer_id(3);
     open->set_name("photo.jpg");

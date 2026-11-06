@@ -124,6 +124,7 @@ use crate::background::{
 use crate::clipboard;
 use crate::clock_trace::ClockTrace;
 use crate::file_share::{self, ShareHost, Sharing, SharingNow};
+use crate::drag::{self, DragChunk, DragItem, DragOffer, DragOut, DragRead};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadRumble, GamepadTable};
 use crate::guest_log::{
@@ -140,7 +141,6 @@ use crate::notifications::{self, Notification, NotificationAction, NotificationE
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
-use crate::run_mode::{IdleStop, RunModePolicy, Usage};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation, TaskRequest, TaskTable,
@@ -207,9 +207,6 @@ pub enum StopReason {
     /// What the guest cannot run without was lost while it ran and did not come back. The
     /// guest was stopped so that it does not crash-loop; a new start waits for it.
     PrerequisiteLost(String),
-    /// The run mode is "As needed" and nothing used Android for this long: no app window, no
-    /// app in the background and no widget. The next app launch starts it again.
-    Unused(Duration),
 }
 
 impl fmt::Display for StopReason {
@@ -240,11 +237,6 @@ impl fmt::Display for StopReason {
             }
             StopReason::ChannelLost(why) => write!(f, "the control channel was lost: {why}"),
             StopReason::StopFailed(why) => write!(f, "the guest did not stop: {why}"),
-            StopReason::Unused(after) => write!(
-                f,
-                "stopped because no app used Android for {} s",
-                after.as_secs()
-            ),
             StopReason::PrerequisiteLost(why) => {
                 write!(
                     f,
@@ -580,8 +572,6 @@ enum Command {
     HostSleep(Sender<()>),
     /// The host woke, with its wall clock then.
     HostWoke(SystemTime),
-    /// The user's run mode changed.
-    RunMode(RunModePolicy),
 }
 
 struct Shared {
@@ -640,6 +630,12 @@ struct Shared {
     package_queries: Mutex<HashMap<u32, Sender<Option<InstalledPackage>>>>,
     /// The ID of the last question about an installed package.
     last_package_query: AtomicU32,
+    /// The drags out of a window waiting for the agent's offer, by request ID.
+    drag_offers: Mutex<HashMap<u32, Sender<control::DragOffer>>>,
+    /// The reads of dragged files waiting for the agent's data, by request ID.
+    drag_reads: Mutex<HashMap<u32, Sender<control::DragData>>>,
+    /// The ID of the last request about a drag.
+    last_drag_request: AtomicU32,
     /// The uninstalls waiting for the agent's answer, by request ID.
     uninstalls: Mutex<HashMap<u32, Sender<UninstallOutcome>>>,
     /// The ID of the last uninstall.
@@ -1111,6 +1107,9 @@ impl Session {
             last_widget_request: AtomicU32::new(0),
             package_queries: Mutex::new(HashMap::new()),
             last_package_query: AtomicU32::new(0),
+            drag_offers: Mutex::new(HashMap::new()),
+            drag_reads: Mutex::new(HashMap::new()),
+            last_drag_request: AtomicU32::new(0),
             uninstalls: Mutex::new(HashMap::new()),
             last_uninstall: AtomicU32::new(0),
             app_refreshes: Mutex::new(Vec::new()),
@@ -1173,8 +1172,6 @@ impl Session {
             host_asleep: None,
             sleep_waiters: Vec::new(),
             clock_pending: None,
-            run_mode: RunModePolicy::default(),
-            idle_stop: IdleStop::default(),
         };
         let worker = thread::Builder::new()
             .name("dsa-session".into())
@@ -1458,13 +1455,6 @@ impl Session {
     /// ([`SessionConfig::freeze_after`], or [`DEFAULT_FREEZE_AFTER`]), or never.
     pub fn freeze_when_idle(&self, on: bool) {
         self.freeze_after(on.then_some(self.freeze_delay));
-    }
-
-    /// Applies the user's run mode: in "As needed" the guest stops once nothing has used it for
-    /// the policy's wait; in "Continuous" it stays in Doze. "As needed" with five minutes is
-    /// the default.
-    pub fn set_run_mode(&self, policy: RunModePolicy) {
-        let _ = self.commands.send(Command::RunMode(policy));
     }
 
     /// Asks the session to start. Ignored unless the session is `Stopped`.
@@ -2485,6 +2475,139 @@ impl Session {
         result
     }
 
+    /// Asks the agent whether an app is dragging something out of the window the pointer
+    /// left (`out`), and waits up to `timeout` for its answer. When one is, the agent ends the
+    /// drag in the guest and offers what it carries; `None` when nothing is being dragged.
+    /// Needs an active session.
+    pub fn drag_out(
+        &self,
+        out: DragOut,
+        timeout: Duration,
+    ) -> Result<Option<DragOffer>, SessionError> {
+        let request_id = self.next_drag_request();
+        let (tx, answer) = mpsc::channel();
+        self.shared
+            .drag_offers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(request_id, tx);
+        let result = self
+            .send(dsa_protocol::encode(&control::Envelope {
+                body: Some(Body::DragOut(control::DragOut {
+                    request_id,
+                    task_id: out.task_id,
+                    x: out.x,
+                    y: out.y,
+                    tool: out.tool,
+                    pointer_id: out.pointer_id,
+                })),
+            }))
+            .and_then(|()| {
+                answer.recv_timeout(timeout).map_err(|_| {
+                    SessionError::NoAnswer(format!(
+                        "Android did not say within {} seconds what is being dragged",
+                        timeout.as_secs()
+                    ))
+                })
+            });
+        // Once the request is gone, an offer that comes late ends its own drag.
+        self.shared
+            .drag_offers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&request_id);
+        let offer = result?;
+        if !offer.error.trim().is_empty() {
+            if offer.drag_id != 0 {
+                let _ = self.end_drag(offer.drag_id, false);
+            }
+            return Err(SessionError::FileRefused(
+                offer.error.chars().take(512).collect(),
+            ));
+        }
+        if offer.items.is_empty() {
+            if offer.drag_id != 0 {
+                let _ = self.end_drag(offer.drag_id, false);
+            }
+            return Ok(None);
+        }
+        Ok(Some(DragOffer {
+            drag_id: offer.drag_id,
+            items: offer
+                .items
+                .iter()
+                .enumerate()
+                .map(|(index, item)| DragItem::from_control(item, index))
+                .collect(),
+        }))
+    }
+
+    /// Reads part of a file of a drag the agent offered, waiting up to `timeout`. Needs an
+    /// active session.
+    pub fn read_drag(&self, read: DragRead, timeout: Duration) -> Result<DragChunk, SessionError> {
+        let length = read.length.clamp(1, drag::READ_BYTES);
+        let request_id = self.next_drag_request();
+        let (tx, answer) = mpsc::channel();
+        self.shared
+            .drag_reads
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(request_id, tx);
+        let result = self
+            .send(dsa_protocol::encode(&control::Envelope {
+                body: Some(Body::DragRead(control::DragRead {
+                    request_id,
+                    drag_id: read.drag_id,
+                    item: read.item,
+                    offset: read.offset,
+                    length,
+                })),
+            }))
+            .and_then(|()| {
+                answer.recv_timeout(timeout).map_err(|_| {
+                    SessionError::NoAnswer(format!(
+                        "Android did not send the dragged file within {} seconds",
+                        timeout.as_secs()
+                    ))
+                })
+            });
+        self.shared
+            .drag_reads
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&request_id);
+        let data = result?;
+        if !data.error.trim().is_empty() {
+            return Err(SessionError::FileRefused(
+                data.error.chars().take(512).collect(),
+            ));
+        }
+        if data.data.len() > length as usize {
+            return Err(SessionError::FileRefused(
+                "Android sent more of the dragged file than was asked for".into(),
+            ));
+        }
+        Ok(DragChunk {
+            data: data.data,
+            end: data.end,
+        })
+    }
+
+    /// Tells the agent drag `drag_id` is over on the host, dropped or not, so it closes what
+    /// it read and gives back its access to the drag's content.
+    pub fn end_drag(&self, drag_id: u32, dropped: bool) -> Result<(), SessionError> {
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::DragEnd(control::DragEnd { drag_id, dropped })),
+        }))
+    }
+
+    fn next_drag_request(&self) -> u32 {
+        self.shared
+            .last_drag_request
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1)
+    }
+
     /// Asks the agent to read the installed apps again, sizes included, and waits up to
     /// `timeout` for the fresh list, which then replaces the one the watchers have. Needs an
     /// active session.
@@ -3100,10 +3223,6 @@ struct Worker {
     /// The host's wall clock when it woke, and when that was, while the guest has yet to be
     /// told: it was frozen or its agent was not connected.
     clock_pending: Option<(SystemTime, Instant)>,
-    /// The user's run mode.
-    run_mode: RunModePolicy,
-    /// Since when nothing has used the running guest, for the "As needed" stop.
-    idle_stop: IdleStop,
 }
 
 impl Worker {
@@ -3136,7 +3255,6 @@ impl Worker {
                         Ok(Command::HostMemoryLow(low)) => self.set_host_memory_low(low),
                         Ok(Command::System(input)) => self.system_input(input),
                         Ok(Command::FreezeAfter(after)) => self.config.freeze_after = after,
-                        Ok(Command::RunMode(policy)) => self.run_mode = policy,
                         Ok(Command::LinksInAndroid(on)) => self.set_links_in_android(on),
                         Ok(Command::HostClipboard(text)) => self.host_clipboard(text),
                         Ok(Command::ShareClipboard(on)) => self.share_clipboard(on),
@@ -3168,7 +3286,6 @@ impl Worker {
                         Ok(Command::HostMemoryLow(low)) => self.set_host_memory_low(low),
                         Ok(Command::System(input)) => self.system_input(input),
                         Ok(Command::FreezeAfter(after)) => self.config.freeze_after = after,
-                        Ok(Command::RunMode(policy)) => self.run_mode = policy,
                         Ok(Command::LinksInAndroid(on)) => self.set_links_in_android(on),
                         Ok(Command::HostClipboard(text)) => self.host_clipboard(text),
                         Ok(Command::ShareClipboard(on)) => self.share_clipboard(on),
@@ -3229,10 +3346,6 @@ impl Worker {
             }
             Command::FreezeAfter(after) => {
                 self.config.freeze_after = after;
-                true
-            }
-            Command::RunMode(policy) => {
-                self.run_mode = policy;
                 true
             }
             Command::Power(state) => {
@@ -4080,54 +4193,6 @@ impl Worker {
         Ok(())
     }
 
-    /// Stops a guest nothing has used for the run mode's wait, when the run mode is "As
-    /// needed". Returns true once it has stopped. Only a guest that has finished booting is
-    /// stopped, and nothing moves on while the host sleeps.
-    fn tick_run_mode(&mut self) -> bool {
-        if self.host_asleep.is_some()
-            || !matches!(
-                self.state(),
-                SessionState::Active | SessionState::Dozing | SessionState::Frozen
-            )
-        {
-            self.idle_stop.reset();
-            return false;
-        }
-        let background_apps = self
-            .shared
-            .background
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .apps()
-            .len();
-        let widgets = self
-            .shared
-            .widgets
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .widgets
-            .len();
-        let usage = Usage {
-            windows_shown: self.shown,
-            background_apps,
-            widgets,
-            notifications: self.notifications.len(),
-        };
-        let now = Instant::now();
-        self.idle_stop.observe(&self.run_mode, usage, now);
-        if !self.idle_stop.due(&self.run_mode, now) {
-            return false;
-        }
-        let after = self.run_mode.stop_after;
-        eprintln!(
-            "lifecycle: no app used Android for {} s, so it stops until an app is opened",
-            after.as_secs()
-        );
-        self.idle_stop.reset();
-        self.stop(StopReason::Unused(after));
-        true
-    }
-
     /// Moves the lifecycle on with time: the screen goes off once no window has been shown
     /// for the doze delay, and a guest in Doze is frozen after `freeze_after`, when set.
     fn tick_lifecycle(&mut self) {
@@ -4606,10 +4671,6 @@ impl Worker {
                 self.config.freeze_after = after;
                 true
             }
-            Command::RunMode(policy) => {
-                self.run_mode = policy;
-                true
-            }
             Command::Power(state) => {
                 self.set_power(state);
                 true
@@ -4678,9 +4739,6 @@ impl Worker {
                 return;
             }
             self.tick_lifecycle();
-            if self.tick_run_mode() {
-                return;
-            }
             self.tick_clock();
             self.offer_host_clipboard();
             self.tick_notifications();
@@ -4943,6 +5001,43 @@ impl Worker {
                     ),
                 }
             }
+            Some(Body::DragOffer(offer)) => {
+                let waiting = self
+                    .shared
+                    .drag_offers
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&offer.request_id);
+                let late = match waiting {
+                    Some(waiting) => waiting.send(offer).err().map(|e| e.0),
+                    None => Some(offer),
+                };
+                // Nobody waits for this offer any more, so the drag is over on the host: the
+                // guest gives its access back now rather than holding it.
+                if let Some(late) = late {
+                    if late.drag_id != 0 {
+                        eprintln!(
+                            "drag: Android offered drag {} after the host stopped asking; ending it",
+                            late.drag_id
+                        );
+                        self.send_body(Body::DragEnd(control::DragEnd {
+                            drag_id: late.drag_id,
+                            dropped: false,
+                        }));
+                    }
+                }
+            }
+            Some(Body::DragData(data)) => {
+                let waiting = self
+                    .shared
+                    .drag_reads
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&data.request_id);
+                if let Some(waiting) = waiting {
+                    let _ = waiting.send(data);
+                }
+            }
             Some(Body::WidgetFrame(frame)) => self.guest_widget_frame(frame),
             Some(Body::GuestBoot(boot)) => self.guest_boot(boot),
             Some(Body::ClockAnswer(answer)) => self.clock_answered(answer),
@@ -5007,6 +5102,9 @@ impl Worker {
             | Some(Body::DeveloperMode(_))
             | Some(Body::FileSharing(_))
             | Some(Body::AndroidFiles(_))
+            | Some(Body::DragOut(_))
+            | Some(Body::DragRead(_))
+            | Some(Body::DragEnd(_))
             | Some(Body::ArmTranslationInstall(_))
             | Some(Body::ArmTranslationChunk(_))
             | Some(Body::ArmTranslationRemove(_))

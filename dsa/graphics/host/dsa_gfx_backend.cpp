@@ -100,7 +100,7 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_select_gpu(uint32_t rule, const uint8_t* l
     gfxstream::vk::GpuPreference preference;
     switch (rule) {
         case DSA_GFX_GPU_RANKING:
-            preference.rule = Rule::None;
+            preference.rule = Rule::BuiltIn;
             break;
         case DSA_GFX_GPU_LUID:
             if (!luid) {

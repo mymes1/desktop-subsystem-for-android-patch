@@ -76,6 +76,7 @@ use crate::background::{
 use crate::data_reset::{UserDataReset, RESET_STOP_WAIT};
 use crate::device_identity::{DeviceIdentity, DeviceIdentityStore, ImageBuild};
 use crate::diagnostics::HostFile;
+use crate::drag::{self, DragChunk, DragItem, DragOffer, DragOut, DragRead};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadInfo, GamepadRumble, GamepadState};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
@@ -89,7 +90,6 @@ use crate::memory::{
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent};
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
-use crate::run_mode::{RunMode, RunModePolicy};
 use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
 use crate::settings::{Settings, SettingsStore};
 use crate::system_settings::SystemSettings;
@@ -105,6 +105,14 @@ use dsa_protocol::control;
 
 /// How long the service waits for Android to say whether a package is installed.
 const PACKAGE_QUERY_WAIT: Duration = Duration::from_secs(10);
+
+/// How long the service waits for Android to say what is dragged out of a window. The user
+/// holds the button meanwhile, so it is short: a drag that does not start soon is no drag.
+const DRAG_OUT_WAIT: Duration = Duration::from_secs(3);
+
+/// How long the service waits for one piece of a dragged file. The app's content provider
+/// may have to fetch or decode it, so it gets longer than a question.
+const DRAG_READ_WAIT: Duration = Duration::from_secs(30);
 
 /// How long the service waits for Android to list its widgets.
 const WIDGET_LIST_WAIT: Duration = Duration::from_secs(20);
@@ -167,10 +175,6 @@ pub trait UserAndroid: Send + Sync {
     /// user's freeze setting says.
     fn freeze_when_idle(&self, on: bool) {
         let _ = on;
-    }
-    /// Applies the user's run mode: whether this Android stops once nothing uses it.
-    fn run_mode(&self, policy: RunModePolicy) {
-        let _ = policy;
     }
     /// Freezes this Android until a task window is shown again.
     fn freeze(&self) -> Result<(), TaskRequestError> {
@@ -388,6 +392,24 @@ pub trait UserAndroid: Send + Sync {
             "this Android cannot list its apps again".into(),
         ))
     }
+    /// The pointer left a task's window with a button held (`out`): what an app is dragging
+    /// out of it, which Android hands over, or `None` when nothing is being dragged.
+    fn drag_out(&self, out: DragOut) -> Result<Option<DragOffer>, TaskRequestError> {
+        let _ = out;
+        Ok(None)
+    }
+    /// Part of a file of a drag this Android handed over.
+    fn read_drag(&self, read: DragRead) -> Result<DragChunk, TaskRequestError> {
+        let _ = read;
+        Err(TaskRequestError::Failed(
+            "this Android cannot send dragged files".into(),
+        ))
+    }
+    /// Ends a drag this Android handed over, dropped or cancelled.
+    fn end_drag(&self, drag_id: u32, dropped: bool) -> Result<(), TaskRequestError> {
+        let _ = (drag_id, dropped);
+        Ok(())
+    }
     /// Opens Android's own settings of `package` in a window of its own, or the list of every
     /// app when it is `None`.
     fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
@@ -527,9 +549,6 @@ impl UserAndroid for Session {
     fn freeze_when_idle(&self, on: bool) {
         Session::freeze_when_idle(self, on)
     }
-    fn run_mode(&self, policy: RunModePolicy) {
-        Session::set_run_mode(self, policy)
-    }
     fn guest_memory(&self) -> Option<GuestMemoryReport> {
         Session::guest_memory(self)
     }
@@ -639,6 +658,15 @@ impl UserAndroid for Session {
     }
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
         Session::package_state(self, package, PACKAGE_QUERY_WAIT).map_err(request_error)
+    }
+    fn drag_out(&self, out: DragOut) -> Result<Option<DragOffer>, TaskRequestError> {
+        Session::drag_out(self, out, DRAG_OUT_WAIT).map_err(request_error)
+    }
+    fn read_drag(&self, read: DragRead) -> Result<DragChunk, TaskRequestError> {
+        Session::read_drag(self, read, DRAG_READ_WAIT).map_err(request_error)
+    }
+    fn end_drag(&self, drag_id: u32, dropped: bool) -> Result<(), TaskRequestError> {
+        Session::end_drag(self, drag_id, dropped).map_err(request_error)
     }
     fn install_arm_translation(
         &self,
@@ -2739,6 +2767,68 @@ impl HostApiService {
         }
     }
 
+    fn drag_out(&self, peer: &Peer, out: types::DragOut) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        if !(out.x.is_finite() && out.y.is_finite()) {
+            return error(
+                ErrorCode::UnknownRequest,
+                "a drag leaves a window at a place on it".to_string(),
+            );
+        }
+        match android.drag_out(DragOut {
+            task_id: out.task_id,
+            x: out.x,
+            y: out.y,
+            tool: out.tool,
+            pointer_id: out.pointer_id,
+        }) {
+            Ok(offer) => response::Body::DragOffer(match offer {
+                Some(offer) => types::DragOffer {
+                    drag_id: offer.drag_id,
+                    items: offer.items.iter().map(DragItem::to_wire).collect(),
+                },
+                None => types::DragOffer::default(),
+            }),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    fn read_drag(&self, peer: &Peer, read: types::ReadDrag) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.read_drag(DragRead {
+            drag_id: read.drag_id,
+            item: read.item,
+            offset: read.offset,
+            length: read.length.clamp(1, drag::READ_BYTES),
+        }) {
+            Ok(chunk) => response::Body::DragData(types::DragData {
+                data: chunk.data,
+                end: chunk.end,
+            }),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    fn end_drag(&self, peer: &Peer, end: types::EndDrag) -> response::Body {
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.end_drag(end.drag_id, end.dropped) {
+            Ok(()) => response::Body::Done(types::Done {}),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
     fn package_state(&self, peer: &Peer, package: &str) -> response::Body {
         if !apk::valid_package_name(package) {
             return error(
@@ -3346,6 +3436,9 @@ impl HostApiService {
             Some(request::Body::GetArmTranslation(_)) => self.get_arm_translation(peer),
             Some(request::Body::RemoveArmTranslation(_)) => self.remove_arm_translation(peer),
             Some(request::Body::GetPackage(get)) => self.package_state(peer, &get.package_name),
+            Some(request::Body::DragOut(out)) => self.drag_out(peer, out),
+            Some(request::Body::ReadDrag(read)) => self.read_drag(peer, read),
+            Some(request::Body::EndDrag(end)) => self.end_drag(peer, end),
             Some(request::Body::AddWidget(add)) => self.add_widget(peer, add),
             Some(request::Body::RemoveWidget(remove)) => self.remove_widget(peer, remove.widget_id),
             Some(request::Body::ListWidgets(_)) => self.list_widgets(peer),
@@ -3408,6 +3501,9 @@ impl HostApiService {
                         | request::Body::ControlMedia(_)
                         | request::Body::ListWidgetProviders(_)
                         | request::Body::GetPackage(_)
+                        | request::Body::DragOut(_)
+                        | request::Body::ReadDrag(_)
+                        | request::Body::EndDrag(_)
                         | request::Body::AddWidget(_)
                         | request::Body::RemoveWidget(_)
                         | request::Body::ListWidgets(_)
@@ -3904,9 +4000,6 @@ impl HostApiService {
             file_sharing: wanted.file_sharing,
             shared_folders: wanted.shared_folders,
             advanced_networking: wanted.advanced_networking,
-            run_mode: run_mode_from_wire(wanted.run_mode),
-            stop_after_secs: wanted.stop_after_secs,
-            keep_for_notifications: wanted.keep_for_notifications,
             adb_port: match u16::try_from(wanted.adb_port) {
                 Ok(port) => port,
                 Err(_) => {
@@ -3954,11 +4047,6 @@ impl HostApiService {
                 // settings at once.
                 if let Ok(android) = self.androids.android(&peer.user) {
                     android.freeze_when_idle(settings.freeze);
-                    android.run_mode(RunModePolicy::of(
-                        settings.run_mode,
-                        settings.stop_after_secs,
-                        settings.keep_for_notifications,
-                    ));
                     android.share_clipboard(settings.clipboard);
                     android.links_in_android(settings.links_in_android);
                     android.share_folders(settings.file_sharing, settings.shared_folders.clone());
@@ -4045,29 +4133,11 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         shared_folders: settings.shared_folders.clone(),
         advanced_networking: settings.advanced_networking,
         network: None,
-        run_mode: run_mode_to_wire(settings.run_mode) as i32,
-        stop_after_secs: settings.stop_after_secs,
-        keep_for_notifications: settings.keep_for_notifications,
         program_updates_available: facts.program_updates_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
         log_dir: facts.log_dir.clone().unwrap_or_default(),
         android_version: facts.android_version.clone().unwrap_or_default(),
-    }
-}
-
-fn run_mode_to_wire(mode: RunMode) -> types::RunMode {
-    match mode {
-        RunMode::AsNeeded => types::RunMode::AsNeeded,
-        RunMode::Continuous => types::RunMode::Continuous,
-    }
-}
-
-/// A run mode from the wire. One this side does not know is "As needed", the default.
-fn run_mode_from_wire(mode: i32) -> RunMode {
-    match types::RunMode::try_from(mode) {
-        Ok(types::RunMode::Continuous) => RunMode::Continuous,
-        _ => RunMode::AsNeeded,
     }
 }
 
@@ -4092,9 +4162,6 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             file_sharing: settings.file_sharing,
             shared_folders: settings.shared_folders,
             advanced_networking: settings.advanced_networking,
-            run_mode: run_mode_from_wire(settings.run_mode),
-            stop_after_secs: crate::run_mode::normalise_stop_after_secs(settings.stop_after_secs),
-            keep_for_notifications: settings.keep_for_notifications,
         },
         facts: ServiceFacts {
             version: settings.version,
@@ -5149,6 +5216,68 @@ impl HostApiClient {
             _ => Err(ClientError::Malformed(
                 "expected what Android has of the package".into(),
             )),
+        }
+    }
+
+    /// The pointer left a task's window with a button held (`out`): what an app in the
+    /// caller's Android drags out of it, or `None` when nothing is being dragged.
+    pub fn drag_out(&mut self, out: DragOut) -> Result<Option<DragOffer>, ClientError> {
+        match self.exchange(
+            request::Body::DragOut(types::DragOut {
+                task_id: out.task_id,
+                x: out.x,
+                y: out.y,
+                tool: out.tool,
+                pointer_id: out.pointer_id,
+            }),
+            self.timeout.max(DRAG_OUT_WAIT + Duration::from_secs(2)),
+        )? {
+            response::Body::DragOffer(offer) if offer.items.is_empty() => Ok(None),
+            response::Body::DragOffer(offer) => Ok(Some(DragOffer {
+                drag_id: offer.drag_id,
+                items: offer
+                    .items
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, item)| DragItem::from_wire(item, index))
+                    .collect(),
+            })),
+            _ => Err(ClientError::Malformed(
+                "expected what is dragged out of the window".into(),
+            )),
+        }
+    }
+
+    /// Part of a file of a drag [`drag_out`](Self::drag_out) handed over.
+    pub fn read_drag(&mut self, read: DragRead) -> Result<DragChunk, ClientError> {
+        match self.exchange(
+            request::Body::ReadDrag(types::ReadDrag {
+                drag_id: read.drag_id,
+                item: read.item,
+                offset: read.offset,
+                length: read.length,
+            }),
+            self.timeout.max(DRAG_READ_WAIT + Duration::from_secs(5)),
+        )? {
+            response::Body::DragData(data) => Ok(DragChunk {
+                data: data.data,
+                end: data.end,
+            }),
+            _ => Err(ClientError::Malformed(
+                "expected part of the dragged file".into(),
+            )),
+        }
+    }
+
+    /// Ends a drag [`drag_out`](Self::drag_out) handed over, dropped or cancelled, so Android
+    /// gives back its access to what was dragged.
+    pub fn end_drag(&mut self, drag_id: u32, dropped: bool) -> Result<(), ClientError> {
+        match self.exchange(
+            request::Body::EndDrag(types::EndDrag { drag_id, dropped }),
+            self.timeout,
+        )? {
+            response::Body::Done(_) => Ok(()),
+            _ => Err(ClientError::Malformed("expected Done".into())),
         }
     }
 

@@ -1,10 +1,11 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace Dsa.Settings.Core;
 
-/// <summary>The screens of the APK install window, as setup's screens are laid out.</summary>
+/// <summary>The states of the APK Installer's window.</summary>
 public enum ApkInstallPage
 {
     /// <summary>Reading the APK.</summary>
@@ -24,7 +25,7 @@ public sealed record ApkFact(string Name, string Value);
 public sealed record ApkPermissionRow(string Description, string Name, bool Sensitive);
 
 /// <summary>
-/// The APK install window: opened on an APK (from Explorer, or dropped on the settings app),
+/// The APK Installer's window: opened on an APK (from Explorer, or dropped on the settings app),
 /// it shows what the file says about the app before Android is started, then installs it.
 /// Installing starts Android first when it is not running, then checks again what Android has
 /// of the app: an update shows both versions and waits for the user, and a downgrade or an APK
@@ -41,14 +42,28 @@ public sealed class ApkInstallViewModel : ObservableObject
     /// <summary>The install kind the user saw when they pressed the button.</summary>
     private ApkInstallKind _confirmed = ApkInstallKind.Unknown;
 
-    public ApkInstallViewModel(IDsaRunner dsa, ITextSource text, string path)
+    /// <summary>The Android processor types this PC runs without translation.</summary>
+    private readonly IReadOnlyList<string> _hostAbis;
+    private bool _launchWhenReady = true;
+
+    public ApkInstallViewModel(IDsaRunner dsa, ITextSource text, string path, IReadOnlyList<string>? hostAbis = null)
     {
         _dsa = dsa;
         _text = text;
+        _hostAbis = hostAbis ?? HostAbis();
         Path = path;
         FileName = System.IO.Path.GetFileName(path);
         Title = FileName;
     }
+
+    /// <summary>The Android processor types of this PC's own processor: an ARM64 PC runs
+    /// arm64-v8a code, an x64 PC x86_64 and x86 code.</summary>
+    public static IReadOnlyList<string> HostAbis() => RuntimeInformation.OSArchitecture switch
+    {
+        Architecture.Arm64 => new[] { "arm64-v8a" },
+        Architecture.X86 => new[] { "x86" },
+        _ => new[] { "x86_64", "x86" },
+    };
 
     public string Path { get; }
     public string FileName { get; }
@@ -59,6 +74,28 @@ public sealed class ApkInstallViewModel : ObservableObject
     public string VersionChip { get; private set; } = "";
     public string SizeChip { get; private set; } = "";
     public string AndroidChip { get; private set; } = "";
+    /// <summary>Who signed the app, where App Installer names the publisher: an APK carries no
+    /// publisher name, only the certificate that signed it.</summary>
+    public string PublisherLine { get; private set; } = "";
+    /// <summary>Why the app may not run on this PC, or empty: it has native code, and none of
+    /// it is for this PC's processor.</summary>
+    public string CompatibilityWarning { get; private set; } = "";
+    /// <summary>Whether the app opens by itself once it is installed, as App Installer's
+    /// "Launch when ready" does. On unless the user turns it off.</summary>
+    public bool LaunchWhenReady
+    {
+        get => _launchWhenReady;
+        set
+        {
+            if (_launchWhenReady != value)
+            {
+                _launchWhenReady = value;
+                Changed();
+            }
+        }
+    }
+    /// <summary>Whether the app was opened by itself after the install, so the window closes.</summary>
+    public bool Launched { get; private set; }
     /// <summary>What installing does: a new install, an update from one version to another, or
     /// why it cannot be done.</summary>
     public string Summary { get; private set; } = "";
@@ -125,6 +162,12 @@ public sealed class ApkInstallViewModel : ObservableObject
         VersionChip = F("ApkWindow_VersionChip", apk.VersionName ?? apk.VersionCode.ToString(CultureInfo.CurrentCulture));
         SizeChip = Size(apk.Size);
         AndroidChip = F("ApkWindow_AndroidChip", apk.MinAndroid ?? apk.MinSdk.ToString(CultureInfo.CurrentCulture));
+        PublisherLine = F("ApkWindow_Publisher", apk.SignerSha256 is { } signer
+            ? F("ApkWindow_Signer", apk.SignerScheme ?? "", signer)
+            : _text.Get("ApkWindow_Unsigned"));
+        CompatibilityWarning = apk.Abis.Count > 0 && !apk.Abis.Any(abi => _hostAbis.Contains(abi))
+            ? F("ApkWindow_AbiWarning", string.Join(", ", apk.Abis))
+            : "";
         var version = VersionText(apk.VersionName, apk.VersionCode);
         Summary = apk.Kind switch
         {
@@ -300,6 +343,10 @@ public sealed class ApkInstallViewModel : ObservableObject
             ResultTitle = F(apk.Kind == ApkInstallKind.Update ? "ApkWindow_UpdatedTitle" : "ApkWindow_DoneTitle", Title);
             ResultText = _text.Get("ApkWindow_DoneText");
             ChangedAll();
+            if (LaunchWhenReady)
+            {
+                await LaunchAfterInstallAsync(apk).ConfigureAwait(true);
+            }
             return;
         }
         var detail = Detail(result);
@@ -313,6 +360,31 @@ public sealed class ApkInstallViewModel : ObservableObject
             return;
         }
         Fail(_text.Get("ApkWindow_FailedTitle"), F("ApkWindow_NotSent", detail.Length > 0 ? detail : $"dsa ended with code {result.ExitCode}"));
+    }
+
+    /// <summary>Opens the app just installed, as "Launch when ready" asks. When it does not
+    /// open, the done screen stays and says why, with its Launch button.</summary>
+    private async Task LaunchAfterInstallAsync(ApkDetails apk)
+    {
+        string? why;
+        try
+        {
+            var result = await _dsa.RunAsync(new[] { "launch", apk.Package }, null).ConfigureAwait(true);
+            why = result.ExitCode == 0 ? null : Detail(result);
+        }
+        catch (DsaException e)
+        {
+            why = Format.Problem(_text, e);
+        }
+        if (why is null)
+        {
+            Launched = true;
+        }
+        else
+        {
+            ResultText = F("ApkWindow_LaunchFailedAfterInstall", Title, why);
+        }
+        ChangedAll();
     }
 
     /// <summary>Android's own words in dsa's refusal, after "Android said: ".</summary>

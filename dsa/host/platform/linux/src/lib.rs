@@ -9,13 +9,13 @@
 //! dropped files.
 //!
 //! The VM and the service:
-//! - [`qemu`]: the VM as a QEMU command line (KVM, virtio disks, vhost-vsock, a balloon with
-//!   free page reporting, virtio-mem, the network adapter);
+//! - [`crosvm`]: the VM as a crosvm command line (KVM, virtio disks, vhost-vsock, a balloon
+//!   with free page reporting, the network adapter, the device sandbox);
 //! - [`launcher`]: starts and stops each user's VM as that user, and resizes, freezes and stops
-//!   it through QMP ([`qmp`]);
+//!   it through crosvm's control socket ([`crosvm_control`]);
 //! - [`vsock`]: the host's end of the guest's control, log and file ports, each connection
 //!   routed to the session of the VM it comes from;
-//! - [`network`]: NAT through passt or slirp, or the host's LAN through a macvtap;
+//! - [`network`]: NAT through passt, or the host's LAN through a macvtap;
 //! - [`image`]: what a VM boots from an image folder, and each user's disk;
 //! - [`service`]: the system service behind `/run/dsa/host.sock`, one session per user
 //!   (`dsa-linux-hostd`).
@@ -27,6 +27,9 @@
 pub mod compositor;
 pub mod config;
 pub mod console;
+pub mod crosvm;
+#[cfg(target_os = "linux")]
+pub mod crosvm_control;
 #[cfg(target_os = "linux")]
 pub mod devices;
 pub mod fetch;
@@ -41,9 +44,6 @@ pub mod package_updates;
 #[cfg(target_os = "linux")]
 pub mod performance;
 pub mod pstore;
-pub mod qemu;
-#[cfg(target_os = "linux")]
-pub mod qmp;
 #[cfg(target_os = "linux")]
 pub mod service;
 pub mod shell;

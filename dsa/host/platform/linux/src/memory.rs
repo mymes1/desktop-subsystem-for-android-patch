@@ -1,5 +1,9 @@
-//! The host's share of each user's Android: its QEMU process, and the window processes in the
-//! user's session, from `/proc`.
+//! The host's share of each user's Android: its crosvm process, and the window processes in
+//! the user's session, from `/proc`.
+//!
+//! crosvm keeps the guest's memory in a memory file that its sandboxed device processes map
+//! too, so the guest's pages count as shared in crosvm's own `smaps_rollup`. The VM's share is
+//! therefore everything resident or swapped out in the crosvm process, which maps all of it.
 
 use dsa_host_core::memory::{HostMemory, HostProcessMemory, HostRole};
 
@@ -15,6 +19,12 @@ pub fn private_kb(smaps_rollup: &str) -> Option<u64> {
     let dirty = kb_field(smaps_rollup, "Private_Dirty:")?;
     let swap = kb_field(smaps_rollup, "Swap:").unwrap_or(0);
     Some(clean + dirty + swap)
+}
+
+/// The VM's memory from its crosvm process's `/proc/<pid>/status`, in KiB: resident and
+/// swapped out, shared with its device processes or not.
+pub fn vm_kb(status: &str) -> Option<u64> {
+    Some(resident_kb(status)? + kb_field(status, "VmSwap:").unwrap_or(0))
 }
 
 fn kb_field(text: &str, name: &str) -> Option<u64> {
@@ -46,10 +56,14 @@ fn process(pid: u32, role: HostRole) -> Option<HostProcessMemory> {
     let dir = format!("/proc/{pid}");
     let status = std::fs::read_to_string(format!("{dir}/status")).ok()?;
     let working_set_kb = resident_kb(&status)?;
-    let private = std::fs::read_to_string(format!("{dir}/smaps_rollup"))
-        .ok()
-        .and_then(|text| private_kb(&text))
-        .unwrap_or(working_set_kb);
+    let private = if role == HostRole::Vm {
+        vm_kb(&status).unwrap_or(working_set_kb)
+    } else {
+        std::fs::read_to_string(format!("{dir}/smaps_rollup"))
+            .ok()
+            .and_then(|text| private_kb(&text))
+            .unwrap_or(working_set_kb)
+    };
     Some(HostProcessMemory {
         role,
         pid,
@@ -107,8 +121,11 @@ mod tests {
 
     #[test]
     fn nfr1_the_vms_resident_and_private_memory_are_read_from_proc() {
-        let status = "Name:\tqemu-system-x86\nUid:\t1000\t1000\t1000\t1000\nVmRSS:\t  812345 kB\n";
+        let status =
+            "Name:\tdsa-android-100\nUid:\t1000\t1000\t1000\t1000\nVmRSS:\t  812345 kB\nVmSwap:\t 5 kB\n";
         assert_eq!(resident_kb(status), Some(812_345));
+        // The guest's memory is shared with crosvm's device processes, and is all the VM's.
+        assert_eq!(vm_kb(status), Some(812_350));
         assert_eq!(owner_uid(status), Some(1000));
         let rollup = "Rss: 9 kB\nPrivate_Clean:  100 kB\nPrivate_Dirty:  700000 kB\nSwap: 20 kB\n";
         assert_eq!(private_kb(rollup), Some(700_120));

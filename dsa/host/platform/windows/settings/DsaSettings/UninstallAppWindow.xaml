@@ -1,7 +1,7 @@
 <!--
     The window Windows' list of installed apps opens to uninstall an Android app. Windows has
     already asked, so it does not ask again: it uninstalls at once and shows the result. It is laid out
-    as the APK install window is, with setup's styles and colours: the caption bar, the hero with
+    as setup's screens are, with setup's styles and colours: the caption bar, the hero with
     the app, a panel for the screen, and the footer layer with its buttons.
 -->
 <Window x:Class="Dsa.Settings.UninstallAppWindow"

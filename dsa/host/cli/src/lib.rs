@@ -164,11 +164,6 @@
 //! `advanced-networking` (off by default) puts the user's Android on this computer's network as
 //! a device of its own, so other devices there reach it, instead of behind a NAT network of its
 //! own; it applies the next time Android starts.
-//! `run-mode` is `as-needed` (the default) or `continuous`: as needed, Android stops once the
-//! last app window has closed and no app runs in the background and no widget is placed, after
-//! `stop-after` (seconds, or a time such as `5m` or `1h`; five minutes by default), and starts
-//! again with the next app; continuous, it stays running in Doze. `keep-for-notifications`
-//! (off by default) is whether an app with a notification shown keeps it running as needed.
 //! `dsa settings set <name> <value>` changes one;
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
 //! takes, on the host and inside Android. `dsa network` shows how the user's Android reaches
@@ -428,41 +423,6 @@ pub enum Change {
     /// The folders to share, in the order the service keeps them.
     SharedFolders(Vec<String>),
     AdvancedNetworking(bool),
-    RunMode(dsa_host_core::run_mode::RunMode),
-    /// The wait before Android stops in "As needed", in seconds.
-    StopAfter(u32),
-    KeepForNotifications(bool),
-}
-
-/// A wait in seconds, or with a unit: `90`, `90s`, `5m`, `1h`.
-fn parse_stop_after(value: &str) -> Result<u32, String> {
-    let text = value.trim().to_ascii_lowercase();
-    let (number, scale) = if let Some(n) = text.strip_suffix('h') {
-        (n, 3600)
-    } else if let Some(n) = text.strip_suffix('m') {
-        (n, 60)
-    } else if let Some(n) = text.strip_suffix('s') {
-        (n, 1)
-    } else {
-        (text.as_str(), 1)
-    };
-    let secs = number
-        .trim()
-        .parse::<u32>()
-        .ok()
-        .and_then(|n| n.checked_mul(scale))
-        .ok_or_else(|| format!("stop-after is a time such as 300, 90s, 5m or 1h, not {value:?}"))?;
-    let (min, max) = (
-        dsa_host_core::run_mode::MIN_STOP_AFTER.as_secs() as u32,
-        dsa_host_core::run_mode::MAX_STOP_AFTER.as_secs() as u32,
-    );
-    if !(min..=max).contains(&secs) {
-        return Err(format!(
-            "stop-after is from {min} seconds to {} hours, not {value:?}",
-            max / 3600
-        ));
-    }
-    Ok(secs)
 }
 
 impl Change {
@@ -491,9 +451,6 @@ impl Change {
             "file-sharing" => switch().map(Change::FileSharing),
             "shared-folders" => parse_shared_folders(value).map(Change::SharedFolders),
             "advanced-networking" => switch().map(Change::AdvancedNetworking),
-            "run-mode" => dsa_host_core::run_mode::RunMode::parse(value).map(Change::RunMode),
-            "stop-after" => parse_stop_after(value).map(Change::StopAfter),
-            "keep-for-notifications" => switch().map(Change::KeepForNotifications),
             "adb-port" => match value.parse::<u16>() {
                 Ok(port) if port > 0 => Ok(Change::AdbPort(port)),
                 _ => Err(format!(
@@ -504,8 +461,8 @@ impl Change {
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, image-updates, input-trace, \
                  resize-trace, memory-limit, developer-mode, adb-port, arm-translation, \
-                 stop-without-asking, file-sharing, shared-folders, run-mode, stop-after, \
-                 keep-for-notifications, advanced-networking and device.<field>"
+                 stop-without-asking, file-sharing, shared-folders, \
+                 advanced-networking and device.<field>"
             )),
         }
     }
@@ -1768,9 +1725,6 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "shared_folders": report.settings.shared_folders,
         "advanced_networking": report.settings.advanced_networking,
         "network": network_json(report.network.as_ref()),
-        "run_mode": report.settings.run_mode.as_str(),
-        "stop_after_secs": report.settings.stop_after_secs,
-        "keep_for_notifications": report.settings.keep_for_notifications,
         "program_updates_available": report.facts.program_updates_available,
         "image_updates_available": report.facts.image_updates_available,
         "version": report.facts.version,
@@ -1850,17 +1804,6 @@ fn on_off(value: bool) -> &'static str {
 }
 
 /// A wait in words: `5 minutes`, `90 seconds`, `1 hour`.
-fn describe_wait(secs: u32) -> String {
-    let plural = |n: u32, unit: &str| format!("{n} {unit}{}", if n == 1 { "" } else { "s" });
-    if secs % 3600 == 0 {
-        plural(secs / 3600, "hour")
-    } else if secs % 60 == 0 {
-        plural(secs / 60, "minute")
-    } else {
-        plural(secs, "second")
-    }
-}
-
 /// What a data reset erases, as the command line and the settings app say it.
 pub const RESET_DATA_WARNING: &str = "Resetting erases every app you installed in Android, \
      the accounts you signed in to and the data of every app. Android stops, and its next \
@@ -2045,19 +1988,6 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         format!(
             "Advanced networking: {} (dsa network shows the addresses)",
             on_off(settings.advanced_networking)
-        ),
-        match settings.run_mode {
-            dsa_host_core::run_mode::RunMode::AsNeeded => format!(
-                "Run mode: as needed (stops {} after the last app closes)",
-                describe_wait(settings.stop_after_secs)
-            ),
-            dsa_host_core::run_mode::RunMode::Continuous => {
-                "Run mode: continuous (stays running in Doze)".to_string()
-            }
-        },
-        format!(
-            "Apps with notifications keep Android running: {}",
-            on_off(settings.keep_for_notifications)
         ),
         format!("Service version: {}", facts.version),
     ];
@@ -2276,9 +2206,6 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::FileSharing(on) => wanted.file_sharing = *on,
             Change::SharedFolders(folders) => wanted.shared_folders = folders.clone(),
             Change::AdvancedNetworking(on) => wanted.advanced_networking = *on,
-            Change::RunMode(mode) => wanted.run_mode = *mode,
-            Change::StopAfter(secs) => wanted.stop_after_secs = *secs,
-            Change::KeepForNotifications(on) => wanted.keep_for_notifications = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
     }

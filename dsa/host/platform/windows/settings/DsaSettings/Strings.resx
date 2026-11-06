@@ -686,7 +686,7 @@
     <value>{0} was removed from your desktop.</value>
   </data>
   <data name="ApkWindow_Caption" xml:space="preserve">
-    <value>Install an Android app</value>
+    <value>APK Installer</value>
   </data>
   <data name="ApkWindow_Reading" xml:space="preserve">
     <value>Reading the file</value>
@@ -707,7 +707,7 @@
     <value>Close</value>
   </data>
   <data name="ApkWindow_Open" xml:space="preserve">
-    <value>Open</value>
+    <value>Launch</value>
   </data>
   <data name="ApkWindow_VersionChip" xml:space="preserve">
     <value>Version {0}</value>
@@ -773,7 +773,7 @@
     <value>Not signed. Android installs only signed apps.</value>
   </data>
   <data name="ApkWindow_PermissionsHeader" xml:space="preserve">
-    <value>Permissions it asks for ({0})</value>
+    <value>Capabilities ({0})</value>
   </data>
   <data name="ApkWindow_NoPermissions" xml:space="preserve">
     <value>It asks for no permissions.</value>
@@ -815,7 +815,7 @@
     <value>{0} is updated</value>
   </data>
   <data name="ApkWindow_DoneText" xml:space="preserve">
-    <value>Open it now, or later from the Start menu.</value>
+    <value>Launch it now, or later from the Start menu.</value>
   </data>
   <data name="ApkWindow_FailedTitle" xml:space="preserve">
     <value>Not installed</value>
@@ -858,6 +858,21 @@
   </data>
   <data name="ApkWindow_Reason_other" xml:space="preserve">
     <value>Android did not install the app.</value>
+  </data>
+  <data name="ApkWindow_Publisher" xml:space="preserve">
+    <value>Publisher: {0}</value>
+  </data>
+  <data name="ApkWindow_AbiWarning" xml:space="preserve">
+    <value>This app has code only for {0} processors, not for this PC's. Android runs it only with an ARM translation package, and may refuse to install it.</value>
+  </data>
+  <data name="ApkWindow_LaunchFailedAfterInstall" xml:space="preserve">
+    <value>{0} is installed, but it did not open. {1}</value>
+  </data>
+  <data name="ApkWindow_LaunchWhenReady" xml:space="preserve">
+    <value>Launch when ready</value>
+  </data>
+  <data name="ApkWindow_DetailsHeader" xml:space="preserve">
+    <value>Details</value>
   </data>
   <data name="NavLogs.Content" xml:space="preserve">
     <value>Android log</value>
@@ -1326,36 +1341,6 @@
   </data>
   <data name="NetworkRestartBar.Message" xml:space="preserve">
     <value>The change applies the next time Android starts. Stop Android on the General page, then open an app.</value>
-  </data>
-  <data name="RunModeHeader.Text" xml:space="preserve">
-    <value>When nothing uses Android</value>
-  </data>
-  <data name="ContinuousCard.Header" xml:space="preserve">
-    <value>Keep Android running</value>
-  </data>
-  <data name="ContinuousCard.Description" xml:space="preserve">
-    <value>Off by default: Android runs as needed. Once the last app window closes and no app runs in the background and no widget is on the desktop, Android stops after the time below, which gives its memory back to Windows. The next app you open starts it again, which takes longer than opening an app in Android that runs. On, Android keeps running in Doze, so apps open at once.</value>
-  </data>
-  <data name="StopAfterCard.Header" xml:space="preserve">
-    <value>Stop Android after</value>
-  </data>
-  <data name="StopAfterCard.Description" xml:space="preserve">
-    <value>How long Android waits with nothing using it before it stops. Opening an app in that time keeps it running.</value>
-  </data>
-  <data name="KeepForNotificationsCard.Header" xml:space="preserve">
-    <value>Keep running for notifications</value>
-  </data>
-  <data name="KeepForNotificationsCard.Description" xml:space="preserve">
-    <value>Off by default. On, Android keeps running while an app has a notification shown, so it can update it. Off, Android stops anyway, and notifications come again once it runs.</value>
-  </data>
-  <data name="StopAfter_Minute" xml:space="preserve">
-    <value>{0} minute</value>
-  </data>
-  <data name="StopAfter_Minutes" xml:space="preserve">
-    <value>{0} minutes</value>
-  </data>
-  <data name="StopAfter_Seconds" xml:space="preserve">
-    <value>{0} seconds</value>
   </data>
   <data name="ResetDataHeader.Text" xml:space="preserve">
     <value>Reset</value>

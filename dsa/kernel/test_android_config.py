@@ -237,9 +237,9 @@ class AndroidKernelConfigTests(unittest.TestCase):
             self.assertIn(option, config)
 
     def test_fr2_the_kernel_boots_under_kvm_with_virtio_devices(self):
-        # The Linux host runs the same kernel under QEMU: its disks, network adapter, vsock,
-        # balloon and virtio-mem are virtio, and the host stops the guest with SysRq on the
-        # serial console. Without them the guest finds no disk and never reaches the host.
+        # The Linux host runs the same kernel under crosvm: its disks, network adapter, vsock,
+        # balloon and console are virtio, and the host stops the guest with SysRq on the
+        # virtio console (hvc0). Without them the guest finds no disk and never reaches the host.
         config = VIRTIO_CONFIG.read_text()
         for option in [
             "CONFIG_VIRTIO_PCI=y",
@@ -247,8 +247,9 @@ class AndroidKernelConfigTests(unittest.TestCase):
             "CONFIG_VIRTIO_NET=y",
             "CONFIG_VIRTIO_VSOCKETS=y",
             "CONFIG_VIRTIO_BALLOON=y",
-            "CONFIG_VIRTIO_MEM=y",
-            "CONFIG_MAGIC_SYSRQ_SERIAL=y",
+            "CONFIG_VIRTIO_CONSOLE=y",
+            "CONFIG_HVC_DRIVER=y",
+            "CONFIG_MAGIC_SYSRQ=y",
         ]:
             self.assertIn(option, config)
         self.assertIn("CONFIG_PCI_HOST_GENERIC=y", ARM64_CONFIG.read_text())

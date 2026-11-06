@@ -352,9 +352,6 @@ impl UserAndroid for UpdatingAndroid {
     fn freeze_when_idle(&self, on: bool) {
         UserAndroid::freeze_when_idle(&*self.session, on)
     }
-    fn run_mode(&self, policy: crate::run_mode::RunModePolicy) {
-        UserAndroid::run_mode(&*self.session, policy)
-    }
     fn links_in_android(&self, on: bool) {
         UserAndroid::links_in_android(&*self.session, on)
     }
@@ -560,6 +557,21 @@ impl UserAndroid for UpdatingAndroid {
     }
     fn refresh_apps(&self) -> Result<(), TaskRequestError> {
         UserAndroid::refresh_apps(&*self.session)
+    }
+    fn drag_out(
+        &self,
+        out: crate::drag::DragOut,
+    ) -> Result<Option<crate::drag::DragOffer>, TaskRequestError> {
+        UserAndroid::drag_out(&*self.session, out)
+    }
+    fn read_drag(
+        &self,
+        read: crate::drag::DragRead,
+    ) -> Result<crate::drag::DragChunk, TaskRequestError> {
+        UserAndroid::read_drag(&*self.session, read)
+    }
+    fn end_drag(&self, drag_id: u32, dropped: bool) -> Result<(), TaskRequestError> {
+        UserAndroid::end_drag(&*self.session, drag_id, dropped)
     }
     fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
         UserAndroid::open_app_settings(&*self.session, package)

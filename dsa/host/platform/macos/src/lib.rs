@@ -39,7 +39,8 @@ pub mod input;
 pub mod launchd;
 pub mod shell;
 pub mod user_disk;
-pub mod vhdx;
+/// The image's VHDX disks read into raw images, shared with the Linux host.
+pub use dsa_host_unix::vhdx;
 pub mod vm_config;
 pub mod wm;
 
