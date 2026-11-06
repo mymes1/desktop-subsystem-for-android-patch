@@ -90,8 +90,10 @@ impl Drop for Service {
 /// Fails the test with what the service printed and the guest log's last lines.
 fn fail(why: String, service: &Service, log: &[String]) -> ! {
     let tail = &log[log.len().saturating_sub(200)..];
+    let path = service.log.with_file_name("compositor.log");
+    let compositor = std::fs::read_to_string(path).unwrap_or_default();
     panic!(
-        "{why}\n--- the service's output ---\n{}\n--- the guest log's last lines ---\n{}",
+        "{why}\n--- the service's output ---\n{}\n--- the window manager's output ---\n{compositor}\n--- the guest log's last lines ---\n{}",
         service.log(),
         tail.join("\n")
     )
@@ -325,6 +327,20 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
     });
     std::fs::write(&config, settings.to_string()).unwrap();
     let service = Service::start(&dir, &config);
+    // Android's renderer is in the window manager, which shows Android in the desktop
+    // session the job runs (a headless Wayland compositor): without it Android never finishes
+    // booting.
+    let compositor_log = std::fs::File::create(dir.join("compositor.log")).unwrap();
+    let _compositor = Service {
+        child: Command::new(env!("CARGO_BIN_EXE_dsa-compositor"))
+            .env("DSA_SOCKET", &socket)
+            .stdin(Stdio::null())
+            .stdout(compositor_log.try_clone().unwrap())
+            .stderr(compositor_log)
+            .spawn()
+            .expect("starting dsa-compositor"),
+        log: dir.join("compositor.log"),
+    };
     let mut first = client(&socket, Duration::from_secs(30));
     let boot = deadline.saturating_duration_since(Instant::now()) - FIRST_FRAME - NEXT_FRAME;
     let ready = first.ensure_running(boot, Duration::from_secs(2), |state| {

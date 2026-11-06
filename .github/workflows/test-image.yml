@@ -739,13 +739,37 @@ jobs:
       - name: Build the widget boot check
         if: matrix.android == '17' && matrix.arch == 'x86_64'
         working-directory: dsa
-        run: cargo test -p dsa-host-linux --test widgets --no-run
+        run: cargo test -p dsa-host-linux --test widgets --no-run && cargo build -p dsa-host-linux --bin dsa-compositor
+
+      # Android's renderer runs in the window manager (dsa-compositor), which needs a desktop
+      # session: a headless Wayland compositor stands in for it, with Mesa's software Vulkan
+      # driver in place of a GPU.
+      - name: Install a headless Wayland compositor and a software Vulkan driver
+        if: matrix.android == '17' && matrix.arch == 'x86_64'
+        timeout-minutes: 20
+        run: |
+          echo 'man-db man-db/auto-update boolean false' | sudo debconf-set-selections
+          sudo apt-get update
+          for try in 1 2 3; do
+            timeout 300 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              weston libxkbcommon0 mesa-vulkan-drivers libvulkan1 && break
+            test "$try" -lt 3 || exit 1
+          done
 
       - name: Place a widget on the booted image
         if: matrix.android == '17' && matrix.arch == 'x86_64'
         timeout-minutes: 12
         working-directory: dsa
-        run: cargo test -p dsa-host-linux --test widgets -- --nocapture --test-threads 1
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime"
+          mkdir -p -m 0700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=wayland-dsa --idle-time=0 --width=1920 --height=1080 &
+          for _ in $(seq 50); do
+            [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
+            sleep 0.2
+          done
+          export WAYLAND_DISPLAY=wayland-dsa
+          cargo test -p dsa-host-linux --test widgets -- --nocapture --test-threads 1
 
       - name: Keep the widget boot check's logs
         if: always() && matrix.android == '17' && matrix.arch == 'x86_64'
@@ -754,6 +778,7 @@ jobs:
           name: widget-boot-logs
           path: |
             /tmp/widget-test-*/hostd.log
+            /tmp/widget-test-*/compositor.log
             /tmp/widget-test-*/first.png
             ~/.local/share/dsa/**/*.log
           if-no-files-found: ignore
