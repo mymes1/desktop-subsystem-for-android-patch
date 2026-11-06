@@ -6,9 +6,9 @@
 #
 # The programs folder holds the release builds (dsa-app-window, dsa, and the service, window
 # manager and device lender programs when they are built). The settings app (dsa-settings)
-# and the icon drawer (dsa-icon) are taken from there too, or built from the Swift package in
-# ../settings when they are not. DSA_SIGN_IDENTITY names the Developer ID
-# to sign with; without it the bundle is signed ad hoc, which runs on the machine that
+# is taken from there too, or built from the Swift package in ../settings when it is not.
+# The icons are the ones dsa/brand/generate.py renders into ./icon. DSA_SIGN_IDENTITY names
+# the Developer ID to sign with; without it the bundle is signed ad hoc, which runs on the machine that
 # built it and is ready to be signed for distribution. DSA_INSTALLER_IDENTITY signs the
 # package the same way.
 set -euo pipefail
@@ -32,15 +32,13 @@ plutil -lint "$app/Contents/Info.plist"
 printf 'APPL????' > "$app/Contents/PkgInfo"
 
 # The bundle's executable is the settings app (SwiftUI): its window, its menu bar item and its
-# Dock icon are what opening DSA.app shows. It and the icon drawer are built here from the
-# Swift package beside this folder unless the programs folder already holds them.
+# Dock icon are what opening DSA.app shows. It is built here from the Swift package beside
+# this folder unless the programs folder already holds it.
 settings_package="$here/../settings"
-if [[ ! -x "$programs/dsa-settings" || ! -x "$programs/dsa-icon" ]]; then
+if [[ ! -x "$programs/dsa-settings" ]]; then
     scratch="$root/dsa/target/dsa-settings"
     swift build -c release --package-path "$settings_package" --scratch-path "$scratch" \
         --product dsa-settings
-    swift build -c release --package-path "$settings_package" --scratch-path "$scratch" \
-        --product dsa-icon
     swift_bin="$(swift build -c release --package-path "$settings_package" --scratch-path "$scratch" --show-bin-path)"
 else
     swift_bin="$programs"
@@ -106,18 +104,15 @@ JSON
 fi
 cp "$root/LICENSE" "$app/Contents/Resources/licenses/DSA.txt"
 
-# The app icon: the placeholder drawn at every size, from 16 to 1024 px, in one .icns.
-iconset="$out/DSA.iconset"
-rm -rf "$iconset"
-"$swift_bin/dsa-icon" "$iconset"
-iconutil -c icns -o "$app/Contents/Resources/DSA.icns" "$iconset"
-rm -rf "$iconset"
-cp "$app/Contents/Resources/DSA.icns" "$helper/Contents/Resources/DSA.icns"
-# The same picture as a layered Icon Composer source, for the Liquid Glass look, until the
-# symbol's design is chosen. It goes beside the package and the disk image.
+# The app icon, one for every macOS version, at every size from 16 to 1024 px in one .icns,
+# and the menu bar's template image at 1x and 2x.
+cp "$here/icon/DSA.icns" "$app/Contents/Resources/DSA.icns"
+cp "$here/icon/DSA.icns" "$helper/Contents/Resources/DSA.icns"
+cp "$here/icon/MenuBarTemplate.png" "$here/icon/MenuBarTemplate@2x.png" "$app/Contents/Resources/"
+# The same picture as a layered Icon Composer source, for the Liquid Glass look. It goes
+# beside the package and the disk image.
 rm -rf "$out/DSA.icon"
-"$swift_bin/dsa-icon" "$out/DSA.icon.iconset" --icon-composer "$out/DSA.icon"
-rm -rf "$out/DSA.icon.iconset"
+cp -R "$here/icon/DSA.icon" "$out/DSA.icon"
 
 # The settings app's texts: its String Catalog compiled to the English and Korean string
 # tables the bundle looks up in the user's language.

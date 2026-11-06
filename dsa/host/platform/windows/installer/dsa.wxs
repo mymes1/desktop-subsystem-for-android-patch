@@ -305,7 +305,7 @@
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
                                Name="SortOrderIndex" Type="integer" Value="66" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\DefaultIcon"
-                               Type="string" Value="[INSTALLFOLDER]dsa-app-window.exe,0" />
+                               Type="string" Value="[INSTALLFOLDER]dsa-app-window.exe,-2" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\InProcServer32"
                                Type="expandable" Value="%SystemRoot%\system32\shell32.dll" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\Instance"

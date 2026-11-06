@@ -131,18 +131,33 @@ code { font-family: var(--mono); font-size: .9em; }
 </style>
 </head>
 <body>
-<!-- The DSA symbol. Placeholder ("antenna window", proposal A) until the owner chooses
-     the shared symbol. Swap this one <symbol> and every use on the page follows. -->
+<!-- The DSA symbol, as dsa/brand/symbol.svg draws it. Every use on the page follows this
+     one <symbol>. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="dsa-mark" viewBox="0 0 64 64">
-    <line x1="22" y1="14" x2="16" y2="4" stroke="#3ddc84" stroke-width="4" stroke-linecap="round"/>
-    <line x1="42" y1="14" x2="48" y2="4" stroke="#3ddc84" stroke-width="4" stroke-linecap="round"/>
-    <rect x="4" y="12" width="56" height="46" rx="9" fill="#0c5a43"/>
-    <rect x="4" y="12" width="56" height="13" rx="9" fill="#3ddc84"/>
-    <rect x="4" y="19" width="56" height="6" fill="#3ddc84"/>
-    <circle cx="48" cy="18.5" r="2.4" fill="#0c5a43"/>
-    <circle cx="40" cy="18.5" r="2.4" fill="#0c5a43"/>
-    <rect x="12" y="32" width="40" height="18" rx="4" fill="#3ddc84" opacity=".35"/>
+    <defs>
+      <linearGradient id="dsa-mark-body" gradientUnits="userSpaceOnUse" x1="8" y1="12" x2="56" y2="60">
+        <stop offset="0" stop-color="#1c8a63"/><stop offset="1" stop-color="#05392a"/>
+      </linearGradient>
+      <linearGradient id="dsa-mark-bar" gradientUnits="userSpaceOnUse" x1="10" y1="2" x2="54" y2="28">
+        <stop offset="0" stop-color="#9af8c4"/><stop offset=".5" stop-color="#47e08c"/><stop offset="1" stop-color="#1fb066"/>
+      </linearGradient>
+      <filter id="dsa-mark-shadow" x="-30%" y="-30%" width="160%" height="170%">
+        <feDropShadow dx="0" dy=".9" stdDeviation=".7" flood-color="#022218" flood-opacity=".32"/>
+        <feDropShadow dx="0" dy="3.2" stdDeviation="3" flood-color="#022218" flood-opacity=".2"/>
+      </filter>
+      <filter id="dsa-mark-bar-shadow" x="-20%" y="-40%" width="140%" height="200%">
+        <feDropShadow dx="0" dy=".8" stdDeviation=".6" flood-color="#022218" flood-opacity=".35"/>
+      </filter>
+    </defs>
+    <g filter="url(#dsa-mark-shadow)">
+      <path d="M22 14 L16.5 5 M42 14 L47.5 5" stroke="url(#dsa-mark-bar)" stroke-width="4" stroke-linecap="round" fill="none"/>
+      <path d="M13 12h38a9 9 0 0 1 9 9v28a9 9 0 0 1-9 9H13a9 9 0 0 1-9-9V21a9 9 0 0 1 9-9z" fill="url(#dsa-mark-body)"/>
+      <path d="M13 12h38a9 9 0 0 1 9 9v4H4v-4a9 9 0 0 1 9-9z" fill="url(#dsa-mark-bar)" filter="url(#dsa-mark-bar-shadow)"/>
+      <circle cx="40" cy="18.5" r="2.3" fill="#0a5a41"/>
+      <circle cx="48" cy="18.5" r="2.3" fill="#0a5a41"/>
+      <path d="M16 32h32a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4V36a4 4 0 0 1 4-4z" fill="#3ddc84" opacity=".32"/>
+    </g>
   </symbol>
 </svg>
 
@@ -308,7 +323,6 @@ code { font-family: var(--mono); font-size: .9em; }
 
 <footer>
   <div class="wrap">
-    <p><span data-l="en">The DSA symbol shown here is a placeholder until the project's symbol is chosen.</span><span data-l="ko">이 페이지의 DSA 기호는 프로젝트 기호가 정해질 때까지 쓰는 임시 기호입니다.</span></p>
     <p><span data-l="en">Android is a trademark of Google LLC. Windows is a trademark of the Microsoft group of companies. macOS and Apple silicon are trademarks of Apple Inc. DSA is an independent open-source project, not affiliated with, endorsed by or sponsored by Google, Microsoft or Apple.</span><span data-l="ko">Android는 Google LLC의 상표입니다. Windows는 Microsoft 그룹의 상표입니다. macOS와 Apple silicon은 Apple Inc.의 상표입니다. DSA는 독립 오픈 소스 프로젝트이며 Google, Microsoft, Apple과 제휴하거나 그들의 보증 또는 후원을 받지 않습니다.</span></p>
   </div>
 </footer>
