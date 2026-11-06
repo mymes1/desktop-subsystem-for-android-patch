@@ -7,6 +7,7 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.graphics.Point
+import android.graphics.Rect
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Animatable
 import android.graphics.drawable.ColorDrawable
@@ -27,6 +28,7 @@ import android.window.TaskOrganizer
 import io.github.thisisthepy.dsa.agent.Log
 import io.github.thisisthepy.dsa.agent.splash.IconKind
 import io.github.thisisthepy.dsa.agent.splash.IconSource
+import io.github.thisisthepy.dsa.agent.splash.LeashPlace
 import io.github.thisisthepy.dsa.agent.splash.LeashSurfaces
 import io.github.thisisthepy.dsa.agent.splash.SplashBackground
 import io.github.thisisthepy.dsa.agent.splash.SplashContent
@@ -62,11 +64,12 @@ class AndroidStartingWindows(
     private val handler = Handler(looper)
     private val windows = StartingWindows()
     private val leashes = TaskLeashes(object : LeashSurfaces<SurfaceControl> {
-        override fun place(leash: SurfaceControl, x: Int, y: Int, clearCrop: Boolean) {
+        override fun place(leash: SurfaceControl, x: Int, y: Int, width: Int, height: Int) {
             if (!leash.isValid) return
             SurfaceControl.Transaction().use { t ->
                 t.setPosition(leash, x.toFloat(), y.toFloat())
-                if (clearCrop) t.setCrop(leash, null)
+                // In the leash's own space: its origin is the task's top left corner.
+                if (width > 0 && height > 0) t.setCrop(leash, Rect(0, 0, width, height))
                 t.apply()
             }
         }
@@ -87,8 +90,7 @@ class AndroidStartingWindows(
         override fun onAppSplashScreenViewRemoved(taskId: Int) {}
 
         override fun onTaskAppeared(taskInfo: ActivityManager.RunningTaskInfo, leash: SurfaceControl) = guarded("place a task") {
-            val position = position(taskInfo)
-            leashes.appeared(taskInfo.taskId, leash, position.x, position.y)
+            leashes.appeared(taskInfo.taskId, leash, place(taskInfo))
         }
 
         override fun onTaskVanished(taskInfo: ActivityManager.RunningTaskInfo) = guarded("forget a task") {
@@ -97,8 +99,7 @@ class AndroidStartingWindows(
         }
 
         override fun onTaskInfoChanged(taskInfo: ActivityManager.RunningTaskInfo) = guarded("place a task") {
-            val position = position(taskInfo)
-            leashes.changed(taskInfo.taskId, position.x, position.y)
+            leashes.changed(taskInfo.taskId, place(taskInfo))
         }
     }
 
@@ -111,8 +112,7 @@ class AndroidStartingWindows(
             try {
                 val tasks = organizer.registerOrganizer()
                 for (task in tasks) {
-                    val position = position(task.taskInfo)
-                    leashes.appeared(task.taskInfo.taskId, task.leash, position.x, position.y)
+                    leashes.appeared(task.taskInfo.taskId, task.leash, place(task.taskInfo))
                 }
                 log.info("drawing starting windows; organizing ${tasks.size} tasks")
             } catch (e: RuntimeException) {
@@ -314,6 +314,25 @@ class AndroidStartingWindows(
 
     /** The task's position in its parent (TaskInfo.positionInParent, not in the SDK). */
     private fun position(task: ActivityManager.RunningTaskInfo): Point = field<Point>(task, "positionInParent") ?: Point()
+
+    /**
+     * The task's place for its surface: its position in its parent and the size of its bounds
+     * (TaskInfo.configuration.windowConfiguration.getBounds, not in the SDK). A size that
+     * cannot be read is 0 by 0, and the surface then keeps its crop.
+     */
+    private fun place(task: ActivityManager.RunningTaskInfo): LeashPlace {
+        val position = position(task)
+        val bounds = try {
+            val configuration = task.javaClass.getField("configuration").get(task)
+            val windowConfiguration = configuration.javaClass.getField("windowConfiguration").get(configuration)
+            windowConfiguration.javaClass.getMethod("getBounds").invoke(windowConfiguration) as Rect?
+        } catch (e: ReflectiveOperationException) {
+            null
+        } catch (e: RuntimeException) {
+            null
+        }
+        return LeashPlace(position.x, position.y, bounds?.width() ?: 0, bounds?.height() ?: 0)
+    }
 
     @Suppress("UNCHECKED_CAST")
     private fun <T> field(target: Any, name: String): T? = try {
