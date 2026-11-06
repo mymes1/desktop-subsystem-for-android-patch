@@ -32,7 +32,7 @@ use wayland_protocols::wp::text_input::zv3::client::zwp_text_input_v3::{
 use wayland_protocols::xdg::shell::client::xdg_toplevel::ResizeEdge;
 
 use super::shm::ShmBuffer;
-use super::{task_of, State};
+use super::{task_of, Event, State};
 use crate::input::keymap::{self, evdev_key, guest_key};
 use crate::input::pointer::{evdev_button, mouse_button, window_hit, Scroll, WindowHit};
 use crate::input::xkb::Typed;
@@ -202,9 +202,33 @@ impl State {
         }
         if hit == WindowHit::Caption(CaptionHit::Client) {
             self.pointer_input(task_id, WindowInput::MouseMove { position: (x, y) });
+            self.watch_drag_out(task_id, (x, y));
         } else if !self.seat_state.pointer_in_app {
             self.pointer_input(task_id, WindowInput::MouseLeave);
         }
+    }
+
+    /// Tells the session when a press of the left button has just left the window, which may
+    /// carry an app's drag out of it.
+    fn watch_drag_out(&mut self, task_id: i32, position: (f64, f64)) {
+        let Some(window) = self.windows.get(&task_id) else {
+            return;
+        };
+        let geometry = window.model.geometry();
+        let Some(inside) = self.data_state.leave.moved(position, geometry.client) else {
+            return;
+        };
+        let (x, y) = geometry.to_guest(inside);
+        self.events.send(Event::DragOut {
+            out: dsa_host_core::drag::DragOut {
+                task_id,
+                x,
+                y,
+                tool: dsa_protocol::control::PointerTool::Mouse as i32,
+                pointer_id: 0,
+            },
+            serial: self.data_state.press_serial,
+        });
     }
 
     fn pointer_button(&mut self, task_id: i32, serial: u32, code: u32, down: bool) {
@@ -229,6 +253,12 @@ impl State {
         let left = code == evdev_button::LEFT;
         match hit {
             WindowHit::Caption(CaptionHit::Client) => {
+                if left {
+                    self.data_state.leave.pressed(down);
+                    if down {
+                        self.data_state.press_serial = serial;
+                    }
+                }
                 if let Some(button) = mouse_button(code) {
                     let input = WindowInput::MouseButton {
                         button,

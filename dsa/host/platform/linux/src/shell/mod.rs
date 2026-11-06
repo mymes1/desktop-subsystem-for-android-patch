@@ -5,11 +5,13 @@
 //! - [`notifications`]: the guest's notifications as the desktop's
 //!   (`org.freedesktop.Notifications`), and the user's clicks back.
 //! - [`file_drop`]: files dropped on a task window (`text/uri-list`).
+//! - [`file_drag`]: files an app drags out of its window, as the desktop takes them.
 //! - [`clipboard`]: which clipboard formats carry text.
 //! - [`dbus`]: the session bus side of the notifications (Linux only).
 
 pub mod clipboard;
 pub mod desktop_entry;
+pub mod file_drag;
 pub mod file_drop;
 pub mod notifications;
 
