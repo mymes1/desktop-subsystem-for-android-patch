@@ -49,19 +49,30 @@ jobs:
       gnss: ${{ steps.find.outputs.gnss }}
       sensors: ${{ steps.find.outputs.sensors }}
       camera: ${{ steps.find.outputs.camera }}
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # The whole history, so a push can be compared with the commit before it.
+          # The whole history, so a push can be compared with the last commit that passed.
           fetch-depth: 0
 
       - name: Compare with the base
         id: find
         run: |
-          before="${{ github.event.before }}"
+          # A newer push cancels an older one, so the push before this one may never have
+          # been tested: a push is compared with the newest develop commit whose run passed,
+          # not with the commit before it.
+          before=""
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            before="$(gh run list --repo "${{ github.repository }}" --workflow test.yml               --branch develop --event push --status success --limit 1               --json headSha --jq '.[0].headSha // ""' || true)"
+          fi
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             git diff --name-only HEAD^1 HEAD > "$RUNNER_TEMP/changed"
-          elif [[ "${{ github.event_name }}" == "push" && -n "$before" && ! "$before" =~ ^0+$ ]] && git cat-file -e "$before" 2>/dev/null; then
+          elif [[ "${{ github.event_name }}" == "push" && -n "$before" ]] && git merge-base --is-ancestor "$before" HEAD 2>/dev/null; then
             git diff --name-only "$before" HEAD > "$RUNNER_TEMP/changed"
           else
             echo ".github/workflows/test.yml" > "$RUNNER_TEMP/changed"
@@ -82,6 +93,11 @@ jobs:
           part 'dsa/(guest/agent|protocol)/' agent
           part 'dsa/(Cargo\.(toml|lock)|host/(core|cli)/)|\.github/scripts/apk/' apk
           part 'dsa/protocol/' protocol
+          # The generated protocol code is checked on every push to develop whatever the
+          # comparison found: it takes a minute, and stale code breaks every host build.
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            echo "protocol=true" >> "$GITHUB_OUTPUT"
+          fi
           part 'dsa/host/platform/windows/settings/' settings
           part 'dsa/(guest/hwcomposer|protocol)/' hwcomposer
           part 'dsa/(guest/codec2|protocol)/' codec2

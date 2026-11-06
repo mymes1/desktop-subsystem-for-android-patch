@@ -129,6 +129,13 @@ dsa logs collect -o diag.zip        # everything a problem report needs, as one 
 `dsa` with no arguments lists every command. Android's log stays in memory and flows to the
 host only while something reads it. Attach `diag.zip` to a problem report.
 
+## User guides
+
+Step-by-step guides cover installing, apps and windows, APKs, files, Android versions,
+settings, memory, developer mode, troubleshooting and uninstalling:
+[docs/guides](docs/guides/README.md). The [introduction page](docs/guides/intro/index.html)
+explains the project for newcomers.
+
 ## Architecture
 
 ```mermaid
