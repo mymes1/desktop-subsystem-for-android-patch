@@ -243,14 +243,18 @@ fn opaque_everywhere(frame: &WidgetFrame) -> Option<String> {
         Err(why) => return Some(why),
     };
     if channels != 2 && channels != 4 {
-        return Some(format!("the picture has {channels} channels and so no alpha"));
+        return Some(format!(
+            "the picture has {channels} channels and so no alpha"
+        ));
     }
     let px: Vec<&[u8]> = pixels.chunks(channels).collect();
     if px.iter().any(|p| p[channels - 1] == 0) {
         return None;
     }
     let clearest = px.iter().map(|p| p[channels - 1]).min().unwrap_or(255);
-    Some(format!("no pixel is see-through; the most transparent has an alpha of {clearest}"))
+    Some(format!(
+        "no pixel is see-through; the most transparent has an alpha of {clearest}"
+    ))
 }
 
 /// Whether a guest log line says a widget failed to draw (`drawing widget 3 failed`).
