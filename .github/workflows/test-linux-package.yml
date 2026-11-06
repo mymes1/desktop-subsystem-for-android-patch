@@ -143,6 +143,10 @@ jobs:
               /usr/share/icons/hicolor/symbolic/apps/io.github.thisisthepy.DSA-symbolic.svg \
               /usr/share/icons/hicolor/scalable/apps/io.github.thisisthepy.DSA.Settings.svg \
               /usr/share/icons/hicolor/symbolic/apps/io.github.thisisthepy.DSA.Settings-symbolic.svg \
+              /usr/share/icons/hicolor/scalable/apps/io.github.thisisthepy.DSA.ApkInstaller.svg \
+              /usr/share/icons/hicolor/symbolic/apps/io.github.thisisthepy.DSA.ApkInstaller-symbolic.svg \
+              /usr/share/icons/hicolor/scalable/apps/io.github.thisisthepy.DSA.Files.svg \
+              /usr/share/icons/hicolor/symbolic/apps/io.github.thisisthepy.DSA.Files-symbolic.svg \
               /usr/share/locale/ko/LC_MESSAGES/dsa-settings.mo; do
             grep -q "\.$path\$\|\.$path -> " .scratch/deb-contents || { echo "the .deb has no $path"; exit 1; }
             grep -qx "$path" .scratch/rpm-contents || { echo "the .rpm has no $path"; exit 1; }

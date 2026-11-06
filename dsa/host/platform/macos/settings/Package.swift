@@ -12,7 +12,6 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [
         .executable(name: "dsa-settings", targets: ["DsaSettings"]),
-        .executable(name: "dsa-icon", targets: ["DsaIcon"]),
     ],
     targets: [
         // The view models and the dsa client: everything the pages show, with no UI in it.
@@ -23,8 +22,6 @@ let package = Package(
             dependencies: ["DsaSettingsCore"],
             path: "Sources/DsaSettings"
         ),
-        // Draws the placeholder icon at every size the .icns holds.
-        .executableTarget(name: "DsaIcon", path: "Sources/DsaIcon"),
         .testTarget(
             name: "DsaSettingsCoreTests",
             dependencies: ["DsaSettingsCore"],

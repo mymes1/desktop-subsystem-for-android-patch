@@ -223,7 +223,7 @@ install -m 0644 "$here"/desktop/*.desktop "$stage/usr/share/applications/"
 install -m 0644 "$here/geoclue/dsa.conf" "$stage/etc/geoclue/conf.d/90-dsa.conf"
 
 # DSA's icons, in the hicolor theme: the colour icon and the symbolic one of DSA and of
-# DSA Settings.
+# its companion apps (Settings, APK Installer, Files).
 settings_dir="$here/../settings"
 for kind in scalable symbolic; do
     install -d "$stage/usr/share/icons/hicolor/$kind/apps"

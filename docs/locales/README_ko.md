@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="../../dsa/host/platform/windows/settings/DsaSettings/Assets/logo.png" width="112" height="112" alt="DSA 로고">
+<img src="../../.github/assets/dsa-logo.png" width="112" height="112" alt="DSA 로고">
 
 # Desktop Subsystem for Android™
 
