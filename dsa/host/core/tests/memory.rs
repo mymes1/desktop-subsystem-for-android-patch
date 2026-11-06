@@ -50,7 +50,7 @@ fn nfr2_the_vm_grows_when_the_guest_runs_short_up_to_its_maximum() {
 }
 
 #[test]
-fn nfr2_the_vm_gives_memory_back_once_the_guest_is_calm_but_not_below_its_base() {
+fn nfr2_the_vm_gives_memory_back_on_the_next_calm_report_but_not_below_its_base() {
     use dsa_host_core::memory::{GrowthAction, MemoryGrowth};
     let start = Instant::now();
     let mut growth = MemoryGrowth::new(3072, 16384);
@@ -58,15 +58,17 @@ fn nfr2_the_vm_gives_memory_back_once_the_guest_is_calm_but_not_below_its_base()
         growth.on_pressure(&pressure(2900, 100, 0.0), start),
         Some(GrowthAction::Resize(4608))
     );
-    let t = start + Duration::from_secs(5);
+    // Still settling right after the growth.
+    let t = start + Duration::from_secs(2);
     assert_eq!(growth.on_pressure(&pressure(4400, 3000, 0.0), t), None);
-    // Calm for 30 seconds: back to what it uses plus headroom, here the base.
-    let t = t + Duration::from_secs(31);
+    // The apps closed: the first calm report after the growth settled takes the memory
+    // back, to what the guest uses plus headroom, here the base. No calm stretch to wait out.
+    let t = start + Duration::from_secs(5);
     assert_eq!(
         growth.on_pressure(&pressure(4400, 3600, 0.0), t),
         Some(GrowthAction::Resize(3072))
     );
-    let t = t + Duration::from_secs(60);
+    let t = t + Duration::from_secs(5);
     assert_eq!(growth.on_pressure(&pressure(2900, 2000, 0.0), t), None);
 }
 
