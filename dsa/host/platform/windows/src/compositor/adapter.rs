@@ -18,6 +18,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use dsa_host_core::compositor::{GraphicsRenderer, GraphicsStreamKind};
+use dsa_host_core::memory::RendererMemory;
 use dsa_transport::{Connection, FrameSender};
 
 use crate::render_gpu::{GpuRequest, Luid, RendererGpu};
@@ -58,6 +59,35 @@ const GPU_NAME: u32 = 4;
 
 type SelectGpuFn = unsafe extern "C" fn(u32, *const u8, *const c_char) -> c_int;
 type GetGpuInfoFn = unsafe extern "C" fn(*mut GpuInfo) -> c_int;
+
+/// What the renderer counts of its memory, as `dsa_gfx_memory_stats` lays it out.
+#[repr(C)]
+#[derive(Default)]
+struct MemoryStats {
+    device_local_bytes: u64,
+    host_visible_bytes: u64,
+    imported_bytes: u64,
+    largest_bytes: u64,
+    device_local_count: u32,
+    host_visible_count: u32,
+    imported_count: u32,
+    guest_processes: i32,
+}
+
+type GetMemoryStatsFn = unsafe extern "C" fn(*mut MemoryStats) -> c_int;
+
+fn renderer_memory(stats: &MemoryStats) -> RendererMemory {
+    RendererMemory {
+        device_local_kb: stats.device_local_bytes / 1024,
+        device_local_count: stats.device_local_count,
+        host_visible_kb: stats.host_visible_bytes / 1024,
+        host_visible_count: stats.host_visible_count,
+        imported_kb: stats.imported_bytes / 1024,
+        imported_count: stats.imported_count,
+        largest_kb: stats.largest_bytes / 1024,
+        guest_processes: stats.guest_processes,
+    }
+}
 
 /// Function pointer type for framebuffer post notifications.
 pub type PostCallbackFn = unsafe extern "C" fn(
@@ -119,6 +149,11 @@ pub trait DisplayPresenter: Send + Sync {
     /// display's frames into now, instead of keeping it until a frame that never comes.
     fn forget_display(&self, display_id: u32) {
         let _ = display_id;
+    }
+
+    /// What the renderer holds in memory, as it counts it; `None` when it cannot say.
+    fn memory(&self) -> Option<RendererMemory> {
+        None
     }
 }
 
@@ -225,6 +260,11 @@ pub trait GfxBackend: Send + Sync {
     fn forget_display(&self, display_id: u32) {
         let _ = display_id;
     }
+
+    /// What the renderer holds in memory, as it counts it.
+    fn memory(&self) -> Option<RendererMemory> {
+        None
+    }
 }
 
 /// Native backend loaded from `gfxstream_backend.dll`.
@@ -248,6 +288,8 @@ pub struct NativeBackend {
     /// Absent from a backend built before a closed display's texture was let go at once: it
     /// keeps the texture until the next frame for the display, as before.
     fn_forget_display: Option<unsafe extern "C" fn(u32)>,
+    /// Absent from a backend built before the renderer counted its memory.
+    fn_get_memory_stats: Option<GetMemoryStatsFn>,
 }
 
 // SAFETY: HMODULE is owned and accessed across threads safely through the loaded function pointers.
@@ -294,6 +336,8 @@ impl NativeBackend {
             let fn_get_gpu_info: Option<GetGpuInfoFn> =
                 Self::get_symbol(handle, b"dsa_gfx_get_gpu_info\0").ok();
             let fn_forget_display = Self::get_symbol(handle, b"dsa_gfx_forget_display\0").ok();
+            let fn_get_memory_stats: Option<GetMemoryStatsFn> =
+                Self::get_symbol(handle, b"dsa_gfx_get_memory_stats\0").ok();
 
             let note = select_gpu(fn_select_gpu, request);
 
@@ -316,6 +360,7 @@ impl NativeBackend {
                     fn_get_adapter_luid,
                     fn_get_gpu_info,
                     fn_forget_display,
+                    fn_get_memory_stats,
                 },
                 note,
             ))
@@ -468,6 +513,16 @@ impl GfxBackend for NativeBackend {
             // SAFETY: the backend takes any display ID; one it does not know is ignored.
             unsafe { forget_display(display_id) }
         }
+    }
+
+    fn memory(&self) -> Option<RendererMemory> {
+        let get_memory_stats = self.fn_get_memory_stats?;
+        let mut stats = MemoryStats::default();
+        // SAFETY: `stats` has the layout the backend fills.
+        if unsafe { get_memory_stats(&mut stats) } != 0 {
+            return None;
+        }
+        Some(renderer_memory(&stats))
     }
 }
 
@@ -711,6 +766,10 @@ impl DisplayPresenter for GfxstreamAdapter {
         if let Some(backend) = &self.backend {
             backend.forget_display(display_id);
         }
+    }
+
+    fn memory(&self) -> Option<RendererMemory> {
+        self.backend.as_ref().and_then(|backend| backend.memory())
     }
 }
 
@@ -1175,5 +1234,32 @@ mod tests {
 
         info.preference_matched = -1;
         assert_eq!(renderer_gpu(&info).matched, None);
+    }
+
+    #[test]
+    fn nfr2_the_renderers_memory_count_is_read_by_kind() {
+        let stats = MemoryStats {
+            device_local_bytes: 64 << 20,
+            host_visible_bytes: 8 << 20,
+            imported_bytes: 2 << 20,
+            largest_bytes: 16 << 20,
+            device_local_count: 9,
+            host_visible_count: 2,
+            imported_count: 1,
+            guest_processes: 5,
+        };
+        let memory = renderer_memory(&stats);
+        assert_eq!(memory.device_local_kb, 64 * 1024);
+        assert_eq!(memory.host_visible_kb, 8 * 1024);
+        assert_eq!(memory.imported_kb, 2 * 1024);
+        assert_eq!(memory.largest_kb, 16 * 1024);
+        assert_eq!(
+            (memory.device_local_count, memory.host_visible_count, memory.imported_count),
+            (9, 2, 1)
+        );
+        assert_eq!(memory.guest_processes, 5);
+        // The layout matches the backend's `dsa_gfx_memory_stats`: four 64-bit sizes, then
+        // three counts and the process count.
+        assert_eq!(std::mem::size_of::<MemoryStats>(), 48);
     }
 }

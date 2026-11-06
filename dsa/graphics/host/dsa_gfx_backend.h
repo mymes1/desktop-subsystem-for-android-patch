@@ -230,6 +230,25 @@ DSA_GFX_EXPORT int dsa_gfx_channel_write(void* channel, const void* buf, size_t 
 DSA_GFX_EXPORT int dsa_gfx_channel_read(void* channel, void* buf, size_t size, size_t* out_read, uint32_t timeout_ms);
 DSA_GFX_EXPORT void dsa_gfx_channel_stop(void* channel);
 
+/* What the renderer holds, by owner: its live Vulkan allocations by kind (memory only the GPU
+ * sees, memory the host's CPU maps, which holds the guest's host-visible memory, and memory
+ * imported from another API, such as a task window's Direct3D texture), the largest one, and
+ * how many guest processes have their process pipe open. Allocations made while the renderer
+ * started are not counted. */
+typedef struct dsa_gfx_memory_stats {
+    uint64_t device_local_bytes;
+    uint64_t host_visible_bytes;
+    uint64_t imported_bytes;
+    uint64_t largest_bytes;
+    uint32_t device_local_count;
+    uint32_t host_visible_count;
+    uint32_t imported_count;
+    int32_t guest_processes;
+} dsa_gfx_memory_stats;
+
+/* Fills `stats`. Returns 0 on success, -1 when the renderer is not running. */
+DSA_GFX_EXPORT int dsa_gfx_get_memory_stats(dsa_gfx_memory_stats* stats);
+
 #ifdef __cplusplus
 }
 #endif
