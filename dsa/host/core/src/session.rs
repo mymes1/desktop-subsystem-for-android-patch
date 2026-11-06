@@ -1339,6 +1339,17 @@ impl Session {
     /// the loopback port, and has the guest serve its shared storage; the address then holds
     /// for the life of the session.
     pub fn android_files(&self) -> Result<String, String> {
+        self.android_files_under(None)
+    }
+
+    /// As [`Session::android_files`], with the shared storage served under `token`. When it
+    /// was served under another token, the guest is told the new one, and the old address
+    /// stops working.
+    pub fn android_files_with_token(&self, token: &str) -> Result<String, String> {
+        self.android_files_under(Some(token))
+    }
+
+    fn android_files_under(&self, wanted: Option<&str>) -> Result<String, String> {
         let connect = self
             .android_files_connect
             .lock()
@@ -1371,7 +1382,10 @@ impl Session {
             let opened = AdbBridge::start(0, guest).map_err(|error| {
                 format!("cannot open a loopback port for Android's files: {error}")
             })?;
-            let token = dsa_protocol::auth::to_hex(&dsa_protocol::auth::nonce()?);
+            let token = match wanted {
+                Some(token) => token.to_string(),
+                None => dsa_protocol::auth::to_hex(&dsa_protocol::auth::nonce()?),
+            };
             *self
                 .shared
                 .android_files_token
@@ -1380,6 +1394,24 @@ impl Session {
             *bridge = Some(opened);
             if let Some(body) = self.shared.android_files_body() {
                 send_quietly(&self.shared, &self.commands, body);
+            }
+        } else if let Some(token) = wanted {
+            let changed = {
+                let mut current = self
+                    .shared
+                    .android_files_token
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                let changed = current.as_deref() != Some(token);
+                if changed {
+                    *current = Some(token.to_string());
+                }
+                changed
+            };
+            if changed {
+                if let Some(body) = self.shared.android_files_body() {
+                    send_quietly(&self.shared, &self.commands, body);
+                }
             }
         }
         let address = bridge

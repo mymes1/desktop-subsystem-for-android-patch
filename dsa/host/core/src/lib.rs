@@ -67,6 +67,7 @@ pub mod device_identity;
 pub mod diagnostics;
 pub mod file_share;
 pub mod files;
+pub mod files_door;
 pub mod gamepads;
 pub mod guest_display;
 pub mod guest_log;

@@ -24,11 +24,11 @@ class SharedFoldersTest {
     }
 
     private fun sharing(on: Boolean, vararg names: String) = Envelope.newBuilder().setFileSharing(
-        FileSharing.newBuilder().setOn(on).setPort(5590).setLocation("Windows").addAllFolders(names.toList()),
+        FileSharing.newBuilder().setOn(on).setPort(5590).setLocation("Host").addAllFolders(names.toList()),
     ).build()
 
     private fun mount(name: String) {
-        val folder = File(File(storage, "Windows"), name)
+        val folder = File(File(storage, "Host"), name)
         folder.mkdirs()
         File(folder, "photo.jpg").writeBytes(byteArrayOf(1))
     }
@@ -39,7 +39,7 @@ class SharedFoldersTest {
         assertEquals(emptyList<File>(), scanned)
         mount("Pictures")
         scheduler.advance(1_000)
-        assertEquals(listOf(File(File(storage, "Windows"), "Pictures")), scanned)
+        assertEquals(listOf(File(File(storage, "Host"), "Pictures")), scanned)
         scheduler.advance(10_000)
         assertEquals("scanned once", 1, scanned.size)
     }

@@ -1,11 +1,11 @@
-//! The user's Mac folders shared into the guest's shared storage, under `Mac`.
+//! The user's Mac folders shared into the guest's shared storage, under `Host`.
 
 use std::path::{Path, PathBuf};
 
 use dsa_host_core::file_share::ShareHost;
 
 /// The folder in Android's shared storage the Mac's folders appear under.
-pub const LOCATION: &str = "Mac";
+pub const LOCATION: &str = dsa_host_core::file_share::LOCATION;
 
 /// The Mac folder, under the home folder, shared under the guest's name `name`. Videos are
 /// `Movies` on a Mac.
@@ -90,6 +90,6 @@ mod tests {
         };
         assert_eq!(folders.folder("Documents"), None);
         assert_eq!(folders.folder("Secrets"), None);
-        assert_eq!(folders.location(), "Mac");
+        assert_eq!(folders.location(), "Host");
     }
 }

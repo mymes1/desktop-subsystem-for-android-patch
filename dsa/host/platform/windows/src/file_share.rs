@@ -25,7 +25,7 @@ use windows_sys::Win32::UI::Shell::{
 use crate::pipe::{current_user_sid, OwnedHandle};
 
 /// The folder in Android's shared storage the user's folders go under.
-pub const LOCATION: &str = "Windows";
+pub const LOCATION: &str = dsa_host_core::file_share::LOCATION;
 
 /// The known folder each shared folder name stands for.
 fn known_folder(name: &str) -> Option<GUID> {

@@ -155,7 +155,7 @@ fn accept(
 }
 
 /// Copies `a` to `b` and `b` to `a` until either ends, then ends both.
-fn splice(a: Box<dyn BridgeStream>, b: Box<dyn BridgeStream>) -> io::Result<()> {
+pub(crate) fn splice(a: Box<dyn BridgeStream>, b: Box<dyn BridgeStream>) -> io::Result<()> {
     let (a_reader, b_reader) = (a.try_clone_stream()?, b.try_clone_stream()?);
     let backward = thread::Builder::new()
         .name("dsa-adb-copy".into())
