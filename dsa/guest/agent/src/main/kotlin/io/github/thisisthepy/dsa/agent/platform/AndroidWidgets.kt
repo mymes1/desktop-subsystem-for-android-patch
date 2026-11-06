@@ -32,6 +32,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
+import android.os.UserManager
 import android.util.SizeF
 import android.view.Display
 import android.view.InputDevice
@@ -122,6 +123,48 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
             },
             Context.RECEIVER_NOT_EXPORTED,
         )
+    }
+
+    /**
+     * The framework refuses every widget call ("User 0 must be unlocked for widgets to be
+     * available") until the user's storage is unlocked, which comes after the agent starts.
+     * The broadcast that says it has is the signal to start; the check after registering
+     * covers an unlock that came in between.
+     */
+    override fun whenReady(ready: () -> Unit) {
+        val users = context.getSystemService(UserManager::class.java)
+        if (users == null || users.isUserUnlocked) {
+            ready()
+            return
+        }
+        val once = java.util.concurrent.atomic.AtomicBoolean(false)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (!once.compareAndSet(false, true)) return
+                try {
+                    context.unregisterReceiver(this)
+                } catch (ignored: IllegalArgumentException) {
+                    // Unregistered already.
+                }
+                ready()
+            }
+        }
+        context.registerReceiver(
+            receiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_USER_UNLOCKED)
+                addAction(Intent.ACTION_BOOT_COMPLETED)
+            },
+            Context.RECEIVER_EXPORTED,
+        )
+        if (users.isUserUnlocked && once.compareAndSet(false, true)) {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (ignored: IllegalArgumentException) {
+                // Unregistered already.
+            }
+            ready()
+        }
     }
 
     override fun providers(): List<WidgetInfo> =
@@ -307,6 +350,13 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
             super.updateAppWidget(remoteViews)
             listener?.invoke()
         }
+
+        /**
+         * What the view shows when the app's views cannot be shown, as for a while after
+         * the app is stopped: nothing, rather than the framework's error card, so the host
+         * keeps the widget's last image until the app draws again.
+         */
+        override fun getErrorView(): View = View(context)
     }
 
     /** The window a widget's views run in: a presentation on a private display of its size. */
@@ -374,7 +424,7 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
             height,
             PixelFormat.RGBA_8888,
             2,
-            HardwareBuffer.USAGE_CPU_READ_OFTEN or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT,
+            HardwareBuffer.USAGE_CPU_READ_OFTEN or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE,
         )
         private val node = RenderNode("dsa-widget-$id").also { it.setPosition(0, 0, width, height) }
         private val renderer = HardwareRenderer().also {
@@ -404,34 +454,81 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
             view.updateAppWidgetSize(sizes, listOf(SizeF(size.widthDp.toFloat(), size.heightDp.toFloat())))
             captureReader.setOnImageAvailableListener({ reader ->
                 val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
-                val png = try {
-                    val plane = image.planes[0]
-                    if (!software && allClear(plane.buffer, width, height, plane.rowStride, plane.pixelStride)) {
-                        main.post {
-                            if (closed || software) return@post
-                            software = true
-                            log.warn("the GPU's image of widget $id came back empty; drawing it in software from now on")
-                            captureInSoftware()
-                        }
-                        return@setOnImageAvailableListener
-                    }
-                    val stride = plane.rowStride / plane.pixelStride
-                    val full = Bitmap.createBitmap(stride, height, Bitmap.Config.ARGB_8888)
-                    full.copyPixelsFromBuffer(plane.buffer)
-                    val cropped = if (stride == width) full else Bitmap.createBitmap(full, 0, 0, width, height)
-                    encode(cropped).also {
-                        if (cropped !== full) cropped.recycle()
-                        full.recycle()
-                    }
+                val pixels = try {
+                    readBack(image)
                 } catch (e: Exception) {
                     log.warn("reading the image of widget $id failed", e)
                     null
                 } finally {
                     image.close()
                 }
-                if (png != null) onFrame(id, width, height, png)
+                if (pixels == null) return@setOnImageAvailableListener
+                if (isClear(pixels)) {
+                    pixels.recycle()
+                    // Either the widget shows nothing yet (its app has not sent its views),
+                    // or the GPU's drawing did not reach this image. A drawing in software
+                    // tells which; only the second makes the widget draw in software.
+                    main.post { checkClearImage() }
+                    return@setOnImageAvailableListener
+                }
+                send(pixels)
             }, encoder)
             requestCapture()
+        }
+
+        /**
+         * The GPU's image, read back through the GPU: the image wrapped as a hardware bitmap
+         * and copied, which the renderer does with a GPU read. Mapping the buffer for the
+         * CPU instead shows nothing on a guest whose graphics driver keeps the buffer's
+         * contents on the host, and the widget then looked empty.
+         */
+        private fun readBack(image: android.media.Image): Bitmap? {
+            val buffer = image.hardwareBuffer
+            if (buffer != null) {
+                try {
+                    val wrapped = Bitmap.wrapHardwareBuffer(buffer, null)
+                    if (wrapped != null) {
+                        val copy = wrapped.copy(Bitmap.Config.ARGB_8888, false)
+                        wrapped.recycle()
+                        if (copy != null) return copy
+                    }
+                } finally {
+                    buffer.close()
+                }
+            }
+            val plane = image.planes[0]
+            val stride = plane.rowStride / plane.pixelStride
+            val full = Bitmap.createBitmap(stride, height, Bitmap.Config.ARGB_8888)
+            full.copyPixelsFromBuffer(plane.buffer)
+            if (stride == width) return full
+            return Bitmap.createBitmap(full, 0, 0, width, height).also { full.recycle() }
+        }
+
+        /** The GPU's image came back clear: a drawing in software says whether it should have. */
+        private fun checkClearImage() {
+            if (closed || software) return
+            val drawn = drawInSoftware() ?: return
+            if (isClear(drawn)) {
+                // The widget shows nothing yet; the host keeps what it showed before.
+                drawn.recycle()
+                return
+            }
+            software = true
+            log.warn("the GPU's image of widget $id came back empty though the widget shows something; drawing it in software from now on")
+            encoder.post { send(drawn) }
+        }
+
+        /** Sends [pixels] as the widget's image, once, and frees them. */
+        private fun send(pixels: Bitmap) {
+            val png = try {
+                encode(pixels)
+            } catch (e: Exception) {
+                log.warn("encoding the image of widget $id failed", e)
+                null
+            } finally {
+                pixels.recycle()
+            }
+            if (png != null) onFrame(id, width, height, png)
         }
 
         fun requestCapture() {
@@ -481,15 +578,28 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
 
         /** Draws the widget without the GPU, for a view the hardware renderer cannot take. */
         private fun captureInSoftware() {
-            try {
-                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                root.draw(Canvas(bitmap))
-                val png = encode(bitmap)
+            val bitmap = drawInSoftware() ?: return
+            if (isClear(bitmap)) {
+                // Nothing to show yet, or the app's views went: the host keeps the last image.
                 bitmap.recycle()
-                encoder.post { onFrame(id, width, height, png) }
-            } catch (e: Exception) {
-                log.warn("drawing widget $id failed", e)
+                return
             }
+            encoder.post { send(bitmap) }
+        }
+
+        /**
+         * The widget drawn in software onto a bitmap with an alpha channel that starts fully
+         * transparent, so what the widget leaves undrawn stays see-through on the desktop.
+         */
+        private fun drawInSoftware(): Bitmap? = try {
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            bitmap.setHasAlpha(true)
+            bitmap.eraseColor(Color.TRANSPARENT)
+            root.draw(Canvas(bitmap))
+            bitmap
+        } catch (e: Exception) {
+            log.warn("drawing widget $id failed", e)
+            null
         }
 
         /** Draws a clock again at its next second or minute, whatever its own ticking does. */
@@ -535,6 +645,14 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
             renderer.destroy()
             encoder.post { captureReader.close() }
         }
+    }
+
+    /** Whether [bitmap] shows nothing: every pixel's alpha is zero. */
+    private fun isClear(bitmap: Bitmap): Boolean {
+        val buffer = java.nio.ByteBuffer.allocate(bitmap.rowBytes * bitmap.height)
+        bitmap.copyPixelsToBuffer(buffer)
+        buffer.rewind()
+        return allClear(buffer, bitmap.width, bitmap.height, bitmap.rowBytes)
     }
 
     private fun encode(bitmap: Bitmap): ByteArray =

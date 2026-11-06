@@ -127,6 +127,13 @@ interface WidgetPlatform {
         failed: (widgetId: Int) -> Unit,
     )
 
+    /**
+     * Calls [ready], on any thread, once the framework keeps widgets: Android keeps them only
+     * once the user's storage is unlocked, which comes some time after the agent starts. It
+     * is called at once when that has happened already.
+     */
+    fun whenReady(ready: () -> Unit) = ready()
+
     companion object {
         val NONE = object : WidgetPlatform {
             override fun providers() = emptyList<WidgetInfo>()
@@ -264,15 +271,33 @@ class WidgetManager(
     /** Whether a start was refused and is being tried again. */
     private var waiting = false
 
+    /** Whether a later start is scheduled already. */
+    private var startScheduled = false
+
+    /** Why the last start was refused, so each new reason is logged once. */
+    private var refusal: String? = null
+
     /**
      * Starts drawing the placed widgets; [post] runs work on the agent's thread. The agent
-     * starts before the user's storage is unlocked, and Android keeps widgets until then, so
-     * a refused start runs again through [later] until it succeeds. Until it has, the host
-     * hears nothing about widgets: an empty list would make it remove the ones placed.
+     * starts before the user's storage is unlocked, and Android keeps no widgets until then,
+     * so the widget host starts when the platform says the user is unlocked
+     * ([WidgetPlatform.whenReady]), at once from there. A start refused all the same runs
+     * again through [later] until it succeeds. Until it has, the host hears nothing about
+     * widgets: an empty list would make it remove the ones placed.
      */
     fun start(later: (() -> Unit) -> Unit = {}, post: (() -> Unit) -> Unit) {
         this.post = post
         this.later = later
+        try {
+            platform.whenReady { post { begin() } }
+        } catch (e: Exception) {
+            log.warn("cannot hear when the user is unlocked; starting the widget host by trying", e)
+            begin()
+        }
+    }
+
+    private fun begin() {
+        if (started) return
         try {
             platform.start(
                 frame = { id, width, height, png -> post { frame(id, width, height, png) } },
@@ -280,9 +305,17 @@ class WidgetManager(
                 failed = { id -> post { retry(id) } },
             )
         } catch (e: Exception) {
-            if (!waiting) log.warn("the widget host did not start yet; trying again until it does", e)
+            val why = "${e.javaClass.name}: ${e.message}"
+            if (why != refusal) log.warn("the widget host did not start yet; trying again until it does", e)
+            refusal = why
             waiting = true
-            later { start(later, post) }
+            if (!startScheduled) {
+                startScheduled = true
+                later {
+                    startScheduled = false
+                    begin()
+                }
+            }
             return
         }
         started = true
