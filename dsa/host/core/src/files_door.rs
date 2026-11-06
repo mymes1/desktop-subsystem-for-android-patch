@@ -276,18 +276,17 @@ fn reach(
 ) -> Result<TcpStream, String> {
     let android = androids.android(user)?;
     let deadline = Instant::now() + wait;
-    let mut last = String::from("Android did not answer");
     loop {
-        match android
+        let last = match android
             .android_files_with_token(key)
             .and_then(|url| address_of(&url))
         {
             Ok(address) => match probe(address, key) {
                 Ok(stream) => return Ok(stream),
-                Err(why) => last = why,
+                Err(why) => why,
             },
-            Err(why) => last = why,
-        }
+            Err(why) => why,
+        };
         if Instant::now() >= deadline {
             return Err(last);
         }
@@ -310,8 +309,8 @@ fn address_of(url: &str) -> Result<SocketAddr, String> {
 /// fresh connection for the client. Right after the token changes the guest's old server can
 /// still be answering, with a refusal; the answer is only taken once it is the folder.
 fn probe(address: SocketAddr, key: &str) -> Result<TcpStream, String> {
-    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(5))
-        .map_err(|e| e.to_string())?;
+    let mut stream =
+        TcpStream::connect_timeout(&address, Duration::from_secs(5)).map_err(|e| e.to_string())?;
     stream
         .set_read_timeout(Some(Duration::from_secs(10)))
         .map_err(|e| e.to_string())?;
@@ -331,8 +330,8 @@ fn probe(address: SocketAddr, key: &str) -> Result<TcpStream, String> {
             format!("Android's file server answered {}", status.trim())
         });
     }
-    let fresh = TcpStream::connect_timeout(&address, Duration::from_secs(5))
-        .map_err(|e| e.to_string())?;
+    let fresh =
+        TcpStream::connect_timeout(&address, Duration::from_secs(5)).map_err(|e| e.to_string())?;
     Ok(fresh)
 }
 

@@ -564,23 +564,24 @@ mod win {
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, FindWindowExW,
-        FindWindowW, GetMessageW, GetWindow, KillTimer, SetTimer, GW_HWNDPREV, WM_TIMER,
-        GetWindowRect, LoadCursorW, PostMessageW, PostQuitMessage, RegisterClassExW,
-        RegisterWindowMessageW, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
-        UpdateLayeredWindow, GWLP_HWNDPARENT, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION,
-        HTCLIENT, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, HWND_BOTTOM, HWND_MESSAGE,
-        IDC_ARROW, MA_NOACTIVATE, MINMAXINFO, MSG, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        SWP_NOZORDER, SW_SHOWNOACTIVATE, ULW_ALPHA, WINDOWPOS, WM_APP, WM_CAPTURECHANGED, WM_CLOSE,
-        WM_CONTEXTMENU, WM_DESTROY, WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE,
-        WM_GETMINMAXINFO, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE,
-        WM_NCHITTEST, WM_SIZE, WM_WINDOWPOSCHANGING, WNDCLASSEXW,
+        FindWindowW, GetMessageW, GetWindow, GetWindowRect, KillTimer, LoadCursorW, PostMessageW,
+        PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SetTimer, SetWindowLongPtrW,
+        SetWindowPos, ShowWindow, TranslateMessage, UpdateLayeredWindow, GWLP_HWNDPARENT,
+        GW_HWNDPREV, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION, HTCLIENT, HTLEFT, HTRIGHT,
+        HTTOP, HTTOPLEFT, HTTOPRIGHT, HWND_BOTTOM, HWND_MESSAGE, IDC_ARROW, MA_NOACTIVATE,
+        MINMAXINFO, MSG, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_SHOWNOACTIVATE,
+        ULW_ALPHA, WINDOWPOS, WM_APP, WM_CAPTURECHANGED, WM_CLOSE, WM_CONTEXTMENU, WM_DESTROY,
+        WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_GETMINMAXINFO, WM_LBUTTONDOWN,
+        WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NCHITTEST, WM_SIZE, WM_TIMER,
+        WM_WINDOWPOSCHANGING, WNDCLASSEXW,
     };
 
     use std::time::Instant;
 
     use super::{
-        android_density, frame_overdue, hit_test, z_place, ZPlace, NO_FRAME, NO_FRAME_CHECK, min_window_size, placement_of, reachable_origin, to_frame,
-        window_size, window_styles, Hit, WindowCommand, WindowReport,
+        android_density, frame_overdue, hit_test, min_window_size, placement_of, reachable_origin,
+        to_frame, window_size, window_styles, z_place, Hit, WindowCommand, WindowReport, ZPlace,
+        NO_FRAME, NO_FRAME_CHECK,
     };
     use crate::compositor::log::{note, CompositorLogger};
     use crate::compositor::widget_menu::{self, MenuChoice};
@@ -782,7 +783,14 @@ mod win {
             return;
         }
         // SAFETY: a timer of the controller window, killed when it closes.
-        unsafe { SetTimer(controller, NO_FRAME_TIMER, NO_FRAME_CHECK.as_millis() as u32, None) };
+        unsafe {
+            SetTimer(
+                controller,
+                NO_FRAME_TIMER,
+                NO_FRAME_CHECK.as_millis() as u32,
+                None,
+            )
+        };
         slot.store(controller as isize, Ordering::SeqCst);
         let _ = ready.send(Ok(()));
         // SAFETY: the usual message loop of this thread's windows.
