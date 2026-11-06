@@ -17,8 +17,9 @@
 //! release inside the widget go to the widget's view in Android, so its buttons and lists
 //! work and an app it opens shows as a window.
 //!
-//! The window manager starts at sign-in. When the service remembers widgets but Android is
-//! not running, it starts Android, so the widgets come back after the computer restarts.
+//! The window manager starts at sign-in, and it starts Android then when it is not running
+//! ([`starts_android_at_sign_in`]): the first app opened after the computer starts does not
+//! wait for Android to boot, and the widgets the service remembers come back.
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -353,19 +354,17 @@ pub fn sync(
             }
         };
         last_error.clear();
-        // Widgets the service remembers come back once Android runs.
-        if !started_android && stream.remembered() > 0 && stream.current().is_empty() {
+        // Android starts with the user's sign-in, so no app launch waits for it to boot, and
+        // the widgets the service remembers come back once it runs.
+        if !started_android {
             started_android = true;
             match requests.status() {
-                Ok(status) if status.state == SessionState::Stopped => {
-                    note(
-                        logger.as_deref(),
-                        "starting Android for the widgets on the desktop",
-                    );
+                Ok(status) if starts_android_at_sign_in(status.state) => {
+                    note(logger.as_deref(), "starting Android at sign-in");
                     if let Err(why) = requests.start() {
                         note(
                             logger.as_deref(),
-                            &format!("Android did not start for the widgets: {why}"),
+                            &format!("Android did not start at sign-in: {why}"),
                         );
                     }
                 }
@@ -1429,9 +1428,28 @@ pub(crate) mod png {
     }
 }
 
+/// Whether the window manager starts Android at sign-in, seeing it in `state`: when it is not
+/// running. One that is starting, running or dozing is left as it is.
+pub fn starts_android_at_sign_in(state: SessionState) -> bool {
+    state == SessionState::Stopped
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fr10_the_window_manager_starts_a_stopped_android_at_sign_in() {
+        assert!(starts_android_at_sign_in(SessionState::Stopped));
+        for running in [
+            SessionState::Starting,
+            SessionState::Active,
+            SessionState::Dozing,
+            SessionState::Frozen,
+        ] {
+            assert!(!starts_android_at_sign_in(running), "{running:?}");
+        }
+    }
     use dsa_host_core::widgets::WidgetProvider;
 
     fn clock() -> WidgetProvider {
