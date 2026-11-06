@@ -64,8 +64,7 @@ class Workflow(unittest.TestCase):
                          ["job image: publishes a release with the kernel but not kernel-source.tar.gz"])
 
     def test_nfr7_arm64_kernel_artifact_without_source_fails(self):
-        arm64 = GOOD.replace("  image:
-", """  kernel-arm64:
+        arm64 = GOOD.replace("  image:\n", """  kernel-arm64:
     steps:
       - uses: actions/upload-artifact@v4
         with:
