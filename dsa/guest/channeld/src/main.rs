@@ -327,13 +327,21 @@ mod daemon {
     #[cfg(target_os = "android")]
     fn reclaim_idle_memory(router: Arc<Router>) {
         use dsa_guest_channeld::reclaim::{
-            file_refaults_kb, memory_pressure, package_running, MemInfo, Reason, ReclaimPolicy,
-            Reclaimer, CHECK_INTERVAL, EXIT_POLL, EXIT_WAIT_LIMIT, RECLAIM_PROPERTY, TRIM_PROPERTY,
+            file_refaults_kb, memory_pressure, package_running, MemInfo, ReadFailures, Reason,
+            ReclaimPolicy, Reclaimer, CHECK_INTERVAL, EXIT_POLL, EXIT_WAIT_LIMIT, RECLAIM_PROPERTY, TRIM_PROPERTY,
             TRIM_SIZE_PROPERTY,
         };
         // The command lines of the guest's processes, for whether a closed app's are gone.
-        fn command_lines() -> Vec<String> {
-            let Ok(entries) = std::fs::read_dir("/proc") else {
+        fn command_lines(failures: &mut ReadFailures) -> Vec<String> {
+            let listing = std::fs::read_dir("/proc");
+            if let Some(line) = failures.note(
+                "/proc",
+                &listing,
+                "a closed app's memory is reclaimed without waiting for its processes to exit",
+            ) {
+                say!("{line}");
+            }
+            let Ok(entries) = listing else {
                 return Vec::new();
             };
             entries
@@ -352,6 +360,7 @@ mod daemon {
         let page_kb = (unsafe { libc::sysconf(libc::_SC_PAGESIZE) }.max(4096) as u64) / 1024;
         let start = std::time::Instant::now();
         let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
+        let mut failures = ReadFailures::default();
         let mut closed = router.apps_closed();
         loop {
             let now_closed = router.wait_for_closed_app(closed, CHECK_INTERVAL);
@@ -366,7 +375,7 @@ mod daemon {
                 let packages = router.take_closed_packages();
                 let waited = std::time::Instant::now();
                 while waited.elapsed() < EXIT_WAIT_LIMIT {
-                    let lines = command_lines();
+                    let lines = command_lines(&mut failures);
                     if !packages.iter().any(|p| package_running(&lines, p)) {
                         break;
                     }
@@ -388,14 +397,25 @@ mod daemon {
             let tasks = router.tasks_in_use();
             reclaimer.host_short(router.host_memory_low());
             // Pressure stall information is optional in the kernel: unreadable counts as busy.
-            let pressure = std::fs::read_to_string("/proc/pressure/memory")
-                .map(|text| memory_pressure(&text, 5.0))
-                .unwrap_or(true);
+            let psi = std::fs::read_to_string("/proc/pressure/memory");
+            if let Some(line) = failures.note(
+                "/proc/pressure/memory",
+                &psi,
+                "the guest counts as under memory pressure and the gradual trim never runs",
+            ) {
+                say!("{line}");
+            }
+            let pressure = psi.map(|text| memory_pressure(&text, 5.0)).unwrap_or(true);
             // Evicted cache read back says the working set is larger than the trim assumed.
-            if let Some(refaults) = std::fs::read_to_string("/proc/vmstat")
-                .ok()
-                .and_then(|text| file_refaults_kb(&text, page_kb))
-            {
+            let vmstat = std::fs::read_to_string("/proc/vmstat");
+            if let Some(line) = failures.note(
+                "/proc/vmstat",
+                &vmstat,
+                "the trim cannot tell when it evicted cache the guest still uses",
+            ) {
+                say!("{line}");
+            }
+            if let Some(refaults) = vmstat.ok().and_then(|text| file_refaults_kb(&text, page_kb)) {
                 reclaimer.refaults(refaults);
             }
             let reason = if app_closed {
