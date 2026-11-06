@@ -129,6 +129,8 @@ Linux 호스트의 VM:
 - VMM은 crosvm(BSD-3-Clause)이다. 이유는 셋이다. ChromeOS와 Android Virtualization Framework(AVF)가 안드로이드 게스트를 이 VMM으로 돌려 검증했다. gfxstream을 일급으로 지원한다. virtio-balloon의 빈 페이지 보고(free page reporting)로 게스트가 놓은 메모리를 호스트에 돌려준다.
 - crosvm은 고정한 업스트림 리비전에서 빌드한다. 저장소에 소스를 넣지 않고, 스크립트가 그 리비전을 `.scratch`로 받아 CI에서 빌드한다. 바이너리는 DSA의 deb와 rpm 패키지에 함께 싣는다. 배포판의 VMM에 기대지 않는다.
 - QEMU는 쓰지 않는다. 안드로이드 게스트로 검증된 경로가 아니고, GPL이라 함께 실을 수 없어 배포판 패키지에 기대야 했다.
+- 메모리는 virtio-mem으로 더하고 돌려준다(2026-11-06 결정). 업스트림 crosvm에는 메모리 핫플러그 장치가 없다. 그래서 VM을 최대 크기로 만들면 게스트 커널이 최대 크기의 약 1.56%를 페이지 구조체로 늘 잡는다(16 GiB 호스트에서 224 MiB, 32 GiB에서 461 MiB). 이 저장소가 crosvm에 virtio-mem 장치를 더하는 패치를 갖고, 빌드 스크립트가 고정 리비전에 그 패치를 적용한다. 업스트림에 쓸 만한 virtio-mem이 생기면 패치 대신 리비전을 올린다.
+- VM은 시작 크기로 부팅하고, 최대 크기까지의 나머지는 virtio-mem 영역으로 둔다. 게스트 커널은 memory_hotplug와 memmap_on_memory를 켜서, 더한 메모리의 페이지 구조체를 더한 메모리 안에 둔다. 확장과 반환 정책은 Windows와 같은 `host/core`의 것이다. 메모리 상한은 두지 않고, 기본은 작게 두며, 더 쓰지 않는 메모리는 바로 돌려준다.
 
 ### D10. 언어
 
