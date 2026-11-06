@@ -218,7 +218,9 @@ after two minutes. `"keep_window_manager": false` turns this off.
   of its own. The window is a tool window owned by the shell's desktop window (`Progman`),
   so it is neither in the taskbar nor in Alt+Tab, stays when the user shows the desktop, and
   is kept below every other window; it never takes the focus. It shows the widget's PNG
-  frames, decoded with WIC, with what the widget leaves clear see-through. Dragging the band
+  frames, decoded with WIC, with what the widget leaves clear see-through. Until the first
+  frame comes, or when a frame has nothing in it, it shows a mostly opaque dark card with
+  rounded corners, so a widget is never an invisible hole on the desktop. Dragging the band
   along its top moves it and dragging its edges resizes it; when the user lets go, the
   service remembers the placement (per user, beside the user's settings, as
   `users/<user>.widgets.json`) and tells Android the window's size, which the widget draws

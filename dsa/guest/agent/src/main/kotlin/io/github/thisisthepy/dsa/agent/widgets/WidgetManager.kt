@@ -100,7 +100,13 @@ interface WidgetPlatform {
      */
     fun configure(widgetId: Int, done: (Boolean) -> Unit)
 
-    /** Draws the widget at [size] from now on, and tells its app the size. */
+    /**
+     * Draws the widget at [size] from now on, and tells its app the size. Before anything else
+     * the widget's view is made and registered with the framework, which drops every update
+     * of a widget ID no view of its host listens to. It is called for every placed widget
+     * each time the agent starts, since the views of an earlier process are gone. When the
+     * widget cannot be drawn, the platform calls the `failed` callback given to [start].
+     */
     fun show(widgetId: Int, size: WidgetSize)
 
     /** Hands pointer input to the widget's view. */
@@ -111,9 +117,15 @@ interface WidgetPlatform {
 
     /**
      * Starts the platform: [frame] is called, on any thread, with each new image of a widget as
-     * a PNG; [changed] when the installed widgets may have changed, as when an app is removed.
+     * a PNG; [changed] when the installed widgets may have changed, as when an app is removed;
+     * [failed], on any thread, when a widget [show] was asked to draw could not be, so it is
+     * tried again.
      */
-    fun start(frame: (widgetId: Int, width: Int, height: Int, png: ByteArray) -> Unit, changed: () -> Unit)
+    fun start(
+        frame: (widgetId: Int, width: Int, height: Int, png: ByteArray) -> Unit,
+        changed: () -> Unit,
+        failed: (widgetId: Int) -> Unit,
+    )
 
     companion object {
         val NONE = object : WidgetPlatform {
@@ -127,7 +139,7 @@ interface WidgetPlatform {
             override fun show(widgetId: Int, size: WidgetSize) = Unit
             override fun pointer(widgetId: Int, action: PointerAction, pointerId: Int, x: Float, y: Float) = Unit
             override fun dozing(dozing: Boolean) = Unit
-            override fun start(frame: (Int, Int, Int, ByteArray) -> Unit, changed: () -> Unit) = Unit
+            override fun start(frame: (Int, Int, Int, ByteArray) -> Unit, changed: () -> Unit, failed: (Int) -> Unit) = Unit
         }
     }
 }
@@ -227,6 +239,10 @@ class WidgetManager(
     private val isConnected: () -> Boolean,
 ) {
     private var post: (() -> Unit) -> Unit = { it() }
+    private var later: (() -> Unit) -> Unit = {}
+
+    /** The widgets waiting to be shown again after drawing them failed. */
+    private val retrying = mutableSetOf<Int>()
     private val shown = mutableMapOf<Int, WidgetSize>()
     private val lastFrame = mutableMapOf<Int, ByteArray>()
 
@@ -256,10 +272,12 @@ class WidgetManager(
      */
     fun start(later: (() -> Unit) -> Unit = {}, post: (() -> Unit) -> Unit) {
         this.post = post
+        this.later = later
         try {
             platform.start(
                 frame = { id, width, height, png -> post { frame(id, width, height, png) } },
                 changed = { post { if (isConnected()) announce() else prune() } },
+                failed = { id -> post { retry(id) } },
             )
         } catch (e: Exception) {
             if (!waiting) log.warn("the widget host did not start yet; trying again until it does", e)
@@ -350,7 +368,26 @@ class WidgetManager(
 
     private fun show(id: Int, size: WidgetSize) {
         shown[id] = size
-        attempt("drawing widget $id") { platform.show(id, size) }
+        try {
+            platform.show(id, size)
+        } catch (e: Exception) {
+            log.warn("drawing widget $id failed; trying again", e)
+            retry(id)
+        }
+    }
+
+    /**
+     * A placed widget could not be drawn: it is shown again a little later, until it is, so a
+     * widget never stays without a view listening to its updates.
+     */
+    private fun retry(id: Int) {
+        if (id !in shown || !retrying.add(id)) return
+        later {
+            retrying.remove(id)
+            val size = shown[id] ?: return@later
+            if (id !in placed()) return@later
+            show(id, size)
+        }
     }
 
     /** Acts on the frame if it is about widgets. False for any other frame. */
