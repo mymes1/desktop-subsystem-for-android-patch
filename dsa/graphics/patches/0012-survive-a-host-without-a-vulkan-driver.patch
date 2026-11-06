@@ -1,0 +1,45 @@
+diff --git a/host/vulkan/VkCommonOperations.cpp b/host/vulkan/VkCommonOperations.cpp
+--- a/host/vulkan/VkCommonOperations.cpp
++++ b/host/vulkan/VkCommonOperations.cpp
+@@ -1829,21 +1829,33 @@ void VkEmulation::initFeatures(Features features) {
+ VkEmulation::~VkEmulation() {
+     std::lock_guard<std::mutex> lock(mMutex);
+ 
+-    freeRetiredLocked(/*wait=*/true);
++    // create() returns early when the host has no usable Vulkan driver, and the half-built
++    // emulation it drops then has no device, and maybe no instance: free only what exists.
++    if (mDvk && mDevice != VK_NULL_HANDLE) {
++        freeRetiredLocked(/*wait=*/true);
++    }
+ 
+     mCompositorVk.reset();
+     mDisplayVk.reset();
+ 
+-    freeExternalMemoryLocked(mDvk, &mStaging.memory);
++    if (mDvk && mDevice != VK_NULL_HANDLE) {
++        freeExternalMemoryLocked(mDvk, &mStaging.memory);
+ 
+-    mDvk->vkDestroyBuffer(mDevice, mStaging.buffer, nullptr);
+-    mDvk->vkDestroyFence(mDevice, mCommandBufferFence, nullptr);
+-    mDvk->vkFreeCommandBuffers(mDevice, mCommandPool, 1, &mCommandBuffer);
+-    mDvk->vkDestroyCommandPool(mDevice, mCommandPool, nullptr);
++        mDvk->vkDestroyBuffer(mDevice, mStaging.buffer, nullptr);
++        mDvk->vkDestroyFence(mDevice, mCommandBufferFence, nullptr);
++        if (mCommandPool != VK_NULL_HANDLE) {
++            mDvk->vkFreeCommandBuffers(mDevice, mCommandPool, 1, &mCommandBuffer);
++            mDvk->vkDestroyCommandPool(mDevice, mCommandPool, nullptr);
++        }
++    }
+ 
+-    mIvk->vkDestroyDevice(mDevice, nullptr);
++    if (mIvk && mDevice != VK_NULL_HANDLE) {
++        mIvk->vkDestroyDevice(mDevice, nullptr);
++    }
+ 
+-    mGvk->vkDestroyInstance(mInstance, nullptr);
++    if (mGvk && mInstance != VK_NULL_HANDLE) {
++        mGvk->vkDestroyInstance(mInstance, nullptr);
++    }
+ }
+ 
+ bool VkEmulation::isYcbcrEmulationEnabled() const { return mEnableYcbcrEmulation; }
