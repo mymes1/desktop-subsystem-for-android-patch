@@ -13,7 +13,6 @@
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc::Sender;
 
-use super::drag_source::DragStarter;
 use crate::compositor::log::{input_trace, input_trace_on};
 use dsa_host_core::drag::{DragOut, LeaveWatch};
 use dsa_host_core::input::{
@@ -40,6 +39,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE,
     WM_RBUTTONDOWN, WM_RBUTTONUP, WM_XBUTTONDOWN, WM_XBUTTONUP, XBUTTON1, XBUTTON2,
 };
+
+use super::drag_source::DragStarter;
 
 /// The mouse left the window (`TrackMouseEvent`). windows-sys keeps it with the common
 /// controls, which this crate does not otherwise need.

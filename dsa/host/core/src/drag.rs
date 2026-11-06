@@ -162,7 +162,8 @@ impl LeaveWatch {
     /// leaves the task; `None` otherwise.
     pub fn moved(&mut self, position: (f64, f64), client: (u32, u32)) -> Option<(f64, f64)> {
         let (x, y) = position;
-        let inside = x >= 0.0 && y >= 0.0 && x < f64::from(client.0) && y < f64::from(client.1);
+        let inside =
+            (0.0..f64::from(client.0)).contains(&x) && (0.0..f64::from(client.1)).contains(&y);
         if inside {
             self.inside = Some(position);
             return None;
