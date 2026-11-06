@@ -11,9 +11,9 @@ use ed25519_dalek::VerifyingKey;
 
 use super::manifest::{self, ImageEntry};
 use super::policy::{decide_for, Decision, InstalledImage};
-use super::versions::{AndroidVersions, Channel, ChooseError, VersionReport};
 use super::store::{Fetch, ImageStore};
 use super::trial::{self, Boot, Outcome};
+use super::versions::{AndroidVersions, Channel, ChooseError, VersionReport};
 use super::UpdateError;
 use crate::accessibility::{AccessibilityWatch, ActionRequest};
 use crate::apk::{InstallOutcome, InstalledPackage};

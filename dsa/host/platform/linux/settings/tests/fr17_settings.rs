@@ -112,7 +112,13 @@ fn fr17_changes_go_through_the_local_api_with_the_same_command_lines() {
             line(&["settings", "set", "memory-limit", "auto", "--json"]),
             line(&["settings", "set", "memory-limit", "8192", "--json"]),
             line(&["settings", "set", "shared-folders", "none", "--json"]),
-            line(&["settings", "set", "shared-folders", "Documents,Music", "--json"]),
+            line(&[
+                "settings",
+                "set",
+                "shared-folders",
+                "Documents,Music",
+                "--json"
+            ]),
         ]
     );
     assert!(elevated.calls().is_empty());
@@ -161,7 +167,10 @@ fn fr17_the_windows_settings_app_makes_the_same_requests() {
         r#""background", "list""#,
         r#""logs", "collect", "-o", path"#,
     ] {
-        assert!(service.contains(request), "DsaService.cs no longer makes {request}");
+        assert!(
+            service.contains(request),
+            "DsaService.cs no longer makes {request}"
+        );
     }
     let fake = Fake::new(json!({}));
     let c = client(&fake, &fake);
@@ -312,8 +321,14 @@ fn fr17_the_android_page_warns_before_moving_to_an_older_version() {
     let channels: Vec<&str> = choices.iter().map(|c| c.channel.as_str()).collect();
     assert_eq!(channels, vec!["latest", "17", "16"]);
     assert_eq!(view::android_choice_index(&info), 0);
-    assert_eq!(view::android_move(&info, &choices[1]), view::AndroidMove::Same);
-    assert_eq!(view::android_move(&info, &choices[2]), view::AndroidMove::Down);
+    assert_eq!(
+        view::android_move(&info, &choices[1]),
+        view::AndroidMove::Same
+    );
+    assert_eq!(
+        view::android_move(&info, &choices[2]),
+        view::AndroidMove::Down
+    );
 }
 
 #[test]
@@ -357,7 +372,8 @@ fn fr17_the_apps_page_searches_and_reads_refusals() {
 
 #[test]
 fn fr17_problems_are_told_apart() {
-    let unreachable = Failure::from_client("dsa: cannot reach the DSA service at /run/dsa/host.sock");
+    let unreachable =
+        Failure::from_client("dsa: cannot reach the DSA service at /run/dsa/host.sock");
     assert_eq!(unreachable.problem, Problem::ServiceUnreachable);
     assert!(!unreachable.detail.starts_with("dsa: "));
     assert_eq!(Failure::from_client("no").problem, Problem::Refused);
@@ -380,7 +396,10 @@ fn fr17_shared_folders_keep_the_service_order() {
         view::toggle_folder(&now, "Downloads", true),
         vec!["Documents", "Downloads", "Pictures"]
     );
-    assert_eq!(view::toggle_folder(&now, "Pictures", false), vec!["Documents"]);
+    assert_eq!(
+        view::toggle_folder(&now, "Pictures", false),
+        vec!["Documents"]
+    );
 }
 
 #[test]
@@ -511,7 +530,10 @@ fn fr17_every_string_is_translated_into_korean() {
             _ => missing.push(text.clone()),
         }
     }
-    assert!(missing.is_empty(), "po/ko.po has no Korean for {missing:#?}");
+    assert!(
+        missing.is_empty(),
+        "po/ko.po has no Korean for {missing:#?}"
+    );
     let linguas = std::fs::read_to_string(crate_dir().join("po/LINGUAS")).unwrap();
     assert!(linguas.lines().any(|l| l.trim() == "ko"));
 }
@@ -543,7 +565,9 @@ fn fr17_the_desktop_entry_appstream_and_icons_are_there() {
     }
     let metainfo = std::fs::read_to_string(data.join(format!("{id}.metainfo.xml"))).unwrap();
     assert!(metainfo.contains(&format!("<id>{id}</id>")));
-    assert!(metainfo.contains(&format!("<launchable type=\"desktop-id\">{id}.desktop</launchable>")));
+    assert!(metainfo.contains(&format!(
+        "<launchable type=\"desktop-id\">{id}.desktop</launchable>"
+    )));
     assert!(metainfo.contains(&format!("<icon type=\"stock\">{id}</icon>")));
     assert!(metainfo.contains("Android is a trademark of Google LLC."));
     for icon in [
@@ -552,8 +576,8 @@ fn fr17_the_desktop_entry_appstream_and_icons_are_there() {
         "icons/hicolor/scalable/apps/io.github.thisisthepy.DSA.svg".into(),
         "icons/hicolor/symbolic/apps/io.github.thisisthepy.DSA-symbolic.svg".into(),
     ] {
-        let svg = std::fs::read_to_string(data.join(&icon))
-            .unwrap_or_else(|e| panic!("{icon}: {e}"));
+        let svg =
+            std::fs::read_to_string(data.join(&icon)).unwrap_or_else(|e| panic!("{icon}: {e}"));
         assert!(svg.contains("<svg"), "{icon} is not an SVG");
     }
 }

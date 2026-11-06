@@ -70,8 +70,7 @@ pub fn check_for(
             image.version, image.android_major, installed.android_major
         ));
     }
-    if !older && (image.android_major, image.build) <= (installed.android_major, installed.build)
-    {
+    if !older && (image.android_major, image.build) <= (installed.android_major, installed.build) {
         return Err(format!(
             "{} is not newer than the installed {}",
             image.version, installed.version

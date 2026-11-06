@@ -327,17 +327,20 @@ impl Memory {
             })
             .collect();
         let guest = json.get("guest").filter(|g| g.is_object()).map(|g| {
-            let kernel = g.get("kernel").filter(|k| k.is_object()).map(|k| GuestKernel {
-                slab_unreclaimable_kb: number(k, "slab_unreclaimable_kb"),
-                kernel_stack_kb: number(k, "kernel_stack_kb"),
-                page_tables_kb: number(k, "page_tables_kb"),
-                vmalloc_used_kb: number(k, "vmalloc_used_kb"),
-                percpu_kb: number(k, "percpu_kb"),
-                cma_total_kb: number(k, "cma_total_kb"),
-                mem_online_kb: number(k, "mem_online_kb"),
-                unaccounted_kb: number(k, "unaccounted_kb"),
-                reserved_at_boot_kb: k["reserved_at_boot_kb"].as_u64(),
-            });
+            let kernel = g
+                .get("kernel")
+                .filter(|k| k.is_object())
+                .map(|k| GuestKernel {
+                    slab_unreclaimable_kb: number(k, "slab_unreclaimable_kb"),
+                    kernel_stack_kb: number(k, "kernel_stack_kb"),
+                    page_tables_kb: number(k, "page_tables_kb"),
+                    vmalloc_used_kb: number(k, "vmalloc_used_kb"),
+                    percpu_kb: number(k, "percpu_kb"),
+                    cma_total_kb: number(k, "cma_total_kb"),
+                    mem_online_kb: number(k, "mem_online_kb"),
+                    unaccounted_kb: number(k, "unaccounted_kb"),
+                    reserved_at_boot_kb: k["reserved_at_boot_kb"].as_u64(),
+                });
             GuestMemory {
                 total_kb: number(g, "mem_total_kb"),
                 free_kb: number(g, "mem_free_kb"),
@@ -408,7 +411,10 @@ pub struct AppWindow {
 impl AppWindow {
     pub fn read(json: &Value) -> AppWindow {
         let size = json["start_size"].as_array().and_then(|pair| {
-            Some((pair.first()?.as_u64()? as u32, pair.get(1)?.as_u64()? as u32))
+            Some((
+                pair.first()?.as_u64()? as u32,
+                pair.get(1)?.as_u64()? as u32,
+            ))
         });
         AppWindow {
             package: text(json, "package"),
@@ -661,10 +667,8 @@ impl Outcome {
             .strip_prefix("not installed (")
             .or_else(|| failure.detail.strip_prefix("not uninstalled ("))?;
         let (status, detail) = rest.split_once("): ")?;
-        let valid = !status.is_empty()
-            && status
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c == '-');
+        let valid =
+            !status.is_empty() && status.chars().all(|c| c.is_ascii_lowercase() || c == '-');
         valid.then(|| Outcome {
             done: false,
             status: status.to_string(),
@@ -778,16 +782,22 @@ impl Client {
 
     /// Starts Android and waits until it has started or failed.
     pub fn start(&self) -> Result<Status, Failure> {
-        Ok(Status::read(
-            &self.json(&["start", "--wait", "--timeout", "360"])?,
-        ))
+        Ok(Status::read(&self.json(&[
+            "start",
+            "--wait",
+            "--timeout",
+            "360",
+        ])?))
     }
 
     /// Stops Android and waits until it has stopped.
     pub fn stop(&self) -> Result<Status, Failure> {
-        Ok(Status::read(
-            &self.json(&["stop", "--wait", "--timeout", "120"])?,
-        ))
+        Ok(Status::read(&self.json(&[
+            "stop",
+            "--wait",
+            "--timeout",
+            "120",
+        ])?))
     }
 
     /// Freezes Android until one of its windows is shown again.
@@ -801,7 +811,9 @@ impl Client {
 
     /// Changes one of the user's own settings.
     pub fn set(&self, name: &str, value: &str) -> Result<Settings, Failure> {
-        Ok(Settings::read(&self.json(&["settings", "set", name, value])?))
+        Ok(Settings::read(
+            &self.json(&["settings", "set", name, value])?,
+        ))
     }
 
     /// Turns one of the user's own switches on or off.
@@ -959,7 +971,9 @@ impl Client {
 
     /// Places a widget; when its app asks for a setup, this waits for the user to finish it.
     pub fn add_widget(&self, provider: &str) -> Result<PlacedWidget, Failure> {
-        Ok(PlacedWidget::read(&self.json(&["widgets", "add", provider])?))
+        Ok(PlacedWidget::read(
+            &self.json(&["widgets", "add", provider])?,
+        ))
     }
 
     pub fn remove_widget(&self, id: i64) -> Result<(), Failure> {
@@ -1011,7 +1025,9 @@ impl Client {
     }
 
     pub fn reset_identity(&self) -> Result<Identity, Failure> {
-        Ok(Identity::read(&self.json(&["settings", "reset", "device"])?))
+        Ok(Identity::read(
+            &self.json(&["settings", "reset", "device"])?,
+        ))
     }
 
     /// Saves the diagnostics of Android and of DSA to `path`, as one zip archive.

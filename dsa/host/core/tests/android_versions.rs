@@ -70,7 +70,10 @@ impl Release {
     fn of(manifest: &Manifest) -> Release {
         let bytes = serde_json::to_vec(manifest).unwrap();
         let mut served = HashMap::new();
-        served.insert("mem://list.sig".into(), hex(&key().sign(&bytes).to_bytes()).into_bytes());
+        served.insert(
+            "mem://list.sig".into(),
+            hex(&key().sign(&bytes).to_bytes()).into_bytes(),
+        );
         served.insert("mem://list".into(), bytes);
         for image in &manifest.images {
             served.insert(
@@ -189,7 +192,11 @@ fn fr14_an_older_major_needs_the_data_erased_and_is_then_applied() {
         }
         other => panic!("expected the data loss to be named, got {other:?}"),
     }
-    assert_eq!(store.state().unwrap().channel, Channel::Latest, "nothing changed");
+    assert_eq!(
+        store.state().unwrap().channel,
+        Channel::Latest,
+        "nothing changed"
+    );
     match store.choose(Channel::Major(15), true) {
         Err(ChooseError::Unsupported(why)) => assert!(why.contains("16, 17"), "{why}"),
         other => panic!("expected an unsupported version, got {other:?}"),
@@ -250,7 +257,8 @@ fn fr14_the_version_is_reported_and_only_an_administrator_chooses_it() {
         .with_android_versions(versions as Arc<dyn AndroidVersions>);
     let _service = RunningService::start_service(Box::new(listener), service);
 
-    let mut user = HostApiClient::connect(&mut AsAdmin(connector.clone(), false), "u", WAIT).unwrap();
+    let mut user =
+        HostApiClient::connect(&mut AsAdmin(connector.clone(), false), "u", WAIT).unwrap();
     let report = user.android_versions().unwrap();
     assert_eq!(report.android_major, 17);
     assert_eq!(report.version, "17.0.0-16373615-8");

@@ -45,9 +45,9 @@ use dsa_host_unix::paths::{Layout, UnixHostPaths};
 use dsa_host_unix::socket::UnixLocalListener;
 
 use crate::config::HostConfig;
+use crate::crosvm::guest_cid;
 use crate::image::{bring_disk_to, image_files, make_disk, ImageFiles};
 use crate::launcher::{BootPlan, LauncherSetup, LinuxVmLauncher, SharedNetworkStatus};
-use crate::crosvm::guest_cid;
 use crate::signs::BootSigns;
 use crate::users::{uid_of, Account};
 use crate::vsock::{connect_stream, VsockHub};
@@ -272,8 +272,7 @@ pub fn create_user_android(
         );
         Box::new(move || -> Result<BootPlan, String> {
             let (dir, version) = current_image(&config, updates.as_ref())?;
-            let mut image =
-                image_files(&dir, config.kernel.as_deref(), &config.kernel_cmdline)?;
+            let mut image = image_files(&dir, config.kernel.as_deref(), &config.kernel_cmdline)?;
             // crosvm attaches raw disks, so a VHDX system disk is read into one once.
             image.system_image = image
                 .system_image
@@ -549,10 +548,7 @@ fn check_for_updates(
             continue;
         }
         let waiting_for_first = no_image();
-        if !waiting_for_first
-            && !updates.store.switch_pending()
-            && !store.machine().image_updates
-        {
+        if !waiting_for_first && !updates.store.switch_pending() && !store.machine().image_updates {
             next = Instant::now() + SETTINGS_RECHECK;
             continue;
         }

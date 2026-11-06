@@ -3865,7 +3865,11 @@ impl HostApiService {
     }
 
     /// Reports the Android version, after choosing `chosen` when there is one.
-    fn android_versions(&self, peer: &Peer, chosen: Option<types::UseAndroidVersion>) -> response::Body {
+    fn android_versions(
+        &self,
+        peer: &Peer,
+        chosen: Option<types::UseAndroidVersion>,
+    ) -> response::Body {
         use crate::update::versions::{Channel, ChooseError};
         let Some(versions) = &self.versions else {
             return error(
@@ -3876,7 +3880,9 @@ impl HostApiService {
             );
         };
         let report = match chosen {
-            None => versions.report().map_err(|why| error(ErrorCode::Unavailable, why)),
+            None => versions
+                .report()
+                .map_err(|why| error(ErrorCode::Unavailable, why)),
             Some(_) if versions.needs_administrator() && !peer.administrator => Err(error(
                 ErrorCode::NotAllowed,
                 "only an administrator can choose the Android version; every user of this \
@@ -4439,7 +4445,9 @@ impl HostApiClient {
         let body = request::Body::GetAndroidVersions(types::GetAndroidVersions {});
         match self.exchange(body, self.timeout)? {
             response::Body::AndroidVersions(report) => Ok(versions_from_wire(report)),
-            _ => Err(ClientError::Malformed("expected the Android versions".into())),
+            _ => Err(ClientError::Malformed(
+                "expected the Android versions".into(),
+            )),
         }
     }
 
@@ -4456,7 +4464,9 @@ impl HostApiClient {
         });
         match self.exchange(body, self.timeout)? {
             response::Body::AndroidVersions(report) => Ok(versions_from_wire(report)),
-            _ => Err(ClientError::Malformed("expected the Android versions".into())),
+            _ => Err(ClientError::Malformed(
+                "expected the Android versions".into(),
+            )),
         }
     }
 

@@ -533,7 +533,9 @@ impl GuestLauncher for LinuxVmLauncher {
     fn exited(&mut self) -> Option<String> {
         let vm = self.vm.as_mut()?;
         let status = vm.child.try_wait().ok().flatten()?;
-        Some(format!("the Android VM exited during boot (crosvm {status})"))
+        Some(format!(
+            "the Android VM exited during boot (crosvm {status})"
+        ))
     }
 
     fn diagnostics(&mut self) -> Option<String> {

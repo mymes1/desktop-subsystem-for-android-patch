@@ -1005,7 +1005,10 @@ mod tests {
         .unwrap();
         let store = FileSettings::new(&dir);
         let mine = store.get("uid:1000").unwrap();
-        assert_eq!(mine.render_gpu, "discrete", "the rest of the file still reads");
+        assert_eq!(
+            mine.render_gpu, "discrete",
+            "the rest of the file still reads"
+        );
         store.set("uid:1000", &mine).unwrap();
         let kept = std::fs::read_to_string(&file).unwrap();
         for gone in ["run_mode", "stop_after_secs", "keep_for_notifications"] {

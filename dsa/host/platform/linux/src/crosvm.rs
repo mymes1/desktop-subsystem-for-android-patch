@@ -280,7 +280,10 @@ impl VmConfig {
         if let Some(init) = init {
             push("--init-mem", init.to_string());
         }
-        push("--socket", self.control_socket.to_string_lossy().into_owned());
+        push(
+            "--socket",
+            self.control_socket.to_string_lossy().into_owned(),
+        );
         if let Some(root) = &self.sandbox_root {
             push("--pivot-root", root.to_string_lossy().into_owned());
         }

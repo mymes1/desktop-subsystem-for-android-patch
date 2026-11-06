@@ -23,7 +23,10 @@ struct Reading {
 
 pub fn logs(ctx: &Shared) -> gtk::Widget {
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let banner = adw::Banner::builder().revealed(false).use_markup(false).build();
+    let banner = adw::Banner::builder()
+        .revealed(false)
+        .use_markup(false)
+        .build();
     root.append(&banner);
 
     let clamp = adw::Clamp::builder().maximum_size(1200).build();
@@ -45,7 +48,10 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
     body.append(&note);
 
     let bar = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    let labels: Vec<String> = view::LOG_PRIORITIES.iter().map(|p| view::priority_label(p)).collect();
+    let labels: Vec<String> = view::LOG_PRIORITIES
+        .iter()
+        .map(|p| view::priority_label(p))
+        .collect();
     let refs: Vec<&str> = labels.iter().map(String::as_str).collect();
     let priority = gtk::DropDown::from_strings(&refs);
     priority.set_selected(2);
@@ -215,22 +221,33 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
                 .initial_name("dsa-diagnostics.zip")
                 .build();
             let (ctx, status, button) = (ctx.clone(), status.clone(), button.clone());
-            dialog.save(Some(&ctx.window.clone()), gio::Cancellable::NONE, move |file| {
-                let Some(path) = file.ok().and_then(|f| f.path()) else {
-                    return;
-                };
-                let path = path.display().to_string();
-                button.set_sensitive(false);
-                status.set_label(&tr("Gathering the diagnostics. This takes a minute or more."));
-                let shown = path.clone();
-                request(&ctx, move |c| c.collect_diagnostics(&path), move |r| {
-                    button.set_sensitive(true);
-                    match r {
-                        Ok(_) => status.set_label(&trf("Saved the diagnostics to {0}.", &[&shown])),
-                        Err(failure) => status.set_label(&view::problem_text(&failure)),
-                    }
-                });
-            });
+            dialog.save(
+                Some(&ctx.window.clone()),
+                gio::Cancellable::NONE,
+                move |file| {
+                    let Some(path) = file.ok().and_then(|f| f.path()) else {
+                        return;
+                    };
+                    let path = path.display().to_string();
+                    button.set_sensitive(false);
+                    status.set_label(&tr(
+                        "Gathering the diagnostics. This takes a minute or more.",
+                    ));
+                    let shown = path.clone();
+                    request(
+                        &ctx,
+                        move |c| c.collect_diagnostics(&path),
+                        move |r| {
+                            button.set_sensitive(true);
+                            match r {
+                                Ok(_) => status
+                                    .set_label(&trf("Saved the diagnostics to {0}.", &[&shown])),
+                                Err(failure) => status.set_label(&view::problem_text(&failure)),
+                            }
+                        },
+                    );
+                },
+            );
         });
     }
     root.upcast()

@@ -29,9 +29,16 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
         let (ctx, page) = (ctx.clone(), page.clone());
         manage_row.connect_activated(move |_| {
             let page = page.clone();
-            request(&ctx, |c| c.open_app_settings(None), move |r| {
-                page.show_failure(&tr("The apps could not be read or changed"), r.as_ref().err());
-            });
+            request(
+                &ctx,
+                |c| c.open_app_settings(None),
+                move |r| {
+                    page.show_failure(
+                        &tr("The apps could not be read or changed"),
+                        r.as_ref().err(),
+                    );
+                },
+            );
         });
     }
 
@@ -78,7 +85,9 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
                 !query.trim().is_empty(),
             )));
             if all.is_empty() {
-                rows.note(&tr("No app is installed in Android yet. Open an APK file to install one."));
+                rows.note(&tr(
+                    "No app is installed in Android yet. Open an APK file to install one.",
+                ));
             } else if shown.is_empty() {
                 rows.note(&tr("No app matches your search."));
             }
@@ -98,11 +107,16 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
                 &ctx,
                 |c| Ok((c.apps()?, c.app_windows().unwrap_or_default())),
                 move |r| {
-                    page.show_failure(&tr("The apps could not be read or changed"), r.as_ref().err());
+                    page.show_failure(
+                        &tr("The apps could not be read or changed"),
+                        r.as_ref().err(),
+                    );
                     if let Ok((list, settings)) = r {
                         *apps.borrow_mut() = Some(list);
-                        *windows.borrow_mut() =
-                            settings.into_iter().map(|w| (w.package.clone(), w)).collect();
+                        *windows.borrow_mut() = settings
+                            .into_iter()
+                            .map(|w| (w.package.clone(), w))
+                            .collect();
                     }
                     if let Some(render) = render.borrow().clone() {
                         render();
@@ -149,9 +163,16 @@ fn app_row(
         open.connect_clicked(move |_| {
             let page = page.clone();
             let package = package.clone();
-            request(&ctx, move |c| c.launch(&package), move |r| {
-                page.show_failure(&tr("The apps could not be read or changed"), r.as_ref().err());
-            });
+            request(
+                &ctx,
+                move |c| c.launch(&package),
+                move |r| {
+                    page.show_failure(
+                        &tr("The apps could not be read or changed"),
+                        r.as_ref().err(),
+                    );
+                },
+            );
         });
     }
 
@@ -177,9 +198,16 @@ fn app_row(
         info.connect_clicked(move |_| {
             let page = page.clone();
             let package = package.clone();
-            request(&ctx, move |c| c.open_app_settings(Some(&package)), move |r| {
-                page.show_failure(&tr("The apps could not be read or changed"), r.as_ref().err());
-            });
+            request(
+                &ctx,
+                move |c| c.open_app_settings(Some(&package)),
+                move |r| {
+                    page.show_failure(
+                        &tr("The apps could not be read or changed"),
+                        r.as_ref().err(),
+                    );
+                },
+            );
         });
     }
 
@@ -188,22 +216,33 @@ fn app_row(
     let start = window.as_ref().and_then(|w| w.start_size);
     let state = Rc::new(RefCell::new((fixed, start)));
     let save = {
-        let (ctx, page, package, state) =
-            (ctx.clone(), page.clone(), app.package.clone(), state.clone());
+        let (ctx, page, package, state) = (
+            ctx.clone(),
+            page.clone(),
+            app.package.clone(),
+            state.clone(),
+        );
         let label = app.label.clone();
         Rc::new(move || {
             let (fixed, start) = *state.borrow();
             let (page, package, ctx2) = (page.clone(), package.clone(), ctx.clone());
             let label = label.clone();
-            request(&ctx, move |c| c.set_app_window(&package, fixed, start), move |r| {
-                page.show_failure(&tr("The apps could not be read or changed"), r.as_ref().err());
-                if r.is_ok() {
-                    ctx2.toast(&trf(
-                        "{0}'s windows follow the new settings from the next one that opens.",
-                        &[&label],
-                    ));
-                }
-            });
+            request(
+                &ctx,
+                move |c| c.set_app_window(&package, fixed, start),
+                move |r| {
+                    page.show_failure(
+                        &tr("The apps could not be read or changed"),
+                        r.as_ref().err(),
+                    );
+                    if r.is_ok() {
+                        ctx2.toast(&trf(
+                            "{0}'s windows follow the new settings from the next one that opens.",
+                            &[&label],
+                        ));
+                    }
+                },
+            );
         })
     };
     let resizable = {
@@ -245,13 +284,11 @@ fn app_row(
     size.set(&labels, index as u32);
     row.add_row(&size.row);
 
-    let (uninstall_row, uninstall) = button_row(
-        &tr("Uninstall"),
-        "",
-        &tr("Uninstall"),
-    );
+    let (uninstall_row, uninstall) = button_row(&tr("Uninstall"), "", &tr("Uninstall"));
     if app.system_app {
-        uninstall_row.set_subtitle(&tr("This app is part of Android and cannot be uninstalled."));
+        uninstall_row.set_subtitle(&tr(
+            "This app is part of Android and cannot be uninstalled.",
+        ));
     }
     uninstall.add_css_class("destructive-action");
     uninstall.set_sensitive(!app.system_app);
@@ -276,33 +313,37 @@ fn app_row(
                     let (ctx3, page, label) = (ctx2.clone(), page.clone(), label.clone());
                     let package = package.clone();
                     let reload = reload.clone();
-                    request(&ctx2, move |c| c.uninstall(&package), move |r| {
-                        page.show_failure(
-                            &tr("The apps could not be read or changed"),
-                            r.as_ref().err(),
-                        );
-                        match r {
-                            Ok(outcome) if outcome.done => {
-                                ctx3.toast(&trf("{0} is uninstalled.", &[&label]))
-                            }
-                            Ok(outcome) => tell(
-                                &ctx3,
-                                &tr("Not uninstalled"),
-                                &trf(
-                                    "{0} was not uninstalled: {1} ({2})",
-                                    &[
-                                        &label,
-                                        &view::uninstall_reason(&outcome.status),
-                                        &outcome.detail,
-                                    ],
+                    request(
+                        &ctx2,
+                        move |c| c.uninstall(&package),
+                        move |r| {
+                            page.show_failure(
+                                &tr("The apps could not be read or changed"),
+                                r.as_ref().err(),
+                            );
+                            match r {
+                                Ok(outcome) if outcome.done => {
+                                    ctx3.toast(&trf("{0} is uninstalled.", &[&label]))
+                                }
+                                Ok(outcome) => tell(
+                                    &ctx3,
+                                    &tr("Not uninstalled"),
+                                    &trf(
+                                        "{0} was not uninstalled: {1} ({2})",
+                                        &[
+                                            &label,
+                                            &view::uninstall_reason(&outcome.status),
+                                            &outcome.detail,
+                                        ],
+                                    ),
                                 ),
-                            ),
-                            Err(_) => {}
-                        }
-                        if let Some(reload) = reload.borrow().clone() {
-                            reload();
-                        }
-                    });
+                                Err(_) => {}
+                            }
+                            if let Some(reload) = reload.borrow().clone() {
+                                reload();
+                            }
+                        },
+                    );
                 },
             );
         });
@@ -332,9 +373,13 @@ pub fn background(ctx: &Shared) -> gtk::Widget {
             &tr("Turn this back on if you chose not to be asked again."),
             move |on| {
                 let page = page.clone();
-                request(&ctx, move |c| c.switch("stop-without-asking", !on), move |r| {
-                    page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
-                });
+                request(
+                    &ctx,
+                    move |c| c.switch("stop-without-asking", !on),
+                    move |r| {
+                        page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+                    },
+                );
             },
         )
     };
@@ -346,80 +391,90 @@ pub fn background(ctx: &Shared) -> gtk::Widget {
         let (ctx, page, rows, slot) = (ctx.clone(), page.clone(), rows.clone(), reload.clone());
         *reload.borrow_mut() = Some(Rc::new(move || {
             let (ctx2, page, rows, slot) = (ctx.clone(), page.clone(), rows.clone(), slot.clone());
-            request(&ctx, |c| c.background(), move |r| {
-                page.show_failure(
-                    &tr("The apps that run in the background could not be read or changed"),
-                    r.as_ref().err(),
-                );
-                rows.clear();
-                let Ok(list) = r else { return };
-                if list.apps.is_empty() {
-                    rows.note(&tr("No app runs in the background."));
-                }
-                for app in &list.apps {
-                    let media = list.media.iter().find(|m| m.package == app.package);
-                    let detail = match media {
-                        Some(m) if m.playback == "playing" => {
-                            trf("Playing {0}", &[&media_title(&m.title, &m.artist)])
-                        }
-                        Some(m) => trf("Paused: {0}", &[&media_title(&m.title, &m.artist)]),
-                        None => [app.title.as_str(), app.text.as_str()]
-                            .into_iter()
-                            .filter(|s| !s.is_empty())
-                            .collect::<Vec<_>>()
-                            .join(" · "),
-                    };
-                    let row = action_row(&app.label, &detail);
-                    row.add_prefix(&png_image(&app.icon_png, "application-x-executable", 32));
-                    let open = button(&tr("Open"));
-                    let stop = button(&tr("Stop"));
-                    stop.add_css_class("destructive-action");
-                    row.add_suffix(&open);
-                    row.add_suffix(&stop);
-                    let run = |action: &'static str| {
-                        let (ctx, page, package) = (ctx2.clone(), page.clone(), app.package.clone());
-                        let (label, slot) = (app.label.clone(), slot.clone());
-                        move |_: &gtk::Button| {
-                            let (ctx3, page, label) = (ctx.clone(), page.clone(), label.clone());
-                            let package = package.clone();
-                            let slot = slot.clone();
-                            request(
-                                &ctx,
-                                move |c| match action {
-                                    "open" => c.open_background(&package),
-                                    _ => c.stop_background(&package),
-                                },
-                                move |r| {
-                                    page.show_failure(
+            request(
+                &ctx,
+                |c| c.background(),
+                move |r| {
+                    page.show_failure(
+                        &tr("The apps that run in the background could not be read or changed"),
+                        r.as_ref().err(),
+                    );
+                    rows.clear();
+                    let Ok(list) = r else { return };
+                    if list.apps.is_empty() {
+                        rows.note(&tr("No app runs in the background."));
+                    }
+                    for app in &list.apps {
+                        let media = list.media.iter().find(|m| m.package == app.package);
+                        let detail = match media {
+                            Some(m) if m.playback == "playing" => {
+                                trf("Playing {0}", &[&media_title(&m.title, &m.artist)])
+                            }
+                            Some(m) => trf("Paused: {0}", &[&media_title(&m.title, &m.artist)]),
+                            None => [app.title.as_str(), app.text.as_str()]
+                                .into_iter()
+                                .filter(|s| !s.is_empty())
+                                .collect::<Vec<_>>()
+                                .join(" · "),
+                        };
+                        let row = action_row(&app.label, &detail);
+                        row.add_prefix(&png_image(&app.icon_png, "application-x-executable", 32));
+                        let open = button(&tr("Open"));
+                        let stop = button(&tr("Stop"));
+                        stop.add_css_class("destructive-action");
+                        row.add_suffix(&open);
+                        row.add_suffix(&stop);
+                        let run = |action: &'static str| {
+                            let (ctx, page, package) =
+                                (ctx2.clone(), page.clone(), app.package.clone());
+                            let (label, slot) = (app.label.clone(), slot.clone());
+                            move |_: &gtk::Button| {
+                                let (ctx3, page, label) =
+                                    (ctx.clone(), page.clone(), label.clone());
+                                let package = package.clone();
+                                let slot = slot.clone();
+                                request(
+                                    &ctx,
+                                    move |c| match action {
+                                        "open" => c.open_background(&package),
+                                        _ => c.stop_background(&package),
+                                    },
+                                    move |r| {
+                                        page.show_failure(
                                         &tr("The apps that run in the background could not be read or changed"),
                                         r.as_ref().err(),
                                     );
-                                    if r.is_ok() && action == "stop" {
-                                        ctx3.toast(&trf("{0} was stopped.", &[&label]));
-                                    }
-                                    if let Some(reload) = slot.borrow().clone() {
-                                        reload();
-                                    }
-                                },
-                            );
-                        }
-                    };
-                    open.connect_clicked(run("open"));
-                    stop.connect_clicked(run("stop"));
-                    rows.add(&row);
-                }
-            });
+                                        if r.is_ok() && action == "stop" {
+                                            ctx3.toast(&trf("{0} was stopped.", &[&label]));
+                                        }
+                                        if let Some(reload) = slot.borrow().clone() {
+                                            reload();
+                                        }
+                                    },
+                                );
+                            }
+                        };
+                        open.connect_clicked(run("open"));
+                        stop.connect_clicked(run("stop"));
+                        rows.add(&row);
+                    }
+                },
+            );
         }));
     }
     {
         let ask = ask.clone();
         let page = page.clone();
-        request(ctx, |c| c.settings(), move |r| {
-            page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
-            if let Ok(settings) = r {
-                ask.set(!settings.stop_without_asking);
-            }
-        });
+        request(
+            ctx,
+            |c| c.settings(),
+            move |r| {
+                page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+                if let Ok(settings) = r {
+                    ask.set(!settings.stop_without_asking);
+                }
+            },
+        );
     }
     let reload_now = reload.borrow().clone();
     if let Some(reload_now) = reload_now {
@@ -461,83 +516,90 @@ pub fn widgets(ctx: &Shared) -> gtk::Widget {
         *reload.borrow_mut() = Some(Rc::new(move || {
             let (ctx2, page, slot) = (ctx.clone(), page.clone(), slot.clone());
             let (placed, offers) = (placed.clone(), offers.clone());
-            request(&ctx, |c| c.widgets(), move |r| {
-                let failed = &tr("Widgets could not be read or changed");
-                page.show_failure(failed, r.as_ref().err());
-                placed.clear();
-                offers.clear();
-                let Ok(list) = r else { return };
-                if list.placed.is_empty() {
-                    placed.note(&tr("No widget is on your desktop yet."));
-                }
-                if list.offers.is_empty() {
-                    offers.note(&tr("No app in Android offers a widget."));
-                }
-                let after = {
-                    let (ctx, page, slot) = (ctx2.clone(), page.clone(), slot.clone());
-                    move |done: String| {
-                        let (ctx, page, slot) = (ctx.clone(), page.clone(), slot.clone());
-                        move |r: Result<(), crate::api::Failure>| {
-                            page.show_failure(&tr("Widgets could not be read or changed"), r.as_ref().err());
-                            if r.is_ok() {
-                                ctx.toast(&done);
-                            }
-                            if let Some(reload) = slot.borrow().clone() {
-                                reload();
+            request(
+                &ctx,
+                |c| c.widgets(),
+                move |r| {
+                    let failed = &tr("Widgets could not be read or changed");
+                    page.show_failure(failed, r.as_ref().err());
+                    placed.clear();
+                    offers.clear();
+                    let Ok(list) = r else { return };
+                    if list.placed.is_empty() {
+                        placed.note(&tr("No widget is on your desktop yet."));
+                    }
+                    if list.offers.is_empty() {
+                        offers.note(&tr("No app in Android offers a widget."));
+                    }
+                    let after = {
+                        let (ctx, page, slot) = (ctx2.clone(), page.clone(), slot.clone());
+                        move |done: String| {
+                            let (ctx, page, slot) = (ctx.clone(), page.clone(), slot.clone());
+                            move |r: Result<(), crate::api::Failure>| {
+                                page.show_failure(
+                                    &tr("Widgets could not be read or changed"),
+                                    r.as_ref().err(),
+                                );
+                                if r.is_ok() {
+                                    ctx.toast(&done);
+                                }
+                                if let Some(reload) = slot.borrow().clone() {
+                                    reload();
+                                }
                             }
                         }
-                    }
-                };
-                for widget in &list.placed {
-                    let detail = trf(
-                        "At {0}, {1}, {2} × {3}",
-                        &[
-                            &widget.x.to_string(),
-                            &widget.y.to_string(),
-                            &widget.width_dp.to_string(),
-                            &widget.height_dp.to_string(),
-                        ],
-                    );
-                    let row = action_row(&widget.label, &format!("{} · {detail}", widget.app));
-                    let remove = button(&tr("Remove"));
-                    row.add_suffix(&remove);
-                    let (ctx, id) = (ctx2.clone(), widget.id);
-                    let done = trf("{0} was removed from your desktop.", &[&widget.label]);
-                    let after = after.clone();
-                    remove.connect_clicked(move |_| {
-                        request(&ctx, move |c| c.remove_widget(id), after(done.clone()));
-                    });
-                    placed.add(&row);
-                }
-                for offer in &list.offers {
-                    let mut detail = vec![
-                        offer.app.clone(),
-                        trf(
-                            "{0} × {1}",
-                            &[&offer.width_dp.to_string(), &offer.height_dp.to_string()],
-                        ),
-                    ];
-                    if offer.needs_configuration {
-                        detail.push(tr("asks you to set it up"));
-                    }
-                    let row = action_row(&offer.label, &detail.join(" · "));
-                    row.add_prefix(&png_image(&offer.preview_png, "view-grid-symbolic", 48));
-                    let add = button(&tr("Add to desktop"));
-                    row.add_suffix(&add);
-                    let (ctx, provider) = (ctx2.clone(), offer.provider.clone());
-                    let done = trf("{0} is on your desktop.", &[&offer.label]);
-                    let after = after.clone();
-                    add.connect_clicked(move |_| {
-                        let provider = provider.clone();
-                        request(
-                            &ctx,
-                            move |c| c.add_widget(&provider).map(|_| ()),
-                            after(done.clone()),
+                    };
+                    for widget in &list.placed {
+                        let detail = trf(
+                            "At {0}, {1}, {2} × {3}",
+                            &[
+                                &widget.x.to_string(),
+                                &widget.y.to_string(),
+                                &widget.width_dp.to_string(),
+                                &widget.height_dp.to_string(),
+                            ],
                         );
-                    });
-                    offers.add(&row);
-                }
-            });
+                        let row = action_row(&widget.label, &format!("{} · {detail}", widget.app));
+                        let remove = button(&tr("Remove"));
+                        row.add_suffix(&remove);
+                        let (ctx, id) = (ctx2.clone(), widget.id);
+                        let done = trf("{0} was removed from your desktop.", &[&widget.label]);
+                        let after = after.clone();
+                        remove.connect_clicked(move |_| {
+                            request(&ctx, move |c| c.remove_widget(id), after(done.clone()));
+                        });
+                        placed.add(&row);
+                    }
+                    for offer in &list.offers {
+                        let mut detail = vec![
+                            offer.app.clone(),
+                            trf(
+                                "{0} × {1}",
+                                &[&offer.width_dp.to_string(), &offer.height_dp.to_string()],
+                            ),
+                        ];
+                        if offer.needs_configuration {
+                            detail.push(tr("asks you to set it up"));
+                        }
+                        let row = action_row(&offer.label, &detail.join(" · "));
+                        row.add_prefix(&png_image(&offer.preview_png, "view-grid-symbolic", 48));
+                        let add = button(&tr("Add to desktop"));
+                        row.add_suffix(&add);
+                        let (ctx, provider) = (ctx2.clone(), offer.provider.clone());
+                        let done = trf("{0} is on your desktop.", &[&offer.label]);
+                        let after = after.clone();
+                        add.connect_clicked(move |_| {
+                            let provider = provider.clone();
+                            request(
+                                &ctx,
+                                move |c| c.add_widget(&provider).map(|_| ()),
+                                after(done.clone()),
+                            );
+                        });
+                        offers.add(&row);
+                    }
+                },
+            );
         }));
     }
     let reload_now = reload.borrow().clone();
