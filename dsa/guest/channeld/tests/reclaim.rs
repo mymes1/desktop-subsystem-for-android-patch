@@ -401,3 +401,88 @@ fn nfr2_the_daemon_looks_at_the_guests_memory_every_few_seconds() {
     use dsa_guest_channeld::reclaim::CHECK_INTERVAL;
     assert!(CHECK_INTERVAL <= Duration::from_secs(5));
 }
+
+#[test]
+fn nfr2_a_close_returns_the_closed_apps_memory_at_once_even_while_another_app_opens() {
+    let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
+    reclaimer.decide_under(secs(0), 1, &memory(3000, 200), false);
+    // A second app opens at 10 s, and the first closes 5 s later, well inside the 30 s the
+    // new app's files are protected for.
+    reclaimer.decide_under(secs(10), 2, &memory(2500, 500), false);
+    // The close does not wait out that grace: the closed app's cache above the floor goes
+    // back now, as page cache only, so the new app's own memory stays resident.
+    assert_eq!(
+        reclaimer.app_closed(secs(15), 1, &memory(2400, 900)),
+        Some(Reason::Gradual)
+    );
+    assert_eq!(reclaimer.trim_mib(), 900 - 256);
+}
+
+#[test]
+fn nfr2_a_close_with_nothing_opening_reclaims_everything_the_app_left_at_once() {
+    let mut reclaimer = Reclaimer::new(ReclaimPolicy::default());
+    reclaimer.decide_under(secs(0), 2, &memory(2000, 600), false);
+    assert_eq!(
+        reclaimer.app_closed(secs(60), 1, &memory(2600, 600)),
+        Some(Reason::AppClosed)
+    );
+    // The last app closing too: at once, and it counts as the idle reclaim.
+    assert_eq!(
+        reclaimer.app_closed(secs(61), 0, &memory(3000, 400)),
+        Some(Reason::AppClosed)
+    );
+    assert_eq!(
+        reclaimer.decide_under(secs(65), 0, &memory(3500, 200), false),
+        None
+    );
+}
+
+#[test]
+fn nfr2_the_close_reclaim_starts_when_the_apps_processes_have_exited() {
+    use dsa_guest_channeld::reclaim::{package_running, EXIT_WAIT_LIMIT};
+    let running = vec![
+        "system_server\0".to_string(),
+        "org.example.notes\0".to_string(),
+        "org.example.notes:sync\0".to_string(),
+    ];
+    assert!(package_running(&running, "org.example.notes"));
+    let gone = vec![
+        "system_server\0".to_string(),
+        "org.example.notes2\0".to_string(),
+        String::new(),
+    ];
+    assert!(!package_running(&gone, "org.example.notes"));
+    // A process the agent keeps running does not hold the reclaim back for long.
+    assert!(EXIT_WAIT_LIMIT <= Duration::from_secs(2));
+}
+
+#[test]
+fn nfr2_the_router_names_each_app_whose_last_task_ended() {
+    let (to_host, _host) = mpsc::channel();
+    let router = Router::new(to_host, |_| Err("no agent here".to_string()));
+    let agent = Peer(10);
+    for (task_id, package) in [
+        (1, "org.example.a"),
+        (2, "org.example.a"),
+        (3, "org.example.b"),
+    ] {
+        router
+            .from_guest(
+                agent,
+                frame(Body::TaskUpdated(TaskUpdated {
+                    task_id,
+                    package_name: package.to_string(),
+                    ..Default::default()
+                })),
+            )
+            .unwrap();
+    }
+    for task_id in [1, 3] {
+        router
+            .from_guest(agent, frame(Body::TaskRemoved(TaskRemoved { task_id })))
+            .unwrap();
+    }
+    // org.example.a still has a task.
+    assert_eq!(router.take_closed_packages(), ["org.example.b"]);
+    assert!(router.take_closed_packages().is_empty());
+}
