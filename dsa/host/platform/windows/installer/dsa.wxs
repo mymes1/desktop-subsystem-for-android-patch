@@ -55,7 +55,7 @@
                       DowngradeErrorMessage="A newer Desktop Subsystem for Android is already installed." />
         <!-- The trademark and independence notice, shown in Installed apps (the support
              information). The licence bundle below carries it too, in NOTICE.txt. -->
-        <Property Id="ARPCOMMENTS" Value="Desktop Subsystem for Android is an independent open source project, not affiliated with, endorsed by or sponsored by Microsoft or Google. Android is a trademark of Google LLC." />
+        <Property Id="ARPCOMMENTS" Value="!(loc.ArpComments)" />
         <Media Id="1" Cabinet="dsa.cab" EmbedCab="yes" />
         <?ifdef ImageVersion ?>
         <!-- An MSI holds at most 2 GB and an image comes close to that, so the image's
@@ -154,7 +154,9 @@
                     <Shortcut Id="SettingsShortcut"
                               Directory="ProgramMenuFolder"
                               Name="DSA Settings"
-                              Description="Settings and state of Desktop Subsystem for Android"
+                              Description="!(loc.SettingsShortcutDescription)"
+                              DescriptionResourceDll="[INSTALLFOLDER]dsa-app-window.exe"
+                              DescriptionResourceId="104"
                               WorkingDirectory="SETTINGSFOLDER" />
                 </File>
             </Component>
@@ -173,7 +175,7 @@
                 <ServiceInstall Id="DsaHost"
                                 Name="DsaHost"
                                 DisplayName="Desktop Subsystem for Android Service"
-                                Description="Runs each user's Android in its own virtual machine and answers the dsa command and the desktop apps."
+                                Description="@[INSTALLFOLDER]dsa-app-window.exe,-109"
                                 Type="ownProcess"
                                 Start="auto"
                                 ErrorControl="normal"
@@ -205,7 +207,9 @@
                     <Shortcut Id="AndroidFilesShortcut"
                               Directory="ProgramMenuFolder"
                               Name="DSA Files"
-                              Description="Files of your Android, in Explorer"
+                              Description="!(loc.FilesShortcutDescription)"
+                              DescriptionResourceDll="[#AppWindowExe]"
+                              DescriptionResourceId="103"
                               Arguments="--android-files"
                               WorkingDirectory="INSTALLFOLDER" />
                 </File>
@@ -221,13 +225,15 @@
                  Open with. -->
             <Component Id="ApkFileAssociation" Guid="5e3b8a2c-7d41-4f96-b0c8-2a9e6f1d4c73">
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile"
-                               Type="string" Value="APK app package" KeyPath="yes" />
+                               Type="string" Value="!(loc.ApkFileType)" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile"
+                               Name="FriendlyTypeName" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-106" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\DefaultIcon"
                                Type="string" Value="&quot;[SETTINGSFOLDER]DsaApkInstaller.exe&quot;,0" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell"
                                Type="string" Value="open" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell\open"
-                               Name="MUIVerb" Type="string" Value="Install in Android" />
+                               Name="MUIVerb" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-105" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell\open"
                                Name="FriendlyAppName" Type="string" Value="APK Installer" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell\open\command"
@@ -253,6 +259,11 @@
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\AppUserModelId\Thisisthepy.DSA.ApkInstaller"
                                Name="DisplayName" Type="string" Value="APK Installer" />
             </Component>
+            <!-- Every word Explorer, the Start menu and the Services console show for DSA is an
+                 indirect string (@file,-id) into the string table of the installed
+                 dsa-app-window.exe, which holds it in English and Korean, so each user sees the
+                 words in their own display language although the package is the machine's.
+                 The IDs are dsa_exe_resources::shell in resources/src/lib.rs. -->
             <!-- Two entries in the context menu of every file (on Windows 11, under Show more
                  options): the installed window host sends the file to the user's Android, which
                  asks which app opens it or takes it. They are the machine's, like the rest of
@@ -260,7 +271,7 @@
                  written into each user's profile would outlive DSA there. -->
             <Component Id="OpenFileInAndroid" Guid="9c6f4b1e-5d2a-4f8e-a3b7-1e0d6c9f2a41">
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaOpenInAndroidApp"
-                               Name="MUIVerb" Type="string" Value="Open in an Android app" KeyPath="yes" />
+                               Name="MUIVerb" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-101" KeyPath="yes" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaOpenInAndroidApp"
                                Name="Icon" Type="string" Value="&quot;[INSTALLFOLDER]dsa-app-window.exe&quot;,0" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaOpenInAndroidApp\command"
@@ -268,7 +279,7 @@
             </Component>
             <Component Id="ShareFileWithAndroid" Guid="2b8e7d30-6c41-4a9f-9e25-7f3a0b1c8d52">
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaShareWithAndroidApp"
-                               Name="MUIVerb" Type="string" Value="Share with an Android app" KeyPath="yes" />
+                               Name="MUIVerb" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-102" KeyPath="yes" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaShareWithAndroidApp"
                                Name="Icon" Type="string" Value="&quot;[INSTALLFOLDER]dsa-app-window.exe&quot;,0" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\*\shell\DsaShareWithAndroidApp\command"
@@ -285,6 +296,10 @@
             <Component Id="AndroidNavigationPane" Guid="3d7a1f52-8b6e-4c09-a5d4-6e2f9b0c1a87">
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
                                Type="string" Value="Android" KeyPath="yes" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Name="LocalizedString" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-107" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
+                               Name="InfoTip" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-108" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
                                Name="System.IsPinnedToNameSpaceTree" Type="integer" Value="1" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"

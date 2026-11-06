@@ -105,6 +105,18 @@ pub fn navigation_values(
     use RegValue::{Dword, Text};
     vec![
         ("", None, Text(NAVIGATION_NAME.into())),
+        // The name and tooltip in the user's display language, from the window host's
+        // string table.
+        (
+            "",
+            Some("LocalizedString"),
+            Text(format!("@{icon},-{}", dsa_exe_resources::shell::NAVIGATION_NAME)),
+        ),
+        (
+            "",
+            Some("InfoTip"),
+            Text(format!("@{icon},-{}", dsa_exe_resources::shell::NAVIGATION_TIP)),
+        ),
         // Shown in the navigation pane, after Quick access, OneDrive and This PC.
         ("", Some("System.IsPinnedToNameSpaceTree"), Dword(1)),
         ("", Some("SortOrderIndex"), Dword(0x42)),
@@ -287,7 +299,8 @@ pub fn register_in_navigation_pane() -> Result<String, String> {
     .as_deref()
         == Some(target.as_str())
         && registry::text(HKEY_CURRENT_USER, &format!("{base}\\DefaultIcon"), "").as_deref()
-            == Some(format!("{icon},0").as_str());
+            == Some(format!("{icon},0").as_str())
+        && registry::text(HKEY_CURRENT_USER, &base, "InfoTip").is_some();
     if unchanged {
         return Ok(target);
     }
@@ -389,6 +402,18 @@ mod tests {
                 .map(|(_, _, v)| v.clone())
         };
         assert_eq!(value("", None), Some(RegValue::Text("Android".into())));
+        assert_eq!(
+            value("", Some("InfoTip")),
+            Some(RegValue::Text(
+                r"@C:\Program Files\DSA\dsa-app-window.exe,-108".into()
+            ))
+        );
+        assert_eq!(
+            value("", Some("LocalizedString")),
+            Some(RegValue::Text(
+                r"@C:\Program Files\DSA\dsa-app-window.exe,-107".into()
+            ))
+        );
         assert_eq!(
             value("", Some("System.IsPinnedToNameSpaceTree")),
             Some(RegValue::Dword(1))
