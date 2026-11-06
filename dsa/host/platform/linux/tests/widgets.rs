@@ -89,6 +89,7 @@ impl Drop for Service {
 
 /// Fails the test with what the service printed and the guest log's last lines.
 fn fail(why: String, service: &Service, log: &[String]) -> ! {
+    let _ = std::fs::write(service.log.with_file_name("guest.log"), log.join("\n"));
     let tail = &log[log.len().saturating_sub(200)..];
     let path = service.log.with_file_name("compositor.log");
     let compositor = std::fs::read_to_string(path).unwrap_or_default();
@@ -356,23 +357,8 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
         log: dir.join("devices.log"),
     };
     let mut first = client(&socket, Duration::from_secs(30));
-    let boot = deadline.saturating_duration_since(Instant::now()) - FIRST_FRAME - NEXT_FRAME;
-    let ready = first.ensure_running(boot, Duration::from_secs(2), |state| {
-        eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
-    });
-    if let Err(why) = ready {
-        fail(
-            format!("Android did not become ready: {why}"),
-            &service,
-            &[],
-        );
-    }
-    eprintln!(
-        "Android was ready {} s after the start",
-        started.elapsed().as_secs()
-    );
-
-    // The guest log, read from now on: Android sends it only while something reads it.
+    // The guest log, read from the start of the boot: Android sends it only while something
+    // reads it, and a boot that fails says why in it.
     let log: Arc<Mutex<Vec<String>>> = Arc::default();
     {
         let reader = client(&socket, Duration::from_secs(10))
@@ -395,6 +381,21 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
             }
         });
     }
+    let boot = deadline.saturating_duration_since(Instant::now()) - FIRST_FRAME - NEXT_FRAME;
+    let ready = first.ensure_running(boot, Duration::from_secs(2), |state| {
+        eprintln!("{} s: Android is {state:?}", started.elapsed().as_secs());
+    });
+    if let Err(why) = ready {
+        fail(
+            format!("Android did not become ready: {why}"),
+            &service,
+            &log.lock().unwrap(),
+        );
+    }
+    eprintln!(
+        "Android was ready {} s after the start",
+        started.elapsed().as_secs()
+    );
     let mut watch = client(&socket, Duration::from_secs(10))
         .watch_widgets()
         .expect("watching the widgets");

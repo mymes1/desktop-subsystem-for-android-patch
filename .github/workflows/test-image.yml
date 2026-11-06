@@ -787,6 +787,7 @@ jobs:
             /tmp/widget-test-*/hostd.log
             /tmp/widget-test-*/compositor.log
             /tmp/widget-test-*/devices.log
+            /tmp/widget-test-*/guest.log
             /tmp/widget-test-*/first.png
             ~/.local/share/dsa/**/*.log
           if-no-files-found: ignore
