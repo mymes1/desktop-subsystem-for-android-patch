@@ -2,13 +2,15 @@
 # Builds the Linux packages of DSA, a .deb and an .rpm, from programs already built.
 #
 #   build-packages.sh --bin-dir <cargo release folder> --version <x.y.z> --out <folder>
+#                     --vm-programs <folder> [--licenses <folder>]
 #                     (--kernel <file> | --placeholder-kernel) [--image-dir <folder>]
 #                     --repo-key <armored public key> [--repo-url <url>]
 #                     [--arch amd64|arm64] [--no-deb] [--no-rpm]
 #
 # The packages install the same things:
 #
-#   /usr/lib/dsa/bin/        dsa, dsa-linux-hostd, dsa-devices and the other host programs
+#   /usr/lib/dsa/bin/        dsa, dsa-linux-hostd, dsa-devices and the other host programs,
+#                            and crosvm and passt, which run the Android VM and its network
 #   /usr/bin/dsa             the command line client
 #   /usr/lib/dsa/vm/         the guest kernel (bzImage, or Image on arm64)
 #   /usr/lib/dsa/vm/image/   the Android image the first start uses, when one is given
@@ -31,6 +33,12 @@
 # (.github/scripts/release/build-linux-repo.sh); --repo-url is where that repository is
 # served, GitHub Pages by default.
 #
+#   AppArmor                 crosvm's and passt's sandboxes, which make user namespaces
+#   /usr/share/doc/<package> the licences, crosvm's crate list and passt's source
+#
+# --vm-programs is the folder dsa/host/platform/linux/crosvm/build.sh filled: crosvm, passt,
+# passt-source.tar.gz and crosvm-crates.txt. --licenses is a bundle generate-licenses.py made.
+#
 # --placeholder-kernel puts an empty kernel in the package, for testing the package before a
 # kernel is built. An image folder is one made by dsa/guest/image/make-image.py, with its
 # image.json. Without one the package carries no Android image; the service then downloads
@@ -45,6 +53,8 @@ out=""
 kernel=""
 placeholder_kernel=0
 image_dir=""
+vm_programs=""
+licenses=""
 arch=""
 make_deb=1
 make_rpm=1
@@ -64,6 +74,8 @@ while [[ $# -gt 0 ]]; do
         --kernel) kernel="$2"; shift 2 ;;
         --placeholder-kernel) placeholder_kernel=1; shift ;;
         --image-dir) image_dir="$2"; shift 2 ;;
+        --vm-programs) vm_programs="$2"; shift 2 ;;
+        --licenses) licenses="$2"; shift 2 ;;
         --arch) arch="$2"; shift 2 ;;
         --no-deb) make_deb=0; shift ;;
         --no-rpm) make_rpm=0; shift ;;
@@ -96,6 +108,9 @@ fi
     || die "name the repository's public key (ASCII armored) with --repo-key"
 [[ "$repo_url" =~ ^https?://[^[:space:]]+$ ]] || die "the repository URL $repo_url is not a URL"
 command -v gpg >/dev/null || die "gpg is needed to write the repository keyring"
+for file in crosvm passt passt-source.tar.gz crosvm-crates.txt; do
+    [[ -f "$vm_programs/$file" ]] || die "name the folder crosvm/build.sh filled with --vm-programs (it has no $file)"
+done
 
 package=desktop-subsystem-for-android
 mkdir -p "$out"
@@ -118,6 +133,9 @@ ln -s ../lib/dsa/bin/dsa "$stage/usr/bin/dsa"
 if [[ -f "$bin_dir/libgfxstream_backend.so" ]]; then
     install -m 0755 "$bin_dir/libgfxstream_backend.so" "$stage/usr/lib/dsa/bin/"
 fi
+# The VM's programs, built from pinned upstream revisions.
+install -m 0755 "$vm_programs/crosvm" "$vm_programs/passt" "$stage/usr/lib/dsa/bin/"
+programs+=(crosvm passt)
 echo "programs: ${programs[*]}"
 has_program() {
     [[ -x "$stage/usr/lib/dsa/bin/$1" ]]
@@ -217,10 +235,20 @@ install -d "$key_dir"
 gpg --batch --yes --dearmor --output "$key_dir/dsa-archive-keyring.gpg" "$repo_key"
 chmod 0644 "$key_dir/dsa-archive-keyring.gpg"
 
+# AppArmor: the sandboxes of crosvm and passt.
+install -d "$stage/etc/apparmor.d"
+install -m 0644 "$here/apparmor/dsa-vm" "$stage/etc/apparmor.d/dsa-vm"
+
 # The licence.
 install -d "$stage/usr/share/doc/$package"
 repo_root="$(cd "$here/../../../../.." && pwd)"
 install -m 0644 "$repo_root/LICENSE" "$stage/usr/share/doc/$package/copyright"
+install -m 0644 "$vm_programs/crosvm-crates.txt" "$vm_programs/passt-source.tar.gz" \
+    "$stage/usr/share/doc/$package/"
+if [[ -n "$licenses" ]]; then
+    install -d "$stage/usr/share/doc/$package/licenses"
+    install -m 0644 "$licenses"/* "$stage/usr/share/doc/$package/licenses/"
+fi
 
 # The repository entries the package scripts write. They are not package files: a conffile
 # would stay behind after a removal, and the entry must go with the package.
@@ -293,6 +321,9 @@ fi
 for module in vhost_vsock vhost_net tun; do
     modprobe "\$module" 2>/dev/null || true
 done
+if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+    apparmor_parser -r -W /etc/apparmor.d/dsa-vm 2>/dev/null || true
+fi
 if command -v udevadm >/dev/null 2>&1; then
     udevadm control --reload-rules || true
     udevadm trigger --subsystem-match=misc --subsystem-match=video4linux || true
@@ -315,6 +346,11 @@ EOF
 read -r -d '' after_remove <<EOF || true
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
+fi
+# The raw copy the service read from the image's VHDX system disk, which no package owns.
+if [ ! -e /usr/lib/dsa/vm/image/image.json ]; then
+    rm -f /usr/lib/dsa/vm/image/system.img /usr/lib/dsa/vm/image/disk.img
+    rmdir /usr/lib/dsa/vm/image /usr/lib/dsa/vm /usr/lib/dsa 2>/dev/null || true
 fi
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database -q /usr/share/applications || true
@@ -340,7 +376,7 @@ if [[ "$make_deb" -eq 1 ]]; then
         echo "Architecture: $arch"
         echo "Maintainer: thisisthepy <noreply@github.com>"
         echo "Installed-Size: $size_kb"
-        echo "Depends: libc6, systemd, udev"
+        echo "Depends: libc6, libstdc++6, libcap2, libwayland-client0, libdrm2, libvulkan1, systemd, udev"
         echo "Recommends: pipewire-pulse | pulseaudio, libpulse0, geoclue-2.0, xdg-desktop-portal, cups-client, upower, power-profiles-daemon, iio-sensor-proxy, xdg-utils"
         echo "Section: otherosfs"
         echo "Priority: optional"
@@ -348,7 +384,7 @@ if [[ "$make_deb" -eq 1 ]]; then
         echo "Description: $summary"
         echo "$description" | sed 's/^/ /'
     } > "$deb_root/DEBIAN/control"
-    printf '%s\n' /etc/dsa/dsa-hostd.json /etc/geoclue/conf.d/90-dsa.conf > "$deb_root/DEBIAN/conffiles"
+    printf '%s\n' /etc/dsa/dsa-hostd.json /etc/geoclue/conf.d/90-dsa.conf /etc/apparmor.d/dsa-vm > "$deb_root/DEBIAN/conffiles"
     printf '#!/bin/sh\nset -e\nif [ "$1" = configure ]; then\n%s\nfi\n%s\n' \
         "$deb_add_repo" "$after_install" > "$deb_root/DEBIAN/postinst"
     printf '#!/bin/sh\nset -e\nif [ "$1" = remove ] || [ "$1" = deconfigure ]; then\n%s\nfi\n' "$before_remove" > "$deb_root/DEBIAN/prerm"

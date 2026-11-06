@@ -1,6 +1,8 @@
 # Builds the Linux packages (.deb and .rpm) and checks them on real systems: the files and
 # the systemd units are where they belong and valid, the package installs and removes on
-# Ubuntu (the .deb) and Fedora (the .rpm), and the programs run. The kernel and the Android
+# Ubuntu (the .deb) and Fedora (the .rpm), and the programs run, crosvm and passt among them,
+# built from their pinned revisions with the licence check of everything crosvm links. The
+# kernel and the Android
 # image are built elsewhere, so the packages here carry a placeholder kernel and a small
 # stand-in image laid out like a real one. The signed apt and dnf repositories the packages
 # register are built too, with a throwaway key, and served locally, so the package manager
@@ -16,6 +18,7 @@ on:
       - "dsa/**"
       - ".github/workflows/test-linux-package.yml"
       - ".github/scripts/release/build-linux-repo.sh"
+      - ".github/scripts/linux-vm/**"
   workflow_dispatch:
 
 concurrency:
@@ -37,9 +40,22 @@ jobs:
           - { os: ubuntu-24.04, arch: amd64 }
           - { os: ubuntu-24.04-arm, arch: arm64 }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Keep the VM programs between runs
+        uses: actions/cache@v4
+        with:
+          path: .scratch/vm-programs
+          key: linux-vm-programs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsa/host/platform/linux/crosvm/**', 'dsa/graphics/host/**', 'dsa/graphics/patches/**', '.github/scripts/linux-vm/**') }}
+
+      # Fails when anything crosvm links is GPL, LGPL or AGPL (check-licenses.py).
+      - name: Build crosvm, passt and gfxstream's renderer, and check crosvm's licences
+        run: bash .github/scripts/linux-vm/build-vm-programs.sh .scratch/vm-programs
 
       - name: Install the packaging tools
         run: |
@@ -72,6 +88,12 @@ jobs:
           name: cargo-lock-${{ matrix.arch }}
           path: dsa/Cargo.lock
 
+      - name: Make the licence bundle with crosvm's crates
+        run: |
+          uv run dsa/host/platform/windows/installer/generate-licenses.py --workspace dsa \
+            --out-dir .scratch/licenses --crosvm-crates .scratch/vm-programs/crosvm-crates.txt
+          cp .scratch/vm-programs/libgfxstream_backend.so dsa/target/release/
+
       - name: Make a stand-in image
         run: |
           dir=.scratch/stand-in-image
@@ -90,7 +112,7 @@ jobs:
           dsa/host/platform/linux/packaging/build-packages.sh \
             --bin-dir dsa/target/release --version "$version" --arch "${{ matrix.arch }}" \
             --placeholder-kernel --image-dir .scratch/stand-in-image --out .scratch/packages \
-            --repo-key .scratch/repo-key.asc --repo-url http://127.0.0.1:8080
+            --repo-key .scratch/repo-key.asc --repo-url http://127.0.0.1:8080 \n            --vm-programs .scratch/vm-programs --licenses .scratch/licenses
           ls -l .scratch/packages
 
       - name: Check the package contents
@@ -106,7 +128,11 @@ jobs:
               /usr/lib/modules-load.d/dsa.conf /usr/share/applications/dsa-open.desktop \
               /usr/share/applications/dsa-apk.desktop /etc/geoclue/conf.d/90-dsa.conf \
               /etc/dsa/dsa-hostd.json /usr/lib/dsa/vm/image/image.json \
-              /usr/share/metainfo/io.github.thisisthepy.DSA.metainfo.xml; do
+              /usr/lib/dsa/bin/crosvm /usr/lib/dsa/bin/passt /usr/lib/dsa/bin/libgfxstream_backend.so \
+              /etc/apparmor.d/dsa-vm \
+              /usr/share/doc/desktop-subsystem-for-android/crosvm-crates.txt \
+              /usr/share/doc/desktop-subsystem-for-android/passt-source.tar.gz \
+              /usr/share/doc/desktop-subsystem-for-android/licenses/crosvm-crates.txt \n              /usr/share/metainfo/io.github.thisisthepy.DSA.metainfo.xml; do
             grep -q "\.$path\$\|\.$path -> " .scratch/deb-contents || { echo "the .deb has no $path"; exit 1; }
             grep -qx "$path" .scratch/rpm-contents || { echo "the .rpm has no $path"; exit 1; }
           done
@@ -159,6 +185,9 @@ jobs:
           dsa --version || dsa --help || true
           test -x /usr/lib/dsa/bin/dsa-devices
           /usr/lib/dsa/bin/dsa-devices --version
+          /usr/lib/dsa/bin/crosvm version
+          /usr/lib/dsa/bin/passt --version
+          ! dpkg-deb --field "$(ls .scratch/packages/*.deb)" Depends | grep -qi qemu
           systemd-analyze verify /usr/lib/systemd/user/dsa-devices.service
           if [ -f /usr/lib/systemd/system/dsa-hostd.service ]; then
             systemd-analyze verify /usr/lib/systemd/system/dsa-hostd.service
@@ -228,6 +257,8 @@ jobs:
           dnf -y reinstall --repo=dsa desktop-subsystem-for-android
           test -f /etc/yum.repos.d/dsa.repo
           /usr/lib/dsa/bin/dsa-devices --version
+          /usr/lib/dsa/bin/crosvm version
+          /usr/lib/dsa/bin/passt --version
           test -L /usr/bin/dsa
           test -f /usr/lib/systemd/user/dsa-devices.service
           rpm -V desktop-subsystem-for-android
