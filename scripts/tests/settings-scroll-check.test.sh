@@ -15,3 +15,7 @@ for item in "'Android'" "'Network'"; do
   grep -F '$items = ' "$workflow" | grep -Fq "$item"
 done
 echo "settings scroll check: ok"
+# Keys go to the foreground window: the keyboard check brings DSA Settings to the front
+# first, since the ARM64 runner's Start menu takes the keyboard.
+grep -Fq 'function Set-Foreground($Window)' "$workflow"
+test "$(grep -c 'Set-Foreground $window' "$workflow")" -ge 2
