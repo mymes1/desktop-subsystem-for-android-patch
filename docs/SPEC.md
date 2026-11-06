@@ -37,9 +37,10 @@ Linux 호스트:
 - 안드로이드는 사용자마다 전용 crosvm VM에서 KVM 위로 돈다. 제어 채널, 로그, 파일 공유, adb는 vsock(vhost-vsock)으로 Hyper-V와 같은 포트를 쓴다.
 - crosvm을 고른 이유: ChromeOS와 AVF가 안드로이드 게스트로 검증한 VMM이고, gfxstream을 일급으로 지원하고, virtio-balloon의 빈 페이지 보고로 게스트가 놓은 메모리를 호스트에 돌려준다.
 - crosvm은 고정한 업스트림 리비전에서 CI가 빌드하고(gfxstream, balloon, vsock, virtio-net, minijail 샌드박스), DSA의 deb와 rpm 패키지가 그 바이너리를 싣는다. 사용자는 QEMU나 다른 VMM을 설치하지 않는다.
-- 메모리(NFR-2): VM은 커질 수 있는 최대 크기로 만들고, 시작할 때 balloon이 시작 크기(3 GiB) 밖의 몫을 잡는다. 게스트가 부족하면 balloon을 줄여 메모리를 더하고, 더 쓰지 않으면 다시 늘려 되돌린다. 정책(풀린 메모리를 다음 확인에서 바로 돌려주는 즉시 반환과 필요할 때의 확장)은 Windows와 같은 `host/core`의 것이다. crosvm에는 핫애드 장치가 없어서, 커널의 페이지 기록은 최대 크기만큼 잡힌다.
+- 메모리(NFR-2): VM은 시작 크기(3 GiB)로 부팅하고, 최대 크기까지의 나머지는 virtio-mem 영역으로 둔다. 업스트림 crosvm에는 virtio-mem이 없어서, 이 저장소가 가진 패치를 빌드 스크립트가 고정 리비전에 적용한다. 게스트가 부족하면 virtio-mem의 요청 크기를 올려 메모리를 더하고, 더 쓰지 않으면 요청 크기를 내려 게스트가 뺀 블록을 호스트에 바로 돌려준다. 정책(풀린 메모리를 다음 확인에서 바로 돌려주는 즉시 반환과 필요할 때의 확장)은 Windows와 같은 `host/core`의 것이다. 게스트 커널은 memory_hotplug, memory hot-remove, virtio-mem, memmap_on_memory를 켜고 더한 메모리를 movable로 자동 온라인한다. 그래서 페이지 구조체는 게스트가 실제로 가진 메모리만큼만 잡힌다.
+- 수용 기준(NFR-2, Linux): crosvm 인자는 `--mem`을 시작 크기로, `--virtio-mem`을 최대 크기와의 차이로 주고 `--init-mem`을 쓰지 않는다(`nfr2_the_linux_vm_boots_at_its_base_size_with_the_rest_as_virtio_mem`). `host/core`의 확장과 축소는 virtio-mem 요청 크기를 시작 크기와의 차이로 정하는 제어 소켓 명령이 되고, 첫 차분한 보고에서 바로 줄인다(`nfr2_memory_growth_sets_the_virtio_mem_request`). 게스트 커널 설정에 위 옵션이 있고 Linux 백엔드의 커널 명령줄에 `memory_hotplug.memmap_on_memory=1`이 있다(`test_nfr2_hotplugged_memory_holds_its_own_page_structs`). crosvm 패치의 장치는 요청 크기까지만 꽂기를 받고, 뺀 블록을 응답 전에 호스트에서 해제한다(패치 안의 단위 테스트).
 - 네트워크(FR-28): NAT는 passt가 vhost-user로 crosvm에 붙는다. crosvm에는 Linux용 user-mode NAT가 없고 배포판의 passt는 vhost-user가 없을 수 있어서, 고정 리비전의 passt를 함께 빌드해 싣고 GPL 소스를 패키지에 둔다. 고급 네트워킹은 macvtap을 쓴다.
-- 크기 조정, 일시 정지와 재개, 종료는 crosvm 제어 소켓 명령(`balloon`, `suspend`, `resume`, `stop`)으로 한다.
+- 크기 조정, 일시 정지와 재개, 종료는 crosvm 제어 소켓 명령(`virtio-mem`, `suspend`, `resume`, `stop`)으로 한다.
 - 수용 기준: CI의 KVM 작업이 공개된 안드로이드 이미지를 crosvm으로 부팅하고, 게스트가 vsock 제어 포트로 연결한다.
 - 수용 기준(NFR-7): crosvm과 그것이 링크하는 모든 크레이트와 라이브러리가 서드파티 라이선스 목록에 오르고, 배포하는 crosvm 빌드에 GPL, LGPL, AGPL 구성 요소가 있으면 CI가 실패한다.
 
