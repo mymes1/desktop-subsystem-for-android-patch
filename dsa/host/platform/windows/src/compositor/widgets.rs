@@ -220,6 +220,39 @@ pub fn z_place(desktop: Option<isize>, above_desktop: Option<isize>, own: isize)
     }
 }
 
+/// How often the widget windows are checked to be right above the desktop. The shell
+/// restacks its own windows without telling anyone: "show desktop", a wallpaper slideshow
+/// and an Explorer restart raise the window that holds the desktop icons and paints the
+/// wallpaper, and a widget window that only fixed its place when it moved itself stayed under
+/// it, drawn but hidden behind the desktop.
+pub const RESTACK_CHECK: Duration = Duration::from_millis(500);
+
+/// One window below a widget window, as [`right_above_desktop`] reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Below {
+    pub hwnd: isize,
+    /// Whether it shows over part of the widget window: visible, not minimized and
+    /// overlapping it.
+    pub covers: bool,
+}
+
+/// Whether a widget window sits where it belongs, given the windows below it in z-order from
+/// the nearest down (`below`): the desktop's own window (`desktop`) comes before any other
+/// window that overlaps it. Other widget windows (`ours`) and windows that do not overlap it
+/// may be in between. False when the desktop is not below it at all, which means the desktop
+/// is drawn over it, and when an app's window is below it, which it would hide.
+pub fn right_above_desktop(below: &[Below], desktop: isize, ours: &[isize]) -> bool {
+    for window in below {
+        if window.hwnd == desktop {
+            return true;
+        }
+        if window.covers && !ours.contains(&window.hwnd) {
+            return false;
+        }
+    }
+    false
+}
+
 /// Where in a widget window a point is, which says what dragging it does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hit {
@@ -633,13 +666,14 @@ mod win {
         WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NCHITTEST, WM_SIZE, WM_TIMER,
         WM_WINDOWPOSCHANGING, WNDCLASSEXW,
     };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible, GW_HWNDNEXT};
 
     use std::time::Instant;
 
     use super::{
         android_density, frame_overdue, hit_test, min_window_size, placement_of, reachable_origin,
-        to_frame, window_size, window_styles, z_place, Hit, WindowCommand, WindowReport, ZPlace,
-        NO_FRAME, NO_FRAME_CHECK,
+        right_above_desktop, to_frame, window_size, window_styles, z_place, Below, Hit,
+        WindowCommand, WindowReport, ZPlace, NO_FRAME, NO_FRAME_CHECK, RESTACK_CHECK,
     };
     use crate::compositor::log::{note, CompositorLogger};
     use crate::compositor::widget_menu::{self, MenuChoice};
@@ -664,6 +698,29 @@ mod win {
 
     /// The controller's timer that checks for windows still without an image.
     const NO_FRAME_TIMER: usize = 1;
+
+    /// The controller's timer that keeps the windows right above the desktop.
+    const RESTACK_TIMER: usize = 2;
+
+    /// What the last drawing of a window handed the system, so a test can tell a window that
+    /// shows something from one that shows nothing.
+    #[cfg(test)]
+    #[derive(Debug, Clone, Copy)]
+    pub(super) struct Presented {
+        pub hwnd: isize,
+        /// Whether UpdateLayeredWindow took the picture.
+        pub committed: bool,
+        pub width: i32,
+        pub height: i32,
+        /// How many of its pixels are at least half opaque.
+        pub opaque: usize,
+        /// Whether the window was shown already when it got the picture.
+        pub visible: bool,
+    }
+
+    #[cfg(test)]
+    pub(super) static PRESENTED: std::sync::Mutex<Vec<Presented>> =
+        std::sync::Mutex::new(Vec::new());
 
     struct State {
         commands: Receiver<WindowCommand>,
@@ -847,8 +904,14 @@ mod win {
                 NO_FRAME_TIMER,
                 NO_FRAME_CHECK.as_millis() as u32,
                 None,
-            )
-        };
+            );
+            SetTimer(
+                controller,
+                RESTACK_TIMER,
+                RESTACK_CHECK.as_millis() as u32,
+                None,
+            );
+        }
         slot.store(controller as isize, Ordering::SeqCst);
         let _ = ready.send(Ok(()));
         // SAFETY: the usual message loop of this thread's windows.
@@ -880,6 +943,10 @@ mod win {
                 note_missing_frames();
                 0
             }
+            WM_TIMER if wparam == RESTACK_TIMER => {
+                keep_above_desktop();
+                0
+            }
             WM_CLOSE => {
                 let windows: Vec<isize> =
                     with_state(|s| s.windows.keys().copied().collect()).unwrap_or_default();
@@ -887,9 +954,10 @@ mod win {
                     // SAFETY: windows of this thread.
                     unsafe { DestroyWindow(window as HWND) };
                 }
-                // SAFETY: the controller is this thread's, and so is its timer.
+                // SAFETY: the controller is this thread's, and so are its timers.
                 unsafe {
                     KillTimer(hwnd, NO_FRAME_TIMER);
+                    KillTimer(hwnd, RESTACK_TIMER);
                     DestroyWindow(hwnd);
                 }
                 0
@@ -981,7 +1049,7 @@ mod win {
 
     /// The desktop's own window: the shell's window that holds the desktop icons, which a
     /// wallpaper slideshow or "show desktop" moves out of `Progman` into a `WorkerW`.
-    fn desktop_window() -> Option<HWND> {
+    pub(super) fn desktop_window() -> Option<HWND> {
         let progman = desktop_owner();
         let defview = wide("SHELLDLL_DefView");
         let worker = wide("WorkerW");
@@ -1004,6 +1072,53 @@ mod win {
             }
         }
         (!progman.is_null()).then_some(progman)
+    }
+
+    /// Puts every widget window that the shell left under the desktop, or above an app's
+    /// window, right above the desktop again ([`right_above_desktop`]). The shell restacks
+    /// its desktop window without moving the widget windows, so they hear nothing of it.
+    fn keep_above_desktop() {
+        let Some(desktop) = desktop_window() else {
+            return;
+        };
+        let ours: Vec<isize> =
+            with_state(|s| s.windows.keys().copied().collect()).unwrap_or_default();
+        for &own in &ours {
+            let rect = rect_of(own as HWND);
+            let mut below = Vec::new();
+            // SAFETY: walks the z-order down from a window of this thread; a window that goes
+            // meanwhile ends the walk.
+            unsafe {
+                let mut next = GetWindow(own as HWND, GW_HWNDNEXT);
+                while !next.is_null() && below.len() < 4096 {
+                    let other = rect_of(next);
+                    let overlaps = other.left < rect.right
+                        && rect.left < other.right
+                        && other.top < rect.bottom
+                        && rect.top < other.bottom;
+                    below.push(Below {
+                        hwnd: next as isize,
+                        covers: overlaps && IsWindowVisible(next) != 0 && IsIconic(next) == 0,
+                    });
+                    next = GetWindow(next, GW_HWNDNEXT);
+                }
+            }
+            if !right_above_desktop(&below, desktop as isize, &ours) {
+                // SAFETY: a window of this thread; WM_WINDOWPOSCHANGING puts it right above
+                // the desktop.
+                unsafe {
+                    SetWindowPos(
+                        own as HWND,
+                        HWND_BOTTOM,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE,
+                    );
+                }
+            }
+        }
     }
 
     /// Where `hwnd` goes in the z-order: right above the desktop ([`z_place`]).
@@ -1098,11 +1213,13 @@ mod win {
         };
         // SAFETY: a window of this thread; it goes right above the desktop, where
         // WM_WINDOWPOSCHANGING puts it.
-        unsafe {
-            SetWindowPos(hwnd, HWND_BOTTOM, x, y, width, height, SWP_NOACTIVATE);
-            ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-        }
+        unsafe { SetWindowPos(hwnd, HWND_BOTTOM, x, y, width, height, SWP_NOACTIVATE) };
+        // A layered window shows nothing at all until it is given a picture, so it gets its
+        // placeholder before it is shown, never after.
         present(hwnd);
+        // SAFETY: as above.
+        unsafe { ShowWindow(hwnd, SW_SHOWNOACTIVATE) };
+        keep_above_desktop();
         report_placement(hwnd);
     }
 
@@ -1172,6 +1289,8 @@ mod win {
         let Some(pixels) = pixels else {
             return;
         };
+        let mut committed = false;
+        let mut failure = None;
         // SAFETY: a DIB section of the window's size, filled from `pixels`, selected into a
         // memory DC for UpdateLayeredWindow and freed after.
         unsafe {
@@ -1207,7 +1326,7 @@ mod win {
                     SourceConstantAlpha: 255,
                     AlphaFormat: AC_SRC_ALPHA as u8,
                 };
-                UpdateLayeredWindow(
+                committed = UpdateLayeredWindow(
                     hwnd,
                     screen,
                     null(),
@@ -1217,14 +1336,51 @@ mod win {
                     0,
                     &blend,
                     ULW_ALPHA,
-                );
+                ) != 0;
+                if !committed {
+                    failure = Some(std::io::Error::last_os_error());
+                }
                 SelectObject(memory, old);
                 DeleteObject(bitmap);
+            } else {
+                failure = Some(std::io::Error::last_os_error());
             }
             DeleteDC(memory);
             ReleaseDC(null_mut(), screen);
         }
+        if let Some(why) = failure {
+            // Without a picture a layered window is not drawn at all, so this is logged.
+            with_state(|s| {
+                let id = s.windows.get(&(hwnd as isize)).map(|w| w.widget.widget_id);
+                note(
+                    s.logger.as_deref(),
+                    &format!(
+                        "widget {}: its window of {width}x{height} pixels could not be drawn: {why}",
+                        id.unwrap_or_default()
+                    ),
+                );
+            });
+        }
+        record(hwnd, committed, width, height, &pixels);
     }
+
+    #[cfg(test)]
+    fn record(hwnd: HWND, committed: bool, width: i32, height: i32, pixels: &[u8]) {
+        if let Ok(mut presented) = PRESENTED.lock() {
+            presented.push(Presented {
+                hwnd: hwnd as isize,
+                committed,
+                width,
+                height,
+                opaque: pixels.chunks_exact(4).filter(|p| p[3] >= 0x80).count(),
+                // SAFETY: a window of this thread.
+                visible: unsafe { IsWindowVisible(hwnd) } != 0,
+            });
+        }
+    }
+
+    #[cfg(not(test))]
+    fn record(_: HWND, _: bool, _: i32, _: i32, _: &[u8]) {}
 
     /// Keeps every pixel clickable and draws the move band while the pointer is over the
     /// window.
@@ -1861,5 +2017,106 @@ mod tests {
             Some(WindowCommand::Remove(3))
         );
         assert_eq!(command_of(WidgetEvent::Listed(vec![3])), None);
+    }
+
+    #[test]
+    fn fr12_a_widget_window_the_shell_put_under_the_desktop_is_put_back_above_it() {
+        let (desktop, own, widget) = (10, 1, 2);
+        let fits = |list: &[(isize, bool)], ours: &[isize]| {
+            let below: Vec<Below> = list
+                .iter()
+                .map(|&(hwnd, covers)| Below { hwnd, covers })
+                .collect();
+            right_above_desktop(&below, desktop, ours)
+        };
+        // Right above the desktop, with a hidden window and another widget between.
+        assert!(fits(&[(30, false), (widget, true), (desktop, true)], &[own, widget]));
+        // The shell raised its desktop window over it: the desktop is not below it.
+        assert!(!fits(&[(40, false), (41, false)], &[own]));
+        // An app's window is under it, which it would hide.
+        assert!(!fits(&[(50, true), (desktop, true)], &[own]));
+    }
+
+    /// A placed widget window shows its placeholder from the moment it opens, through the real
+    /// windows: it is given its picture before it is shown, the system takes the picture, the
+    /// picture is mostly opaque, and the window is visible, on a monitor and right above the
+    /// desktop.
+    #[cfg(windows)]
+    #[test]
+    fn fr12_a_placed_widget_window_shows_its_placeholder_at_once() {
+        use windows_sys::Win32::Foundation::{HWND, RECT};
+        use windows_sys::Win32::Graphics::Gdi::{MonitorFromRect, MONITOR_DEFAULTTONULL};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetWindow, GetWindowLongPtrW, GetWindowRect, IsWindowVisible, GWL_EXSTYLE,
+            GW_HWNDNEXT, WS_EX_LAYERED,
+        };
+
+        let mut windows = WindowsWidgetWindows::open(None).expect("opening the widget windows");
+        let placement = Placement {
+            x: 40,
+            y: 40,
+            width_dp: 180,
+            height_dp: 110,
+        };
+        windows.command(WindowCommand::Place(Widget {
+            widget_id: 4242,
+            provider: clock(),
+            placement,
+        }));
+        let deadline = Instant::now() + Duration::from_secs(10);
+        // Only this test opens widget windows, so the first drawing is its window's.
+        let (first, hwnd) = loop {
+            let found = win::PRESENTED.lock().unwrap().first().copied();
+            if let Some(found) = found {
+                break (found, found.hwnd as HWND);
+            }
+            assert!(Instant::now() < deadline, "the widget's window was never drawn");
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        // Shown right after its first drawing.
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(first.committed, "the system did not take the window's picture");
+        assert!(!first.visible, "the window was shown before it had a picture");
+        let pixels = (first.width * first.height) as usize;
+        assert!(pixels > 0, "the window is {}x{}", first.width, first.height);
+        assert!(
+            first.opaque * 10 >= pixels * 9,
+            "only {} of {pixels} pixels of the placeholder are opaque",
+            first.opaque
+        );
+        // SAFETY: reads a window of the windows' thread.
+        unsafe {
+            assert!(IsWindowVisible(hwnd) != 0, "the window is hidden");
+            let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+            assert!(ex_style & WS_EX_LAYERED != 0);
+            let mut rect = RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+            };
+            GetWindowRect(hwnd, &mut rect);
+            assert_eq!(
+                (rect.right - rect.left, rect.bottom - rect.top),
+                (first.width, first.height)
+            );
+            assert!(
+                !MonitorFromRect(&rect, MONITOR_DEFAULTTONULL).is_null(),
+                "the window at {},{} is on no monitor",
+                rect.left,
+                rect.top
+            );
+            // With a shell, the desktop is below the window, so the desktop is not drawn over it.
+            if let Some(desktop) = win::desktop_window() {
+                let mut next = GetWindow(hwnd, GW_HWNDNEXT);
+                let mut steps = 0;
+                while !next.is_null() && next != desktop && steps < 4096 {
+                    next = GetWindow(next, GW_HWNDNEXT);
+                    steps += 1;
+                }
+                assert_eq!(next, desktop, "the desktop is drawn over the window");
+            }
+        }
+        windows.command(WindowCommand::Remove(4242));
     }
 }
