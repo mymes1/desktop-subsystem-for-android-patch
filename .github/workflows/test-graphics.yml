@@ -323,8 +323,8 @@ jobs:
         run: |
           export VK_ICD_FILENAMES="$(brew --prefix molten-vk)/etc/vulkan/icd.d/MoltenVK_icd.json"
           export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix vulkan-loader)/lib:$(brew --prefix molten-vk)/lib"
-          # gfxstream turns on Vulkan portability, which the loader needs to show MoltenVK,
-          # only when it is told the driver is MoltenVK.
+          # gfxstream itself turns on the Vulkan portability the loader needs to show
+          # MoltenVK; this names the driver for the parts of gfxstream that ask.
           export ANDROID_EMU_VK_ICD=moltenvk
           uv run dsa/graphics/host/test_host_renderer.py
 
