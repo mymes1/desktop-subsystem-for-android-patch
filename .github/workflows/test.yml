@@ -155,6 +155,13 @@ jobs:
       - name: Show the host target
         run: rustc -vV
 
+      # The Linux settings app is a member of the workspace and links GTK 4 and libadwaita.
+      - name: Install GTK 4 and libadwaita
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
+
       - name: Check formatting
         run: cargo fmt --all --check
 
@@ -287,6 +294,75 @@ jobs:
   # The macOS host on Apple silicon: its tests, the vsock transport over socket pairs, and
   # dsa-hostd signed with the virtualization entitlement and checked by the framework itself.
   # GitHub's macOS runners are VMs without nested virtualization, so no Android boots here.
+  # DSA Settings for Linux: its view models and translations without a display, its desktop
+  # files, and the app itself in a headless Wayland session with no DSA service to reach,
+  # where it must open its window, say the service is not running and keep running.
+  linux-settings:
+    name: Test the Linux settings app (ubuntu-latest)
+    needs: changes
+    if: needs.changes.outputs.linux == 'true' || needs.changes.outputs.unix == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: dsa
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GTK 4, libadwaita, gettext and the desktop file checkers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev gettext desktop-file-utils \
+            appstream weston
+
+      - name: Run the settings app's tests
+        run: cargo test --no-fail-fast -p dsa-settings-linux
+
+      - name: Lint the settings app
+        run: cargo clippy -p dsa-settings-linux --all-targets -- -D warnings
+
+      - name: Build the settings app
+        run: cargo build -p dsa-settings-linux --bin dsa-settings
+
+      - name: Check the translations, the desktop entry and the AppStream entry
+        working-directory: dsa/host/platform/linux/settings
+        run: |
+          for po in po/*.po; do
+            msgfmt --check --statistics -o /dev/null "$po"
+          done
+          desktop-file-validate data/io.github.thisisthepy.DSA.Settings.desktop
+          appstreamcli validate --no-net --explain data/io.github.thisisthepy.DSA.Settings.metainfo.xml
+
+      - name: Run the settings app against the headless session
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/runtime"
+          mkdir -p -m 0700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless --socket=wayland-dsa --idle-time=0 &
+          for _ in $(seq 50); do
+            [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
+            sleep 0.2
+          done
+          export WAYLAND_DISPLAY=wayland-dsa GDK_BACKEND=wayland
+          export DSA_SOCKET="$RUNNER_TEMP/no-service.sock"
+          export XDG_DATA_HOME="$RUNNER_TEMP/data"
+          export LANGUAGE=ko
+          for page in general memory apps logs about; do
+            set +e
+            timeout 5 dbus-run-session -- target/debug/dsa-settings --page "$page" \
+              2> "$RUNNER_TEMP/settings-$page.log"
+            code=$?
+            set -e
+            cat "$RUNNER_TEMP/settings-$page.log"
+            if [[ "$code" -ne 124 ]]; then
+              echo "::error::the settings app ended with code $code on the $page page instead of running"
+              exit 1
+            fi
+            if grep -q "panicked\|CRITICAL" "$RUNNER_TEMP/settings-$page.log"; then
+              echo "::error::the settings app reported a crash or a GTK critical on the $page page"
+              exit 1
+            fi
+          done
+
   macos-host:
     name: Test the macOS host (macos-14)
     needs: changes
@@ -719,7 +795,7 @@ jobs:
     name: Report the test result
     if: always()
     needs:
-      [changes, repository, rust, unix-socket, macos-host, linux-host, linux-vm, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
+      [changes, repository, rust, unix-socket, macos-host, linux-host, linux-settings, linux-vm, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
