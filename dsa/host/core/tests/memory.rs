@@ -571,3 +571,43 @@ fn nfr2_a_still_screen_gets_the_gpu_driver_trim_within_seconds() {
     use dsa_host_core::memory::QUIET_TRIM_DELAY;
     assert!(QUIET_TRIM_DELAY <= Duration::from_secs(5));
 }
+
+#[test]
+fn nfr2_the_window_managers_committed_memory_is_broken_down_by_owner() {
+    use dsa_host_core::memory::{committed_line, CommittedMemory, RendererMemory};
+    let committed = CommittedMemory {
+        private_kb: Some(453 * MIB),
+        walked_private_kb: 450 * MIB,
+        process_heap_kb: 20 * MIB,
+        other_heaps_kb: 30 * MIB,
+        other_heaps: 4,
+        gpu_mapped_kb: 100 * MIB,
+        direct_kb: 300 * MIB,
+        largest_private_kb: vec![64 * MIB, 3 * MIB / 2],
+        own_live_kb: Some(12 * MIB),
+        renderer: Some(RendererMemory {
+            device_local_kb: 200 * MIB,
+            device_local_count: 40,
+            host_visible_kb: 96 * MIB,
+            host_visible_count: 6,
+            imported_kb: 0,
+            imported_count: 0,
+            largest_kb: 32 * MIB,
+            guest_processes: 7,
+        }),
+        gpu_local_kb: Some(220 * MIB),
+        gpu_non_local_kb: None,
+    };
+    assert_eq!(
+        committed_line(&committed),
+        "committed memory by owner: private 453 MiB (450 found); default heap 20 (the window \
+         manager's own allocations 12); 4 other heaps 30; GPU-mapped 100; allocated directly 300 \
+         (largest allocations 64.0, 1.5 MiB); renderer: GPU-only 200 MiB in 40, CPU-mapped 96 \
+         MiB in 6, imported 0 MiB in 0, largest 32 MiB, 7 guest processes connected; GPU memory \
+         220 MiB, GPU-mapped system memory ? MiB"
+    );
+    // A renderer that cannot count says so rather than showing zeros.
+    let unknown = CommittedMemory::default();
+    assert!(committed_line(&unknown).contains("renderer: no count"));
+    assert!(committed_line(&unknown).contains("(largest allocations none MiB)"));
+}

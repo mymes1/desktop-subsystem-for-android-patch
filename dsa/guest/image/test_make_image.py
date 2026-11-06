@@ -2228,7 +2228,12 @@ class GuestMemoryTests(unittest.TestCase):
             rc = archive.read("VENDOR/etc/init/dsa-channeld.rc").decode()
             start = rc.index("on property:vendor.dsa.memory.reclaim=1 && property:sys.boot_completed=1")
             trigger = rc[start:rc.index("on property:vendor.dsa.memory.trim=1")]
-            self.assertEqual(trigger.count('write /sys/fs/cgroup/memory.reclaim "256M swappiness=200"'), 4)
+            self.assertEqual(
+                trigger.count('write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.reclaim_step}M swappiness=200"'), 4
+            )
+            self.assertNotIn("256M", trigger)
+            contexts = archive.read("VENDOR/etc/selinux/vendor_property_contexts").decode().splitlines()
+            self.assertIn("vendor.dsa.memory.reclaim_step u:object_r:dsa_memory_prop:s0 exact int", contexts)
             self.assertLess(trigger.rindex("cgroup/memory.reclaim"), trigger.index("drop_caches"))
             self.assertLess(trigger.index("drop_caches"), trigger.index("compact_memory"))
 
@@ -2273,6 +2278,7 @@ class GuestMemoryTests(unittest.TestCase):
             self.assertEqual(contexts.count(make_image.TRIM_PROPERTY_CONTEXT), 1)
         all_of_them = (
             make_image.RECLAIM_PROPERTY_CONTEXT + "\n"
+            + make_image.RECLAIM_STEP_PROPERTY_CONTEXT + "\n"
             + make_image.TRIM_PROPERTY_CONTEXT + "\n"
             + make_image.TRIM_SIZE_PROPERTY_CONTEXT + "\n"
             + make_image.BOOT_PROPERTY_CONTEXT + "\n"

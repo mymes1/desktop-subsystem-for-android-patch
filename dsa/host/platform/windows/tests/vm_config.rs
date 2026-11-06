@@ -524,3 +524,33 @@ fn the_memory_process_suffix_is_only_used_where_hcs_accepts_it() {
     assert!(hosting_process_name_suffix_supported(22420, 0));
     assert!(hosting_process_name_suffix_supported(26100, 0));
 }
+
+#[test]
+fn nfr2_the_guest_kernel_sets_little_memory_aside_at_boot() {
+    for arch in [GuestArch::X86_64, GuestArch::Arm64] {
+        let cmdline = if arch == GuestArch::Arm64 {
+            arm64_config().full_kernel_cmdline_for(arch)
+        } else {
+            config().full_kernel_cmdline_for(arch)
+        };
+        let words: Vec<&str> = cmdline.split_whitespace().collect();
+        // A 4 MiB bounce buffer, not the 64 MiB default, which the VMBus devices never use.
+        assert!(words.contains(&"swiotlb=2048"), "{cmdline}");
+        // No KFENCE pool, and hash tables sized for a desktop guest rather than its memory.
+        for word in [
+            "kfence.sample_interval=0",
+            "dhash_entries=65536",
+            "ihash_entries=32768",
+            "thash_entries=16384",
+            "uhash_entries=1024",
+        ] {
+            assert!(words.contains(&word), "{word} in {cmdline}");
+        }
+        // Nothing reserves RAM for a crash kernel or a RAM log.
+        for reserving in ["crashkernel=", "ramoops.mem_size", "memmap=", "cma="] {
+            assert!(!cmdline.contains(reserving), "{reserving} in {cmdline}");
+        }
+        // The user's own parameters still come last, so they can override these.
+        assert!(cmdline.ends_with("androidboot.hardware=dsa"), "{cmdline}");
+    }
+}

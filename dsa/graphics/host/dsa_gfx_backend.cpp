@@ -5,6 +5,7 @@
 
 #include "dsa_gfx_backend.h"
 #include "dsa_gfx_display.h"
+#include "dsa_gfx_memory.h"
 
 #include <algorithm>
 #include <atomic>
@@ -88,6 +89,7 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_init(uint32_t width, uint32_t height) {
     int ret = stream_renderer_init(params, sizeof(params) / sizeof(params[0]));
     if (ret == 0) {
         s_initialized.store(true, std::memory_order_release);
+        dsa_gfx_memory_install();
     }
     return ret;
 }
@@ -171,6 +173,7 @@ extern "C" DSA_GFX_EXPORT void dsa_gfx_teardown(void) {
         return;
     }
     dsa_gfx_display_shutdown();
+    dsa_gfx_memory_uninstall();
     stream_renderer_teardown();
     s_initialized.store(false, std::memory_order_release);
 }
@@ -216,12 +219,14 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_process_pipe(dsa_stream_read_fn read_cb,
     }
 
     uint64_t puid = dsa_gfx_on_process_create();
+    dsa_gfx_memory_process_started();
 
     size_t sent = 0;
     while (sent < sizeof(puid)) {
         int n = write_cb(user_data, reinterpret_cast<const char*>(&puid) + sent, sizeof(puid) - sent);
         if (n <= 0) {
             dsa_gfx_on_process_destroy(puid);
+            dsa_gfx_memory_process_ended();
             return -3;
         }
         sent += static_cast<size_t>(n);
@@ -237,6 +242,7 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_process_pipe(dsa_stream_read_fn read_cb,
     }
 
     dsa_gfx_on_process_destroy(puid);
+    dsa_gfx_memory_process_ended();
     return 0;
 }
 

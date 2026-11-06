@@ -139,6 +139,20 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn("presenter->forget.empty()", windows)
         self.assertIn("presenter->targets.erase(it);", windows)
 
+    def test_nfr2_the_renderer_says_what_its_vulkan_memory_holds(self):
+        header = (HERE / "dsa_gfx_backend.h").read_text(encoding="utf-8")
+        self.assertIn("dsa_gfx_get_memory_stats(dsa_gfx_memory_stats* stats)", header)
+        source = (HERE / "dsa_gfx_memory.cpp").read_text(encoding="utf-8")
+        # Every allocation and free of the renderer's device dispatch is counted by kind.
+        self.assertIn("vk->vkAllocateMemory = counted_allocate;", source)
+        self.assertIn("vk->vkFreeMemory = counted_free;", source)
+        self.assertIn("VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT", source)
+        backend = (HERE / "dsa_gfx_backend.cpp").read_text(encoding="utf-8")
+        self.assertIn("dsa_gfx_memory_install();", backend)
+        self.assertIn("dsa_gfx_memory_uninstall();", backend)
+        self.assertEqual(backend.count("dsa_gfx_memory_process_ended();"), 2)
+        self.assertIn("dsa_gfx_memory.cpp", CMAKE_FILE.read_text(encoding="utf-8"))
+
     def test_fr4_only_the_region_a_frame_fills_is_copied(self):
         source = (HERE / "dsa_gfx_display.cpp").read_text(encoding="utf-8")
         # The guest's buffers keep their size while a window is resized; the display's size
