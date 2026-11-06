@@ -1,34 +1,71 @@
-# 설정 둘러보기
+# 설정
 
-DSA 설정은 Windows용 Desktop Subsystem for Android™(DSA)의 설정 앱입니다. 시작 메뉴에서 엽니다. 테마,
-강조색, 언어(영어와 한국어)를 따릅니다. 스스로 바꾸는 것은 없고 모든 스위치가 `dsa` 명령을 거치므로,
-`dsa settings`가 같은 값을 보여 주고 `dsa settings set <name> <value>`가 바꿉니다. 스위치는 `on`이나 `off`를
-받습니다.
+**DSA 설정**은 Windows용 Desktop Subsystem for Android™(DSA)의 설정 앱입니다. 시작 메뉴에서
+**DSA Settings**를 선택해 엽니다. Windows 표시 언어에 따라 한국어나 영어로 표시되고, Windows 테마를
+따릅니다.
 
-"관리자"라고 적은 설정은 컴퓨터 전체의 것이라 관리자만 바꿉니다.
+DSA 설정에서 바꾸는 내용은 모두 `dsa` 명령을 거칩니다. 그래서 명령줄에서도 같은 값을 보고 바꿀 수 있습니다.
+
+```
+dsa settings                        # 모든 설정과 값
+dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이나 off를 받습니다
+```
+
+일부 설정은 PC의 모든 사용자에게 적용되므로 관리자만 바꿀 수 있습니다. DSA 설정은 이런 설정에 방패 아이콘을
+표시하고, 바꿀 때 관리자 권한을 요청합니다. 아래 표에는 "(관리자)"로 표시했습니다.
+
+## 페이지
 
 | 페이지 | 내용 | 명령줄 |
 |---|---|---|
-| 일반 | Android 시작, 중지, 얼리기, 상태와 마지막 오류 | `dsa start`, `dsa stop`, `dsa freeze`, `dsa status` |
-| 메모리 | 메모리 한도(기본 자동), VM 크기, 부분마다 쓰는 양 | `memory-limit`, `dsa memory` |
-| 앱 | 설치된 앱: 세부 정보, 앱마다 Android 설정, 제거 | `dsa apps list`, `info`, `settings`, `uninstall` |
-| 백그라운드에서 실행 중 | 창 없이 실행되는 앱을 열거나 멈춥니다 | `dsa background`, `stop-without-asking` |
-| 위젯 | 바탕 화면 위젯 추가와 제거 | `dsa widgets` |
-| 디스플레이 및 GPU | 창을 그리는 GPU | `render-gpu`(`display`, `integrated`, `discrete` 또는 GPU 이름 일부), `dsa gpus` |
-| Android | Android 버전과 고를 수 있는 버전 | `dsa android version`, `dsa android use` |
-| 업데이트 | DSA와 Android 이미지 업데이트(관리자) | `program-updates`, `image-updates`, `dsa update` |
-| 기기 정보 | Android가 앱에 알리는 제조사, 모델, 지문 | `dsa settings device`, `device.<field>`, `dsa settings reset device` |
-| 네트워크 | Android의 네트워크 연결 방식, 주소, DNS | `dsa network`, `advanced-networking` |
-| 고급 | 유휴 시 얼리기, 웹 링크를 Android 앱에서 열기, 클립보드, 공유 폴더, 개발자 모드와 adb 주소, 추적 스위치(관리자), 로그 폴더 | `freeze`, `links-in-android`, `clipboard`, `file-sharing`, `shared-folders`, `developer-mode`, `adb-port`, `input-trace`, `resize-trace` |
-| Android 로그 | Android의 실시간 로그 | `dsa logcat` |
-| 정보 | 버전과 라이선스 | |
+| **일반** | Android 상태, **시작**, **종료**, **지금 안드로이드 일시 정지**, 마지막 문제, **내 로그 폴더 열기** | `dsa status`, `dsa start`, `dsa stop`, `dsa freeze` |
+| **메모리** | **메모리 한도**, Android 가상 머신의 크기, 부분별 사용량 | `memory-limit`, `dsa memory` |
+| **앱** | 설치된 앱: **열기**, **앱 정보**, **제거**, **크기 조절**, 창이 열리는 크기 | `dsa apps`, `dsa app-window` |
+| **백그라운드에서 실행 중** | 창 없이 실행 중인 앱: **열기**, **중지**, 중지 전에 물을지 여부 | `dsa background`, `stop-without-asking` |
+| **위젯** | 바탕 화면의 위젯, **바탕 화면에 추가** | `dsa widgets` |
+| **디스플레이 및 GPU** | **렌더링 GPU**, **창 관리자 다시 시작** | `render-gpu`, `dsa gpus` |
+| **안드로이드** | 실행 중인 버전, **사용할 버전**(관리자) | `dsa android version`, `dsa android use` |
+| **업데이트** | **DSA 자동 업데이트**(관리자), **안드로이드 이미지 자동 업데이트**(관리자), **지금 설치** | `program-updates`, `image-updates`, `dsa update` |
+| **기기 정보** | Android가 앱에 알리는 제조사, 모델, 빌드 지문 | `dsa settings device`, `device.<field>` |
+| **네트워크** | Android의 네트워크 연결 방식, 주소, DNS 서버, 게이트웨이, **고급 네트워킹** | `dsa network`, `advanced-networking` |
+| **고급** | 클립보드, 파일, 웹 링크, 유휴 상태 일시 정지, 초기화, ARM 앱, 개발자 모드, 추적(관리자), 로그 폴더 | 아래 표 |
+| **Android 로그** | Android 실시간 로그, **진단 정보 저장** | `dsa logcat`, `dsa logs collect` |
+| **정보** | 버전, 라이선스, 소스 코드 | |
 
-참고:
+## 고급 페이지
 
-- `advanced-networking`(기본값 꺼짐)은 Android를 별도 NAT 네트워크 뒤가 아니라 내 네트워크의 독립 기기로
-  둡니다. 다음에 Android를 시작할 때 적용됩니다.
-- 기기 정보 변경은 다음에 Android를 시작할 때 적용됩니다.
-- `arm-translation off`는 설치된 ARM 변환 패키지를 남겨 두되 Android를 그것 없이 시작합니다.
+| 설정 | 기본값 | 명령줄 |
+|---|---|---|
+| **안드로이드와 클립보드 공유** | 켬 | `clipboard` |
+| **Windows 폴더를 안드로이드와 공유** | 켬 | `file-sharing` |
+| **공유할 폴더** | 여섯 폴더 모두 | `shared-folders` |
+| **유휴 상태에서 안드로이드 일시 정지** | 끔 | `freeze` |
+| **안드로이드 앱에서 웹 링크 열기** | 끔 | `links-in-android` |
+| **안드로이드 데이터 초기화** | | `dsa reset-data` |
+| **ARM 전용 앱 실행** | | `arm-translation` |
+| **개발자 모드** | 끔 | `developer-mode`, `adb-port` |
+| **입력 추적**(관리자) | 끔 | `input-trace` |
+| **크기 조정 추적**(관리자) | 끔 | `resize-trace` |
+
+## 바꾼 설정이 적용되는 때
+
+- **렌더링 GPU**: 창 관리자가 다시 시작할 때 적용됩니다. 다음에 로그인하거나 **창 관리자 다시 시작**을 누르면
+  됩니다.
+- **메모리 한도**, **기기 정보**, **고급 네트워킹**, **ARM 전용 앱 실행**, Android 버전: 다음에 Android를
+  시작할 때 적용됩니다. Android를 다시 시작하려면 **일반** 페이지에서 종료한 다음 앱을 엽니다.
+- 나머지: 바로 적용됩니다.
+
+## 명령줄에서 쓰는 값
+
+- `render-gpu`: `display`(주 모니터의 GPU, 기본값), `integrated`, `discrete`, 또는 `dsa gpus`가 보여 주는
+  GPU 이름의 일부
+- `memory-limit`: `auto`(기본값. 최대 3 GB까지 늘어나며 PC의 메모리를 넘지 않습니다), 또는 `4g`, `3072`(MiB)
+  같은 크기
+- `shared-folders`: `all`, `none`, 또는 쉼표로 구분한 폴더 이름(예: `Documents,Pictures`)
+- `adb-port`: 1부터 65535까지의 TCP 포트. 기본값은 58526입니다.
+- `device.<field>`: `manufacturer`, `brand`, `model`, `device`, `name`, `characteristics`,
+  `fingerprint`, 또는 `fingerprint.release` 같은 지문의 일부. `dsa settings reset device`는 모든 값을
+  되돌립니다.
 
 ---
 

@@ -1,55 +1,64 @@
 # Memory and idle behaviour
 
-Desktop Subsystem for Android™ (DSA) is built so that an idle Android costs your computer
-little, and memory Android no longer uses goes back to your computer.
+Desktop Subsystem for Android™ (DSA) gives memory back to your PC while Android runs, not
+only when it stops. There is nothing to set up for this. This page explains what happens,
+and how to see it.
+
+## See how much memory Android uses
+
+Open the **Memory** page of DSA Settings, or run `dsa memory`. Both show:
+
+- **On this PC**: what Android's virtual machine, the window manager and each app window
+  hold.
+- **Inside Android**: memory in use, cache, compressed memory and the largest processes.
+  Android reports this a few minutes after it starts.
 
 ## Doze, the idle state
 
 When every Android window has been closed or minimized for 30 seconds, Android's screen
-goes off and Android enters Doze, as a phone does in a pocket. Notifications, alarms and
-widgets keep working in Doze's short maintenance windows, and the CPU rests in between.
-`dsa status` then says `Dozing`. Showing any Android window wakes it at once.
+turns off and Android enters Doze, as a phone does in a pocket.
 
-Android also follows your computer's sleep: it saves its state before the computer
-sleeps and sets its clock when it wakes. Its battery follows your computer's battery.
+- Notifications, alarms and widgets keep working in Doze. The CPU rests in between.
+- `dsa status` says `Dozing`. The **General** page of DSA Settings says **Dozing (idle)**.
+- Showing any Android window wakes Android at once.
+
+Android also follows your PC's sleep. It saves its state before the PC sleeps and sets its
+clock when the PC wakes.
 
 ## Freezing (off by default)
 
-Freezing stops Android's processes altogether, which also stops notifications, alarms and
-widget updates. That is why it is never done by default.
+Freezing stops every process in Android. It uses no CPU then, but notifications, alarms and
+widgets stop too. That is why DSA never freezes Android unless you ask.
 
-- `dsa freeze` freezes Android now.
-- "Freeze when idle" on the **Advanced** page of DSA Settings, or
-  `dsa settings set freeze on`, freezes it after 30 minutes in Doze.
-- Showing a window, or input in one, resumes it.
+- To freeze now: **Freeze** under **Freeze Android now** on the **General** page, or
+  `dsa freeze`.
+- To freeze after 30 minutes in Doze: turn on **Freeze Android when idle** on the
+  **Advanced** page, or `dsa settings set freeze on`.
+- Opening an Android window, or input in one, resumes Android.
 
-## Memory goes back continuously
+## How memory goes back
 
-- The VM's memory is taken from your computer only when Android first touches it, and the
-  pages Android frees are reported and returned to your computer while it runs, not only
-  when it stops.
-- When no app has been used for a minute, Android moves cold pages to compressed memory
-  and drops clean caches, so that memory is free to return. Cached apps are ended when
-  Android goes to sleep with no window open.
-- A minimized window's program, and the window manager after 30 seconds without a shown
-  window, give up the memory they are not using.
+- Android's virtual machine takes memory from your PC only when Android first uses it.
+- Memory that Android frees is returned to your PC while Android runs.
+- When an app's last window closes, Android ends that app's processes, so their memory goes
+  back within seconds. An app with a widget on the desktop, or one still working in the
+  background (such as a music player), keeps running.
+- While no app window is open, Android drops its file caches and moves idle memory to
+  compressed memory, so more of it can go back.
+- The window manager gives back the memory it does not use 30 seconds after the last app
+  window closes.
 
-There is no fixed memory cap to set: the memory limit is automatic by default. You can set
-one on the **Memory** page of DSA Settings or with `dsa settings set memory-limit 4g`
-(`auto` puts it back).
+## Memory limit
 
-## Seeing it
+The limit is **Automatic** by default: Android can grow to 3 GB, and never past your PC's
+memory. To set another limit, use **Memory limit** on the **Memory** page, or:
 
-`dsa memory` shows what your Android takes on the host (the VM, the window manager and
-each app window) and inside Android (memory in use, cache, app memory, compressed swap,
-the largest processes). The **Memory** page of DSA Settings shows the same.
+```
+dsa settings set memory-limit 4g     # 4 GiB
+dsa settings set memory-limit auto   # back to automatic
+```
 
-## Goals (not yet met)
-
-The goal with one simple app open is that all of DSA's processes together use at most
-400 MiB of private memory, and at most 250 MiB in the end, with each further app adding
-at most 80 MiB. These are goals; they are being measured and worked on.
-
+A new limit applies at the next start of Android.
 
 ---
 

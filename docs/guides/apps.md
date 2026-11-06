@@ -1,85 +1,110 @@
 # Apps and windows
 
-In Desktop Subsystem for Android™ (DSA), every Android app task is a real desktop window.
-There is no emulator frame showing a whole phone screen. This page describes the Windows
-host; the Linux and macOS hosts are in progress.
+Each Android app task opens as a desktop window of its own, with its own taskbar button.
+There is no emulator frame around a phone screen. This page describes Desktop Subsystem
+for Android™ (DSA) on Windows.
 
-## Opening an app
+## Open an app
 
-- **Start menu.** Each app Android lists gets a Start menu shortcut under its own name and
-  icon, so Windows search finds it, even while Android is stopped. Opening it starts the
-  window manager and Android first when they are not running.
-- **Command line.** `dsa apps list` shows the installed apps, and
+- **Start menu.** Each installed app has a Start menu entry with its own name and icon, so
+  Windows search finds it. Opening it starts Android first when Android is not running.
+- **DSA Settings.** On the **Apps** page, select **Open** next to the app.
+- **Command line.** `dsa apps list` lists the installed apps with their packages.
   `dsa launch <package>` opens one, for example `dsa launch com.android.settings`.
-- **Windows Settings.** Each app is listed under Settings > Apps > Installed apps, where it
-  can be uninstalled like any other program.
 
-A shortcut whose name another program already uses gets the package after it, such as
-`Clock (com.example.clock)`. DSA only changes or removes shortcuts it made itself.
+When another program's Start menu entry already has the app's name, DSA adds the package to
+the name, such as `Clock (com.example.clock)`. DSA changes or removes only the entries it
+made.
 
-## Windows
+## Work with app windows
 
-- Each task has its own window, taskbar button and Alt+Tab entry, with the app's own name
-  and icon. Task Manager lists each app's window program under the app's name.
-- Windows 11 caption buttons, snap layouts and live resize work. Resizing does not
-  recreate the app, and output stays sharp at every display scale.
-- Mouse, touch, pen (pressure, eraser, barrel button) and the keyboard work, including the
-  Windows input method for Korean and other languages. There is no Android keyboard app:
-  text goes from your input method to the app directly.
-- Closing a window asks Android to end its task.
-- `dsa tasks` lists the tasks that have a window. `dsa stop-app <package>` stops an app.
-- `dsa app-window <package> --fixed-size on` keeps an app's windows at one size, and
-  `--start-size 1280x800` (or `auto`) sets the size they open at.
-  `dsa app-window <package> reset` puts both back.
+- Each task has its own window, taskbar button and Alt+Tab entry, with the app's name and
+  icon. Task Manager lists each app under its own name.
+- Snap layouts, the Windows 11 title bar buttons and live resizing work. Resizing does not
+  restart the app.
+- Mouse, touch, pen (pressure, eraser and barrel button) and keyboard all work. Text comes
+  from your Windows input method, including Korean and other languages; there is no Android
+  keyboard app.
 - Screen readers such as Narrator read the app through UI Automation.
+- Closing a window asks Android to end that task.
+
+## Set an app's window size
+
+On the **Apps** page of DSA Settings:
+
+- Turn off **Resizable** to keep the app's windows at the size they open at.
+- Pick the size the app's windows open at: the size Android chooses, or a phone or tablet
+  size in portrait or landscape.
+
+The change applies to the next window the app opens. From the command line:
+
+```
+dsa app-window <package> --fixed-size on        # cannot be resized or maximized
+dsa app-window <package> --start-size 1280x800  # opens at this size; auto lets Android choose
+dsa app-window <package> reset                  # back to the defaults
+```
 
 ## Notifications
 
-Android notifications show as Windows notifications under the app's name and icon.
-Clicking one opens the app. Dismissing one dismisses it in Android too, unless the app
-keeps it. Notifications keep arriving while Android is in Doze (see [Memory](memory.md)).
+Android notifications show as Windows notifications, with the app's name and icon.
+
+- Select a notification to open the app.
+- Dismiss it, and it is dismissed in Android too, unless the app keeps it shown.
+- Notifications keep arriving while Android is in Doze. See [Memory](memory.md).
 
 ## Apps running in the background
 
-An app that keeps running with no window (because it runs a foreground service, such as a
-music player) shows as an icon in the notification area, with the app's icon and its
-notification as the tooltip.
+An app that keeps running after its window closes, such as a music player, shows as an
+icon in the notification area. Its tooltip is the app's notification.
 
-- Click it to open the app.
-- Right-click it for Open, the notification's actions, and Stop. Stop asks first; "Do not
-  ask again" turns on the `stop-without-asking` setting.
-- Apps that play media get the media keys and Windows' media flyout.
-- The "Running in the background" page of DSA Settings, and `dsa background`, list them;
-  `dsa background open <package>` and `dsa background stop <package>` act on one.
+- Select the icon to open the app.
+- Right-click it for **Open**, the notification's own actions, and **Stop**.
+- **Stop** asks first. Tick **Do not ask again** to skip the question from then on. To be
+  asked again, turn on **Ask before stopping an app from the notification area** on the
+  **Running in the background** page of DSA Settings.
+- An app that plays media also works with the media keys and the Windows media controls.
+
+The **Running in the background** page of DSA Settings lists these apps, with **Open** and
+**Stop** for each. From the command line: `dsa background`, `dsa background open <package>`
+and `dsa background stop <package>`.
 
 ## Widgets on the desktop
 
-Android widgets can sit on your desktop, each in a window of its own. A widget stays
-below other windows, stays when you show the desktop, and is not in the taskbar or
-Alt+Tab.
+An Android widget can sit on your desktop in a window of its own. It stays below other
+windows, stays when you show the desktop, and is not in the taskbar or Alt+Tab.
 
-1. Open the **Widgets** page of DSA Settings and add a widget, or use
-   `dsa widgets list` and `dsa widgets add <provider>`.
-2. Drag the band along its top to move it, and its edges to resize it. DSA remembers where
-   you put it.
-3. Right-click it for **Resize** (the sizes the widget allows) and **Remove**.
+1. Open the **Widgets** page of DSA Settings.
+2. Under **Widgets your apps offer**, select **Add to desktop** next to a widget. If the app
+   asks you to set the widget up, its setup opens in a window.
+3. Drag the band along the widget's top to move it. Drag its edges to resize it. DSA
+   remembers where you put it.
+4. Right-click the widget for **Resize**, to pick one of the sizes it allows, and
+   **Remove**.
 
-`dsa widgets remove <id>` removes one from the command line.
+From the command line: `dsa widgets list`, `dsa widgets add <provider>` and
+`dsa widgets remove <id>`.
 
-## Links and clipboard
+## Links and the clipboard
 
-- Web links that apps open go to your default browser. Links an installed app has
-  verified as its own open in that app. To keep every link in Android, turn on "Open web
-  links in Android apps" (`dsa settings set links-in-android on`).
-- Copied text is shared both ways. Turn it off with the switch in DSA Settings or
-  `dsa settings set clipboard off`.
+- A web link you tap in an Android app opens in your default browser. A link that an
+  installed app has verified as its own opens in that app.
+- To open every web link in Android apps instead, turn on **Open web links in Android
+  apps** on the **Advanced** page of DSA Settings (`dsa settings set links-in-android on`).
+- Text you copy is shared both ways between Windows and Android. To stop it, turn off
+  **Share the clipboard with Android** on the **Advanced** page
+  (`dsa settings set clipboard off`).
 
-## ARM-only apps
+## Apps built only for ARM
 
-On x64, apps built only for ARM need an ARM translation package, which is installed
-separately: `dsa arm-translation install <folder>`. `dsa arm-translation status` says
-what is installed. DSA does not ship one.
+On an x64 PC, an app with code only for ARM processors needs an ARM translation package.
+DSA does not include one.
 
+1. Install a package from its folder: `dsa arm-translation install <folder>`.
+2. Restart Android: stop it on the **General** page of DSA Settings, then open an app.
+
+`dsa arm-translation status` says what is installed. The **Run apps built only for ARM**
+switch on the **Advanced** page turns the package on or off without removing it. Only
+64-bit ARM apps (`arm64-v8a`) can run.
 
 ---
 

@@ -2,25 +2,28 @@
 
 ## Windows
 
-Uninstall Desktop Subsystem for Android™ (DSA) from Settings > Apps > Installed apps, or
-run setup again and choose **Uninstall**.
+Uninstall Desktop Subsystem for Android™ (DSA) in either way:
 
-Uninstalling removes, for every user, signed in or not:
+- Windows **Settings** > **Apps** > **Installed apps**: find Desktop Subsystem for Android,
+  then select **Uninstall**.
+- Run setup again and select **Uninstall**.
+
+Uninstalling removes these, for every user of the PC, signed in or not:
 
 - the program, the `DsaHost` service, the `dsa` command, DSA Settings and the APK Installer;
-- the downloaded Android images and setup files;
-- the Start menu shortcuts of Android apps, their entries in Installed apps, the
-  "Android" entry in Explorer, and the `.apk` association and context menu entries;
+- the downloaded Android images and updates;
+- the Start menu entries of Android apps and their entries in **Installed apps**;
+- **Android** in File Explorer, the `.apk` file association, and the context menu entries;
 - DSA's settings and logs.
 
 It **keeps** each user's Android disk, `%LOCALAPPDATA%\DSA\android.vhdx`, so a later
-install finds your apps and data again. To start fresh instead, run `dsa reset-data --yes`
-before uninstalling, or delete that file afterwards.
+install finds your apps and data again. To remove your data too, run `dsa reset-data --yes`
+before you uninstall, or delete that file afterwards.
 
-A Start menu moved elsewhere by folder redirection keeps its Android shortcuts, because
-the uninstaller cannot read another user's redirection. Delete them by hand.
+If folder redirection moved a user's Start menu, that user's Android app entries stay,
+because the uninstaller looks only in the default place. Delete them by hand.
 
-Your WSL setup is untouched, because DSA never changed it.
+Your WSL setup is untouched, because DSA never changes it.
 
 ## Linux (not released yet)
 
@@ -29,7 +32,7 @@ sudo apt remove desktop-subsystem-for-android    # Debian, Ubuntu
 sudo dnf remove desktop-subsystem-for-android    # Fedora
 ```
 
-Removing the package also removes the package repository entry it registered.
+Removing the package also removes the package repository entry it added.
 
 ---
 
