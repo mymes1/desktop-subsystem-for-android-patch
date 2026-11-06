@@ -152,10 +152,16 @@ jobs:
           # build.sh names the kernel Image-<release>; the arm64 image takes it as Image.
           mv .scratch/kernel-out/Image-* .scratch/kernel-out/Image
 
+      # The arm64 image ships this kernel, so its corresponding source goes with it too.
+      - name: Bundle the kernel source
+        run: dsa/kernel/source-bundle.sh .scratch/kernel-out/kernel-source.tar.gz .scratch/kernel-out/config-*
+
       - uses: actions/upload-artifact@v4
         with:
           name: kernel-arm64
-          path: .scratch/kernel-out/Image
+          path: |
+            .scratch/kernel-out/Image
+            .scratch/kernel-out/kernel-source.tar.gz
           if-no-files-found: error
 
   channeld:
