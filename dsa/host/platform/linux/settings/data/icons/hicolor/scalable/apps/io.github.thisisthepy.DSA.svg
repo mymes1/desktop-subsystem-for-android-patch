@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Placeholder DSA symbol, in the Adwaita style, until the owner chooses the design. -->
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#62a0ea"/>
+      <stop offset="1" stop-color="#1c71d8"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="16" width="104" height="100" rx="20" fill="#1a5fb4"/>
+  <rect x="12" y="12" width="104" height="100" rx="20" fill="url(#base)"/>
+  <rect x="32" y="34" width="64" height="52" rx="8" fill="#ffffff"/>
+  <rect x="32" y="34" width="64" height="12" rx="6" fill="#deddda"/>
+  <circle cx="64" cy="66" r="10" fill="#1c71d8"/>
+</svg>

@@ -1,0 +1,559 @@
+//! DSA Settings for Linux, without a display: the requests it makes through the local API,
+//! what it reads from the answers, what its pages show, its translations and its desktop
+//! files.
+
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+
+use dsa_settings_linux::api::{Dsa, Failure, Problem};
+use dsa_settings_linux::model::{Client, LogLine, Memory, Outcome, Settings, State, Status};
+use dsa_settings_linux::pages::Page;
+use dsa_settings_linux::view;
+use serde_json::json;
+
+/// A stand-in for the service: it records each command line and answers with `answer`.
+struct Fake {
+    calls: Mutex<Vec<Vec<String>>>,
+    answer: Mutex<Result<String, Failure>>,
+}
+
+impl Fake {
+    fn new(answer: serde_json::Value) -> Arc<Fake> {
+        Arc::new(Fake {
+            calls: Mutex::new(Vec::new()),
+            answer: Mutex::new(Ok(answer.to_string())),
+        })
+    }
+
+    fn failing(failure: Failure) -> Arc<Fake> {
+        Arc::new(Fake {
+            calls: Mutex::new(Vec::new()),
+            answer: Mutex::new(Err(failure)),
+        })
+    }
+
+    fn calls(&self) -> Vec<Vec<String>> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl Dsa for Fake {
+    fn run(&self, args: &[String]) -> Result<String, Failure> {
+        self.calls.lock().unwrap().push(args.to_vec());
+        self.answer.lock().unwrap().clone()
+    }
+}
+
+fn line(args: &[&str]) -> Vec<String> {
+    args.iter().map(|a| a.to_string()).collect()
+}
+
+fn client(fake: &Arc<Fake>, elevated: &Arc<Fake>) -> Client {
+    Client::new(fake.clone(), elevated.clone(), true)
+}
+
+fn settings_json() -> serde_json::Value {
+    json!({
+        "render_gpu": "display", "freeze": false, "clipboard": true,
+        "program_updates": false, "image_updates": true,
+        "image_updates_available": true, "version": "0.1.0",
+        "log_dir": "/var/lib/dsa/logs", "android_version": "17.0.0-1",
+        "developer_mode": false, "adb_port": 58526, "memory_limit_mb": 0,
+        "shared_folders": ["Documents", "Pictures"], "advanced_networking": false,
+        "network": { "mode": "nat", "addresses": ["10.0.2.15"], "dns_servers": ["10.0.2.3"],
+                     "gateway": "10.0.2.2", "problem": null }
+    })
+}
+
+fn repo() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../..")
+}
+
+fn crate_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+#[test]
+fn fr17_the_app_has_every_page_the_windows_settings_app_has() {
+    let main_window = std::fs::read_to_string(
+        repo().join("dsa/host/platform/windows/settings/DsaSettings/MainWindow.xaml"),
+    )
+    .unwrap();
+    let windows_pages = main_window.matches("<ui:NavigationViewItem ").count();
+    assert_eq!(
+        Page::ALL.len(),
+        windows_pages,
+        "the Windows settings app has {windows_pages} pages and this one {}",
+        Page::ALL.len()
+    );
+    for page in Page::ALL {
+        assert_eq!(Page::from_id(page.id()), Some(page));
+    }
+}
+
+#[test]
+fn fr17_changes_go_through_the_local_api_with_the_same_command_lines() {
+    let fake = Fake::new(settings_json());
+    let elevated = Fake::new(settings_json());
+    let c = client(&fake, &elevated);
+    c.set("render-gpu", "integrated").unwrap();
+    c.switch("freeze", true).unwrap();
+    c.set_memory_limit(0).unwrap();
+    c.set_memory_limit(8192).unwrap();
+    c.set_shared_folders(&[]).unwrap();
+    c.set_shared_folders(&["Documents".into(), "Music".into()])
+        .unwrap();
+    assert_eq!(
+        fake.calls(),
+        vec![
+            line(&["settings", "set", "render-gpu", "integrated", "--json"]),
+            line(&["settings", "set", "freeze", "on", "--json"]),
+            line(&["settings", "set", "memory-limit", "auto", "--json"]),
+            line(&["settings", "set", "memory-limit", "8192", "--json"]),
+            line(&["settings", "set", "shared-folders", "none", "--json"]),
+            line(&["settings", "set", "shared-folders", "Documents,Music", "--json"]),
+        ]
+    );
+    assert!(elevated.calls().is_empty());
+}
+
+#[test]
+fn fr17_settings_of_every_user_ask_for_an_administrator() {
+    let fake = Fake::new(settings_json());
+    let elevated = Fake::new(settings_json());
+    let c = client(&fake, &elevated);
+    c.set_machine("image-updates", false).unwrap();
+    c.set_machine("input-trace", true).unwrap();
+    c.use_android("16", true).ok();
+    assert!(fake.calls().is_empty());
+    assert_eq!(
+        elevated.calls(),
+        vec![
+            line(&["settings", "set", "image-updates", "off", "--json"]),
+            line(&["settings", "set", "input-trace", "on", "--json"]),
+            line(&["android", "use", "16", "--erase-data", "--json"]),
+        ]
+    );
+
+    // An administrator's app asks the service directly.
+    let direct = Client::new(fake.clone(), elevated.clone(), false);
+    direct.set_machine("resize-trace", true).unwrap();
+    assert_eq!(
+        fake.calls(),
+        vec![line(&["settings", "set", "resize-trace", "on", "--json"])]
+    );
+}
+
+#[test]
+fn fr17_the_windows_settings_app_makes_the_same_requests() {
+    let service = std::fs::read_to_string(
+        repo().join("dsa/host/platform/windows/settings/DsaSettings.Core/DsaService.cs"),
+    )
+    .unwrap();
+    for request in [
+        r#""start", "--wait", "--timeout", "360""#,
+        r#""stop", "--wait", "--timeout", "120""#,
+        r#""settings", "set", name, value"#,
+        r#""reset-data", "--yes""#,
+        r#""files", "open""#,
+        r#""widgets", "list""#,
+        r#""background", "list""#,
+        r#""logs", "collect", "-o", path"#,
+    ] {
+        assert!(service.contains(request), "DsaService.cs no longer makes {request}");
+    }
+    let fake = Fake::new(json!({}));
+    let c = client(&fake, &fake);
+    c.start().unwrap();
+    c.stop().unwrap();
+    c.reset_data().unwrap();
+    c.open_android_files().unwrap();
+    c.widgets().unwrap();
+    c.background().unwrap();
+    c.app_windows().unwrap();
+    c.set_app_window("com.example", true, Some((412, 915)))
+        .unwrap();
+    c.set_app_window("com.example", false, None).unwrap();
+    assert_eq!(
+        fake.calls(),
+        vec![
+            line(&["start", "--wait", "--timeout", "360", "--json"]),
+            line(&["stop", "--wait", "--timeout", "120", "--json"]),
+            line(&["reset-data", "--yes", "--json"]),
+            line(&["files", "open", "--json"]),
+            line(&["widgets", "list", "--json"]),
+            line(&["background", "list", "--json"]),
+            line(&["app-window", "--json"]),
+            line(&[
+                "app-window",
+                "com.example",
+                "--fixed-size",
+                "on",
+                "--start-size",
+                "412x915",
+                "--json"
+            ]),
+            line(&[
+                "app-window",
+                "com.example",
+                "--fixed-size",
+                "off",
+                "--start-size",
+                "auto",
+                "--json"
+            ]),
+        ]
+    );
+}
+
+#[test]
+fn fr17_the_device_identity_is_set_and_reset_through_the_service() {
+    let fake = Fake::new(json!({
+        "chosen": { "model": "Pixel" },
+        "effective": { "model": "Pixel", "brand": "DSA" }
+    }));
+    let c = client(&fake, &fake);
+    let identity = c.set_identity("model", "Pixel").unwrap();
+    assert_eq!(identity.chosen("model"), "Pixel");
+    assert_eq!(identity.effective("brand"), "DSA");
+    c.set_identity("fingerprint.tags", "").unwrap();
+    c.reset_identity().unwrap();
+    assert_eq!(
+        fake.calls(),
+        vec![
+            line(&["settings", "set", "device.model", "Pixel", "--json"]),
+            line(&["settings", "reset", "device.fingerprint.tags", "--json"]),
+            line(&["settings", "reset", "device", "--json"]),
+        ]
+    );
+    assert!(view::identity_problem("brand", "has space").is_some());
+    assert!(view::identity_problem("brand", "").is_none());
+    assert!(view::identity_problem("brand", "DSA").is_none());
+}
+
+#[test]
+fn fr17_settings_are_read_as_the_service_reports_them() {
+    let settings = Settings::read(&settings_json());
+    assert!(settings.image_updates);
+    assert!(settings.clipboard);
+    assert_eq!(settings.shared_folders, vec!["Documents", "Pictures"]);
+    assert_eq!(settings.adb_connect(), "adb connect 127.0.0.1:58526");
+    assert_eq!(
+        settings.network.as_ref().unwrap().addresses,
+        vec!["10.0.2.15"]
+    );
+
+    // A service from before a switch existed leaves it at its default.
+    let old = Settings::read(&json!({ "render_gpu": "display" }));
+    assert!(old.clipboard);
+    assert!(old.file_sharing);
+    assert_eq!(old.shared_folders.len(), 6);
+    assert_eq!(old.adb_port, 58526);
+}
+
+#[test]
+fn fr17_the_general_page_offers_what_the_state_allows() {
+    let status = |state: &str| Status::read(&json!({ "state": state }));
+    let stopped = view::controls(Some(&status("Stopped")));
+    assert!(stopped.can_start && !stopped.can_stop && !stopped.can_freeze);
+    let active = view::controls(Some(&status("Active")));
+    assert!(!active.can_start && active.can_stop && active.can_freeze);
+    let frozen = view::controls(Some(&status("Frozen")));
+    assert!(frozen.can_stop && !frozen.can_freeze);
+    assert_eq!(status("Dozing").state, State::Dozing);
+    assert_eq!(status("nonsense").state, State::Unknown);
+    assert_eq!(view::controls(None), view::controls(Some(&status("?"))));
+}
+
+#[test]
+fn fr17_the_memory_page_shows_the_vm_and_the_guest_breakdown() {
+    let memory = Memory::read(&json!({
+        "host": [
+            { "role": "vm", "pid": 10, "working_set_kb": 1048576, "private_kb": 1000 },
+            { "role": "window manager", "pid": 11, "working_set_kb": 2048, "private_kb": 1024 }
+        ],
+        "host_total_kb": 1050624,
+        "vm_beyond_guest_kb": 524288,
+        "guest": {
+            "mem_total_kb": 4194304, "mem_available_kb": 3145728, "mem_free_kb": 1048576,
+            "total_pss_kb": 819200, "cached_kb": 100, "buffers_kb": 24,
+            "kernel": { "slab_unreclaimable_kb": 10, "reserved_at_boot_kb": 2048,
+                        "mem_online_kb": 4194304, "cma_total_kb": 0 },
+            "top_processes": [ { "pid": 500, "name": "system_server", "pss_kb": 204800 } ],
+            "age_seconds": 30
+        }
+    }));
+    assert_eq!(view::vm_size_kb(&memory), Some(1048576));
+    let host = view::host_rows(&memory);
+    assert_eq!(host.len(), 2);
+    assert_eq!(host[0].size, "1.0 GB");
+    let guest = memory.guest.as_ref().unwrap();
+    let rows = view::guest_rows(guest);
+    assert_eq!(rows[0].size, "800 MB");
+    assert_eq!(rows[1].size, "124 KB");
+    assert_eq!(view::kernel_rows(guest).len(), 7);
+    assert_eq!(view::process_rows(guest)[0].label, "system_server");
+    assert!((view::guest_used_fraction(guest) - 0.25).abs() < 1e-9);
+
+    let limits = view::memory_limit_choices(5000);
+    assert_eq!(limits[0].1, 0);
+    assert!(limits.iter().any(|(_, mb)| *mb == 5000));
+    assert!(limits.windows(2).skip(1).all(|w| w[0].1 < w[1].1));
+}
+
+#[test]
+fn fr17_the_android_page_warns_before_moving_to_an_older_version() {
+    let info = dsa_settings_linux::model::AndroidVersion::read(&json!({
+        "version": "17.0.0-1", "android_major": 17, "channel": "latest",
+        "supported_majors": [16, 17], "target_major": 17
+    }));
+    let choices = view::android_choices(&info);
+    let channels: Vec<&str> = choices.iter().map(|c| c.channel.as_str()).collect();
+    assert_eq!(channels, vec!["latest", "17", "16"]);
+    assert_eq!(view::android_choice_index(&info), 0);
+    assert_eq!(view::android_move(&info, &choices[1]), view::AndroidMove::Same);
+    assert_eq!(view::android_move(&info, &choices[2]), view::AndroidMove::Down);
+}
+
+#[test]
+fn fr17_the_apps_page_searches_and_reads_refusals() {
+    let apps: Vec<_> = [("com.b", "Beta"), ("com.a", "alpha"), ("org.c", "Gamma")]
+        .iter()
+        .map(|(package, label)| {
+            dsa_settings_linux::model::App::read(&json!({ "package": package, "label": label }))
+        })
+        .collect();
+    let all: Vec<&str> = view::filter_apps(&apps, "")
+        .iter()
+        .map(|a| a.label.as_str())
+        .collect();
+    assert_eq!(all, vec!["alpha", "Beta", "Gamma"]);
+    assert_eq!(view::filter_apps(&apps, "COM.").len(), 2);
+    assert_eq!(view::apps_count(3, 2, true), "2 of 3 apps");
+
+    let refused = Outcome::refusal(&Failure::new(
+        Problem::Refused,
+        "not uninstalled (system-app): it is part of Android",
+    ))
+    .unwrap();
+    assert_eq!(refused.status, "system-app");
+    assert!(Outcome::refusal(&Failure::new(Problem::Refused, "something else")).is_none());
+
+    let fake = Fake::failing(Failure::new(
+        Problem::Refused,
+        "not installed (downgrade): newer version installed",
+    ));
+    let outcome = client(&fake, &fake).install("/tmp/a.apk").unwrap();
+    assert!(!outcome.done);
+    assert_eq!(outcome.status, "downgrade");
+
+    assert_eq!(view::start_size_index(None), Some(0));
+    let phone = dsa_settings_linux::model::AppWindow::read(
+        &json!({ "package": "a", "start_size": [412, 915] }),
+    );
+    assert_eq!(view::start_size_index(Some(&phone)), Some(1));
+}
+
+#[test]
+fn fr17_problems_are_told_apart() {
+    let unreachable = Failure::from_client("dsa: cannot reach the DSA service at /run/dsa/host.sock");
+    assert_eq!(unreachable.problem, Problem::ServiceUnreachable);
+    assert!(!unreachable.detail.starts_with("dsa: "));
+    assert_eq!(Failure::from_client("no").problem, Problem::Refused);
+    let fake = Fake::new(json!(null));
+    let fake2 = Arc::new(Fake {
+        calls: Mutex::new(Vec::new()),
+        answer: Mutex::new(Ok("not json".into())),
+    });
+    assert!(client(&fake, &fake).status().is_ok());
+    assert_eq!(
+        client(&fake2, &fake2).status().unwrap_err().problem,
+        Problem::Unreadable
+    );
+}
+
+#[test]
+fn fr17_shared_folders_keep_the_service_order() {
+    let now = vec!["Pictures".to_string(), "Documents".to_string()];
+    assert_eq!(
+        view::toggle_folder(&now, "Downloads", true),
+        vec!["Documents", "Downloads", "Pictures"]
+    );
+    assert_eq!(view::toggle_folder(&now, "Pictures", false), vec!["Documents"]);
+}
+
+#[test]
+fn fr17_the_log_page_filters_pauses_and_keeps_the_newest_lines() {
+    let record = |message: &str| {
+        json!({ "time": "10:00:00.000", "priority": "I", "tag": "Tag", "pid": 1, "tid": 2,
+                "message": message })
+        .to_string()
+    };
+    let parsed = LogLine::parse(&record("hello")).unwrap();
+    assert_eq!(parsed.text(), "10:00:00.000     1     2 I Tag: hello");
+    let mut log = view::LogView::default();
+    assert!(log.add(&record("one")));
+    assert!(!log.add("not a record"));
+    log.set_paused(true);
+    assert!(!log.add(&record("two")));
+    assert_eq!(log.shown().len(), 1);
+    assert!(log.paused_text().contains('1'));
+    log.set_paused(false);
+    assert_eq!(log.shown().len(), 2);
+    log.filter = "TWO".into();
+    assert_eq!(log.shown().len(), 1);
+    log.filter.clear();
+    for i in 0..view::LogView::LIMIT + 10 {
+        log.add(&record(&i.to_string()));
+    }
+    assert_eq!(log.shown().len(), view::LogView::LIMIT);
+    assert_eq!(
+        view::logcat_args("W"),
+        vec!["logcat".to_string(), "--json".into(), "*:W".into()]
+    );
+}
+
+/// Every string literal the pages show: one with a letter that has a space or starts with a
+/// capital, and is not a format string or a name in capitals.
+fn shown_strings() -> Vec<String> {
+    let src = crate_dir().join("src");
+    let mut files = vec![src.join("view.rs"), src.join("pages.rs")];
+    let mut ui: Vec<PathBuf> = std::fs::read_dir(src.join("ui"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    ui.sort();
+    files.extend(ui);
+    let mut found = Vec::new();
+    for file in files {
+        for code in std::fs::read_to_string(&file).unwrap().lines() {
+            let trimmed = code.trim_start();
+            if trimmed.starts_with("//") || code.contains("// not translated") {
+                continue;
+            }
+            let mut parts = code.split('"');
+            parts.next();
+            while let Some(literal) = parts.next() {
+                parts.next();
+                let shown = literal.chars().any(|c| c.is_ascii_alphabetic())
+                    && literal.chars().count() >= 2
+                    && !literal.starts_with('-')
+                    && !literal.contains('\\')
+                    && !literal
+                        .split('{')
+                        .skip(1)
+                        .any(|after| !after.starts_with(|c: char| c.is_ascii_digit()))
+                    && !literal
+                        .chars()
+                        .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+                    && (literal.contains(' ') || literal.starts_with(|c: char| c.is_uppercase()));
+                if shown && !found.iter().any(|f| f == literal) {
+                    found.push(literal.to_string());
+                }
+            }
+        }
+    }
+    found
+}
+
+/// The translations of a `.po` file of single-line entries.
+fn catalogue(path: &Path) -> BTreeMap<String, String> {
+    let text = std::fs::read_to_string(path).unwrap();
+    let unquote = |s: &str| -> String {
+        let s = s.trim();
+        serde_json::from_str::<String>(s).unwrap_or_else(|e| panic!("{s} in {path:?}: {e}"))
+    };
+    let mut entries = BTreeMap::new();
+    let mut id: Option<String> = None;
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("msgid ") {
+            id = Some(unquote(rest));
+        } else if let Some(rest) = line.strip_prefix("msgstr ") {
+            let id = id.take().expect("msgstr without msgid");
+            assert!(
+                entries.insert(id.clone(), unquote(rest)).is_none(),
+                "{id:?} is in {path:?} twice"
+            );
+        }
+    }
+    entries
+}
+
+fn placeholders(text: &str) -> Vec<String> {
+    let mut found: Vec<String> = (0..10)
+        .map(|i| format!("{{{i}}}"))
+        .filter(|p| text.contains(p.as_str()))
+        .collect();
+    found.sort();
+    found
+}
+
+#[test]
+fn fr17_every_string_is_translated_into_korean() {
+    let ko = catalogue(&crate_dir().join("po/ko.po"));
+    let mut wanted = shown_strings();
+    wanted.extend(Page::ALL.iter().map(|p| p.title().to_string()));
+    wanted.extend(
+        dsa_settings_linux::model::ALL_FOLDERS
+            .iter()
+            .map(|f| f.to_string()),
+    );
+    wanted.push("OK".into());
+    let mut missing = Vec::new();
+    for text in &wanted {
+        match ko.get(text) {
+            Some(korean) if !korean.is_empty() => assert_eq!(
+                placeholders(text),
+                placeholders(korean),
+                "the Korean of {text:?} has other placeholders"
+            ),
+            _ => missing.push(text.clone()),
+        }
+    }
+    assert!(missing.is_empty(), "po/ko.po has no Korean for {missing:#?}");
+    let linguas = std::fs::read_to_string(crate_dir().join("po/LINGUAS")).unwrap();
+    assert!(linguas.lines().any(|l| l.trim() == "ko"));
+}
+
+#[test]
+fn fr17_text_never_names_another_platform() {
+    for text in shown_strings() {
+        for mark in ["Windows", "File Explorer", "Start menu", "taskbar", "vmmem"] {
+            assert!(!text.contains(mark), "{text:?} names {mark}");
+        }
+    }
+}
+
+#[test]
+fn fr17_the_desktop_entry_appstream_and_icons_are_there() {
+    let data = crate_dir().join("data");
+    let id = dsa_settings_linux::APP_ID;
+    let desktop = std::fs::read_to_string(data.join(format!("{id}.desktop"))).unwrap();
+    for key in [
+        "[Desktop Entry]",
+        "Type=Application",
+        "Name=DSA Settings",
+        "Name[ko]=",
+        &format!("Icon={id}"),
+        "Exec=/usr/lib/dsa/bin/dsa-settings",
+        "Categories=",
+    ] {
+        assert!(desktop.contains(key), "the desktop entry has no {key}");
+    }
+    let metainfo = std::fs::read_to_string(data.join(format!("{id}.metainfo.xml"))).unwrap();
+    assert!(metainfo.contains(&format!("<id>{id}</id>")));
+    assert!(metainfo.contains(&format!("<launchable type=\"desktop-id\">{id}.desktop</launchable>")));
+    assert!(metainfo.contains(&format!("<icon type=\"stock\">{id}</icon>")));
+    assert!(metainfo.contains("Android is a trademark of Google LLC."));
+    for icon in [
+        format!("icons/hicolor/scalable/apps/{id}.svg"),
+        format!("icons/hicolor/symbolic/apps/{id}-symbolic.svg"),
+        "icons/hicolor/scalable/apps/io.github.thisisthepy.DSA.svg".into(),
+        "icons/hicolor/symbolic/apps/io.github.thisisthepy.DSA-symbolic.svg".into(),
+    ] {
+        let svg = std::fs::read_to_string(data.join(&icon))
+            .unwrap_or_else(|e| panic!("{icon}: {e}"));
+        assert!(svg.contains("<svg"), "{icon} is not an SVG");
+    }
+}
