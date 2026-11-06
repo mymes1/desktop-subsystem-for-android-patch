@@ -348,6 +348,10 @@ pub fn begin(view: &AnyObject, offer: DragOffer, client: HostApiClient) -> Resul
 
 /// The task view's `draggingSession:sourceOperationMaskForDraggingContext:`: a copy, inside
 /// the app or out of it.
+///
+/// # Safety
+///
+/// AppKit calls this as an Objective-C method on a task view; it reads none of its pointers.
 pub unsafe extern "C-unwind" fn source_operations(
     _this: &AnyObject,
     _: Sel,
@@ -358,6 +362,11 @@ pub unsafe extern "C-unwind" fn source_operations(
 }
 
 /// The task view's `draggingSession:endedAtPoint:operation:`.
+///
+/// # Safety
+///
+/// AppKit calls this as an Objective-C method with `this` a live task view; the session
+/// pointer is never dereferenced.
 pub unsafe extern "C-unwind" fn session_ended(
     this: &AnyObject,
     _: Sel,
