@@ -101,7 +101,12 @@ impl<T: FrameTarget> FrameRouter<T> {
         if gone.is_empty() {
             return;
         }
-        if let Some(forget) = self.forget.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(forget) = self
+            .forget
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
             for display in gone {
                 forget(display);
             }
