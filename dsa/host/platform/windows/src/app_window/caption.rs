@@ -265,7 +265,7 @@ unsafe fn title_mask(title: &str, size: (u32, u32), dpi: u32) -> Option<Vec<u8>>
     } else {
         Some(SelectObject(dc, font))
     };
-    SetBkMode(dc, TRANSPARENT);
+    SetBkMode(dc, TRANSPARENT as _);
     // White on the bitmap's black: each pixel's brightness is the text's coverage.
     SetTextColor(dc, 0x00FF_FFFF);
     let mut text: Vec<u16> = title.encode_utf16().collect();
