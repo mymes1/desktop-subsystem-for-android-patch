@@ -567,13 +567,30 @@
                       Execute="deferred"
                       Impersonate="no"
                       Return="ignore" />
+        <!-- A same-version build installs over another build of that version as a major
+             upgrade: its product code is new, so for Windows Installer it is a different
+             product. REINSTALL on the command line (as in REINSTALL=ALL REINSTALLMODE=vamus,
+             the usual way to put a rebuilt package over the same version) would then ask to
+             reinstall features this product does not have yet, so nothing would be installed
+             while the build before it is removed. Before costing, it is cleared when this
+             product is not installed, and the command does what a double-click does. -->
+        <SetProperty Id="REINSTALL" Value="[DSA_NO_VALUE]" Before="CostFinalize" Sequence="both"
+                     Condition="NOT Installed AND REINSTALL" />
+        <!-- The Remove* actions run only on a real uninstall: everything is being removed,
+             not by a newer version taking over (UPGRADINGPRODUCTCODE), not as a repair or
+             reinstall (REINSTALL), and dsa-hostd, which they run, is installed now and being
+             removed. Each runs dsa-hostd from its installed file, which Windows Installer
+             refuses (error 2753) unless the file is installed or being installed; the
+             component states make that hold whatever the command line set. The window
+             managers start only when dsa-hostd is being installed or reinstalled, for the
+             same reason. -->
         <InstallExecuteSequence>
             <Custom Action="StopPrograms" After="StopServices" Condition="NOT UPGRADINGPRODUCTCODE" />
-            <Custom Action="StartWindowManagers" After="RemoveExistingProducts" Condition="NOT REMOVE~=&quot;ALL&quot;" />
-            <Custom Action="RemoveUserData" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
-            <Custom Action="RemoveMachineData" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
-            <Custom Action="RemoveImages" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
-            <Custom Action="RemoveUpdates" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+            <Custom Action="StartWindowManagers" After="RemoveExistingProducts" Condition="$HostdExe=3" />
+            <Custom Action="RemoveUserData" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND NOT REINSTALL AND ?HostdExe=3 AND $HostdExe=2" />
+            <Custom Action="RemoveMachineData" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND NOT REINSTALL AND ?HostdExe=3 AND $HostdExe=2" />
+            <Custom Action="RemoveImages" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND NOT REINSTALL AND ?HostdExe=3 AND $HostdExe=2" />
+            <Custom Action="RemoveUpdates" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND NOT REINSTALL AND ?HostdExe=3 AND $HostdExe=2" />
         </InstallExecuteSequence>
 
         <Feature Id="Main" Title="Desktop Subsystem for Android" Level="1">
