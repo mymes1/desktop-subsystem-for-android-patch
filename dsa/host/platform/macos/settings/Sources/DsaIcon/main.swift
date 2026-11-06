@@ -6,7 +6,11 @@
 // with a soft shadow, a gradient, and the DSA placeholder symbol, two app windows one over the
 // other. The symbol's design is not chosen yet; when it is, this drawing is what changes.
 //
-// Usage: dsa-icon <output .iconset folder>
+// It also writes the same picture as a layered Icon Composer source (`.icon`), for the Liquid
+// Glass look of macOS 26: the gradient fill in icon.json, and each window of the symbol as a
+// layer of its own, so the system lights and refracts them apart.
+//
+// Usage: dsa-icon <output .iconset folder> [--icon-composer <output .icon folder>]
 
 import CoreGraphics
 import Foundation
@@ -18,7 +22,16 @@ func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> CGColor {
             blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
 }
 
-func draw(size: Int) -> CGImage? {
+/// The parts of the picture: the squircle body, and the symbol's two windows.
+struct Parts: OptionSet {
+    let rawValue: Int
+    static let body = Parts(rawValue: 1)
+    static let back = Parts(rawValue: 2)
+    static let front = Parts(rawValue: 4)
+    static let all: Parts = [.body, .back, .front]
+}
+
+func draw(size: Int, parts: Parts = .all) -> CGImage? {
     let s = CGFloat(size)
     guard let context = CGContext(
         data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
@@ -30,6 +43,7 @@ func draw(size: Int) -> CGImage? {
     let radius = body.width * 0.2237
     let shape = CGPath(roundedRect: body, cornerWidth: radius, cornerHeight: radius, transform: nil)
 
+    if parts.contains(.body) {
     context.saveGState()
     context.setShadow(offset: CGSize(width: 0, height: -s * 10 / 1024), blur: s * 28 / 1024, color: color(0x000000, 0.3))
     context.addPath(shape)
@@ -44,16 +58,22 @@ func draw(size: Int) -> CGImage? {
                               locations: [0, 1])!
     context.drawLinearGradient(gradient, start: CGPoint(x: body.minX, y: body.maxY), end: CGPoint(x: body.maxX, y: body.minY), options: [])
     context.restoreGState()
+    }
 
     // The symbol: a window outlined behind, a window filled in front.
     let unit = body.width / 16
     let line = max(1, unit * 0.9)
     let back = CGRect(x: body.minX + unit * 3, y: body.minY + unit * 6.5, width: unit * 8, height: unit * 6.5)
     let front = CGRect(x: body.minX + unit * 5, y: body.minY + unit * 3, width: unit * 8, height: unit * 6.5)
-    context.setStrokeColor(color(0xFFFFFF, 0.9))
-    context.setLineWidth(line)
-    context.addPath(CGPath(roundedRect: back.insetBy(dx: line / 2, dy: line / 2), cornerWidth: unit * 1.2, cornerHeight: unit * 1.2, transform: nil))
-    context.strokePath()
+    if parts.contains(.back) {
+        context.setStrokeColor(color(0xFFFFFF, 0.9))
+        context.setLineWidth(line)
+        context.addPath(CGPath(roundedRect: back.insetBy(dx: line / 2, dy: line / 2), cornerWidth: unit * 1.2, cornerHeight: unit * 1.2, transform: nil))
+        context.strokePath()
+    }
+    guard parts.contains(.front) else {
+        return context.makeImage()
+    }
     context.setFillColor(color(0xFFFFFF))
     context.addPath(CGPath(roundedRect: front, cornerWidth: unit * 1.2, cornerHeight: unit * 1.2, transform: nil))
     context.fillPath()
@@ -71,10 +91,57 @@ func write(_ image: CGImage, to url: URL) -> Bool {
     return CGImageDestinationFinalize(destination)
 }
 
+/// Writes the layered Icon Composer source: icon.json and the symbol's layers in Assets.
+func writeIconComposer(_ folder: URL) throws {
+    let assets = folder.appendingPathComponent("Assets", isDirectory: true)
+    try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+    for (name, parts) in [("back-window.png", Parts.back), ("front-window.png", Parts.front)] {
+        guard let image = draw(size: 1024, parts: parts), write(image, to: assets.appendingPathComponent(name)) else {
+            throw NSError(domain: "dsa-icon", code: 1, userInfo: [NSLocalizedDescriptionKey: "could not draw \(name)"])
+        }
+    }
+    // The fill is the body's gradient; the system draws the squircle, its edge and its shadow.
+    let json = """
+    {
+      "fill" : {
+        "linear-gradient" : [
+          "srgb:0.16863,0.76863,0.70588,1.00000",
+          "srgb:0.13333,0.34118,0.90980,1.00000"
+        ]
+      },
+      "groups" : [
+        {
+          "name" : "Front window",
+          "layers" : [ { "name" : "Front window", "image-name" : "front-window.png", "glass" : true } ],
+          "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+          "translucency" : { "enabled" : true, "value" : 0.4 }
+        },
+        {
+          "name" : "Back window",
+          "layers" : [ { "name" : "Back window", "image-name" : "back-window.png", "glass" : true } ],
+          "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+          "translucency" : { "enabled" : true, "value" : 0.6 }
+        }
+      ],
+      "supported-platforms" : { "squares" : [ "macOS" ] }
+    }
+
+    """
+    try Data(json.utf8).write(to: folder.appendingPathComponent("icon.json"))
+}
+
 let args = CommandLine.arguments
-guard args.count == 2 else {
-    FileHandle.standardError.write(Data("usage: dsa-icon <output .iconset folder>\n".utf8))
+guard args.count == 2 || (args.count == 4 && args[2] == "--icon-composer") else {
+    FileHandle.standardError.write(Data("usage: dsa-icon <output .iconset folder> [--icon-composer <output .icon folder>]\n".utf8))
     exit(2)
+}
+if args.count == 4 {
+    do {
+        try writeIconComposer(URL(fileURLWithPath: args[3], isDirectory: true))
+    } catch {
+        FileHandle.standardError.write(Data("dsa-icon: \(error.localizedDescription)\n".utf8))
+        exit(1)
+    }
 }
 let folder = URL(fileURLWithPath: args[1], isDirectory: true)
 try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
