@@ -25,6 +25,7 @@ pub mod adapter;
 pub mod audio;
 pub mod background;
 pub mod clipboard;
+pub mod committed;
 pub mod display_gpu;
 pub mod frames;
 pub mod gamepads;
@@ -1078,6 +1079,7 @@ impl Compositor {
         let manager_stop = Arc::new(AtomicBool::new(false));
         let idle = Arc::new(Mutex::new(IdleTrim::new(IDLE_TRIM_DELAY, Instant::now())));
         let trim_gpu = gpu.clone();
+        let trim_renderer = self.presenter.clone();
         let quiet_router = Arc::clone(&router);
         let setup = ManagerSetup {
             events: events_rx,
@@ -1128,7 +1130,14 @@ impl Compositor {
             .name("dsa-wm-trim".into())
             .spawn(move || {
                 let quiet_for = Box::new(move || quiet_router.quiet_for());
-                trim::run(trim_idle, trim_gpu, quiet_for, trim_stop, trim_logger)
+                trim::run(
+                    trim_idle,
+                    trim_gpu,
+                    trim_renderer,
+                    quiet_for,
+                    trim_stop,
+                    trim_logger,
+                )
             })
             .map_err(|e| log(&format!("could not start the idle memory trim: {e}")))
             .ok();

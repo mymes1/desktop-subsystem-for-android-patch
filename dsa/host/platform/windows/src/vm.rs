@@ -159,6 +159,20 @@ impl NetworkAdapter {
     }
 }
 
+/// Keeps what the guest kernel sets aside at boot small; each of these is memory the guest
+/// never gets back while it runs.
+/// - `swiotlb=2048`: the bounce buffer for devices that cannot reach all of memory, 4 MiB
+///   (2048 slabs of 2 KiB) instead of 64. The kernel makes it whenever memory may reach past
+///   4 GiB, which Hyper-V's hot-add range makes true, but the VMBus disks and network adapter
+///   reach all of memory and bounce nothing.
+/// - `kfence.sample_interval=0`: no KFENCE pool (2 MiB and its metadata) when the kernel has
+///   KFENCE; nobody reads its reports in a user's VM.
+/// - `dhash_entries`, `ihash_entries`, `thash_entries`, `uhash_entries`: the dentry, inode,
+///   TCP and UDP hash tables sized for a desktop guest's few files and connections, not
+///   scaled to its memory (about 8 MiB for 3 GiB, down to under 1 MiB).
+pub const BOOT_MEMORY_CMDLINE: &str = "swiotlb=2048 kfence.sample_interval=0 \
+     dhash_entries=65536 ihash_entries=32768 thash_entries=16384 uhash_entries=1024";
+
 /// The fault cluster for fine-grained memory, as a power of two of 4 KiB pages: 64 KiB. Free
 /// page reporting's order must be at least this, which its least value, 5, is.
 const FAULT_CLUSTER_SHIFT: u32 = 4;
@@ -333,6 +347,8 @@ impl AndroidVmConfig {
             arch.console_cmdline(),
             self.page_reporting_order
         );
+        cmdline.push(' ');
+        cmdline.push_str(BOOT_MEMORY_CMDLINE);
         if self.pstore_disk.is_some() {
             cmdline.push(' ');
             cmdline.push_str(crate::pstore_disk::KERNEL_CMDLINE);

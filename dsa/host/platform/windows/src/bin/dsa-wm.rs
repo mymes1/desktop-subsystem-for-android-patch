@@ -5,6 +5,13 @@
 //! task's frames, reconnects when the VM restarts, and exits cleanly on sign-out.
 #![windows_subsystem = "windows"]
 
+/// Counts what the window manager's own code allocates, so its memory breakdown can tell that
+/// apart from what drivers and the renderer hold in the same heap.
+#[cfg(windows)]
+#[global_allocator]
+static ALLOCATOR: dsa_host_windows::compositor::committed::CountingAllocator =
+    dsa_host_windows::compositor::committed::CountingAllocator;
+
 #[cfg(not(windows))]
 fn main() -> std::process::ExitCode {
     eprintln!("dsa-wm runs on Windows only");

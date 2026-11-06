@@ -717,6 +717,104 @@ pub fn held_line(before: &HeldMemory, after: &HeldMemory) -> String {
     )
 }
 
+/// What the graphics renderer holds, as it counts it: its live GPU allocations by kind, in
+/// KiB, and how many guest processes are connected to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RendererMemory {
+    /// Memory only the GPU sees: the guest's images and buffers, and the color buffers
+    /// behind every gralloc buffer.
+    pub device_local_kb: u64,
+    pub device_local_count: u32,
+    /// Memory the host's CPU maps: what the guest's host-visible memory is copied into.
+    pub host_visible_kb: u64,
+    pub host_visible_count: u32,
+    /// Memory imported from another graphics API: the task windows' textures.
+    pub imported_kb: u64,
+    pub imported_count: u32,
+    pub largest_kb: u64,
+    /// Guest processes with an open connection to the renderer. Each keeps its own
+    /// allocations until it exits.
+    pub guest_processes: i32,
+}
+
+/// Where a host process's committed (private) memory goes, by owner, in KiB, as far as the
+/// platform can tell; `None` where it cannot.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CommittedMemory {
+    /// All committed private memory, from the platform's counters.
+    pub private_kb: Option<u64>,
+    /// Committed private pages found by walking the address space.
+    pub walked_private_kb: u64,
+    /// Of those: the process's default heap, which the process's own allocations use.
+    pub process_heap_kb: u64,
+    /// Of those: every other heap (drivers' and libraries' own), and how many there are.
+    pub other_heaps_kb: u64,
+    pub other_heaps: u32,
+    /// Of those: write-combined or uncached pages, which only GPU drivers map.
+    pub gpu_mapped_kb: u64,
+    /// Of those: the rest, allocated straight from the system (drivers, the renderer, thread
+    /// stacks).
+    pub direct_kb: u64,
+    /// The largest private allocations of any owner (heap segments included), largest first:
+    /// a renderer's or a driver's pool shows up here by its size.
+    pub largest_private_kb: Vec<u64>,
+    /// What the process's own allocator has handed out and not freed.
+    pub own_live_kb: Option<u64>,
+    /// The renderer's own count, when it can give one.
+    pub renderer: Option<RendererMemory>,
+    pub gpu_local_kb: Option<u64>,
+    pub gpu_non_local_kb: Option<u64>,
+}
+
+/// The log line that breaks a host process's committed memory down by owner, in MiB.
+pub fn committed_line(c: &CommittedMemory) -> String {
+    let show = |kb: Option<u64>| kb.map_or("?".to_string(), |kb| mib(kb).to_string());
+    let largest: Vec<String> = c
+        .largest_private_kb
+        .iter()
+        .map(|kb| format!("{:.1}", *kb as f64 / 1024.0))
+        .collect();
+    let mut line = format!(
+        "committed memory by owner: private {} MiB ({} found); default heap {} (the window \
+         manager's own allocations {}); {} other heaps {}; GPU-mapped {}; allocated directly {} \
+         (largest allocations {} MiB)",
+        show(c.private_kb),
+        mib(c.walked_private_kb),
+        mib(c.process_heap_kb),
+        show(c.own_live_kb),
+        c.other_heaps,
+        mib(c.other_heaps_kb),
+        mib(c.gpu_mapped_kb),
+        mib(c.direct_kb),
+        if largest.is_empty() {
+            "none".to_string()
+        } else {
+            largest.join(", ")
+        },
+    );
+    match &c.renderer {
+        Some(r) => line.push_str(&format!(
+            "; renderer: GPU-only {} MiB in {}, CPU-mapped {} MiB in {}, imported {} MiB in {}, \
+             largest {} MiB, {} guest processes connected",
+            mib(r.device_local_kb),
+            r.device_local_count,
+            mib(r.host_visible_kb),
+            r.host_visible_count,
+            mib(r.imported_kb),
+            r.imported_count,
+            mib(r.largest_kb),
+            r.guest_processes,
+        )),
+        None => line.push_str("; renderer: no count"),
+    }
+    line.push_str(&format!(
+        "; GPU memory {} MiB, GPU-mapped system memory {} MiB",
+        show(c.gpu_local_kb),
+        show(c.gpu_non_local_kb)
+    ));
+    line
+}
+
 /// How long the window manager waits after the last task window closed before it gives back
 /// the memory it is not using: not at all. Memory no window uses goes back on the trim's next
 /// check, within a second; pages touched again come back from the standby list on their own.
