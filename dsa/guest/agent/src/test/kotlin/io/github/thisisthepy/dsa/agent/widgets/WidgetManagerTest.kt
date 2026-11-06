@@ -411,6 +411,41 @@ class WidgetManagerTest {
     }
 
     @Test
+    fun fr12_widgets_start_the_moment_the_user_is_unlocked_without_waiting_for_a_retry() {
+        var unlocked = false
+        var readyCallback: (() -> Unit)? = null
+        val waiting = object : WidgetPlatform by platform {
+            override fun whenReady(ready: () -> Unit) {
+                if (unlocked) ready() else readyCallback = ready
+            }
+            override fun start(frame: (Int, Int, Int, ByteArray) -> Unit, changed: () -> Unit, failed: (Int) -> Unit) {
+                check(unlocked) { "User 0 must be unlocked for widgets to be available" }
+                platform.start(frame, changed, failed)
+            }
+        }
+        platform.offered += clock()
+        platform.bound[3] = "com.example.clock/.ClockWidget"
+        val retries = mutableListOf<() -> Unit>()
+        val manager = WidgetManager(waiting, store, { frame -> sent += decode(frame); true }, log, { connected })
+        manager.start(later = { retries += it }) { it() }
+        manager.connected()
+        // Locked: the widget host is not even tried, so nothing fails and nothing is sent.
+        assertTrue(sent.isEmpty())
+        assertTrue(retries.isEmpty())
+        assertTrue(log.lines.isEmpty())
+        assertTrue(platform.shown.isEmpty())
+        // Unlocked: the widgets start then, with no retry in between.
+        unlocked = true
+        readyCallback!!()
+        assertTrue(retries.isEmpty())
+        assertEquals(listOf(3), platform.shown.map { it.first })
+        assertEquals(listOf(Envelope.BodyCase.WIDGET_UPDATED, Envelope.BodyCase.WIDGET_LIST), sent.map { it.bodyCase })
+        // A second signal starts nothing again.
+        readyCallback!!()
+        assertEquals(1, platform.shown.size)
+    }
+
+    @Test
     fun fr12_placed_widgets_listen_and_draw_again_after_the_agent_restarts() {
         // Widgets 2 and 3 were placed before the agent or Android restarted. Android kept the
         // IDs; the agent kept a size for 2 only. The new process has no views yet.

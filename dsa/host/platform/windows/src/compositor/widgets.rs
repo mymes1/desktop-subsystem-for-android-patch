@@ -688,6 +688,9 @@ mod win {
     struct Window {
         widget: Widget,
         frame: Option<WidgetFrame>,
+        /// The last image that had something in it, which the window keeps showing when
+        /// Android sends one with nothing in it.
+        shown: Option<WidgetFrame>,
         hover: bool,
         pressed: bool,
         /// Since when the window waits for its first image; None once one came.
@@ -714,6 +717,9 @@ mod win {
         pub height: i32,
         /// How many of its pixels are at least half opaque.
         pub opaque: usize,
+        /// How many of its pixels are see-through: an alpha of at most 1, which keeps them
+        /// clickable.
+        pub clear: usize,
         /// Whether the window was shown already when it got the picture.
         pub visible: bool,
     }
@@ -1189,6 +1195,7 @@ mod win {
                         Window {
                             widget: widget.clone(),
                             frame: None,
+                            shown: None,
                             hover: false,
                             pressed: false,
                             waiting_since: Some(Instant::now()),
@@ -1253,27 +1260,41 @@ mod win {
         );
         let dpi = dpi_of(hwnd);
         let pixels = with_state(|s| {
-            let window = s.windows.get(&(hwnd as isize))?;
-            let decoded = match (&window.frame, &s.decoder) {
-                (Some(frame), Some(decoder)) => decoder
+            let State {
+                windows,
+                decoder,
+                logger,
+                ..
+            } = s;
+            let window = windows.get_mut(&(hwnd as isize))?;
+            let decode = |frame: &WidgetFrame| match decoder.as_ref() {
+                Some(decoder) => decoder
                     .decode(&frame.png, width as u32, height as u32)
-                    .map_err(|why| note(s.logger.as_deref(), &format!("a widget's image: {why}")))
+                    .map_err(|why| note(logger.as_deref(), &format!("a widget's image: {why}")))
                     .ok(),
-                _ => None,
+                None => None,
             };
-            let decoded = match decoded {
-                Some(pixels) if super::all_clear(&pixels) => {
-                    note(
-                        s.logger.as_deref(),
-                        &format!(
-                            "widget {}: Android sent an image with nothing in it; showing the placeholder",
-                            window.widget.widget_id
-                        ),
-                    );
-                    None
-                }
-                other => other,
-            };
+            let mut decoded = window.frame.as_ref().and_then(decode);
+            if decoded.as_deref().is_some_and(super::all_clear) {
+                // A widget whose app stopped drawing keeps its last image; the placeholder is
+                // only for a widget that has never shown one.
+                note(
+                    logger.as_deref(),
+                    &format!(
+                        "widget {}: Android sent an image with nothing in it; {}",
+                        window.widget.widget_id,
+                        if window.shown.is_some() {
+                            "keeping the last one"
+                        } else {
+                            "showing the placeholder"
+                        }
+                    ),
+                );
+                window.frame = window.shown.clone();
+                decoded = window.frame.as_ref().and_then(decode);
+            } else if decoded.is_some() {
+                window.shown = window.frame.clone();
+            }
             let mut pixels = decoded
                 .unwrap_or_else(|| super::placeholder(width as usize, height as usize, dpi));
             finish(
@@ -1373,6 +1394,7 @@ mod win {
                 width,
                 height,
                 opaque: pixels.chunks_exact(4).filter(|p| p[3] >= 0x80).count(),
+                clear: pixels.chunks_exact(4).filter(|p| p[3] <= 1).count(),
                 // SAFETY: a window of this thread.
                 visible: unsafe { IsWindowVisible(hwnd) } != 0,
             });
@@ -2046,7 +2068,7 @@ mod tests {
     /// desktop.
     #[cfg(windows)]
     #[test]
-    fn fr12_a_placed_widget_window_shows_its_placeholder_at_once() {
+    fn fr12_a_placed_widget_window_shows_its_placeholder_at_once_then_its_see_through_image_and_keeps_it() {
         use windows_sys::Win32::Foundation::{HWND, RECT};
         use windows_sys::Win32::Graphics::Gdi::{MonitorFromRect, MONITOR_DEFAULTTONULL};
         use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -2129,6 +2151,114 @@ mod tests {
                 assert_eq!(next, desktop, "the desktop is drawn over the window");
             }
         }
+
+        // A widget's own image: its left half drawn, its right half see-through, as a clock's
+        // text over the wallpaper. The system is handed exactly that, alpha and all.
+        let frame = |png: Vec<u8>| {
+            WindowCommand::Frame(WidgetFrame {
+                widget_id: 4242,
+                width: 8,
+                height: 2,
+                png,
+            })
+        };
+        let drawn = [[255u8, 255, 255, 255]; 4]
+            .into_iter()
+            .chain([[0u8, 0, 0, 0]; 4])
+            .collect::<Vec<_>>();
+        windows.command(frame(rgba_png(8, 2, &[drawn.clone(), drawn].concat())));
+        let image = next_presented(1, deadline);
+        assert!(image.committed, "the system did not take the widget's image");
+        assert!(
+            image.opaque * 10 >= pixels * 4 && image.opaque * 10 <= pixels * 6,
+            "{} of {pixels} pixels are opaque; half the widget's image is see-through",
+            image.opaque
+        );
+        assert!(
+            image.clear * 10 >= pixels * 4,
+            "only {} of {pixels} pixels are see-through; the widget's transparent half is drawn opaque",
+            image.clear
+        );
+
+        // Its app stops drawing and the image comes back empty: the last one stays, not the
+        // placeholder.
+        windows.command(frame(rgba_png(8, 2, &[[0u8; 4]; 16])));
+        let kept = next_presented(2, deadline);
+        assert!(
+            kept.opaque == image.opaque && kept.clear == image.clear,
+            "after an empty image the window shows {} opaque and {} clear pixels, not its last image ({} and {})",
+            kept.opaque,
+            kept.clear,
+            image.opaque,
+            image.clear
+        );
         windows.command(WindowCommand::Remove(4242));
+    }
+
+    /// The window's next drawing after the first `seen` ones.
+    #[cfg(windows)]
+    fn next_presented(seen: usize, deadline: Instant) -> win::Presented {
+        let deadline = deadline.max(Instant::now() + Duration::from_secs(10));
+        loop {
+            if let Some(found) = win::PRESENTED.lock().unwrap().get(seen).copied() {
+                return found;
+            }
+            assert!(Instant::now() < deadline, "the widget's window was not drawn again");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// An RGBA PNG of `width` by `height` straight-alpha `pixels`, stored without compression.
+    #[cfg(windows)]
+    fn rgba_png(width: u32, height: u32, pixels: &[[u8; 4]]) -> Vec<u8> {
+        fn crc(bytes: &[u8]) -> u32 {
+            let mut crc = 0xffff_ffffu32;
+            for &b in bytes {
+                crc ^= b as u32;
+                for _ in 0..8 {
+                    crc = if crc & 1 != 0 {
+                        (crc >> 1) ^ 0xedb8_8320
+                    } else {
+                        crc >> 1
+                    };
+                }
+            }
+            !crc
+        }
+        fn chunk(out: &mut Vec<u8>, kind: &[u8], body: &[u8]) {
+            out.extend_from_slice(&(body.len() as u32).to_be_bytes());
+            let start = out.len();
+            out.extend_from_slice(kind);
+            out.extend_from_slice(body);
+            let sum = crc(&out[start..]);
+            out.extend_from_slice(&sum.to_be_bytes());
+        }
+        let mut raw = Vec::new();
+        for row in pixels.chunks(width as usize) {
+            raw.push(0);
+            for p in row {
+                raw.extend_from_slice(p);
+            }
+        }
+        let (mut a, mut b) = (1u32, 0u32);
+        for &byte in &raw {
+            a = (a + byte as u32) % 65521;
+            b = (b + a) % 65521;
+        }
+        let len = raw.len() as u16;
+        let mut z = vec![0x78, 0x01, 0x01];
+        z.extend_from_slice(&len.to_le_bytes());
+        z.extend_from_slice(&(!len).to_le_bytes());
+        z.extend_from_slice(&raw);
+        z.extend_from_slice(&((b << 16) | a).to_be_bytes());
+        let mut header = Vec::new();
+        header.extend_from_slice(&width.to_be_bytes());
+        header.extend_from_slice(&height.to_be_bytes());
+        header.extend_from_slice(&[8, 6, 0, 0, 0]);
+        let mut out = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+        chunk(&mut out, b"IHDR", &header);
+        chunk(&mut out, b"IDAT", &z);
+        chunk(&mut out, b"IEND", &[]);
+        out
     }
 }
