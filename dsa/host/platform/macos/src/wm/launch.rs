@@ -217,7 +217,10 @@ mod tests {
     fn fr17_the_window_host_runs_from_its_helper_bundle_not_dsa_app() {
         let contents = folder("helper").join("DSA.app/Contents");
         let macos = contents.join("MacOS");
-        let helper = contents.join("Helpers").join(HELPER_APP).join("Contents/MacOS");
+        let helper = contents
+            .join("Helpers")
+            .join(HELPER_APP)
+            .join("Contents/MacOS");
         std::fs::create_dir_all(&macos).unwrap();
         std::fs::create_dir_all(&helper).unwrap();
         std::fs::write(macos.join("dsa-wm"), b"wm").unwrap();

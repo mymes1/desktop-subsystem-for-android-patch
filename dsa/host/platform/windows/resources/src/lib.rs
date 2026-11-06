@@ -363,11 +363,7 @@ pub fn string_table(strings: &[(u16, &str)], language: u16) -> Vec<Resource> {
 
 /// The resources of a further icon from the `.ico` file `file`: its images, numbered from
 /// `first_id`, and the icon group `group_id` that lists them.
-pub fn icon_resources(
-    file: &[u8],
-    group_id: u16,
-    first_id: u16,
-) -> Result<Vec<Resource>, String> {
+pub fn icon_resources(file: &[u8], group_id: u16, first_id: u16) -> Result<Vec<Resource>, String> {
     let images = parse_ico(file)?;
     if images.is_empty() {
         return Err("the icon file holds no image".into());
@@ -527,7 +523,7 @@ pub fn embed_with(
     let mut resources = program_resources(&strings, description_ko, &icon);
     resources.extend(extra);
     std::fs::write(&path, res_file(&resources))
-    .unwrap_or_else(|why| panic!("writing {}: {why}", path.display()));
+        .unwrap_or_else(|why| panic!("writing {}: {why}", path.display()));
     println!("cargo:rustc-link-arg-bin={bin}={}", path.display());
 }
 
