@@ -2204,30 +2204,10 @@ fn fr30_dsa_app_window_changes_and_resets_an_apps_window_settings() {
 }
 
 #[test]
-fn fr31_the_run_mode_is_as_needed_after_five_minutes_and_changed_with_dsa_settings() {
-    let ((listener, _, _), endpoint) = local_pair();
-    let _service = settings_service(listener);
-    let settings = json_of(&dsa(&endpoint, "settings --json"));
-    assert_eq!(settings["run_mode"], "as-needed");
-    assert_eq!(settings["stop_after_secs"], 300);
-    assert_eq!(settings["keep_for_notifications"], false);
-    let changed = json_of(&dsa(&endpoint, "settings set run-mode continuous --json"));
-    assert_eq!(changed["run_mode"], "continuous");
-    let changed = json_of(&dsa(&endpoint, "settings set stop-after 10m --json"));
-    assert_eq!(changed["stop_after_secs"], 600);
-    assert_eq!(
-        changed["run_mode"], "continuous",
-        "one change keeps the others"
-    );
-    let changed = json_of(&dsa(
-        &endpoint,
-        "settings set keep-for-notifications on --json",
-    ));
-    assert_eq!(changed["keep_for_notifications"], true);
-    let shown = stdout(&dsa(&endpoint, "settings"));
-    assert!(shown.contains("Run mode: continuous"), "{shown}");
-    assert!(parse(&args("settings set stop-after 1s")).is_err());
-    assert!(parse(&args("settings set run-mode sometimes")).is_err());
+fn fr31_there_is_no_run_mode_setting_to_stop_an_idle_android() {
+    for name in ["run-mode continuous", "stop-after 5m", "keep-for-notifications on"] {
+        assert!(parse(&args(&format!("settings set {name}"))).is_err(), "{name}");
+    }
 }
 
 #[test]

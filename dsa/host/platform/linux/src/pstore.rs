@@ -6,7 +6,7 @@
 //! them in `/sys/fs/pstore` at the next boot.
 //!
 //! It is the same disk as the Windows host's, as a raw file: one GPT partition with a fixed
-//! partition UUID, which the kernel command line names (`qemu::PSTORE_CMDLINE`), so finding
+//! partition UUID, which the kernel command line names (`crosvm::PSTORE_CMDLINE`), so finding
 //! it does not depend on the order the guest names its disks in. A file that is missing or
 //! not this disk is written again from scratch.
 
@@ -163,7 +163,7 @@ mod tests {
         assert_eq!(&disk[(DISK_BYTES - 512) as usize..][..8], b"EFI PART");
         let entry = &disk[1024..1024 + 128];
         assert_eq!(&entry[16..32], &guid_bytes(PARTITION_UUID));
-        assert!(crate::qemu::PSTORE_CMDLINE.contains(PARTITION_UUID));
+        assert!(crate::crosvm::PSTORE_CMDLINE.contains(PARTITION_UUID));
         assert_eq!(crc32(b"123456789"), 0xCBF4_3926);
     }
 

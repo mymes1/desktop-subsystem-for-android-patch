@@ -226,9 +226,9 @@ after two minutes. `"keep_window_manager": false` turns this off.
   window opens its menu: Resize, with the sizes the widget allows, and Remove (in Korean
   when that is the display language). The widgets come from the settings app's Widgets
   page, which shows changes made elsewhere through `dsa widgets watch`, or
-  `dsa widgets list|add <provider>|remove <id>`. When the
-  window manager starts at sign-in and the service remembers widgets, it starts Android so
-  they come back.
+  `dsa widgets list|add <provider>|remove <id>`. The
+  window manager starts at sign-in and starts Android then, so the first app opened after
+  the computer starts does not wait for a boot and remembered widgets come back.
 - It owns no window. Each Android app task shows in a window of the app's own window
   program (below). The window manager watches the user's tasks through the service's
   local API, starts each app's window program, and tells it to open a window for each

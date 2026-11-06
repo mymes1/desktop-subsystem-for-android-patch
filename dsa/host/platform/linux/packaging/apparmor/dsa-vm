@@ -1,0 +1,15 @@
+# crosvm puts each of the Android VM's devices in a sandbox of its own, and passt isolates
+# itself, both in user namespaces. Ubuntu lets a program make one only when its AppArmor
+# profile allows it, so these profiles allow that and confine nothing else.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile dsa-crosvm /usr/lib/dsa/bin/crosvm flags=(unconfined) {
+  userns,
+  include if exists <local/dsa-crosvm>
+}
+
+profile dsa-passt /usr/lib/dsa/bin/passt flags=(unconfined) {
+  userns,
+  include if exists <local/dsa-passt>
+}

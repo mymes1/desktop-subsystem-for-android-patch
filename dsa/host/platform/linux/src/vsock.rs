@@ -3,7 +3,7 @@
 //! Every VM on the machine reaches the host at CID 2, on the same ports, so one socket per
 //! port serves all of them. A [`VsockHub`] accepts on a port and hands each connection to the
 //! listener registered for the CID it comes from, which the kernel reports and the guest
-//! cannot choose: vhost-vsock stamps every packet with the CID QEMU was given. A connection
+//! cannot choose: vhost-vsock stamps every packet with the CID crosvm was given. A connection
 //! from a CID nobody registered is closed at once.
 //!
 //! Each user's session has a [`CidListener`] for its VM's CID on each port it serves, so one

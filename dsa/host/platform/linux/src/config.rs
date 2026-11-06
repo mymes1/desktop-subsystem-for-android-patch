@@ -80,13 +80,17 @@ pub struct HostConfig {
     /// More kernel command line, after the image's.
     #[serde(default)]
     pub kernel_cmdline: String,
-    /// The QEMU program; by default the one for this architecture on the `PATH`.
+    /// The crosvm program; by default the one DSA's package installs beside the service.
     #[serde(default, deserialize_with = "optional_path")]
-    pub qemu: Option<PathBuf>,
+    pub crosvm: Option<PathBuf>,
+    /// Whether crosvm runs each of the VM's devices in its sandbox (minijail).
+    #[serde(default = "default_true")]
+    pub sandbox: bool,
     /// The VM's starting memory in MiB, whatever the user's limit, for tests and development.
     #[serde(default)]
     pub memory_mb: Option<u32>,
-    /// Whether the VM may grow while it runs (virtio-mem). Off, it keeps its starting size.
+    /// Whether the VM may grow while it runs (the balloon lets memory out). Off, it keeps its
+    /// starting size.
     #[serde(default = "default_true")]
     pub grow_memory: bool,
     #[serde(default = "default_processors")]
@@ -218,7 +222,7 @@ mod tests {
         assert_eq!(config.socket, PathBuf::from("/run/dsa/host.sock"));
         assert_eq!(config.control_port, 5000);
         assert_eq!(config.log_port, 5001);
-        assert!(config.grow_memory && config.network);
+        assert!(config.grow_memory && config.network && config.sandbox);
         assert_eq!(config.page_reporting_order, 9);
         assert_eq!(
             config.settings_dir(),

@@ -5,7 +5,7 @@
 //! user ID, as the kernel reports it for the socket connection, picks the VM: the first
 //! request of a user creates their disk and their session, and every later one reaches the
 //! same session. The service runs as root so it can serve the vsock ports every guest shares
-//! and make a user's LAN link; each user's QEMU, passt and files are the user's own.
+//! and make a user's LAN link; each user's crosvm, passt and files are the user's own.
 //!
 //! With `images_dir`, every VM boots the image the update store calls current, and with
 //! `update` a background thread checks the signed release list and downloads new images. The
@@ -46,7 +46,7 @@ use dsa_host_unix::socket::UnixLocalListener;
 use crate::config::HostConfig;
 use crate::image::{bring_disk_to, image_files, make_disk, ImageFiles};
 use crate::launcher::{BootPlan, LauncherSetup, LinuxVmLauncher, SharedNetworkStatus};
-use crate::qemu::{guest_cid, GuestArch};
+use crate::crosvm::guest_cid;
 use crate::signs::BootSigns;
 use crate::users::{uid_of, Account};
 use crate::vsock::{connect_stream, VsockHub};
@@ -117,6 +117,17 @@ pub fn host_paths() -> UnixHostPaths {
     )
 }
 
+/// The user's Android disk in their data folder `root`: the qcow2 disk an earlier DSA made, when
+/// they have one, else the raw disk DSA makes now.
+pub fn user_disk(root: &Path) -> PathBuf {
+    let earlier = root.join("data.qcow2");
+    if earlier.exists() {
+        earlier
+    } else {
+        root.join("data.img")
+    }
+}
+
 /// The files of one user's Android.
 pub struct UserFiles {
     pub data_disk: PathBuf,
@@ -129,7 +140,7 @@ impl UserFiles {
     pub fn of(paths: &dyn HostPaths, user: &str) -> Result<UserFiles, String> {
         let root = paths.user_data(user)?;
         Ok(UserFiles {
-            data_disk: root.join("data.qcow2"),
+            data_disk: user_disk(&root),
             pstore_disk: root.join("pstore.img"),
             console_log: paths.user_logs(user)?.join("android-console.log"),
             run_dir: paths.user_tmp(user)?,
@@ -237,10 +248,10 @@ pub fn create_user_android(
     let uid = uid_of(user)?;
     let account = Account::of_uid(uid)?;
     let files = UserFiles::of(&host_paths(), user)?;
-    let qemu = match &config.qemu {
-        Some(qemu) => qemu.clone(),
-        None => crate::network::find_program(GuestArch::HOST.qemu_program())
-            .unwrap_or_else(|| PathBuf::from(GuestArch::HOST.qemu_program())),
+    let crosvm = match &config.crosvm {
+        Some(crosvm) => crosvm.clone(),
+        None => crate::network::find_program("crosvm")
+            .unwrap_or_else(|| PathBuf::from("/usr/lib/dsa/bin/crosvm")),
     };
     let store = settings_store(config);
     let trace_on = Arc::new(AtomicBool::new(false));
@@ -258,7 +269,14 @@ pub fn create_user_android(
         );
         Box::new(move || -> Result<BootPlan, String> {
             let (dir, version) = current_image(&config, updates.as_ref())?;
-            let image = image_files(&dir, config.kernel.as_deref(), &config.kernel_cmdline)?;
+            let mut image =
+                image_files(&dir, config.kernel.as_deref(), &config.kernel_cmdline)?;
+            // crosvm attaches raw disks, so a VHDX system disk is read into one once.
+            image.system_image = image
+                .system_image
+                .as_deref()
+                .map(crate::image::raw_disk)
+                .transpose()?;
             match (&image.disk_template, &version) {
                 (Some(template), Some(version)) => bring_disk_to(
                     &account,
@@ -301,7 +319,8 @@ pub fn create_user_android(
             account: account.clone(),
             name: format!("{}-{uid}", config.vm_name),
             guest_cid: cid,
-            qemu,
+            crosvm,
+            sandbox: config.sandbox,
             processors: config.processors,
             page_reporting_order: config.page_reporting_order,
             data_disk: files.data_disk.clone(),
@@ -708,13 +727,6 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
             Ok(android) => {
                 let settings = factory_store.get(user).ok();
                 android.freeze_when_idle(settings.as_ref().is_some_and(|s| s.freeze));
-                let defaults = dsa_host_core::settings::Settings::default();
-                let chosen = settings.as_ref().unwrap_or(&defaults);
-                android.run_mode(dsa_host_core::run_mode::RunModePolicy::of(
-                    chosen.run_mode,
-                    chosen.stop_after_secs,
-                    chosen.keep_for_notifications,
-                ));
                 android.share_clipboard(settings.as_ref().is_none_or(|s| s.clipboard));
                 android.links_in_android(settings.as_ref().is_some_and(|s| s.links_in_android));
                 android.share_folders(
@@ -856,8 +868,15 @@ mod tests {
         let files = UserFiles::of(&paths, "uid:1000").unwrap();
         assert_eq!(
             files.data_disk,
-            PathBuf::from("/home/ana/.local/share/dsa/data.qcow2")
+            PathBuf::from("/home/ana/.local/share/dsa/data.img")
         );
+        // A disk an earlier DSA made as qcow2 stays the user's disk.
+        let root = std::env::temp_dir().join(format!("dsa-user-disk-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        assert_eq!(user_disk(&root), root.join("data.img"));
+        std::fs::write(root.join("data.qcow2"), b"QFI").unwrap();
+        assert_eq!(user_disk(&root), root.join("data.qcow2"));
+        std::fs::remove_dir_all(&root).unwrap();
         assert_eq!(
             files.console_log,
             PathBuf::from("/home/ana/.local/share/dsa/logs/android-console.log")

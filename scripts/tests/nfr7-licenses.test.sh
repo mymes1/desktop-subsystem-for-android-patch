@@ -22,6 +22,9 @@ fi
 # 0. The licence rule for the components Cargo does not list (dsa/third-party.toml)
 run_py scripts/tests/nfr7_components_test.py
 
+# 0b. The licence check of the crosvm the Linux packages ship
+run_py dsa/host/platform/linux/crosvm/test_check_licenses.py
+
 # 1. Check licence policy against allow-list
 run_py dsa/host/platform/windows/installer/generate-licenses.py \
     --workspace dsa --check-only

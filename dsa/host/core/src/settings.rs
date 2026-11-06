@@ -40,7 +40,6 @@ use serde::{Deserialize, Serialize};
 use crate::app_windows::AppWindowSettings;
 use crate::arm_translation::Package;
 use crate::file_share;
-use crate::run_mode::{normalise_stop_after_secs, RunMode, DEFAULT_STOP_AFTER};
 
 /// The longest render GPU value accepted, in characters.
 const MAX_RENDER_GPU: usize = 128;
@@ -96,15 +95,6 @@ pub struct Settings {
     /// The host folders shared while file sharing is on, by name, in the order of
     /// [`file_share::FOLDERS`]. All of them by default.
     pub shared_folders: Vec<String>,
-    /// Whether the user's Android stops once nothing uses it ("As needed", the default) or
-    /// keeps running in Doze ("Continuous").
-    pub run_mode: RunMode,
-    /// How long nothing may use the user's Android in "As needed" before it stops, in
-    /// seconds. Five minutes by default; 0 from a client means the default.
-    pub stop_after_secs: u32,
-    /// Whether an app with a notification shown keeps the user's Android running in "As
-    /// needed". Off by default.
-    pub keep_for_notifications: bool,
 }
 
 impl Default for Settings {
@@ -126,9 +116,6 @@ impl Default for Settings {
             arm_translation: true,
             file_sharing: true,
             shared_folders: file_share::all_folders(),
-            run_mode: RunMode::AsNeeded,
-            stop_after_secs: DEFAULT_STOP_AFTER.as_secs() as u32,
-            keep_for_notifications: false,
         }
     }
 }
@@ -169,10 +156,6 @@ fn default_adb_port() -> u16 {
     DEFAULT_ADB_PORT
 }
 
-fn default_stop_after_secs() -> u32 {
-    DEFAULT_STOP_AFTER.as_secs() as u32
-}
-
 /// The adb port as kept: 0, which a client sends for "the default", becomes
 /// [`DEFAULT_ADB_PORT`].
 pub fn normalise_adb_port(port: u16) -> u16 {
@@ -210,12 +193,6 @@ pub struct UserSettings {
     pub shared_folders: Vec<String>,
     #[serde(default)]
     pub advanced_networking: bool,
-    #[serde(default)]
-    pub run_mode: RunMode,
-    #[serde(default = "default_stop_after_secs")]
-    pub stop_after_secs: u32,
-    #[serde(default)]
-    pub keep_for_notifications: bool,
 }
 
 impl Default for UserSettings {
@@ -233,9 +210,6 @@ impl Default for UserSettings {
             file_sharing: true,
             shared_folders: file_share::all_folders(),
             advanced_networking: false,
-            run_mode: RunMode::AsNeeded,
-            stop_after_secs: default_stop_after_secs(),
-            keep_for_notifications: false,
         }
     }
 }
@@ -261,9 +235,6 @@ impl UserSettings {
             file_sharing: settings.file_sharing,
             shared_folders,
             advanced_networking: settings.advanced_networking,
-            run_mode: settings.run_mode,
-            stop_after_secs: normalise_stop_after_secs(settings.stop_after_secs),
-            keep_for_notifications: settings.keep_for_notifications,
         }
     }
 }
@@ -450,9 +421,6 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         // a file kept by another release still reads.
         shared_folders: file_share::normalise_folders(&mine.shared_folders)
             .unwrap_or_else(|_| file_share::known_folders(&mine.shared_folders)),
-        run_mode: mine.run_mode,
-        stop_after_secs: normalise_stop_after_secs(mine.stop_after_secs),
-        keep_for_notifications: mine.keep_for_notifications,
     }
 }
 
@@ -488,7 +456,6 @@ impl SettingsStore for FileSettings {
             render_gpu,
             adb_port: normalise_adb_port(settings.adb_port),
             shared_folders,
-            stop_after_secs: normalise_stop_after_secs(settings.stop_after_secs),
             ..settings.clone()
         })
     }
@@ -571,7 +538,6 @@ impl SettingsStore for MemorySettings {
             render_gpu,
             adb_port: normalise_adb_port(settings.adb_port),
             shared_folders,
-            stop_after_secs: normalise_stop_after_secs(settings.stop_after_secs),
             ..settings.clone()
         })
     }
@@ -708,9 +674,6 @@ mod tests {
                     developer_mode: true,
                     adb_port: 5037,
                     arm_translation: false,
-                    run_mode: RunMode::Continuous,
-                    stop_after_secs: 600,
-                    keep_for_notifications: true,
                     file_sharing: false,
                     shared_folders: vec!["Pictures".into()],
                 },
@@ -1031,56 +994,23 @@ mod tests {
     }
 
     #[test]
-    fn fr31_run_mode_is_as_needed_after_five_minutes_by_default_and_kept_per_user() {
-        let dir = scratch("run-mode");
-        let store = FileSettings::new(&dir);
-        let fresh = store.get("uid:1000").unwrap();
-        assert_eq!(fresh.run_mode, RunMode::AsNeeded);
-        assert_eq!(fresh.stop_after_secs, 300);
-        assert!(!fresh.keep_for_notifications);
-        // A file saved before the settings existed is "As needed" after five minutes.
+    fn fr31_a_run_mode_kept_by_an_earlier_release_is_ignored_and_dropped() {
+        let dir = scratch("run-mode-gone");
         std::fs::create_dir_all(dir.join("users")).unwrap();
+        let file = dir.join("users").join("uid_1000.json");
         std::fs::write(
-            dir.join("users").join("uid_1001.json"),
-            r#"{"render_gpu": "display", "freeze": true}"#,
+            &file,
+            r#"{"render_gpu": "discrete", "run_mode": "as-needed", "stop_after_secs": 300, "keep_for_notifications": true}"#,
         )
         .unwrap();
-        let old = store.get("uid:1001").unwrap();
-        assert_eq!(old.run_mode, RunMode::AsNeeded);
-        assert_eq!(old.stop_after_secs, 300);
-        let saved = store
-            .set(
-                "uid:1000",
-                &Settings {
-                    run_mode: RunMode::Continuous,
-                    stop_after_secs: 0,
-                    keep_for_notifications: true,
-                    ..Settings::default()
-                },
-            )
-            .unwrap();
-        assert_eq!(saved.stop_after_secs, 300, "0 means the default wait");
-        store
-            .set(
-                "uid:1000",
-                &Settings {
-                    run_mode: RunMode::Continuous,
-                    stop_after_secs: 1,
-                    keep_for_notifications: true,
-                    ..Settings::default()
-                },
-            )
-            .unwrap();
-        let again = FileSettings::new(&dir);
-        let mine = again.get("uid:1000").unwrap();
-        assert_eq!(mine.run_mode, RunMode::Continuous);
-        assert_eq!(mine.stop_after_secs, 10, "kept to the shortest wait");
-        assert!(mine.keep_for_notifications);
-        assert_eq!(
-            again.get("uid:1001").unwrap().run_mode,
-            RunMode::AsNeeded,
-            "the user's own"
-        );
+        let store = FileSettings::new(&dir);
+        let mine = store.get("uid:1000").unwrap();
+        assert_eq!(mine.render_gpu, "discrete", "the rest of the file still reads");
+        store.set("uid:1000", &mine).unwrap();
+        let kept = std::fs::read_to_string(&file).unwrap();
+        for gone in ["run_mode", "stop_after_secs", "keep_for_notifications"] {
+            assert!(!kept.contains(gone), "{gone} is dropped: {kept}");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

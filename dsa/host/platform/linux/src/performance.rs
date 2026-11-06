@@ -1,6 +1,6 @@
 //! The guest's power hints on Linux: how hard the host runs the VM's processors.
 //!
-//! A KVM guest's virtual processors are threads of its QEMU process, scheduled like any
+//! A KVM guest's virtual processors are threads of its crosvm process, scheduled like any
 //! program's. So the performance the guest's power hints ask for becomes the nice value of
 //! every thread of that process (on Linux each thread has its own):
 //!

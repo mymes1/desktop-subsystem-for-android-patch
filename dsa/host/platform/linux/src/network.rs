@@ -1,12 +1,13 @@
 //! The VM's network: NAT by default, the host's LAN with advanced networking.
 //!
-//! NAT is user-mode networking, so it needs no privileges and changes nothing on the host:
-//! - passt (`passt`, BSD-3-Clause and GPL-2.0-or-later, run as its own program) when it is
-//!   installed. It gives the guest the host's own address and routes by DHCP, forwards DNS to
-//!   the host's resolvers, carries IPv6 when the host has it, and follows the host's routes,
-//!   so a VPN on the host carries the guest's traffic too;
-//! - QEMU's built-in slirp otherwise, which does the same for IPv4 and IPv6 with a private
-//!   10.0.2.0/24 network.
+//! NAT is user-mode networking through passt, so it needs no privileges and changes nothing
+//! on the host. passt (BSD-3-Clause and GPL-2.0-or-later) runs as its own program, as the
+//! user, and serves the VM's adapter as a vhost-user device on a Unix socket. It gives the
+//! guest the host's own address and routes by DHCP, forwards DNS to the host's resolvers,
+//! carries IPv6 when the host has it, and follows the host's routes, so a VPN on the host
+//! carries the guest's traffic too. crosvm has no user-mode network of its own on Linux, and
+//! the passt of older distributions has no vhost-user, so DSA ships a passt of its own beside
+//! crosvm and uses it first.
 //!
 //! Advanced networking puts the VM on the host's LAN as a device of its own, through a macvtap
 //! link on the interface of the host's default route. That needs the service's privileges to
@@ -67,10 +68,16 @@ pub fn macvtap_name(uid: u32) -> String {
     format!("dsatap{uid:x}")
 }
 
-/// Finds `program` on the `PATH`, or in the system's program folders.
+/// Finds `program` beside this program (where DSA's package puts crosvm and passt), on the
+/// `PATH`, or in the system's program folders.
 pub fn find_program(program: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH").unwrap_or_default();
-    std::env::split_paths(&path)
+    let beside = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf));
+    beside
+        .into_iter()
+        .chain(std::env::split_paths(&path))
         .chain(
             [
                 "/usr/bin",
@@ -107,10 +114,7 @@ pub fn host_status(mode: &str, problem: Option<String>) -> NetworkStatus {
     let (interface, gateway) = default_route(&route)
         .map(|(interface, gateway)| (Some(interface), gateway.to_string()))
         .unwrap_or((None, String::new()));
-    let addresses = if mode == NetworkStatus::NAT && find_program("passt").is_none() {
-        // slirp's fixed guest address.
-        vec!["10.0.2.15".to_string()]
-    } else if mode == NetworkStatus::NAT {
+    let addresses = if mode == NetworkStatus::NAT {
         // passt gives the guest the host's own address on the default route.
         interface
             .and_then(|interface| {
@@ -146,10 +150,10 @@ mod running {
     use std::process::{Child, Command, Stdio};
     use std::time::{Duration, Instant};
 
-    use crate::qemu::NetworkBackend;
+    use crate::crosvm::NetworkBackend;
     use crate::users::Account;
 
-    /// The file descriptor QEMU finds the macvtap's tap at.
+    /// The file descriptor crosvm finds the macvtap's tap at.
     pub const TAP_FD: i32 = 3;
 
     /// What the VM's network is for one boot.
@@ -157,7 +161,7 @@ mod running {
         pub backend: NetworkBackend,
         /// The adapter's MAC address, when the network decides it (a macvtap has its own).
         pub mac_address: Option<String>,
-        /// The tap to hand QEMU as [`TAP_FD`].
+        /// The tap to hand crosvm as [`TAP_FD`].
         pub tap: Option<File>,
         pub status: NetworkStatus,
     }
@@ -197,7 +201,7 @@ mod running {
                     let _ = std::fs::remove_file(&socket);
                     let mut command = Command::new(passt);
                     command
-                        .args(["--foreground", "--quiet", "--one-off", "--socket"])
+                        .args(passt_args())
                         .arg(&socket)
                         .stdin(Stdio::null())
                         .stdout(Stdio::null())
@@ -217,7 +221,14 @@ mod running {
                     }
                     NetworkBackend::Passt { socket }
                 }
-                None => NetworkBackend::User,
+                None => {
+                    problem = Some(
+                        "passt, which gives Android its network, is missing: reinstall DSA \
+                         (the desktop-subsystem-for-android package)"
+                            .to_string(),
+                    );
+                    NetworkBackend::None
+                }
             };
             Ok(NetworkChoice {
                 backend,
@@ -310,6 +321,12 @@ mod running {
 #[cfg(target_os = "linux")]
 pub use running::{place_tap, TAP_FD};
 
+/// passt's arguments, before the socket path: the adapter as a vhost-user device, for one VM
+/// that connects once.
+pub fn passt_args() -> [&'static str; 5] {
+    ["--vhost-user", "--foreground", "--quiet", "--one-off", "--socket"]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,6 +354,13 @@ mod tests {
         let out = "2: wlp2s0    inet 192.168.0.23/24 brd 192.168.0.255 scope global wlp2s0\n\
                    2: wlp2s0    inet6 fe80::1/64 scope link\n";
         assert_eq!(interface_addresses(out), ["192.168.0.23", "fe80::1"]);
+    }
+
+    #[test]
+    fn fr28_passt_serves_the_adapter_as_a_vhost_user_device() {
+        let args = passt_args();
+        assert_eq!(args[0], "--vhost-user");
+        assert_eq!(args.last(), Some(&"--socket"));
     }
 
     #[test]
