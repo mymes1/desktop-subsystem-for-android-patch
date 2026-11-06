@@ -603,11 +603,21 @@ mod tests {
     fn pr1_the_kernel_reads_the_bootconfig_that_carries_the_boot_secret() {
         let cmdline = config().full_kernel_cmdline();
         let words: Vec<&str> = cmdline.split_whitespace().collect();
-        assert_eq!(words.iter().filter(|w| **w == "bootconfig").count(), 1, "{cmdline}");
+        assert_eq!(
+            words.iter().filter(|w| **w == "bootconfig").count(),
+            1,
+            "{cmdline}"
+        );
         let mut config = config();
         config.kernel_cmdline = format!("{} bootconfig", config.kernel_cmdline);
         let cmdline = config.full_kernel_cmdline();
-        assert_eq!(cmdline.split_whitespace().filter(|w| *w == "bootconfig").count(), 1);
+        assert_eq!(
+            cmdline
+                .split_whitespace()
+                .filter(|w| *w == "bootconfig")
+                .count(),
+            1
+        );
     }
 
     #[test]
