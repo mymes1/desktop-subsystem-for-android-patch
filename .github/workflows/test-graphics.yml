@@ -144,9 +144,13 @@ jobs:
 
       - name: Run host renderer smoke test on software Vulkan
         env:
-          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
           GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}/.scratch/build-host/dist/bin/libgfxstream_backend.so
-        run: uv run dsa/graphics/host/test_host_renderer.py
+        run: |
+          # Mesa names the manifest lvp_icd.json since 25, and lvp_icd.x86_64.json before it.
+          icd="$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -n 1)"
+          test -f "$icd"
+          export VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd"
+          uv run dsa/graphics/host/test_host_renderer.py
 
       - name: Keep the host renderer library and headers
         uses: actions/upload-artifact@v4
@@ -326,6 +330,8 @@ jobs:
           # gfxstream itself turns on the Vulkan portability the loader needs to show
           # MoltenVK; this names the driver for the parts of gfxstream that ask.
           export ANDROID_EMU_VK_ICD=moltenvk
+          # The GPU the selection tests look for: MoltenVK's device on the runner, not Lavapipe.
+          export DSA_TEST_GPU_NAME=apple
           uv run dsa/graphics/host/test_host_renderer.py
 
       - name: Keep the host renderer library and headers
