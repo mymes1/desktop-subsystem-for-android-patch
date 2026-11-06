@@ -270,9 +270,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install a headless Wayland compositor and libxkbcommon
+        timeout-minutes: 20
         run: |
+          # A stalled download held the job for its whole 30 minutes: each try gets 5 minutes,
+          # and man-db's trigger, the slowest part of an install on the runners, is skipped.
+          echo 'man-db man-db/auto-update boolean false' | sudo debconf-set-selections
           sudo apt-get update
-          sudo apt-get install -y weston libxkbcommon0
+          for try in 1 2 3; do
+            timeout 300 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y weston libxkbcommon0 && break
+            test "$try" -lt 3 || exit 1
+          done
 
       - name: Run the Linux host's tests
         run: cargo test --no-fail-fast -p dsa-host-linux
@@ -337,10 +344,17 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install GTK 4, libadwaita, gettext and the desktop file checkers
+        timeout-minutes: 20
         run: |
+          # A stalled download held the job for its whole 30 minutes: each try gets 5 minutes,
+          # and man-db's trigger, the slowest part of an install on the runners, is skipped.
+          echo 'man-db man-db/auto-update boolean false' | sudo debconf-set-selections
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev gettext desktop-file-utils \
-            appstream weston
+          for try in 1 2 3; do
+            timeout 300 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libgtk-4-dev libadwaita-1-dev \
+              gettext desktop-file-utils appstream weston && break
+            test "$try" -lt 3 || exit 1
+          done
 
       - name: Run the settings app's tests
         run: cargo test --no-fail-fast -p dsa-settings-linux
@@ -394,10 +408,12 @@ jobs:
           done
 
   macos-host:
-    name: Test the macOS host (macos-14)
+    name: Test the macOS host (macos-latest)
     needs: changes
     if: needs.changes.outputs.macos == 'true'
-    runs-on: macos-14
+    # macos-14 runners are no longer handed out: every job asking for one was cancelled
+    # without ever starting.
+    runs-on: macos-latest
     timeout-minutes: 30
     defaults:
       run:
