@@ -10,4 +10,7 @@ if grep -Eq 'runs-on: macos-1[0-4]$' "$workflow"; then
   exit 1
 fi
 test "$(grep -c 'timeout 300 sudo DEBIAN_FRONTEND=noninteractive apt-get install' "$workflow")" -ge 2
+
+# The macOS settings app's icon is checked size by size, as the package test does.
+grep -Fq 'test -s "$RUNNER_TEMP/DSA.iconset/icon_$size.png"' "$workflow"
 echo "test workflow runners: ok"
