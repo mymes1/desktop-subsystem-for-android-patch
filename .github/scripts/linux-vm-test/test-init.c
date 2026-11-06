@@ -1,7 +1,7 @@
 // The init of the VM the launcher test boots with the runner's own kernel: it loads the
-// modules the initrd carries, in the order of their numbered names (the virtio balloon
-// driver and what it needs, when the kernel does not build them in), and then idles, so the
-// guest's balloon driver is up while the test resizes, pauses and stops the VM.
+// modules the initrd carries, in the order of their numbered names (the virtio balloon and
+// virtio-mem drivers and what they need, when the kernel does not build them in), and then
+// idles, so the guest's drivers are up while the test resizes, pauses and stops the VM.
 #define _GNU_SOURCE
 #include <fcntl.h>
 #include <stdio.h>
