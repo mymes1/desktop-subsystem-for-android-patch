@@ -991,6 +991,75 @@ jobs:
       # service's own first check (a minute after it started) cannot find it first.
       # 0.0.10 bundles a newer stand-in image, 17.0.0-2, whose disk has a disk's signature, so
       # the service takes its files as complete and must boot it in place of 17.0.0-1.
+      # A repair, a reinstall from the command line, and a rebuild of the same version put
+      # over the one installed, each as people run them: msiexec /fa, msiexec /i with
+      # REINSTALL=ALL REINSTALLMODE=vamus, and a plain msiexec /i (a double-click) or the
+      # REINSTALL command on a newer build. None of them may remove what only uninstalling
+      # removes, and the service runs after each. Uninstalling, and what it removes, is the
+      # Uninstall step below.
+      - name: fr1_repair_reinstall_and_same_version_rebuild_keep_the_service_and_user_data
+        run: |
+          $userRoot = "$env:LOCALAPPDATA\DSA"
+          $userMark = "$userRoot\repair-test.txt"
+          $machineMark = "$env:DATA_DIR\settings\repair-test.txt"
+          New-Item -ItemType Directory -Force $userRoot, "$env:DATA_DIR\settings" | Out-Null
+          Set-Content $userMark 'kept'
+          Set-Content $machineMark 'kept'
+          $displayName = 'Desktop Subsystem for Android (test package)'
+          function Get-Entries {
+            @(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' |
+              Where-Object { $_.DisplayName -eq $displayName })
+          }
+          function Invoke-Step([string] $what, [string] $log, [string[]] $arguments) {
+            Write-Host "== $what"
+            $p = Start-Process msiexec -Wait -PassThru -ArgumentList ($arguments + @('/qn', '/l*v', $log))
+            if ($p.ExitCode -notin 0, 3010) {
+              Select-String -Path $log -Pattern 'Error 27|Return value 3' | Select-Object -First 20 | ForEach-Object { $_.Line }
+              Get-Content $log -Tail 80
+              throw "$what failed ($($p.ExitCode))"
+            }
+            if (Select-String -Path $log -Pattern 'Action start [0-9:]+: Remove(UserData|MachineData|Images|Updates)\.' -Quiet) {
+              throw "$what ran an action that only uninstalling may run"
+            }
+            $deadline = (Get-Date).AddSeconds(60)
+            while ((Get-Service DsaHost -ErrorAction SilentlyContinue).Status -ne 'Running') {
+              if ((Get-Date) -gt $deadline) { throw "after $what the service is $((Get-Service DsaHost -ErrorAction SilentlyContinue).Status)" }
+              Start-Sleep -Seconds 2
+            }
+            foreach ($name in 'dsa.exe', 'dsa-hostd.exe', 'dsa-wm.exe') {
+              if (-not (Test-Path "$env:PROGRAM_DIR\$name")) { throw "after $what $name is missing" }
+            }
+            if (-not (Test-Path $userMark)) { throw "$what removed the user's files" }
+            if (-not (Test-Path $machineMark)) { throw "$what removed the service's settings" }
+            $entries = Get-Entries
+            if ($entries.Count -ne 1) { throw "after $what $($entries.Count) entries are in the list of installed programs" }
+            & "$env:PROGRAM_DIR\dsa.exe" status
+            if ($LASTEXITCODE -ne 0) { throw "after $what dsa status failed" }
+            Write-Host "$what kept the service and the data"
+          }
+          function Build-Again {
+            dsa/host/platform/windows/installer/build.ps1 -Version 0.0.9 -PlaceholderKernel -Arch $env:DSA_ARCH `
+              -ImageDir .scratch\stand-in-image -AndroidMajor 17 `
+              -PipeSddl "D:P(A;;GA;;;SY)(A;;GRGW;;;IU)(A;;GRGW;;;AU)" `
+              -ListUrl "$env:MIRROR\images.json" -TrustedKey $env:TEST_PUBLIC_KEY `
+              -ProgramListUrl "$env:MIRROR\program.json"
+            if (-not $?) { throw "building 0.0.9 again failed" }
+          }
+          $msi = (Resolve-Path 'dsa\target\installer\dsa-test-0.0.9.msi').Path
+          Invoke-Step 'a repair (msiexec /fa)' 'repair-fa.log' @('/fa', "`"$msi`"")
+          Invoke-Step 'a reinstall (REINSTALL=ALL REINSTALLMODE=vamus)' 'repair-vamus.log' @('/i', "`"$msi`"", 'REINSTALL=ALL', 'REINSTALLMODE=vamus')
+          # A rebuild of the same version is a new product to Windows Installer, which takes
+          # the place of the build before it.
+          $before = (Get-Entries)[0].PSChildName
+          Build-Again
+          Invoke-Step 'a same-version rebuild installed as a double-click does' 'same-version.log' @('/i', "`"$msi`"")
+          $after = (Get-Entries)[0].PSChildName
+          if ($after -eq $before) { throw "the rebuild did not replace the build before it ($before)" }
+          Build-Again
+          Invoke-Step 'a same-version rebuild installed with REINSTALL=ALL REINSTALLMODE=vamus' 'same-version-vamus.log' @('/i', "`"$msi`"", 'REINSTALL=ALL', 'REINSTALLMODE=vamus')
+          if ((Get-Entries)[0].PSChildName -eq $after) { throw "the second rebuild did not replace the first" }
+          Remove-Item -Force $userMark, $machineMark
+
       - name: Build version 0.0.10 and offer it in the program list
         run: |
           $newer = (New-Item -ItemType Directory -Force .scratch\stand-in-image-2).FullName
