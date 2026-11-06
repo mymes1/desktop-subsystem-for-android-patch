@@ -109,6 +109,9 @@ const WM_APP_COMMANDS: u32 = WM_APP + 1;
 const WM_APP_QUIT: u32 = WM_APP + 2;
 /// Sent to a task window when a frame of another size than the window's is kept for it.
 const WM_APP_FRAME_READY: u32 = WM_APP + 4;
+/// Sent to a task window when the color its title bar's band is filled with changes: the
+/// color in `wparam`, and `lparam` 0 when the band is left as the app draws it.
+const WM_APP_BAND_COLOUR: u32 = WM_APP + 5;
 
 /// The message window's timer, which reports windows left showing a frame of an older size.
 const TICK_TIMER: usize = 1;
@@ -569,6 +572,15 @@ unsafe extern "system" fn task_window_proc(
         WM_APP_FRAME_READY => {
             if let Some(data) = window_data(hwnd) {
                 take_kept_frame(hwnd, data);
+            }
+            0
+        }
+        WM_APP_BAND_COLOUR => {
+            // The app's frames show whether it leaves the title bar's band empty.
+            if let Some(data) = window_data(hwnd) {
+                let fill = (lparam != 0).then_some(wparam as u32);
+                let presenter = data.presenter.borrow().clone();
+                data.caption.set_fill(hwnd, fill, presenter.as_deref());
             }
             0
         }
@@ -1180,6 +1192,11 @@ impl Ui {
                     ToHost::Retitle { task_id, title } => {
                         if let Some(hwnd) = self.open.get(&task_id) {
                             SetWindowTextW(*hwnd, wide(&title).as_ptr());
+                            // The title bar shows the name too.
+                            if let Some(data) = window_data(*hwnd) {
+                                let presenter = data.presenter.borrow().clone();
+                                data.caption.set_title(*hwnd, &title, presenter.as_deref());
+                            }
                         }
                     }
                     ToHost::Resize {
@@ -1334,7 +1351,7 @@ impl Ui {
             min_client: Cell::new(None),
             reporting: Cell::new(false),
             minimized: Cell::new(false),
-            caption: CaptionWindow::new(task_id, TASK_STYLE, TASK_EX_STYLE),
+            caption: CaptionWindow::new(task_id, TASK_STYLE, TASK_EX_STYLE, ICON_ID),
             drag_edges: Cell::new((false, false)),
             following: Cell::new(false),
             mode: Cell::new(ModeState::new()),
@@ -1404,6 +1421,17 @@ impl Ui {
                 // drops the message.
                 unsafe { PostMessageW(window as HWND, WM_APP_FRAME_READY, 0, 0) };
             }));
+            presenter.on_band_colour(Box::new(move |fill| {
+                // SAFETY: as above.
+                unsafe {
+                    PostMessageW(
+                        window as HWND,
+                        WM_APP_BAND_COLOUR,
+                        fill.unwrap_or(0) as WPARAM,
+                        LPARAM::from(fill.is_some()),
+                    )
+                };
+            }));
             self.setup
                 .presenters
                 .lock()
@@ -1424,7 +1452,7 @@ impl Ui {
         if let Some(data) = window_data(hwnd) {
             data.caption.extend_frame(hwnd);
             data.caption.report_height(hwnd, &*self.setup.report);
-            data.caption.paint(hwnd, data.presenter.borrow().as_deref());
+            data.caption.set_title(hwnd, title, data.presenter.borrow().as_deref());
             // Until the app's first frame the window shows the app's icon on a splash
             // background, never the desktop through an empty window. It is on the screen
             // before the window is shown.
