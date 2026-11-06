@@ -4,491 +4,530 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Desktop Subsystem for Android</title>
-<meta name="description" content="Desktop Subsystem for Android (DSA): Android as a complete, self-governing system in its own VM, with each app as a first-class desktop window. Open source, Apache-2.0.">
+<meta name="description" content="Desktop Subsystem for Android (DSA) runs Android in its own VM on its own kernel and shows each Android task as a real desktop window. Open source, Apache-2.0.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root {
-  --green: #3ddc84;
   --deep: #0c5a43;
-  --bg: #f4f8f5;
-  --bg2: #e7f0ea;
-  --ink: #0d1f18;
-  --muted: #4a6158;
-  --line: #c7d8ce;
-  --card: #ffffff;
-  --accent-ink: #0a4a37;
-  --win: #ffffff;
-  --shadow: 0 10px 30px rgba(12, 90, 67, .18);
-  --sans: "Inter", system-ui, -apple-system, "Segoe UI", "Noto Sans KR", "Malgun Gothic", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --green: #3ddc84;
+  --bg: #eef2ef;
+  --wall: #e3eae5;
+  --ink: #111a16;
+  --muted: #52615a;
+  --line: #c9d4cd;
+  --win: #fbfcfb;
+  --bar: #f1f4f2;
+  --rail: #0f1a16;
+  --rail-ink: #d6e4dc;
+  --rail-muted: #7f978b;
+  --rail-line: #22332b;
+  --accent: #0c5a43;
+  --focus: #0c5a43;
+  --shadow: 0 1px 2px rgba(17,26,22,.08), 0 12px 32px rgba(17,26,22,.12);
+  --shadow-top: 0 1px 2px rgba(17,26,22,.1), 0 22px 48px rgba(12,90,67,.22);
+  --head: "Schibsted Grotesk", "IBM Plex Sans KR", system-ui, sans-serif;
+  --sans: "IBM Plex Sans", "IBM Plex Sans KR", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --railw: 288px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #07140f; --bg2: #0c1f18; --ink: #e6f4ec; --muted: #9db8ab; --line: #1f3a2f;
-    --card: #0f241c; --accent-ink: #3ddc84; --win: #132c22; --shadow: 0 10px 30px rgba(0,0,0,.5);
+    --bg: #0a100d; --wall: #0d1512; --ink: #e4ece7; --muted: #94a69c; --line: #24332c;
+    --win: #131c18; --bar: #18231e; --rail: #060a08; --rail-line: #1a2721;
+    --accent: #3ddc84; --focus: #3ddc84;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.45);
+    --shadow-top: 0 1px 2px rgba(0,0,0,.5), 0 22px 48px rgba(0,0,0,.6);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #07140f; --bg2: #0c1f18; --ink: #e6f4ec; --muted: #9db8ab; --line: #1f3a2f;
-  --card: #0f241c; --accent-ink: #3ddc84; --win: #132c22; --shadow: 0 10px 30px rgba(0,0,0,.5);
+  --bg: #0a100d; --wall: #0d1512; --ink: #e4ece7; --muted: #94a69c; --line: #24332c;
+  --win: #131c18; --bar: #18231e; --rail: #060a08; --rail-line: #1a2721;
+  --accent: #3ddc84; --focus: #3ddc84;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.45);
+  --shadow-top: 0 1px 2px rgba(0,0,0,.5), 0 22px 48px rgba(0,0,0,.6);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 400 17px/1.6 var(--sans); }
-html[lang="ko"] [data-l="en"], html[lang="en"] [data-l="ko"] { display: none !important; }
-a { color: var(--accent-ink); }
-:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; border-radius: 6px; }
-.skip { position: absolute; left: -999px; top: 8px; background: var(--card); padding: 8px 12px; z-index: 50; }
-.skip:focus { left: 16px; }
-.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--sans); }
+html[lang="ko"] body { word-break: keep-all; line-height: 1.7; }
+html[lang="en"] [data-l="ko"], html[lang="ko"] [data-l="en"] { display: none; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.mono { font-family: var(--mono); }
 
-header.top { position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px);
-  background: color-mix(in srgb, var(--bg) 82%, transparent); border-bottom: 1px solid var(--line); }
-header.top .wrap { display: flex; align-items: center; gap: 12px; height: 56px; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; text-decoration: none; color: var(--ink); }
-.brand svg { width: 30px; height: 30px; }
-.spacer { flex: 1; }
-.tbtn { font: 600 14px var(--sans); background: transparent; color: var(--ink); border: 1px solid var(--line);
-  border-radius: 999px; padding: 6px 12px; cursor: pointer; }
-.tbtn[aria-pressed="true"] { background: var(--deep); color: #fff; border-color: var(--deep); }
+/* Layout: the Android rail, the HAL seam, the desktop */
+.stage { display: grid; grid-template-columns: var(--railw) 1fr; min-height: 100vh; }
+.rail { position: sticky; top: 0; height: 100vh; overflow: auto; background: var(--rail); color: var(--rail-ink);
+  padding: 20px 20px 24px; font: 400 13px/1.5 var(--mono); border-right: 1px solid var(--rail-line); }
+.desk { position: relative; min-width: 0; background:
+  linear-gradient(var(--wall), var(--wall)) padding-box;
+  padding: 0 clamp(16px, 4vw, 56px) 120px; }
+.seam { position: fixed; top: 0; bottom: 0; left: var(--railw); width: 0; z-index: 3; pointer-events: none; }
+.seam::before { content: ""; position: absolute; top: 0; bottom: 0; left: -1px; width: 2px;
+  background: repeating-linear-gradient(to bottom, var(--green) 0 6px, transparent 6px 12px); opacity: .55; }
+.seam span { position: absolute; top: 50%; left: 6px; transform: rotate(90deg); transform-origin: left top;
+  font: 500 11px/1 var(--mono); letter-spacing: .14em; color: var(--muted); white-space: nowrap; }
 
-.hero { padding: 56px 0 24px; }
-.eyebrow { font: 500 13px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink); }
-h1 { font-size: clamp(36px, 7vw, 76px); line-height: 1.02; letter-spacing: -.03em; margin: 12px 0 18px; font-weight: 800; }
-h1 em { font-style: normal; color: var(--green); }
-.lede { font-size: clamp(18px, 2.2vw, 22px); color: var(--muted); max-width: 720px; }
+.rail h2 { font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--rail-muted); margin: 22px 0 8px; }
+.rail .who { display: flex; align-items: center; gap: 10px; font: 700 15px/1.2 var(--head); color: #fff; }
+.rail .who svg { width: 28px; height: 28px; color: var(--green); }
+.rail .sub { color: var(--rail-muted); margin: 6px 0 0; }
+.state { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; padding: 4px 10px; border: 1px solid var(--rail-line); border-radius: 999px; }
+.state i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+.state[data-s="doze"] i { background: transparent; border: 1px solid var(--rail-muted); }
+.procs { list-style: none; margin: 0; padding: 0; }
+.procs li { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--rail-line); }
+.procs li span:last-child { color: var(--rail-muted); }
+.procs li.app span:first-child::before { content: "▸ "; color: var(--green); }
+.procs li.gone { display: none; }
+.meter { height: 8px; background: var(--rail-line); border-radius: 4px; overflow: hidden; margin: 8px 0 6px; }
+.meter b { display: block; height: 100%; width: 0; background: var(--green); transition: width .5s ease; }
+.lend { list-style: none; margin: 0; padding: 0; }
+.lend li { display: flex; justify-content: space-between; padding: 3px 0; color: var(--rail-muted); }
+.lend li.on { color: var(--rail-ink); }
+.lend li.on span:last-child { color: var(--green); }
+.log { margin: 0; padding: 0; list-style: none; color: var(--rail-muted); min-height: 7.5em; }
+.log li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note { color: var(--rail-muted); font-size: 11px; margin-top: 18px; }
+.railtoggle { display: none; }
 
-/* The simulation */
-.sim { margin: 32px 0 8px; background: var(--card); border: 1px solid var(--line); border-radius: 20px;
-  box-shadow: var(--shadow); overflow: hidden; }
-.sim-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
-.sim-bar strong { font-size: 14px; margin-right: 6px; }
-.launch { font: 600 14px var(--sans); border: 0; border-radius: 10px; padding: 8px 12px; cursor: pointer;
-  background: var(--bg2); color: var(--ink); display: inline-flex; gap: 6px; align-items: center; }
-.launch:hover { background: color-mix(in srgb, var(--green) 25%, var(--bg2)); }
-.launch i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
-.stage { position: relative; height: 460px; background:
-  radial-gradient(circle at 18% 50%, color-mix(in srgb, var(--green) 14%, transparent), transparent 40%), var(--bg2); }
-#field { position: absolute; inset: 0; width: 100%; height: 100%; }
-.desk { position: absolute; top: 0; bottom: 0; right: 0; left: 38%; }
-.win { position: absolute; width: 190px; background: var(--win); border-radius: 12px; box-shadow: var(--shadow);
-  border: 1px solid var(--line); overflow: hidden; transition: transform .5s cubic-bezier(.2,.8,.2,1), opacity .5s; }
-.win.enter { transform: scale(.3) translateX(-200px); opacity: 0; }
-.win .tb { display: flex; align-items: center; gap: 6px; padding: 6px 6px 6px 10px; background: var(--deep); color: #fff; font-size: 13px; font-weight: 600; }
-.win .tb span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.win .tb button { border: 0; background: transparent; color: #fff; font-size: 16px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
-.win .tb button:hover { background: rgba(255,255,255,.2); }
-.win .body { height: 96px; padding: 10px; display: grid; gap: 6px; }
-.win .body div { border-radius: 6px; background: var(--bg2); }
-.legend { display: flex; flex-wrap: wrap; gap: 18px; padding: 12px 14px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); align-items: center; }
-.meter { flex: 1 1 220px; min-width: 200px; }
-.meter .track { height: 10px; border-radius: 99px; background: var(--bg2); overflow: hidden; border: 1px solid var(--line); }
-.meter .fill { height: 100%; width: 10%; background: linear-gradient(90deg, var(--deep), var(--green)); transition: width .6s; }
-.state { font: 500 13px var(--mono); padding: 3px 10px; border-radius: 99px; background: var(--bg2); color: var(--ink); }
-.state.doze { background: var(--deep); color: #fff; }
-.note { font-size: 13px; color: var(--muted); margin: 8px 2px 0; }
+/* Desktop top bar */
+.top { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 0 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--win); }
+.seg button { font: 500 12px/1 var(--mono); padding: 8px 10px; background: none; border: 0; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 
-/* Chapters */
-section.ch { padding: 96px 0; border-top: 1px solid var(--line); }
-.ch .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
-.ch h2 { font-size: clamp(28px, 4.2vw, 48px); line-height: 1.08; letter-spacing: -.02em; margin: 8px 0 16px; }
-.ch p { color: var(--muted); max-width: 560px; }
-.num { font: 800 clamp(44px, 7vw, 84px)/1 var(--sans); letter-spacing: -.03em; color: var(--accent-ink); }
-.tag { display: inline-block; font: 500 12px var(--mono); text-transform: uppercase; letter-spacing: .06em; border-radius: 6px; padding: 2px 8px; margin-top: 8px; }
-.tag.m { background: var(--green); color: #052b1f; }
-.tag.g { border: 1px dashed var(--muted); color: var(--muted); }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 28px; }
-.stat { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px; }
-.stat p { margin: 10px 0 0; font-size: 15px; }
-.plat { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 28px; }
-.plat .stat h3 { margin: 0 0 4px; }
-.diagram { width: 100%; height: auto; }
-.reveal { opacity: 0; transform: translateY(24px); transition: opacity .8s, transform .8s; }
-.reveal.on { opacity: 1; transform: none; }
-.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
-.btn { display: inline-block; text-decoration: none; font-weight: 700; padding: 12px 18px; border-radius: 12px; background: var(--deep); color: #fff; }
-.btn.alt { background: transparent; color: var(--ink); border: 1px solid var(--line); }
-footer { padding: 48px 0 64px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
-code { font-family: var(--mono); font-size: .9em; }
+/* Wallpaper headline */
+.lead { max-width: 920px; padding: clamp(40px, 9vh, 96px) 0 clamp(32px, 6vh, 64px); }
+.lead .name { font: 500 13px/1.4 var(--mono); color: var(--muted); margin: 0 0 20px; }
+h1 { font: 700 clamp(32px, 5.4vw, 64px)/1.06 var(--head); letter-spacing: -.02em; margin: 0; max-width: 18ch; }
+html[lang="ko"] h1 { letter-spacing: -.01em; line-height: 1.2; max-width: 20ch; }
+.lead p { font-size: clamp(17px, 1.6vw, 19px); color: var(--muted); max-width: 60ch; margin: 24px 0 0; }
+.hint { font: 400 13px/1.5 var(--mono); color: var(--muted); margin-top: 28px; }
 
-@media (max-width: 760px) {
-  .ch .grid { grid-template-columns: 1fr; gap: 24px; }
-  .stage { height: 520px; }
-  .desk { left: 0; top: 46%; }
-  .win { width: 150px; }
-  section.ch { padding: 64px 0; }
+/* Windows */
+.windows { display: grid; gap: clamp(28px, 5vh, 56px); max-width: 1040px; }
+.win { position: relative; background: var(--win); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  max-width: 760px; transition: box-shadow .2s, opacity .45s ease, translate .45s ease; will-change: transform; }
+.win:nth-child(even) { justify-self: end; }
+.win.top-z { box-shadow: var(--shadow-top); z-index: 2; }
+.win.pending { opacity: 0; translate: -48px 0; }
+.win[hidden] { display: none; }
+.tb { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; background: var(--bar); border-bottom: 1px solid var(--line);
+  border-radius: 10px 10px 0 0; cursor: grab; touch-action: none; user-select: none; font: 500 12px/1 var(--mono); color: var(--muted); }
+.tb:active { cursor: grabbing; }
+.tb svg { width: 16px; height: 16px; color: var(--accent); flex: none; }
+.tb .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb .x { flex: none; width: 28px; height: 24px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; font: 400 16px/1 var(--sans); }
+.tb .x:hover { background: var(--line); color: var(--ink); }
+.body { padding: clamp(20px, 3vw, 32px); }
+.win h3 { font: 700 clamp(22px, 2.4vw, 28px)/1.2 var(--head); letter-spacing: -.01em; margin: 0 0 14px; }
+.win p { margin: 0 0 14px; max-width: 64ch; }
+.win p:last-child { margin-bottom: 0; }
+.figs { display: flex; flex-wrap: wrap; gap: 12px 32px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.fig { min-width: 150px; }
+.fig b { display: block; font: 500 clamp(26px, 3vw, 34px)/1.1 var(--head); letter-spacing: -.01em; }
+.fig small { display: block; color: var(--muted); font-size: 14px; max-width: 26ch; }
+.tag { display: inline-block; font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: 4px 6px; border-radius: 4px; margin: 6px 0; }
+.tag.m { background: var(--deep); color: #fff; }
+.tag.g { border: 1px solid var(--line); color: var(--muted); }
+.devs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.devs button { font: 500 13px/1 var(--mono); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.devs button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.devs button[aria-pressed="true"]::before { content: "● "; color: var(--green); }
+.hosts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 18px; }
+.hosts div { border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.hosts h4 { font: 700 16px/1.2 var(--head); margin: 0; }
+.hosts p { font-size: 14px; color: var(--muted); margin: 6px 0 0; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.links a { font: 500 14px/1 var(--sans); padding: 12px 16px; border-radius: 8px; text-decoration: none; border: 1px solid var(--line); color: var(--ink); }
+.links a:first-child { background: var(--deep); border-color: var(--deep); color: #fff; }
+.closed { font: 400 13px/1.4 var(--mono); color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; max-width: 760px; }
+.closed button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.win:nth-child(even) + .closed, .closed:nth-child(even) { justify-self: end; }
+
+/* Taskbar of the host shell */
+.task { position: fixed; left: calc(var(--railw) + 16px); right: 16px; bottom: 12px; z-index: 4; display: flex; gap: 6px; align-items: center;
+  padding: 6px; background: color-mix(in srgb, var(--win) 88%, transparent); backdrop-filter: blur(10px);
+  border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow-x: auto; scrollbar-width: none; }
+.task .lbl { font: 500 11px/1 var(--mono); color: var(--muted); padding: 0 8px; white-space: nowrap; }
+.task button { flex: none; font: 500 12px/1 var(--mono); padding: 8px 10px; border-radius: 8px; border: 0; background: none; color: var(--muted); cursor: pointer; position: relative; }
+.task button[data-open="true"] { color: var(--ink); }
+.task button[data-open="true"]::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: 2px; height: 2px; border-radius: 1px; background: var(--accent); }
+.task button[data-front="true"] { background: var(--bar); }
+
+footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted); }
+
+/* Narrow: the rail becomes a strip above the desktop */
+@media (max-width: 860px) {
+  :root { --railw: 0px; }
+  .stage { display: block; }
+  .rail { position: sticky; top: 0; z-index: 5; height: auto; max-height: 100vh; padding: 10px 16px; border-right: 0; border-bottom: 2px dashed color-mix(in srgb, var(--green) 55%, transparent); }
+  .seam { display: none; }
+  .rail .full { display: none; }
+  .rail.open .full { display: block; }
+  .rail .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .rail .sub, .rail .state { margin: 0; }
+  .rail .who { font-size: 14px; }
+  .rail .who svg { width: 22px; height: 22px; }
+  .railtoggle { display: inline-block; font: 500 12px/1 var(--mono); color: var(--rail-ink); background: none; border: 1px solid var(--rail-line); border-radius: 6px; padding: 6px 8px; cursor: pointer; }
+  .rail .mini { display: flex; gap: 12px; color: var(--rail-muted); font-size: 12px; margin-top: 6px; }
+  .desk { padding: 0 16px 104px; }
+  .win, .win:nth-child(even) { justify-self: stretch; }
+  .task { left: 8px; right: 8px; bottom: 8px; }
+  .task .lbl { display: none; }
 }
+@media (min-width: 861px) { .rail .mini { display: none; } .rail .row { display: block; } }
+
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  .win, .reveal, .meter .fill { transition: none; }
-  .reveal { opacity: 1; transform: none; }
+  .win, .meter b { transition: none; }
+  .win.pending { opacity: 1; translate: none; }
 }
 </style>
 </head>
 <body>
-<!-- The DSA symbol. Placeholder ("antenna window", proposal A) until the owner chooses
-     the shared symbol. Swap this one <symbol> and every use on the page follows. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="dsa-mark" viewBox="0 0 64 64">
-    <line x1="22" y1="14" x2="16" y2="4" stroke="#3ddc84" stroke-width="4" stroke-linecap="round"/>
-    <line x1="42" y1="14" x2="48" y2="4" stroke="#3ddc84" stroke-width="4" stroke-linecap="round"/>
-    <rect x="4" y="12" width="56" height="46" rx="9" fill="#0c5a43"/>
-    <rect x="4" y="12" width="56" height="13" rx="9" fill="#3ddc84"/>
-    <rect x="4" y="19" width="56" height="6" fill="#3ddc84"/>
-    <circle cx="48" cy="18.5" r="2.4" fill="#0c5a43"/>
-    <circle cx="40" cy="18.5" r="2.4" fill="#0c5a43"/>
-    <rect x="12" y="32" width="40" height="18" rx="4" fill="#3ddc84" opacity=".35"/>
+  <!-- Brand symbol placeholder ("antenna window"). Replace this one symbol to change the mark everywhere. -->
+  <symbol id="dsa-mark" viewBox="0 0 32 32">
+    <path d="M10 9 7 4M22 9l3-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+    <rect x="3" y="9" width="26" height="19" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
+    <path d="M3 14h26" stroke="currentColor" stroke-width="2"/>
+    <circle cx="11" cy="11.6" r="1" fill="currentColor"/><circle cx="21" cy="11.6" r="1" fill="currentColor"/>
   </symbol>
 </svg>
 
-<a class="skip" href="#main"><span data-l="en">Skip to content</span><span data-l="ko">본문으로 건너뛰기</span></a>
-
-<header class="top">
-  <div class="wrap">
-    <a class="brand" href="#main"><svg role="img" aria-label="DSA"><use href="#dsa-mark"/></svg> DSA</a>
-    <span class="spacer"></span>
-    <div role="group" aria-label="Language / 언어">
-      <button class="tbtn" type="button" data-lang="en" aria-pressed="true">EN</button>
-      <button class="tbtn" type="button" data-lang="ko" aria-pressed="false">한국어</button>
-    </div>
-  </div>
-</header>
-
-<main id="main">
-<div class="wrap hero">
-  <div class="eyebrow">Desktop Subsystem for Android™</div>
-  <h1>
-    <span data-l="en">Android, <em>sovereign</em>.<br>Its apps, <em>free</em>.</span>
-    <span data-l="ko">스스로 다스리는 <em>Android</em>,<br>자유로운 <em>앱</em>.</span>
-  </h1>
-  <p class="lede">
-    <span data-l="en">DSA does not imitate a phone. It gives Android a machine of its own: its own virtual machine, its own kernel, its own complete system. Then each app steps out of it and becomes a real window on your desktop.</span>
-    <span data-l="ko">DSA는 휴대폰을 흉내 내지 않습니다. Android에게 자기만의 기계를 줍니다. 자기 가상 머신, 자기 커널, 온전한 자기 시스템입니다. 그리고 앱 하나하나가 그 안에서 걸어 나와 데스크톱의 진짜 창이 됩니다.</span>
-  </p>
-
-  <div class="sim" aria-labelledby="simtitle">
-    <div class="sim-bar">
-      <strong id="simtitle"><span data-l="en">Try it: launch an app</span><span data-l="ko">직접 해 보기: 앱 실행</span></strong>
-      <button class="launch" type="button" data-app="Notes" data-c="#3ddc84"><i style="background:#3ddc84"></i><span data-l="en">Notes</span><span data-l="ko">메모</span></button>
-      <button class="launch" type="button" data-app="Music" data-c="#f2b134"><i style="background:#f2b134"></i><span data-l="en">Music</span><span data-l="ko">음악</span></button>
-      <button class="launch" type="button" data-app="Maps" data-c="#4aa3ff"><i style="background:#4aa3ff"></i><span data-l="en">Maps</span><span data-l="ko">지도</span></button>
-      <button class="launch" type="button" data-app="Chat" data-c="#e66b8f"><i style="background:#e66b8f"></i><span data-l="en">Chat</span><span data-l="ko">채팅</span></button>
-      <button class="launch" type="button" data-app="Camera" data-c="#9b7bff"><i style="background:#9b7bff"></i><span data-l="en">Camera</span><span data-l="ko">카메라</span></button>
-    </div>
-    <div class="stage">
-      <canvas id="field" aria-hidden="true"></canvas>
-      <div class="desk" id="desk" role="region" aria-label="Desktop"></div>
-    </div>
-    <div class="legend">
-      <span class="state" id="state" role="status" aria-live="polite">Active</span>
-      <div class="meter">
-        <div><span data-l="en">Host memory held by Android</span><span data-l="ko">Android가 쓰는 호스트 메모리</span>: <span id="memv">0</span>%</div>
-        <div class="track" aria-hidden="true"><div class="fill" id="memf"></div></div>
+<div class="stage">
+  <aside class="rail" id="rail" aria-label="Android system state (illustration)">
+    <div class="row">
+      <div>
+        <div class="who"><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span>Android</span></div>
+        <p class="sub"><span data-l="en">Its own VM, its own kernel</span><span data-l="ko">자기 VM, 자기 커널</span></p>
       </div>
-      <span><span data-l="en">Windows open</span><span data-l="ko">열린 창</span>: <span id="wins">0</span></span>
+      <div class="state" id="state" data-s="active" role="status" aria-live="polite"><i></i><span id="stateTxt">active</span></div>
+      <button class="railtoggle" id="railtoggle" aria-expanded="false" aria-controls="railfull"><span data-l="en">Details</span><span data-l="ko">자세히</span></button>
     </div>
-  </div>
-  <p class="note">
-    <span data-l="en">An illustration, not a measurement. Left: the Android VM with its own kernel. The line is the HAL boundary. Right: your desktop. Close every window and Android dozes while its unused memory flows back to the host.</span>
-    <span data-l="ko">측정이 아닌 그림입니다. 왼쪽은 자기 커널을 가진 Android VM, 선은 HAL 경계, 오른쪽은 데스크톱입니다. 창을 모두 닫으면 Android가 Doze에 들고, 쓰지 않는 메모리가 호스트로 흘러 돌아갑니다.</span>
-  </p>
+    <div class="mini"><span id="miniTasks">0 tasks</span><span id="miniMem">0 MiB</span></div>
+    <div class="full" id="railfull">
+      <h2><span data-l="en">Processes</span><span data-l="ko">프로세스</span></h2>
+      <ul class="procs" id="procs">
+        <li><span>init</span><span>1</span></li>
+        <li><span>servicemanager</span><span>211</span></li>
+        <li><span>surfaceflinger</span><span>388</span></li>
+        <li><span>system_server</span><span>602</span></li>
+        <li><span>hwcomposer</span><span>415</span></li>
+        <li><span>agent</span><span>1031</span></li>
+      </ul>
+      <h2><span data-l="en">Host memory, at the goal budget</span><span data-l="ko">호스트 메모리, 목표 예산 기준</span></h2>
+      <div class="meter" aria-hidden="true"><b id="memBar"></b></div>
+      <div id="memTxt">0 MiB</div>
+      <h2><span data-l="en">Lent across the HAL</span><span data-l="ko">HAL 너머에서 빌린 장치</span></h2>
+      <ul class="lend" id="lend"></ul>
+      <h2>binder</h2>
+      <div><span id="txn">0</span> <span data-l="en">transactions</span><span data-l="ko">건</span></div>
+      <ul class="log" id="log" aria-hidden="true"></ul>
+      <p class="note"><span data-l="en">An illustration driven by this page, not live data. Each window on the right stands for one Android task. Memory uses the final goal: 250 MiB with one app, 80 MiB for each further app.</span><span data-l="ko">이 페이지가 움직이는 그림이며 실제 데이터가 아닙니다. 오른쪽 창 하나가 Android 작업 하나입니다. 메모리 수치는 최종 목표인 앱 하나에 250 MiB, 앱이 하나 늘 때마다 80 MiB를 씁니다.</span></p>
+    </div>
+  </aside>
+  <div class="seam" aria-hidden="true"><span>HAL BOUNDARY</span></div>
+
+  <main class="desk" id="desk">
+    <div class="top">
+      <div class="seg" role="group" aria-label="Language">
+        <button data-lang="en" aria-pressed="true">EN</button><button data-lang="ko" aria-pressed="false" lang="ko">한국어</button>
+      </div>
+      <div class="seg" role="group" aria-label="Theme">
+        <button data-theme-set="auto" aria-pressed="true">auto</button><button data-theme-set="light" aria-pressed="false">light</button><button data-theme-set="dark" aria-pressed="false">dark</button>
+      </div>
+    </div>
+
+    <header class="lead">
+      <p class="name">Desktop Subsystem for Android™ (DSA)</p>
+      <h1><span data-l="en">Each Android app becomes a real desktop window. Android keeps its own kernel.</span><span data-l="ko">Android 앱이 하나씩 진짜 데스크톱 창이 됩니다. Android는 자기 커널 위에서 그대로 돕니다.</span></h1>
+      <p><span data-l="en">DSA runs Android as a complete system in a dedicated virtual machine, and hands each of its tasks to the host as a native window. Nothing in Android is emulated or translated. The host supplies only what a desktop owns: windows, input, and devices.</span><span data-l="ko">DSA는 Android를 전용 가상 머신에서 온전한 시스템으로 실행하고, 그 안의 작업 하나하나를 호스트의 네이티브 창으로 넘깁니다. Android의 어떤 부분도 흉내 내거나 번역하지 않습니다. 호스트는 데스크톱이 원래 가진 것만 내줍니다. 창, 입력, 장치입니다.</span></p>
+      <p class="hint"><span data-l="en">Left: Android, running on its own. Right: your desktop. The windows below are movable, focusable and closable, by pointer or keyboard (arrow keys on a title bar move it, Delete closes it).</span><span data-l="ko">왼쪽은 혼자 돌아가는 Android, 오른쪽은 데스크톱입니다. 아래 창은 마우스로도 키보드로도 옮기고, 앞으로 가져오고, 닫을 수 있습니다. 제목 표시줄에서 화살표 키로 옮기고 Delete로 닫습니다.</span></p>
+    </header>
+
+    <div class="windows" id="windows">
+
+      <section class="win" id="w-system" data-proc="task.system" data-title="system" aria-labelledby="h-system">
+        <div class="tb" tabindex="0" aria-label="Window: own system. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / own system</span><button class="x" aria-label="Close window">×</button></div>
+        <div class="body">
+          <h3 id="h-system"><span data-l="en">Android runs whole, in its own VM.</span><span data-l="ko">Android는 전용 VM에서 통째로 돕니다.</span></h3>
+          <p><span data-l="en">Android runs in a dedicated lightweight VM on a kernel that DSA builds and ships, with binder built in. The kernel, ART and the framework are Android's own. No system call is translated, the user's WSL setup is never touched, and no user has to build or replace a kernel.</span><span data-l="ko">Android는 DSA가 직접 빌드해 함께 배포하는 커널 위, 전용 경량 VM에서 실행됩니다. binder는 커널에 들어 있습니다. 커널과 ART, 프레임워크는 모두 Android 본래의 것입니다. 시스템 호출을 번역하지 않고, 사용자의 WSL 설정은 건드리지 않으며, 사용자가 커널을 빌드하거나 바꿀 일도 없습니다.</span></p>
+          <p><span data-l="en">The consequence: apps meet the Android they were written for, and the host stays the host.</span><span data-l="ko">그래서 앱은 자기가 만들어진 그 Android를 만나고, 호스트는 호스트로 남습니다.</span></p>
+          <div class="figs"><div class="fig"><b>53 s</b><span class="tag m"><span data-l="en">Measured</span><span data-l="ko">측정값</span></span><small><span data-l="en">Android VM boot, on a real PC, preview build.</span><span data-l="ko">실제 PC, 미리보기 빌드에서 잰 Android VM 부팅 시간.</span></small></div></div>
+        </div>
+      </section>
+
+      <section class="win" id="w-window" data-proc="task.window" data-title="windows" aria-labelledby="h-window">
+        <div class="tb" tabindex="0" aria-label="Window: native windows. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / one task, one window</span><button class="x" aria-label="Close window">×</button></div>
+        <div class="body">
+          <h3 id="h-window"><span data-l="en">One task, one native window.</span><span data-l="ko">작업 하나에 네이티브 창 하나.</span></h3>
+          <p><span data-l="en">There is no phone frame showing the whole Android screen. Each Android task gets its own host window, with its own taskbar button, Alt+Tab entry, Start menu entry and notifications. A custom hwcomposer hands each task's layers to the host, and frames go from the GPU to the window without a copy through the CPU.</span><span data-l="ko">Android 화면 전체를 담는 휴대폰 틀은 없습니다. Android 작업마다 호스트 창이 따로 생기고, 작업 표시줄 단추, Alt+Tab 항목, 시작 메뉴 항목, 알림도 따로 갖습니다. 전용 hwcomposer가 작업별 레이어를 호스트에 넘기고, 프레임은 CPU를 거쳐 복사되지 않고 GPU에서 곧장 창으로 갑니다.</span></p>
+          <p><span data-l="en">The host is the shell. Android carries no launcher, no status bar and no keyboard app; text input comes from the host's own input method. The windows on this page behave the same way: move one, bring it forward, close it.</span><span data-l="ko">셸은 호스트입니다. Android 안에는 런처도, 상태 표시줄도, 키보드 앱도 없고, 글자 입력은 호스트의 입력기가 맡습니다. 이 페이지의 창도 똑같이 움직입니다. 옮기고, 앞으로 가져오고, 닫아 보십시오.</span></p>
+          <div class="figs"><div class="fig"><b>429 ms</b><span class="tag m"><span data-l="en">Measured</span><span data-l="ko">측정값</span></span><small><span data-l="en">Launch to an app window's first frame, on a real PC, preview build.</span><span data-l="ko">실제 PC, 미리보기 빌드에서 잰 앱 실행부터 창의 첫 프레임까지.</span></small></div></div>
+        </div>
+      </section>
+
+      <section class="win" id="w-hal" data-proc="task.hal" data-title="HAL" aria-labelledby="h-hal">
+        <div class="tb" tabindex="0" aria-label="Window: the HAL boundary. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / the HAL boundary</span><button class="x" aria-label="Close window">×</button></div>
+        <div class="body">
+          <h3 id="h-hal"><span data-l="en">Devices cross at the HAL, nowhere else.</span><span data-l="ko">장치는 HAL에서만 경계를 넘습니다.</span></h3>
+          <p><span data-l="en">The dashed line beside this page is the hardware abstraction layer. Everything above it stays in Android. The host lends its devices across it as HAL services over RPC Binder, so Android talks to a camera or a speaker the way it always does, and the host decides what is lent. OpenGL ES runs on ANGLE; Vulkan is remoted to the host GPU.</span><span data-l="ko">페이지 옆의 점선이 하드웨어 추상화 계층(HAL)입니다. 그 위의 모든 것은 Android 안에 남습니다. 호스트는 RPC Binder 위의 HAL 서비스로 장치를 그 너머에 빌려줍니다. Android는 카메라나 스피커를 늘 하던 방식대로 쓰고, 무엇을 빌려줄지는 호스트가 정합니다. OpenGL ES는 ANGLE 위에서, Vulkan은 호스트 GPU로 원격 실행됩니다.</span></p>
+          <p><span data-l="en">Control messages have one definition, and the codecs for Rust, Java and C++ are generated from it. Every connection checks the protocol version, the schema hash and a per-boot secret. Lend a device:</span><span data-l="ko">제어 메시지의 정의는 하나이고, Rust, Java, C++ 코덱은 모두 그 정의에서 생성됩니다. 연결마다 프로토콜 버전, 스키마 해시, 부팅마다 바뀌는 비밀 값을 확인합니다. 장치를 빌려줘 보십시오.</span></p>
+          <div class="devs" id="devs" role="group" aria-label="Host devices">
+            <button data-dev="gpu" aria-pressed="true">GPU</button>
+            <button data-dev="audio" aria-pressed="false">audio</button>
+            <button data-dev="camera" aria-pressed="false">camera</button>
+            <button data-dev="sensors" aria-pressed="false">sensors</button>
+            <button data-dev="location" aria-pressed="false">location</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="win" id="w-mem" data-proc="task.memory" data-title="memory" aria-labelledby="h-mem">
+        <div class="tb" tabindex="0" aria-label="Window: idle and memory. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / idle and memory</span><button class="x" aria-label="Close window">×</button></div>
+        <div class="body">
+          <h3 id="h-mem"><span data-l="en">No window open means Doze, and memory goes back.</span><span data-l="ko">열린 창이 없으면 Doze, 메모리는 호스트로.</span></h3>
+          <p><span data-l="en">When no Android window is shown, Android enters Doze, as a phone does in a pocket: notifications still arrive and the CPU rests. Memory that Android frees is reported and returned to the host while it runs, not only when it stops. Freezing the guest is opt-in, never the default.</span><span data-l="ko">보이는 Android 창이 없으면 Android는 주머니 속 휴대폰처럼 Doze에 들어갑니다. 알림은 그대로 오고 CPU는 쉽니다. Android가 비운 메모리는 멈출 때가 아니라 돌아가는 동안 계속 호스트에 알려지고 돌려집니다. 게스트를 얼리는 것은 사용자가 고를 때만이고, 기본값이 아닙니다.</span></p>
+          <p><span data-l="en">Close the windows on this page and watch the rail: tasks leave, the memory figure falls, and Android dozes.</span><span data-l="ko">이 페이지의 창을 닫으면서 왼쪽을 보십시오. 작업이 빠지고, 메모리 수치가 내려가고, Android가 Doze에 듭니다.</span></p>
+          <div class="figs">
+            <div class="fig"><b>400 MiB</b><span class="tag g"><span data-l="en">Goal</span><span data-l="ko">목표</span></span><small><span data-l="en">Near term: all DSA host processes, one simple app open.</span><span data-l="ko">단기: 단순한 앱 하나를 연 상태의 DSA 호스트 프로세스 전체.</span></small></div>
+            <div class="fig"><b>250 MiB</b><span class="tag g"><span data-l="en">Goal</span><span data-l="ko">목표</span></span><small><span data-l="en">Final, under the same conditions.</span><span data-l="ko">최종, 같은 조건.</span></small></div>
+            <div class="fig"><b>80 MiB</b><span class="tag g"><span data-l="en">Goal</span><span data-l="ko">목표</span></span><small><span data-l="en">At most, for each further app.</span><span data-l="ko">앱이 하나 늘 때마다 넘지 않을 양.</span></small></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="win" id="w-hosts" data-proc="task.hosts" data-title="hosts" aria-labelledby="h-hosts">
+        <div class="tb" tabindex="0" aria-label="Window: three hosts. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / three hosts</span><button class="x" aria-label="Close window">×</button></div>
+        <div class="body">
+          <h3 id="h-hosts"><span data-l="en">One guest, three hosts.</span><span data-l="ko">게스트 하나, 호스트 셋.</span></h3>
+          <p><span data-l="en">The protocol, the guest and the host core name no operating system. Each host adds only its VM, its transport and its window system, so the Android that runs is the same on all three.</span><span data-l="ko">프로토콜, 게스트, 호스트 코어에는 특정 운영체제가 들어 있지 않습니다. 호스트마다 VM, 전송 수단, 창 시스템만 더하므로 세 호스트 모두에서 같은 Android가 돕니다.</span></p>
+          <div class="hosts">
+            <div><h4>Windows 11</h4><span class="tag m"><span data-l="en">Preview released</span><span data-l="ko">미리보기 출시</span></span><p><span data-l="en">Host Compute System VM, Direct3D 11 and DirectComposition windows. x64 released; ARM64 in progress.</span><span data-l="ko">Host Compute System VM, Direct3D 11과 DirectComposition 창. x64는 출시, ARM64는 진행 중.</span></p></div>
+            <div><h4>Linux</h4><span class="tag g"><span data-l="en">In progress</span><span data-l="ko">진행 중</span></span><p><span data-l="en">crosvm on KVM, a Wayland compositor, .deb and .rpm with a signed repository. Built and run in CI, not released.</span><span data-l="ko">KVM 위의 crosvm, Wayland 컴포지터, 서명된 저장소와 .deb, .rpm. CI에서 빌드하고 실행하며, 아직 출시 전.</span></p></div>
+            <div><h4>macOS</h4><span class="tag g"><span data-l="en">In progress</span><span data-l="ko">진행 중</span></span><p><span data-l="en">Apple's Virtualization framework on Apple silicon, as DSA.app in a .pkg and a .dmg. Built in CI, not released.</span><span data-l="ko">Apple silicon의 Virtualization 프레임워크, .pkg와 .dmg로 배포하는 DSA.app. CI에서 빌드하며, 아직 출시 전.</span></p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="win" id="w-open" data-proc="task.open" data-title="open" aria-labelledby="h-open">
+        <div class="tb" tabindex="0" aria-label="Window: open source. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / open source</span><button class="x" aria-label="Close window">×</button></div>
+        <div class="body">
+          <h3 id="h-open"><span data-l="en">Built from parts anyone may carry on.</span><span data-l="ko">누구든 이어 갈 수 있는 부품으로 만듭니다.</span></h3>
+          <p><span data-l="en">Microsoft ended the Windows Subsystem for Android on March 5, 2025, and the apps people ran with it lost their place on the desktop. DSA covers what it did and goes further, on Apache-2.0 code with no proprietary binaries. No app store and no Google Play services ship with DSA; installing them stays the user's choice.</span><span data-l="ko">Microsoft는 2025년 3월 5일 Windows Subsystem for Android 지원을 끝냈고, 그 위에서 쓰던 앱은 데스크톱에서 자리를 잃었습니다. DSA는 그때 되던 일을 모두 해내고 그 이상을 목표로 하며, 독점 바이너리 없이 Apache-2.0 코드로 만듭니다. 앱 스토어나 Google Play 서비스는 함께 배포하지 않습니다. 설치는 사용자가 정합니다.</span></p>
+          <p><span data-l="en">Development is public: issues, pull requests, and a test for every specified behaviour.</span><span data-l="ko">개발은 공개로 진행합니다. 이슈와 풀 리퀘스트가 열려 있고, 정해 둔 동작마다 테스트가 있습니다.</span></p>
+          <div class="links">
+            <a href="https://github.com/thisisthepy/desktop-subsystem-for-android/releases/latest"><span data-l="en">Download the preview</span><span data-l="ko">미리보기 받기</span></a>
+            <a href="https://github.com/thisisthepy/desktop-subsystem-for-android"><span data-l="en">Source on GitHub</span><span data-l="ko">GitHub 소스</span></a>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      <p><span data-l="en">Android is a trademark of Google LLC. Windows is a trademark of the Microsoft group of companies. macOS and Apple silicon are trademarks of Apple Inc. DSA is an independent open-source project, not affiliated with, endorsed by or sponsored by Google, Microsoft or Apple.</span><span data-l="ko">Android는 Google LLC의 상표입니다. Windows는 Microsoft 그룹의 상표입니다. macOS와 Apple silicon은 Apple Inc.의 상표입니다. DSA는 독립 오픈 소스 프로젝트이며 Google, Microsoft, Apple과 제휴 관계가 없고 그 보증이나 후원을 받지 않습니다.</span></p>
+    </footer>
+  </main>
 </div>
 
-<section class="ch" id="autonomy">
-  <div class="wrap grid">
-    <div class="reveal">
-      <div class="eyebrow">01</div>
-      <h2><span data-l="en">A whole system, governing itself.</span><span data-l="ko">스스로를 다스리는 온전한 시스템.</span></h2>
-      <p><span data-l="en">Android runs in a dedicated lightweight VM with a kernel DSA builds and ships. Its kernel, its runtime and its framework stay Android's own. Nothing is translated, nothing is faked at the system call level, and nothing depends on the user's WSL or on a kernel the user has to build.</span><span data-l="ko">Android는 DSA가 직접 빌드해 함께 제공하는 커널 위에서, 전용 경량 VM으로 실행됩니다. 커널, 런타임, 프레임워크는 그대로 Android의 것입니다. 시스템 호출을 번역하거나 흉내 내지 않고, 사용자의 WSL이나 사용자가 직접 빌드할 커널에 기대지 않습니다.</span></p>
-    </div>
-    <svg class="diagram reveal" viewBox="0 0 400 260" role="img" aria-label="The Android VM contains its own kernel, runtime and framework">
-      <rect x="20" y="20" width="360" height="220" rx="18" fill="none" stroke="#3ddc84" stroke-width="3"/>
-      <text x="40" y="50" fill="currentColor" font-size="14" font-family="sans-serif">Android VM</text>
-      <rect x="40" y="70" width="320" height="40" rx="8" fill="#3ddc84" opacity=".25"/><text x="56" y="96" fill="currentColor" font-size="14" font-family="sans-serif">Apps</text>
-      <rect x="40" y="118" width="320" height="40" rx="8" fill="#3ddc84" opacity=".45"/><text x="56" y="144" fill="currentColor" font-size="14" font-family="sans-serif">Framework · ART</text>
-      <rect x="40" y="166" width="320" height="52" rx="8" fill="#0c5a43"/><text x="56" y="198" fill="#fff" font-size="14" font-family="sans-serif">Kernel (binder built in)</text>
-    </svg>
-  </div>
-</section>
-
-<section class="ch" id="windows">
-  <div class="wrap grid">
-    <div class="reveal">
-      <div class="eyebrow">02</div>
-      <h2><span data-l="en">No phone frame. Windows.</span><span data-l="ko">휴대폰 틀이 아니라, 창.</span></h2>
-      <p><span data-l="en">Every Android task is its own native window, with its own taskbar button, Alt+Tab entry, Start menu entry and notifications. A custom hwcomposer hands each task's layers to the host, and frames travel GPU to window without passing through the CPU. The host is the shell: there is no launcher, no status bar and no keyboard app inside Android.</span><span data-l="ko">Android 작업 하나하나가 자기 작업 표시줄 단추, Alt+Tab 항목, 시작 메뉴 항목, 알림을 가진 네이티브 창입니다. 전용 hwcomposer가 작업마다 레이어를 호스트로 넘기고, 프레임은 CPU를 거치지 않고 GPU에서 창으로 갑니다. 셸은 호스트입니다. Android 안에는 런처도, 상태 표시줄도, 키보드 앱도 없습니다.</span></p>
-    </div>
-    <div class="stat reveal">
-      <div class="num">429 ms</div>
-      <span class="tag m"><span data-l="en">Measured</span><span data-l="ko">측정값</span></span>
-      <p><span data-l="en">Time to an app window's first frame, measured on a real PC (preview build).</span><span data-l="ko">실제 PC에서 잰 앱 창의 첫 프레임까지 걸린 시간(미리보기 빌드).</span></p>
-    </div>
-  </div>
-</section>
-
-<section class="ch" id="boundary">
-  <div class="wrap grid">
-    <div class="reveal">
-      <div class="eyebrow">03</div>
-      <h2><span data-l="en">The border is the HAL. The treaty is one protocol.</span><span data-l="ko">국경은 HAL, 조약은 하나의 프로토콜.</span></h2>
-      <p><span data-l="en">Android keeps its sovereignty; the host lends its devices. GPU, audio, camera, sensors and location cross at the hardware abstraction layer, as HAL services over RPC Binder. Control messages follow one definition, with codecs generated for Rust, Java and C++. Every connection checks the protocol version, the schema hash and a per-boot secret.</span><span data-l="ko">Android는 주권을 지키고, 호스트는 장치를 빌려줍니다. GPU, 오디오, 카메라, 센서, 위치는 하드웨어 추상화 계층에서 RPC Binder 위의 HAL 서비스로 경계를 넘습니다. 제어 메시지는 하나의 정의를 따르고, Rust, Java, C++ 코덱은 그 정의에서 생성됩니다. 모든 연결은 프로토콜 버전, 스키마 해시, 부팅마다 바뀌는 비밀을 확인합니다.</span></p>
-    </div>
-    <svg class="diagram reveal" viewBox="0 0 400 240" role="img" aria-label="Guest and host separated by the HAL boundary, joined by one protocol">
-      <rect x="10" y="20" width="160" height="200" rx="14" fill="#3ddc84" opacity=".18" stroke="#3ddc84"/>
-      <text x="30" y="50" fill="currentColor" font-size="14" font-family="sans-serif">Guest</text>
-      <rect x="230" y="20" width="160" height="200" rx="14" fill="#0c5a43" opacity=".9"/>
-      <text x="250" y="50" fill="#fff" font-size="14" font-family="sans-serif">Host</text>
-      <line x1="200" y1="10" x2="200" y2="230" stroke="currentColor" stroke-dasharray="6 6"/>
-      <text x="184" y="236" fill="currentColor" font-size="11" font-family="monospace">HAL</text>
-      <path d="M150 100 H250" stroke="#3ddc84" stroke-width="3" marker-end="url(#a)"/>
-      <path d="M250 150 H150" stroke="#3ddc84" stroke-width="3" marker-end="url(#a)"/>
-      <text x="152" y="92" fill="currentColor" font-size="11" font-family="monospace">control.proto</text>
-      <text x="160" y="170" fill="currentColor" font-size="11" font-family="monospace">RPC Binder</text>
-      <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#3ddc84"/></marker></defs>
-    </svg>
-  </div>
-</section>
-
-<section class="ch" id="memory">
-  <div class="wrap">
-    <div class="reveal">
-      <div class="eyebrow">04</div>
-      <h2><span data-l="en">Memory comes home.</span><span data-l="ko">메모리는 집으로 돌아옵니다.</span></h2>
-      <p><span data-l="en">When no window is shown, Android enters Doze, as a phone in a pocket does: notifications still arrive, the CPU rests. Memory Android frees is reported and returned to the host continuously while it runs, not only when it stops. Freezing is a choice, never the default.</span><span data-l="ko">보이는 창이 없으면 Android는 주머니 속 휴대폰처럼 Doze에 듭니다. 알림은 계속 오고 CPU는 쉽니다. Android가 비운 메모리는 멈출 때만이 아니라 실행 중에도 계속 호스트로 돌아갑니다. 얼리기는 선택이며, 기본값이 아닙니다.</span></p>
-    </div>
-    <div class="stats">
-      <div class="stat reveal"><div class="num">53 s</div><span class="tag m"><span data-l="en">Measured</span><span data-l="ko">측정값</span></span>
-        <p><span data-l="en">Boot time of the Android VM, measured on a real PC (preview build).</span><span data-l="ko">실제 PC에서 잰 Android VM의 부팅 시간(미리보기 빌드).</span></p></div>
-      <div class="stat reveal"><div class="num">400 MiB</div><span class="tag g"><span data-l="en">Goal</span><span data-l="ko">목표</span></span>
-        <p><span data-l="en">Near-term goal: all of DSA's host processes with one simple app open.</span><span data-l="ko">단기 목표: 단순한 앱 하나를 연 상태의 DSA 호스트 프로세스 전체.</span></p></div>
-      <div class="stat reveal"><div class="num">250 MiB</div><span class="tag g"><span data-l="en">Goal</span><span data-l="ko">목표</span></span>
-        <p><span data-l="en">Final goal for the same, with at most 80 MiB for each further app.</span><span data-l="ko">같은 조건의 최종 목표. 앱을 하나 더 열 때마다 80 MiB 이하.</span></p></div>
-    </div>
-  </div>
-</section>
-
-<section class="ch" id="hosts">
-  <div class="wrap">
-    <div class="reveal">
-      <div class="eyebrow">05</div>
-      <h2><span data-l="en">One guest. Three homes.</span><span data-l="ko">하나의 게스트, 세 개의 집.</span></h2>
-      <p><span data-l="en">The protocol, the guest and the host core name no operating system. Each host adds only its VM, its transport and its window system.</span><span data-l="ko">프로토콜, 게스트, 호스트 코어는 어떤 운영체제도 지목하지 않습니다. 호스트마다 VM, 전송, 창 시스템만 더합니다.</span></p>
-    </div>
-    <div class="plat">
-      <div class="stat reveal"><h3>Windows 11</h3><span class="tag m"><span data-l="en">Preview, released</span><span data-l="ko">미리보기 출시</span></span>
-        <p><span data-l="en">Host Compute System VM, Direct3D 11 and DirectComposition windows. x64 released; ARM64 in progress.</span><span data-l="ko">Host Compute System VM, Direct3D 11과 DirectComposition 창. x64 출시, ARM64 진행 중.</span></p></div>
-      <div class="stat reveal"><h3>Linux</h3><span class="tag g"><span data-l="en">In progress</span><span data-l="ko">진행 중</span></span>
-        <p><span data-l="en">crosvm on KVM, a Wayland compositor, .deb and .rpm with a signed repository. Built and run in CI, not released.</span><span data-l="ko">KVM 위 crosvm, Wayland 컴포지터, 서명된 저장소를 갖춘 .deb와 .rpm. CI에서 빌드하고 실행하며, 미출시.</span></p></div>
-      <div class="stat reveal"><h3>macOS</h3><span class="tag g"><span data-l="en">In progress</span><span data-l="ko">진행 중</span></span>
-        <p><span data-l="en">Apple's Virtualization framework on Apple silicon, as DSA.app in a .pkg and a .dmg. Built in CI, not released.</span><span data-l="ko">Apple silicon의 Virtualization 프레임워크, .pkg와 .dmg에 담긴 DSA.app. CI에서 빌드하며, 미출시.</span></p></div>
-    </div>
-  </div>
-</section>
-
-<section class="ch" id="open">
-  <div class="wrap reveal">
-    <div class="eyebrow">06</div>
-    <h2><span data-l="en">Open, so it can outlive any one owner.</span><span data-l="ko">열려 있기에, 누구 하나보다 오래갑니다.</span></h2>
-    <p><span data-l="en">Microsoft ended the Windows Subsystem for Android on March 5, 2025. DSA rebuilds that experience on parts anyone may carry on: Apache-2.0, no proprietary binaries, and no app store or Google Play services shipped, which stay the user's choice. Work happens in the open on the develop branch: issues, pull requests, and tests for every behaviour.</span><span data-l="ko">Microsoft는 2025년 3월 5일 Windows Subsystem for Android를 끝냈습니다. DSA는 그 경험을 누구나 이어 갈 수 있는 부품으로 다시 짓습니다. Apache-2.0이고, 독점 바이너리가 없으며, 앱 스토어나 Google Play 서비스는 함께 제공하지 않고 사용자의 선택으로 남깁니다. 작업은 develop 브랜치에서 공개로 이루어집니다. 이슈, 풀 리퀘스트, 모든 동작에 대한 테스트로요.</span></p>
-    <div class="cta">
-      <a class="btn" href="https://github.com/thisisthepy/desktop-subsystem-for-android"><span data-l="en">Source on GitHub</span><span data-l="ko">GitHub의 소스</span></a>
-      <a class="btn alt" href="https://github.com/thisisthepy/desktop-subsystem-for-android/releases/latest"><span data-l="en">Download the preview</span><span data-l="ko">미리보기 내려받기</span></a>
-      <a class="btn alt" href="https://github.com/thisisthepy/desktop-subsystem-for-android/issues"><span data-l="en">Report or propose</span><span data-l="ko">보고하거나 제안하기</span></a>
-      <a class="btn alt" href="../README.md" data-l="en">User guides</a>
-      <a class="btn alt" href="../ko/README.md" data-l="ko">사용 안내서</a>
-    </div>
-  </div>
-</section>
-</main>
-
-<footer>
-  <div class="wrap">
-    <p><span data-l="en">The DSA symbol shown here is a placeholder until the project's symbol is chosen.</span><span data-l="ko">이 페이지의 DSA 기호는 프로젝트 기호가 정해질 때까지 쓰는 임시 기호입니다.</span></p>
-    <p><span data-l="en">Android is a trademark of Google LLC. Windows is a trademark of the Microsoft group of companies. macOS and Apple silicon are trademarks of Apple Inc. DSA is an independent open-source project, not affiliated with, endorsed by or sponsored by Google, Microsoft or Apple.</span><span data-l="ko">Android는 Google LLC의 상표입니다. Windows는 Microsoft 그룹의 상표입니다. macOS와 Apple silicon은 Apple Inc.의 상표입니다. DSA는 독립 오픈 소스 프로젝트이며 Google, Microsoft, Apple과 제휴하거나 그들의 보증 또는 후원을 받지 않습니다.</span></p>
-  </div>
-</footer>
+<nav class="task" id="task" aria-label="Taskbar"><span class="lbl">host</span></nav>
 
 <script>
 (function () {
   "use strict";
   var root = document.documentElement;
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
 
-  // Language: #ko or the stored choice or the browser's language.
+  /* Language */
   function setLang(l) {
     root.lang = l;
-    document.querySelectorAll("[data-lang]").forEach(function (b) {
-      b.setAttribute("aria-pressed", String(b.dataset.lang === l));
-    });
-    try { localStorage.setItem("dsa-intro-lang", l); } catch (e) {}
-    updateState();
+    document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.lang === l)); });
+    store("dsa-intro-lang", l); render();
   }
-  var initial = location.hash === "#ko" ? "ko" : location.hash === "#en" ? "en" : null;
-  if (!initial) { try { initial = localStorage.getItem("dsa-intro-lang"); } catch (e) {} }
-  if (!initial) initial = (navigator.language || "en").toLowerCase().indexOf("ko") === 0 ? "ko" : "en";
-  document.querySelectorAll("[data-lang]").forEach(function (b) {
-    b.addEventListener("click", function () { setLang(b.dataset.lang); });
+  document.querySelectorAll("[data-lang]").forEach(function (b) { b.onclick = function () { setLang(b.dataset.lang); }; });
+
+  /* Theme */
+  function setTheme(t) {
+    if (t === "auto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", t);
+    document.querySelectorAll("[data-theme-set]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.themeSet === t)); });
+    store("dsa-intro-theme", t);
+  }
+  document.querySelectorAll("[data-theme-set]").forEach(function (b) { b.onclick = function () { setTheme(b.dataset.themeSet); }; });
+
+  /* Narrow rail toggle */
+  var rail = document.getElementById("rail"), rt = document.getElementById("railtoggle");
+  rt.onclick = function () { var o = rail.classList.toggle("open"); rt.setAttribute("aria-expanded", String(o)); };
+
+  /* Windows */
+  var wins = [].slice.call(document.querySelectorAll(".win"));
+  var procs = document.getElementById("procs"), task = document.getElementById("task");
+  var z = 1, front = null;
+  var state = {};
+  wins.forEach(function (w, i) {
+    state[w.id] = { open: true, seen: false, x: 0, y: 0, pid: 1200 + i * 37 };
+    var li = document.createElement("li"); li.className = "app gone"; li.id = "p-" + w.id;
+    li.innerHTML = "<span>" + w.dataset.proc + "</span><span>" + state[w.id].pid + "</span>";
+    procs.appendChild(li);
+    var b = document.createElement("button"); b.id = "t-" + w.id; b.textContent = w.dataset.title;
+    b.onclick = function () { if (!state[w.id].open) reopen(w); else { raise(w); w.scrollIntoView({ block: "nearest", behavior: reduce.matches ? "auto" : "smooth" }); w.querySelector(".tb").focus({ preventScroll: true }); } };
+    task.appendChild(b);
+    var ph = document.createElement("div"); ph.className = "closed"; ph.hidden = true; ph.id = "c-" + w.id;
+    w.after(ph);
+    var tb = w.querySelector(".tb");
+    w.querySelector(".x").onclick = function (e) { e.stopPropagation(); close(w); };
+    w.addEventListener("pointerdown", function () { raise(w); });
+    tb.addEventListener("focus", function () { raise(w); });
+    tb.addEventListener("keydown", function (e) {
+      var s = state[w.id], step = e.shiftKey ? 64 : 16;
+      if (e.key === "ArrowLeft") s.x -= step; else if (e.key === "ArrowRight") s.x += step;
+      else if (e.key === "ArrowUp") s.y -= step; else if (e.key === "ArrowDown") s.y += step;
+      else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); close(w); return; }
+      else if (e.key === "Home") { s.x = 0; s.y = 0; }
+      else return;
+      e.preventDefault(); place(w);
+    });
+    tb.addEventListener("dblclick", function () { state[w.id].x = 0; state[w.id].y = 0; place(w); });
+    var drag = null;
+    tb.addEventListener("pointerdown", function (e) {
+      if (e.target.closest(".x") || e.button > 0) return;
+      drag = { px: e.clientX, py: e.clientY, x: state[w.id].x, y: state[w.id].y };
+      tb.setPointerCapture(e.pointerId);
+    });
+    tb.addEventListener("pointermove", function (e) {
+      if (!drag) return;
+      state[w.id].x = drag.x + e.clientX - drag.px; state[w.id].y = drag.y + e.clientY - drag.py; place(w);
+    });
+    tb.addEventListener("pointerup", function () { drag = null; });
+    tb.addEventListener("pointercancel", function () { drag = null; });
   });
 
-  // Scroll reveal.
-  var els = document.querySelectorAll(".reveal");
-  if ("IntersectionObserver" in window && !reduce.matches) {
+  function place(w) {
+    var s = state[w.id], d = document.getElementById("desk").getBoundingClientRect(), r = w.getBoundingClientRect();
+    s.cx = s.cx || 0;
+    // Keep at least 96 px of the title bar inside the desktop horizontally.
+    var base = r.left - s.cx;
+    var minX = d.left - base - r.width + 96, maxX = d.right - base - 96;
+    s.x = Math.max(minX, Math.min(maxX, s.x));
+    s.cx = s.x;
+    w.style.transform = (s.x || s.y) ? "translate(" + s.x + "px," + s.y + "px)" : "";
+  }
+  function raise(w) {
+    if (front === w) return;
+    if (front) front.classList.remove("top-z");
+    front = w; w.classList.add("top-z"); w.style.zIndex = ++z; render();
+  }
+  function close(w) {
+    var s = state[w.id]; s.open = false; w.hidden = true;
+    var ph = document.getElementById("c-" + w.id); ph.hidden = false;
+    var t = w.querySelector(".t").textContent;
+    ph.innerHTML = root.lang === "ko"
+      ? "<span>" + t + " 창을 닫았습니다. 메모리가 호스트로 돌아갔습니다.</span> <button>다시 열기</button>"
+      : "<span>Closed " + t + ". Its memory went back to the host.</span> <button>Reopen</button>";
+    ph.querySelector("button").onclick = function () { reopen(w); };
+    if (front === w) front = null;
+    log(root.lang === "ko" ? "작업 종료 → " + w.dataset.proc : "task removed → " + w.dataset.proc);
+    render();
+    var next = document.getElementById("t-" + w.id); if (next) next.focus();
+  }
+  function reopen(w) {
+    var s = state[w.id]; s.open = true; s.seen = true; w.hidden = false;
+    document.getElementById("c-" + w.id).hidden = true;
+    w.classList.remove("pending");
+    log("window.open → " + w.dataset.proc);
+    raise(w); render();
+    w.scrollIntoView({ block: "nearest", behavior: reduce.matches ? "auto" : "smooth" });
+    w.querySelector(".tb").focus({ preventScroll: true });
+  }
+
+  /* Detach: a window leaves Android when it first scrolls into view */
+  function seeAll() { wins.forEach(function (w) { state[w.id].seen = true; w.classList.remove("pending"); }); render(); }
+  if (reduce.matches || !("IntersectionObserver" in window)) seeAll();
+  else {
+    wins.forEach(function (w) { w.classList.add("pending"); });
     var io = new IntersectionObserver(function (es) {
-      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("on"); io.unobserve(e.target); } });
-    }, { threshold: .15 });
-    els.forEach(function (e) { io.observe(e); });
-  } else { els.forEach(function (e) { e.classList.add("on"); }); }
-
-  // The simulation.
-  var canvas = document.getElementById("field"), ctx = canvas.getContext("2d");
-  var desk = document.getElementById("desk"), stage = canvas.parentElement;
-  var stateEl = document.getElementById("state"), memv = document.getElementById("memv"),
-      memf = document.getElementById("memf"), winsEl = document.getElementById("wins");
-  var W = 0, H = 0, dpr = 1, particles = [], windows = 0, mem = 12, target = 12, dozing = false, idleTimer = null, t = 0;
-  var names = { Notes: "메모", Music: "음악", Maps: "지도", Chat: "채팅", Camera: "카메라" };
-
-  function resize() {
-    dpr = window.devicePixelRatio || 1;
-    W = stage.clientWidth; H = stage.clientHeight;
-    canvas.width = W * dpr; canvas.height = H * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (reduce.matches) draw();
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var w = e.target; io.unobserve(w);
+        state[w.id].seen = true; w.classList.remove("pending");
+        log("window.open → " + w.dataset.proc); render();
+      });
+    }, { rootMargin: "0px 0px -15% 0px", threshold: 0.05 });
+    wins.forEach(function (w) { io.observe(w); });
   }
-  function narrow() { return W < 760; }
-  function core() { return narrow() ? { x: W / 2, y: H * .2, r: Math.min(W, H) * .16 } : { x: W * .18, y: H / 2, r: Math.min(W * .14, H * .32) }; }
-  function hostBar() { return narrow() ? { x: 16, y: H - 18, w: W - 32 } : { x: W * .42, y: H - 18, w: W * .54 }; }
+  reduce.addEventListener && reduce.addEventListener("change", function (e) { if (e.matches) seeAll(); });
 
-  function updateState() {
-    var ko = root.lang === "ko";
-    stateEl.textContent = dozing ? (ko ? "Dozing: 화면 꺼짐, 알림은 계속" : "Dozing: screen off, notifications still arrive")
-                                 : (ko ? "Active" : "Active");
-    stateEl.classList.toggle("doze", dozing);
-    memv.textContent = Math.round(mem);
-    memf.style.width = mem + "%";
-    winsEl.textContent = windows;
-    desk.setAttribute("aria-label", ko ? "데스크톱" : "Desktop");
-    desk.querySelectorAll(".win").forEach(function (w) {
-      var n = w.dataset.app, label = ko ? names[n] : n;
-      w.querySelector(".tb span").textContent = label;
-      w.querySelector(".tb button").setAttribute("aria-label", (ko ? "닫기: " : "Close ") + label);
-      w.setAttribute("aria-label", label);
+  /* Devices lent across the HAL */
+  var devNames = { gpu: "GPU", audio: "audio", camera: "camera", sensors: "sensors", location: "location" };
+  var lend = document.getElementById("lend");
+  function devs() {
+    lend.innerHTML = "";
+    document.querySelectorAll("#devs button").forEach(function (b) {
+      var on = b.getAttribute("aria-pressed") === "true";
+      var li = document.createElement("li"); if (on) li.className = "on";
+      li.innerHTML = "<span>" + devNames[b.dataset.dev] + "</span><span>" + (on ? (root.lang === "ko" ? "빌림" : "lent") : (root.lang === "ko" ? "없음" : "not lent")) + "</span>";
+      lend.appendChild(li);
     });
   }
-
-  function emit(n, from, to, color, back) {
-    if (reduce.matches) return;
-    for (var i = 0; i < n; i++) {
-      particles.push({ x: from.x + (Math.random() - .5) * 20, y: from.y + (Math.random() - .5) * 20, tx: to.x, ty: to.y,
-        p: -i * .03, s: .012 + Math.random() * .01, c: color, back: back, bend: (Math.random() - .5) * 120 });
-    }
-  }
-
-  function launch(app, color) {
-    clearTimeout(idleTimer);
-    if (dozing) { dozing = false; }
-    windows++;
-    target = Math.min(92, 18 + windows * 14);
-    var c = core(), dr = desk.getBoundingClientRect(), sr = stage.getBoundingClientRect();
-    var maxX = Math.max(10, dr.width - (narrow() ? 160 : 200)), maxY = Math.max(10, dr.height - 150);
-    var x = 10 + Math.random() * maxX, y = 10 + Math.random() * maxY;
-    var w = document.createElement("div");
-    w.className = "win enter"; w.dataset.app = app; w.setAttribute("role", "group");
-    w.style.left = x + "px"; w.style.top = y + "px";
-    w.innerHTML = '<div class="tb"><svg width="16" height="16" aria-hidden="true"><use href="#dsa-mark"/></svg><span></span><button type="button">×</button></div>' +
-      '<div class="body"><div style="background:' + color + ';opacity:.55"></div><div></div><div style="width:70%"></div></div>';
-    w.querySelector("button").addEventListener("click", function () { close(w, color); });
-    desk.appendChild(w);
-    requestAnimationFrame(function () { requestAnimationFrame(function () { w.classList.remove("enter"); }); });
-    emit(26, c, { x: dr.left - sr.left + x + 90, y: dr.top - sr.top + y + 20 }, color, false);
-    updateState();
-  }
-
-  function close(w, color) {
-    var dr = w.getBoundingClientRect(), sr = stage.getBoundingClientRect(), hb = hostBar();
-    var from = { x: dr.left - sr.left + dr.width / 2, y: dr.top - sr.top + dr.height / 2 };
-    var focusNext = w.previousElementSibling || w.nextElementSibling;
-    w.remove();
-    windows--;
-    target = Math.max(12, 18 + windows * 14 - 4);
-    emit(30, from, { x: hb.x + hb.w * .5, y: hb.y }, "#3ddc84", true);
-    if (focusNext) focusNext.querySelector("button").focus();
-    else document.querySelector(".launch").focus();
-    if (windows === 0) {
-      idleTimer = setTimeout(function () { dozing = true; target = 6; emit(20, core(), { x: hostBar().x + hostBar().w * .5, y: hostBar().y }, "#3ddc84", true); updateState(); }, reduce.matches ? 0 : 2200);
-    }
-    updateState();
-  }
-
-  document.querySelectorAll(".launch").forEach(function (b) {
-    b.addEventListener("click", function () { if (windows < 8) launch(b.dataset.app, b.dataset.c); });
+  document.querySelectorAll("#devs button").forEach(function (b) {
+    b.onclick = function () {
+      var on = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", String(on));
+      log((on ? "hal.attach " : "hal.detach ") + b.dataset.dev + " · RPC Binder"); devs();
+    };
   });
 
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    var c = core(), style = getComputedStyle(root), ink = style.getPropertyValue("--ink").trim() || "#0d1f18";
-    var pulse = reduce.matches ? 0 : Math.sin(t / (dozing ? 60 : 25)) * 4;
-    // HAL boundary
-    ctx.save(); ctx.setLineDash([6, 8]); ctx.strokeStyle = ink; ctx.globalAlpha = .35; ctx.beginPath();
-    if (narrow()) { ctx.moveTo(0, H * .43); ctx.lineTo(W, H * .43); } else { ctx.moveTo(W * .36, 0); ctx.lineTo(W * .36, H); }
-    ctx.stroke(); ctx.restore();
-    ctx.fillStyle = ink; ctx.globalAlpha = .55; ctx.font = "12px ui-monospace, monospace";
-    if (narrow()) ctx.fillText("HAL", 12, H * .43 - 8); else ctx.fillText("HAL", W * .36 + 8, 22);
-    ctx.globalAlpha = 1;
-    // The VM: rings for apps, framework, kernel
-    var rings = [[1, .18], [.72, .32], [.44, 1]];
-    rings.forEach(function (r, i) {
-      ctx.beginPath(); ctx.arc(c.x, c.y, c.r * r[0] + (i === 0 ? pulse : 0), 0, Math.PI * 2);
-      ctx.fillStyle = i === 2 ? "#0c5a43" : "rgba(61,220,132," + r[1] * (dozing ? .5 : 1) + ")"; ctx.fill();
+  /* Rail rendering */
+  var txn = 0, logEl = document.getElementById("log"), lines = [];
+  function log(s) { lines.unshift(s); lines = lines.slice(0, 5); logEl.innerHTML = lines.map(function (l) { return "<li>" + l + "</li>"; }).join(""); }
+  function openTasks() { return wins.filter(function (w) { return state[w.id].open && state[w.id].seen; }); }
+  function render() {
+    var ot = openTasks(), n = ot.length, ko = root.lang === "ko";
+    wins.forEach(function (w) {
+      var s = state[w.id];
+      document.getElementById("p-" + w.id).classList.toggle("gone", !(s.open && s.seen));
+      var b = document.getElementById("t-" + w.id);
+      b.dataset.open = String(s.open && s.seen); b.dataset.front = String(front === w && s.open);
+      b.setAttribute("aria-label", w.dataset.title + (s.open ? "" : ko ? ", 닫힘" : ", closed"));
     });
-    ctx.strokeStyle = "#3ddc84"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(c.x, c.y, c.r * 1.12, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = "#fff"; ctx.font = "600 12px system-ui, sans-serif"; ctx.textAlign = "center";
-    ctx.fillText(root.lang === "ko" ? "커널" : "kernel", c.x, c.y + 4);
-    ctx.fillStyle = ink; ctx.fillText(root.lang === "ko" ? "Android VM" : "Android VM", c.x, c.y - c.r * 1.12 - 8);
-    ctx.textAlign = "start";
-    // Host memory bar
-    var hb = hostBar();
-    ctx.globalAlpha = .55; ctx.fillStyle = ink; ctx.fillText(root.lang === "ko" ? "호스트" : "host", hb.x, hb.y - 8); ctx.globalAlpha = 1;
-    ctx.fillStyle = "rgba(12,90,67,.25)"; ctx.fillRect(hb.x, hb.y, hb.w, 6);
-    ctx.fillStyle = "#3ddc84"; ctx.fillRect(hb.x, hb.y, hb.w * (1 - mem / 100), 6);
-    // Particles
-    for (var i = particles.length - 1; i >= 0; i--) {
-      var p = particles[i]; p.p += p.s;
-      if (p.p < 0) continue;
-      if (p.p >= 1) { particles.splice(i, 1); continue; }
-      var e = 1 - Math.pow(1 - p.p, 3), mx = (p.x + p.tx) / 2, my = (p.y + p.ty) / 2 + p.bend;
-      var x = (1 - e) * (1 - e) * p.x + 2 * (1 - e) * e * mx + e * e * p.tx;
-      var y = (1 - e) * (1 - e) * p.y + 2 * (1 - e) * e * my + e * e * p.ty;
-      ctx.globalAlpha = 1 - p.p * .6; ctx.fillStyle = p.c;
-      ctx.beginPath(); ctx.arc(x, y, p.back ? 2.2 : 3, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
+    var mem = n ? 250 + 80 * (n - 1) : 0, max = 250 + 80 * (wins.length - 1);
+    document.getElementById("memBar").style.width = (mem / max * 100) + "%";
+    var mt = n ? (ko ? "작업 " + n + "개 · 최대 " + mem + " MiB" : n + (n > 1 ? " tasks" : " task") + " · up to " + mem + " MiB")
+               : (ko ? "열린 창 없음 · 빈 메모리는 호스트로 반환" : "no window open · freed memory returned to the host");
+    document.getElementById("memTxt").textContent = mt;
+    document.getElementById("miniTasks").textContent = ko ? "작업 " + n + "개" : n + (n === 1 ? " task" : " tasks");
+    document.getElementById("miniMem").textContent = n ? (ko ? "최대 " : "up to ") + mem + " MiB" : (ko ? "메모리 반환됨" : "memory returned");
+    var st = document.getElementById("state"), anySeen = wins.some(function (w) { return state[w.id].seen; });
+    var doze = anySeen && n === 0;
+    st.dataset.s = doze ? "doze" : "active";
+    document.getElementById("stateTxt").textContent = doze ? "doze" : "active";
+    devs();
   }
 
-  function loop() {
-    t++;
-    mem += (target - mem) * .04;
-    if (Math.abs(target - mem) > .3) { memv.textContent = Math.round(mem); memf.style.width = mem + "%"; }
-    draw();
-    requestAnimationFrame(loop);
+  /* Binder activity: faster while tasks are open, sparse in Doze */
+  var calls = ["surfaceflinger → hwcomposer · present", "system_server → agent · task.moved", "agent → host · window.frame", "host → agent · input.key", "system_server → servicemanager · getService"];
+  function tick() {
+    var n = openTasks().length;
+    txn += n ? 3 + n * 4 + Math.floor(Math.random() * 6) : (Math.random() < .2 ? 1 : 0);
+    document.getElementById("txn").textContent = txn.toLocaleString("en");
+    if (n && Math.random() < .35) log(calls[Math.floor(Math.random() * calls.length)]);
   }
+  var timer = null;
+  function startTick() { if (!timer && !reduce.matches) timer = setInterval(tick, 900); }
+  document.addEventListener("visibilitychange", function () { if (document.hidden) { clearInterval(timer); timer = null; } else startTick(); });
 
-  window.addEventListener("resize", resize);
-  window.addEventListener("hashchange", function () { if (location.hash === "#ko" || location.hash === "#en") setLang(location.hash.slice(1)); });
-  resize();
-  setLang(initial);
-  if (reduce.matches) {
-    // No animation: state changes apply at once and the scene redraws on each change.
-    var origUpdate = updateState;
-    updateState = function () { mem = target; origUpdate(); draw(); };
-    updateState();
-  } else {
-    requestAnimationFrame(loop);
-  }
+  var l = store("dsa-intro-lang") || ((navigator.language || "").toLowerCase().indexOf("ko") === 0 ? "ko" : "en");
+  setTheme(store("dsa-intro-theme") || "auto");
+  log("boot complete · binder ready");
+  setLang(l);
+  tick(); startTick();
 })();
 </script>
 </body>
