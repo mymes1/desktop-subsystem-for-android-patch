@@ -110,12 +110,18 @@ pub fn navigation_values(
         (
             "",
             Some("LocalizedString"),
-            Text(format!("@{icon},-{}", dsa_exe_resources::shell::NAVIGATION_NAME)),
+            Text(format!(
+                "@{icon},-{}",
+                dsa_exe_resources::shell::NAVIGATION_NAME
+            )),
         ),
         (
             "",
             Some("InfoTip"),
-            Text(format!("@{icon},-{}", dsa_exe_resources::shell::NAVIGATION_TIP)),
+            Text(format!(
+                "@{icon},-{}",
+                dsa_exe_resources::shell::NAVIGATION_TIP
+            )),
         ),
         // Shown in the navigation pane, after Quick access, OneDrive and This PC.
         ("", Some("System.IsPinnedToNameSpaceTree"), Dword(1)),
@@ -123,7 +129,10 @@ pub fn navigation_values(
         (
             "DefaultIcon",
             None,
-            Text(format!("{icon},-{}", dsa_exe_resources::FILES_ICON_GROUP_ID)),
+            Text(format!(
+                "{icon},-{}",
+                dsa_exe_resources::FILES_ICON_GROUP_ID
+            )),
         ),
         (
             "InProcServer32",
