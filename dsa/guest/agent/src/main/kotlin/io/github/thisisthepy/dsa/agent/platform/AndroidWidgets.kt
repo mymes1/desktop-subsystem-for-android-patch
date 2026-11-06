@@ -270,32 +270,42 @@ class AndroidWidgets(private val context: Context, private val log: Log) : Widge
         }
     }
 
-    /** The root of a widget's window: it hears when any view in it needs drawing again. */
-    private class CaptureRoot(context: Context, private val invalidated: () -> Unit) : FrameLayout(context) {
+    /**
+     * The root of a widget's window: it hears when any view in it needs drawing again.
+     *
+     * FrameLayout's constructor calls requestLayout() before this class's own fields are set,
+     * so the callback is read through a field that is still null at that point.
+     */
+    internal class CaptureRoot(context: Context, invalidated: () -> Unit) : FrameLayout(context) {
+        private val listener: (() -> Unit)? = invalidated
+
         override fun onDescendantInvalidated(child: View, target: View) {
             super.onDescendantInvalidated(child, target)
-            invalidated()
+            listener?.invoke()
         }
 
         override fun invalidate() {
             super.invalidate()
-            invalidated()
+            listener?.invoke()
         }
 
         override fun requestLayout() {
             super.requestLayout()
-            invalidated()
+            listener?.invoke()
         }
     }
 
     /**
      * A widget's view as the agent makes it: it says when its app sent new views, which is
-     * the one sign of an update that reaches a view with no window.
+     * the one sign of an update that reaches a view with no window. Its callback is read the
+     * same guarded way, in case the view's constructor reaches an override first.
      */
-    private class WidgetView(context: Context, private val updated: () -> Unit) : AppWidgetHostView(context) {
+    internal class WidgetView(context: Context, updated: () -> Unit) : AppWidgetHostView(context) {
+        private val listener: (() -> Unit)? = updated
+
         override fun updateAppWidget(remoteViews: RemoteViews?) {
             super.updateAppWidget(remoteViews)
-            updated()
+            listener?.invoke()
         }
     }
 
