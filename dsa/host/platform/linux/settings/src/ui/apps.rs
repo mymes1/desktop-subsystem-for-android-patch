@@ -11,6 +11,9 @@ use crate::i18n::{tr, trf};
 use crate::model::{App, AppWindow};
 use crate::view;
 
+/// A callback set once its page is built, called to draw or reload that page again.
+type Hook = Rc<RefCell<Option<Rc<dyn Fn()>>>>;
+
 /// The installed apps: open, App info, uninstall, and each app's window settings.
 pub fn apps(ctx: &Shared) -> gtk::Widget {
     let page = Rc::new(Page::new());
@@ -61,8 +64,8 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
     let windows: Rc<RefCell<HashMap<String, AppWindow>>> = Rc::default();
 
     // Builds the list again from what is known, as the search says.
-    let render: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::default();
-    let reload: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::default();
+    let render: Hook = Rc::default();
+    let reload: Hook = Rc::default();
     {
         let (ctx, page, rows, apps, windows) = (
             ctx.clone(),
@@ -147,7 +150,7 @@ fn app_row(
     page: &Rc<Page>,
     app: &App,
     window: Option<AppWindow>,
-    reload: Rc<RefCell<Option<Rc<dyn Fn()>>>>,
+    reload: Hook,
 ) -> adw::ExpanderRow {
     let row = adw::ExpanderRow::builder()
         .title(app.label.as_str())
@@ -386,7 +389,7 @@ pub fn background(ctx: &Shared) -> gtk::Widget {
     stopping.add(&ask.row);
     page.add(&stopping);
 
-    let reload: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::default();
+    let reload: Hook = Rc::default();
     {
         let (ctx, page, rows, slot) = (ctx.clone(), page.clone(), rows.clone(), reload.clone());
         *reload.borrow_mut() = Some(Rc::new(move || {
@@ -509,7 +512,7 @@ pub fn widgets(ctx: &Shared) -> gtk::Widget {
     let offers = Rows::new(group(&tr("Widgets your apps offer"), None));
     page.add(&offers.group);
 
-    let reload: Rc<RefCell<Option<Rc<dyn Fn()>>>> = Rc::default();
+    let reload: Hook = Rc::default();
     {
         let (ctx, page, slot) = (ctx.clone(), page.clone(), reload.clone());
         let (placed, offers) = (placed.clone(), offers.clone());
