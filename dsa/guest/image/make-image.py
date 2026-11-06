@@ -1840,6 +1840,24 @@ def narrow_vsock_neverallows(text):
     return re.sub(r"\n{3,}", "\n\n", narrowed)
 
 
+def with_versioned_app_domains(rules_text, plat_sepolicy_text):
+    """Gives each rule of `rules_text` that names platform_app the same rule for every
+    platform_app_<sdk> domain the platform policy declares. Android 17 runs a platform app that
+    targets SDK 36 or later in platform_app_<sdk>, not platform_app, so the agent (which targets
+    36) was refused everything DSA's policy grants it, the control channel first. Android 16 has
+    no such domain, and its rules stay as they are."""
+    domains = sorted(set(re.findall(r"\((?:type|typeattribute) (platform_app_\d+)\)", plat_sepolicy_text)))
+    if not domains:
+        return rules_text
+    word = re.compile(r"\bplatform_app\b")
+    out = []
+    for line in rules_text.splitlines():
+        out.append(line)
+        if not line.lstrip().startswith(";") and word.search(line):
+            out.extend(word.sub(domain, line) for domain in domains)
+    return "\n".join(out) + ("\n" if rules_text.endswith("\n") else "")
+
+
 def patch_plat_sepolicy(plat_sepolicy_text, fragment_text):
     """Narrows neverallows on vsock_socket and appends the graphics vsock policy rules."""
     narrowed = narrow_vsock_neverallows(plat_sepolicy_text)
@@ -2069,6 +2087,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             if agent_payload is not None:
                 # What the agent needs to put the guest into Doze and set its battery.
                 plat_patched += "\n" + AGENT_POLICY.read_text()
+            # DSA's rules for platform_app hold for Android 17's per-SDK app domains too.
+            base = len(narrow_vsock_neverallows(plat_orig).rstrip())
+            plat_patched = plat_patched[:base] + with_versioned_app_domains(plat_patched[base:], plat_orig)
             new_plat_bytes = plat_patched.encode()
             cil_map["SYSTEM/etc/selinux/plat_sepolicy.cil"] = new_plat_bytes
 
