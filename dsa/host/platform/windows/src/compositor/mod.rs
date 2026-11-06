@@ -1013,6 +1013,10 @@ impl Compositor {
         let logger = self.logger.clone();
         let log = |message: &str| note(logger.as_deref(), message);
         let router = Arc::new(FrameRouter::new());
+        if let Some(presenter) = &self.presenter {
+            let presenter = Arc::clone(presenter);
+            router.on_forget(Box::new(move |display| presenter.forget_display(display)));
+        }
         let mut luid = None;
         let gpu = match &self.presenter {
             None => None,
