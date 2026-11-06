@@ -48,9 +48,17 @@ fi
 cp "$swift_bin/dsa-settings" "$app/Contents/MacOS/"
 
 # The window host is required: it is the template each app's own bundle copies, and the
-# window manager runs it for an app that has no bundle. The others are taken when they were
-# built.
-cp "$programs/dsa-app-window" "$app/Contents/MacOS/"
+# window manager runs it for an app that has no bundle. It lives in a helper bundle of its own,
+# with its own bundle identifier, and never in DSA.app's Contents/MacOS: a window host that ran
+# as DSA.app would make macOS take DSA.app for running, and opening DSA.app would then bring
+# that window forward instead of starting the settings app.
+helper="$app/Contents/Helpers/DSA App Window.app"
+mkdir -p "$helper/Contents/MacOS" "$helper/Contents/Resources"
+sed "s/@VERSION@/$version/g" "$here/window-host-Info.plist" > "$helper/Contents/Info.plist"
+plutil -lint "$helper/Contents/Info.plist"
+printf 'APPL????' > "$helper/Contents/PkgInfo"
+cp "$programs/dsa-app-window" "$helper/Contents/MacOS/"
+# The others are taken when they were built.
 for program in dsa dsa-hostd dsa-wm dsa-devices; do
     if [[ -f "$programs/$program" ]]; then
         cp "$programs/$program" "$app/Contents/MacOS/"
@@ -104,6 +112,12 @@ rm -rf "$iconset"
 "$swift_bin/dsa-icon" "$iconset"
 iconutil -c icns -o "$app/Contents/Resources/DSA.icns" "$iconset"
 rm -rf "$iconset"
+cp "$app/Contents/Resources/DSA.icns" "$helper/Contents/Resources/DSA.icns"
+# The same picture as a layered Icon Composer source, for the Liquid Glass look, until the
+# symbol's design is chosen. It goes beside the package and the disk image.
+rm -rf "$out/DSA.icon"
+"$swift_bin/dsa-icon" "$out/DSA.icon.iconset" --icon-composer "$out/DSA.icon"
+rm -rf "$out/DSA.icon.iconset"
 
 # The settings app's texts: its String Catalog compiled to the English and Korean string
 # tables the bundle looks up in the user's language.
@@ -132,6 +146,7 @@ for program in "$app/Contents/MacOS"/*; do
     [[ "$(basename "$program")" == dsa-settings ]] && continue
     sign "$program"
 done
+sign "$helper"
 sign "$app"
 codesign --verify --strict --verbose=2 "$app"
 
