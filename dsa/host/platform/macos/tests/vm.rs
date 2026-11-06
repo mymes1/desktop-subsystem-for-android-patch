@@ -77,6 +77,16 @@ fn fr2_the_rest_of_the_image_command_line_is_kept_in_order() {
 }
 
 #[test]
+fn pr1_the_kernel_reads_the_bootconfig_that_carries_the_boot_secret() {
+    // Once, whether the image's command line already says it or not.
+    for image in [HYPER_V_CMDLINE, "init=/init bootconfig"] {
+        let cmdline = for_virtualization_framework(image, "", false);
+        let flags = cmdline.split_whitespace().filter(|w| *w == "bootconfig");
+        assert_eq!(flags.count(), 1, "{cmdline}");
+    }
+}
+
+#[test]
 fn fr2_only_an_uncompressed_image_boots_on_apple_silicon() {
     let mut image = vec![0u8; 4096];
     image[56..60].copy_from_slice(b"ARM\x64");

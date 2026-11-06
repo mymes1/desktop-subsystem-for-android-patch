@@ -227,6 +227,15 @@ impl VmConfig {
         );
         cmdline.push(' ');
         cmdline.push_str(&image);
+        // The boot's secret is bootconfig appended to the initrd, and the kernel reads that
+        // only when the command line says so: without it the guest's daemon finds no secret.
+        if !image
+            .split_whitespace()
+            .any(|word| word == dsa_host_core::bootconfig::CMDLINE_FLAG)
+        {
+            cmdline.push(' ');
+            cmdline.push_str(dsa_host_core::bootconfig::CMDLINE_FLAG);
+        }
         cmdline
     }
 
@@ -588,6 +597,17 @@ mod tests {
             .full_kernel_cmdline()
             .contains("sysrq_always_enabled=1"));
         assert_eq!(SHUTDOWN_SEQUENCE, [b"\x0fs", b"\x0fu", b"\x0fo"]);
+    }
+
+    #[test]
+    fn pr1_the_kernel_reads_the_bootconfig_that_carries_the_boot_secret() {
+        let cmdline = config().full_kernel_cmdline();
+        let words: Vec<&str> = cmdline.split_whitespace().collect();
+        assert_eq!(words.iter().filter(|w| **w == "bootconfig").count(), 1, "{cmdline}");
+        let mut config = config();
+        config.kernel_cmdline = format!("{} bootconfig", config.kernel_cmdline);
+        let cmdline = config.full_kernel_cmdline();
+        assert_eq!(cmdline.split_whitespace().filter(|w| *w == "bootconfig").count(), 1);
     }
 
     #[test]

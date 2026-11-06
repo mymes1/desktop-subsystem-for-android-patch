@@ -67,5 +67,11 @@ pub fn for_virtualization_framework(image: &str, extra: &str, pstore: bool) -> S
             .filter(|word| !replaced(word))
             .map(str::to_string),
     );
+    // The boot's secret is bootconfig appended to the initrd, and the kernel reads that only
+    // when the command line says so: without it the guest's daemon finds no secret.
+    let flag = dsa_host_core::bootconfig::CMDLINE_FLAG;
+    if !words.iter().any(|word| word == flag) {
+        words.push(flag.to_string());
+    }
     words.join(" ")
 }
