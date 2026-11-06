@@ -96,6 +96,10 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   widget's view; a click opens its app on the guest's display. The widget IDs outlive the
   agent and the guest, and the size each was drawn at is kept in the agent's preferences.
   Each connection hears of every placed widget (`WidgetUpdated`, then `WidgetList`).
+  Android hands a widget's updates only to a view its host made for that widget ID, so on
+  every start the agent makes a view for each placed widget before anything else about its
+  drawing, and tries again a second later when that fails. When the widget's window cannot
+  open, the widget is drawn without one, in software, each time its app sends new views.
 - **APKs from the host.** `InstallApk` opens a `PackageInstaller` session, each `ApkChunk`
   is written into it in order, and the session is committed once the APK is whole. After
   each chunk the agent reports how far it got (`InstallProgress`), which paces the host, and

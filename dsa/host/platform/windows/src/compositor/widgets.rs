@@ -118,7 +118,7 @@ pub fn window_styles() -> (u32, u32) {
 
 /// How long a widget window waits for its first image from Android, after it opened, before
 /// the window manager logs that it has none. Android draws a widget within a second of being
-/// told its size, so a window still without an image after this shows only its see-through
+/// told its size, so a window still without an image after this shows only its
 /// placeholder, and the log says so.
 pub const NO_FRAME: Duration = Duration::from_secs(10);
 
@@ -132,6 +132,65 @@ pub fn frame_overdue(waiting_since: Option<Instant>, noted: bool, now: Instant) 
         Some(since) => !noted && now.saturating_duration_since(since) >= NO_FRAME,
         None => false,
     }
+}
+
+/// The corner radius of a widget window's placeholder, in device-independent pixels.
+const PLACEHOLDER_RADIUS_DIP: u32 = 12;
+
+/// What a widget window shows until its first image from Android comes, or while the image
+/// it has is all clear: a dark grey card with a lighter edge and rounded corners, as
+/// premultiplied BGRA rows of `width` by `height` pixels on a monitor of `dpi`. It is mostly
+/// opaque, so the user sees where the widget is and can grab it even when Android has not
+/// drawn it yet; a window that showed nothing would look like no widget at all.
+pub fn placeholder(width: usize, height: usize, dpi: u32) -> Vec<u8> {
+    let mut pixels = vec![0u8; width * height * 4];
+    let radius = (px_of_dip(PLACEHOLDER_RADIUS_DIP, dpi).max(1) as usize)
+        .min(width / 2)
+        .min(height / 2) as i64;
+    let edge = px_of_dip(1, dpi).max(1) as i64;
+    let (w, h) = (width as i64, height as i64);
+    // Premultiplied BGRA: #383838 at 0xd8 inside, #909090 at 0xe8 on the edge.
+    let fill = [0x2f, 0x2f, 0x2f, 0xd8];
+    let border = [0x83, 0x83, 0x83, 0xe8];
+    for y in 0..h {
+        for x in 0..w {
+            // How far into a rounded corner's square the pixel is, 0 outside the squares.
+            let cx = if x < radius {
+                radius - x
+            } else if x >= w - radius {
+                x - (w - radius - 1)
+            } else {
+                0
+            };
+            let cy = if y < radius {
+                radius - y
+            } else if y >= h - radius {
+                y - (h - radius - 1)
+            } else {
+                0
+            };
+            let in_corner = cx > 0 && cy > 0;
+            if in_corner && cx * cx + cy * cy > radius * radius {
+                continue;
+            }
+            let inner = (radius - edge).max(0);
+            let on_edge = x < edge
+                || y < edge
+                || x >= w - edge
+                || y >= h - edge
+                || (in_corner && cx * cx + cy * cy > inner * inner);
+            let at = ((y * w + x) * 4) as usize;
+            pixels[at..at + 4].copy_from_slice(if on_edge { &border } else { &fill });
+        }
+    }
+    pixels
+}
+
+/// Whether premultiplied BGRA `pixels` show nothing: every alpha is zero. A widget always
+/// draws something, so such an image is a drawing that went wrong, and the window shows its
+/// placeholder instead of a see-through hole.
+pub fn all_clear(pixels: &[u8]) -> bool {
+    pixels.chunks_exact(4).all(|pixel| pixel[3] == 0)
 }
 
 /// Where a widget window goes in the z-order.
@@ -909,7 +968,7 @@ mod win {
                 note(
                     s.logger.as_deref(),
                     &format!(
-                        "widget {} ({}) has had no image from Android for {waited} s; its window of {}x{} pixels shows only a see-through placeholder. The service's and the agent's logs say why",
+                        "widget {} ({}) has had no image from Android for {waited} s; its window of {}x{} pixels shows only its placeholder. The service's and the agent's logs say why",
                         window.widget.widget_id,
                         window.widget.provider.provider,
                         rect.right - rect.left,
@@ -1085,8 +1144,21 @@ mod win {
                     .ok(),
                 _ => None,
             };
-            let mut pixels =
-                decoded.unwrap_or_else(|| placeholder(width as usize, height as usize));
+            let decoded = match decoded {
+                Some(pixels) if super::all_clear(&pixels) => {
+                    note(
+                        s.logger.as_deref(),
+                        &format!(
+                            "widget {}: Android sent an image with nothing in it; showing the placeholder",
+                            window.widget.widget_id
+                        ),
+                    );
+                    None
+                }
+                other => other,
+            };
+            let mut pixels = decoded
+                .unwrap_or_else(|| super::placeholder(width as usize, height as usize, dpi));
             finish(
                 &mut pixels,
                 width as usize,
@@ -1154,15 +1226,6 @@ mod win {
         }
     }
 
-    /// A see-through grey square for a widget that has drawn nothing yet.
-    fn placeholder(width: usize, height: usize) -> Vec<u8> {
-        let mut pixels = vec![0u8; width * height * 4];
-        for pixel in pixels.chunks_exact_mut(4) {
-            // Premultiplied BGRA: grey at a quarter.
-            pixel.copy_from_slice(&[0x20, 0x20, 0x20, 0x40]);
-        }
-        pixels
-    }
 
     /// Keeps every pixel clickable and draws the move band while the pointer is over the
     /// window.
@@ -1627,6 +1690,39 @@ mod tests {
             needs_configuration: false,
             app_label: "Clock App".into(),
         }
+    }
+
+    #[test]
+    fn fr12_a_widget_window_without_an_image_shows_a_visible_placeholder() {
+        let (width, height) = (600usize, 340usize);
+        let pixels = placeholder(width, height, 192);
+        assert_eq!(pixels.len(), width * height * 4);
+        assert!(!all_clear(&pixels));
+        let alpha = |x: usize, y: usize| pixels[(y * width + x) * 4 + 3];
+        // The middle and every edge's midpoint are mostly opaque, so the window is never a
+        // see-through hole on the desktop.
+        for (x, y) in [
+            (width / 2, height / 2),
+            (0, height / 2),
+            (width - 1, height / 2),
+            (width / 2, 0),
+            (width / 2, height - 1),
+        ] {
+            assert!(alpha(x, y) >= 0xc0, "alpha at {x},{y} is {}", alpha(x, y));
+        }
+        // The corners are rounded off.
+        assert_eq!(alpha(0, 0), 0);
+        assert_eq!(alpha(width - 1, height - 1), 0);
+        // Premultiplied: no colour exceeds its alpha.
+        assert!(pixels.chunks_exact(4).all(|p| p[..3].iter().all(|&c| c <= p[3])));
+        // A tiny window still gets one.
+        assert!(!all_clear(&placeholder(3, 2, 96)));
+    }
+
+    #[test]
+    fn fr12_an_image_with_nothing_in_it_is_told_from_one_with_something_drawn() {
+        assert!(all_clear(&[0, 0, 0, 0, 9, 9, 9, 0]));
+        assert!(!all_clear(&[0, 0, 0, 0, 0, 0, 0, 1]));
     }
 
     #[test]
