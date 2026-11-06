@@ -53,6 +53,7 @@
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+html, body { overflow-x: clip; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--sans); }
 html[lang="ko"] body { word-break: keep-all; line-height: 1.7; }
 html[lang="en"] [data-l="ko"], html[lang="ko"] [data-l="en"] { display: none; }
@@ -67,7 +68,7 @@ a { color: var(--accent); }
   padding: 20px 20px 24px; font: 400 13px/1.5 var(--mono); border-right: 1px solid var(--rail-line); }
 .desk { position: relative; min-width: 0; background:
   linear-gradient(var(--wall), var(--wall)) padding-box;
-  padding: 0 clamp(16px, 4vw, 56px) 120px; }
+  padding: 0 clamp(16px, 4vw, 56px) 140px; }
 .seam { position: fixed; top: 0; bottom: 0; left: var(--railw); width: 0; z-index: 3; pointer-events: none; }
 .seam::before { content: ""; position: absolute; top: 0; bottom: 0; left: -1px; width: 2px;
   background: repeating-linear-gradient(to bottom, var(--green) 0 6px, transparent 6px 12px); opacity: .55; }
@@ -94,11 +95,13 @@ a { color: var(--accent); }
 .lend li.on span:last-child { color: var(--green); }
 .log { margin: 0; padding: 0; list-style: none; color: var(--rail-muted); min-height: 7.5em; }
 .log li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.note { color: var(--rail-muted); font-size: 11px; margin-top: 18px; }
+.note { color: var(--rail-muted); font: 400 12px/1.55 var(--sans); margin-top: 18px; }
+.illus { display: inline-block; margin-top: 10px; font: 500 10px/1.3 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: #0f1a16; background: var(--green); padding: 3px 6px; border-radius: 3px; }
+html[lang="ko"] .illus { letter-spacing: 0; font-family: var(--sans); text-transform: none; font-size: 11px; }
 .railtoggle { display: none; }
 
 /* Desktop top bar */
-.top { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 0 0; }
+.top { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 16px 0 0; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--win); }
 .seg button { font: 500 12px/1 var(--mono); padding: 8px 10px; background: none; border: 0; color: var(--muted); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
@@ -106,15 +109,15 @@ a { color: var(--accent); }
 /* Wallpaper headline */
 .lead { max-width: 920px; padding: clamp(40px, 9vh, 96px) 0 clamp(32px, 6vh, 64px); }
 .lead .name { font: 500 13px/1.4 var(--mono); color: var(--muted); margin: 0 0 20px; }
-h1 { font: 700 clamp(32px, 5.4vw, 64px)/1.06 var(--head); letter-spacing: -.02em; margin: 0; max-width: 18ch; }
-html[lang="ko"] h1 { letter-spacing: -.01em; line-height: 1.2; max-width: 20ch; }
+h1 { font: 700 clamp(30px, 5vw, 60px)/1.08 var(--head); letter-spacing: -.02em; margin: 0; max-width: 22ch; overflow-wrap: break-word; }
+html[lang="ko"] h1 { letter-spacing: -.01em; line-height: 1.2; max-width: 22ch; }
 .lead p { font-size: clamp(17px, 1.6vw, 19px); color: var(--muted); max-width: 60ch; margin: 24px 0 0; }
-.hint { font: 400 13px/1.5 var(--mono); color: var(--muted); margin-top: 28px; }
+.hint { font: 400 15px/1.6 var(--sans); max-width: 62ch; color: var(--muted); margin-top: 28px; }
 
 /* Windows */
-.windows { display: grid; gap: clamp(28px, 5vh, 56px); max-width: 1040px; }
+.windows { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(28px, 5vh, 56px); max-width: 1040px; }
 .win { position: relative; background: var(--win); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
-  max-width: 760px; transition: box-shadow .2s, opacity .45s ease, translate .45s ease; will-change: transform; }
+  width: 100%; min-width: 0; max-width: 760px; transition: box-shadow .2s, opacity .45s ease, translate .45s ease; will-change: transform; }
 .win:nth-child(even) { justify-self: end; }
 .win.top-z { box-shadow: var(--shadow-top); z-index: 2; }
 .win.pending { opacity: 0; translate: -48px 0; }
@@ -126,29 +129,30 @@ html[lang="ko"] h1 { letter-spacing: -.01em; line-height: 1.2; max-width: 20ch; 
 .tb .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tb .x { flex: none; width: 28px; height: 24px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; font: 400 16px/1 var(--sans); }
 .tb .x:hover { background: var(--line); color: var(--ink); }
+.body, .lead, .lead p, .win p, .fig small { min-width: 0; overflow-wrap: break-word; }
 .body { padding: clamp(20px, 3vw, 32px); }
 .win h3 { font: 700 clamp(22px, 2.4vw, 28px)/1.2 var(--head); letter-spacing: -.01em; margin: 0 0 14px; }
 .win p { margin: 0 0 14px; max-width: 64ch; }
 .win p:last-child { margin-bottom: 0; }
 .figs { display: flex; flex-wrap: wrap; gap: 12px 32px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
-.fig { min-width: 150px; }
+.fig { min-width: 0; flex: 1 1 150px; }
 .fig b { display: block; font: 500 clamp(26px, 3vw, 34px)/1.1 var(--head); letter-spacing: -.01em; }
 .fig small { display: block; color: var(--muted); font-size: 14px; max-width: 26ch; }
 .tag { display: inline-block; font: 500 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: 4px 6px; border-radius: 4px; margin: 6px 0; }
 .tag.m { background: var(--deep); color: #fff; }
 .tag.g { border: 1px solid var(--line); color: var(--muted); }
 .devs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-.devs button { font: 500 13px/1 var(--mono); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.devs button { max-width: 100%; font: 500 13px/1 var(--mono); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
 .devs button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .devs button[aria-pressed="true"]::before { content: "● "; color: var(--green); }
-.hosts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 18px; }
+.hosts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 12px; margin-top: 18px; }
 .hosts div { border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
 .hosts h4 { font: 700 16px/1.2 var(--head); margin: 0; }
 .hosts p { font-size: 14px; color: var(--muted); margin: 6px 0 0; }
 .links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .links a { font: 500 14px/1 var(--sans); padding: 12px 16px; border-radius: 8px; text-decoration: none; border: 1px solid var(--line); color: var(--ink); }
 .links a:first-child { background: var(--deep); border-color: var(--deep); color: #fff; }
-.closed { font: 400 13px/1.4 var(--mono); color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; max-width: 760px; }
+.closed { width: 100%; min-width: 0; font: 400 13px/1.4 var(--mono); color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; max-width: 760px; }
 .closed button { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 .win:nth-child(even) + .closed, .closed:nth-child(even) { justify-self: end; }
 
@@ -162,7 +166,7 @@ html[lang="ko"] h1 { letter-spacing: -.01em; line-height: 1.2; max-width: 20ch; 
 .task button[data-open="true"]::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: 2px; height: 2px; border-radius: 1px; background: var(--accent); }
 .task button[data-front="true"] { background: var(--bar); }
 
-footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted); }
+footer { max-width: 760px; margin: 64px 0 0; padding-bottom: 24px; font-size: 13px; color: var(--muted); }
 
 /* Narrow: the rail becomes a strip above the desktop */
 @media (max-width: 860px) {
@@ -178,7 +182,9 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
   .rail .who svg { width: 22px; height: 22px; }
   .railtoggle { display: inline-block; font: 500 12px/1 var(--mono); color: var(--rail-ink); background: none; border: 1px solid var(--rail-line); border-radius: 6px; padding: 6px 8px; cursor: pointer; }
   .rail .mini { display: flex; gap: 12px; color: var(--rail-muted); font-size: 12px; margin-top: 6px; }
-  .desk { padding: 0 16px 104px; }
+  .desk { padding: 0 16px 120px; }
+  .rail .row { flex-wrap: wrap; }
+  .seg button { padding: 8px; }
   .win, .win:nth-child(even) { justify-self: stretch; }
   .task { left: 8px; right: 8px; bottom: 8px; }
   .task .lbl { display: none; }
@@ -207,7 +213,8 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
     <div class="row">
       <div>
         <div class="who"><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span>Android</span></div>
-        <p class="sub"><span data-l="en">Its own VM, its own kernel</span><span data-l="ko">자기 VM, 자기 커널</span></p>
+        <p class="sub"><span data-l="en">Its own VM, its own kernel</span><span data-l="ko">전용 VM, 자체 커널</span></p>
+        <span class="illus"><span data-l="en">Illustration, not live data</span><span data-l="ko">그림 예시, 실제 데이터 아님</span></span>
       </div>
       <div class="state" id="state" data-s="active" role="status" aria-live="polite"><i></i><span id="stateTxt">active</span></div>
       <button class="railtoggle" id="railtoggle" aria-expanded="false" aria-controls="railfull"><span data-l="en">Details</span><span data-l="ko">자세히</span></button>
@@ -231,7 +238,7 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
       <h2>binder</h2>
       <div><span id="txn">0</span> <span data-l="en">transactions</span><span data-l="ko">건</span></div>
       <ul class="log" id="log" aria-hidden="true"></ul>
-      <p class="note"><span data-l="en">An illustration driven by this page, not live data. Each window on the right stands for one Android task. Memory uses the final goal: 250 MiB with one app, 80 MiB for each further app.</span><span data-l="ko">이 페이지가 움직이는 그림이며 실제 데이터가 아닙니다. 오른쪽 창 하나가 Android 작업 하나입니다. 메모리 수치는 최종 목표인 앱 하나에 250 MiB, 앱이 하나 늘 때마다 80 MiB를 씁니다.</span></p>
+      <p class="note"><span data-l="en">An illustration driven by this page, not live data. Each window on the right stands for one Android task. Process IDs and binder calls are examples. Memory uses the final goal: 250 MiB with one app, 80 MiB for each further app.</span><span data-l="ko">이 페이지의 조작에 따라 움직이는 그림 예시이며, 실제 데이터가 아닙니다. 오른쪽 창 하나가 Android 작업 하나입니다. 프로세스 번호와 binder 호출은 예시입니다. 메모리 수치는 최종 목표인 앱 하나에 250 MiB, 앱이 하나 늘 때마다 80 MiB를 씁니다.</span></p>
     </div>
   </aside>
   <div class="seam" aria-hidden="true"><span>HAL BOUNDARY</span></div>
@@ -248,9 +255,9 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
 
     <header class="lead">
       <p class="name">Desktop Subsystem for Android™ (DSA)</p>
-      <h1><span data-l="en">Each Android app becomes a real desktop window. Android keeps its own kernel.</span><span data-l="ko">Android 앱이 하나씩 진짜 데스크톱 창이 됩니다. Android는 자기 커널 위에서 그대로 돕니다.</span></h1>
-      <p><span data-l="en">DSA runs Android as a complete system in a dedicated virtual machine, and hands each of its tasks to the host as a native window. Nothing in Android is emulated or translated. The host supplies only what a desktop owns: windows, input, and devices.</span><span data-l="ko">DSA는 Android를 전용 가상 머신에서 온전한 시스템으로 실행하고, 그 안의 작업 하나하나를 호스트의 네이티브 창으로 넘깁니다. Android의 어떤 부분도 흉내 내거나 번역하지 않습니다. 호스트는 데스크톱이 원래 가진 것만 내줍니다. 창, 입력, 장치입니다.</span></p>
-      <p class="hint"><span data-l="en">Left: Android, running on its own. Right: your desktop. The windows below are movable, focusable and closable, by pointer or keyboard (arrow keys on a title bar move it, Delete closes it).</span><span data-l="ko">왼쪽은 혼자 돌아가는 Android, 오른쪽은 데스크톱입니다. 아래 창은 마우스로도 키보드로도 옮기고, 앞으로 가져오고, 닫을 수 있습니다. 제목 표시줄에서 화살표 키로 옮기고 Delete로 닫습니다.</span></p>
+      <h1><span data-l="en">Android apps run as real desktop windows.</span><span data-l="ko">Android 앱이 진짜 데스크톱 창으로 실행됩니다.</span></h1>
+      <p><span data-l="en">Android itself keeps its own kernel and runs whole in a dedicated virtual machine. DSA hands each of its tasks to the host as a native window. Nothing in Android is emulated or translated. The host supplies only what a desktop owns: windows, input and devices.</span><span data-l="ko">Android는 자체 커널을 그대로 쓰며 전용 가상 머신 안에서 온전한 시스템으로 실행됩니다. DSA는 그 안의 작업을 하나씩 호스트의 네이티브 창으로 띄웁니다. Android의 어느 부분도 에뮬레이션하거나 번역하지 않습니다. 호스트는 창과 입력, 장치처럼 데스크톱이 원래 가진 것만 제공합니다.</span></p>
+      <p class="hint"><span data-l="en">Left: Android, running on its own. Right: your desktop. The windows below are movable, focusable and closable, by pointer or keyboard (arrow keys on a title bar move it, Delete closes it).</span><span data-l="ko">왼쪽에서는 Android가 따로 실행되고, 오른쪽은 데스크톱입니다. 아래 창은 마우스나 키보드로 옮기고, 앞으로 가져오고, 닫을 수 있습니다. 제목 표시줄을 선택한 뒤 화살표 키로 옮기고 Delete 키로 닫습니다.</span></p>
     </header>
 
     <div class="windows" id="windows">
@@ -258,9 +265,9 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
       <section class="win" id="w-system" data-proc="task.system" data-title="system" aria-labelledby="h-system">
         <div class="tb" tabindex="0" aria-label="Window: own system. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / own system</span><button class="x" aria-label="Close window">×</button></div>
         <div class="body">
-          <h3 id="h-system"><span data-l="en">Android runs whole, in its own VM.</span><span data-l="ko">Android는 전용 VM에서 통째로 돕니다.</span></h3>
-          <p><span data-l="en">Android runs in a dedicated lightweight VM on a kernel that DSA builds and ships, with binder built in. The kernel, ART and the framework are Android's own. No system call is translated, the user's WSL setup is never touched, and no user has to build or replace a kernel.</span><span data-l="ko">Android는 DSA가 직접 빌드해 함께 배포하는 커널 위, 전용 경량 VM에서 실행됩니다. binder는 커널에 들어 있습니다. 커널과 ART, 프레임워크는 모두 Android 본래의 것입니다. 시스템 호출을 번역하지 않고, 사용자의 WSL 설정은 건드리지 않으며, 사용자가 커널을 빌드하거나 바꿀 일도 없습니다.</span></p>
-          <p><span data-l="en">The consequence: apps meet the Android they were written for, and the host stays the host.</span><span data-l="ko">그래서 앱은 자기가 만들어진 그 Android를 만나고, 호스트는 호스트로 남습니다.</span></p>
+          <h3 id="h-system"><span data-l="en">Android runs whole, in its own VM.</span><span data-l="ko">Android는 전용 VM에서 통째로 실행됩니다.</span></h3>
+          <p><span data-l="en">Android runs in a dedicated lightweight VM on a kernel that DSA builds and ships, with binder built in. The kernel, ART and the framework are Android's own. No system call is translated, the user's WSL setup is never touched, and no user has to build or replace a kernel.</span><span data-l="ko">Android는 전용 경량 VM에서 실행되고, 커널은 DSA가 binder를 포함해 직접 빌드하고 함께 배포합니다. 커널, ART, 프레임워크는 손대지 않은 Android 그대로입니다. 시스템 호출을 번역하지 않고, 사용자의 WSL 설정도 건드리지 않습니다. 사용자가 커널을 빌드하거나 교체할 필요도 없습니다.</span></p>
+          <p><span data-l="en">As a result, apps run on the Android they were built for, and the host system is left unchanged.</span><span data-l="ko">그래서 앱은 원래 대상으로 삼은 Android 환경에서 그대로 동작하고, 호스트 시스템은 바뀌지 않습니다.</span></p>
           <div class="figs"><div class="fig"><b>53 s</b><span class="tag m"><span data-l="en">Measured</span><span data-l="ko">측정값</span></span><small><span data-l="en">Android VM boot, on a real PC, preview build.</span><span data-l="ko">실제 PC, 미리보기 빌드에서 잰 Android VM 부팅 시간.</span></small></div></div>
         </div>
       </section>
@@ -269,8 +276,8 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
         <div class="tb" tabindex="0" aria-label="Window: native windows. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / one task, one window</span><button class="x" aria-label="Close window">×</button></div>
         <div class="body">
           <h3 id="h-window"><span data-l="en">One task, one native window.</span><span data-l="ko">작업 하나에 네이티브 창 하나.</span></h3>
-          <p><span data-l="en">There is no phone frame showing the whole Android screen. Each Android task gets its own host window, with its own taskbar button, Alt+Tab entry, Start menu entry and notifications. A custom hwcomposer hands each task's layers to the host, and frames go from the GPU to the window without a copy through the CPU.</span><span data-l="ko">Android 화면 전체를 담는 휴대폰 틀은 없습니다. Android 작업마다 호스트 창이 따로 생기고, 작업 표시줄 단추, Alt+Tab 항목, 시작 메뉴 항목, 알림도 따로 갖습니다. 전용 hwcomposer가 작업별 레이어를 호스트에 넘기고, 프레임은 CPU를 거쳐 복사되지 않고 GPU에서 곧장 창으로 갑니다.</span></p>
-          <p><span data-l="en">The host is the shell. Android carries no launcher, no status bar and no keyboard app; text input comes from the host's own input method. The windows on this page behave the same way: move one, bring it forward, close it.</span><span data-l="ko">셸은 호스트입니다. Android 안에는 런처도, 상태 표시줄도, 키보드 앱도 없고, 글자 입력은 호스트의 입력기가 맡습니다. 이 페이지의 창도 똑같이 움직입니다. 옮기고, 앞으로 가져오고, 닫아 보십시오.</span></p>
+          <p><span data-l="en">There is no phone frame showing the whole Android screen. Each Android task gets its own host window, with its own taskbar button, Alt+Tab entry, Start menu entry and notifications. A custom hwcomposer hands each task's layers to the host, and each frame is copied GPU to GPU through a shared texture into the window, never through the CPU.</span><span data-l="ko">Android 화면 전체를 휴대폰 모양 틀에 담아 보여 주지 않습니다. Android 작업마다 호스트 창이 하나씩 열리고, 작업 표시줄 단추와 Alt+Tab 항목, 시작 메뉴 항목, 알림도 각각 생깁니다. 전용 hwcomposer가 작업별 레이어를 호스트에 넘기고, 프레임은 공유 텍스처를 통해 GPU 안에서 창으로 복사됩니다. CPU는 거치지 않습니다.</span></p>
+          <p><span data-l="en">The host is the shell. Android carries no launcher, no status bar and no keyboard app; text input comes from the host's own input method. The windows on this page behave the same way: move one, bring it forward, close it.</span><span data-l="ko">셸 역할은 호스트가 맡습니다. Android 안에는 런처, 상태 표시줄, 키보드 앱이 없고, 글자 입력은 호스트의 입력기가 처리합니다. 이 페이지의 창도 같은 방식으로 다룰 수 있습니다. 옮기고, 앞으로 가져오고, 닫아 보십시오.</span></p>
           <div class="figs"><div class="fig"><b>429 ms</b><span class="tag m"><span data-l="en">Measured</span><span data-l="ko">측정값</span></span><small><span data-l="en">Launch to an app window's first frame, on a real PC, preview build.</span><span data-l="ko">실제 PC, 미리보기 빌드에서 잰 앱 실행부터 창의 첫 프레임까지.</span></small></div></div>
         </div>
       </section>
@@ -279,8 +286,8 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
         <div class="tb" tabindex="0" aria-label="Window: the HAL boundary. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / the HAL boundary</span><button class="x" aria-label="Close window">×</button></div>
         <div class="body">
           <h3 id="h-hal"><span data-l="en">Devices cross at the HAL, nowhere else.</span><span data-l="ko">장치는 HAL에서만 경계를 넘습니다.</span></h3>
-          <p><span data-l="en">The dashed line beside this page is the hardware abstraction layer. Everything above it stays in Android. The host lends its devices across it as HAL services over RPC Binder, so Android talks to a camera or a speaker the way it always does, and the host decides what is lent. OpenGL ES runs on ANGLE; Vulkan is remoted to the host GPU.</span><span data-l="ko">페이지 옆의 점선이 하드웨어 추상화 계층(HAL)입니다. 그 위의 모든 것은 Android 안에 남습니다. 호스트는 RPC Binder 위의 HAL 서비스로 장치를 그 너머에 빌려줍니다. Android는 카메라나 스피커를 늘 하던 방식대로 쓰고, 무엇을 빌려줄지는 호스트가 정합니다. OpenGL ES는 ANGLE 위에서, Vulkan은 호스트 GPU로 원격 실행됩니다.</span></p>
-          <p><span data-l="en">Control messages have one definition, and the codecs for Rust, Java and C++ are generated from it. Every connection checks the protocol version, the schema hash and a per-boot secret. Lend a device:</span><span data-l="ko">제어 메시지의 정의는 하나이고, Rust, Java, C++ 코덱은 모두 그 정의에서 생성됩니다. 연결마다 프로토콜 버전, 스키마 해시, 부팅마다 바뀌는 비밀 값을 확인합니다. 장치를 빌려줘 보십시오.</span></p>
+          <p><span data-l="en">The dashed line beside this page is the hardware abstraction layer. Everything above it stays in Android. The host lends its devices across it as HAL services over RPC Binder, so Android talks to a camera or a speaker the way it always does, and the host decides what is lent. Every app's OpenGL ES runs on ANGLE over Vulkan, and the Vulkan calls are carried to the host GPU.</span><span data-l="ko">페이지 옆의 점선이 하드웨어 추상화 계층(HAL)입니다. 그 위쪽은 모두 Android 안에 있습니다. 호스트는 장치를 RPC Binder 기반 HAL 서비스로 이 경계 너머에 빌려줍니다. Android는 카메라나 스피커를 평소와 똑같이 쓰고, 어떤 장치를 빌려줄지는 호스트가 정합니다. 모든 앱의 OpenGL ES는 Vulkan 위의 ANGLE로 실행되고, Vulkan 호출은 호스트 GPU로 전달됩니다.</span></p>
+          <p><span data-l="en">Control messages have one definition, and the codecs for Rust, Java and C++ are generated from it. Every connection checks the protocol version, the schema hash and a per-boot secret. Lend a device:</span><span data-l="ko">제어 메시지는 정의 하나에서 Rust, Java, C++ 코덱을 모두 생성합니다. 연결할 때마다 프로토콜 버전과 스키마 해시, 부팅할 때마다 새로 만드는 비밀 값을 확인합니다. 아래에서 장치를 빌려줘 보십시오.</span></p>
           <div class="devs" id="devs" role="group" aria-label="Host devices">
             <button data-dev="gpu" aria-pressed="true">GPU</button>
             <button data-dev="audio" aria-pressed="false">audio</button>
@@ -294,13 +301,13 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
       <section class="win" id="w-mem" data-proc="task.memory" data-title="memory" aria-labelledby="h-mem">
         <div class="tb" tabindex="0" aria-label="Window: idle and memory. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / idle and memory</span><button class="x" aria-label="Close window">×</button></div>
         <div class="body">
-          <h3 id="h-mem"><span data-l="en">No window open means Doze, and memory goes back.</span><span data-l="ko">열린 창이 없으면 Doze, 메모리는 호스트로.</span></h3>
-          <p><span data-l="en">When no Android window is shown, Android enters Doze, as a phone does in a pocket: notifications still arrive and the CPU rests. Memory that Android frees is reported and returned to the host while it runs, not only when it stops. Freezing the guest is opt-in, never the default.</span><span data-l="ko">보이는 Android 창이 없으면 Android는 주머니 속 휴대폰처럼 Doze에 들어갑니다. 알림은 그대로 오고 CPU는 쉽니다. Android가 비운 메모리는 멈출 때가 아니라 돌아가는 동안 계속 호스트에 알려지고 돌려집니다. 게스트를 얼리는 것은 사용자가 고를 때만이고, 기본값이 아닙니다.</span></p>
-          <p><span data-l="en">Close the windows on this page and watch the rail: tasks leave, the memory figure falls, and Android dozes.</span><span data-l="ko">이 페이지의 창을 닫으면서 왼쪽을 보십시오. 작업이 빠지고, 메모리 수치가 내려가고, Android가 Doze에 듭니다.</span></p>
+          <h3 id="h-mem"><span data-l="en">No window open means Doze, and memory goes back.</span><span data-l="ko">창을 모두 닫으면 Doze, 메모리는 호스트로 돌아갑니다.</span></h3>
+          <p><span data-l="en">When no Android window is shown, Android enters Doze, as a phone does in a pocket: notifications still arrive and the CPU rests. Memory that Android frees is reported and returned to the host while it runs, not only when it stops. Freezing the guest is opt-in, never the default.</span><span data-l="ko">화면에 Android 창이 하나도 없으면 Android는 주머니 속 휴대폰처럼 Doze 상태가 됩니다. 알림은 계속 받고 CPU는 쉽니다. Android가 쓰지 않게 된 메모리는 종료할 때만이 아니라 실행 중에도 계속 호스트에 반환됩니다. 게스트 동결은 사용자가 켤 때만 동작하며 기본값이 아닙니다.</span></p>
+          <p><span data-l="en">Close the windows on this page and watch the rail: tasks leave, the memory figure falls, and Android dozes.</span><span data-l="ko">이 페이지의 창을 닫으면서 왼쪽을 보십시오. 작업 목록이 줄고 메모리 수치가 내려가며, 창을 모두 닫으면 Android가 Doze 상태로 바뀝니다.</span></p>
           <div class="figs">
             <div class="fig"><b>400 MiB</b><span class="tag g"><span data-l="en">Goal</span><span data-l="ko">목표</span></span><small><span data-l="en">Near term: all DSA host processes, one simple app open.</span><span data-l="ko">단기: 단순한 앱 하나를 연 상태의 DSA 호스트 프로세스 전체.</span></small></div>
             <div class="fig"><b>250 MiB</b><span class="tag g"><span data-l="en">Goal</span><span data-l="ko">목표</span></span><small><span data-l="en">Final, under the same conditions.</span><span data-l="ko">최종, 같은 조건.</span></small></div>
-            <div class="fig"><b>80 MiB</b><span class="tag g"><span data-l="en">Goal</span><span data-l="ko">목표</span></span><small><span data-l="en">At most, for each further app.</span><span data-l="ko">앱이 하나 늘 때마다 넘지 않을 양.</span></small></div>
+            <div class="fig"><b>80 MiB</b><span class="tag g"><span data-l="en">Goal</span><span data-l="ko">목표</span></span><small><span data-l="en">At most, for each further app.</span><span data-l="ko">앱을 하나 더 열 때마다 늘어나는 양의 상한.</span></small></div>
           </div>
         </div>
       </section>
@@ -309,7 +316,7 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
         <div class="tb" tabindex="0" aria-label="Window: three hosts. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / three hosts</span><button class="x" aria-label="Close window">×</button></div>
         <div class="body">
           <h3 id="h-hosts"><span data-l="en">One guest, three hosts.</span><span data-l="ko">게스트 하나, 호스트 셋.</span></h3>
-          <p><span data-l="en">The protocol, the guest and the host core name no operating system. Each host adds only its VM, its transport and its window system, so the Android that runs is the same on all three.</span><span data-l="ko">프로토콜, 게스트, 호스트 코어에는 특정 운영체제가 들어 있지 않습니다. 호스트마다 VM, 전송 수단, 창 시스템만 더하므로 세 호스트 모두에서 같은 Android가 돕니다.</span></p>
+          <p><span data-l="en">The protocol, the guest and the host core name no operating system. Each host adds only its VM, its transport and its window system, so the Android that runs is the same on all three.</span><span data-l="ko">프로토콜, 게스트, 호스트 코어는 특정 운영체제에 의존하지 않습니다. 호스트별로 VM, 전송 계층, 창 시스템만 따로 구현하므로 세 호스트 모두에서 같은 Android가 실행됩니다.</span></p>
           <div class="hosts">
             <div><h4>Windows 11</h4><span class="tag m"><span data-l="en">Preview released</span><span data-l="ko">미리보기 출시</span></span><p><span data-l="en">Host Compute System VM, Direct3D 11 and DirectComposition windows. x64 released; ARM64 in progress.</span><span data-l="ko">Host Compute System VM, Direct3D 11과 DirectComposition 창. x64는 출시, ARM64는 진행 중.</span></p></div>
             <div><h4>Linux</h4><span class="tag g"><span data-l="en">In progress</span><span data-l="ko">진행 중</span></span><p><span data-l="en">crosvm on KVM, a Wayland compositor, .deb and .rpm with a signed repository. Built and run in CI, not released.</span><span data-l="ko">KVM 위의 crosvm, Wayland 컴포지터, 서명된 저장소와 .deb, .rpm. CI에서 빌드하고 실행하며, 아직 출시 전.</span></p></div>
@@ -321,9 +328,9 @@ footer { max-width: 760px; margin-top: 64px; font-size: 13px; color: var(--muted
       <section class="win" id="w-open" data-proc="task.open" data-title="open" aria-labelledby="h-open">
         <div class="tb" tabindex="0" aria-label="Window: open source. Arrow keys move, Delete closes."><svg aria-hidden="true"><use href="#dsa-mark"/></svg><span class="t">android / open source</span><button class="x" aria-label="Close window">×</button></div>
         <div class="body">
-          <h3 id="h-open"><span data-l="en">Built from parts anyone may carry on.</span><span data-l="ko">누구든 이어 갈 수 있는 부품으로 만듭니다.</span></h3>
-          <p><span data-l="en">Microsoft ended the Windows Subsystem for Android on March 5, 2025, and the apps people ran with it lost their place on the desktop. DSA covers what it did and goes further, on Apache-2.0 code with no proprietary binaries. No app store and no Google Play services ship with DSA; installing them stays the user's choice.</span><span data-l="ko">Microsoft는 2025년 3월 5일 Windows Subsystem for Android 지원을 끝냈고, 그 위에서 쓰던 앱은 데스크톱에서 자리를 잃었습니다. DSA는 그때 되던 일을 모두 해내고 그 이상을 목표로 하며, 독점 바이너리 없이 Apache-2.0 코드로 만듭니다. 앱 스토어나 Google Play 서비스는 함께 배포하지 않습니다. 설치는 사용자가 정합니다.</span></p>
-          <p><span data-l="en">Development is public: issues, pull requests, and a test for every specified behaviour.</span><span data-l="ko">개발은 공개로 진행합니다. 이슈와 풀 리퀘스트가 열려 있고, 정해 둔 동작마다 테스트가 있습니다.</span></p>
+          <h3 id="h-open"><span data-l="en">Built from parts anyone may carry on.</span><span data-l="ko">누구나 이어받을 수 있는 코드로 만듭니다.</span></h3>
+          <p><span data-l="en">Microsoft ended the Windows Subsystem for Android on March 5, 2025, and the apps people ran with it lost their place on the desktop. DSA covers what it did and goes further, on Apache-2.0 code with no proprietary binaries. No app store and no Google Play services ship with DSA; installing them stays the user's choice.</span><span data-l="ko">Microsoft는 2025년 3월 5일 Windows Subsystem for Android 지원을 종료했고, 그 위에서 쓰던 앱은 데스크톱에서 실행할 방법을 잃었습니다. DSA는 그 기능을 모두 제공하고 그 이상을 목표로 하며, 독점 바이너리 없이 Apache-2.0 코드로 만듭니다. 앱 스토어와 Google Play 서비스는 포함하지 않으며, 설치 여부는 사용자가 정합니다.</span></p>
+          <p><span data-l="en">Development is public: issues, pull requests, and a test for every specified behaviour.</span><span data-l="ko">개발은 모두 공개되어 있습니다. 이슈와 풀 리퀘스트를 누구나 볼 수 있고, 명세한 동작마다 테스트가 있습니다.</span></p>
           <div class="links">
             <a href="https://github.com/thisisthepy/desktop-subsystem-for-android/releases/latest"><span data-l="en">Download the preview</span><span data-l="ko">미리보기 받기</span></a>
             <a href="https://github.com/thisisthepy/desktop-subsystem-for-android"><span data-l="en">Source on GitHub</span><span data-l="ko">GitHub 소스</span></a>
