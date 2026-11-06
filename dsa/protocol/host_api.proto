@@ -1270,6 +1270,44 @@ enum RunMode {
 // they are. The answer is Done once the new disk is in place; the next start boots it.
 message ResetData {}
 
+// Asks which Android version runs and which can be chosen. The service answers
+// AndroidVersions.
+message GetAndroidVersions {}
+
+// Chooses the Android version this computer follows. Where every user boots the same image,
+// only an administrator may choose (ERROR_CODE_NOT_ALLOWED otherwise). A major that is not
+// supported is ERROR_CODE_INVALID_SETTING. A major older than the running one erases every
+// user's Android data, since Android cannot read data a newer version wrote, so it needs
+// erase_data (ERROR_CODE_DATA_WOULD_BE_LOST otherwise). The service answers AndroidVersions
+// and downloads the image at once; it is used from the next start.
+message UseAndroidVersion {
+  // The major version to follow; 0 follows the newest supported one.
+  uint32 major = 1;
+  bool erase_data = 2;
+}
+
+// The Android version: what runs, what is chosen, and what can be.
+message AndroidVersions {
+  // The image Android starts from.
+  string version = 1;
+  uint32 android_major = 2;
+  uint64 build = 3;
+  // The AOSP build ID and the security patch level (YYYY-MM-DD); empty when unknown.
+  string build_id = 4;
+  string security_patch = 5;
+  // The chosen major version; 0 follows the newest supported one.
+  uint32 chosen_major = 6;
+  // The supported major versions, oldest first.
+  repeated uint32 supported_majors = 7;
+  // The major the choice leads to; it differs from android_major while a switch waits for
+  // its image.
+  uint32 target_major = 8;
+  // Whether the current image has not finished its first boot yet.
+  bool on_trial = 9;
+  // The latest news about the image; empty when there is none.
+  string notice = 10;
+}
+
 // What an ARM translation package says of itself, from its arm-translation.json.
 message ArmTranslationPackage {
   string name = 1;
@@ -1481,6 +1519,9 @@ enum ErrorCode {
   // A widget was not placed: its app offers no such widget, Android did not allow it, or the
   // user canceled its setup. The detail says which.
   ERROR_CODE_WIDGET_REFUSED = 9;
+  // Choosing an older Android major version erases user data, and the request did not agree
+  // to that. The detail says what would be lost.
+  ERROR_CODE_DATA_WOULD_BE_LOST = 10;
 }
 
 message Error {
@@ -1659,6 +1700,8 @@ message Request {
     SetAppWindowSettings set_app_window_settings = 303;
     GetAndroidFiles get_android_files = 90;
     ResetData reset_data = 310;
+    GetAndroidVersions get_android_versions = 320;
+    UseAndroidVersion use_android_version = 321;
   }
 }
 
@@ -1685,6 +1728,7 @@ message Response {
     BackgroundApps background_apps = 18;
     AppWindowSettingsList app_window_settings = 300;
     AndroidFilesLocation android_files = 90;
+    AndroidVersions android_versions = 320;
   }
 }
 

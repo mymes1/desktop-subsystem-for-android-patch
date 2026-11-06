@@ -36,7 +36,8 @@ use dsa_host_core::power::PowerHub;
 use dsa_host_core::session::{Session, SessionState};
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{
-    check_reporting, next_image_check, Download, UpdateNotices, UpdatingAndroid,
+    check_reporting, next_image_check, CheckNow, Download, StoreVersions, UpdateNotices,
+    UpdatingAndroid,
 };
 use dsa_host_core::update::store::{ImageStore, Recovery};
 use dsa_host_core::window_manager::WindowManagerKeeper;
@@ -105,6 +106,8 @@ pub struct Updates {
     pub notices: Arc<UpdateNotices>,
     pub boot_timeout: Duration,
     pub trial_running: Arc<AtomicBool>,
+    /// Set when a user chose another Android version, so the image is checked for at once.
+    pub check_now: Arc<CheckNow>,
 }
 
 /// Where each user's files are.
@@ -259,6 +262,21 @@ pub fn create_user_android(
         Box::new(move || -> Result<BootPlan, String> {
             let (dir, version) = current_image(&config, updates.as_ref())?;
             let image = image_files(&dir, config.kernel.as_deref(), &config.kernel_cmdline)?;
+            // A disk holding a newer Android's data than this image, after the user chose an
+            // older version and agreed to erase it, starts afresh.
+            if let Some(updates) = &updates {
+                let major = updates
+                    .store
+                    .state()
+                    .map_err(|e| e.to_string())?
+                    .current
+                    .android_major;
+                dsa_host_core::data_reset::erase_if_newer(
+                    &disk,
+                    &crate::image::version_file(&disk),
+                    major,
+                )?;
+            }
             match (&image.disk_template, &version) {
                 (Some(template), Some(version)) => bring_disk_to(
                     &account,
@@ -466,6 +484,7 @@ fn open_updates(config: &HostConfig, build: &str) -> Result<Option<Updates>, Str
         notices: Arc::new(UpdateNotices::default()),
         boot_timeout: Duration::from_secs(boot_timeout),
         trial_running: Arc::new(AtomicBool::new(false)),
+        check_now: Arc::new(CheckNow::default()),
     }))
 }
 
@@ -502,12 +521,19 @@ fn check_for_updates(
     let fetch = crate::fetch::CurlFetch;
     while !stop.load(Ordering::Relaxed) {
         next = next_image_check(next, Instant::now(), !no_image(), FIRST_IMAGE_RETRY);
+        // A user who chose another Android version waits for it now, not at the next turn.
+        if updates.check_now.take() {
+            next = Instant::now();
+        }
         if Instant::now() < next {
             thread::sleep(Duration::from_secs(1));
             continue;
         }
         let waiting_for_first = no_image();
-        if !waiting_for_first && !store.machine().image_updates {
+        if !waiting_for_first
+            && !updates.store.switch_pending()
+            && !store.machine().image_updates
+        {
             next = Instant::now() + SETTINGS_RECHECK;
             continue;
         }
@@ -797,6 +823,14 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
         );
     if let Some(source) = android_version {
         service = service.with_android_version(source);
+    }
+    if let Some(updates) = &updates {
+        service = service.with_android_versions(Arc::new(StoreVersions {
+            store: Arc::clone(&updates.store),
+            notices: Arc::clone(&updates.notices),
+            check_now: Arc::clone(&updates.check_now),
+            shared_by_users: true,
+        }));
     }
     {
         let androids = androids.clone();

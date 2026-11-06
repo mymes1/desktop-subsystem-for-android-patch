@@ -1308,6 +1308,8 @@ pub struct HostApiService {
     data_reset: Option<Arc<dyn UserDataReset>>,
     /// How long a data reset waits for the user's Android to stop.
     data_reset_wait: Duration,
+    /// Which Android version runs, and choosing another.
+    versions: Option<Arc<dyn crate::update::versions::AndroidVersions>>,
 }
 
 /// Says what the build of the image a user's Android starts from is, by user.
@@ -1338,7 +1340,17 @@ impl HostApiService {
             identities: None,
             data_reset: None,
             data_reset_wait: RESET_STOP_WAIT,
+            versions: None,
         }
+    }
+
+    /// Lets users see the Android version and choose another through `versions`.
+    pub fn with_android_versions(
+        mut self,
+        versions: Arc<dyn crate::update::versions::AndroidVersions>,
+    ) -> HostApiService {
+        self.versions = Some(versions);
+        self
     }
 
     /// Resets a user's Android data with `reset`, which puts a fresh data disk in place of
@@ -3213,6 +3225,10 @@ impl HostApiService {
                 }
             }
             Some(request::Body::ResetData(_)) => self.reset_data(peer),
+            Some(request::Body::GetAndroidVersions(_)) => self.android_versions(peer, None),
+            Some(request::Body::UseAndroidVersion(chosen)) => {
+                self.android_versions(peer, Some(chosen))
+            }
             Some(request::Body::SetSettings(set)) => self.set_settings(peer, set),
             Some(request::Body::GetDeviceIdentity(_)) => self.device_identity(peer, None),
             Some(request::Body::SetDeviceIdentity(set)) => {
@@ -3407,7 +3423,9 @@ impl HostApiService {
                         | request::Body::WatchGamepads(_)
                         | request::Body::ListAppWindowSettings(_)
                         | request::Body::SetAppWindowSettings(_)
-                        | request::Body::ResetData(_) => unreachable!("answered above"),
+                        | request::Body::ResetData(_)
+                        | request::Body::GetAndroidVersions(_)
+                        | request::Body::UseAndroidVersion(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -3750,6 +3768,51 @@ impl HostApiService {
         )
     }
 
+    /// Reports the Android version, after choosing `chosen` when there is one.
+    fn android_versions(&self, peer: &Peer, chosen: Option<types::UseAndroidVersion>) -> response::Body {
+        use crate::update::versions::{Channel, ChooseError};
+        let Some(versions) = &self.versions else {
+            return error(
+                ErrorCode::Unavailable,
+                "this service does not keep Android images it can update, so the Android \
+                 version cannot be chosen here"
+                    .into(),
+            );
+        };
+        let report = match chosen {
+            None => versions.report().map_err(|why| error(ErrorCode::Unavailable, why)),
+            Some(_) if versions.needs_administrator() && !peer.administrator => Err(error(
+                ErrorCode::NotAllowed,
+                "only an administrator can choose the Android version; every user of this \
+                 computer runs the same one. Run the command as an administrator."
+                    .into(),
+            )),
+            Some(chosen) => versions
+                .choose(Channel::from_wire(chosen.major), chosen.erase_data)
+                .map_err(|why| match why {
+                    ChooseError::Unsupported(why) => error(ErrorCode::InvalidSetting, why),
+                    ChooseError::DataWouldBeLost(why) => error(ErrorCode::DataWouldBeLost, why),
+                    ChooseError::Store(why) => error(ErrorCode::Unavailable, why),
+                })
+                .inspect(|report| {
+                    eprintln!(
+                        "local API: {} chose Android {} (now {}, moving to {})",
+                        peer.user,
+                        match report.channel {
+                            Channel::Latest => "latest".to_string(),
+                            Channel::Major(major) => major.to_string(),
+                        },
+                        report.android_major,
+                        report.target_major
+                    )
+                }),
+        };
+        match report {
+            Ok(report) => response::Body::AndroidVersions(versions_to_wire(&report)),
+            Err(body) => body,
+        }
+    }
+
     /// Erases the caller's Android data: stops their Android and has the platform put a fresh
     /// data disk in place of theirs.
     fn reset_data(&self, peer: &Peer) -> response::Body {
@@ -4044,6 +4107,37 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
     }
 }
 
+fn versions_to_wire(report: &crate::update::versions::VersionReport) -> types::AndroidVersions {
+    types::AndroidVersions {
+        version: report.version.clone(),
+        android_major: report.android_major,
+        build: report.build,
+        build_id: report.build_id.clone().unwrap_or_default(),
+        security_patch: report.security_patch.clone().unwrap_or_default(),
+        chosen_major: report.channel.to_wire(),
+        supported_majors: report.supported_majors.clone(),
+        target_major: report.target_major,
+        on_trial: report.on_trial,
+        notice: report.notice.clone().unwrap_or_default(),
+    }
+}
+
+fn versions_from_wire(wire: types::AndroidVersions) -> crate::update::versions::VersionReport {
+    let text = |s: String| Some(s).filter(|s| !s.is_empty());
+    crate::update::versions::VersionReport {
+        version: wire.version,
+        android_major: wire.android_major,
+        build: wire.build,
+        build_id: text(wire.build_id),
+        security_patch: text(wire.security_patch),
+        channel: crate::update::versions::Channel::from_wire(wire.chosen_major),
+        supported_majors: wire.supported_majors,
+        target_major: wire.target_major,
+        on_trial: wire.on_trial,
+        notice: text(wire.notice),
+    }
+}
+
 fn error(code: ErrorCode, detail: String) -> response::Body {
     response::Body::Error(types::Error {
         code: code as i32,
@@ -4141,6 +4235,20 @@ impl std::fmt::Display for ClientError {
 }
 
 impl std::error::Error for ClientError {}
+
+impl ClientError {
+    /// Whether the service refused to move to an older Android major because that erases
+    /// user data the request did not agree to lose.
+    pub fn data_would_be_lost(&self) -> bool {
+        matches!(
+            self,
+            ClientError::Service {
+                code: ErrorCode::DataWouldBeLost,
+                ..
+            }
+        )
+    }
+}
 
 /// The client end of the local API.
 pub struct HostApiClient {
@@ -4257,6 +4365,34 @@ impl HostApiClient {
     }
 
     /// The settings of the caller's DSA, with what the service says about itself.
+    /// Which Android version runs and which can be chosen.
+    pub fn android_versions(
+        &mut self,
+    ) -> Result<crate::update::versions::VersionReport, ClientError> {
+        let body = request::Body::GetAndroidVersions(types::GetAndroidVersions {});
+        match self.exchange(body, self.timeout)? {
+            response::Body::AndroidVersions(report) => Ok(versions_from_wire(report)),
+            _ => Err(ClientError::Malformed("expected the Android versions".into())),
+        }
+    }
+
+    /// Chooses the Android version this computer follows. `erase_data` agrees to erasing
+    /// every user's Android data when it is older than the running one.
+    pub fn use_android_version(
+        &mut self,
+        channel: crate::update::versions::Channel,
+        erase_data: bool,
+    ) -> Result<crate::update::versions::VersionReport, ClientError> {
+        let body = request::Body::UseAndroidVersion(types::UseAndroidVersion {
+            major: channel.to_wire(),
+            erase_data,
+        });
+        match self.exchange(body, self.timeout)? {
+            response::Body::AndroidVersions(report) => Ok(versions_from_wire(report)),
+            _ => Err(ClientError::Malformed("expected the Android versions".into())),
+        }
+    }
+
     pub fn settings(&mut self) -> Result<SettingsReport, ClientError> {
         match self.exchange(
             request::Body::GetSettings(types::GetSettings {}),

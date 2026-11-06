@@ -40,6 +40,7 @@ background.
 | Shell | No Android launcher, status bar or keyboard: the Start menu, the notification centre and the Windows IME take their place | planned |
 | Idle | Android's Doze is the idle state, so notifications and widgets keep working while the CPU rests | planned |
 | Widgets | Android widgets on the Windows desktop | planned |
+| Versions | The latest two Android versions, Android 16 and 17. You choose one in the settings app; moving to an older one erases the Android data, because Android cannot read data a newer version wrote | planned |
 
 ```
 [Android VM]                                    [Windows host: DSA service]
