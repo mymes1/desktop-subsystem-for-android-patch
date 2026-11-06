@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use dsa_host_core::file_share::ShareHost;
 
 /// The folder in Android's shared storage the user's folders go under.
-pub const LOCATION: &str = "Linux";
+pub const LOCATION: &str = dsa_host_core::file_share::LOCATION;
 
 /// The `user-dirs.dirs` key for each shared folder name.
 fn xdg_key(name: &str) -> Option<&'static str> {
@@ -297,7 +297,7 @@ XDG_VIDEOS_DIR="videos"
         let mut ran = false;
         folders.as_user(&mut || ran = true).unwrap();
         assert!(ran);
-        assert_eq!(folders.location(), "Linux");
+        assert_eq!(folders.location(), "Host");
         assert!(folders.space(Path::new("/")).is_some());
     }
 }
