@@ -1449,6 +1449,56 @@ pub struct NetworkStatus {
 /// they are. The answer is Done once the new disk is in place; the next start boots it.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ResetData {}
+/// Asks which Android version runs and which can be chosen. The service answers
+/// AndroidVersions.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetAndroidVersions {}
+/// Chooses the Android version this computer follows. Where every user boots the same image,
+/// only an administrator may choose (ERROR_CODE_NOT_ALLOWED otherwise). A major that is not
+/// supported is ERROR_CODE_INVALID_SETTING. A major older than the running one erases every
+/// user's Android data, since Android cannot read data a newer version wrote, so it needs
+/// erase_data (ERROR_CODE_DATA_WOULD_BE_LOST otherwise). The service answers AndroidVersions
+/// and downloads the image at once; it is used from the next start.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UseAndroidVersion {
+    /// The major version to follow; 0 follows the newest supported one.
+    #[prost(uint32, tag = "1")]
+    pub major: u32,
+    #[prost(bool, tag = "2")]
+    pub erase_data: bool,
+}
+/// The Android version: what runs, what is chosen, and what can be.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AndroidVersions {
+    /// The image Android starts from.
+    #[prost(string, tag = "1")]
+    pub version: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub android_major: u32,
+    #[prost(uint64, tag = "3")]
+    pub build: u64,
+    /// The AOSP build ID and the security patch level (YYYY-MM-DD); empty when unknown.
+    #[prost(string, tag = "4")]
+    pub build_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "5")]
+    pub security_patch: ::prost::alloc::string::String,
+    /// The chosen major version; 0 follows the newest supported one.
+    #[prost(uint32, tag = "6")]
+    pub chosen_major: u32,
+    /// The supported major versions, oldest first.
+    #[prost(uint32, repeated, tag = "7")]
+    pub supported_majors: ::prost::alloc::vec::Vec<u32>,
+    /// The major the choice leads to; it differs from android_major while a switch waits for
+    /// its image.
+    #[prost(uint32, tag = "8")]
+    pub target_major: u32,
+    /// Whether the current image has not finished its first boot yet.
+    #[prost(bool, tag = "9")]
+    pub on_trial: bool,
+    /// The latest news about the image; empty when there is none.
+    #[prost(string, tag = "10")]
+    pub notice: ::prost::alloc::string::String,
+}
 /// What an ARM translation package says of itself, from its arm-translation.json.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ArmTranslationPackage {
@@ -1858,7 +1908,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -1986,6 +2036,10 @@ pub mod request {
         ReadDrag(super::ReadDrag),
         #[prost(message, tag = "322")]
         EndDrag(super::EndDrag),
+        #[prost(message, tag = "330")]
+        GetAndroidVersions(super::GetAndroidVersions),
+        #[prost(message, tag = "331")]
+        UseAndroidVersion(super::UseAndroidVersion),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1994,7 +2048,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -2046,6 +2100,8 @@ pub mod response {
         DragOffer(super::DragOffer),
         #[prost(message, tag = "321")]
         DragData(super::DragData),
+        #[prost(message, tag = "330")]
+        AndroidVersions(super::AndroidVersions),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -2867,6 +2923,9 @@ pub enum ErrorCode {
     /// A widget was not placed: its app offers no such widget, Android did not allow it, or the
     /// user canceled its setup. The detail says which.
     WidgetRefused = 9,
+    /// Choosing an older Android major version erases user data, and the request did not agree
+    /// to that. The detail says what would be lost.
+    DataWouldBeLost = 10,
 }
 impl ErrorCode {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -2885,6 +2944,7 @@ impl ErrorCode {
             Self::FileRefused => "ERROR_CODE_FILE_REFUSED",
             Self::InstallRefused => "ERROR_CODE_INSTALL_REFUSED",
             Self::WidgetRefused => "ERROR_CODE_WIDGET_REFUSED",
+            Self::DataWouldBeLost => "ERROR_CODE_DATA_WOULD_BE_LOST",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -2900,6 +2960,7 @@ impl ErrorCode {
             "ERROR_CODE_FILE_REFUSED" => Some(Self::FileRefused),
             "ERROR_CODE_INSTALL_REFUSED" => Some(Self::InstallRefused),
             "ERROR_CODE_WIDGET_REFUSED" => Some(Self::WidgetRefused),
+            "ERROR_CODE_DATA_WOULD_BE_LOST" => Some(Self::DataWouldBeLost),
             _ => None,
         }
     }
