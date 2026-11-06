@@ -22,9 +22,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # A newer push to develop holds every older one, so only the newest is checked. Runs
-  # that never finish are avoided by checking compile and lint before each push.
-  group: test-linux-package-${{ github.ref }}
+  # Every push to develop is checked to the end in a group of its own: a newer merge
+  # used to cancel the run in progress, and with merges minutes apart the long runs
+  # never finished. A newer push to one pull request still replaces its older run.
+  group: test-linux-package-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: true
 
 permissions:
