@@ -2030,7 +2030,10 @@ mod tests {
             right_above_desktop(&below, desktop, ours)
         };
         // Right above the desktop, with a hidden window and another widget between.
-        assert!(fits(&[(30, false), (widget, true), (desktop, true)], &[own, widget]));
+        assert!(fits(
+            &[(30, false), (widget, true), (desktop, true)],
+            &[own, widget]
+        ));
         // The shell raised its desktop window over it: the desktop is not below it.
         assert!(!fits(&[(40, false), (41, false)], &[own]));
         // An app's window is under it, which it would hide.
@@ -2047,8 +2050,8 @@ mod tests {
         use windows_sys::Win32::Foundation::{HWND, RECT};
         use windows_sys::Win32::Graphics::Gdi::{MonitorFromRect, MONITOR_DEFAULTTONULL};
         use windows_sys::Win32::UI::WindowsAndMessaging::{
-            GetWindow, GetWindowLongPtrW, GetWindowRect, IsWindowVisible, GWL_EXSTYLE,
-            GW_HWNDNEXT, WS_EX_LAYERED,
+            GetWindow, GetWindowLongPtrW, GetWindowRect, IsWindowVisible, GWL_EXSTYLE, GW_HWNDNEXT,
+            WS_EX_LAYERED,
         };
 
         let mut windows = WindowsWidgetWindows::open(None).expect("opening the widget windows");
@@ -2070,13 +2073,22 @@ mod tests {
             if let Some(found) = found {
                 break (found, found.hwnd as HWND);
             }
-            assert!(Instant::now() < deadline, "the widget's window was never drawn");
+            assert!(
+                Instant::now() < deadline,
+                "the widget's window was never drawn"
+            );
             std::thread::sleep(Duration::from_millis(20));
         };
         // Shown right after its first drawing.
         std::thread::sleep(Duration::from_millis(500));
-        assert!(first.committed, "the system did not take the window's picture");
-        assert!(!first.visible, "the window was shown before it had a picture");
+        assert!(
+            first.committed,
+            "the system did not take the window's picture"
+        );
+        assert!(
+            !first.visible,
+            "the window was shown before it had a picture"
+        );
         let pixels = (first.width * first.height) as usize;
         assert!(pixels > 0, "the window is {}x{}", first.width, first.height);
         assert!(
