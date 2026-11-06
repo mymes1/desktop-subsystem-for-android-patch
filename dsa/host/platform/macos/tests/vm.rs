@@ -29,6 +29,22 @@ fn fr2_the_console_is_the_virtio_console() {
 }
 
 #[test]
+fn nfr2_freed_memory_is_reported_a_page_at_a_time() {
+    // Once, from the host, whatever the image or the user's settings say.
+    let cmdline = for_virtualization_framework(
+        HYPER_V_CMDLINE,
+        "page_reporting.page_reporting_order=9",
+        false,
+    );
+    let words: Vec<&str> = cmdline.split_whitespace().collect();
+    let orders: Vec<&&str> = words
+        .iter()
+        .filter(|w| w.starts_with("page_reporting.page_reporting_order="))
+        .collect();
+    assert_eq!(orders, [&"page_reporting.page_reporting_order=0"]);
+}
+
+#[test]
 fn fr2_android_finds_its_partitions_on_every_pci_slot() {
     let cmdline = for_virtualization_framework(HYPER_V_CMDLINE, "", false);
     assert!(!cmdline.contains("boot_devices=vmbus"));

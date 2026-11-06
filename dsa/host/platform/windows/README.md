@@ -656,11 +656,12 @@ What keeps the number small:
 - The VM's memory is backed by the pagefile and committed on first touch, and the pages the
   guest frees and reports go back to the host (`vm.rs`). On the Windows builds WSL does this
   on (26100 and later, and earlier ones from a set update revision), the VM has small backing
-  pages and faults 64 KiB at a time, and the guest reports free memory in 128 KiB pieces.
-  Elsewhere it reports 2 MiB pieces (`page_reporting_order`, 5 or 9).
+  pages and faults 64 KiB at a time, and the guest reports every free 4 KiB page, at once.
+  Elsewhere it reports 2 MiB pieces (`page_reporting_order`, 0 or 9).
 - Inside Android, the control daemon has cold pages moved to compressed memory (zram) and the
-  clean caches dropped when no app has been in use for a minute, so that memory is free to
-  report. The agent ends cached apps when the guest goes to sleep with no task open.
+  clean caches dropped on its first look (every 5 seconds) after the last app closes, and
+  page cache beyond the open apps' working set trimmed on the next look that finds it, so
+  that memory is free to report at once. The agent ends cached apps when the guest goes to sleep with no task open.
 - A window host empties its working set when its window is minimized, and the window manager
   does when no window has been shown for 30 seconds.
 - `dsa-wm` empties its working set 30 seconds after the last task window closes, and logs

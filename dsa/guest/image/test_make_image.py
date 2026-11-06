@@ -2052,7 +2052,7 @@ class GuestMemoryTests(unittest.TestCase):
     def test_nfr1_the_secure_element_service_is_removed(self):
         self.assertTrue(make_image.removed("SYSTEM/app/SecureElement/SecureElement.apk"))
 
-    def test_nfr2_a_gradual_trim_reclaims_a_bounded_slice_from_the_coldest_pages_and_reads_memory_pressure(self):
+    def test_nfr2_a_trim_reclaims_the_coldest_pages_and_compacts_so_they_are_reported_at_once(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=True) as archive:
             contexts = archive.read("VENDOR/etc/selinux/vendor_property_contexts").decode().splitlines()
             self.assertIn("vendor.dsa.memory.trim u:object_r:dsa_memory_prop:s0 exact bool", contexts)
@@ -2061,7 +2061,10 @@ class GuestMemoryTests(unittest.TestCase):
             self.assertIn("vendor.dsa.memory.trim_size u:object_r:dsa_memory_prop:s0 exact int", contexts)
             self.assertIn('write /sys/fs/cgroup/memory.reclaim "${vendor.dsa.memory.trim_size}M swappiness=0"', trigger)
             self.assertNotIn("drop_caches", trigger)
-            self.assertNotIn("compact_memory", trigger)
+            # What the trim freed is scattered: compacting gathers it into whole blocks that free
+            # page reporting hands back now, not when background compaction gets to it.
+            self.assertLess(trigger.index("cgroup/memory.reclaim"), trigger.index("write /proc/sys/vm/compact_memory 1"))
+            self.assertLess(trigger.index("compact_memory"), trigger.index("setprop vendor.dsa.memory.trim 0"))
             self.assertIn("(allow vendor_init cgroup_v2 (file (write open getattr)))", archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
             self.assertIn("setprop vendor.dsa.memory.trim 0", trigger)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()

@@ -403,7 +403,7 @@ fn fr2_configurations_that_cannot_make_a_vm_are_refused_with_the_reason() {
             "not a SID",
             Box::new(|c| c.socket_sids = vec!["S-1-5-x)(A;;FA;;;WD".into()]),
         ),
-        ("outside 5 to 10", Box::new(|c| c.page_reporting_order = 12)),
+        ("outside 0 to 10", Box::new(|c| c.page_reporting_order = 12)),
     ];
     for (expected, break_it) in cases {
         let mut broken = config();
