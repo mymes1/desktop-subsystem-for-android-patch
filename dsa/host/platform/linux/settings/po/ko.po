@@ -70,7 +70,7 @@ msgid "Cache"
 msgstr "캐시"
 
 msgid "File contents kept in memory. Android drops them when it needs the memory."
-msgstr "메모리에 올려 둔 파일 내용입니다. 메모리가 필요하면 안드로이드가 비웁니다."
+msgstr "메모리에 올려 둔 파일 내용입니다. 메모리가 필요하면 Android가 비웁니다."
 
 msgid "Kernel caches"
 msgstr "커널 캐시"
@@ -136,10 +136,10 @@ msgid "Discrete GPU (for example, for games)"
 msgstr "외장 GPU(예: 게임)"
 
 msgid "Always the newest (now Android {0})"
-msgstr "항상 최신 버전(지금은 안드로이드 {0})"
+msgstr "항상 최신 버전(지금은 Android {0})"
 
 msgid "Android {0}"
-msgstr "안드로이드 {0}"
+msgstr "Android {0}"
 
 msgid "{0} of {1} apps"
 msgstr "앱 {1}개 중 {0}개"
@@ -214,19 +214,19 @@ msgid "Supported by {0} {1} ({2})."
 msgstr "{0} {1}(으)로 지원합니다({2})."
 
 msgid "Android installs apps for: {0}"
-msgstr "안드로이드가 앱을 설치하는 ABI: {0}"
+msgstr "Android가 앱을 설치하는 ABI: {0}"
 
 msgid "Android is not running, so what it supports now is not known."
-msgstr "안드로이드가 실행 중이 아니어서 지금 지원하는 것을 알 수 없습니다."
+msgstr "Android가 실행 중이 아니어서 지금 지원하는 것을 알 수 없습니다."
 
 msgid "Connected through this computer (NAT). Android apps see it as Wi-Fi, with no data charges."
-msgstr "이 컴퓨터를 거쳐 연결되어 있습니다(NAT). 안드로이드 앱에는 데이터 요금이 없는 와이파이로 보입니다."
+msgstr "이 컴퓨터를 거쳐 연결되어 있습니다(NAT). Android 앱에는 데이터 요금이 없는 와이파이로 보입니다."
 
 msgid "Connected to this computer's network as a device of its own (advanced networking)."
 msgstr "이 컴퓨터의 네트워크에 독립된 기기로 연결되어 있습니다(고급 네트워킹)."
 
 msgid "Android is not running, so it has no network yet."
-msgstr "안드로이드가 실행 중이 아니어서 아직 네트워크가 없습니다."
+msgstr "Android가 실행 중이 아니어서 아직 네트워크가 없습니다."
 
 msgid "The DSA service does not report the network. Update DSA to see it."
 msgstr "DSA 서비스가 네트워크를 알려 주지 않습니다. DSA를 업데이트하면 볼 수 있습니다."
@@ -310,7 +310,7 @@ msgid "Display and GPU"
 msgstr "디스플레이 및 GPU"
 
 msgid "Android version"
-msgstr "안드로이드 버전"
+msgstr "Android 버전"
 
 msgid "Updates"
 msgstr "업데이트"
@@ -409,7 +409,7 @@ msgid "{0} was not uninstalled: {1} ({2})"
 msgstr "{0}을(를) 제거하지 못했습니다: {1} ({2})"
 
 msgid "These Android apps keep running after their windows close, because they play music, download files, keep a VPN on or do other work in the background. Each also has an indicator in the top bar. Stopping an app ends what it is doing and frees the memory it used."
-msgstr "이 안드로이드 앱들은 창을 닫은 뒤에도 음악 재생, 파일 내려받기, VPN 같은 일을 하며 계속 실행됩니다. 앱마다 상단 표시줄에도 표시기가 있습니다. 앱을 중지하면 하던 일을 멈추고 쓰던 메모리를 돌려받습니다."
+msgstr "이 Android 앱들은 창을 닫은 뒤에도 음악 재생, 파일 내려받기, VPN 같은 일을 하며 계속 실행됩니다. 앱마다 상단 표시줄에도 표시기가 있습니다. 앱을 중지하면 하던 일을 멈추고 쓰던 메모리를 돌려받습니다."
 
 msgid "Stopping apps"
 msgstr "앱 중지"
@@ -532,7 +532,7 @@ msgid "State"
 msgstr "상태"
 
 msgid "Desktop Subsystem for Android™ runs Android in its own lightweight virtual machine and shows each app in its own window."
-msgstr "Desktop Subsystem for Android™는 안드로이드를 전용 경량 가상 머신에서 실행하고, 앱마다 자기 창으로 보여 줍니다."
+msgstr "Desktop Subsystem for Android™는 Android를 전용 경량 가상 머신에서 실행하고, 앱마다 자기 창으로 보여 줍니다."
 
 msgid "Android"
 msgstr "Android"
@@ -553,10 +553,10 @@ msgid "More"
 msgstr "더 보기"
 
 msgid "Freeze Android now"
-msgstr "지금 안드로이드 일시 정지"
+msgstr "지금 Android 일시 정지"
 
 msgid "Stops every process in Android until you open one of its windows again. Notifications, alarms and widgets stop with it."
-msgstr "안드로이드의 창을 다시 열 때까지 모든 프로세스를 멈춥니다. 알림, 알람, 위젯도 함께 멈춥니다."
+msgstr "Android의 창을 다시 열 때까지 모든 프로세스를 멈춥니다. 알림, 알람, 위젯도 함께 멈춥니다."
 
 msgid "Freeze"
 msgstr "일시 정지"
@@ -571,7 +571,7 @@ msgid "Open the service's log folder (administrators)"
 msgstr "서비스 로그 폴더 열기(관리자)"
 
 msgid "The logs of the DSA service and of Android itself."
-msgstr "DSA 서비스와 안드로이드 자체의 로그입니다."
+msgstr "DSA 서비스와 Android 자체의 로그입니다."
 
 msgid "Ask the DSA service for the state again."
 msgstr "DSA 서비스에 상태를 다시 묻습니다."
@@ -589,19 +589,19 @@ msgid "The RAM the virtual machine, the window manager and the app windows hold 
 msgstr "가상 머신, 창 관리자, 앱 창이 지금 차지한 RAM입니다."
 
 msgid "Android's VM now"
-msgstr "지금 안드로이드 VM"
+msgstr "지금 Android VM"
 
 msgid "The memory the VM holds on this computer, and how much of it Android uses"
-msgstr "VM이 이 컴퓨터에서 차지한 메모리와 그중 안드로이드가 쓰는 양"
+msgstr "VM이 이 컴퓨터에서 차지한 메모리와 그중 Android가 쓰는 양"
 
 msgid "Inside Android"
-msgstr "안드로이드 안에서"
+msgstr "Android 안에서"
 
 msgid "Available to Android"
-msgstr "안드로이드가 쓸 수 있는 메모리"
+msgstr "Android가 쓸 수 있는 메모리"
 
 msgid "Android's kernel"
-msgstr "안드로이드 커널"
+msgstr "Android 커널"
 
 msgid "Largest processes"
 msgstr "메모리를 많이 쓰는 프로세스"
@@ -610,19 +610,19 @@ msgid "Memory limit"
 msgstr "메모리 한도"
 
 msgid "The most memory Android may grow to. Android takes memory only as it needs it and gives it back when idle. Automatic lets it grow to 3 GB, never past this computer's memory. Takes effect the next time Android starts."
-msgstr "안드로이드가 늘어날 수 있는 최대 메모리입니다. 안드로이드는 필요한 만큼만 메모리를 쓰고 유휴 상태가 되면 돌려줍니다. 자동이면 3 GB까지 늘어나고, 이 컴퓨터의 메모리를 넘지 않습니다. 다음에 안드로이드를 시작할 때 적용됩니다."
+msgstr "Android가 늘어날 수 있는 최대 메모리입니다. Android는 필요한 만큼만 메모리를 쓰고 유휴 상태가 되면 돌려줍니다. 자동이면 3 GB까지 늘어나고, 이 컴퓨터의 메모리를 넘지 않습니다. 다음에 Android를 시작할 때 적용됩니다."
 
 msgid "The memory could not be measured"
 msgstr "메모리를 측정하지 못했습니다"
 
 msgid "{0}: used by Android {1}, free, not yet returned {2}"
-msgstr "{0}: 안드로이드 사용 {1}, 비어 있지만 아직 돌려주지 않음 {2}"
+msgstr "{0}: Android 사용 {1}, 비어 있지만 아직 돌려주지 않음 {2}"
 
 msgid "Android is not running, so it takes no memory on this computer."
-msgstr "안드로이드가 실행 중이 아니므로 이 컴퓨터의 메모리를 쓰지 않습니다."
+msgstr "Android가 실행 중이 아니므로 이 컴퓨터의 메모리를 쓰지 않습니다."
 
 msgid "No report yet. Android reports how it uses its memory a few minutes after it starts."
-msgstr "아직 보고가 없습니다. 안드로이드는 시작하고 몇 분 뒤에 메모리 사용 내역을 보고합니다."
+msgstr "아직 보고가 없습니다. Android는 시작하고 몇 분 뒤에 메모리 사용 내역을 보고합니다."
 
 msgid "Reported {0} seconds ago"
 msgstr "{0}초 전에 보고됨"
@@ -634,7 +634,7 @@ msgid "Render GPU"
 msgstr "렌더링 GPU"
 
 msgid "The GPU that draws Android apps. By default it is the one that drives the primary monitor, so frames never cross between GPUs and a laptop's discrete GPU can sleep."
-msgstr "안드로이드 앱을 그리는 GPU입니다. 기본값은 주 모니터를 구동하는 GPU입니다. 그래서 프레임이 GPU 사이를 건너지 않고, 노트북의 외장 GPU가 쉴 수 있습니다."
+msgstr "Android 앱을 그리는 GPU입니다. 기본값은 주 모니터를 구동하는 GPU입니다. 그래서 프레임이 GPU 사이를 건너지 않고, 노트북의 외장 GPU가 쉴 수 있습니다."
 
 msgid "A new render GPU takes effect when the window manager starts again: at the next sign-in, or when you restart it below."
 msgstr "바꾼 렌더링 GPU는 창 관리자가 다시 시작할 때 적용됩니다. 다음에 로그인할 때 적용되며, 아래에서 바로 다시 시작할 수도 있습니다."
@@ -649,7 +649,7 @@ msgid "Restart the window manager"
 msgstr "창 관리자 다시 시작"
 
 msgid "Open Android app windows close and come back."
-msgstr "열려 있는 안드로이드 앱 창이 닫혔다가 다시 열립니다."
+msgstr "열려 있는 Android 앱 창이 닫혔다가 다시 열립니다."
 
 msgid "Restart"
 msgstr "다시 시작"
@@ -658,7 +658,7 @@ msgid "Restart the window manager?"
 msgstr "창 관리자를 다시 시작하시겠습니까?"
 
 msgid "The windows of Android apps close for a moment. Android and its apps keep running."
-msgstr "안드로이드 앱 창이 잠시 닫힙니다. 안드로이드와 앱은 계속 실행됩니다."
+msgstr "Android 앱 창이 잠시 닫힙니다. Android와 앱은 계속 실행됩니다."
 
 msgid "The window manager could not be restarted"
 msgstr "창 관리자를 다시 시작하지 못했습니다"
@@ -676,37 +676,37 @@ msgid "Security patch level"
 msgstr "보안 패치 수준"
 
 msgid "Changing the Android version"
-msgstr "안드로이드 버전 바꾸는 중"
+msgstr "Android 버전 바꾸는 중"
 
 msgid "Every user of this computer runs the same Android version, so changing it needs an administrator. Security updates for the chosen version keep coming. When a version stops being supported, DSA moves to the next one and keeps your apps."
-msgstr "이 컴퓨터의 모든 사용자가 같은 안드로이드 버전을 쓰므로, 바꾸려면 관리자 권한이 필요합니다. 고른 버전의 보안 업데이트는 계속 받습니다. 버전의 지원이 끝나면 DSA가 다음 버전으로 올리고 앱은 그대로 둡니다."
+msgstr "이 컴퓨터의 모든 사용자가 같은 Android 버전을 쓰므로, 바꾸려면 관리자 권한이 필요합니다. 고른 버전의 보안 업데이트는 계속 받습니다. 버전의 지원이 끝나면 DSA가 다음 버전으로 올리고 앱은 그대로 둡니다."
 
 msgid "Version to use"
 msgstr "사용할 버전"
 
 msgid "DSA supports the latest two Android versions. Some apps run on only one of them."
-msgstr "DSA는 최신 안드로이드 버전 두 개를 지원합니다. 어떤 앱은 그중 한 버전에서만 동작합니다."
+msgstr "DSA는 최신 Android 버전 두 개를 지원합니다. 어떤 앱은 그중 한 버전에서만 동작합니다."
 
 msgid "Change"
 msgstr "바꾸기"
 
 msgid "Android {0} is chosen. It is downloaded now and used the next time Android starts."
-msgstr "안드로이드 {0}을(를) 골랐습니다. 지금 내려받고, 다음에 안드로이드가 시작될 때부터 씁니다."
+msgstr "Android {0}을(를) 골랐습니다. 지금 내려받고, 다음에 Android가 시작될 때부터 씁니다."
 
 msgid "Supported versions: Android {0}"
-msgstr "지원하는 버전: 안드로이드 {0}"
+msgstr "지원하는 버전: Android {0}"
 
 msgid "Move to a newer Android?"
-msgstr "더 새 안드로이드로 옮길까요?"
+msgstr "더 새 Android로 옮길까요?"
 
 msgid "Android {0} is downloaded and used the next time Android starts. Your apps and their data move along. Moving back later erases the data."
-msgstr "안드로이드 {0}을(를) 내려받아 다음에 안드로이드가 시작될 때부터 씁니다. 앱과 데이터는 함께 옮겨집니다. 나중에 되돌리면 데이터가 지워집니다."
+msgstr "Android {0}을(를) 내려받아 다음에 Android가 시작될 때부터 씁니다. 앱과 데이터는 함께 옮겨집니다. 나중에 되돌리면 데이터가 지워집니다."
 
 msgid "Erase Android data to move to an older version?"
-msgstr "안드로이드 데이터를 지우고 이전 버전으로 옮길까요?"
+msgstr "Android 데이터를 지우고 이전 버전으로 옮길까요?"
 
 msgid "Android {0} is older than the Android {1} that runs now, and Android cannot read data a newer version wrote. Moving erases the Android data of every user of this computer: every app they installed, the accounts they signed in to and the data of every app. Each user's Android then starts as it was first installed. DSA's settings stay. This cannot be undone."
-msgstr "안드로이드 {0}은(는) 지금 실행 중인 안드로이드 {1}보다 오래된 버전이고, 안드로이드는 더 새 버전이 쓴 데이터를 읽지 못합니다. 옮기면 이 컴퓨터 모든 사용자의 안드로이드 데이터가 지워집니다: 설치한 모든 앱, 로그인한 계정, 모든 앱의 데이터입니다. 각 사용자의 안드로이드는 처음 설치한 상태로 시작합니다. DSA 설정은 그대로 남습니다. 되돌릴 수 없습니다."
+msgstr "Android {0}은(는) 지금 실행 중인 Android {1}보다 오래된 버전이고, Android는 더 새 버전이 쓴 데이터를 읽지 못합니다. 옮기면 이 컴퓨터 모든 사용자의 Android 데이터가 지워집니다: 설치한 모든 앱, 로그인한 계정, 모든 앱의 데이터입니다. 각 사용자의 Android는 처음 설치한 상태로 시작합니다. DSA 설정은 그대로 남습니다. 되돌릴 수 없습니다."
 
 msgid "Erase data and change"
 msgstr "데이터 지우고 바꾸기"
@@ -727,16 +727,16 @@ msgid "Update DSA with the system's package manager, such as apt or dnf."
 msgstr "apt나 dnf 같은 시스템의 패키지 관리자로 DSA를 업데이트하세요."
 
 msgid "Android image"
-msgstr "안드로이드 이미지"
+msgstr "Android 이미지"
 
 msgid "This setting applies to every user of this computer, so changing it asks for an administrator's permission."
 msgstr "이 설정은 이 컴퓨터의 모든 사용자에게 적용되므로, 바꾸려면 관리자 권한을 묻습니다."
 
 msgid "Update the Android image automatically"
-msgstr "안드로이드 이미지 자동 업데이트"
+msgstr "Android 이미지 자동 업데이트"
 
 msgid "Download signed security updates and new versions of Android. They apply at the next start of Android."
-msgstr "서명된 보안 업데이트와 새 안드로이드 버전을 내려받습니다. 다음에 안드로이드를 시작할 때 적용됩니다."
+msgstr "서명된 보안 업데이트와 새 Android 버전을 내려받습니다. 다음에 Android를 시작할 때 적용됩니다."
 
 msgid "This installation does not offer image updates."
 msgstr "이 설치에서는 이미지 업데이트를 제공하지 않습니다."
@@ -754,10 +754,10 @@ msgid "DSA service version"
 msgstr "DSA 서비스 버전"
 
 msgid "Android image version"
-msgstr "안드로이드 이미지 버전"
+msgstr "Android 이미지 버전"
 
 msgid "The Android image the next start boots. Image updates change it."
-msgstr "다음에 시작할 때 부팅하는 안드로이드 이미지입니다. 이미지 업데이트가 이 버전을 바꿉니다."
+msgstr "다음에 시작할 때 부팅하는 Android 이미지입니다. 이미지 업데이트가 이 버전을 바꿉니다."
 
 msgid "Licences"
 msgstr "라이선스"
@@ -775,7 +775,7 @@ msgid "Android is a trademark of Google LLC."
 msgstr "Android is a trademark of Google LLC."
 
 msgid "The names and build fingerprint Android reports to apps. Leave a box empty to keep the value shown in it. Android reads these when it starts, so a change applies from its next start."
-msgstr "안드로이드가 앱에 알리는 이름과 빌드 지문입니다. 칸을 비워 두면 칸에 보이는 값을 그대로 씁니다. 안드로이드는 시작할 때 이 값을 읽으므로, 바꾼 값은 다음 시작부터 적용됩니다."
+msgstr "Android가 앱에 알리는 이름과 빌드 지문입니다. 칸을 비워 두면 칸에 보이는 값을 그대로 씁니다. Android는 시작할 때 이 값을 읽으므로, 바꾼 값은 다음 시작부터 적용됩니다."
 
 msgid "Apps may notice"
 msgstr "앱이 알아챌 수 있습니다"
@@ -790,7 +790,7 @@ msgid "Fingerprint from the next start"
 msgstr "다음 시작부터 쓰는 지문"
 
 msgid "Restart Android now"
-msgstr "지금 안드로이드 다시 시작"
+msgstr "지금 Android 다시 시작"
 
 msgid "Reset to defaults"
 msgstr "기본값으로 되돌리기"
@@ -799,28 +799,28 @@ msgid "Save"
 msgstr "저장"
 
 msgid "Saved. Android uses it from its next start."
-msgstr "저장했습니다. 안드로이드를 다음에 시작할 때부터 씁니다."
+msgstr "저장했습니다. Android를 다음에 시작할 때부터 씁니다."
 
 msgid "Saved. Restart Android to use it now."
-msgstr "저장했습니다. 지금 쓰려면 안드로이드를 다시 시작하세요."
+msgstr "저장했습니다. 지금 쓰려면 Android를 다시 시작하세요."
 
 msgid "Reset the device identity?"
 msgstr "기기 정보를 되돌릴까요?"
 
 msgid "Every value goes back to DSA's own. It applies from the next start of Android."
-msgstr "모든 값이 DSA의 기본값으로 돌아갑니다. 안드로이드를 다음에 시작할 때부터 적용됩니다."
+msgstr "모든 값이 DSA의 기본값으로 돌아갑니다. Android를 다음에 시작할 때부터 적용됩니다."
 
 msgid "Back to the defaults. Android uses them from its next start."
-msgstr "기본값으로 되돌렸습니다. 안드로이드를 다음에 시작할 때부터 씁니다."
+msgstr "기본값으로 되돌렸습니다. Android를 다음에 시작할 때부터 씁니다."
 
 msgid "Back to the defaults. Restart Android to use them now."
-msgstr "기본값으로 되돌렸습니다. 지금 쓰려면 안드로이드를 다시 시작하세요."
+msgstr "기본값으로 되돌렸습니다. 지금 쓰려면 Android를 다시 시작하세요."
 
 msgid "Android started again with this identity."
-msgstr "안드로이드가 이 기기 정보로 다시 시작했습니다."
+msgstr "Android가 이 기기 정보로 다시 시작했습니다."
 
 msgid "Android's network"
-msgstr "안드로이드의 네트워크"
+msgstr "Android의 네트워크"
 
 msgid "Connection"
 msgstr "연결"
@@ -838,46 +838,46 @@ msgid "Advanced networking is not in use"
 msgstr "고급 네트워킹을 쓰지 못하고 있습니다"
 
 msgid "Restart Android to apply"
-msgstr "적용하려면 안드로이드를 다시 시작하세요"
+msgstr "적용하려면 Android를 다시 시작하세요"
 
 msgid "The change applies the next time Android starts. Stop Android on the General page, then open an app."
-msgstr "바뀐 설정은 안드로이드가 다음에 시작할 때 적용됩니다. 일반 페이지에서 안드로이드를 중지한 뒤 앱을 여세요."
+msgstr "바뀐 설정은 Android가 다음에 시작할 때 적용됩니다. 일반 페이지에서 Android를 중지한 뒤 앱을 여세요."
 
 msgid "Advanced networking"
 msgstr "고급 네트워킹"
 
 msgid "Off by default. When on, Android joins this computer's network as a device of its own: other devices on the network can reach Android apps, and Android apps can reach them directly. Programs on this computer can always reach a server in Android at the address above."
-msgstr "기본값은 꺼짐입니다. 켜면 안드로이드가 이 컴퓨터의 네트워크에 독립된 기기로 들어갑니다. 네트워크의 다른 기기가 안드로이드 앱에 닿고, 안드로이드 앱도 그 기기에 바로 닿습니다. 이 컴퓨터의 프로그램은 언제나 위의 주소로 안드로이드의 서버에 닿을 수 있습니다."
+msgstr "기본값은 꺼짐입니다. 켜면 Android가 이 컴퓨터의 네트워크에 독립된 기기로 들어갑니다. 네트워크의 다른 기기가 Android 앱에 닿고, Android 앱도 그 기기에 바로 닿습니다. 이 컴퓨터의 프로그램은 언제나 위의 주소로 Android의 서버에 닿을 수 있습니다."
 
 msgid "Files"
 msgstr "파일"
 
 msgid "To send a file to an Android app, drag it from the file manager onto the app's window. An APK you drop is installed."
-msgstr "안드로이드 앱에 파일을 보내려면 파일 관리자에서 앱 창으로 끌어 놓습니다. 끌어 놓은 APK는 설치됩니다."
+msgstr "Android 앱에 파일을 보내려면 파일 관리자에서 앱 창으로 끌어 놓습니다. 끌어 놓은 APK는 설치됩니다."
 
 msgid "Share folders with Android"
-msgstr "폴더를 안드로이드와 공유"
+msgstr "폴더를 Android와 공유"
 
 msgid "On by default: the folders chosen below show in Android's shared storage, so Android apps can open and save files there. Android apps reach them only with Android's storage permission, and they can do only what your own account may do."
-msgstr "기본값은 켜짐입니다. 아래에서 고른 폴더가 안드로이드 공유 저장소에 보여, 안드로이드 앱이 그곳의 파일을 열고 저장할 수 있습니다. 안드로이드 앱은 안드로이드의 저장소 권한이 있을 때만 이 폴더에 닿고, 내 계정이 할 수 있는 일만 할 수 있습니다."
+msgstr "기본값은 켜짐입니다. 아래에서 고른 폴더가 Android 공유 저장소에 보여, Android 앱이 그곳의 파일을 열고 저장할 수 있습니다. Android 앱은 Android의 저장소 권한이 있을 때만 이 폴더에 닿고, 내 계정이 할 수 있는 일만 할 수 있습니다."
 
 msgid "Shared folders"
 msgstr "공유할 폴더"
 
 msgid "A folder you clear is taken away from Android at once."
-msgstr "선택을 해제한 폴더는 곧바로 안드로이드에서 사라집니다."
+msgstr "선택을 해제한 폴더는 곧바로 Android에서 사라집니다."
 
 msgid "Android files"
-msgstr "안드로이드 파일"
+msgstr "Android 파일"
 
 msgid "Opens Android's shared storage in the file manager: the files Android apps saved, such as photos and downloads. Android starts if it is not running. DSA Files in the app grid does the same."
-msgstr "안드로이드 공유 저장소를 파일 관리자에서 엽니다. 사진과 다운로드처럼 안드로이드 앱이 저장한 파일이 있습니다. 안드로이드가 실행 중이 아니면 시작합니다. 앱 목록의 DSA 파일도 같은 일을 합니다."
+msgstr "Android 공유 저장소를 파일 관리자에서 엽니다. 사진과 다운로드처럼 Android 앱이 저장한 파일이 있습니다. Android가 실행 중이 아니면 시작합니다. 앱 목록의 DSA 파일도 같은 일을 합니다."
 
 msgid "Open web links in Android apps"
-msgstr "안드로이드 앱에서 웹 링크 열기"
+msgstr "Android 앱에서 웹 링크 열기"
 
 msgid "Off by default: a web link you tap in an Android app opens in your default browser on this computer. On, it opens in an Android app, as on a phone. A link an installed app has verified as its own opens in that app either way."
-msgstr "기본값은 꺼짐입니다. 꺼져 있으면 안드로이드 앱에서 누른 웹 링크가 이 컴퓨터의 기본 브라우저에서 열립니다. 켜면 휴대폰에서처럼 안드로이드 앱에서 열립니다. 설치된 앱이 자기 것으로 확인한 링크는 어느 쪽이든 그 앱에서 열립니다."
+msgstr "기본값은 꺼짐입니다. 꺼져 있으면 Android 앱에서 누른 웹 링크가 이 컴퓨터의 기본 브라우저에서 열립니다. 켜면 휴대폰에서처럼 Android 앱에서 열립니다. 설치된 앱이 자기 것으로 확인한 링크는 어느 쪽이든 그 앱에서 열립니다."
 
 msgid "ARM apps"
 msgstr "ARM 앱"
@@ -886,19 +886,19 @@ msgid "Run apps built only for ARM"
 msgstr "ARM 전용 앱 실행"
 
 msgid "Many Android apps contain code only for ARM processors. They install and run here only with an ARM translation package, which you install with dsa arm-translation install. DSA does not include one yet. This switch decides whether Android uses the installed package; it applies from the next start of Android. Only 64-bit ARM apps (arm64-v8a) can run."
-msgstr "많은 안드로이드 앱은 ARM 프로세서용 코드만 담고 있습니다. 이런 앱은 ARM 번역 묶음이 있어야 여기서 설치되고 실행됩니다. 묶음은 dsa arm-translation install로 설치합니다. DSA에는 아직 기본 묶음이 없습니다. 이 스위치는 설치된 묶음을 안드로이드가 쓸지 정하며, 다음에 안드로이드를 시작할 때부터 적용됩니다. 64비트 ARM 앱(arm64-v8a)만 실행할 수 있습니다."
+msgstr "많은 Android 앱은 ARM 프로세서용 코드만 담고 있습니다. 이런 앱은 ARM 번역 묶음이 있어야 여기서 설치되고 실행됩니다. 묶음은 dsa arm-translation install로 설치합니다. DSA에는 아직 기본 묶음이 없습니다. 이 스위치는 설치된 묶음을 Android가 쓸지 정하며, 다음에 Android를 시작할 때부터 적용됩니다. 64비트 ARM 앱(arm64-v8a)만 실행할 수 있습니다."
 
 msgid "Status"
 msgstr "상태"
 
 msgid "Android started before this change. Stop and start Android for ARM apps to follow it."
-msgstr "안드로이드가 이 변경 전에 시작되었습니다. 안드로이드를 멈췄다가 다시 시작하면 ARM 앱에 반영됩니다."
+msgstr "Android가 이 변경 전에 시작되었습니다. Android를 멈췄다가 다시 시작하면 ARM 앱에 반영됩니다."
 
 msgid "Remove the ARM translation package"
 msgstr "ARM 번역 묶음 제거"
 
 msgid "Deletes the package from your Android disk. ARM apps you installed stay, but do not run after Android restarts."
-msgstr "안드로이드 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, 안드로이드를 다시 시작하면 실행되지 않습니다."
+msgstr "Android 디스크에서 묶음을 지웁니다. 설치한 ARM 앱은 남지만, Android를 다시 시작하면 실행되지 않습니다."
 
 msgid "Developer"
 msgstr "개발자"
@@ -907,28 +907,28 @@ msgid "Developer mode"
 msgstr "개발자 모드"
 
 msgid "Off by default. When on, adb on this computer can connect to Android without asking in Android, through a port only this computer can reach. Turn it off when you are done."
-msgstr "기본값은 꺼짐입니다. 켜면 이 컴퓨터의 adb가 안드로이드에서 승인하지 않고 안드로이드에 연결할 수 있습니다. 포트는 이 컴퓨터에서만 닿습니다. 다 쓰면 끄세요."
+msgstr "기본값은 꺼짐입니다. 켜면 이 컴퓨터의 adb가 Android에서 승인하지 않고 Android에 연결할 수 있습니다. 포트는 이 컴퓨터에서만 닿습니다. 다 쓰면 끄세요."
 
 msgid "Connect adb"
 msgstr "adb 연결"
 
 msgid "While developer mode is on and Android is running, run this command:"
-msgstr "개발자 모드가 켜져 있고 안드로이드가 실행 중일 때 다음 명령을 실행하세요:"
+msgstr "개발자 모드가 켜져 있고 Android가 실행 중일 때 다음 명령을 실행하세요:"
 
 msgid "Port"
 msgstr "포트"
 
 msgid "Share the clipboard with Android"
-msgstr "안드로이드와 클립보드 공유"
+msgstr "Android와 클립보드 공유"
 
 msgid "On by default: text you copy on this computer can be pasted in Android apps, and text copied in Android can be pasted on this computer. Images stay where they were copied."
-msgstr "기본값은 켜짐입니다. 이 컴퓨터에서 복사한 텍스트를 안드로이드 앱에 붙여넣을 수 있고, 안드로이드에서 복사한 텍스트를 이 컴퓨터에 붙여넣을 수 있습니다. 이미지는 복사한 곳에만 남습니다."
+msgstr "기본값은 켜짐입니다. 이 컴퓨터에서 복사한 텍스트를 Android 앱에 붙여넣을 수 있고, Android에서 복사한 텍스트를 이 컴퓨터에 붙여넣을 수 있습니다. 이미지는 복사한 곳에만 남습니다."
 
 msgid "Freeze Android when idle"
-msgstr "유휴 상태에서 안드로이드 일시 정지"
+msgstr "유휴 상태에서 Android 일시 정지"
 
 msgid "Off by default: an idle Android dozes and still receives notifications. Frozen, it uses no CPU but receives nothing until you open an app."
-msgstr "기본값은 꺼짐입니다. 꺼져 있으면 유휴 상태의 안드로이드는 Doze 상태로 들어가고 알림을 계속 받습니다. 일시 정지하면 CPU를 쓰지 않지만, 앱을 열 때까지 아무것도 받지 않습니다."
+msgstr "기본값은 꺼짐입니다. 꺼져 있으면 유휴 상태의 Android는 Doze 상태로 들어가고 알림을 계속 받습니다. 일시 정지하면 CPU를 쓰지 않지만, 앱을 열 때까지 아무것도 받지 않습니다."
 
 msgid "Diagnostics"
 msgstr "진단"
@@ -970,22 +970,22 @@ msgid "Reset"
 msgstr "초기화"
 
 msgid "Reset Android's data"
-msgstr "안드로이드 데이터 초기화"
+msgstr "Android 데이터 초기화"
 
 msgid "Erases every app you installed, your accounts and the data of every app, so Android starts as it was first installed. The Android image and these settings stay."
-msgstr "설치한 앱, 계정, 모든 앱의 데이터를 지우고 안드로이드를 처음 설치했을 때로 되돌립니다. 안드로이드 이미지와 이 설정은 그대로 남습니다."
+msgstr "설치한 앱, 계정, 모든 앱의 데이터를 지우고 Android를 처음 설치했을 때로 되돌립니다. Android 이미지와 이 설정은 그대로 남습니다."
 
 msgid "Reset Android's data?"
-msgstr "안드로이드 데이터를 초기화할까요?"
+msgstr "Android 데이터를 초기화할까요?"
 
 msgid "This erases every app you installed in Android, the accounts you signed in to and the data of every app. Android stops now, and its next start is as it was first installed. The Android image and DSA's settings stay. This cannot be undone."
-msgstr "안드로이드에 설치한 모든 앱, 로그인한 계정, 모든 앱의 데이터가 지워집니다. 안드로이드는 지금 멈추고, 다음에 시작할 때 처음 설치했을 때의 상태가 됩니다. 안드로이드 이미지와 DSA 설정은 그대로 남습니다. 되돌릴 수 없습니다."
+msgstr "Android에 설치한 모든 앱, 로그인한 계정, 모든 앱의 데이터가 지워집니다. Android는 지금 멈추고, 다음에 시작할 때 처음 설치했을 때의 상태가 됩니다. Android 이미지와 DSA 설정은 그대로 남습니다. 되돌릴 수 없습니다."
 
 msgid "Android's data was reset"
-msgstr "안드로이드 데이터를 초기화했습니다"
+msgstr "Android 데이터를 초기화했습니다"
 
 msgid "The next app you open starts Android as it was first installed."
-msgstr "다음에 앱을 열면 처음 설치했을 때의 안드로이드가 시작됩니다."
+msgstr "다음에 앱을 열면 처음 설치했을 때의 Android가 시작됩니다."
 
 msgid "Documents"
 msgstr "문서"
