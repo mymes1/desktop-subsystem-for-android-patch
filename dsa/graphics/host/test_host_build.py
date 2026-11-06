@@ -184,6 +184,16 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn('+        (vulkanIcd == "moltenvk") || (vulkanIcd.empty() && moltenVKSupported);', patch)
         self.assertIn('-    const bool moltenVKEnabled = (vulkanIcd == "moltenvk");', patch)
 
+    def test_pr3_renderer_fails_rather_than_crashes_when_no_graphics_api_starts(self):
+        # A guest that asks for Vulkan only gets no GL emulation, and when Vulkan then failed
+        # the GL compositor was taken from the GL emulation that was never made (exit 139).
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0014", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0014-fail-the-start-when-no-graphics-api-starts.patch").read_text(encoding="utf-8")
+        self.assertIn("+    if (!fb->m_emulationVk && !fb->m_emulationGl) {", patch)
+        self.assertIn("+        return false;", patch)
+
     def test_pr3_gpu_preference_names_clear_x11_macros(self):
         # X11/X.h, which EGL pulls in on Linux, defines None as a macro.
         patch = (HERE.parent / "patches" /

@@ -231,6 +231,8 @@ class RendererWithoutVulkanTests(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         result = json.loads(done.stdout.strip().splitlines()[-1])
         self.assertIsInstance(result["init"], int)
+        # Only Vulkan is asked for, so with no driver the start must fail and say so.
+        self.assertNotEqual(result["init"], 0, "the renderer started with no Vulkan driver")
 
 
 class RenderGpuSelectionTests(unittest.TestCase):
