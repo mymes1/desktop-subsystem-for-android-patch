@@ -92,7 +92,8 @@ korean_by_id = {ids[name]: ko for name, _, ko in table if name in ids}
 for id_ in ids.values():
     if id_ not in korean_by_id:
         fail(f"fr3_shell_words_have_korean: string {id_} has no Korean")
-used = set(re.findall(r"dsa-app-window\.exe,-(\d+)", wxs)) | set(re.findall(r'(?:Description|Display)ResourceId="(\d+)"', wxs))
+# A string is named "@file,-id"; "file,-id" without the @ is an icon (DefaultIcon), not a string.
+used = set(re.findall(r"@\[INSTALLFOLDER\]dsa-app-window\.exe,-(\d+)", wxs)) | set(re.findall(r'(?:Description|Display)ResourceId="(\d+)"', wxs))
 for id_ in sorted(used):
     if id_ not in korean_by_id:
         fail(f"fr3_shell_words_have_korean: dsa.wxs points at string {id_}, which the table lacks")

@@ -135,8 +135,17 @@ pub fn uri_list(paths: &[PathBuf]) -> String {
             use std::os::unix::ffi::OsStrExt;
             path.as_os_str().as_bytes().to_vec()
         };
+        // A Windows path is named "file:///C:/..." (RFC 8089): the drive gets a slash before it.
         #[cfg(not(unix))]
-        let bytes = path.to_string_lossy().replace('\\', "/").into_bytes();
+        let bytes = {
+            let path = path.to_string_lossy().replace('\\', "/");
+            if path.starts_with('/') {
+                path
+            } else {
+                format!("/{path}")
+            }
+            .into_bytes()
+        };
         for byte in bytes {
             if byte.is_ascii_alphanumeric() || b"/-._~".contains(&byte) {
                 list.push(byte as char);
