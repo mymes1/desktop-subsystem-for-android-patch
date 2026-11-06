@@ -218,10 +218,16 @@ impl MemorySnapshot {
 
     /// How much more the VM holds on the host than the guest says it uses, in KiB: free guest
     /// memory the host has not got back. `None` until the guest has reported or without a VM.
+    ///
+    /// What the kernel reserved at boot (its code, the page structures, swiotlb) is outside
+    /// MemTotal, so it is not in the guest's use either, but it is in use for as long as the
+    /// VM runs and the host can never take it back. It counts as used here; counting it as
+    /// free memory not returned would show a gap that no reclaim can close.
     pub fn vm_beyond_guest_kb(&self) -> Option<u64> {
-        let guest = self.guest.as_ref()?;
+        let guest = &self.guest.as_ref()?.memory;
         let (vm, count) = self.role_total_kb(HostRole::Vm);
-        (count > 0).then(|| vm.saturating_sub(guest.memory.used_kb()))
+        let held = guest.used_kb() + guest.reserved_at_boot_kb().unwrap_or(0);
+        (count > 0).then(|| vm.saturating_sub(held))
     }
 
     /// One line for the service's log: the host's total and its parts, then what the guest
@@ -712,8 +718,9 @@ pub fn held_line(before: &HeldMemory, after: &HeldMemory) -> String {
 }
 
 /// How long the window manager waits after the last task window closed before it gives back
-/// the memory it is not using.
-pub const IDLE_TRIM_DELAY: Duration = Duration::from_secs(30);
+/// the memory it is not using: not at all. Memory no window uses goes back on the trim's next
+/// check, within a second; pages touched again come back from the standby list on their own.
+pub const IDLE_TRIM_DELAY: Duration = Duration::ZERO;
 
 /// Decides when a host process that serves task windows (the window manager) should give
 /// back the memory it is not using: once each time no task window has been open for a while.
@@ -737,7 +744,7 @@ pub struct IdleTrim {
 /// How long shown windows must go without a new frame before the window manager gives back the
 /// GPU driver's spare memory. An app that shows a still screen draws nothing; one that is
 /// animating never reaches it, so nothing it renders waits for memory the driver let go.
-pub const QUIET_TRIM_DELAY: Duration = Duration::from_secs(60);
+pub const QUIET_TRIM_DELAY: Duration = Duration::from_secs(5);
 
 impl IdleTrim {
     /// Starts idle, as at start-up, when no window is open yet.

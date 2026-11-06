@@ -533,3 +533,41 @@ fn nfr2_the_window_manager_gives_memory_back_once_no_window_has_been_open_a_whil
     trim.task_event(None, at(420));
     assert!(trim.due(at(450)));
 }
+
+#[test]
+fn nfr2_memory_the_kernel_reserved_at_boot_is_not_counted_as_free_memory_held() {
+    // The guest uses 2048 MiB of its 4096 MiB total, and reserved 104 MiB of the 4200 MiB it
+    // was given at boot: 2152 MiB the host cannot take back while the VM runs.
+    let mut snapshot = snapshot();
+    snapshot.host[0].working_set_kb = 2160 * MIB;
+    assert_eq!(snapshot.vm_beyond_guest_kb(), Some(8 * MIB));
+    // A VM that has returned every free page holds nothing beyond.
+    snapshot.host[0].working_set_kb = 2152 * MIB;
+    assert_eq!(snapshot.vm_beyond_guest_kb(), Some(0));
+    // A guest that could not count what it was given still reports what it uses.
+    let mut uncounted = report();
+    uncounted.mem_online_kb = 0;
+    snapshot.guest = Some(GuestMemoryReport {
+        memory: GuestMemory::from_control(uncounted),
+        age: Duration::ZERO,
+    });
+    assert_eq!(snapshot.vm_beyond_guest_kb(), Some(104 * MIB));
+}
+
+#[test]
+fn nfr2_the_window_manager_gives_memory_back_as_soon_as_no_window_is_open() {
+    use dsa_host_core::memory::IDLE_TRIM_DELAY;
+    let start = Instant::now();
+    let mut trim = IdleTrim::new(IDLE_TRIM_DELAY, start);
+    trim.sync(&[opened(1)], start);
+    assert!(!trim.due(start));
+    trim.task_event(Some(&TaskEvent::Removed { task_id: 1 }), start);
+    // The trim's next check, a second later at most, gives it back.
+    assert!(trim.due(start));
+}
+
+#[test]
+fn nfr2_a_still_screen_gets_the_gpu_driver_trim_within_seconds() {
+    use dsa_host_core::memory::QUIET_TRIM_DELAY;
+    assert!(QUIET_TRIM_DELAY <= Duration::from_secs(5));
+}
