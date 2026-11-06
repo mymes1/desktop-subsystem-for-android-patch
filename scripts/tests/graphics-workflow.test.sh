@@ -39,3 +39,11 @@ grep -Fq 'host-gfxstream-macos' "$workflow"
 grep -Fq 'libgfxstream_backend.dylib' "$workflow"
 # On macOS the frames are copied on the GPU into the window manager's IOSurfaces.
 grep -Fq '_dsa_gfx_set_display_iosurface_callbacks' "$workflow"
+# Lavapipe's manifest is found by pattern, since Mesa 25 dropped the processor from its name.
+grep -Fq 'ls /usr/share/vulkan/icd.d/lvp_icd*.json' "$workflow"
+if grep -Fq 'VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json' "$workflow"; then
+  echo "the Linux renderer test names a Lavapipe manifest that Mesa 25 no longer installs" >&2
+  exit 1
+fi
+# On the Mac runner the GPU selection tests look for MoltenVK's device, not Lavapipe.
+grep -Fq 'DSA_TEST_GPU_NAME=apple' "$workflow"
