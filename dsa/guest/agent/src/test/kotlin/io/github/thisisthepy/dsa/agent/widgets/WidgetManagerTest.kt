@@ -265,9 +265,10 @@ class WidgetManagerTest {
         scheduler.runDue()
         assertEquals(1, sent.size)
         assertEquals(180, sent[0].widgetFrame.width)
-        // A new connection gets the image again.
-        manager.connected()
+        // A new connection gets the image again, as it connects, and only once: the same
+        // image drawn again after it is not sent twice.
         sent.clear()
+        manager.connected()
         platform.frame(1, 180, 110, png)
         scheduler.runDue()
         assertEquals(1, sent.count { it.hasWidgetFrame() })

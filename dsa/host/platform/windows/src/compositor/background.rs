@@ -577,8 +577,8 @@ mod win {
         RegisterClassExW, RegisterWindowMessageW, SetForegroundWindow, SetMenuDefaultItem,
         TrackPopupMenuEx, TranslateMessage, HICON, ICONINFO, IDI_APPLICATION, MF_SEPARATOR,
         MF_STRING, MSG, SM_CXSMICON, TPM_NONOTIFY, TPM_RETURNCMD, TPM_RIGHTBUTTON, WM_APP,
-        WM_CLOSE, WM_COMMAND, WM_CONTEXTMENU, WM_DESTROY, WM_INITDIALOG, WM_NULL,
-        WM_SETTINGCHANGE, WNDCLASSEXW, WS_POPUP,
+        WM_CLOSE, WM_COMMAND, WM_CONTEXTMENU, WM_DESTROY, WM_INITDIALOG, WM_NULL, WM_SETTINGCHANGE,
+        WNDCLASSEXW, WS_POPUP,
     };
 
     use super::{
@@ -1040,7 +1040,9 @@ mod win {
 
     /// Whether the taskbar uses the light theme (Windows' "default app mode" is separate).
     fn taskbar_is_light() -> bool {
-        use windows_sys::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
+        use windows_sys::Win32::System::Registry::{
+            RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD,
+        };
         let path = wide(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
         let name = wide("SystemUsesLightTheme");
         let mut value = 0u32;

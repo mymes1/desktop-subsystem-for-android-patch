@@ -302,7 +302,12 @@ impl Router {
 
     /// The packages whose last task ended since the last call, oldest first.
     pub fn take_closed_packages(&self) -> Vec<String> {
-        std::mem::take(&mut *self.closed_packages.lock().unwrap_or_else(|e| e.into_inner()))
+        std::mem::take(
+            &mut *self
+                .closed_packages
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        )
     }
 
     fn app_closed(&self, package: &str) {
