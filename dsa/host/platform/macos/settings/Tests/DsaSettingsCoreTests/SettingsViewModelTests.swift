@@ -194,7 +194,8 @@ final class SettingsViewModelTests: XCTestCase {
         let (cli, service) = make()
         cli.answer("memory --json", """
         {"host":[{"role":"vm","pid":10,"working_set_kb":1048576,"private_kb":2048},
-                 {"role":"window manager","pid":11,"working_set_kb":10240,"private_kb":1024}],
+                 {"role":"window manager","pid":11,"working_set_kb":10240,"private_kb":1024},
+                 {"role":"graphics renderer","pid":12,"working_set_kb":20480,"private_kb":2048}],
          "host_total_kb":1058816,"vm_beyond_guest_kb":204800,
          "guest":{"mem_total_kb":2097152,"mem_available_kb":1048576,"mem_free_kb":524288,"cached_kb":102400,
                   "buffers_kb":0,"total_pss_kb":409600,"age_seconds":30,
@@ -205,7 +206,7 @@ final class SettingsViewModelTests: XCTestCase {
         await memory.refresh()
         let en = Locale(identifier: "en_US")
         XCTAssertEqual(Format.size(1048576, locale: en), "1.00 GB")
-        XCTAssertEqual(memory.hostRows.map(\.label), ["Role_Vm", "Role_WindowManager"])
+        XCTAssertEqual(memory.hostRows.map(\.label), ["Role_Vm", "Role_WindowManager", "Role_Renderer"])
         XCTAssertTrue(memory.hasVmSize)
         XCTAssertTrue(memory.hasVmBeyondGuest)
         XCTAssertEqual(memory.guestUsedFraction, 0.5, accuracy: 0.0001)

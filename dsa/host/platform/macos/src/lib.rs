@@ -63,6 +63,8 @@ pub mod android_vm;
 #[cfg(target_os = "macos")]
 pub mod fetch;
 #[cfg(target_os = "macos")]
+pub mod gfx;
+#[cfg(target_os = "macos")]
 pub mod host_memory;
 #[cfg(target_os = "macos")]
 pub mod objc;

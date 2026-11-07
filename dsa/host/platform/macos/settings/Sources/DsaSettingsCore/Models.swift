@@ -199,12 +199,15 @@ public struct ArmTranslationInfo: Equatable, Sendable {
 public enum HostRole: String, Sendable {
     case vm = "Vm"
     case windowManager = "WindowManager"
+    /// The graphics renderer (dsa-gfx), which the window manager starts.
+    case renderer = "Renderer"
     case appWindow = "AppWindow"
 
     static func parse(_ role: String?) -> HostRole? {
         switch role {
         case "vm": return .vm
         case "window manager": return .windowManager
+        case "graphics renderer": return .renderer
         case "app window": return .appWindow
         default: return nil
         }

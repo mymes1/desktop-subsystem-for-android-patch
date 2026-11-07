@@ -3,7 +3,9 @@
 //! The Virtualization framework runs each VM in an XPC service process,
 //! `com.apple.Virtualization.VirtualMachine`, which launchd starts and Activity Monitor
 //! shows. Its parent is launchd, not the agent, so the agent tells its VM's process apart by
-//! which one appeared when it started the VM ([`vm_processes`] before and after).
+//! which one appeared when it started the VM ([`vm_processes`] before and after). The user's
+//! window manager (`dsa-wm`) and the graphics renderer it starts (`dsa-gfx`) are found by
+//! name among the user's processes.
 
 use std::sync::{Arc, Mutex};
 
@@ -12,8 +14,8 @@ use dsa_host_core::memory::{HostMemory, HostProcessMemory, HostRole};
 /// The name of the framework's VM process.
 pub const VM_PROCESS: &str = "com.apple.Virtualization.VirtualMachine";
 
-/// The process IDs of every VM process of this user.
-pub fn vm_processes() -> Vec<i32> {
+/// Every process of this user, by process ID.
+fn own_processes() -> Vec<i32> {
     // SAFETY: a null buffer asks for the count.
     let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
     if count <= 0 {
@@ -30,9 +32,26 @@ pub fn vm_processes() -> Vec<i32> {
     // SAFETY: no preconditions.
     let me = unsafe { libc::getuid() };
     pids.into_iter()
-        .filter(|&pid| pid > 0 && process_name(pid).is_some_and(|n| n == VM_PROCESS))
-        .filter(|&pid| process_uid(pid) == Some(me))
+        .filter(|&pid| pid > 0 && process_uid(pid) == Some(me))
         .collect()
+}
+
+/// The process IDs of every VM process of this user.
+pub fn vm_processes() -> Vec<i32> {
+    own_processes()
+        .into_iter()
+        .filter(|&pid| process_name(pid).is_some_and(|n| n == VM_PROCESS))
+        .collect()
+}
+
+/// What a process of the user's session named `name` does for their Android: the window
+/// manager, or the graphics renderer it starts.
+pub fn role_of(name: &str) -> Option<HostRole> {
+    match name {
+        "dsa-wm" => Some(HostRole::WindowManager),
+        "dsa-gfx" => Some(HostRole::Renderer),
+        _ => None,
+    }
 }
 
 fn process_name(pid: i32) -> Option<String> {
@@ -95,17 +114,40 @@ pub struct MacHostMemory {
 
 impl HostMemory for MacHostMemory {
     fn processes(&self, _user: &str, _vm_id: Option<&str>) -> Vec<HostProcessMemory> {
-        self.vm
-            .get()
-            .and_then(|pid| {
-                process_memory_kb(pid).map(|(resident, footprint)| HostProcessMemory {
-                    role: HostRole::Vm,
-                    pid: pid as u32,
-                    working_set_kb: resident,
-                    private_kb: footprint,
-                })
+        let measure = |pid: i32, role: HostRole| {
+            process_memory_kb(pid).map(|(resident, footprint)| HostProcessMemory {
+                role,
+                pid: pid as u32,
+                working_set_kb: resident,
+                private_kb: footprint,
             })
+        };
+        let mut found: Vec<HostProcessMemory> = self
+            .vm
+            .get()
+            .and_then(|pid| measure(pid, HostRole::Vm))
             .into_iter()
-            .collect()
+            .collect();
+        // The agent runs as the user, so the user's own window manager and renderer are
+        // among its processes.
+        for pid in own_processes() {
+            if let Some(role) = process_name(pid).as_deref().and_then(role_of) {
+                found.extend(measure(pid, role));
+            }
+        }
+        found.sort_by_key(|p| (p.role.rank(), p.pid));
+        found
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nfr5_the_renderers_memory_shows_under_its_own_process() {
+        assert_eq!(role_of("dsa-gfx"), Some(HostRole::Renderer));
+        assert_eq!(role_of("dsa-wm"), Some(HostRole::WindowManager));
+        assert_eq!(role_of("Finder"), None);
     }
 }

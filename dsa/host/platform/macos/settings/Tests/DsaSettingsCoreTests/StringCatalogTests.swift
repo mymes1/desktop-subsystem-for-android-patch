@@ -61,7 +61,7 @@ final class StringCatalogTests: XCTestCase {
         }
         // The keys made from a value at run time.
         var built = SessionStateKeys.all
-        built += ["Role_Vm", "Role_WindowManager", "Role_AppWindow"]
+        built += ["Role_Vm", "Role_WindowManager", "Role_Renderer", "Role_AppWindow"]
         built += ["V", "D", "I", "W", "E", "F"].map { "Logs_Priority_\($0)" }
         built += ["incompatible", "conflicting-signature", "invalid-apk", "insufficient-storage", "downgrade", "blocked", "other"]
             .map { "Install_Reason_\($0)" }

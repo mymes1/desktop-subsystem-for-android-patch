@@ -5,7 +5,7 @@
 # Usage: build-app.sh <version> <programs folder> <output folder> [renderer dylib]
 #
 # The programs folder holds the release builds (dsa-app-window, dsa, and the service, window
-# manager and device lender programs when they are built). The settings app (dsa-settings)
+# manager, graphics renderer and device lender programs when they are built). The settings app (dsa-settings)
 # is taken from there too, or built from the Swift package in ../settings when it is not.
 # The icons are the ones dsa/brand/generate.py renders into ./icon. DSA_SIGN_IDENTITY names
 # the Developer ID to sign with; without it the bundle is signed ad hoc, which runs on the machine that
@@ -57,7 +57,7 @@ plutil -lint "$helper/Contents/Info.plist"
 printf 'APPL????' > "$helper/Contents/PkgInfo"
 cp "$programs/dsa-app-window" "$helper/Contents/MacOS/"
 # The others are taken when they were built.
-for program in dsa dsa-hostd dsa-wm dsa-devices; do
+for program in dsa dsa-hostd dsa-wm dsa-gfx dsa-devices; do
     if [[ -f "$programs/$program" ]]; then
         cp "$programs/$program" "$app/Contents/MacOS/"
     fi
