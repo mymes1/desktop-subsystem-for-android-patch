@@ -130,6 +130,33 @@ def fr17_the_readme_logo_is_there(out):
         fail(f"the README logo is not {size} px")
 
 
+def fr11_the_apk_installer_icon_is_its_own_drawing(out):
+    """The APK Installer ships the parcel master, not the DSA symbol with a badge."""
+    for badge, name in icons.OWN_MASTERS.items():
+        if badge in icons.BADGES:
+            fail(f"{badge} is both drawn from {name}.svg and given a badge")
+        own = (icons.BRAND / f"{name}.svg").read_text(encoding="utf-8")
+        symbol = (icons.BRAND / "symbol.svg").read_text(encoding="utf-8")
+        if inner_paths(symbol) & inner_paths(own):
+            fail(f"{name}.svg reuses the DSA symbol's shapes")
+        scalable, symbolic = icons.linux_paths(icons.LINUX_APPS[badge])
+        for path, master in ((scalable, name), (symbolic, f"{name}-symbolic")):
+            data = read(out, path)
+            expected = (icons.BRAND / f"{master}.svg").read_bytes()
+            if data is not None and data.replace(b"\r\n", b"\n") != expected.replace(b"\r\n", b"\n"):
+                fail(f"{path.name} is not {master}.svg")
+        path = next(p for p, b in icons.WINDOWS_ICONS if b == badge)
+        ico_data, png = read(out, path.with_suffix(".ico")), read(out, path.with_suffix(".png"))
+        if ico_data is not None and png is not None and png not in ico_data:
+            fail(f"{path.name}.ico and {path.name}.png are not the same drawing")
+
+
+def inner_paths(svg):
+    import re
+
+    return set(re.findall(r'\sd="([^"]+)"', svg))
+
+
 def main(argv):
     out = Path(argv[1]).resolve() if argv[:1] == ["--out"] and len(argv) == 2 else None
     checks = [
@@ -137,6 +164,7 @@ def main(argv):
         fr17_every_linux_app_has_a_colour_and_a_symbolic_icon,
         fr17_the_macos_icon_holds_every_size_and_its_layers,
         fr17_the_readme_logo_is_there,
+        fr11_the_apk_installer_icon_is_its_own_drawing,
     ]
     for check in checks:
         before = len(failures)

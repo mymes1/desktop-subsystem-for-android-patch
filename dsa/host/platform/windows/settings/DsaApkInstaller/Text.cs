@@ -4,8 +4,8 @@ using Dsa.Settings.Core;
 
 namespace Dsa.ApkInstaller;
 
-/// <summary>The texts in the user's language, from the settings app's string tables, which
-/// this app embeds as its own (Strings.resx in English, Strings.&lt;language&gt;.resx).</summary>
+/// <summary>The window's texts, in English in every language, from the settings app's
+/// English string table (Strings.resx), which this app embeds as its own.</summary>
 internal sealed class ResourceText : ITextSource
 {
     private static readonly ResourceManager Manager =
@@ -15,7 +15,7 @@ internal sealed class ResourceText : ITextSource
     {
         try
         {
-            return Manager.GetString(key, CultureInfo.CurrentUICulture) ?? key;
+            return Manager.GetString(key, CultureInfo.InvariantCulture) ?? key;
         }
         catch (MissingManifestResourceException)
         {

@@ -1,14 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <!-- The DSA app icon for GNOME: a raised green plate with the window on it, white title
-       bar and antennae over a deep body. -->
-  <rect x="5" y="9" width="54" height="51" rx="11" fill="#08402f"/>
-  <rect x="5" y="5" width="54" height="51" rx="11" fill="#2fd37c"/>
-  <g transform="translate(32 31) scale(.66) translate(-32 -32)">
-    <path d="M22 14 L16.5 5 M42 14 L47.5 5" stroke="#ffffff" stroke-width="4.4" stroke-linecap="round" fill="none"/>
-    <path d="M13 12h38a9 9 0 0 1 9 9v28a9 9 0 0 1-9 9H13a9 9 0 0 1-9-9V21a9 9 0 0 1 9-9z" fill="#0c5a43"/>
-    <path d="M13 12h38a9 9 0 0 1 9 9v4H4v-4a9 9 0 0 1 9-9z" fill="#ffffff"/>
-    <circle cx="40" cy="18.5" r="2.3" fill="#0c5a43"/>
-    <circle cx="48" cy="18.5" r="2.3" fill="#0c5a43"/>
-    <path d="M16 32h32a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4V36a4 4 0 0 1 4-4z" fill="#ffffff" opacity=".3"/>
-  </g>
-<defs><filter id="badge-shadow" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy=".8" stdDeviation=".8" flood-color="#022218" flood-opacity=".4"/></filter></defs><circle cx="51" cy="51" r="10.5" fill="#ffffff" filter="url(#badge-shadow)"/><g transform="translate(51 51) scale(.88) translate(-50 -50)"><path d="M50 42.5v9 M45.6 47.6l4.4 4.4 4.4-4.4 M44.5 56h11" stroke="#0a5a41" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g></svg>
+  <!-- The APK Installer: an open parcel with an arrow going down into it. DSA's own drawing,
+       with no DSA mark on it, so it reads as "install a package" at every size. -->
+  <defs>
+    <linearGradient id="lid" x1="0" y1="20" x2="0" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fcd98f"/>
+      <stop offset="1" stop-color="#f0b354"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="30" x2="0" y2="57" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f3bb5e"/>
+      <stop offset="1" stop-color="#d98b2b"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="4" x2="0" y2="37" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3cbf86"/>
+      <stop offset="1" stop-color="#0f7a50"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 30H52V53A4 4 0 0 1 48 57H16A4 4 0 0 1 12 53Z" fill="url(#body)"/>
+  <path d="M12 30H52V33.5H12Z" fill="#8a4b0c" fill-opacity="0.18"/>
+  <path d="M22 44H42A1.5 1.5 0 0 1 43.5 45.5V48.5A1.5 1.5 0 0 1 42 50H22A1.5 1.5 0 0 1 20.5 48.5V45.5A1.5 1.5 0 0 1 22 44Z" fill="#ffffff" fill-opacity="0.5"/>
+  <path d="M10 22.5A2.5 2.5 0 0 1 12.5 20H51.5A2.5 2.5 0 0 1 54 22.5V28.5A1.5 1.5 0 0 1 52.5 30H11.5A1.5 1.5 0 0 1 10 28.5Z" fill="url(#lid)"/>
+  <path d="M29.5 4H34.5A2 2 0 0 1 36.5 6V21H43.6A1.5 1.5 0 0 1 44.7 23.5L33.1 36A1.5 1.5 0 0 1 30.9 36L19.3 23.5A1.5 1.5 0 0 1 20.4 21H27.5V6A2 2 0 0 1 29.5 4Z" fill="url(#arrow)" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
+</svg>
