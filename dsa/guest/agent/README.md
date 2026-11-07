@@ -112,6 +112,13 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   (`SessionParams.abiOverride`, a field the SDK hides that the platform-signed agent may set):
   the host asks for `arm64-v8a` only when the APK's x86_64 libraries leave out some of its ARM
   ones and a translator is in place.
+- **Apps of several APKs.** When `InstallApk` lists `parts` (the base APK and the splits of a
+  split-APK bundle the host chose for this device, then any expansion files), their bytes
+  follow one another in the chunks. The agent writes every APK into the same session under
+  its own name, and keeps each expansion (OBB) file aside in its cache. Once the installer
+  has installed the app, the agent copies the expansion files into the app's folder under
+  `Android/obb/<package>/` and says the app is installed; when they cannot go there, it says
+  so with the reason. A failed or cancelled install drops them.
 - **Dragging out of a window.** A one-pixel window of the agent's, above every app and
   taking no input, hears of every drag an app starts with `DRAG_FLAG_GLOBAL` (the window
   manager's private flag for intercepting global drags). When the pointer leaves a task's
@@ -504,6 +511,10 @@ Every permission in `src/main/AndroidManifest.xml` is listed in
 `privapp-permissions-dsa-agent.xml`, which the image installs next to the agent. The
 framework refuses to boot when a privileged app requests a privileged permission its list
 does not grant, so the two must change together; `test_make_image.py` checks that they do.
+The runtime permissions are the exception: `default-permissions-dsa-agent.xml`, which the
+image installs in `system_ext/etc/default-permissions/`, grants them from the first boot.
+The storage permissions are there so that Android lets the agent write the folders under
+`Android/obb/`.
 
 ## Building and testing
 
@@ -534,3 +545,4 @@ The release APK, `build/outputs/apk/release/dsa-agent-release-unsigned.apk`, is 
 | `src/test/` | The unit tests |
 | `hidden-api/` | Compile-only declarations of framework classes outside the SDK |
 | `privapp-permissions-dsa-agent.xml` | The agent's privileged permissions |
+| `default-permissions-dsa-agent.xml` | The runtime permissions the image grants the agent |

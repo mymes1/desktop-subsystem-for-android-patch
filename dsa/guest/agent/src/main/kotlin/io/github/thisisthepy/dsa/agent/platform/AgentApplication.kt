@@ -78,6 +78,11 @@ class AgentApplication : Application() {
             media = AndroidMediaSessions(this, log, android.os.Handler(thread.looper)),
             stopper = AndroidAppStopper(this, log),
             packageInstaller = installer,
+            expansionFiles = AndroidExpansionFiles(
+                java.io.File(cacheDir, "expansion-files"),
+                @Suppress("DEPRECATION") android.os.Environment.getExternalStorageDirectory(),
+                log,
+            ),
             packageUninstaller = uninstaller,
             packageReinstaller = AndroidPackageReinstaller(this, installer, uninstaller, AndroidApks()),
             crashRecords = AndroidCrashRecords(this, log),

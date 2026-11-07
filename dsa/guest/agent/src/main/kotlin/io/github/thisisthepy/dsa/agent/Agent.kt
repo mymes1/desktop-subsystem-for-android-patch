@@ -150,6 +150,8 @@ class Agent(
     media: MediaSource = MediaSource.NONE,
     stopper: AppStopper = AppStopper.NONE,
     packageInstaller: PackageInstallerPort = PackageInstallerPort.NONE,
+    expansionFiles: io.github.thisisthepy.dsa.agent.install.ExpansionFiles =
+        io.github.thisisthepy.dsa.agent.install.ExpansionFiles.NONE,
     packages: PackageInfoPort = PackageInfoPort.NONE,
     googleDeviceId: GoogleDeviceIdPort = GoogleDeviceIdPort.NONE,
     packageUninstaller: PackageUninstallerPort = PackageUninstallerPort.NONE,
@@ -241,6 +243,7 @@ class Agent(
         log,
         post = { work -> scheduler.post(work) },
         onInstalled = { requestAppsRefresh() },
+        expansionFiles = expansionFiles,
     )
     private val printer = HostPrinter(
         { frame -> channel.send(frame) },
