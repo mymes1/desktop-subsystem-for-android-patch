@@ -115,6 +115,20 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   list, so rows still scroll to the edge. The overlay names what it replaces in a resource
   map (`android:resourcesMap`), which makes the framework rewrite the layout's id and style
   attribute to Settings' own.
+- The lists that set their own padding get the same 24 dp, edited in the apps themselves
+  (`LIST_BOTTOM_MARGIN_DP`). Settings' home page: on Android 16 its
+  `TopLevelSettings.onCreateRecyclerView` no longer calls `setPadding(0, 0, 0, 0)` over the
+  overlay's layout; on Android 17, `isRunningInFreeformWindow` says yes (the host draws the
+  caption), so Android's own freeform padding applies, and the overlay sets that
+  `dashboard_padding_bottom` to 24 dp. Settings' All apps list gets `paddingBottom` in its
+  compiled `manage_applications_apps.xml`. PermissionController's `preference_recyclerview`
+  gets it too; the app declares `<overlayable>`, so no overlay may replace its layouts, and it
+  lives in the permission APEX, which `make-image.py` unpacks with otatools' `deapexer`,
+  edits and packs with `apexer` before signing, as signing itself packs it, and checks again
+  after signing. Files (DocumentsUI) on Android 16 pads its list's bottom by the height of
+  the bar below it, and by 0 in windows without one: `getSaveLayoutHeight` now returns at
+  least 24 dp in pixels. Android 17's Files keeps 48 dp of its own. The dex edits keep each
+  method's size; `check-image.py` fails an image without them.
 - With the input trace on (`androidboot.hardware.dsa_input_trace=1`), `dsa-trace.rc` makes every
   app's main thread log each message it takes 16 ms or more to handle, or starts 16 ms or more
   late.
