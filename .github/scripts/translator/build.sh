@@ -39,7 +39,7 @@ export SOONG_ONLY=true
 export SOONG_NINJA=ninja
 export SKIP_ABI_CHECKS=true
 export DISABLE_ARTIFACT_PATH_REQUIREMENTS=true
-export TEMPORARY_DISABLE_PATH_RESTRICTIONS=true
+# Not TEMPORARY_DISABLE_PATH_RESTRICTIONS: soong_ui stops when it is set (the third run did).
 export BUILD_USERNAME=dsa-translator BUILD_HOSTNAME=github-actions
 if command -v ccache >/dev/null; then
   export CC_WRAPPER="$(command -v ccache)"
@@ -77,5 +77,9 @@ if (( status != 0 )); then
   done
   echo "::endgroup::"
   tail -n 120 out/error.log 2>/dev/null || true
+  # soong_ui's own fatal errors reach soong.log and the console, not error.log.
+  echo "::group::The end of soong.log"
+  tail -n 40 out/soong.log 2>/dev/null || true
+  echo "::endgroup::"
 fi
 exit "$status"
