@@ -26,12 +26,16 @@
             <FontFamily x:Key="StrongTextFont">Segoe UI Variable Text Semibold, Segoe UI Semibold, Malgun Gothic</FontFamily>
             <FontFamily x:Key="StrongDisplayFont">Segoe UI Variable Display Semibold, Segoe UI Semibold, Malgun Gothic</FontFamily>
 
-            <!-- App Installer's spacing: 32 px from the window's sides, the icon tile 88 px at
-                 the top right, sections 20 px apart, and the footer on its own layer under the
-                 content, 20 px above and 24 px below its controls. -->
+            <!-- App Installer's spacing: 32 px from the window's sides, the icon's tile 106 px at
+                 the top right with the icon inside it, and the bottom row, without a divider or
+                 a band of its own, 20 px above and 24 px below its controls. -->
             <Thickness x:Key="ContentMargin">32,12,32,0</Thickness>
             <Thickness x:Key="FooterPadding">32,20,32,24</Thickness>
-            <sys:Double x:Key="AppIconSize">88</sys:Double>
+            <sys:Double x:Key="AppIconTileSize">106</sys:Double>
+            <sys:Double x:Key="AppIconSize">84</sys:Double>
+            <!-- The same light grey in both themes, as App Installer's tile: an icon made for a
+                 launcher reads on it whatever the window's colour is. -->
+            <SolidColorBrush x:Key="AppIconTileBrush" Color="#E6E6E6" />
             <sys:Double x:Key="PrimaryButtonMinWidth">120</sys:Double>
 
             <Style x:Key="AppNameText" TargetType="TextBlock">
@@ -49,7 +53,7 @@
                 <Setter Property="LineHeight" Value="20" />
                 <Setter Property="Margin" Value="0,4,0,0" />
                 <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             </Style>
             <Style x:Key="SectionHeader" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource StrongTextFont}" />
@@ -58,6 +62,36 @@
                 <Setter Property="LineHeight" Value="20" />
                 <Setter Property="Margin" Value="0,20,0,8" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            </Style>
+            <!-- The title line of a notice: Body Strong, without a section header's margins. -->
+            <Style x:Key="NoticeTitle" TargetType="TextBlock" BasedOn="{StaticResource SectionHeader}">
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <!-- A notice: App Installer's InfoBar, the icon in its own column on the title line
+                 and the title and the text in one column beside it. -->
+            <Style x:Key="NoticeBox" TargetType="Border">
+                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="Padding" Value="12" />
+                <Setter Property="Margin" Value="0,12,0,0" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            </Style>
+            <!-- The More link: words in the accent colour, a button to keyboard and automation. -->
+            <Style x:Key="LinkButton" TargetType="Button">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="Transparent" Padding="0,2">
+                                <ContentPresenter TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
             <Style x:Key="BodyText" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}" />

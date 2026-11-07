@@ -712,14 +712,8 @@
   <data name="ApkWindow_Open" xml:space="preserve">
     <value>Launch</value>
   </data>
-  <data name="ApkWindow_VersionChip" xml:space="preserve">
-    <value>Version {0}</value>
-  </data>
   <data name="ApkWindow_AndroidChip" xml:space="preserve">
     <value>Android {0} or later</value>
-  </data>
-  <data name="ApkWindow_SummaryNew" xml:space="preserve">
-    <value>{0} will be installed in Android. It then appears in the Start menu.</value>
   </data>
   <data name="ApkWindow_SummaryUpdate" xml:space="preserve">
     <value>{0} is installed already. This updates it from version {1} to version {2}. Its data stays.</value>
@@ -732,9 +726,6 @@
   </data>
   <data name="ApkWindow_SummarySignature" xml:space="preserve">
     <value>{0} is installed already, signed with another key than this file. Android does not let an app signed by someone else replace it, which keeps the app's data safe. To use this file, uninstall the app in Android first.</value>
-  </data>
-  <data name="ApkWindow_SummaryUnknown" xml:space="preserve">
-    <value>Android is not running. Installing starts it, then checks whether {0} is installed already.</value>
   </data>
   <data name="ApkWindow_FactPackage" xml:space="preserve">
     <value>Package</value>
@@ -774,9 +765,6 @@
   </data>
   <data name="ApkWindow_Unsigned" xml:space="preserve">
     <value>Not signed. Android installs only signed apps.</value>
-  </data>
-  <data name="ApkWindow_PermissionsHeader" xml:space="preserve">
-    <value>Capabilities ({0})</value>
   </data>
   <data name="ApkWindow_NoPermissions" xml:space="preserve">
     <value>It asks for no permissions.</value>
@@ -862,9 +850,6 @@
   <data name="ApkWindow_Reason_other" xml:space="preserve">
     <value>Android did not install the app.</value>
   </data>
-  <data name="ApkWindow_Publisher" xml:space="preserve">
-    <value>Publisher: {0}</value>
-  </data>
   <data name="ApkWindow_AbiWarning" xml:space="preserve">
     <value>This app has code only for {0} processors, not for this PC's. Android runs it only with an ARM translation package, and may refuse to install it.</value>
   </data>
@@ -873,9 +858,6 @@
   </data>
   <data name="ApkWindow_LaunchWhenReady" xml:space="preserve">
     <value>Launch when ready</value>
-  </data>
-  <data name="ApkWindow_DetailsHeader" xml:space="preserve">
-    <value>Details</value>
   </data>
   <data name="NavLogs.Content" xml:space="preserve">
     <value>Android log</value>
@@ -1443,5 +1425,17 @@
   </data>
   <data name="Android_DownWarning" xml:space="preserve">
     <value>Android {0} is older than the Android {1} that runs now, and Android cannot read data a newer version wrote. Moving erases the Android data of every user of this computer: every app they installed, the accounts they signed in to and the data of every app. Each user's Android then starts as it was first installed. DSA's settings stay. This cannot be undone.</value>
+  </data>
+  <data name="ApkWindow_AbiWarningTitle" xml:space="preserve">
+    <value>This app may not run on this PC</value>
+  </data>
+  <data name="ApkWindow_InstalledTitle" xml:space="preserve">
+    <value>Already installed</value>
+  </data>
+  <data name="ApkWindow_DowngradeTitle" xml:space="preserve">
+    <value>A newer version is installed</value>
+  </data>
+  <data name="ApkWindow_SignatureTitle" xml:space="preserve">
+    <value>Signed with another key</value>
   </data>
 </root>

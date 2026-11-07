@@ -5,7 +5,7 @@ namespace Dsa.Settings.Core.Tests;
 
 /// <summary>The APK Installer is laid out as App Installer lays out an app package. These hold
 /// the metrics that make it look so: the Windows type ramp, the spacing, Mica, the icon tile at
-/// the top right and the main button at the bottom right.</summary>
+/// the top right and the buttons at the bottom right.</summary>
 public class ApkInstallerStyleTests
 {
     private static readonly XNamespace Wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
@@ -71,7 +71,8 @@ public class ApkInstallerStyleTests
     {
         Assert.Equal("32,12,32,0", Resource("ContentMargin"));
         Assert.Equal("32,20,32,24", Resource("FooterPadding"));
-        Assert.Equal("88", Resource("AppIconSize"));
+        Assert.Equal("106", Resource("AppIconTileSize"));
+        Assert.Equal("84", Resource("AppIconSize"));
         Assert.Equal("120", Resource("PrimaryButtonMinWidth"));
         Assert.Equal("0,20,0,8", Setter(KeyedStyle("SectionHeader"), "Margin"));
     }
@@ -88,8 +89,8 @@ public class ApkInstallerStyleTests
         Assert.Equal("ApkInstallWindow", (string?)root.Attribute(XName.Get("AutomationProperties.AutomationId")));
         var bar = Window().Descendants(Ui + "TitleBar").Single();
         Assert.Equal("False", (string?)bar.Attribute("ShowMaximize"));
-        var icon = bar.Descendants(Ui + "ImageIcon").Single();
-        Assert.Equal("pack://application:,,,/Assets/apk-installer.png", (string?)icon.Attribute("Source"));
+        // Only the title's words: no icon in the title bar.
+        Assert.Empty(bar.Descendants());
     }
 
     [Fact]
@@ -100,15 +101,78 @@ public class ApkInstallerStyleTests
         var left = header.Elements(Wpf + "StackPanel").Single();
         Assert.Equal("0", (string?)left.Attribute("Grid.Column"));
         var lines = left.Elements(Wpf + "TextBlock").Select(t => (string?)t.Attribute(X + "Name")).ToList();
-        Assert.Equal(new[] { "HeroTitle", "HeroPackage", "PublisherText", "VersionChip" }, lines);
+        Assert.Equal(new[] { "HeroTitle", "HeroPackage", "PublisherText", "VersionChip", "SourceText" }, lines);
         Assert.Equal("{StaticResource AppNameText}", (string?)Named(doc, "HeroTitle").Attribute("Style"));
         Assert.Equal("{StaticResource DetailLine}", (string?)Named(doc, "PublisherText").Attribute("Style"));
         Assert.Equal("{StaticResource DetailLine}", (string?)Named(doc, "VersionChip").Attribute("Style"));
+        Assert.Equal("{StaticResource DetailLine}", (string?)Named(doc, "SourceText").Attribute("Style"));
+        // The lines are in the normal text colour.
+        Assert.Equal("{DynamicResource TextFillColorPrimaryBrush}", Setter(KeyedStyle("DetailLine"), "Foreground"));
+        var tile = Named(doc, "AppIconTile");
+        Assert.Equal("1", (string?)tile.Attribute("Grid.Column"));
+        Assert.Equal("Top", (string?)tile.Attribute("VerticalAlignment"));
+        Assert.Equal("{StaticResource AppIconTileSize}", (string?)tile.Attribute("Width"));
+        Assert.Equal("{StaticResource AppIconTileBrush}", (string?)tile.Attribute("Background"));
+        Assert.NotNull(tile.Attribute("CornerRadius"));
         var icon = Named(doc, "AppIcon");
-        Assert.Equal("1", (string?)icon.Attribute("Grid.Column"));
-        Assert.Equal("Top", (string?)icon.Attribute("VerticalAlignment"));
+        Assert.Equal(tile, icon.Parent);
         Assert.Equal("{StaticResource AppIconSize}", (string?)icon.Attribute("Width"));
-        Assert.Equal("{StaticResource AppIconSize}", (string?)icon.Attribute("Height"));
+        var clip = icon.Descendants(Wpf + "RectangleGeometry").Single();
+        Assert.Equal("12", (string?)clip.Attribute("RadiusX"));
+    }
+
+    [Fact]
+    public void Fr11_the_lines_come_in_order_then_capabilities_then_notices()
+    {
+        var doc = Window();
+        var names = doc.Descendants().Select(e => (string?)e.Attribute(X + "Name")).Where(n => n is not null).ToList();
+        string[] order = { "HeroTitle", "HeroPackage", "PublisherText", "VersionChip", "SourceText", "AppIconTile",
+            "PermissionsHeader", "PermissionPreview", "MoreLink", "ExpandedPanel", "SummaryBox", "CompatibilityBox", "LaunchWhenReady" };
+        Assert.Equal(order, order.OrderBy(n => names.IndexOf(n)));
+    }
+
+    [Theory]
+    [InlineData("SummaryBox", "SummaryBadge", "SummaryTitle", "SummaryText")]
+    [InlineData("CompatibilityBox", "CompatibilityBadge", "CompatibilityTitle", "CompatibilityText")]
+    public void Fr11_a_notice_has_its_icon_on_the_title_line_and_its_text_in_one_column(string box, string badge, string title, string text)
+    {
+        var doc = Window();
+        Assert.Equal("{StaticResource NoticeBox}", (string?)Named(doc, box).Attribute("Style"));
+        var slot = Named(doc, badge).Parent!;
+        Assert.Equal("20", (string?)slot.Attribute("Height")); // the title's line height
+        Assert.Equal("Top", (string?)slot.Attribute("VerticalAlignment"));
+        Assert.Equal("Center", (string?)Named(doc, badge).Attribute("VerticalAlignment"));
+        Assert.Equal("20", Setter(KeyedStyle("NoticeTitle").Document!.Descendants(Wpf + "Style")
+            .Single(s => (string?)s.Attribute(X + "Key") == "SectionHeader"), "LineHeight"));
+        Assert.Equal(Named(doc, title).Parent, Named(doc, text).Parent);
+        Assert.Equal("1", (string?)Named(doc, title).Parent!.Attribute("Grid.Column"));
+    }
+
+    [Fact]
+    public void Fr11_there_is_no_divider_band_or_section_header()
+    {
+        var doc = Window();
+        var footer = Named(doc, "Footer");
+        Assert.Null(footer.Attribute("BorderThickness"));
+        Assert.Null(footer.Attribute("Background"));
+        var details = Named(doc, "DetailsPanel");
+        Assert.DoesNotContain(details.Descendants(), e => ((string?)e.Attribute("Style"))?.Contains("SectionHeader") == true);
+        Assert.Empty(doc.Descendants(Wpf + "Separator"));
+        Assert.DoesNotContain(doc.Descendants(), e => (string?)e.Attribute(X + "Name") == "DetailsHeader");
+    }
+
+    [Fact]
+    public void Fr11_more_expands_in_a_scrolling_area_inside_the_window()
+    {
+        var doc = Window();
+        var expanded = Named(doc, "ExpandedPanel");
+        Assert.Equal(Wpf + "ScrollViewer", expanded.Name);
+        Assert.Equal("Auto", (string?)expanded.Attribute("VerticalScrollBarVisibility"));
+        var inside = expanded.Descendants().Select(e => (string?)e.Attribute(X + "Name")).ToList();
+        Assert.Contains("PermissionList", inside);
+        Assert.Contains("SensitiveChip", inside);
+        Assert.Contains("FactList", inside);
+        Assert.Equal("OnMore", (string?)Named(doc, "MoreLink").Attribute("Click"));
     }
 
     [Fact]
@@ -118,9 +182,8 @@ public class ApkInstallerStyleTests
         var names = Named(doc, "DetailsPanel").Descendants()
             .Select(e => (string?)e.Attribute(X + "Name")).Where(n => n is not null).ToList();
         Assert.True(names.IndexOf("PermissionsHeader") < names.IndexOf("PermissionList"));
-        Assert.True(names.IndexOf("PermissionList") < names.IndexOf("DetailsHeader"));
-        Assert.True(names.IndexOf("DetailsHeader") < names.IndexOf("FactList"));
-        Assert.Equal("{StaticResource SectionHeader}", (string?)Named(doc, "PermissionsHeader").Attribute("Style"));
+        Assert.True(names.IndexOf("PermissionList") < names.IndexOf("FactList"));
+        Assert.Equal("{StaticResource BodyText}", (string?)Named(doc, "PermissionsHeader").Attribute("Style"));
     }
 
     [Fact]
@@ -136,9 +199,11 @@ public class ApkInstallerStyleTests
         var buttons = Named(doc, "Buttons");
         Assert.Equal("1", (string?)buttons.Attribute("Grid.Column"));
         Assert.Equal("Right", (string?)buttons.Attribute("HorizontalAlignment"));
-        // The main buttons come last, at the right edge, in the accent colour.
+        // The main buttons come first, in the accent colour, and all have one width.
+        Assert.Equal(Wpf + "UniformGrid", buttons.Name);
+        Assert.Equal("1", (string?)buttons.Attribute("Rows"));
         var order = buttons.Elements().Select(b => (string?)b.Attribute(X + "Name")).ToList();
-        Assert.Equal(new[] { "CancelButton", "CloseButton", "OpenButton", "InstallButton" }, order);
+        Assert.Equal(new[] { "InstallButton", "OpenButton", "CancelButton", "CloseButton" }, order);
         foreach (var name in new[] { "InstallButton", "OpenButton" })
         {
             Assert.Equal("Primary", (string?)Named(doc, name).Attribute("Appearance"));

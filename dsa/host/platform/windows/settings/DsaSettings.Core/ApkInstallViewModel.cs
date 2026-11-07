@@ -71,7 +71,25 @@ public sealed class ApkInstallViewModel : ObservableObject
     public ApkDetails? Apk => _apk;
     public string Title { get; private set; }
     public string Subtitle { get; private set; } = "";
-    public string VersionChip { get; private set; } = "";
+    /// <summary>The big title: asks about the app while the install is the user's to decide or
+    /// is under way, and is the bare name before the file is read and on the result screens.
+    /// This and the labels below are English in every language, so they are not in the string
+    /// tables.</summary>
+    public string HeroTitle => _apk is not null && Page is ApkInstallPage.Details or ApkInstallPage.Progress
+        ? $"Install {Title}?"
+        : Title;
+    public string PackageLine { get; private set; } = "";
+    public string VersionLine { get; private set; } = "";
+    /// <summary>Where the APK came from: the host it was downloaded from, or its folder.</summary>
+    public string SourceLine { get; private set; } = "";
+    public string MoreLabel => "More";
+    /// <summary>How many permissions show before More is pressed.</summary>
+    public const int PreviewCount = 3;
+    /// <summary>Whether More was pressed, so the permissions and the rest of what the file says
+    /// show in full.</summary>
+    public bool IsExpanded { get; private set; }
+    /// <summary>The first permissions, shown before More is pressed.</summary>
+    public IReadOnlyList<ApkPermissionRow> PermissionPreview => Permissions.Take(PreviewCount).ToList();
     public string SizeChip { get; private set; } = "";
     public string AndroidChip { get; private set; } = "";
     /// <summary>Who signed the app, where App Installer names the publisher: an APK carries no
@@ -80,6 +98,10 @@ public sealed class ApkInstallViewModel : ObservableObject
     /// <summary>Why the app may not run on this PC, or empty: it has native code, and none of
     /// it is for this PC's processor.</summary>
     public string CompatibilityWarning { get; private set; } = "";
+    /// <summary>The short title line above <see cref="CompatibilityWarning"/>.</summary>
+    public string CompatibilityTitle { get; private set; } = "";
+    /// <summary>The short title line above <see cref="Summary"/>.</summary>
+    public string SummaryTitle { get; private set; } = "";
     /// <summary>Whether the app opens by itself once it is installed, as App Installer's
     /// "Launch when ready" does. On unless the user turns it off.</summary>
     public bool LaunchWhenReady
@@ -96,8 +118,8 @@ public sealed class ApkInstallViewModel : ObservableObject
     }
     /// <summary>Whether the app was opened by itself after the install, so the window closes.</summary>
     public bool Launched { get; private set; }
-    /// <summary>What installing does: a new install, an update from one version to another, or
-    /// why it cannot be done.</summary>
+    /// <summary>What the user has to know beyond the app itself: an update from one version to
+    /// another, the same version again, or why it cannot be done. Empty for a plain install.</summary>
     public string Summary { get; private set; } = "";
     public ApkInstallKind Kind => _apk?.Kind ?? ApkInstallKind.Unknown;
     /// <summary>Whether Android would refuse the APK, so the install button is off.</summary>
@@ -159,26 +181,35 @@ public sealed class ApkInstallViewModel : ObservableObject
         _apk = apk;
         Title = string.IsNullOrWhiteSpace(apk.Label) ? apk.Package : apk.Label!;
         Subtitle = apk.Package;
-        VersionChip = F("ApkWindow_VersionChip", apk.VersionName ?? apk.VersionCode.ToString(CultureInfo.CurrentCulture));
+        PackageLine = $"Package Name: {apk.Package}";
+        VersionLine = $"Version: {apk.VersionName ?? apk.VersionCode.ToString(CultureInfo.InvariantCulture)}";
+        SourceLine = $"Source: {ApkSource.Of(Path)}";
         SizeChip = Size(apk.Size);
         AndroidChip = F("ApkWindow_AndroidChip", apk.MinAndroid ?? apk.MinSdk.ToString(CultureInfo.CurrentCulture));
-        PublisherLine = F("ApkWindow_Publisher", apk.SignerSha256 is { } signer
+        PublisherLine = "Publisher: " + (apk.SignerSha256 is { } signer
             ? F("ApkWindow_Signer", apk.SignerScheme ?? "", signer)
             : _text.Get("ApkWindow_Unsigned"));
         CompatibilityWarning = apk.Abis.Count > 0 && !apk.Abis.Any(abi => _hostAbis.Contains(abi))
             ? F("ApkWindow_AbiWarning", string.Join(", ", apk.Abis))
             : "";
+        CompatibilityTitle = CompatibilityWarning.Length > 0 ? _text.Get("ApkWindow_AbiWarningTitle") : "";
         var version = VersionText(apk.VersionName, apk.VersionCode);
         Summary = apk.Kind switch
         {
-            ApkInstallKind.New => F("ApkWindow_SummaryNew", Title),
             ApkInstallKind.Update => F("ApkWindow_SummaryUpdate", Title,
                 VersionText(apk.Installed?.VersionName, apk.Installed?.VersionCode ?? 0), version),
             ApkInstallKind.Reinstall => F("ApkWindow_SummaryReinstall", Title, version),
             ApkInstallKind.Downgrade => F("ApkWindow_SummaryDowngrade", Title,
                 VersionText(apk.Installed?.VersionName, apk.Installed?.VersionCode ?? 0), version),
             ApkInstallKind.SignatureMismatch => F("ApkWindow_SummarySignature", Title),
-            _ => F("ApkWindow_SummaryUnknown", Title),
+            _ => "",
+        };
+        SummaryTitle = apk.Kind switch
+        {
+            ApkInstallKind.Update or ApkInstallKind.Reinstall => _text.Get("ApkWindow_InstalledTitle"),
+            ApkInstallKind.Downgrade => _text.Get("ApkWindow_DowngradeTitle"),
+            ApkInstallKind.SignatureMismatch => _text.Get("ApkWindow_SignatureTitle"),
+            _ => "",
         };
         var facts = new List<ApkFact>
         {
@@ -206,9 +237,19 @@ public sealed class ApkInstallViewModel : ObservableObject
             .ToList();
         PermissionsHeader = apk.Permissions.Count == 0
             ? _text.Get("ApkWindow_NoPermissions")
-            : F("ApkWindow_PermissionsHeader", apk.Permissions.Count);
+            : $"Capabilities ({apk.Permissions.Count}):";
         Page = ApkInstallPage.Details;
         ChangedAll();
+    }
+
+    /// <summary>More: shows every permission and the rest of what the file says.</summary>
+    public void Expand()
+    {
+        if (!IsExpanded)
+        {
+            IsExpanded = true;
+            ChangedAll();
+        }
     }
 
     private string VersionText(string? name, long code) =>
