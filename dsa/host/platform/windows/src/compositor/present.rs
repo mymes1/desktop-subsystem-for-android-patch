@@ -432,6 +432,86 @@ struct State {
     band_probed: Option<Instant>,
     /// What the window was last told to fill the band with.
     band_fill: Option<u32>,
+    /// Whether a screenshot waits for the next frame, and what it got once one came.
+    capture_wanted: bool,
+    captured: Option<Result<CapturedFrame, String>>,
+}
+
+/// A frame read back for a screenshot: `width` by `height` pixels as RGBA rows, top row
+/// first, and the height of the title bar's band over the frame's top while the window shows
+/// one (0 in a window that fills its monitor).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapturedFrame {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+    pub band: u32,
+}
+
+/// How long a screenshot of a window whose app is drawing waits for the app's next frame.
+const CAPTURE_WAIT: Duration = Duration::from_millis(100);
+
+/// A window whose last frame came longer ago than this has an app that is not drawing, so its
+/// newest frame is whole in its texture and is read from there at once.
+const CAPTURE_STILL_FOR: Duration = Duration::from_millis(50);
+
+/// The `region` pixels at the top left of `texture`, read back to the CPU as RGBA rows. Waits
+/// for the GPU.
+///
+/// # Safety
+///
+/// `texture` is a texture of `gpu`'s device; the caller holds the presenter's state lock.
+unsafe fn read_frame(
+    gpu: &Gpu,
+    texture: &ID3D11Texture2D,
+    (width, height): (u32, u32),
+) -> Result<Vec<u8>, String> {
+    if width == 0 || height == 0 {
+        return Err("the window has no frame to read".into());
+    }
+    // Made for this one read and let go after it, so a screenshot keeps no memory.
+    let desc = D3D11_TEXTURE2D_DESC {
+        Width: width,
+        Height: height,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Usage: D3D11_USAGE_STAGING,
+        BindFlags: 0,
+        CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+        MiscFlags: 0,
+    };
+    let mut staging = None;
+    gpu.device
+        .CreateTexture2D(&desc, None, Some(&mut staging))
+        .map_err(|e| failed("creating the texture a screenshot is read into", e))?;
+    let staging = staging.ok_or("creating the texture a screenshot is read into gave none")?;
+    let context = gpu.context.lock().unwrap_or_else(|e| e.into_inner());
+    let whole = D3D11_BOX {
+        left: 0,
+        top: 0,
+        front: 0,
+        right: width,
+        bottom: height,
+        back: 1,
+    };
+    context.CopySubresourceRegion(&staging, 0, 0, 0, 0, texture, 0, Some(&whole as *const _));
+    let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+    context
+        .Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+        .map_err(|e| failed("reading a screenshot", e))?;
+    let row = (width * 4) as usize;
+    let mut pixels = Vec::with_capacity(row * height as usize);
+    for y in 0..height as usize {
+        let start = (mapped.pData as *const u8).add(y * mapped.RowPitch as usize);
+        pixels.extend_from_slice(std::slice::from_raw_parts(start, row));
+    }
+    context.Unmap(&staging, 0);
+    Ok(pixels)
 }
 
 /// What a window's splash is drawn from: its background as `0xAARRGGBB`, the app's icon as
@@ -507,6 +587,8 @@ pub struct WindowPresenter {
     frame_ready: Mutex<Option<FrameReady>>,
     /// Tells the window what to fill its title bar's band with.
     band_colour: Mutex<Option<BandColour>>,
+    /// Wakes a screenshot waiting for the next frame.
+    capture_done: Condvar,
     logger: Option<Arc<CompositorLogger>>,
 }
 
@@ -599,10 +681,13 @@ impl WindowPresenter {
                 band_pending: false,
                 band_probed: None,
                 band_fill: None,
+                capture_wanted: false,
+                captured: None,
             }),
             claim_released: Condvar::new(),
             frame_ready: Mutex::new(None),
             band_colour: Mutex::new(None),
+            capture_done: Condvar::new(),
             logger,
         }))
     }
@@ -1053,6 +1138,8 @@ impl WindowPresenter {
         }
         state.closed = true;
         state.newest = None;
+        // A screenshot waiting for a frame gets none.
+        self.capture_done.notify_all();
         let Ok(dcomp) = self.gpu.dcomp() else {
             return;
         };
@@ -1062,6 +1149,55 @@ impl WindowPresenter {
             let _ = state.target.SetRoot(None::<&IDCompositionVisual>);
             let _ = dcomp.Commit();
         }
+    }
+
+    /// The frame the window shows, read back for a screenshot, or `None` before the app's
+    /// first frame. A frame is whole in its texture only until the renderer writes the next
+    /// one into it, so while the app draws, the screenshot takes the next frame as it is shown,
+    /// waiting [`CAPTURE_WAIT`] at most; a still app's newest frame is read at once.
+    pub fn capture(&self) -> Result<Option<CapturedFrame>, String> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed {
+            return Ok(None);
+        }
+        let drawing = state
+            .last_frame_at
+            .is_some_and(|at| at.elapsed() < CAPTURE_STILL_FOR);
+        if drawing {
+            state.capture_wanted = true;
+            state.captured = None;
+            let deadline = Instant::now() + CAPTURE_WAIT;
+            while state.captured.is_none() && !state.closed {
+                let left = deadline.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    break;
+                }
+                state = self
+                    .capture_done
+                    .wait_timeout(state, left)
+                    .unwrap_or_else(|e| e.into_inner())
+                    .0;
+            }
+            state.capture_wanted = false;
+            if let Some(captured) = state.captured.take() {
+                return captured.map(Some);
+            }
+            if state.closed {
+                return Ok(None);
+            }
+        }
+        let Some((texture, _, region)) = state.newest.clone() else {
+            return Ok(None);
+        };
+        let band = state.band;
+        // SAFETY: the texture is one of this presenter's device, read under the state lock.
+        let rgba = unsafe { read_frame(&self.gpu, &texture, region)? };
+        Ok(Some(CapturedFrame {
+            width: region.0,
+            height: region.1,
+            rgba,
+            band,
+        }))
     }
 
     /// Shows the frame in `texture`, which fills its top-left `content` pixels (0 when the
@@ -1130,6 +1266,20 @@ impl WindowPresenter {
         // SAFETY: plain COM calls on objects this presenter owns, and the immediate context
         // under its lock.
         let band_changed = unsafe { self.probe_band(&mut state, &texture.texture, region) };
+        // A screenshot waiting for this frame reads it while it is whole in its texture.
+        if state.capture_wanted {
+            state.capture_wanted = false;
+            let band = state.band;
+            // SAFETY: as above.
+            let read = unsafe { read_frame(&self.gpu, &texture.texture, region) };
+            state.captured = Some(read.map(|rgba| CapturedFrame {
+                width: region.0,
+                height: region.1,
+                rgba,
+                band,
+            }));
+            self.capture_done.notify_all();
+        }
         if keep {
             trace_stage(
                 self.logger.as_deref(),

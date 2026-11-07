@@ -30,6 +30,7 @@ import io.github.thisisthepy.dsa.agent.input.PointerQueue
 import io.github.thisisthepy.dsa.agent.input.TextInput
 import io.github.thisisthepy.dsa.agent.input.TextKeys
 import io.github.thisisthepy.dsa.agent.input.TouchSounds
+import io.github.thisisthepy.dsa.agent.input.UnhandledKeys
 import io.github.thisisthepy.dsa.agent.files.DragCatcher
 import io.github.thisisthepy.dsa.agent.files.DragOut
 import io.github.thisisthepy.dsa.agent.files.FileOpener
@@ -75,6 +76,7 @@ import io.github.thisisthepy.dsa.agent.widgets.WidgetManager
 import io.github.thisisthepy.dsa.agent.widgets.WidgetPlatform
 import io.github.thisisthepy.dsa.agent.widgets.WidgetStore
 import io.github.thisisthepy.dsa.agent.windowing.FreeformSetup
+import io.github.thisisthepy.dsa.agent.windowing.GestureExclusion
 import io.github.thisisthepy.dsa.agent.windowing.CaptionInsets
 import io.github.thisisthepy.dsa.agent.windowing.TaskArranger
 import io.github.thisisthepy.dsa.agent.windowing.WindowingControl
@@ -172,6 +174,9 @@ class Agent(
     wifi: WifiPort = WifiPort.NONE,
     dragCatcher: DragCatcher = DragCatcher.NONE,
     dragRunner: ((Runnable) -> Unit)? = null,
+    private val gestureExclusion: GestureExclusion = GestureExclusion.NONE,
+    private val unhandledKeys: UnhandledKeys = UnhandledKeys.NONE,
+    private val editorFocused: () -> Boolean = { false },
 ) {
     private val network = NetworkSetup(wifi, log)
     private val channel = ChannelClient(
@@ -188,7 +193,16 @@ class Agent(
     /** Where the host was last told each task is, for the input thread to read. */
     @Volatile
     private var taskBounds: Map<Int, TaskBounds> = emptyMap()
-    private val pointer = PointerInput(injector, { taskId -> taskBounds[taskId] }, log)
+    private val pointer = PointerInput(injector, { taskId -> taskBounds[taskId] }, log) { taskId, keyCode, down ->
+        // Keys belong to the scheduler's thread.
+        scheduler.post {
+            try {
+                keys.navigationButton(taskId, keyCode, down)
+            } catch (e: Exception) {
+                log.warn("injecting a mouse's back or forward button failed", e)
+            }
+        }
+    }
     private val pointerQueue = PointerQueue(inputScheduler) { event, queuedNanos ->
         val started = System.nanoTime()
         try {
@@ -203,7 +217,17 @@ class Agent(
             scheduler.post { frames.released(reporter.reportedPackage(event.taskId)) }
         }
     }
-    private val keys = KeyInput(injector, reporter::isReported, reporter::reportedFocused, actions::focusTask, log)
+    private val keys = KeyInput(
+        injector,
+        reporter::isReported,
+        reporter::reportedFocused,
+        actions::focusTask,
+        log,
+        // A task the agent has not read yet counts as on its first screen, so a key never
+        // takes it back past where it began.
+        onFirstScreen = { taskId -> taskId !in pastFirstScreen },
+        editorFocused = { editorFocused() },
+    )
     private val text = TextInput(
         editor = editor,
         injector = injector,
@@ -336,6 +360,11 @@ class Agent(
         reporter::reportedBounds,
         clock,
     )
+    /** Where the apps on the display keep system gestures out, as last heard. */
+    private var exclusion: List<TaskBounds> = emptyList()
+
+    /** The tasks past their first screen, as last read: Back has somewhere to go in them. */
+    private var pastFirstScreen: Set<Int> = emptySet()
     private var refreshPending = false
     private var appsPending = false
     private var appsForced = false
@@ -371,6 +400,8 @@ class Agent(
             }
             listenToApps()
             listenToCrashes()
+            listenToExclusion()
+            listenToUnhandledKeys()
             channel.start()
             requestRefresh()
         }
@@ -382,6 +413,31 @@ class Agent(
         } catch (e: Exception) {
             log.warn("listening to installed apps failed; trying again", e)
             scheduler.postDelayed(RETRY_MILLIS, ::listenToApps)
+        }
+    }
+
+    /** Hears where apps keep system gestures out, which marks an app's controls in its title bar. */
+    private fun listenToExclusion() {
+        try {
+            gestureExclusion.listen { rects ->
+                scheduler.post {
+                    if (rects != exclusion) {
+                        exclusion = rects
+                        requestRefresh()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            log.warn("listening to the display's gesture exclusion failed; apps that draw their own title bar get no controls there", e)
+        }
+    }
+
+    /** Hears the Esc presses no app took, which become Back past a task's first screen. */
+    private fun listenToUnhandledKeys() {
+        try {
+            unhandledKeys.listen { scheduler.post { keys.escapeUnhandled() } }
+        } catch (e: Exception) {
+            log.warn("listening to the keys no app takes failed; Esc never goes back", e)
         }
     }
 
@@ -479,9 +535,11 @@ class Agent(
             return
         }
         when (result) {
-            is RequestResult.Launched -> log.info("launched ${result.packageName}")
+            is RequestResult.Launched ->
+                log.info(if (result.newWindow) "opened a new window of ${result.packageName}" else "launched ${result.packageName}")
             is RequestResult.LaunchFailed -> log.warn("could not launch ${result.packageName}: ${result.reason}")
-            is RequestResult.SettingsOpened -> log.info("opened the settings of ${result.packageName ?: "every app"}")
+            is RequestResult.SettingsOpened ->
+                log.info("opened the ${result.page.name.lowercase()} settings of ${result.packageName ?: "every app"}")
             is RequestResult.SettingsFailed ->
                 log.warn("could not open the settings of ${result.packageName ?: "every app"}: ${result.reason}")
             is RequestResult.Closed -> log.info("ended task ${result.taskId}")
@@ -496,7 +554,13 @@ class Agent(
             }
             is RequestResult.Caption -> {
                 log.info("task ${result.taskId} is under a title bar ${result.height} pixels high")
-                captions.setHeight(result.taskId, result.height, reporter.reportedBounds(result.taskId))
+                captions.setHeight(
+                    result.taskId,
+                    result.height,
+                    reporter.reportedBounds(result.taskId),
+                    result.startWidth,
+                    result.endWidth,
+                )
             }
             is RequestResult.SizeRefused -> log.warn("did not resize task ${result.taskId}: ${result.reason}")
             is RequestResult.Malformed -> log.warn("dropped a frame: ${result.reason}")
@@ -677,16 +741,17 @@ class Agent(
         trace.applied((System.nanoTime() - arranging) / 1_000_000.0)
         if (arranger.waiting) checkMoves()
         if (!channel.connected) return
-        reporter.update(
-            running.map { task ->
-                val placed = bounds[task.taskId]
-                if (placed == null || placed == task.bounds) task else task.copy(bounds = placed)
-            },
-            arranger.display,
-        )
+        val placedTasks = running.map { task ->
+            val placed = bounds[task.taskId]
+            val moved = if (placed == null || placed == task.bounds) task else task.copy(bounds = placed)
+            val controls = captions.controls(moved.taskId, moved.bounds, moved.transparentCaption, exclusion)
+            if (controls.isEmpty()) moved else moved.copy(captionInteractive = controls)
+        }
+        reporter.update(placedTasks, arranger.display)
+        pastFirstScreen = placedTasks.filter { it.canGoBack }.map { it.taskId }.toSet()
         val reported = reporter.reported
         val told = reported.mapNotNull { taskId -> reporter.reportedBounds(taskId)?.let { taskId to it } }.toMap()
-        captions.update(told)
+        captions.update(told, placedTasks.filter { it.transparentCaption }.map { it.taskId }.toSet())
         if (told != taskBounds) {
             taskBounds = told
             inputScheduler.post { pointer.retainTasks(reported) }

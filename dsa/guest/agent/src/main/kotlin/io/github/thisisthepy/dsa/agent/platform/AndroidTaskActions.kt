@@ -16,6 +16,7 @@ import android.view.Display
 import android.view.WindowInsets
 import io.github.thisisthepy.dsa.agent.Log
 import io.github.thisisthepy.dsa.agent.requests.ResizeOutcome
+import io.github.thisisthepy.dsa.agent.requests.SettingsPage
 import io.github.thisisthepy.dsa.agent.requests.TaskActions
 import io.github.thisisthepy.dsa.agent.tasks.ScreenDp
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
@@ -38,9 +39,25 @@ class AndroidTaskActions(
     /** Whether this framework lacks the calls that hold a task's screen size. */
     private var noScreenOverrides = false
 
-    override fun launchApp(packageName: String): Boolean {
+    /** The Settings pages this Settings lacks, each said once in the log. */
+    private val missingPages = mutableSetOf<String>()
+
+    override fun launchApp(packageName: String): Boolean = launch(packageName, Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    override fun supportsMultipleWindows(packageName: String): Boolean =
+        io.github.thisisthepy.dsa.agent.platform.supportsMultipleWindows(context.packageManager, packageName)
+
+    /**
+     * Starts the launcher activity with FLAG_ACTIVITY_MULTIPLE_TASK beside NEW_TASK, which
+     * makes the framework start another task rather than bring the app's task to the front,
+     * as Android's desktop windows do for New window.
+     */
+    override fun launchNewWindow(packageName: String): Boolean =
+        launch(packageName, Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+
+    private fun launch(packageName: String, flags: Int): Boolean {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        intent.addFlags(flags)
         val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
         freeform(options)
         return try {
@@ -55,12 +72,30 @@ class AndroidTaskActions(
         }
     }
 
-    override fun openAppSettings(packageName: String?): Boolean {
-        val intent = if (packageName == null) {
-            Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS)
-        } else {
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null))
+    override fun openAppSettings(packageName: String?, page: SettingsPage): Boolean {
+        if (packageName == null) return startSettings(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS), "the list of apps")
+        val action = when (page) {
+            SettingsPage.DETAILS -> Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+            // Settings' UserAspectRatioAppActivity, which takes the package as its data.
+            SettingsPage.ASPECT_RATIO -> ACTION_MANAGE_USER_ASPECT_RATIO_SETTINGS
+            SettingsPage.OPEN_BY_DEFAULT -> Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS
         }
+        val data = Uri.fromParts("package", packageName, null)
+        if (action == Settings.ACTION_APPLICATION_DETAILS_SETTINGS) return startSettings(Intent(action, data), packageName)
+        return try {
+            startSettings(Intent(action, data), packageName, rethrowMissing = true)
+        } catch (e: ActivityNotFoundException) {
+            // A Settings without this page still has the app's info, where the user finds it.
+            if (missingPages.add(action)) log.warn("Settings has no $action page; the app's info opens instead", e)
+            startSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, data), packageName)
+        }
+    }
+
+    /**
+     * Starts the Settings page [intent] as a task of its own in a freeform window; [what] names
+     * it in the log. A missing page is thrown on when [rethrowMissing], else it is false.
+     */
+    private fun startSettings(intent: Intent, what: String, rethrowMissing: Boolean = false): Boolean {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
         val options = ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY)
         freeform(options)
@@ -68,10 +103,11 @@ class AndroidTaskActions(
             context.startActivity(intent, options.toBundle())
             true
         } catch (e: ActivityNotFoundException) {
-            log.warn("Settings has no page for ${packageName ?: "the list of apps"}", e)
+            if (rethrowMissing) throw e
+            log.warn("Settings has no page for $what", e)
             false
         } catch (e: SecurityException) {
-            log.warn("the framework refused to open the settings of ${packageName ?: "every app"}", e)
+            log.warn("the framework refused to open the settings of $what", e)
             false
         }
     }
@@ -236,8 +272,13 @@ class AndroidTaskActions(
      * of its own, and apps lay out their top edge by the status bar inset. The sources do not
      * force their insets to be consumed, so an app drawing edge to edge draws its status bar
      * background under the band.
+     *
+     * The caption bar source carries [boundingRects], relative to [frame], as Android's own
+     * desktop windows give an app that draws its own title bar the places their caption draws
+     * over (WindowDecoration's calculateBoundingRectsInsets); the app reads them with
+     * WindowInsets.getBoundingRects(captionBar()). The status bar source carries none.
      */
-    override fun setCaptionInset(taskId: Int, frame: TaskBounds?): Boolean = try {
+    override fun setCaptionInset(taskId: Int, frame: TaskBounds?, boundingRects: List<TaskBounds>): Boolean = try {
         val token = taskToken(taskId)
         if (token == null) {
             false
@@ -256,7 +297,11 @@ class AndroidTaskActions(
                         Int::class.javaPrimitiveType,
                     ).invoke(transaction, token, insetsOwner, index, type)
                 } else {
-                    addInsetsSource(transactionClass, transaction, token, index, type, frame)
+                    val rects = boundingRects
+                        .takeIf { it.isNotEmpty() && type == WindowInsets.Type.captionBar() }
+                        ?.map { Rect(it.left, it.top, it.right, it.bottom) }
+                        ?.toTypedArray()
+                    addInsetsSource(transactionClass, transaction, token, index, type, frame, rects)
                 }
             }
             commit(transactionClass, transaction)
@@ -275,7 +320,7 @@ class AndroidTaskActions(
     /**
      * WindowContainerTransaction.addInsetsSource in whichever form this framework has: with
      * bounding rectangles and flags (Android 15 and later), with bounding rectangles, or with
-     * the frame alone. No bounding rectangles and no flags are given.
+     * the frame alone. [boundingRects] go where the form takes them; no flags are given.
      */
     private fun addInsetsSource(
         transactionClass: Class<*>,
@@ -284,9 +329,10 @@ class AndroidTaskActions(
         index: Int,
         type: Int,
         frame: TaskBounds,
+        boundingRects: Array<Rect>?,
     ) {
         val methods = transactionClass.methods.filter { it.name == "addInsetsSource" }
-        val form = InsetsSourceForm.choose(methods.map { m -> m.parameterTypes.map { it.name } })
+        val form = InsetsSourceForm.choose(methods.map { m -> m.parameterTypes.map { it.typeName } })
             ?: throw NoSuchMethodException("WindowContainerTransaction.addInsetsSource")
         // A frame in display pixels, or the same band as a size from the task's top edge.
         val area: Any = when (form) {
@@ -298,8 +344,8 @@ class AndroidTaskActions(
             is InsetsSourceForm.Size -> form.parameterCount
         }
         val args: Array<Any?> = when (count) {
-            7 -> arrayOf(token, insetsOwner, index, type, area, null, 0)
-            6 -> arrayOf(token, insetsOwner, index, type, area, null)
+            7 -> arrayOf(token, insetsOwner, index, type, area, boundingRects, 0)
+            6 -> arrayOf(token, insetsOwner, index, type, area, boundingRects)
             else -> arrayOf(token, insetsOwner, index, type, area)
         }
         methods[form.index].invoke(transaction, *args)
@@ -364,5 +410,9 @@ class AndroidTaskActions(
         const val RESIZE_MODE_PRESERVE_WINDOW = 1
 
         const val MAX_TASKS = 1000
+
+        // Settings.ACTION_MANAGE_USER_ASPECT_RATIO_SETTINGS, which the SDK hides. Settings of
+        // Android 16 and 17 answers it with the package as data (UserAspectRatioAppActivity).
+        const val ACTION_MANAGE_USER_ASPECT_RATIO_SETTINGS = "android.settings.MANAGE_USER_ASPECT_RATIO_SETTINGS"
     }
 }

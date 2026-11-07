@@ -385,6 +385,10 @@ fn handle(message: ToHost) {
                 window.set_full_screen(mode == WindowMode::Fullscreen);
             }
         }),
+        // macOS draws the title bar in the system's own way, with its own name and buttons.
+        ToHost::CaptionMode { .. } | ToHost::CaptionBack { .. } => {}
+        // The windows keep the system's own window menu here, which has no Android items yet.
+        ToHost::AppMenu { .. } => {}
     }
 }
 

@@ -49,4 +49,28 @@ public interface AppInfoOrBuilder extends
    * @return The iconPng.
    */
   com.google.protobuf.ByteString getIconPng();
+
+  /**
+   * <pre>
+   * The icon a window's title bar shows: an adaptive icon's foreground layer alone, without
+   * its background plate, as a square PNG image of the same size as `icon_png`. Empty for an
+   * app whose icon is not adaptive, which shows `icon_png` there too.
+   * </pre>
+   *
+   * <code>bytes caption_icon_png = 4;</code>
+   * @return The captionIconPng.
+   */
+  com.google.protobuf.ByteString getCaptionIconPng();
+
+  /**
+   * <pre>
+   * Whether the app supports several windows at once (its launcher activity or the app
+   * declares android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), so the window's
+   * system menu offers New window.
+   * </pre>
+   *
+   * <code>bool multiple_windows = 5;</code>
+   * @return The multipleWindows.
+   */
+  boolean getMultipleWindows();
 }

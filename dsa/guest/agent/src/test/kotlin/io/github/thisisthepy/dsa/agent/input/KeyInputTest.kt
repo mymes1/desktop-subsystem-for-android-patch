@@ -19,6 +19,8 @@ class KeyInputTest {
     private val focusedTasks = mutableSetOf(7)
     private val focusRequests = mutableListOf<Int>()
     private var focusWorks = true
+    private val pastFirstScreen = mutableSetOf<Int>()
+    private var editing = false
     private val input = KeyInput(
         injector,
         { it in reported },
@@ -28,6 +30,8 @@ class KeyInputTest {
             focusWorks
         },
         log,
+        onFirstScreen = { it !in pastFirstScreen },
+        editorFocused = { editing },
     )
 
     private fun event(
@@ -70,30 +74,122 @@ class KeyInputTest {
     }
 
     @Test
-    fun fr16_esc_alone_goes_back() {
+    fun fr5_esc_goes_to_the_app_first_as_escape() {
+        pastFirstScreen += 7
         down(AndroidKey.KEYCODE_ESCAPE)
         up(AndroidKey.KEYCODE_ESCAPE)
 
         assertEquals(listOf(AndroidKey.ACTION_DOWN, AndroidKey.ACTION_UP), injector.keys.map { it.action })
-        assertEquals(listOf(AndroidKey.KEYCODE_BACK, AndroidKey.KEYCODE_BACK), injector.keys.map { it.keyCode })
+        assertEquals(listOf(AndroidKey.KEYCODE_ESCAPE, AndroidKey.KEYCODE_ESCAPE), injector.keys.map { it.keyCode })
+        assertEquals(listOf(0, 0), injector.keys.map { it.metaState })
     }
 
     @Test
-    fun fr16_esc_with_a_modifier_stays_escape() {
+    fun fr5_an_esc_the_app_leaves_goes_back() {
+        pastFirstScreen += 7
+        down(AndroidKey.KEYCODE_ESCAPE)
+        input.escapeUnhandled()
+        up(AndroidKey.KEYCODE_ESCAPE)
+
+        assertEquals(
+            listOf(AndroidKey.KEYCODE_ESCAPE, AndroidKey.KEYCODE_BACK, AndroidKey.KEYCODE_BACK, AndroidKey.KEYCODE_ESCAPE),
+            injector.keys.map { it.keyCode },
+        )
+        assertEquals(AndroidKey.ACTION_DOWN, injector.keys[1].action)
+        assertEquals(AndroidKey.ACTION_UP, injector.keys[2].action)
+        // The framework's word counts once: a second one is about no Escape.
+        input.escapeUnhandled()
+        assertEquals(4, injector.keys.size)
+    }
+
+    @Test
+    fun fr5_an_esc_the_app_takes_does_not_go_back() {
+        pastFirstScreen += 7
+        down(AndroidKey.KEYCODE_ESCAPE)
+        up(AndroidKey.KEYCODE_ESCAPE)
+        // No word from the framework: the app took it. A late word about it counts for nothing.
+        injector.clock += 5_000
+        input.escapeUnhandled()
+
+        assertEquals(listOf(AndroidKey.KEYCODE_ESCAPE, AndroidKey.KEYCODE_ESCAPE), injector.keys.map { it.keyCode })
+    }
+
+    @Test
+    fun fr5_an_esc_on_the_tasks_first_screen_does_nothing_more() {
+        down(AndroidKey.KEYCODE_ESCAPE)
+        input.escapeUnhandled()
+        up(AndroidKey.KEYCODE_ESCAPE)
+
+        assertEquals(listOf(AndroidKey.KEYCODE_ESCAPE, AndroidKey.KEYCODE_ESCAPE), injector.keys.map { it.keyCode })
+    }
+
+    @Test
+    fun fr5_esc_with_a_modifier_stays_escape_and_never_goes_back() {
+        pastFirstScreen += 7
         val shift = AndroidKey.META_SHIFT_ON or AndroidKey.META_SHIFT_LEFT_ON
         down(AndroidKey.KEYCODE_ESCAPE, shift)
+        input.escapeUnhandled()
         up(AndroidKey.KEYCODE_ESCAPE, shift)
 
         assertEquals(listOf(AndroidKey.KEYCODE_ESCAPE, AndroidKey.KEYCODE_ESCAPE), injector.keys.map { it.keyCode })
     }
 
     @Test
-    fun fr16_an_esc_press_is_released_as_the_key_it_went_down_as() {
-        val ctrl = AndroidKey.META_CTRL_ON or AndroidKey.META_CTRL_LEFT_ON
-        down(AndroidKey.KEYCODE_ESCAPE)
-        up(AndroidKey.KEYCODE_ESCAPE, ctrl)
+    fun fr5_backspace_with_no_text_field_falls_back_to_back_when_the_app_leaves_it() {
+        pastFirstScreen += 7
+        down(AndroidKey.KEYCODE_DEL)
+        down(AndroidKey.KEYCODE_DEL, repeat = 1, time = 500)
+        up(AndroidKey.KEYCODE_DEL)
 
-        assertEquals(listOf(AndroidKey.KEYCODE_BACK, AndroidKey.KEYCODE_BACK), injector.keys.map { it.keyCode })
+        // The app gets Backspace first; held with Ctrl and Alt, the framework's key map turns
+        // one no app takes into Back. The whole press carries them.
+        val fallback = AndroidKey.META_CTRL_ON or AndroidKey.META_CTRL_LEFT_ON or
+            AndroidKey.META_ALT_ON or AndroidKey.META_ALT_LEFT_ON
+        assertEquals(List(3) { AndroidKey.KEYCODE_DEL }, injector.keys.map { it.keyCode })
+        assertEquals(List(3) { fallback }, injector.keys.map { it.metaState })
+    }
+
+    @Test
+    fun fr5_backspace_in_a_text_field_deletes_text_as_it_is() {
+        pastFirstScreen += 7
+        editing = true
+        down(AndroidKey.KEYCODE_DEL)
+        up(AndroidKey.KEYCODE_DEL)
+
+        assertEquals(listOf(AndroidKey.KEYCODE_DEL, AndroidKey.KEYCODE_DEL), injector.keys.map { it.keyCode })
+        assertEquals(listOf(0, 0), injector.keys.map { it.metaState })
+    }
+
+    @Test
+    fun fr5_backspace_on_the_tasks_first_screen_never_goes_back() {
+        down(AndroidKey.KEYCODE_DEL)
+        up(AndroidKey.KEYCODE_DEL)
+        val ctrl = AndroidKey.META_CTRL_ON or AndroidKey.META_CTRL_LEFT_ON
+        pastFirstScreen += 7
+        down(AndroidKey.KEYCODE_DEL, ctrl)
+        up(AndroidKey.KEYCODE_DEL, ctrl)
+
+        // Plain on the first screen; with a modifier it is the app's shortcut, as it was sent.
+        assertEquals(listOf(0, 0, ctrl, ctrl), injector.keys.map { it.metaState })
+    }
+
+    @Test
+    fun fr5_the_mouse_back_and_forward_buttons_are_back_and_forward_keys() {
+        input.navigationButton(8, AndroidKey.KEYCODE_BACK, true)
+        input.navigationButton(8, AndroidKey.KEYCODE_BACK, false)
+        input.navigationButton(8, AndroidKey.KEYCODE_FORWARD, true)
+        input.navigationButton(8, AndroidKey.KEYCODE_FORWARD, false)
+
+        assertEquals(
+            listOf(AndroidKey.KEYCODE_BACK, AndroidKey.KEYCODE_BACK, AndroidKey.KEYCODE_FORWARD, AndroidKey.KEYCODE_FORWARD),
+            injector.keys.map { it.keyCode },
+        )
+        assertEquals(
+            listOf(AndroidKey.ACTION_DOWN, AndroidKey.ACTION_UP, AndroidKey.ACTION_DOWN, AndroidKey.ACTION_UP),
+            injector.keys.map { it.action },
+        )
+        // The task under the pointer takes the focus, so the key reaches it.
+        assertEquals(listOf(8), focusRequests.distinct())
     }
 
     @Test

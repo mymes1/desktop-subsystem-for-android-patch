@@ -70,6 +70,21 @@ class HostInputMethod : InputMethodService() {
         @Volatile
         private var current: HostInputMethod? = null
 
+        /**
+         * Whether a text field takes typed text now: the input method is bound to an editor of
+         * the focused window. A window with no editor still starts input with the input method,
+         * but with no connection, which the input method manager marks with a field ID of 0; an
+         * editor that takes raw keys (a terminal, whose input type is TYPE_NULL) counts too, so
+         * Backspace there stays Backspace.
+         */
+        val editorFocused: Boolean
+            get() {
+                val method = current ?: return false
+                val info = method.currentInputEditorInfo ?: return false
+                if (!method.currentInputStarted || method.currentInputConnection == null) return false
+                return info.inputType and InputType.TYPE_MASK_CLASS != InputType.TYPE_NULL || info.fieldId != 0
+            }
+
         /** Where the cursor of the focused editor goes, in display pixels; called on any thread. */
         @Volatile
         var onCursor: ((RectF) -> Unit)? = null

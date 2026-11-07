@@ -23,6 +23,7 @@ public  final class AppInfo extends
     packageName_ = "";
     label_ = "";
     iconPng_ = com.google.protobuf.ByteString.EMPTY;
+    captionIconPng_ = com.google.protobuf.ByteString.EMPTY;
   }
   public static final int PACKAGE_NAME_FIELD_NUMBER = 1;
   private java.lang.String packageName_;
@@ -178,6 +179,95 @@ public  final class AppInfo extends
   private void clearIconPng() {
     
     iconPng_ = getDefaultInstance().getIconPng();
+  }
+
+  public static final int CAPTION_ICON_PNG_FIELD_NUMBER = 4;
+  private com.google.protobuf.ByteString captionIconPng_;
+  /**
+   * <pre>
+   * The icon a window's title bar shows: an adaptive icon's foreground layer alone, without
+   * its background plate, as a square PNG image of the same size as `icon_png`. Empty for an
+   * app whose icon is not adaptive, which shows `icon_png` there too.
+   * </pre>
+   *
+   * <code>bytes caption_icon_png = 4;</code>
+   * @return The captionIconPng.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString getCaptionIconPng() {
+    return captionIconPng_;
+  }
+  /**
+   * <pre>
+   * The icon a window's title bar shows: an adaptive icon's foreground layer alone, without
+   * its background plate, as a square PNG image of the same size as `icon_png`. Empty for an
+   * app whose icon is not adaptive, which shows `icon_png` there too.
+   * </pre>
+   *
+   * <code>bytes caption_icon_png = 4;</code>
+   * @param value The captionIconPng to set.
+   */
+  private void setCaptionIconPng(com.google.protobuf.ByteString value) {
+    java.lang.Class<?> valueClass = value.getClass();
+  
+    captionIconPng_ = value;
+  }
+  /**
+   * <pre>
+   * The icon a window's title bar shows: an adaptive icon's foreground layer alone, without
+   * its background plate, as a square PNG image of the same size as `icon_png`. Empty for an
+   * app whose icon is not adaptive, which shows `icon_png` there too.
+   * </pre>
+   *
+   * <code>bytes caption_icon_png = 4;</code>
+   */
+  private void clearCaptionIconPng() {
+    
+    captionIconPng_ = getDefaultInstance().getCaptionIconPng();
+  }
+
+  public static final int MULTIPLE_WINDOWS_FIELD_NUMBER = 5;
+  private boolean multipleWindows_;
+  /**
+   * <pre>
+   * Whether the app supports several windows at once (its launcher activity or the app
+   * declares android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), so the window's
+   * system menu offers New window.
+   * </pre>
+   *
+   * <code>bool multiple_windows = 5;</code>
+   * @return The multipleWindows.
+   */
+  @java.lang.Override
+  public boolean getMultipleWindows() {
+    return multipleWindows_;
+  }
+  /**
+   * <pre>
+   * Whether the app supports several windows at once (its launcher activity or the app
+   * declares android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), so the window's
+   * system menu offers New window.
+   * </pre>
+   *
+   * <code>bool multiple_windows = 5;</code>
+   * @param value The multipleWindows to set.
+   */
+  private void setMultipleWindows(boolean value) {
+    
+    multipleWindows_ = value;
+  }
+  /**
+   * <pre>
+   * Whether the app supports several windows at once (its launcher activity or the app
+   * declares android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), so the window's
+   * system menu offers New window.
+   * </pre>
+   *
+   * <code>bool multiple_windows = 5;</code>
+   */
+  private void clearMultipleWindows() {
+    
+    multipleWindows_ = false;
   }
 
   public static io.github.thisisthepy.dsa.control.v1.AppInfo parseFrom(
@@ -444,6 +534,98 @@ public  final class AppInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * The icon a window's title bar shows: an adaptive icon's foreground layer alone, without
+     * its background plate, as a square PNG image of the same size as `icon_png`. Empty for an
+     * app whose icon is not adaptive, which shows `icon_png` there too.
+     * </pre>
+     *
+     * <code>bytes caption_icon_png = 4;</code>
+     * @return The captionIconPng.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getCaptionIconPng() {
+      return instance.getCaptionIconPng();
+    }
+    /**
+     * <pre>
+     * The icon a window's title bar shows: an adaptive icon's foreground layer alone, without
+     * its background plate, as a square PNG image of the same size as `icon_png`. Empty for an
+     * app whose icon is not adaptive, which shows `icon_png` there too.
+     * </pre>
+     *
+     * <code>bytes caption_icon_png = 4;</code>
+     * @param value The captionIconPng to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCaptionIconPng(com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setCaptionIconPng(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The icon a window's title bar shows: an adaptive icon's foreground layer alone, without
+     * its background plate, as a square PNG image of the same size as `icon_png`. Empty for an
+     * app whose icon is not adaptive, which shows `icon_png` there too.
+     * </pre>
+     *
+     * <code>bytes caption_icon_png = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCaptionIconPng() {
+      copyOnWrite();
+      instance.clearCaptionIconPng();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * Whether the app supports several windows at once (its launcher activity or the app
+     * declares android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), so the window's
+     * system menu offers New window.
+     * </pre>
+     *
+     * <code>bool multiple_windows = 5;</code>
+     * @return The multipleWindows.
+     */
+    @java.lang.Override
+    public boolean getMultipleWindows() {
+      return instance.getMultipleWindows();
+    }
+    /**
+     * <pre>
+     * Whether the app supports several windows at once (its launcher activity or the app
+     * declares android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), so the window's
+     * system menu offers New window.
+     * </pre>
+     *
+     * <code>bool multiple_windows = 5;</code>
+     * @param value The multipleWindows to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMultipleWindows(boolean value) {
+      copyOnWrite();
+      instance.setMultipleWindows(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Whether the app supports several windows at once (its launcher activity or the app
+     * declares android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), so the window's
+     * system menu offers New window.
+     * </pre>
+     *
+     * <code>bool multiple_windows = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMultipleWindows() {
+      copyOnWrite();
+      instance.clearMultipleWindows();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.AppInfo)
   }
   @java.lang.Override
@@ -463,10 +645,12 @@ public  final class AppInfo extends
             "packageName_",
             "label_",
             "iconPng_",
+            "captionIconPng_",
+            "multipleWindows_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\n";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\n\u0004\n\u0005\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

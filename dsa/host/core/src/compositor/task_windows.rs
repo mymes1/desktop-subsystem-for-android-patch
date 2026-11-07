@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
-use super::caption::{caption_tone, CaptionTone};
+use super::caption::{caption_tone, CaptionBand, CaptionTone};
 use super::window_mode::WindowMode;
 use super::window_sizing::{WindowSizing, BASE_DENSITY, SETTLE};
 use crate::app_windows::AppWindowSettings;
@@ -75,6 +75,18 @@ pub enum WindowChange {
         mode: WindowMode,
         resizable: bool,
     },
+    /// Whether the app draws its own title bar, and where its controls are in the band, in
+    /// the window's client pixels (which are the task's). Comes with a window that opens for
+    /// an app that draws its own, and with every change.
+    CaptionMode {
+        task_id: i32,
+        app_drawn: bool,
+        interactive: Vec<Bounds>,
+    },
+    /// Whether the task has somewhere to go back to, so the title bar shows a back arrow in
+    /// the place of the app's icon. Comes with a window that opens past its first screen, and
+    /// with every change.
+    CaptionBack { task_id: i32, back: bool },
 }
 
 /// The title of a task's window: its label, else its package, else its ID.
@@ -117,6 +129,38 @@ pub fn fit_within(size: (u32, u32), area: (u32, u32)) -> (u32, u32) {
 /// The tone of the caption glyphs of `task`'s window.
 fn tone_of(task: &Task) -> CaptionTone {
     caption_tone(task.status_bar, task.status_bar_color)
+}
+
+/// Whether `task`'s app draws its own title bar, and where its controls are in the band. The
+/// controls count only while it does.
+fn caption_mode_of(task: &Task) -> (bool, Vec<Bounds>) {
+    if task.transparent_caption {
+        (true, task.caption_interactive.clone())
+    } else {
+        (false, Vec::new())
+    }
+}
+
+/// What `task`'s window must change in its title bar since `previous`, or, for a window that
+/// opens (`previous` is `None`), what differs from a window's own title bar showing the icon.
+fn caption_changes(previous: Option<&Task>, task: &Task) -> Vec<WindowChange> {
+    let mut changes = Vec::new();
+    let mode = caption_mode_of(task);
+    let was = previous.map_or((false, Vec::new()), caption_mode_of);
+    if mode != was {
+        changes.push(WindowChange::CaptionMode {
+            task_id: task.task_id,
+            app_drawn: mode.0,
+            interactive: mode.1,
+        });
+    }
+    if previous.is_some_and(|previous| previous.can_go_back) != task.can_go_back {
+        changes.push(WindowChange::CaptionBack {
+            task_id: task.task_id,
+            back: task.can_go_back,
+        });
+    }
+    changes
 }
 
 fn open(task: &Task) -> WindowChange {
@@ -282,6 +326,7 @@ impl TaskWindows {
                 tone: tone_of(&task),
             },
         ];
+        changes.extend(caption_changes(None, &task));
         changes.extend(self.mode_change(task_id, true));
         changes.extend(self.task_size_change(task_id));
         changes
@@ -335,13 +380,17 @@ impl TaskWindows {
                     return Vec::new();
                 }
                 let mut changes = match previous {
-                    None => vec![
-                        open(task),
-                        WindowChange::CaptionTone {
-                            task_id: task.task_id,
-                            tone: tone_of(task),
-                        },
-                    ],
+                    None => {
+                        let mut changes = vec![
+                            open(task),
+                            WindowChange::CaptionTone {
+                                task_id: task.task_id,
+                                tone: tone_of(task),
+                            },
+                        ];
+                        changes.extend(caption_changes(None, task));
+                        changes
+                    }
                     Some(previous) => {
                         let mut changes = Vec::new();
                         if tone_of(&previous) != tone_of(task) {
@@ -350,6 +399,7 @@ impl TaskWindows {
                                 tone: tone_of(task),
                             });
                         }
+                        changes.extend(caption_changes(Some(&previous), task));
                         let title = window_title(task);
                         if window_title(&previous) != title {
                             changes.push(WindowChange::Retitle {
@@ -519,13 +569,20 @@ impl TaskWindows {
         (changes, request.into_iter().collect())
     }
 
-    /// The task's window draws its title bar over its top `height` pixels. Returns the
-    /// request that gives the task a top inset of that height.
-    pub fn window_caption(&mut self, task_id: i32, height: u32) -> Vec<TaskRequest> {
+    /// The task's window draws its title bar over its top `band.height` pixels, with its icon
+    /// and its caption buttons reaching `band.start_width` and `band.end_width` in from the
+    /// ends. Returns the request that gives the task a top inset of that height, and tells an
+    /// app that draws its own title bar where to keep clear.
+    pub fn window_caption(&mut self, task_id: i32, band: CaptionBand) -> Vec<TaskRequest> {
         if !self.has_window(task_id) {
             return Vec::new();
         }
-        vec![TaskRequest::SetCaption { task_id, height }]
+        vec![TaskRequest::SetCaption {
+            task_id,
+            height: band.height,
+            start_width: band.start_width,
+            end_width: band.end_width,
+        }]
     }
 
     /// The task's window opened on a monitor of `dpi`. Returns the client size it takes, and
@@ -765,6 +822,92 @@ mod tests {
     }
 
     #[test]
+    fn fr22_a_window_hears_when_its_app_draws_its_own_title_bar_and_when_it_stops() {
+        let mut windows = TaskWindows::new();
+        let mut drawing = task(1, "Browser", 720, 1280);
+        drawing.transparent_caption = true;
+        let tabs = Bounds {
+            left: 40,
+            top: 0,
+            right: 400,
+            bottom: 31,
+        };
+        drawing.caption_interactive = vec![tabs];
+        let opened_changes = windows.apply(&TaskEvent::Updated(drawing.clone()));
+        assert!(opened_changes.contains(&WindowChange::CaptionMode {
+            task_id: 1,
+            app_drawn: true,
+            interactive: vec![tabs],
+        }));
+        // The same again changes nothing; new controls are passed on.
+        assert!(windows
+            .apply(&TaskEvent::Updated(drawing.clone()))
+            .iter()
+            .all(|change| !matches!(change, WindowChange::CaptionMode { .. })));
+        let wider = Bounds { right: 500, ..tabs };
+        drawing.caption_interactive = vec![wider];
+        assert!(windows
+            .apply(&TaskEvent::Updated(drawing.clone()))
+            .contains(&WindowChange::CaptionMode {
+                task_id: 1,
+                app_drawn: true,
+                interactive: vec![wider],
+            }));
+        // Withdrawn, the window takes its own title bar back, and the controls no longer count.
+        drawing.transparent_caption = false;
+        assert!(windows
+            .apply(&TaskEvent::Updated(drawing))
+            .contains(&WindowChange::CaptionMode {
+                task_id: 1,
+                app_drawn: false,
+                interactive: Vec::new(),
+            }));
+        // A window of an app that never asked hears nothing about it.
+        assert!(windows
+            .apply(&updated(2, "Clock"))
+            .iter()
+            .all(|change| !matches!(change, WindowChange::CaptionMode { .. })));
+    }
+
+    #[test]
+    fn fr22_the_icon_becomes_a_back_button_when_the_task_can_go_back() {
+        let mut windows = TaskWindows::new();
+        let first = task(1, "Settings", 720, 1280);
+        assert!(windows
+            .apply(&TaskEvent::Updated(first.clone()))
+            .iter()
+            .all(|change| !matches!(change, WindowChange::CaptionBack { .. })));
+        let deeper = Task {
+            can_go_back: true,
+            ..first.clone()
+        };
+        assert!(windows.apply(&TaskEvent::Updated(deeper.clone())).contains(
+            &WindowChange::CaptionBack {
+                task_id: 1,
+                back: true
+            }
+        ));
+        assert!(windows
+            .apply(&TaskEvent::Updated(first))
+            .contains(&WindowChange::CaptionBack {
+                task_id: 1,
+                back: false
+            }));
+        // A window that opens past its first screen shows the arrow from the start.
+        let opened_deep = Task {
+            task_id: 2,
+            can_go_back: true,
+            ..deeper
+        };
+        assert!(windows.apply(&TaskEvent::Updated(opened_deep)).contains(
+            &WindowChange::CaptionBack {
+                task_id: 2,
+                back: true
+            }
+        ));
+    }
+
+    #[test]
     fn fr22_a_window_follows_its_apps_status_bar_tone() {
         use crate::tasks::StatusBarAppearance;
         let mut windows = TaskWindows::new();
@@ -796,18 +939,28 @@ mod tests {
     #[test]
     fn fr22_a_windows_caption_height_becomes_its_tasks_top_inset() {
         let mut windows = TaskWindows::new();
-        assert!(windows.window_caption(1, 62).is_empty(), "no window yet");
+        let band = |height| CaptionBand {
+            height,
+            start_width: 96,
+            end_width: 276,
+        };
+        assert!(
+            windows.window_caption(1, band(62)).is_empty(),
+            "no window yet"
+        );
         windows.apply(&updated(1, "Clock"));
         assert_eq!(
-            windows.window_caption(1, 62),
+            windows.window_caption(1, band(62)),
             vec![TaskRequest::SetCaption {
                 task_id: 1,
-                height: 62
+                height: 62,
+                start_width: 96,
+                end_width: 276,
             }]
         );
         windows.user_closed(1);
         assert!(
-            windows.window_caption(1, 31).is_empty(),
+            windows.window_caption(1, band(31)).is_empty(),
             "the window closed"
         );
     }

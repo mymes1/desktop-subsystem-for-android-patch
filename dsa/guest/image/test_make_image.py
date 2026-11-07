@@ -2983,6 +2983,7 @@ class TouchLatencyTests(unittest.TestCase):
             self.assertIn('android:hasCode="false"', manifest)
             self.assertIn('android:targetSdkVersion="35"', manifest)
             self.assertIn('<integer name="config_tapTimeoutMillis">0</integer>', values)
+            self.assertIn('<bool name="config_appCompatUserAppAspectRatioSettingsIsEnabled">true</bool>', values)
 
             overlay = root / "DsaFrameworkOverlay.apk"
             overlay.write_bytes(b"overlay")
@@ -2995,6 +2996,12 @@ class TouchLatencyTests(unittest.TestCase):
             self.assertIn('partition="vendor"', certs)
             self.assertIn("vendor/overlay/DsaFrameworkOverlay.apk 0 0 644 capabilities=0x0", fs_config)
             self.assertIn(make_image.VENDOR_OVERLAY_CONTEXT, contexts)
+
+    def test_fr22_the_system_menus_aspect_ratio_takes_effect(self):
+        # Settings stores the user's choice either way; the window manager applies it only
+        # while the framework's flag is on, and Android's default leaves it off.
+        self.assertEqual(make_image.FRAMEWORK_OVERLAY_BOOLEANS,
+                         {"config_appCompatUserAppAspectRatioSettingsIsEnabled": True})
 
     def test_fr5_an_existing_overlay_label_is_not_specified_twice(self):
         existing = "/(vendor|system/vendor)/overlay(/.*)? u:object_r:vendor_overlay_file:s0\n"

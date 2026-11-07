@@ -840,6 +840,28 @@ inline const std::string& ReinstallStatus_Name(T enum_t_value) {
 }
 bool ReinstallStatus_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, ReinstallStatus* value);
+enum AppSettingsPage : int {
+  APP_SETTINGS_PAGE_DETAILS = 0,
+  APP_SETTINGS_PAGE_ASPECT_RATIO = 1,
+  APP_SETTINGS_PAGE_OPEN_BY_DEFAULT = 2,
+  AppSettingsPage_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  AppSettingsPage_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool AppSettingsPage_IsValid(int value);
+constexpr AppSettingsPage AppSettingsPage_MIN = APP_SETTINGS_PAGE_DETAILS;
+constexpr AppSettingsPage AppSettingsPage_MAX = APP_SETTINGS_PAGE_OPEN_BY_DEFAULT;
+constexpr int AppSettingsPage_ARRAYSIZE = AppSettingsPage_MAX + 1;
+
+const std::string& AppSettingsPage_Name(AppSettingsPage value);
+template<typename T>
+inline const std::string& AppSettingsPage_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, AppSettingsPage>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function AppSettingsPage_Name.");
+  return AppSettingsPage_Name(static_cast<AppSettingsPage>(enum_t_value));
+}
+bool AppSettingsPage_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, AppSettingsPage* value);
 enum UninstallStatus : int {
   UNINSTALL_STATUS_UNSPECIFIED = 0,
   UNINSTALL_STATUS_SUCCESS = 1,
@@ -2350,6 +2372,7 @@ class TaskUpdated final :
   // accessors -------------------------------------------------------
 
   enum : int {
+    kCaptionInteractiveFieldNumber = 24,
     kPackageNameFieldNumber = 3,
     kLabelFieldNumber = 4,
     kBoundsFieldNumber = 2,
@@ -2364,8 +2387,28 @@ class TaskUpdated final :
     kFocusedFieldNumber = 5,
     kFullscreenFieldNumber = 21,
     kPictureInPictureFieldNumber = 22,
+    kTransparentCaptionFieldNumber = 23,
     kOrientationFieldNumber = 20,
+    kCanGoBackFieldNumber = 25,
   };
+  // repeated .dsa.control.v1.Rect caption_interactive = 24;
+  int caption_interactive_size() const;
+  private:
+  int _internal_caption_interactive_size() const;
+  public:
+  void clear_caption_interactive();
+  ::dsa::control::v1::Rect* mutable_caption_interactive(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::Rect >*
+      mutable_caption_interactive();
+  private:
+  const ::dsa::control::v1::Rect& _internal_caption_interactive(int index) const;
+  ::dsa::control::v1::Rect* _internal_add_caption_interactive();
+  public:
+  const ::dsa::control::v1::Rect& caption_interactive(int index) const;
+  ::dsa::control::v1::Rect* add_caption_interactive();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::Rect >&
+      caption_interactive() const;
+
   // string package_name = 3;
   void clear_package_name();
   const std::string& package_name() const;
@@ -2511,6 +2554,15 @@ class TaskUpdated final :
   void _internal_set_picture_in_picture(bool value);
   public:
 
+  // bool transparent_caption = 23;
+  void clear_transparent_caption();
+  bool transparent_caption() const;
+  void set_transparent_caption(bool value);
+  private:
+  bool _internal_transparent_caption() const;
+  void _internal_set_transparent_caption(bool value);
+  public:
+
   // .dsa.control.v1.TaskOrientation orientation = 20;
   void clear_orientation();
   ::dsa::control::v1::TaskOrientation orientation() const;
@@ -2518,6 +2570,15 @@ class TaskUpdated final :
   private:
   ::dsa::control::v1::TaskOrientation _internal_orientation() const;
   void _internal_set_orientation(::dsa::control::v1::TaskOrientation value);
+  public:
+
+  // bool can_go_back = 25;
+  void clear_can_go_back();
+  bool can_go_back() const;
+  void set_can_go_back(bool value);
+  private:
+  bool _internal_can_go_back() const;
+  void _internal_set_can_go_back(bool value);
   public:
 
   // @@protoc_insertion_point(class_scope:dsa.control.v1.TaskUpdated)
@@ -2528,6 +2589,7 @@ class TaskUpdated final :
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
   struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::Rect > caption_interactive_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr label_;
     ::dsa::control::v1::Rect* bounds_;
@@ -2542,7 +2604,9 @@ class TaskUpdated final :
     bool focused_;
     bool fullscreen_;
     bool picture_in_picture_;
+    bool transparent_caption_;
     int orientation_;
+    bool can_go_back_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -3055,6 +3119,7 @@ class LaunchApp final :
 
   enum : int {
     kPackageNameFieldNumber = 1,
+    kNewWindowFieldNumber = 2,
   };
   // string package_name = 1;
   void clear_package_name();
@@ -3070,6 +3135,15 @@ class LaunchApp final :
   std::string* _internal_mutable_package_name();
   public:
 
+  // bool new_window = 2;
+  void clear_new_window();
+  bool new_window() const;
+  void set_new_window(bool value);
+  private:
+  bool _internal_new_window() const;
+  void _internal_set_new_window(bool value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.LaunchApp)
  private:
   class _Internal;
@@ -3079,6 +3153,7 @@ class LaunchApp final :
   typedef void DestructorSkippable_;
   struct Impl_ {
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
+    bool new_window_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -3630,6 +3705,8 @@ class SetTaskCaption final :
   enum : int {
     kTaskIdFieldNumber = 1,
     kHeightFieldNumber = 2,
+    kStartWidthFieldNumber = 3,
+    kEndWidthFieldNumber = 4,
   };
   // int32 task_id = 1;
   void clear_task_id();
@@ -3649,6 +3726,24 @@ class SetTaskCaption final :
   void _internal_set_height(uint32_t value);
   public:
 
+  // uint32 start_width = 3;
+  void clear_start_width();
+  uint32_t start_width() const;
+  void set_start_width(uint32_t value);
+  private:
+  uint32_t _internal_start_width() const;
+  void _internal_set_start_width(uint32_t value);
+  public:
+
+  // uint32 end_width = 4;
+  void clear_end_width();
+  uint32_t end_width() const;
+  void set_end_width(uint32_t value);
+  private:
+  uint32_t _internal_end_width() const;
+  void _internal_set_end_width(uint32_t value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.SetTaskCaption)
  private:
   class _Internal;
@@ -3659,6 +3754,8 @@ class SetTaskCaption final :
   struct Impl_ {
     int32_t task_id_;
     uint32_t height_;
+    uint32_t start_width_;
+    uint32_t end_width_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -3772,6 +3869,8 @@ class AppInfo final :
     kPackageNameFieldNumber = 1,
     kLabelFieldNumber = 2,
     kIconPngFieldNumber = 3,
+    kCaptionIconPngFieldNumber = 4,
+    kMultipleWindowsFieldNumber = 5,
   };
   // string package_name = 1;
   void clear_package_name();
@@ -3815,6 +3914,29 @@ class AppInfo final :
   std::string* _internal_mutable_icon_png();
   public:
 
+  // bytes caption_icon_png = 4;
+  void clear_caption_icon_png();
+  const std::string& caption_icon_png() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_caption_icon_png(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_caption_icon_png();
+  PROTOBUF_NODISCARD std::string* release_caption_icon_png();
+  void set_allocated_caption_icon_png(std::string* caption_icon_png);
+  private:
+  const std::string& _internal_caption_icon_png() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_caption_icon_png(const std::string& value);
+  std::string* _internal_mutable_caption_icon_png();
+  public:
+
+  // bool multiple_windows = 5;
+  void clear_multiple_windows();
+  bool multiple_windows() const;
+  void set_multiple_windows(bool value);
+  private:
+  bool _internal_multiple_windows() const;
+  void _internal_set_multiple_windows(bool value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.AppInfo)
  private:
   class _Internal;
@@ -3826,6 +3948,8 @@ class AppInfo final :
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr label_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr icon_png_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr caption_icon_png_;
+    bool multiple_windows_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -5035,6 +5159,7 @@ class OpenAppSettings final :
 
   enum : int {
     kPackageNameFieldNumber = 1,
+    kPageFieldNumber = 2,
   };
   // string package_name = 1;
   void clear_package_name();
@@ -5050,6 +5175,15 @@ class OpenAppSettings final :
   std::string* _internal_mutable_package_name();
   public:
 
+  // .dsa.control.v1.AppSettingsPage page = 2;
+  void clear_page();
+  ::dsa::control::v1::AppSettingsPage page() const;
+  void set_page(::dsa::control::v1::AppSettingsPage value);
+  private:
+  ::dsa::control::v1::AppSettingsPage _internal_page() const;
+  void _internal_set_page(::dsa::control::v1::AppSettingsPage value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.OpenAppSettings)
  private:
   class _Internal;
@@ -5059,6 +5193,7 @@ class OpenAppSettings final :
   typedef void DestructorSkippable_;
   struct Impl_ {
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr package_name_;
+    int page_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -31887,6 +32022,86 @@ inline void TaskUpdated::set_picture_in_picture(bool value) {
   // @@protoc_insertion_point(field_set:dsa.control.v1.TaskUpdated.picture_in_picture)
 }
 
+// bool transparent_caption = 23;
+inline void TaskUpdated::clear_transparent_caption() {
+  _impl_.transparent_caption_ = false;
+}
+inline bool TaskUpdated::_internal_transparent_caption() const {
+  return _impl_.transparent_caption_;
+}
+inline bool TaskUpdated::transparent_caption() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.TaskUpdated.transparent_caption)
+  return _internal_transparent_caption();
+}
+inline void TaskUpdated::_internal_set_transparent_caption(bool value) {
+  
+  _impl_.transparent_caption_ = value;
+}
+inline void TaskUpdated::set_transparent_caption(bool value) {
+  _internal_set_transparent_caption(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.TaskUpdated.transparent_caption)
+}
+
+// repeated .dsa.control.v1.Rect caption_interactive = 24;
+inline int TaskUpdated::_internal_caption_interactive_size() const {
+  return _impl_.caption_interactive_.size();
+}
+inline int TaskUpdated::caption_interactive_size() const {
+  return _internal_caption_interactive_size();
+}
+inline void TaskUpdated::clear_caption_interactive() {
+  _impl_.caption_interactive_.Clear();
+}
+inline ::dsa::control::v1::Rect* TaskUpdated::mutable_caption_interactive(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.TaskUpdated.caption_interactive)
+  return _impl_.caption_interactive_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::Rect >*
+TaskUpdated::mutable_caption_interactive() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.TaskUpdated.caption_interactive)
+  return &_impl_.caption_interactive_;
+}
+inline const ::dsa::control::v1::Rect& TaskUpdated::_internal_caption_interactive(int index) const {
+  return _impl_.caption_interactive_.Get(index);
+}
+inline const ::dsa::control::v1::Rect& TaskUpdated::caption_interactive(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.TaskUpdated.caption_interactive)
+  return _internal_caption_interactive(index);
+}
+inline ::dsa::control::v1::Rect* TaskUpdated::_internal_add_caption_interactive() {
+  return _impl_.caption_interactive_.Add();
+}
+inline ::dsa::control::v1::Rect* TaskUpdated::add_caption_interactive() {
+  ::dsa::control::v1::Rect* _add = _internal_add_caption_interactive();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.TaskUpdated.caption_interactive)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::Rect >&
+TaskUpdated::caption_interactive() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.TaskUpdated.caption_interactive)
+  return _impl_.caption_interactive_;
+}
+
+// bool can_go_back = 25;
+inline void TaskUpdated::clear_can_go_back() {
+  _impl_.can_go_back_ = false;
+}
+inline bool TaskUpdated::_internal_can_go_back() const {
+  return _impl_.can_go_back_;
+}
+inline bool TaskUpdated::can_go_back() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.TaskUpdated.can_go_back)
+  return _internal_can_go_back();
+}
+inline void TaskUpdated::_internal_set_can_go_back(bool value) {
+  
+  _impl_.can_go_back_ = value;
+}
+inline void TaskUpdated::set_can_go_back(bool value) {
+  _internal_set_can_go_back(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.TaskUpdated.can_go_back)
+}
+
 // -------------------------------------------------------------------
 
 // TaskRemoved
@@ -32031,6 +32246,26 @@ inline void LaunchApp::set_allocated_package_name(std::string* package_name) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.LaunchApp.package_name)
+}
+
+// bool new_window = 2;
+inline void LaunchApp::clear_new_window() {
+  _impl_.new_window_ = false;
+}
+inline bool LaunchApp::_internal_new_window() const {
+  return _impl_.new_window_;
+}
+inline bool LaunchApp::new_window() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.LaunchApp.new_window)
+  return _internal_new_window();
+}
+inline void LaunchApp::_internal_set_new_window(bool value) {
+  
+  _impl_.new_window_ = value;
+}
+inline void LaunchApp::set_new_window(bool value) {
+  _internal_set_new_window(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.LaunchApp.new_window)
 }
 
 // -------------------------------------------------------------------
@@ -32259,6 +32494,46 @@ inline void SetTaskCaption::set_height(uint32_t value) {
   // @@protoc_insertion_point(field_set:dsa.control.v1.SetTaskCaption.height)
 }
 
+// uint32 start_width = 3;
+inline void SetTaskCaption::clear_start_width() {
+  _impl_.start_width_ = 0u;
+}
+inline uint32_t SetTaskCaption::_internal_start_width() const {
+  return _impl_.start_width_;
+}
+inline uint32_t SetTaskCaption::start_width() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SetTaskCaption.start_width)
+  return _internal_start_width();
+}
+inline void SetTaskCaption::_internal_set_start_width(uint32_t value) {
+  
+  _impl_.start_width_ = value;
+}
+inline void SetTaskCaption::set_start_width(uint32_t value) {
+  _internal_set_start_width(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SetTaskCaption.start_width)
+}
+
+// uint32 end_width = 4;
+inline void SetTaskCaption::clear_end_width() {
+  _impl_.end_width_ = 0u;
+}
+inline uint32_t SetTaskCaption::_internal_end_width() const {
+  return _impl_.end_width_;
+}
+inline uint32_t SetTaskCaption::end_width() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.SetTaskCaption.end_width)
+  return _internal_end_width();
+}
+inline void SetTaskCaption::_internal_set_end_width(uint32_t value) {
+  
+  _impl_.end_width_ = value;
+}
+inline void SetTaskCaption::set_end_width(uint32_t value) {
+  _internal_set_end_width(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.SetTaskCaption.end_width)
+}
+
 // -------------------------------------------------------------------
 
 // AppInfo
@@ -32411,6 +32686,76 @@ inline void AppInfo::set_allocated_icon_png(std::string* icon_png) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AppInfo.icon_png)
+}
+
+// bytes caption_icon_png = 4;
+inline void AppInfo::clear_caption_icon_png() {
+  _impl_.caption_icon_png_.ClearToEmpty();
+}
+inline const std::string& AppInfo::caption_icon_png() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AppInfo.caption_icon_png)
+  return _internal_caption_icon_png();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void AppInfo::set_caption_icon_png(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.caption_icon_png_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AppInfo.caption_icon_png)
+}
+inline std::string* AppInfo::mutable_caption_icon_png() {
+  std::string* _s = _internal_mutable_caption_icon_png();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.AppInfo.caption_icon_png)
+  return _s;
+}
+inline const std::string& AppInfo::_internal_caption_icon_png() const {
+  return _impl_.caption_icon_png_.Get();
+}
+inline void AppInfo::_internal_set_caption_icon_png(const std::string& value) {
+  
+  _impl_.caption_icon_png_.Set(value, GetArenaForAllocation());
+}
+inline std::string* AppInfo::_internal_mutable_caption_icon_png() {
+  
+  return _impl_.caption_icon_png_.Mutable(GetArenaForAllocation());
+}
+inline std::string* AppInfo::release_caption_icon_png() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.AppInfo.caption_icon_png)
+  return _impl_.caption_icon_png_.Release();
+}
+inline void AppInfo::set_allocated_caption_icon_png(std::string* caption_icon_png) {
+  if (caption_icon_png != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.caption_icon_png_.SetAllocated(caption_icon_png, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.caption_icon_png_.IsDefault()) {
+    _impl_.caption_icon_png_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.AppInfo.caption_icon_png)
+}
+
+// bool multiple_windows = 5;
+inline void AppInfo::clear_multiple_windows() {
+  _impl_.multiple_windows_ = false;
+}
+inline bool AppInfo::_internal_multiple_windows() const {
+  return _impl_.multiple_windows_;
+}
+inline bool AppInfo::multiple_windows() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.AppInfo.multiple_windows)
+  return _internal_multiple_windows();
+}
+inline void AppInfo::_internal_set_multiple_windows(bool value) {
+  
+  _impl_.multiple_windows_ = value;
+}
+inline void AppInfo::set_multiple_windows(bool value) {
+  _internal_set_multiple_windows(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.AppInfo.multiple_windows)
 }
 
 // -------------------------------------------------------------------
@@ -33494,6 +33839,26 @@ inline void OpenAppSettings::set_allocated_package_name(std::string* package_nam
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.OpenAppSettings.package_name)
+}
+
+// .dsa.control.v1.AppSettingsPage page = 2;
+inline void OpenAppSettings::clear_page() {
+  _impl_.page_ = 0;
+}
+inline ::dsa::control::v1::AppSettingsPage OpenAppSettings::_internal_page() const {
+  return static_cast< ::dsa::control::v1::AppSettingsPage >(_impl_.page_);
+}
+inline ::dsa::control::v1::AppSettingsPage OpenAppSettings::page() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.OpenAppSettings.page)
+  return _internal_page();
+}
+inline void OpenAppSettings::_internal_set_page(::dsa::control::v1::AppSettingsPage value) {
+  
+  _impl_.page_ = value;
+}
+inline void OpenAppSettings::set_page(::dsa::control::v1::AppSettingsPage value) {
+  _internal_set_page(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.OpenAppSettings.page)
 }
 
 // -------------------------------------------------------------------
@@ -59152,6 +59517,7 @@ template <> struct is_proto_enum< ::dsa::control::v1::RejectReason> : ::std::tru
 template <> struct is_proto_enum< ::dsa::control::v1::TaskOrientation> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::StatusBarAppearance> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::ReinstallStatus> : ::std::true_type {};
+template <> struct is_proto_enum< ::dsa::control::v1::AppSettingsPage> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::UninstallStatus> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PointerAction> : ::std::true_type {};
 template <> struct is_proto_enum< ::dsa::control::v1::PointerTool> : ::std::true_type {};

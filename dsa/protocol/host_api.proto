@@ -127,6 +127,18 @@ message ListApps {
 // Answered with Done once Android has been asked.
 message OpenAppSettings {
   string package_name = 1;
+  // Which of Android's pages for the app. Ignored without a package.
+  AppSettingsPage page = 2;
+}
+
+// One of Android's settings pages for an app.
+enum AppSettingsPage {
+  // The app's info: its permissions, storage and notifications.
+  APP_SETTINGS_PAGE_DETAILS = 0;
+  // The app's aspect ratio, which the user may override.
+  APP_SETTINGS_PAGE_ASPECT_RATIO = 1;
+  // Whether the links the app supports open in the app or in the browser.
+  APP_SETTINGS_PAGE_OPEN_BY_DEFAULT = 2;
 }
 
 // Uninstalls an app the user installed in the caller's Android. Android must be running. The
@@ -168,6 +180,9 @@ message CloseTask {
 // window.
 message LaunchApp {
   string package_name = 1;
+  // Start another task of the app even when it has one, in a window of its own. Only for an
+  // app that supports several windows (AppInfo.multiple_windows).
+  bool new_window = 2;
 }
 
 // The user's Stop: asks the caller's Android to end every process of an app and give its
@@ -196,9 +211,15 @@ message SetTaskDensity {
 
 // A task's window draws its title bar over the top `height` pixels of the task: asks the
 // caller's Android to give the task a top system bar inset of that height. 0 removes it.
+//
+// `start_width` and `end_width` are how far the window's icon and its caption buttons reach
+// into the band from its left and right ends, in Android display pixels, which an app that
+// draws its own title bar keeps its controls out of.
 message SetTaskCaption {
   int32 task_id = 1;
   uint32 height = 2;
+  uint32 start_width = 3;
+  uint32 end_width = 4;
 }
 
 // Turns the connection into a stream of input for the caller's Android: after the answer
@@ -981,6 +1002,16 @@ message Task {
   bool fullscreen = 21;
   // Whether the task's app went into picture-in-picture.
   bool picture_in_picture = 22;
+  // Whether the task's app draws its own title bar (it asked for a transparent caption bar
+  // background): the window then draws only its caption buttons and the app's icon.
+  bool transparent_caption = 23;
+  // While `transparent_caption` is set: where in the title bar band the app has controls,
+  // relative to the task's top left corner in Android display pixels. The rest of the band
+  // drags the window.
+  repeated Rect caption_interactive = 24;
+  // Whether the task has somewhere to go back to (it is past its first activity), so the
+  // window shows a back button in the place of the app's icon.
+  bool can_go_back = 25;
 }
 
 // The orientation a task's top activity asks for.
@@ -1038,6 +1069,11 @@ message AppInfo {
   // The native libraries the app's APKs on the device hold, base and splits together, by
   // ABI. Empty for an app without native code.
   repeated NativeLibraries native_libraries = 13;
+  // The icon a window's title bar shows: an adaptive icon's foreground layer alone, as a
+  // square PNG image. Empty for an app whose icon is not adaptive, which shows `icon_png`.
+  bytes caption_icon_png = 14;
+  // Whether the app supports several windows at once, so its windows offer New window.
+  bool multiple_windows = 15;
 }
 
 // Installs an app of the caller's Android again from the APKs it has there, with its native

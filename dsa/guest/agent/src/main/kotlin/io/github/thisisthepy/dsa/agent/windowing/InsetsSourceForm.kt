@@ -9,6 +9,10 @@ package io.github.thisisthepy.dsa.agent.windowing
  * found the Insets one and passed it a Rect, which the framework refused, so no task got a
  * top inset and every app drew its toolbar under the host's caption buttons. A frame form is
  * preferred; the Insets form is used when it is the only one.
+ *
+ * Android 17 adds forms whose bounding rectangles are InsetsBoundingRect[] beside the Rect[]
+ * ones. The agent gives bounding rectangles as Rect[], so only a form that takes Rect[] there
+ * (or has no such parameter) is chosen. Types are named as Class.getTypeName names them.
  */
 sealed interface InsetsSourceForm {
     /** The index of this form in the list it was chosen from. */
@@ -22,12 +26,13 @@ sealed interface InsetsSourceForm {
 
     companion object {
         private const val RECT = "android.graphics.Rect"
+        private const val RECTS = "android.graphics.Rect[]"
         private const val INSETS = "android.graphics.Insets"
 
         /** The form to call among [forms], or null when none takes a frame or a size. */
         fun choose(forms: List<List<String>>): InsetsSourceForm? {
             fun candidates(kind: String) = forms.withIndex()
-                .filter { (_, types) -> types.size in 5..7 && types[4] == kind }
+                .filter { (_, types) -> types.size in 5..7 && types[4] == kind && (types.size < 6 || types[5] == RECTS) }
                 .maxByOrNull { (_, types) -> types.size }
             candidates(RECT)?.let { (index, types) -> return Frame(index, types.size) }
             candidates(INSETS)?.let { (index, types) -> return Size(index, types.size) }
