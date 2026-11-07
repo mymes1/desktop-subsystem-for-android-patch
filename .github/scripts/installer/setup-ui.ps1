@@ -81,24 +81,6 @@ function Wait-ProcessWindow([int]$ProcessId, [int]$Seconds = 60) {
     $null
 }
 
-# Selects the item named $Name inside $Window (such as a navigation item). Returns whether it
-# could.
-function Select-Named($Window, [string]$Name) {
-    $condition = New-Object System.Windows.Automation.PropertyCondition($Auto::NameProperty, $Name)
-    $item = $Window.FindFirst($Scope::Descendants, $condition)
-    if (-not $item) { return $false }
-    $pattern = $null
-    if ($item.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) {
-        $pattern.Select()
-        return $true
-    }
-    if ($item.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
-        $pattern.Invoke()
-        return $true
-    }
-    $false
-}
-
 # Saves a picture of $Window and 32 px around it.
 function Save-WindowScreen($Window, [string]$Path) {
     Start-Sleep -Milliseconds 600   # let the window finish drawing
