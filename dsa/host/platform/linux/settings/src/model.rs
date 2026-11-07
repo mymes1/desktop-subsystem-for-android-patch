@@ -715,6 +715,35 @@ impl LogLine {
             self.time, self.pid, self.tid, self.priority, self.tag, self.message
         )
     }
+
+    /// The log page's columns: time, PID, TID, priority and the body (`tag: message`), as
+    /// the Windows settings app splits them. A record that stands for dropped records has
+    /// only its body.
+    pub fn columns(&self) -> LogColumns {
+        if self.dropped > 0 {
+            return LogColumns {
+                body: self.text(),
+                ..LogColumns::default()
+            };
+        }
+        LogColumns {
+            time: self.time.clone(),
+            pid: self.pid.to_string(),
+            tid: self.tid.to_string(),
+            priority: self.priority.clone(),
+            body: format!("{}: {}", self.tag, self.message),
+        }
+    }
+}
+
+/// One log line split into the page's columns.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LogColumns {
+    pub time: String,
+    pub pid: String,
+    pub tid: String,
+    pub priority: String,
+    pub body: String,
 }
 
 fn on_off(on: bool) -> &'static str {

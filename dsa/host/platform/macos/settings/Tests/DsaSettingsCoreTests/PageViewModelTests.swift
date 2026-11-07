@@ -156,6 +156,36 @@ final class PageViewModelTests: XCTestCase {
         XCTAssertEqual(LogViewModel.arguments("W"), ["logcat", "--json", "*:W"])
     }
 
+    func test_fr21_a_log_line_splits_into_the_page_columns_and_a_dropped_record_has_only_its_body() throws {
+        let line = try XCTUnwrap(LogLine.parse(
+            #"{"time":"2026-11-04 10:00:00.000","priority":"I","tag":"ActivityManager","pid":12,"tid":13,"message":"시작"}"#))
+        XCTAssertEqual(line.timeColumn, "2026-11-04 10:00:00.000")
+        XCTAssertEqual(line.pidColumn, "12")
+        XCTAssertEqual(line.tidColumn, "13")
+        XCTAssertEqual(line.priorityColumn, "I")
+        XCTAssertEqual(line.bodyColumn, "ActivityManager: 시작")
+
+        let dropped = try XCTUnwrap(LogLine.parse(#"{"time":"2026-11-04 10:00:00.000","priority":"W","dropped":3}"#))
+        XCTAssertEqual(dropped.timeColumn + dropped.pidColumn + dropped.tidColumn + dropped.priorityColumn, "")
+        XCTAssertEqual(dropped.bodyColumn, "--------- 3 records dropped")
+    }
+
+    func test_fr21_copying_selected_log_lines_gives_each_whole_line_in_page_order() {
+        let cli = FakeCli()
+        let logs = LogViewModel(stream: cli, service: DsaService(cli: cli), text: KeyText())
+        let record = { (tag: String, message: String) in
+            #"{"time":"2026-11-04 10:00:00.000","priority":"I","tag":"\#(tag)","pid":12,"tid":13,"message":"\#(message)"}"#
+        }
+        logs.addMany([record("A", "one"), record("B", "two"), record("C", "three"), #"{"dropped":3}"#])
+        let selected: Set<LogLine.ID> = [logs.lines[3].id, logs.lines[0].id, logs.lines[2].id]
+        XCTAssertEqual(logs.copyText(selected), [
+            "2026-11-04 10:00:00.000    12    13 I A: one",
+            "2026-11-04 10:00:00.000    12    13 I C: three",
+            "--------- 3 records dropped",
+        ].joined(separator: "\n"))
+        XCTAssertEqual(logs.copyText([]), "")
+    }
+
     func test_fr17_log_page_reads_the_log_through_dsa_logcat() async throws {
         let cli = FakeCli()
         cli.streams["logcat --json *:I"] = [#"{"tag":"A","message":"one"}"#, #"{"tag":"B","message":"two"}"#]

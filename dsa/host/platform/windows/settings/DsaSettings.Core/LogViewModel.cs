@@ -105,6 +105,15 @@ public sealed class LogViewModel : ObservableObject
     /// not paused.</summary>
     public LogLines Lines { get; } = new();
 
+    /// <summary>What copying the selected lines puts on the clipboard: each whole line as the
+    /// log prints it, one per line, in the order the page shows them, whatever order they
+    /// were selected in.</summary>
+    public string CopyText(IEnumerable<LogLine> selected)
+    {
+        var chosen = new HashSet<LogLine>(selected, ReferenceEqualityComparer.Instance);
+        return string.Join(Environment.NewLine, Lines.Where(chosen.Contains).Select(l => l.Text));
+    }
+
     public bool IsReading => _reading is not null;
     public string Error => _error ?? "";
     public bool HasError => _error is not null;

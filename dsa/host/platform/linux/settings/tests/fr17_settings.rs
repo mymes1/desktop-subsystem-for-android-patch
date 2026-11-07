@@ -411,6 +411,64 @@ fn fr21_the_log_page_uses_the_app_font() {
     );
 }
 
+
+#[test]
+fn fr21_a_log_line_splits_into_the_page_columns_and_a_dropped_record_has_only_its_body() {
+    let record = json!({ "time": "2026-11-04 10:00:00.000", "priority": "I",
+                         "tag": "ActivityManager", "pid": 12, "tid": 13, "message": "시작" });
+    let columns = LogLine::parse(&record.to_string()).unwrap().columns();
+    assert_eq!(columns.time, "2026-11-04 10:00:00.000");
+    assert_eq!(columns.pid, "12");
+    assert_eq!(columns.tid, "13");
+    assert_eq!(columns.priority, "I");
+    assert_eq!(columns.body, "ActivityManager: 시작");
+
+    let record = json!({ "time": "2026-11-04 10:00:00.000", "priority": "W", "dropped": 3 });
+    let dropped = LogLine::parse(&record.to_string()).unwrap().columns();
+    assert_eq!(dropped.time.clone() + &dropped.pid + &dropped.tid + &dropped.priority, "");
+    assert_eq!(dropped.body, "--------- 3 records dropped");
+}
+
+#[test]
+fn fr21_copying_selected_log_lines_gives_each_whole_line_in_page_order() {
+    let record = |tag: &str, message: &str| {
+        let json = json!({ "time": "2026-11-04 10:00:00.000", "priority": "I", "tag": tag,
+                           "pid": 12, "tid": 13, "message": message });
+        LogLine::parse(&json.to_string()).unwrap()
+    };
+    let dropped = LogLine::parse(&json!({ "dropped": 3 }).to_string()).unwrap();
+    let shown = vec![
+        record("A", "one"),
+        record("B", "two"),
+        record("C", "three"),
+        dropped,
+    ];
+    assert_eq!(
+        view::log_copy_text(&shown, &[3, 0, 2, 0, 9]),
+        "2026-11-04 10:00:00.000    12    13 I A: one\n\
+         2026-11-04 10:00:00.000    12    13 I C: three\n\
+         --------- 3 records dropped"
+    );
+    assert_eq!(view::log_copy_text(&shown, &[]), "");
+
+    let page = std::fs::read_to_string(crate_dir().join("src/ui/logs.rs")).unwrap();
+    assert!(
+        page.contains("SelectionMode::Multiple")
+            && page.contains("<Control>c")
+            && page.contains("\"log.copy\""),
+        "the log page cannot select several lines or copy them with Ctrl+C and its menu"
+    );
+}
+
+#[test]
+fn fr21_the_log_page_shows_lines_in_columns() {
+    let page = std::fs::read_to_string(crate_dir().join("src/ui/logs.rs")).unwrap();
+    assert!(
+        page.contains("line.columns()") && !page.contains("TextView"),
+        "the log page shows each line as one text instead of in columns"
+    );
+}
+
 #[test]
 fn fr17_the_log_page_filters_pauses_and_keeps_the_newest_lines() {
     let record = |message: &str| {

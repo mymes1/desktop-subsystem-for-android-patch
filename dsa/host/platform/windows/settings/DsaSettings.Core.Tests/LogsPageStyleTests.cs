@@ -44,6 +44,17 @@ public class LogsPageStyleTests
     }
 
     [Fact]
+    public void Fr21_log_lines_select_several_and_copy_with_ctrl_c_and_the_menu()
+    {
+        var list = Page().Descendants(Wpf + "ListBox").Single();
+        Assert.Equal("Extended", (string?)list.Attribute("SelectionMode"));
+        Assert.Contains(list.Descendants(Wpf + "CommandBinding"),
+            b => (string?)b.Attribute("Command") == "ApplicationCommands.Copy");
+        Assert.Contains(list.Descendants(Wpf + "MenuItem"),
+            m => (string?)m.Attribute("Command") == "ApplicationCommands.Copy");
+    }
+
+    [Fact]
     public void Fr21_a_log_row_uses_the_body_font_on_a_line_that_fits_korean_text()
     {
         var cell = Page().Descendants(Wpf + "Style")

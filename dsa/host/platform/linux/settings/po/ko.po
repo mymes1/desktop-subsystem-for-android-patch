@@ -1007,3 +1007,6 @@ msgstr "바탕 화면"
 
 msgid "OK"
 msgstr "확인"
+
+msgid "Copy"
+msgstr "복사"

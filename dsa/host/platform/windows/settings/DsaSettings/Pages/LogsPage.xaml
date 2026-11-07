@@ -53,11 +53,21 @@
         <Grid Grid.Row="4">
             <ListBox x:Name="LinesList" ItemsSource="{Binding Lines, Mode=OneWay}"
                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                     VirtualizingPanel.ScrollUnit="Pixel"
+                     VirtualizingPanel.ScrollUnit="Pixel" SelectionMode="Extended"
                      ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True">
                 <!-- A log line is one short row in the app's body font: the theme's list rows
                      are tall and padded. The 20 px line fits Korean text and keeps every row
                      one height. -->
+                <!-- Selected lines copy with Ctrl+C or the menu, as the whole lines of the log.
+                     Ctrl+A and Shift or Ctrl clicks select as in any extended list. -->
+                <ListBox.CommandBindings>
+                    <CommandBinding Command="ApplicationCommands.Copy" Executed="OnCopy" CanExecute="OnCanCopy" />
+                </ListBox.CommandBindings>
+                <ListBox.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="{l:Text CopyButton.ToolTip}" Command="ApplicationCommands.Copy" />
+                    </ContextMenu>
+                </ListBox.ContextMenu>
                 <ListBox.Resources>
                     <Style x:Key="LogCell" TargetType="TextBlock">
                         <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
