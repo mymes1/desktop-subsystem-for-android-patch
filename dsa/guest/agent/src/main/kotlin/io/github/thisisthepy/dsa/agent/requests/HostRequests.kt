@@ -65,10 +65,12 @@ interface TaskActions {
     /**
      * Gives the task a top system bar inset covering [frame] (guest display pixels): the band
      * of the task the host's window draws its title bar over. The task's app receives it as its
-     * status bar, system bar and caption bar inset. A null [frame] removes it. False when the
-     * framework has no way to give a task an inset, or refused.
+     * status bar, system bar and caption bar inset. A null [frame] removes it. The caption bar
+     * inset carries [boundingRects] (relative to [frame]) as the places in it the host draws
+     * over, for an app that draws its own title bar; none otherwise. False when the framework
+     * has no way to give a task an inset, or refused.
      */
-    fun setCaptionInset(taskId: Int, frame: TaskBounds?): Boolean
+    fun setCaptionInset(taskId: Int, frame: TaskBounds?, boundingRects: List<TaskBounds> = emptyList()): Boolean
 }
 
 /** What the framework took of a resize. */
@@ -110,7 +112,7 @@ sealed interface RequestResult {
      * The host's window for the task draws its title bar over the task's top [height] pixels;
      * the task gets a top inset of that height (0 removes it).
      */
-    data class Caption(val taskId: Int, val height: Int) : RequestResult
+    data class Caption(val taskId: Int, val height: Int, val startWidth: Int = 0, val endWidth: Int = 0) : RequestResult
 
     /** A resize or density for a task the host was never told about. */
     data class SizeRefused(val taskId: Int, val reason: String) : RequestResult
@@ -153,8 +155,12 @@ class HostRequests(
             }
             Envelope.BodyCase.SET_TASK_DENSITY ->
                 density(envelope.setTaskDensity.taskId, envelope.setTaskDensity.densityDpi)
-            Envelope.BodyCase.SET_TASK_CAPTION ->
-                caption(envelope.setTaskCaption.taskId, envelope.setTaskCaption.height)
+            Envelope.BodyCase.SET_TASK_CAPTION -> caption(
+                envelope.setTaskCaption.taskId,
+                envelope.setTaskCaption.height,
+                envelope.setTaskCaption.startWidth,
+                envelope.setTaskCaption.endWidth,
+            )
             Envelope.BodyCase.BODY_NOT_SET, null -> RequestResult.Malformed("the frame carries no message")
             else -> RequestResult.NotForTheAgent(envelope.bodyCase)
         }
@@ -199,11 +205,16 @@ class HostRequests(
     }
 
     // The height is unsigned on the wire; a value past Int.MAX_VALUE reads as negative here.
-    private fun caption(taskId: Int, height: Int): RequestResult = when {
+    private fun caption(taskId: Int, height: Int, startWidth: Int, endWidth: Int): RequestResult = when {
         height < 0 || height > MAX_LENGTH ->
             RequestResult.Malformed("SetTaskCaption asks for a title bar ${Integer.toUnsignedString(height)} pixels high")
+        startWidth < 0 || startWidth > MAX_LENGTH || endWidth < 0 || endWidth > MAX_LENGTH ->
+            RequestResult.Malformed(
+                "SetTaskCaption says its icon and buttons reach ${Integer.toUnsignedString(startWidth)} and " +
+                    "${Integer.toUnsignedString(endWidth)} pixels into the title bar",
+            )
         !reported(taskId) -> RequestResult.SizeRefused(taskId, "the host was never told about this task")
-        else -> RequestResult.Caption(taskId, height)
+        else -> RequestResult.Caption(taskId, height, startWidth, endWidth)
     }
 
     private companion object {

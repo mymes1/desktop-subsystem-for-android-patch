@@ -240,10 +240,14 @@ class FakeActions : TaskActions {
 
     /** Each caption inset given: the task and its frame, null for a removal. */
     val captionInsets = mutableListOf<Pair<Int, TaskBounds?>>()
+
+    /** The bounding rectangles each of [captionInsets] carried. */
+    val captionBoundingRects = mutableListOf<List<TaskBounds>>()
     var insetsTaken = true
 
-    override fun setCaptionInset(taskId: Int, frame: TaskBounds?): Boolean {
+    override fun setCaptionInset(taskId: Int, frame: TaskBounds?, boundingRects: List<TaskBounds>): Boolean {
         captionInsets += taskId to frame
+        captionBoundingRects += boundingRects
         return insetsTaken
     }
 }

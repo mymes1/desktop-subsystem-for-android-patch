@@ -236,8 +236,13 @@ class AndroidTaskActions(
      * of its own, and apps lay out their top edge by the status bar inset. The sources do not
      * force their insets to be consumed, so an app drawing edge to edge draws its status bar
      * background under the band.
+     *
+     * The caption bar source carries [boundingRects], relative to [frame], as Android's own
+     * desktop windows give an app that draws its own title bar the places their caption draws
+     * over (WindowDecoration's calculateBoundingRectsInsets); the app reads them with
+     * WindowInsets.getBoundingRects(captionBar()). The status bar source carries none.
      */
-    override fun setCaptionInset(taskId: Int, frame: TaskBounds?): Boolean = try {
+    override fun setCaptionInset(taskId: Int, frame: TaskBounds?, boundingRects: List<TaskBounds>): Boolean = try {
         val token = taskToken(taskId)
         if (token == null) {
             false
@@ -256,7 +261,11 @@ class AndroidTaskActions(
                         Int::class.javaPrimitiveType,
                     ).invoke(transaction, token, insetsOwner, index, type)
                 } else {
-                    addInsetsSource(transactionClass, transaction, token, index, type, frame)
+                    val rects = boundingRects
+                        .takeIf { it.isNotEmpty() && type == WindowInsets.Type.captionBar() }
+                        ?.map { Rect(it.left, it.top, it.right, it.bottom) }
+                        ?.toTypedArray()
+                    addInsetsSource(transactionClass, transaction, token, index, type, frame, rects)
                 }
             }
             commit(transactionClass, transaction)
@@ -275,7 +284,7 @@ class AndroidTaskActions(
     /**
      * WindowContainerTransaction.addInsetsSource in whichever form this framework has: with
      * bounding rectangles and flags (Android 15 and later), with bounding rectangles, or with
-     * the frame alone. No bounding rectangles and no flags are given.
+     * the frame alone. [boundingRects] go where the form takes them; no flags are given.
      */
     private fun addInsetsSource(
         transactionClass: Class<*>,
@@ -284,9 +293,10 @@ class AndroidTaskActions(
         index: Int,
         type: Int,
         frame: TaskBounds,
+        boundingRects: Array<Rect>?,
     ) {
         val methods = transactionClass.methods.filter { it.name == "addInsetsSource" }
-        val form = InsetsSourceForm.choose(methods.map { m -> m.parameterTypes.map { it.name } })
+        val form = InsetsSourceForm.choose(methods.map { m -> m.parameterTypes.map { it.typeName } })
             ?: throw NoSuchMethodException("WindowContainerTransaction.addInsetsSource")
         // A frame in display pixels, or the same band as a size from the task's top edge.
         val area: Any = when (form) {
@@ -298,8 +308,8 @@ class AndroidTaskActions(
             is InsetsSourceForm.Size -> form.parameterCount
         }
         val args: Array<Any?> = when (count) {
-            7 -> arrayOf(token, insetsOwner, index, type, area, null, 0)
-            6 -> arrayOf(token, insetsOwner, index, type, area, null)
+            7 -> arrayOf(token, insetsOwner, index, type, area, boundingRects, 0)
+            6 -> arrayOf(token, insetsOwner, index, type, area, boundingRects)
             else -> arrayOf(token, insetsOwner, index, type, area)
         }
         methods[form.index].invoke(transaction, *args)

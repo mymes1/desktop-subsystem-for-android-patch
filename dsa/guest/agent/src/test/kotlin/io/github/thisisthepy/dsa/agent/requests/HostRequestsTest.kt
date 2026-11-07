@@ -48,6 +48,20 @@ class HostRequestsTest {
         .build().toByteArray()
 
     @Test
+    fun fr22_the_reach_of_a_windows_icon_and_buttons_is_handed_back_with_its_height() {
+        reported += 3
+        val frame = Envelope.newBuilder()
+            .setSetTaskCaption(SetTaskCaption.newBuilder().setTaskId(3).setHeight(31).setStartWidth(40).setEndWidth(138))
+            .build().toByteArray()
+
+        assertEquals(RequestResult.Caption(3, 31, 40, 138), requests.handle(frame))
+        val past = Envelope.newBuilder()
+            .setSetTaskCaption(SetTaskCaption.newBuilder().setTaskId(3).setHeight(31).setStartWidth(-1))
+            .build().toByteArray()
+        assertTrue(requests.handle(past) is RequestResult.Malformed)
+    }
+
+    @Test
     fun fr22_a_title_bar_height_for_a_reported_task_is_handed_back() {
         reported += 3
 

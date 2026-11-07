@@ -80,6 +80,10 @@ interface InputInjector {
  *   button, so the right button arrives as BUTTON_SECONDARY, which the framework treats as a
  *   context click, not as a long press. A second button while one is down is only a
  *   BUTTON_PRESS. Hovering begins with ACTION_HOVER_ENTER and stops before a press.
+ * - The mouse's back and forward buttons are keys, not presses of the pointer: Back
+ *   (KEYCODE_BACK) and Forward (KEYCODE_FORWARD) go down and up with the button
+ *   ([onNavigationKey]), as the framework's input reader makes them of a real mouse's, and
+ *   they never touch what is under the pointer.
  * - The wheel is ACTION_SCROLL with AXIS_VSCROLL and AXIS_HSCROLL at the mouse's position.
  * - Fingers are SOURCE_TOUCHSCREEN, and a pen is SOURCE_STYLUS. Every finger that is down
  *   goes in each event of the touch: the second finger is ACTION_POINTER_DOWN, a move carries
@@ -107,12 +111,20 @@ class PointerInput(
     /** Where the host was told the task is on the display; null for a task it was not told about. */
     private val boundsOf: (Int) -> TaskBounds?,
     private val log: Log,
+    /**
+     * A mouse's back or forward button went down or up over task `taskId`: the key code
+     * (KEYCODE_BACK or KEYCODE_FORWARD) and whether it is down. Called on this class's thread.
+     */
+    private val onNavigationKey: (taskId: Int, keyCode: Int, down: Boolean) -> Unit = { _, _, _ -> },
 ) {
     private class Mouse {
         var buttons = 0
         var downTime = 0L
         var down = false
         var hovering = false
+
+        /** The back and forward buttons held, as BUTTON_BACK and BUTTON_FORWARD bits. */
+        var navigation = 0
     }
 
     /** A finger or a pen that is down: the task it is on, and the pointer the framework sees. */
@@ -205,6 +217,31 @@ class PointerInput(
             }
         }
         val wanted = event.buttons and MOUSE_BUTTONS
+        val navigation = when (event.action) {
+            PointerAction.POINTER_ACTION_UP, PointerAction.POINTER_ACTION_CANCEL -> 0
+            PointerAction.POINTER_ACTION_SCROLL -> mouse.navigation
+            else -> event.buttons and NAVIGATION_BUTTONS
+        }
+        for ((button, keyCode) in NAVIGATION_KEYS) {
+            val before = mouse.navigation and button != 0
+            val now = navigation and button != 0
+            if (before != now) onNavigationKey(event.taskId, keyCode, now)
+        }
+        mouse.navigation = navigation
+        fun begin() {
+            stopHovering()
+            mouse.down = true
+            mouse.downTime = injector.now()
+            mouse.buttons = wanted
+            send(MotionEvent.ACTION_DOWN, wanted)
+            pressButtons(0, wanted) { button, state -> send(MotionEvent.ACTION_BUTTON_PRESS, state, button) }
+        }
+        fun end() {
+            releaseButtons(mouse.buttons, 0) { button, state -> send(MotionEvent.ACTION_BUTTON_RELEASE, state, button) }
+            send(MotionEvent.ACTION_UP, 0)
+            mouse.down = false
+            mouse.buttons = 0
+        }
         when (event.action) {
             PointerAction.POINTER_ACTION_HOVER_MOVE -> {
                 if (mouse.down) return
@@ -216,16 +253,21 @@ class PointerInput(
             }
             PointerAction.POINTER_ACTION_HOVER_EXIT -> if (!mouse.down) stopHovering()
             PointerAction.POINTER_ACTION_DOWN -> {
-                if (mouse.down) return
-                stopHovering()
-                mouse.down = true
-                mouse.downTime = injector.now()
-                mouse.buttons = wanted
-                send(MotionEvent.ACTION_DOWN, wanted)
-                pressButtons(0, wanted) { button, state -> send(MotionEvent.ACTION_BUTTON_PRESS, state, button) }
+                // Back or forward alone is a key, and presses nothing under the pointer.
+                if (mouse.down || wanted == 0) return
+                begin()
             }
             PointerAction.POINTER_ACTION_MOVE -> {
-                if (!mouse.down) return
+                // The host's press began with back or forward: the pointer's own press starts
+                // with the first other button, and ends when the last of them is let go.
+                if (!mouse.down) {
+                    if (wanted != 0) begin()
+                    return
+                }
+                if (wanted == 0) {
+                    end()
+                    return
+                }
                 val before = mouse.buttons
                 if (before == wanted) {
                     send(MotionEvent.ACTION_MOVE, before)
@@ -237,10 +279,7 @@ class PointerInput(
             }
             PointerAction.POINTER_ACTION_UP -> {
                 if (!mouse.down) return
-                releaseButtons(mouse.buttons, 0) { button, state -> send(MotionEvent.ACTION_BUTTON_RELEASE, state, button) }
-                send(MotionEvent.ACTION_UP, 0)
-                mouse.down = false
-                mouse.buttons = 0
+                end()
             }
             PointerAction.POINTER_ACTION_CANCEL -> {
                 if (!mouse.down) return
@@ -411,11 +450,16 @@ class PointerInput(
             MotionEvent.BUTTON_PRIMARY,
             MotionEvent.BUTTON_SECONDARY,
             MotionEvent.BUTTON_TERTIARY,
-            MotionEvent.BUTTON_BACK,
-            MotionEvent.BUTTON_FORWARD,
         )
         private const val MOUSE_BUTTONS = MotionEvent.BUTTON_PRIMARY or MotionEvent.BUTTON_SECONDARY or
-            MotionEvent.BUTTON_TERTIARY or MotionEvent.BUTTON_BACK or MotionEvent.BUTTON_FORWARD
+            MotionEvent.BUTTON_TERTIARY
+        private const val NAVIGATION_BUTTONS = MotionEvent.BUTTON_BACK or MotionEvent.BUTTON_FORWARD
+
+        /** The key each of a mouse's navigation buttons is. */
+        private val NAVIGATION_KEYS = listOf(
+            MotionEvent.BUTTON_BACK to android.view.KeyEvent.KEYCODE_BACK,
+            MotionEvent.BUTTON_FORWARD to android.view.KeyEvent.KEYCODE_FORWARD,
+        )
         private const val STYLUS_BUTTONS = MotionEvent.BUTTON_STYLUS_PRIMARY or MotionEvent.BUTTON_STYLUS_SECONDARY
     }
 }
