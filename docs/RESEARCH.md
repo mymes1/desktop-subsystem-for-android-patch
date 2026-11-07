@@ -1192,6 +1192,14 @@ DSA에 필요한 것은 안드로이드의 네이티브 브리지다. 곧 `libbe
 
 남은 미정의 모듈은 모두 이 빌드가 만들지 않는 변형이다. 진짜 bionic 링커와 debuggerd(`linux_bionic` 호스트용), musl 호스트, Windows 호스트(`-lws2_32`), NDK 변형의 crt 개체, 호스트 `libnativehelper`의 `libdexfile_all_headers`다. `ALLOW_MISSING_DEPENDENCIES`로는 빌드하는 것만 실패하므로 두었다. 이 확인은 정적이라 Soong이 실제로 고르는 변형과 다를 수 있다. 다음 실행의 `m -k` 요약이 나머지를 보인다.
 
+### 두 번째 실행(run 42389737141, android17)과 고친 것
+
+soong_ui는 만들어졌고, 제품 설정(kati)에서 멈추었다. `build/make/core/soong_config.mk`가 `toolchain/pgo-profiles/sampling/afdo_profiles.mk`를 대시 없는 `include`로 읽는데, 그 프로젝트가 없었다(`Error getting 'pre product config' release config`). AFDO 목록은 `libc` 같은 모듈의 프로파일(`fdo_profile`)을 가리키므로 `sampling` 폴더째 받는다. 저장소 이름은 `platform/`이 붙지 않은 `toolchain/pgo-profiles`다.
+
+이번에는 kati가 읽는 makefile도 흉내 냈다. `config.mk`, `envsetup.mk`, `product_config.mk`, `board_config.mk`, `soong_config.mk`, `release_config.mk`와 제품의 `inherit-product` 사슬에서 대시 없는 `include`와 `inherit-product`를 따라가, 트리에 없는 파일을 찾았다(16과 17 모두 40개를 읽었다). 없는 파일은 위의 하나뿐이었다. 변수로 이름을 짓는 include(`$(board_config_mk)`, `$(INTERNAL_BUILD_ID_MAKEFILE)` 등)는 모두 트리 안의 파일이다. 제품 설정에서 경로 때문에 멈추는 `$(error ...)`는 VNDK 판 검사뿐인데, 이 제품은 그 값을 정하지 않는다.
+
+Soong 분석 단계는 흉내 낼 수 없는 부분이 남는다. 이 트리의 Java, APEX, 파일 시스템 모듈(`android_app` 15개, `runtime_apex`, `soong_filesystem_creator` 등)은 빌드하지 않지만 분석은 된다. 그 단계에서 의존 누락이 아닌 오류(싱글톤의 검사 등)가 나면 다음 로그에 나온다. 앞의 두 실행에서 로그 artifact가 비었던 것은 `.dsa-targets`와 `.dsa-sources.json`이 점으로 시작해 `upload-artifact`가 건너뛰었기 때문이다. `include-hidden-files`를 켜고 `soong_ui.log`와 `soong.variables`를 더했다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
