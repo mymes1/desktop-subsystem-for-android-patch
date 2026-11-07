@@ -676,6 +676,8 @@ impl Main {
                     let requests = self.windows.window_caption(task_id, band);
                     self.requests(requests);
                 }
+                // The Linux windows have no system menu with Android items, so none is chosen.
+                FromHost::MenuChosen { .. } => {}
             },
         }
     }

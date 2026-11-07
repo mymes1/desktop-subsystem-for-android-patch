@@ -34,6 +34,10 @@
 //! other, so the window takes it together with a frame of that size. A window the user's
 //! settings for the app make fixed in size cannot be resized or maximized by the user; it
 //! still takes the sizes Android gives it.
+//!
+//! Each window's system menu carries the Android window menu after Windows' own items
+//! ([`super::system_menu`]). Its Screenshot is taken here ([`super::screenshot`]); every other
+//! item is reported to the window manager, which carries it out.
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -94,6 +98,7 @@ use super::drop_target::{self, DropHandler};
 use super::ime::ImeWindow;
 use super::keys::KeyWindow;
 use super::pointer::PointerWindow;
+use super::system_menu::{self, SystemMenuItem};
 
 /// A task window that is open, as tests and logs see it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,6 +274,8 @@ struct WindowData {
     /// Whether the window is taking the size the desktop suggests for its monitor's new scale,
     /// which it takes at once rather than wait for a frame of it.
     rescaling: Cell<bool>,
+    /// Where a screenshot that failed says why.
+    logger: Option<Arc<CompositorLogger>>,
 }
 
 /// The UI thread's state, reached from the message window's procedure.
@@ -276,6 +283,8 @@ struct Ui {
     open: HashMap<i32, HWND>,
     commands: Receiver<ToHost>,
     setup: UiSetup,
+    /// Whether the windows' system menu offers New window, as the window manager last said.
+    new_window: bool,
 }
 
 thread_local! {
@@ -355,6 +364,7 @@ fn run(setup: UiSetup, commands: Receiver<ToHost>, ready: Sender<Result<isize, S
                 open: HashMap::new(),
                 commands,
                 setup,
+                new_window: false,
             });
         });
         let _ = ready.send(Ok(message_window as isize));
@@ -476,6 +486,13 @@ unsafe extern "system" fn task_window_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     if let Some(data) = window_data(hwnd) {
+        // The Android items of the system menu; Windows' own commands go on below.
+        if message == WM_SYSCOMMAND {
+            if let Some(item) = system_menu::chosen(wparam) {
+                menu_chosen(hwnd, data, item);
+                return 0;
+            }
+        }
         if let Some(result) = mode_message(hwnd, data, message, wparam, lparam) {
             return result;
         }
@@ -821,6 +838,37 @@ unsafe extern "system" fn task_window_proc(
             DefWindowProcW(hwnd, message, wparam, lparam)
         }
         _ => DefWindowProcW(hwnd, message, wparam, lparam),
+    }
+}
+
+/// The user chose `item` in `hwnd`'s system menu. The screenshot is taken here; the window
+/// manager carries out the rest.
+unsafe fn menu_chosen(hwnd: HWND, data: &WindowData, item: SystemMenuItem) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{AllowSetForegroundWindow, ASFW_ANY};
+    if item == SystemMenuItem::Screenshot {
+        match data.presenter.borrow().clone() {
+            Some(presenter) => super::screenshot::take(
+                presenter,
+                hwnd as isize,
+                system_menu::display_text().screenshot_file,
+                data.logger.clone(),
+            ),
+            None => note(
+                data.logger.as_deref(),
+                "the screenshot was not taken: the window shows no frames",
+            ),
+        }
+        return;
+    }
+    if let Some(action) = system_menu::action(item) {
+        // Each of these opens a window in another program (the app's new task, Android's
+        // settings, DSA's settings). The user asked for it here, so that window may come to
+        // the front rather than only flash on the taskbar.
+        AllowSetForegroundWindow(ASFW_ANY);
+        (data.report)(FromHost::MenuChosen {
+            task_id: data.task_id,
+            action,
+        });
     }
 }
 
@@ -1330,6 +1378,13 @@ impl Ui {
                             }
                         }
                     }
+                    ToHost::AppMenu { new_window } => {
+                        // Every window of the app has the same menu, and the next ones too.
+                        self.new_window = new_window;
+                        for hwnd in self.open.values() {
+                            system_menu::apply(*hwnd, new_window);
+                        }
+                    }
                 }
             }
         }
@@ -1433,6 +1488,7 @@ impl Ui {
             restore: Cell::new(None),
             self_sizing: Cell::new(false),
             rescaling: Cell::new(false),
+            logger: self.setup.logger.clone(),
         }));
         let class = wide(TASK_CLASS);
         let hwnd = CreateWindowExW(
@@ -1460,6 +1516,8 @@ impl Ui {
         }
         super::pointer::deliver_contacts_at_once(hwnd);
         window_marks::mark_task(hwnd as isize, task_id);
+        // The Android window menu, under Windows' own items.
+        system_menu::apply(hwnd, self.new_window);
         // Files dropped from Explorer go to the task's app.
         if let Some(handler) = &self.setup.drops {
             if let Err(why) = drop_target::register(hwnd as isize, task_id, Arc::clone(handler)) {

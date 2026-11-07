@@ -32,7 +32,7 @@ use dsa_host_core::compositor::shown_windows::ShownWindows;
 use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
 use dsa_host_core::compositor::window_hosts::{
     accept_window_host, answer_attached, report_from_wire, to_wire, FromHost, HostAction, HostId,
-    ToHost, WindowHosts,
+    MenuWork, ToHost, WindowHosts,
 };
 use dsa_host_core::memory::IdleTrim;
 use dsa_host_core::tasks::{AppInfo, TaskEvent, TaskRequest};
@@ -65,6 +65,29 @@ const TICK: Duration = Duration::from_millis(500);
 /// The name of the pipe the window hosts of session `session` dial.
 pub fn pipe_name(session: u32) -> String {
     format!("dsa-wm-{session}")
+}
+
+/// The arguments that open DSA's settings on the Apps page with `package`'s row in view.
+pub fn app_page_arguments(package: &str) -> [String; 4] {
+    [
+        "--page".into(),
+        "apps".into(),
+        "--app".into(),
+        package.into(),
+    ]
+}
+
+/// Opens DSA's settings (the settings app installed beside this window manager) on the Apps
+/// page at `package`, as the system menu's App info does. The settings app runs on its own;
+/// nothing waits for it.
+fn open_app_page(package: &str) -> Result<(), String> {
+    let program =
+        crate::start_menu::default_uninstaller().ok_or("the settings app's place is not known")?;
+    std::process::Command::new(&program)
+        .args(app_page_arguments(package))
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("could not start {}: {e}", program.display()))
 }
 
 /// What the other threads tell the manager.
@@ -823,6 +846,17 @@ impl Manager {
                 FOCUSED_WINDOWS.store(self.focused.len(), Ordering::Relaxed);
             }
             FromHost::Shown { task_id, shown } => self.shown.reported(task_id, shown),
+            FromHost::MenuChosen { task_id, action } => {
+                match self.hosts.menu_chosen(task_id, action) {
+                    Some(MenuWork::Request(request)) => self.request(vec![request]),
+                    Some(MenuWork::AppPage { package }) => {
+                        if let Err(why) = open_app_page(&package) {
+                            self.log(&format!("could not open the settings of {package}: {why}"));
+                        }
+                    }
+                    None => {}
+                }
+            }
         }
     }
 
@@ -921,6 +955,7 @@ impl Manager {
                             self.drop_remote(*task_id)
                         }
                         ToHost::Retitle { .. }
+                        | ToHost::AppMenu { .. }
                         | ToHost::Resize { .. }
                         | ToHost::TaskSize { .. }
                         | ToHost::ImeCursor { .. }
@@ -1001,5 +1036,18 @@ impl Manager {
             .collect();
         self.setup.router.set_routes(routes);
         *self.setup.listing.lock().unwrap_or_else(|e| e.into_inner()) = windows;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fr22_app_info_opens_the_apps_page_at_the_app() {
+        assert_eq!(
+            app_page_arguments("com.example.clock"),
+            ["--page", "apps", "--app", "com.example.clock"].map(String::from)
+        );
     }
 }

@@ -220,6 +220,12 @@ pub enum TaskRequest {
     /// Start another task of an app that supports several windows, even when it has one, in
     /// a window of its own: the system menu's New window.
     NewWindow { package_name: String },
+    /// Open one of Android's settings pages of the app (`page`) in a window of its own, as
+    /// the system menu's Aspect ratio and Open by default do.
+    OpenAppSettings {
+        package_name: String,
+        page: AppSettingsPage,
+    },
     /// The user resized the task's window: the task takes its client size, in guest
     /// display pixels. `live` is true while the user is still dragging the window's edge:
     /// the task takes the size without being reconfigured, so its activities lay out again
@@ -260,6 +266,14 @@ impl TaskRequest {
             TaskRequest::Launch { package_name } => format!("launch {package_name}"),
             TaskRequest::NewWindow { package_name } => {
                 format!("open a new window of {package_name}")
+            }
+            TaskRequest::OpenAppSettings { package_name, page } => {
+                let page = match page {
+                    AppSettingsPage::Details => "info",
+                    AppSettingsPage::AspectRatio => "aspect ratio",
+                    AppSettingsPage::OpenByDefault => "open by default",
+                };
+                format!("open Android's {page} page of {package_name}")
             }
             TaskRequest::Resize {
                 task_id,

@@ -256,6 +256,8 @@ impl<P: Platform> Manager<P> {
                     self.hidden.insert(task_id);
                 }
             }
+            // The macOS windows offer no Android items in their menu, so none is chosen.
+            FromHost::MenuChosen { .. } => {}
         }
     }
 

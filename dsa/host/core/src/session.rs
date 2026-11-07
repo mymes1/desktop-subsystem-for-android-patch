@@ -2770,6 +2770,9 @@ impl Session {
                 package_name,
                 new_window: true,
             }),
+            TaskRequest::OpenAppSettings { package_name, page } => {
+                return self.open_app_settings_page(Some(&package_name), page)
+            }
             TaskRequest::StopApp { package_name } => {
                 Body::StopApp(control::StopApp { package_name })
             }

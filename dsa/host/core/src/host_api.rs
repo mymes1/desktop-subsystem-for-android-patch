@@ -5539,6 +5539,9 @@ impl HostApiClient {
             TaskRequest::Close { task_id } => self.close_task(*task_id),
             TaskRequest::Launch { package_name } => self.launch_app(package_name),
             TaskRequest::NewWindow { package_name } => self.new_window(package_name),
+            TaskRequest::OpenAppSettings { package_name, page } => {
+                self.open_app_settings_page(Some(package_name), *page)
+            }
             TaskRequest::Resize {
                 task_id,
                 width,
