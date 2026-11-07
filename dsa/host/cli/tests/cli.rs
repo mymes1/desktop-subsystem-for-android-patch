@@ -1627,6 +1627,139 @@ fn fr11_dsa_install_refuses_a_file_that_is_no_apk_before_starting_android() {
         .is_none_or(|android| android.state() == SessionState::Stopped));
 }
 
+/// An APKPure bundle of the notes app: its base APK, which has complete x86_64 and arm64-v8a
+/// libraries, splits for two languages and two densities, and an expansion file.
+fn notes_xapk() -> Vec<u8> {
+    use dsa_host_core::apk_info::fixture::{archive, notes_apk, notes_split};
+    let base = notes_apk();
+    let en = notes_split("config.en", &[]);
+    let fr = notes_split("config.fr", &[]);
+    let mdpi = notes_split("config.mdpi", &[]);
+    let xxxhdpi = notes_split("config.xxxhdpi", &[]);
+    archive(
+        &[
+            ("manifest.json", &b"{}"[..]),
+            ("com.example.notes.apk", &base[..]),
+            ("config.en.apk", &en[..]),
+            ("config.fr.apk", &fr[..]),
+            ("config.mdpi.apk", &mdpi[..]),
+            ("config.xxxhdpi.apk", &xxxhdpi[..]),
+            (
+                "Android/obb/com.example.notes/main.42.com.example.notes.obb",
+                &b"expansion"[..],
+            ),
+        ],
+        b"",
+    )
+}
+
+#[test]
+fn fr11_dsa_install_installs_the_splits_of_an_xapk_this_android_takes_in_one_install() {
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let path = apk_file("Notes.xapk", &notes_xapk());
+
+    let output = dsa_with_path(&endpoint, "install", &path, "--json");
+    assert!(output.status.success(), "{}", stderr(&output));
+    let android = androids.of(&user).unwrap();
+    let installs = android.part_installs.lock().unwrap();
+    assert_eq!(installs.len(), 1);
+    assert_eq!(installs[0].name, "Notes.xapk");
+    let names: Vec<&str> = installs[0]
+        .parts
+        .iter()
+        .map(|part| part.name.as_str())
+        .collect();
+    // The base, one density, English (and the host's language, when it is French), and the
+    // expansion file last.
+    assert_eq!(names[0], "base.apk", "{names:?}");
+    assert!(names.contains(&"split_config.en.apk"), "{names:?}");
+    assert_eq!(
+        names.iter().filter(|name| name.contains("dpi")).count(),
+        1,
+        "{names:?}"
+    );
+    assert_eq!(
+        names.last(),
+        Some(&"main.42.com.example.notes.obb"),
+        "{names:?}"
+    );
+    assert!(installs[0].parts.last().unwrap().obb);
+    // The base APK's x86_64 libraries are whole, so the app is x86_64.
+    assert_eq!(installs[0].abi.as_deref(), Some("x86_64"));
+    assert!(android.installs.lock().unwrap().is_empty());
+}
+
+#[test]
+fn fr11_dsa_apk_info_reads_the_base_of_a_bundle_and_says_what_installing_sends() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = RunningService::start(listener, Arc::new(FakeAndroids::default()));
+    // Told by what is in it, whatever its name.
+    let path = apk_file("notes.zip", &notes_xapk());
+    let json = json_of(&dsa_with_path(&endpoint, "apk-info", &path, "--json"));
+    assert_eq!(json["package"], "com.example.notes");
+    assert_eq!(json["label"], "Notes");
+    assert_eq!(json["format"], "xapk");
+    assert_eq!(json["apks"][0], "base.apk");
+    assert!(json["split_count"].as_u64().unwrap() >= 2, "{json}");
+    assert_eq!(json["obbs"][0], "main.42.com.example.notes.obb");
+    assert!(json["total_size"].as_u64().unwrap() > json["size"].as_u64().unwrap());
+    let text = stdout(&dsa_with_path(&endpoint, "apk-info", &path, ""));
+    assert!(text.contains("split-APK bundle (.xapk)"), "{text}");
+    // One APK says it is one.
+    let apk = apk_file("notes.apk", &dsa_host_core::apk_info::fixture::notes_apk());
+    let json = json_of(&dsa_with_path(&endpoint, "apk-info", &apk, "--json"));
+    assert_eq!(json["format"], "apk");
+    assert_eq!(json["split_count"], 0);
+    assert_eq!(json["total_size"], json["size"]);
+}
+
+#[test]
+fn fr11_dsa_install_refuses_an_app_bundle_and_an_encrypted_bundle_with_their_reasons() {
+    use dsa_host_core::apk_info::fixture::archive;
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let aab = archive(
+        &[
+            ("BundleConfig.pb", &b"\x0a\x00"[..]),
+            ("base/manifest/AndroidManifest.xml", &b"\x03\x00"[..]),
+        ],
+        b"",
+    );
+    let aab = apk_file("notes.aab", &aab);
+    let output = dsa_with_path(&endpoint, "install", &aab, "");
+    assert_eq!(output.status.code(), Some(1));
+    let error = stderr(&output);
+    assert!(
+        error.starts_with("dsa: not installed (app-bundle): notes.aab: "),
+        "{error}"
+    );
+    assert!(error.contains("another key"), "{error}");
+    let sealed = archive(
+        &[
+            ("info.json", &b"{}"[..]),
+            ("base.apk", &b"\x13\x37 sealed"[..]),
+        ],
+        b"",
+    );
+    let sealed = apk_file("notes.apkm", &sealed);
+    for command in ["install", "apk-info"] {
+        let output = dsa_with_path(&endpoint, command, &sealed, "");
+        assert_eq!(output.status.code(), Some(1), "{command}");
+        let error = stderr(&output);
+        assert!(
+            error.starts_with("dsa: not installed (encrypted-bundle): notes.apkm: "),
+            "{command}: {error}"
+        );
+    }
+    // Android was not started for any of them.
+    assert!(androids
+        .of(&user)
+        .is_none_or(|android| android.state() == SessionState::Stopped));
+}
+
 #[test]
 fn fr11_two_dsa_installs_at_once_both_succeed_one_after_the_other() {
     let ((listener, _, user), endpoint) = local_pair();
