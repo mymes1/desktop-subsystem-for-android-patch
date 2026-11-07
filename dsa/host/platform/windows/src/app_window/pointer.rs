@@ -9,6 +9,11 @@
 //! The mouse arrives as the classic mouse messages. Touch and pen arrive as pointer
 //! messages, which this module handles itself, so Windows does not also turn them into
 //! mouse messages; the few mouse messages it still makes from them are dropped.
+//!
+//! The window is never registered for `WM_TOUCH` (`RegisterTouchWindow`). A window that is
+//! gets a finger as `WM_TOUCH` in place of pointer messages, and when it leaves `WM_TOUCH` to
+//! Windows, the finger becomes mouse messages marked as made from touch, which this module
+//! drops: a finger then does nothing in the app.
 
 use std::cell::{Cell, RefCell};
 use std::sync::mpsc::Sender;
@@ -20,7 +25,7 @@ use dsa_host_core::input::{
     PointerTool, WindowGeometry, WindowInput,
 };
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
-use windows_sys::Win32::Graphics::Gdi::ScreenToClient;
+use windows_sys::Win32::Graphics::Gdi::{ClientToScreen, ScreenToClient};
 use windows_sys::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     ReleaseCapture, SetCapture, TrackMouseEvent, TME_LEAVE, TRACKMOUSEEVENT,
@@ -30,7 +35,6 @@ use windows_sys::Win32::UI::Input::Pointer::{
     POINTER_FLAG_INCONTACT, POINTER_FLAG_INRANGE, POINTER_INFO, POINTER_PEN_INFO,
     POINTER_TOUCH_INFO,
 };
-use windows_sys::Win32::UI::Input::Touch::{RegisterTouchWindow, TWF_WANTPALM};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     GetClientRect, GetMessageExtraInfo, RemovePropW, SetPropW, PEN_FLAG_BARREL, PEN_FLAG_ERASER,
     PEN_FLAG_INVERTED, PEN_MASK_PRESSURE, POINTER_INPUT_TYPE, PT_PEN, PT_TOUCH,
@@ -69,14 +73,16 @@ pub fn tablet_service_property() -> Vec<u16> {
         .collect()
 }
 
-/// Makes Windows hand the window's touch and pen contacts over without delay: without
-/// `TWF_WANTPALM`, a contact waits while Windows decides whether it is a palm.
+/// Makes Windows hand the window's touch and pen contacts over without delay: it does not
+/// hold a contact back to see whether it becomes a press and hold or a flick.
+///
+/// It leaves the window unregistered for `WM_TOUCH`, so fingers keep arriving as pointer
+/// messages (see the module's notes).
 ///
 /// # Safety
 ///
 /// `hwnd` is a live window of this thread.
 pub unsafe fn deliver_contacts_at_once(hwnd: HWND) {
-    RegisterTouchWindow(hwnd, TWF_WANTPALM);
     SetPropW(
         hwnd,
         tablet_service_property().as_ptr(),
@@ -209,6 +215,58 @@ pub fn pen_tool_and_buttons(pen_flags: u32) -> (PointerTool, u32) {
 /// A pen's or a finger's pressure, which Windows reports from 0 to 1024, from 0 to 1.
 pub fn pressure(raw: u32) -> f32 {
     (raw.min(1024) as f32) / 1024.0
+}
+
+/// A finger's pointer message as the window's input. `client_origin` is where the window's
+/// client area begins on the screen, in the same pixels as the pointer's position. `None`
+/// when the message says nothing about a contact (a finger that is not touching).
+pub fn touch_input(
+    message: u32,
+    touch: &POINTER_TOUCH_INFO,
+    client_origin: (i32, i32),
+) -> Option<WindowInput> {
+    let info = &touch.pointerInfo;
+    let phase = contact_phase(PointerTool::Touch, message, info.pointerFlags)?;
+    let measured = (touch.touchMask & TOUCH_MASK_PRESSURE != 0).then(|| pressure(touch.pressure));
+    Some(WindowInput::Contact {
+        tool: PointerTool::Touch,
+        pointer_id: info.pointerId,
+        phase,
+        position: in_client(info, client_origin),
+        pressure: measured,
+        buttons: 0,
+    })
+}
+
+/// A pen's pointer message as the window's input, as [`touch_input`] reads a finger's. A pen
+/// also hovers, and a hovering pen has no pressure.
+pub fn pen_input(
+    message: u32,
+    pen: &POINTER_PEN_INFO,
+    client_origin: (i32, i32),
+) -> Option<WindowInput> {
+    let info = &pen.pointerInfo;
+    let (tool, barrel) = pen_tool_and_buttons(pen.penFlags);
+    let phase = contact_phase(tool, message, info.pointerFlags)?;
+    let measured = (pen.penMask & PEN_MASK_PRESSURE != 0).then(|| pressure(pen.pressure));
+    Some(WindowInput::Contact {
+        tool,
+        pointer_id: info.pointerId,
+        phase,
+        position: in_client(info, client_origin),
+        pressure: if phase == ContactPhase::Hover {
+            Some(0.0)
+        } else {
+            measured
+        },
+        buttons: barrel,
+    })
+}
+
+/// A pointer's position in the client area that begins at `client_origin` on the screen.
+fn in_client(info: &POINTER_INFO, (left, top): (i32, i32)) -> (f64, f64) {
+    let point = info.ptPixelLocation;
+    (f64::from(point.x - left), f64::from(point.y - top))
 }
 
 /// One task window's pointer input.
@@ -382,59 +440,47 @@ impl PointerWindow {
         if GetPointerType(pointer_id, &mut kind) == 0 {
             return None;
         }
-        let (tool, info, pressure_value, barrel) = match kind {
+        let origin = client_origin(hwnd);
+        let (input, stamp) = match kind {
             PT_TOUCH => {
                 let mut touch: POINTER_TOUCH_INFO = std::mem::zeroed();
                 if GetPointerTouchInfo(pointer_id, &mut touch) == 0 {
                     return None;
                 }
-                let measured =
-                    (touch.touchMask & TOUCH_MASK_PRESSURE != 0).then(|| pressure(touch.pressure));
-                (PointerTool::Touch, touch.pointerInfo, measured, 0)
+                (
+                    touch_input(message, &touch, origin),
+                    touch.pointerInfo.PerformanceCount,
+                )
             }
             PT_PEN => {
                 let mut pen: POINTER_PEN_INFO = std::mem::zeroed();
                 if GetPointerPenInfo(pointer_id, &mut pen) == 0 {
                     return None;
                 }
-                let (tool, barrel) = pen_tool_and_buttons(pen.penFlags);
-                let measured =
-                    (pen.penMask & PEN_MASK_PRESSURE != 0).then(|| pressure(pen.pressure));
-                (tool, pen.pointerInfo, measured, barrel)
+                (
+                    pen_input(message, &pen, origin),
+                    pen.pointerInfo.PerformanceCount,
+                )
             }
             _ => return None,
         };
-        let phase = match contact_phase(tool, message, info.pointerFlags) {
-            Some(phase) => phase,
-            // Handled, so Windows makes no mouse messages from it.
-            None => return Some(0),
+        // Handled either way, so Windows makes no mouse messages from it.
+        let Some(input) = input else {
+            return Some(0);
         };
-        if input_trace_on() && matches!(phase, ContactPhase::Down | ContactPhase::Up) {
-            input_trace(
-                "app.pointer",
-                self.task_id,
-                &format!(
-                    "phase={phase:?} age={:.1}",
-                    pointer_age_millis(info.PerformanceCount)
-                ),
-            );
+        if let WindowInput::Contact { phase, tool, .. } = input {
+            if input_trace_on() && matches!(phase, ContactPhase::Down | ContactPhase::Up) {
+                input_trace(
+                    "app.pointer",
+                    self.task_id,
+                    &format!(
+                        "phase={phase:?} tool={tool:?} pointer={pointer_id} age={:.1}",
+                        pointer_age_millis(stamp)
+                    ),
+                );
+            }
         }
-        let position = client_point(hwnd, &info);
-        self.deliver(
-            hwnd,
-            WindowInput::Contact {
-                tool,
-                pointer_id,
-                phase,
-                position,
-                pressure: if phase == ContactPhase::Hover {
-                    Some(0.0)
-                } else {
-                    pressure_value
-                },
-                buttons: barrel,
-            },
-        );
+        self.deliver(hwnd, input);
         Some(0)
     }
 
@@ -470,11 +516,11 @@ impl PointerWindow {
     }
 }
 
-/// A pointer's position in the window's client area.
-unsafe fn client_point(hwnd: HWND, info: &POINTER_INFO) -> (f64, f64) {
-    let mut point = info.ptPixelLocation;
-    ScreenToClient(hwnd, &mut point);
-    (f64::from(point.x), f64::from(point.y))
+/// Where the window's client area begins on the screen.
+unsafe fn client_origin(hwnd: HWND) -> (i32, i32) {
+    let mut point = POINT { x: 0, y: 0 };
+    ClientToScreen(hwnd, &mut point);
+    (point.x, point.y)
 }
 
 /// The size of the window's client area, in its pixels.

@@ -306,6 +306,14 @@ dropped.
 - Fingers are `SOURCE_TOUCHSCREEN` and a pen is `SOURCE_STYLUS` (its eraser end
   `TOOL_TYPE_ERASER`). Every finger down goes in each event of a touch: the second finger
   is `ACTION_POINTER_DOWN`, and lifting all but the last is `ACTION_POINTER_UP`.
+- The fingers on every task window are one touch of the display, as on a phone's screen,
+  and the framework splits it between the windows. Two touches from one device at once
+  would make the second `ACTION_DOWN` cancel the first.
+- Each finger takes the lowest pointer ID its touch does not use. The host's IDs can be
+  any number, and the input dispatcher refuses a pointer ID above 31. A touch carries at
+  most 16 fingers, as a `MotionEvent` does.
+- A finger scrolls and flings by moving: it is never `ACTION_SCROLL`, which only the
+  wheel sends.
 
 Injection rather than a uinput device: a uinput device needs `/dev/uinput` opened by a
 process the SELinux policy allows, which an app is not, and a mouse there reports movement,
