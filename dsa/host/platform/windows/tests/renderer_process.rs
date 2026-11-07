@@ -6,7 +6,8 @@
 //! its supervisor, a window that holds a shared texture) and the guest (a command stream over
 //! a Hyper-V loopback socket that posts a frame to a display), kills the renderer, and checks
 //! that the window manager goes on, the window keeps its texture and last frame, the renderer
-//! comes back, and the guest's next frame reaches the window again.
+//! comes back, the guest registers its process again and makes its gralloc buffer's
+//! ColorBuffer again under the same handle and size, and its next frame reaches the window.
 //!
 //! The frame tests need gfxstream: `GFXSTREAM_BACKEND_PATH` names `gfxstream_backend.dll`, and
 //! they are skipped without it. The restart test runs everywhere, with no backend loaded.
@@ -240,22 +241,35 @@ impl DisplaySink for Window {
     }
 }
 
-/// A guest process's command stream over Hyper-V loopback, speaking renderControl as the
-/// guest's hwcomposer does.
+/// One guest process over Hyper-V loopback, as the guest's graphics driver is after it has
+/// registered with a renderer: its process pipe (kept open, as the process lives) and a command
+/// stream that carries its unique ID, speaking renderControl.
+///
+/// The process draws into a gralloc buffer, whose ColorBuffer every guest process reaches by
+/// one handle derived from the buffer (the top bit set, apart from the handles the renderer
+/// hands out). After a renderer restart the guest registers the process again, with a new
+/// process pipe and ID, and makes the ColorBuffer again under the same handle and size before
+/// it uses it: this is what [`Guest::post_frame`] does each time.
 struct Guest {
+    _pipe: Box<dyn BridgeStream>,
     stream: Box<dyn BridgeStream>,
 }
 
 impl Guest {
     const RC_GET_RENDERER_VERSION: u32 = 10000;
-    const RC_CREATE_COLOR_BUFFER: u32 = 10012;
+    const RC_OPEN_COLOR_BUFFER_2: u32 = 10025;
+    const RC_SET_PUID: u32 = 10033;
     const RC_SET_DISPLAY_COLOR_BUFFER: u32 = 10040;
     const RC_SET_DISPLAY_POSE: u32 = 10044;
+    const RC_CREATE_COLOR_BUFFER_WITH_HANDLE: u32 = 10048;
     const RC_CREATE_DISPLAY_BY_ID: u32 = 10062;
     const GL_RGBA: u32 = 0x1908;
+    /// The gralloc buffer's ColorBuffer handle: buffer 7, with the shared handles' top bit.
+    const BUFFER: u32 = 0x8000_0007;
 
-    /// Connects to the renderer, trying again while it is not listening yet.
-    fn connect(port: u32) -> Guest {
+    /// Opens a stream to `port`, trying again every 250 ms while the renderer is not
+    /// listening, as the guest's driver does while the renderer restarts.
+    fn open(port: u32) -> Box<dyn BridgeStream> {
         let deadline = Instant::now() + WAIT;
         loop {
             match connect_stream(
@@ -263,23 +277,40 @@ impl Guest {
                 Guid::vsock_service(port),
                 Duration::from_secs(2),
             ) {
-                Ok(mut stream) => {
-                    // Every stream starts with the guest's client flags.
-                    stream.write_all(&0u32.to_le_bytes()).unwrap();
-                    return Guest { stream };
-                }
+                Ok(stream) => return stream,
                 Err(error) => {
                     assert!(
                         Instant::now() < deadline,
                         "the renderer takes no stream on port {port}: {error}"
                     );
-                    thread::sleep(Duration::from_millis(100));
+                    thread::sleep(Duration::from_millis(250));
                 }
             }
         }
     }
 
-    fn call(&mut self, opcode: u32, args: &[u32]) -> u32 {
+    /// Registers a guest process with the renderer on `ports` (the command stream's, the
+    /// process pipe's) and opens its command stream.
+    fn connect(ports: (u32, u32)) -> Guest {
+        let mut pipe = Guest::open(ports.1);
+        pipe.write_all(&100i32.to_le_bytes()).unwrap();
+        let mut puid = [0u8; 8];
+        pipe.read_exact(&mut puid)
+            .expect("the renderer gives the process its ID");
+        assert_ne!(u64::from_le_bytes(puid), 0);
+        let mut stream = Guest::open(ports.0);
+        // Every stream starts with the guest's client flags.
+        stream.write_all(&0u32.to_le_bytes()).unwrap();
+        let mut guest = Guest {
+            _pipe: pipe,
+            stream,
+        };
+        let id = u64::from_le_bytes(puid);
+        guest.send(Self::RC_SET_PUID, &[id as u32, (id >> 32) as u32]);
+        guest
+    }
+
+    fn send(&mut self, opcode: u32, args: &[u32]) {
         let mut packet = Vec::with_capacity(8 + 4 * args.len());
         packet.extend_from_slice(&opcode.to_le_bytes());
         packet.extend_from_slice(&((8 + 4 * args.len()) as u32).to_le_bytes());
@@ -289,6 +320,10 @@ impl Guest {
         self.stream
             .write_all(&packet)
             .expect("the renderer takes the call");
+    }
+
+    fn call(&mut self, opcode: u32, args: &[u32]) -> u32 {
+        self.send(opcode, args);
         let mut reply = [0u8; 4];
         self.stream
             .read_exact(&mut reply)
@@ -296,14 +331,25 @@ impl Guest {
         u32::from_le_bytes(reply)
     }
 
-    /// Posts one finished frame to `DISPLAY`, as the hwcomposer does for a task.
+    /// Posts one finished frame to `DISPLAY` from the gralloc buffer, as the hwcomposer does
+    /// for a task: the ColorBuffer is opened by its handle, made under that handle first when
+    /// the renderer does not have it (a new renderer does not).
     fn post_frame(&mut self) {
         assert!(self.call(Self::RC_GET_RENDERER_VERSION, &[]) > 0);
-        let buffer = self.call(Self::RC_CREATE_COLOR_BUFFER, &[64, 64, Self::GL_RGBA]);
-        assert_ne!(buffer, 0, "a color buffer is made");
+        if self.call(Self::RC_OPEN_COLOR_BUFFER_2, &[Self::BUFFER]) != 0 {
+            self.send(
+                Self::RC_CREATE_COLOR_BUFFER_WITH_HANDLE,
+                &[64, 64, Self::GL_RGBA, Self::BUFFER],
+            );
+            assert_eq!(
+                self.call(Self::RC_OPEN_COLOR_BUFFER_2, &[Self::BUFFER]),
+                0,
+                "the renderer makes the ColorBuffer again under the guest's handle"
+            );
+        }
         self.call(Self::RC_CREATE_DISPLAY_BY_ID, &[DISPLAY]);
         self.call(Self::RC_SET_DISPLAY_POSE, &[DISPLAY, 0, 0, 64, 64]);
-        self.call(Self::RC_SET_DISPLAY_COLOR_BUFFER, &[DISPLAY, buffer]);
+        self.call(Self::RC_SET_DISPLAY_COLOR_BUFFER, &[DISPLAY, Self::BUFFER]);
     }
 }
 
@@ -341,7 +387,7 @@ fn nfr5_killing_the_renderer_keeps_the_window_and_its_frame_and_frames_resume() 
 
     // The guest draws a frame: the renderer asks the window manager for the window's
     // texture, and, where the GPU can open it, copies the frame into it.
-    let mut guest = Guest::connect(ports(1).0);
+    let mut guest = Guest::connect(ports(1));
     guest.post_frame();
     assert!(
         wait_until("the frame's request", WAIT, || window
@@ -380,10 +426,11 @@ fn nfr5_killing_the_renderer_keeps_the_window_and_its_frame_and_frames_resume() 
     assert_eq!(window.shown.load(Ordering::SeqCst), shown);
     drop(guest);
 
-    // The guest's stream dropped with the old renderer; it connects again, as it does after
-    // a restart, and its next frame reaches the same window.
+    // The guest's streams dropped with the old renderer. It registers the process again
+    // (a new process pipe and ID), makes its gralloc buffer's ColorBuffer again under the same
+    // handle and size, and its next frame reaches the same window.
     let asked = window.asked.load(Ordering::SeqCst);
-    let mut guest = Guest::connect(ports(1).0);
+    let mut guest = Guest::connect(ports(1));
     guest.post_frame();
     assert!(
         wait_until("the next frame's request", WAIT, || {
