@@ -452,7 +452,7 @@
     <value>메모리 한도</value>
   </data>
   <data name="MemoryLimitCard.Description" xml:space="preserve">
-    <value>Android가 늘어날 수 있는 최대 메모리입니다. Android는 필요한 만큼만 메모리를 쓰고 유휴 상태가 되면 돌려줍니다. 자동이면 3 GB까지 늘어나고, 이 PC의 메모리를 넘지 않습니다. 다음에 Android를 시작할 때 적용됩니다.</value>
+    <value>Android가 늘어날 수 있는 최대 메모리입니다. Android는 필요한 만큼만 메모리를 쓰고, 더 필요하지 않으면 바로 돌려줍니다. 자동이면 고정된 한도가 없고, 이 PC의 메모리에서 Windows 몫을 뺀 만큼까지 늘어날 수 있습니다. 다음에 Android를 시작할 때 적용됩니다.</value>
   </data>
   <data name="MemoryLimit_Auto" xml:space="preserve">
     <value>자동</value>
