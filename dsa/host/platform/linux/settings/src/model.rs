@@ -606,6 +606,105 @@ impl ArmTranslation {
     }
 }
 
+/// Google's terms, which its apps follow, when the service does not name the page.
+pub const GAPPS_TERMS_URL: &str = "https://policies.google.com/terms";
+/// Google's page that registers a device it has not certified, when the service does not
+/// name it.
+pub const GAPPS_REGISTRATION_URL: &str = "https://www.google.com/android/uncertified/";
+
+/// The package of Google's apps DSA installed for the user, as LiteGapps names it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GappsPackage {
+    /// LiteGapps' variant, such as `core`.
+    pub variant: String,
+    /// LiteGapps' build, such as `20261001`.
+    pub version: String,
+    /// The Android version the package is for, such as `16.0`.
+    pub android_version: String,
+    pub sdk: u64,
+    pub arch: String,
+    /// The file it came in, and where it was downloaded from.
+    pub file: String,
+    pub source: String,
+}
+
+/// What the Google Play item shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GappsState {
+    /// No package is installed, and the running Android has none.
+    NotInstalled,
+    /// A package is installed, and the running Android uses it (or does not run).
+    Installed,
+    /// What is installed differs from what the running Android booted with: a new package
+    /// waits for a restart, or a removed one is still in use until then.
+    RestartPending,
+}
+
+/// Where Google Play stands for the user.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gapps {
+    pub package: Option<GappsPackage>,
+    /// Whether this boot of Android has the Google apps laid over its system; `None` while
+    /// Android is not running.
+    pub active: Option<bool>,
+    /// The Google Services Framework Android ID, which Google's registration page asks for,
+    /// once Android knows it.
+    pub device_id: Option<String>,
+    pub restart_needed: bool,
+    pub terms_url: String,
+    pub registration_url: String,
+}
+
+impl Gapps {
+    pub fn read(json: &Value) -> Gapps {
+        let package = json
+            .get("package")
+            .filter(|p| p.is_object())
+            .map(|p| GappsPackage {
+                variant: text(p, "variant"),
+                version: text(p, "version"),
+                android_version: text(p, "android_version"),
+                sdk: number(p, "sdk"),
+                arch: text(p, "arch"),
+                file: text(p, "file"),
+                source: text(p, "source"),
+            });
+        let android = json.get("android").filter(|a| a.is_object());
+        Gapps {
+            package,
+            active: android.map(|a| flag(a, "active", false)),
+            device_id: android.and_then(|a| optional_text(a, "device_id")),
+            restart_needed: flag(json, "restart_needed", false),
+            terms_url: optional_text(json, "terms_url")
+                .unwrap_or_else(|| GAPPS_TERMS_URL.to_string()),
+            registration_url: optional_text(json, "registration_url")
+                .unwrap_or_else(|| GAPPS_REGISTRATION_URL.to_string()),
+        }
+    }
+
+    pub fn state(&self) -> GappsState {
+        if self.restart_needed {
+            GappsState::RestartPending
+        } else if self.package.is_some() {
+            GappsState::Installed
+        } else {
+            GappsState::NotInstalled
+        }
+    }
+
+    /// Whether the install button may be pressed: only without a package, and not while a
+    /// request is under way.
+    pub fn can_install(&self, busy: bool) -> bool {
+        !busy && self.package.is_none()
+    }
+
+    /// Whether the remove button may be pressed: only with a package, and not while a
+    /// request is under way.
+    pub fn can_remove(&self, busy: bool) -> bool {
+        !busy && self.package.is_some()
+    }
+}
+
 /// The device identity: what the user chose (empty where they chose nothing) and what
 /// Android reports, keyed by the names `dsa settings set device.<name>` takes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -918,6 +1017,22 @@ impl Client {
         Ok(ArmTranslation::read(
             &self.json(&["arm-translation", "remove"])?,
         ))
+    }
+
+    /// Where Google Play stands.
+    pub fn gapps(&self) -> Result<Gapps, Failure> {
+        Ok(Gapps::read(&self.json(&["gapps", "status"])?))
+    }
+
+    /// Downloads, checks and installs the Google apps package, starting Android first when
+    /// it is not running. It takes minutes; Android uses the package from its next start.
+    pub fn install_gapps(&self) -> Result<Gapps, Failure> {
+        Ok(Gapps::read(&self.json(&["gapps", "install"])?))
+    }
+
+    /// Removes the Google apps package, starting Android first when it is not running.
+    pub fn remove_gapps(&self) -> Result<Gapps, Failure> {
+        Ok(Gapps::read(&self.json(&["gapps", "remove"])?))
     }
 
     /// Every app installed in Android; Android is started first when it is not running.

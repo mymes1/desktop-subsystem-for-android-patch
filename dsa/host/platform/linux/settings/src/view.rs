@@ -6,8 +6,8 @@ use std::collections::VecDeque;
 use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
-    AndroidVersion, App, AppWindow, ArmTranslation, GuestMemory, HostRole, Memory, Network,
-    NetworkMode, State, Status, ALL_FOLDERS,
+    AndroidVersion, App, AppWindow, ArmTranslation, Gapps, GappsState, GuestMemory, HostRole,
+    Memory, Network, NetworkMode, State, Status, ALL_FOLDERS,
 };
 
 /// A problem in the user's language, with what the client said after it.
@@ -422,6 +422,52 @@ pub fn arm_abis(arm: &ArmTranslation) -> String {
     match &arm.abilist {
         Some(abis) => trf("Android installs apps for: {0}", &[abis]),
         None => tr("Android is not running, so what it supports now is not known."),
+    }
+}
+
+/// What the Google Play item says of the package and whether Android uses it.
+pub fn gapps_status(gapps: &Gapps) -> String {
+    let package = match &gapps.package {
+        Some(p) => trf(
+            "LiteGapps {0} {1} for Android {2} ({3})",
+            &[&p.variant, &p.version, &p.android_version, &p.arch],
+        ),
+        None => String::new(),
+    };
+    match gapps.state() {
+        GappsState::RestartPending if gapps.package.is_some() => trf(
+            "Installed: {0}. Restart Android to start using it.",
+            &[&package],
+        ),
+        GappsState::RestartPending => {
+            tr("Removed. The Google apps stay in Android until it restarts.")
+        }
+        GappsState::Installed if gapps.package.is_some() => trf("Installed: {0}.", &[&package]),
+        _ => tr("Not installed."),
+    }
+}
+
+/// Where the installed package came from; empty without one.
+pub fn gapps_source(gapps: &Gapps) -> String {
+    match &gapps.package {
+        Some(p) => {
+            let file = if p.file.is_empty() { &p.source } else { &p.file };
+            trf("Downloaded from the LiteGapps project: {0}", &[file])
+        }
+        None => String::new(),
+    }
+}
+
+/// What the Google Play item says while the package is being installed.
+pub fn gapps_busy_text() -> String {
+    tr("Downloading and installing Google Play. This can take several minutes.")
+}
+
+/// What the Google Play item says of the Android ID Google's registration page asks for.
+pub fn gapps_device_id(gapps: &Gapps) -> String {
+    match &gapps.device_id {
+        Some(_) => tr("Enter this number on Google's registration page."),
+        None => tr("It shows here once Google Play is installed and Android has started."),
     }
 }
 
