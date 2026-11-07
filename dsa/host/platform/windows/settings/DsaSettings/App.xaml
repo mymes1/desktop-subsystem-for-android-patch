@@ -124,6 +124,63 @@
                 <Setter Property="MinWidth" Value="120" />
             </Style>
 
+            <!-- WinUI's text box shows focus by its 2 px accent line alone, and centres its text.
+                 The library adds its 1 px dark focus rectangle around every text box. -->
+            <Style TargetType="ui:TextBox" BasedOn="{StaticResource DefaultUiTextBoxStyle}">
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+            <Style TargetType="TextBox" BasedOn="{StaticResource DefaultTextBoxStyle}">
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+
+            <!-- A value to read and copy, as WinUI's TextBlock with IsTextSelectionEnabled: plain
+                 text with no frame, no tab stop and no focus mark. WPF's TextBlock cannot be
+                 selected, so this is a read-only TextBox with only its text host. A Decorator
+                 host lets the wheel scroll the page, and the -2 px margin cancels the text host's
+                 own inset, so the text lines up with the text above it. -->
+            <Style x:Key="SelectableText" TargetType="TextBox">
+                <Setter Property="OverridesDefaultStyle" Value="True" />
+                <Setter Property="IsReadOnly" Value="True" />
+                <Setter Property="IsReadOnlyCaretVisible" Value="False" />
+                <Setter Property="IsTabStop" Value="False" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="ContextMenu" Value="{DynamicResource DefaultControlContextMenu}" />
+                <Setter Property="Cursor" Value="IBeam" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TextBox">
+                            <Decorator x:Name="PART_ContentHost" Margin="-2,0,-2,0" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <!-- Cascadia Mono and Consolas have no Hangul, so Korean falls to Malgun Gothic. -->
+            <Style x:Key="SelectableCode" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
+                <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Malgun Gothic" />
+                <Setter Property="FontSize" Value="12" />
+            </Style>
+            <!-- A command to copy: a subtle filled block in the card's text column, on its own row
+                 8 px under the description, as WinUI Gallery frames code it offers to copy. -->
+            <Style x:Key="CodeBlock" TargetType="Border">
+                <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="Padding" Value="12,4,4,4" />
+                <Setter Property="Margin" Value="0,8,0,0" />
+            </Style>
+
             <!-- The Settings app's navigation items are 40 px high. -->
             <Style TargetType="ui:NavigationViewItem" BasedOn="{StaticResource NavigationViewItemDefaultStyle}">
                 <Setter Property="MinHeight" Value="40" />

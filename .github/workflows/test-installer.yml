@@ -275,7 +275,7 @@ jobs:
           # The app opens on the page --page names, so each picture is of one fresh start.
           foreach ($theme in 'light', 'dark') {
             Set-AppTheme -Dark:($theme -eq 'dark')
-            foreach ($page in 'general', 'memory', 'display', 'updates', 'advanced', 'device', 'about') {
+            foreach ($page in 'general', 'memory', 'display', 'updates', 'advanced', 'device', 'about', 'logs') {
               $app = Start-Process $exe -ArgumentList '--page', $page -PassThru
               $window = Wait-ProcessWindow $app.Id 90
               if (-not $window) {
@@ -357,6 +357,67 @@ jobs:
           } finally {
             Set-AppTheme
             Remove-Item Env:DSA_CLI
+          }
+
+      # The adb card sits below the fold of the Advanced page, so the page is scrolled to it.
+      # Each theme and language gets a picture at rest and one with the port box focused, and
+      # the box's height is measured. The Network page's read-only values get a picture too.
+      - name: fr17_text_boxes_and_selectable_values_match_winui
+        run: |
+          . .github/scripts/installer/setup-ui.ps1
+          New-Item -ItemType Directory -Force screens | Out-Null
+          $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
+          try {
+            foreach ($lang in 'en-US', 'ko-KR') {
+              foreach ($theme in 'light', 'dark') {
+                Set-AppTheme -Dark:($theme -eq 'dark')
+                $app = Start-Process $exe -ArgumentList '--page', 'advanced', '--lang', $lang -PassThru
+                $window = Wait-ProcessWindow $app.Id 90
+                if (-not $window) { throw "DSA Settings showed no window for the Advanced page within 90 seconds" }
+                Start-Sleep -Seconds 5
+                $box = $window.FindFirst($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($Auto::AutomationIdProperty, 'AdbPortBox')))
+                if (-not $box) { throw "the Advanced page has no adb port box" }
+                $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+                $viewer = $walker.GetParent($box)
+                while ($viewer -and -not $viewer.GetCurrentPropertyValue($Auto::IsScrollPatternAvailableProperty)) {
+                  $viewer = $walker.GetParent($viewer)
+                }
+                if (-not $viewer) { throw "the adb port box is not inside anything that scrolls" }
+                $scroll = $viewer.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern)
+                $w = $window.Current.BoundingRectangle
+                foreach ($percent in 30..100) {
+                  $scroll.SetScrollPercent(-1, $percent)
+                  Start-Sleep -Milliseconds 50
+                  $r = $box.Current.BoundingRectangle
+                  if ($r.Top -gt 0 -and $r.Top -lt ($w.Top + $w.Height / 2)) { break }
+                }
+                Start-Sleep -Seconds 1
+                Save-WindowScreen $window "$PWD\screens\settings-$theme-adb-$lang.png"
+                $r = $box.Current.BoundingRectangle
+                Write-Host "the adb port box measures $($r.Width) by $($r.Height)"
+                if ([Math]::Abs($r.Height - 32) -gt 0.5) { throw "the adb port box is $($r.Height) px high, not 32" }
+                $box.SetFocus()
+                Start-Sleep -Seconds 1
+                Save-WindowScreen $window "$PWD\screens\settings-$theme-adb-focused-$lang.png"
+                if ($app.HasExited) { throw "DSA Settings exited while showing the adb card (code $($app.ExitCode))" }
+                Stop-Process -Id $app.Id -Force
+                $app.WaitForExit(10000) | Out-Null
+              }
+            }
+            foreach ($theme in 'light', 'dark') {
+              Set-AppTheme -Dark:($theme -eq 'dark')
+              $app = Start-Process $exe -ArgumentList '--lang', 'en-US' -PassThru
+              $window = Wait-ProcessWindow $app.Id 90
+              if (-not $window) { throw "DSA Settings showed no window within 90 seconds" }
+              Start-Sleep -Seconds 5
+              if (-not (Select-Named $window 'Network')) { throw "the settings app has no Network page to select" }
+              Start-Sleep -Seconds 3
+              Save-WindowScreen $window "$PWD\screens\settings-$theme-network.png"
+              Stop-Process -Id $app.Id -Force
+              $app.WaitForExit(10000) | Out-Null
+            }
+          } finally {
+            Set-AppTheme
           }
 
       # The "Running in the background" page with apps on it: this runner's Android does not
