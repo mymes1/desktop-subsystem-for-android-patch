@@ -167,7 +167,10 @@
           "path": "bionic",
           "name": "platform/bionic",
           "url": "https://android.googlesource.com/platform/bionic",
-          "commit": "06356e41c5ed7b12220b24c05ba4fdb873b126a7"
+          "commit": "06356e41c5ed7b12220b24c05ba4fdb873b126a7",
+          "exclude": [
+            "apex/Android.bp"
+          ]
         },
         {
           "path": "external/arm-optimized-routines",
@@ -670,7 +673,10 @@
           "path": "bionic",
           "name": "platform/bionic",
           "url": "https://android.googlesource.com/platform/bionic",
-          "commit": "f22516cbc67e81c13cf943ce02f01b8929a98726"
+          "commit": "f22516cbc67e81c13cf943ce02f01b8929a98726",
+          "exclude": [
+            "apex/Android.bp"
+          ]
         },
         {
           "path": "external/arm-optimized-routines",

@@ -16,6 +16,10 @@ A project may be fetched in part:
                                       their build files out so the build never sees their
                                       modules
 
+    "exclude": ["apex/Android.bp"]    files deleted after the checkout, for build files whose
+                                      modules this build never uses and cannot analyse
+                                      without projects it leaves out
+
 "{clang}" and "{rust}" stand for the Clang and the Rust toolchain the build uses, which the
 fetch reads from the build system itself (see clang_versions and rust_versions).
 """
@@ -94,6 +98,10 @@ def check_project(android, project):
             if not isinstance(entries, list) or not entries or not all(
                     isinstance(e, str) and e and ".." not in e.split("/") for e in entries):
                 raise LockError(f"{where}: {key} must be a list of paths inside the project")
+    exclude = project.get("exclude", [])
+    if not isinstance(exclude, list) or not all(
+            isinstance(e, str) and e and not e.startswith("/") and ".." not in e.split("/") for e in exclude):
+        raise LockError(f"{where}: exclude must be a list of files inside the project")
     for key in ("linkfiles", "copyfiles"):
         for entry in project.get(key, []):
             for side in ("src", "dest"):

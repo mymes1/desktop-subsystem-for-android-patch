@@ -34,6 +34,10 @@ The results go to dsa/target/image/<version>/:
   package released beside the image, which image.json describes under "arm_translation". The
   system partition carries the same package's system image, which Android uses from its first
   start while the user has installed no package of their own.
+
+With --framework, the system partition carries the patched SurfaceFlinger, libhwui and libEGL
+that recover from a GPU device loss, in place of the build's own (FRAMEWORK_FILES), and
+image.json describes them under "framework".
 """
 
 import argparse
@@ -2151,6 +2155,117 @@ def add_arm_translation_import(text):
     return "\n".join(lines + [ARM_TRANSLATION_IMPORT]) + "\n"
 
 
+# The patched framework: SurfaceFlinger, libhwui and libEGL with DSA's recovery from a GPU
+# device loss, which the "Framework build" workflow builds from the exact source of the
+# published build (dsa/guest/framework). They take the place of the build's own files, beside
+# that build's libraries, so an image takes them only from a build of the same build number and
+# for the same architecture. image.json describes them under "framework", and check-image.py
+# finds the same files in the image. SurfaceFlinger then tells the apps about a reset through a
+# debug property, which GPU_RESET_POLICY lets it set.
+sys.path.insert(0, str(REPO / "dsa/guest/framework"))
+import framework_lock  # noqa: E402
+
+FRAMEWORK_MANIFEST = "framework.json"
+FRAMEWORK_FILES = list(framework_lock.OUTPUTS)
+GPU_RESET_PROPERTY = "debug.dsa.gpu.resets"
+GPU_RESET_RULE = "(allow surfaceflinger debug_prop (property_service (set)))"
+
+
+def framework_problems(description, build_id, android_major, arch, read):
+    """What makes a framework build's files wrong for an image: its framework.json (parsed),
+    the image's build number, Android version and architecture, and a function that returns a
+    file's bytes by its target_files name, or None."""
+    problems = []
+    if description.get("android_major") != android_major:
+        problems.append(f"the framework is built for Android {description.get('android_major')}, "
+                        f"not {android_major}")
+    if description.get("build_id") != build_id:
+        problems.append(f"the framework is built from build {description.get('build_id')}, but the "
+                        f"image is made from build {build_id}, whose libraries it would run beside")
+    if description.get("arch") != arch:
+        problems.append(f"the framework is built for {description.get('arch')}, not {arch}")
+    files = description.get("files") or {}
+    if sorted(files) != sorted(FRAMEWORK_FILES):
+        problems.append(f"the framework has {sorted(files)}, not {sorted(FRAMEWORK_FILES)}")
+    machine = ARCHES.get(arch, {}).get("elf_machine")
+    for name in FRAMEWORK_FILES:
+        entry = files.get(name) or {}
+        data = read(name)
+        if data is None:
+            problems.append(f"the framework's {name} is missing")
+            continue
+        if len(data) != entry.get("size") or hashlib.sha256(data).hexdigest() != entry.get("sha256"):
+            problems.append(f"the framework's {name} is not the file framework.json describes")
+        if elf_machine(data[:64]) != machine:
+            problems.append(f"the framework's {name} is built for ELF machine {elf_machine(data[:64])}, "
+                            f"not {arch} ({machine})")
+    return problems
+
+
+def checked_framework(folder, build_id, android_major, arch):
+    """The framework build's files in `folder`, by their target_files names, and its
+    description, once they are the files of the image's own build and architecture."""
+    folder = Path(folder)
+    description = json.loads((folder / FRAMEWORK_MANIFEST).read_text())
+
+    def read(name):
+        path = folder / name
+        return path.read_bytes() if path.is_file() else None
+
+    problems = framework_problems(description, build_id, android_major, arch, read)
+    if problems:
+        raise SystemExit("; ".join(problems))
+    return {name: read(name) for name in FRAMEWORK_FILES}, description
+
+
+def framework_entry(description):
+    """What image.json says of the framework an image carries."""
+    return {
+        "version": description.get("version", ""),
+        "build_id": description["build_id"],
+        "release": description.get("release", ""),
+        "arch": description["arch"],
+        "files": {name: description["files"][name]["sha256"] for name in FRAMEWORK_FILES},
+    }
+
+
+def check_framework(manifest, names, read):
+    """The problems with the patched framework in an image, given image.json, the names in its
+    target files and a function that reads one: each file image.json names is in the image with
+    that SHA-256, built from the image's own build for its architecture, and SurfaceFlinger may
+    tell the apps about a reset."""
+    entry = manifest.get("framework")
+    if entry is None:
+        return []
+    problems = []
+    source = manifest.get("source", {})
+    arch = manifest.get("arch") or DEFAULT_ARCH
+    if entry.get("build_id") != source.get("build_id"):
+        problems.append(f"the framework is built from build {entry.get('build_id')}, but the image is "
+                        f"made from build {source.get('build_id')}")
+    if entry.get("arch") != arch:
+        problems.append(f"the framework is built for {entry.get('arch')}, not {arch}")
+    files = entry.get("files") or {}
+    if sorted(files) != sorted(FRAMEWORK_FILES):
+        problems.append(f"image.json's framework names {sorted(files)}, not {sorted(FRAMEWORK_FILES)}")
+    machine = ARCHES.get(arch, {}).get("elf_machine")
+    for name in FRAMEWORK_FILES:
+        if name not in names:
+            problems.append(f"{name} is missing from the image")
+            continue
+        data = read(name)
+        if hashlib.sha256(data).hexdigest() != files.get(name):
+            problems.append(f"{name} is not the framework build's file that image.json names, so the "
+                            "image does not recover from a GPU device loss")
+        if elf_machine(data[:64]) != machine:
+            problems.append(f"{name} is built for ELF machine {elf_machine(data[:64])}, not {arch}")
+    policy = "SYSTEM/etc/selinux/plat_sepolicy.cil"
+    if policy in names and GPU_RESET_RULE not in read(policy).decode(errors="replace"):
+        problems.append(f"SurfaceFlinger may not set {GPU_RESET_PROPERTY}, so the apps never hear of a "
+                        "GPU reset")
+    return problems
+
+
 # Google Play, for a user who installs it (`dsa gapps install`). The host puts
 # androidboot.dsa.gapps=on in the boot's bootconfig only while the user has a Google apps image
 # installed. The init script then lays the image over /product and /system_ext before the
@@ -2499,6 +2614,7 @@ ADB_POLICY = HERE / "sepolicy/adb.cil"
 KERNEL_POLICY = HERE / "sepolicy/kernel.cil"
 ARM_TRANSLATION_POLICY = HERE / "sepolicy/arm-translation.cil"
 GAPPS_POLICY = HERE / "sepolicy/gapps.cil"
+GPU_RESET_POLICY = HERE / "sepolicy/gpu-reset.cil"
 
 
 def narrow_vsock_neverallows(text):
@@ -2649,7 +2765,7 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, settings_overlay=None, power_hal=None,
            codec2=None, audio=None, gnss_hal=None,
-           sensors=None, camera=None, arm_translation=None):
+           sensors=None, camera=None, arm_translation=None, framework=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -2662,7 +2778,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     when `gnss_hal` names it, and DSA's sensors HAL in place of Cuttlefish's when `sensors`
     names it, and DSA's camera HAL, which lends the host's cameras, in place of Cuttlefish's
     emulated cameras when `camera` names it, and the default ARM translation package's system
-    image when `arm_translation` names the package's folder."""
+    image when `arm_translation` names the package's folder, and the patched framework's files
+    in place of the build's own when `framework` maps their target_files names to their bytes."""
     fstab = (HERE / "fstab.dsa").read_bytes()
     default_translator = (Path(arm_translation) / ARM_TRANSLATION_IMAGE).read_bytes() if arm_translation else None
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
@@ -2719,8 +2836,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         graphics_payload, vulkan_payload, channeld_payload, agent_payload, hwcomposer_payload,
         overlay_payload, settings_overlay_payload, *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
         audio_payload, *(gnss_payloads or {}).values(), *(sensors_payloads or {}).values(),
-        *(camera_payloads or {}).values(),
+        *(camera_payloads or {}).values(), *(framework or {}).values(),
     ])
+    replaced_framework = set()
     replaced_graphics_payload = False
     replaced_vulkan_payload = False
     kept_modules = re.compile(r"^(VENDOR_BOOT/RAMDISK|VENDOR_DLKM|SYSTEM_DLKM)/lib/modules/.*\.ko$")
@@ -2756,6 +2874,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             plat_patched += "\n" + ARM_TRANSLATION_POLICY.read_text()
             # init laying a user's Google apps over /product and /system_ext.
             plat_patched += "\n" + GAPPS_POLICY.read_text()
+            if framework is not None:
+                # SurfaceFlinger telling the apps about a GPU reset.
+                plat_patched += "\n" + GPU_RESET_POLICY.read_text()
             if channeld_payload is not None:
                 # Its rules name the domain they declare, so they go in whole.
                 plat_patched += "\n" + CHANNELD_POLICY.read_text()
@@ -2861,6 +2982,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             elif name == VULKAN_RANCHU_LIBRARY and vulkan_payload is not None:
                 data = vulkan_payload
                 replaced_vulkan_payload = True
+            elif framework is not None and name in framework:
+                data = framework[name]
+                replaced_framework.add(name)
             else:
                 data = zin.read(name)
                 if name in PROP_FILES:
@@ -3019,6 +3143,11 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     if graphics_payload is not None and not replaced_graphics_payload:
         dest.unlink(missing_ok=True)
         raise ValueError(f"target_files does not contain {GFXSTREAM_LIBRARY}")
+    if framework is not None and replaced_framework != set(framework):
+        dest.unlink(missing_ok=True)
+        raise ValueError("target_files does not contain "
+                         + ", ".join(sorted(set(framework) - replaced_framework))
+                         + ", which the patched framework replaces")
 
 
 def key_arguments(target_files, keys):
@@ -3971,12 +4100,20 @@ def main():
     parser.add_argument("--arm-translation", type=Path,
                         help="an ARM translation package folder (arm-translation.json and system.img) that "
                              "an x86_64 image carries as its default translator, and releases beside it")
+    parser.add_argument("--framework", type=Path,
+                        help="a folder from the Framework build (framework.json and the files it names): "
+                             "SurfaceFlinger, libhwui and libEGL that recover from a GPU device loss, built "
+                             "from the image's own build for its architecture")
     args = parser.parse_args()
     if args.arm_translation:
         checked_arm_translation(args.arm_translation, args.arch)
 
     spec = image_spec(json.loads((HERE / "inputs.json").read_text())["images"], args.major, args.arch)
     use_arch(args.arch)
+    framework_payloads = framework_description = None
+    if args.framework:
+        framework_payloads, framework_description = checked_framework(
+            args.framework, spec["build_id"], spec["android_major"], args.arch)
     inputs = args.inputs / f"{spec['build_id']}-{args.arch}"
     target_files = inputs / spec["files"]["target_files"]["name"]
     keys = args.keys.resolve()
@@ -4026,7 +4163,8 @@ def main():
            otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
            framework_overlay=framework_overlay, settings_overlay=settings_overlay, power_hal=args.power_hal,
            codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
-           sensors=args.sensors, camera=args.camera, arm_translation=args.arm_translation)
+           sensors=args.sensors, camera=args.camera, arm_translation=args.arm_translation,
+           framework=framework_payloads)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path
@@ -4101,6 +4239,8 @@ def main():
     (out / ARM_TRANSLATION_ZIP).unlink(missing_ok=True)
     if args.arm_translation:
         manifest["arm_translation"] = default_arm_translation(args.arm_translation, args.arch, out)
+    if framework_description is not None:
+        manifest["framework"] = framework_entry(framework_description)
     (out / "image.json").write_text(json.dumps(manifest, indent=2) + "\n")
     shutil.copy(signed, out / "signed-target_files.zip")
     shutil.rmtree(work)

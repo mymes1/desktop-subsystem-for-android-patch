@@ -154,6 +154,14 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   handlers. `sepolicy/arm-translation.cil` lets init do so; dsa-channeld writes and removes the
   user's image. Only an x86_64 image made with `--arm-translation` has the default package and
   its "default" file, so a boot told to use one on any other image stays x86_64 only.
+- With `--framework` (a folder from the "Framework build" workflow), SurfaceFlinger, libhwui
+  and libEGL are builds of the image's own source with DSA's recovery from a GPU device loss
+  (`../framework/patches`). When the host's GPU resets, SurfaceFlinger and every app's renderer
+  drop their GPU context, build a new one once the GPU answers, and draw every window again,
+  instead of aborting and restarting the framework. The files must come from the image's own
+  build number and architecture; `image.json` lists their SHA-256 under `framework`, and
+  `check-image.py` finds them in the image. `sepolicy/gpu-reset.cil` lets SurfaceFlinger tell
+  the apps of a reset through `debug.dsa.gpu.resets`.
 - Google Play stays out of the image. A user who wants it runs `dsa gapps install` (or the
   settings app's Google Play item): the host downloads LiteGapps' Core build for this Android
   and sends an erofs image of its apps, permission lists, system configuration and framework
