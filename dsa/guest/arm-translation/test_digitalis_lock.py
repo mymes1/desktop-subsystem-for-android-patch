@@ -147,6 +147,15 @@ class LockTests(unittest.TestCase):
         for name in names:
             self.assertIn(f'srcs: ["x86_64/{name}.so"]', text)
 
+    def test_fr25_the_build_sets_no_environment_soong_ui_refuses(self):
+        # soong_ui stops at once on these (TEMPORARY_DISABLE_PATH_RESTRICTIONS did in the third
+        # run), before Soong reads a single Android.bp.
+        build = (REPO / ".github/scripts/translator/build.sh").read_text()
+        for name in ("TEMPORARY_DISABLE_PATH_RESTRICTIONS", "EXPERIMENTAL_USE_OPENJDK11_TOOLCHAIN",
+                     "EXPERIMENTAL_USE_OPENJDK17_TOOLCHAIN", "EXPERIMENTAL_USE_OPENJDK21_TOOLCHAIN"):
+            self.assertNotRegex(build, rf"export\s+{name}=")
+        self.assertRegex(build, r"export BUILD_USERNAME=")
+
     def test_fr25_the_build_product_is_x86_64_only_with_an_arm64_bridge(self):
         board = (DEVICE / "BoardConfig.mk").read_text()
         self.assertIn("TARGET_ARCH := x86_64", board)

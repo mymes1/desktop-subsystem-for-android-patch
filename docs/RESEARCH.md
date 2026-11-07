@@ -1200,6 +1200,12 @@ soong_ui는 만들어졌고, 제품 설정(kati)에서 멈추었다. `build/make
 
 Soong 분석 단계는 흉내 낼 수 없는 부분이 남는다. 이 트리의 Java, APEX, 파일 시스템 모듈(`android_app` 15개, `runtime_apex`, `soong_filesystem_creator` 등)은 빌드하지 않지만 분석은 된다. 그 단계에서 의존 누락이 아닌 오류(싱글톤의 검사 등)가 나면 다음 로그에 나온다. 앞의 두 실행에서 로그 artifact가 비었던 것은 `.dsa-targets`와 `.dsa-sources.json`이 점으로 시작해 `upload-artifact`가 건너뛰었기 때문이다. `include-hidden-files`를 켜고 `soong_ui.log`와 `soong.variables`를 더했다.
 
+### 세 번째 실행(run 42392409794, android17)과 고친 것
+
+제품 설정과 release config는 통과했다(`lunch`가 `TARGET_PRODUCT=dsa_translator`, `BUILD_ID=CP2A.260605.016`, `SOONG_ONLY=true`를 보였다). 그다음 soong_ui가 PATH를 꾸미는 단계(`ui/build/path.go`)에서 멈추었다. `build.sh`가 정한 `TEMPORARY_DISABLE_PATH_RESTRICTIONS`는 이제 쓰지 않는 값이라, 정해져 있으면 soong_ui가 곧바로 끝낸다. 그래서 Soong 부트스트랩과 분석은 시작하지 않았다. 이 오류는 `error.log`가 아니라 콘솔과 `soong.log`에만 남으므로, 실패하면 `soong.log`의 끝도 보인다.
+
+그 값을 빼면 PATH 제한이 켜진다. 빌드가 쓰는 `python3`와 기본 명령은 `prebuilts/build-tools/path/linux-x86`에 있고(잠금이 `path` 폴더를 받는다), ccache는 `CC_WRAPPER`에 절대 경로로 주므로 제한에 걸리지 않는다. soong_ui가 환경 변수 때문에 멈추는 다른 경우(JDK 실험 값, `BUILD_USERNAME` 없음)도 `build.sh`에 없다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
