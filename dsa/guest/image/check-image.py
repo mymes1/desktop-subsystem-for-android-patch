@@ -6,8 +6,11 @@ It fails when the shell apps are still there, when the build is still debuggable
 could start without developer mode, listen on TCP or ask for an authorisation, when an
 app is not signed with one of the keys in the key folder, when the framework overlay or the
 trace script is missing, when the agent is missing or not signed with the platform key, when
-Settings still has the preferences or code that crash it without Bluetooth, when a system
-app users open is not compiled for the guest's boot image and its own dex, when the files
+Settings still has the preferences or code that crash it without Bluetooth, when a list in
+Settings or Files that sets its own padding keeps no room below its last row, when a system
+app users open is not compiled for the guest's boot image and its own dex, when an app the
+published build shipped compiled lost its odex, vdex or app image, or has one made for
+other dex, another boot image or another compiler filter, when the files
 do not match image.json, when an arm64 image carries an ARM translation package or an x86_64
 image's default one does not match image.json or would be refused by the host, when the patched
 framework image.json names (SurfaceFlinger, libhwui and libEGL from the Framework build) is not
@@ -192,10 +195,27 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
                 if left:
                     problems.append(f"{name}:{dex} still has the code in {', '.join(sorted(set(left)))} "
                                     "that crashes Settings without the Bluetooth adapter")
+    # The lists that set their own bottom padding, in Settings and Files, keep room below
+    # their last row. (PermissionController's, inside the permission APEX, make-image.py
+    # checks after signing: reading an APEX payload takes otatools' deapexer.)
+    for suffix, edits in [
+        (make_image.SETTINGS_APK, {"code": make_image.SETTINGS_CODE_LIST_MARGIN,
+                                   "dimensions": make_image.SETTINGS_LIST_DIMENSIONS}),
+        (make_image.DOCUMENTSUI_APK, {"code": make_image.DOCUMENTSUI_CODE}),
+    ]:
+        for name in names:
+            if name.endswith(suffix):
+                left = make_image.apk_edits_left(z.read(name), **edits)
+                if left:
+                    problems.append(f"{name} still has {'; '.join(left)}, so the last row of its list "
+                                    "sits on the window's bottom edge")
     # The system apps users open, compiled when the image was made: each odex must be there,
     # made for the APK's own (edited, signed) dex and the guest's boot image, or ART drops it
     # and the app runs interpreted again.
     problems += make_image.compiled_app_problems(z)
+    # The apps the published build shipped compiled keep their odex, vdex and app image,
+    # valid for their dex and the guest's boot image, with the filter they were compiled with.
+    problems += make_image.prebuilt_oat_problems(z)
     if "VENDOR/etc/fstab.dsa" not in names:
         problems.append("the Hyper-V mount table is missing")
     if "SYSTEM/etc/selinux/plat_sepolicy.cil" not in names:

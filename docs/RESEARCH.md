@@ -1434,3 +1434,31 @@ R16의 번역기 빌드와 같은 방법이다. 받기 스크립트(`fetch-sourc
 - WebView(Chromium)는 자기 GPU 스레드의 컨텍스트 손실을 스스로 처리한다. 그 동작은 확인하지 않았다.
 - `SkiaVulkanPipeline`과 하드웨어 비트맵 업로더의 Vulkan 경로는 이 이미지들에서 쓰이지 않는다. 업로더의 Vulkan 경로는 `GrDirectContext`를 만들지 못하면 여전히 끝낸다.
 - 보호 콘텐츠(protected) 컨텍스트는 다시 만들지만, 보호 버퍼의 다시 가져오기는 시험하지 않았다(DSA에 DRM 경로가 없다).
+
+## R20. 내비게이션 막대 없는 창의 목록 아래 여백: 코드가 패딩을 정하는 곳과 다시 컴파일할 앱 (FR-22, FR-5)
+
+### 확인한 자료
+- Android 16 이미지 입력(빌드 15581820, BP4A.251205.006)의 `Settings.apk`, `DocumentsUI.apk`, `com.android.permission.capex` 안의 `PermissionController.apk`. Android 17(빌드 16373615)의 `Settings.apk`, `DocumentsUI.apk`. 모두 `.scratch/list-bottom-margin/`에 있다.
+- AOSP 소스의 `TopLevelSettings.java`, `DirectoryFragment.java`, idmap2의 `ResourceMapping.cpp`, otatools의 `releasetools/apex_utils.py`와 `sign_target_files_apks.py`.
+- Android 16 target_files의 `oat/` 목록과 각 odex의 oat 헤더. Release image 42329110634(2026-11-07)의 빌드 로그.
+
+### 방법
+- 레이아웃은 SDK build-tools 37.0.0의 `aapt2 dump xmltree`로 읽었다. dex는 `make-image.py`의 `dex_methods`와 `dex_instructions`로 메서드를 풀어 보았다. 고친 APK도 같은 방법으로 다시 읽어 결과를 확인했다.
+
+### 찾은 것
+- **Settings 홈(16)**: `TopLevelSettings.onCreateRecyclerView`가 `setPadding(mPaddingHorizontal, 0, mPaddingHorizontal, 0)`을 부른다. 16 빌드에는 `setPaddingHorizontal`이 없고(두 창 패딩 코드가 컴파일에서 빠졌다) `mPaddingHorizontal`에 쓰는 곳이 dex 어디에도 없다. 목록 스타일 `PreferenceFragmentList.Material`은 좌우를 0으로 둔다. 그래서 이 호출이 바꾸는 것은 레이아웃(오버레이가 24 dp를 준다)의 아래 패딩뿐이다.
+- **Settings 홈(17)**: `setPaddingHorizontal`이 `isRunningInFreeformWindow`(캡션 막대 인셋이 보이는지)일 때만 `dashboard_padding_bottom`(16 dp)을 아래에 준다. DSA 창의 캡션은 호스트가 게스트 밖에 그리므로 게스트에는 캡션 막대 인셋이 없고, 아래 패딩은 0이다. 이 dimen을 읽는 것은 17 Settings 전체에서 이 메서드 하나다(dex와 컴파일된 XML 모두 확인).
+- **모든 앱 목록**: `manage_applications_apps.xml`의 RecyclerView에는 패딩이 없고 코드도 패딩을 정하지 않는다. 16과 17 모두 같다. 같은 레이아웃의 다른 요소가 `paddingBottom`을 써서 이름이 이미 파일에 있다.
+- **PermissionController**: 목록은 androidx의 `preference_recyclerview`(`paddingBottom` 0dp)다. 앱이 `<overlayable>`을 선언하므로 idmap2는 목록에 없는 리소스의 오버레이를 거부한다(`ResourceMapping.cpp`의 `CheckOverlayable`). 앱은 permission APEX 안에 있다. `sign_target_files_apks`는 이 APEX를 서명할 때 이미 페이로드를 `deapexer`로 풀고, 안의 APK를 서명하고, `apexer --payload_only`로 다시 싸고, 압축 APEX면 `apex_compression_tool`로 다시 압축한다(`apex_utils.ApexApkSigner`). 같은 도구가 otatools에 있다.
+- **파일(16)**: `DirectoryFragment.updateLayout`이 목록 아래를 `getSaveLayoutHeight()`(Material 3면 `bottom_container`, 아니면 `container_save`의 높이)로 채우고, 그 막대가 없으면 0이다. 17은 목록 모드에서 `list_container_padding_bottom`(48 dp)을 쓰고 이 메서드가 없다. 16 DocumentsUI에는 24 dp 리소스로 쓸 만한 필드 참조가 없지만, `getResources`, `getDisplayMetrics`, `DisplayMetrics.density`의 참조는 있다.
+- **dexopt**: 16 target_files에서 앱의 odex가 자기 파티션에 있는 것은 KeyChain, WallpaperBackup, FusedLocation, InputDevices, SettingsProvider, Telecom(모두 `speed`, 사유 `prebuilt`)과 CuttlefishService(`verify`, DSA가 지운다)다. Settings와 DocumentsUI를 포함한 나머지는 `SYSTEM_OTHER`에만 있고(`verify`) DSA 디스크에는 실리지 않는다. 서명은 APK의 dex를 바꾸지 않으므로(엔트리의 CRC가 같다) 앞의 앱들의 vdex는 서명 뒤에도 맞는다. Settings와 DocumentsUI는 2026-11-07의 릴리스 빌드에서 `speed`로 컴파일되었다(로그의 `compiled SYSTEM_EXT/priv-app/Settings/Settings.apk with speed: 52430 KiB`, 4개 이미지 모두). APEX 안의 PermissionController는 공개 빌드도 dexpreopt하지 않는다.
+
+### 결정
+- Settings 16 홈은 그 `setPadding` 호출을 건너뛴다. Settings 17 홈은 `isRunningInFreeformWindow`가 참을 돌려주고, Settings 오버레이가 `dashboard_padding_bottom`을 24 dp로 바꾼다(그 dimen을 읽는 Settings에만 넣는다. 16에 넣으면 idmap2가 부팅마다 경고한다).
+- 모든 앱 목록과 PermissionController는 APK 안의 컴파일된 레이아웃에 `paddingBottom` 24 dp를 넣거나 바꾼다. dex를 고칠 일이 아니다: 패딩이 레이아웃의 것이고 코드가 덮어쓰지 않는다. permission APEX는 서명 전에 서명과 같은 방법으로 풀고 다시 싸며, 서명 뒤에 다시 풀어 편집이 남았는지 확인한다.
+- 파일 16은 `getSaveLayoutHeight`를 같은 크기의 코드로 바꿔 막대 높이와 24 dp(밀도로 환산, `getDimensionPixelSize`와 같은 반올림) 중 큰 값을 돌려준다.
+- 공개 빌드의 odex 목록을 이미지의 target_files에 `META/dsa_prebuilt_oat.json`으로 남기고, dex가 바뀐 앱은 같은 필터, 같은 공유 라이브러리, 같은 부트 이미지로 다시 컴파일한다. `check-image.py`가 이 목록으로 이미지를 확인한다.
+
+### 확인하지 못한 것
+- 소유자 PC에서 Settings의 `oat/`가 없었다는 관찰은 위 릴리스 로그와 맞지 않는다. 설치된 이미지의 버전과, 실제 위치(`/system_ext/priv-app/Settings/oat/x86_64/`)를 PC에서 확인해야 한다.
+- 고친 메서드를 ART가 받아들이는지는 이 PC에서 돌려 보지 않았다. CI의 이미지 빌드에서 dex2oat가 Settings와 DocumentsUI를 `--abort-on-hard-verifier-error`로 컴파일하므로, 검증기가 거부하는 메서드가 있으면 빌드가 멈춘다. 화면의 여백은 실제 PC에서 확인한다.
