@@ -50,6 +50,26 @@ check(get(app, "FriendlyAppName") == NAME, "fr11: the program has no friendly na
 check(get(app + r"\SupportedTypes", ".apk") is not None, "fr11: the program does not list .apk as a type it opens")
 check(get(app + r"\shell\open\command") == f'"{EXE}" --install-apk "%1"',
       "fr11: the program's own open command does not install the APK")
+# Split-APK bundles open in the APK Installer too; App Bundles only under Open with, where it
+# says why it does not install them.
+BUNDLE_NAME = "@[INSTALLFOLDER]dsa-app-window.exe,-111"
+check(get(r"SOFTWARE\Classes\Dsa.ApkBundle\shell\open\command") == f'"{EXE}" --install-apk "%1"',
+      "fr11: split-APK bundles do not open in the APK Installer")
+check(get(r"SOFTWARE\Classes\Dsa.ApkBundle", "FriendlyTypeName") == BUNDLE_NAME,
+      "fr11: split-APK bundles have no type name of their own")
+check(get(r"SOFTWARE\Classes\Dsa.ApkBundle\DefaultIcon") == f'"{EXE}",0',
+      "fr11: split-APK bundles do not show the APK Installer's icon")
+for extension in [".xapk", ".apks", ".apkm"]:
+    check(get(rf"SOFTWARE\Classes\{extension}") == "Dsa.ApkBundle",
+          f"fr11: {extension} is not associated with Dsa.ApkBundle")
+    check(get(rf"SOFTWARE\Classes\{extension}\OpenWithProgids", "Dsa.ApkBundle") is not None,
+          f"fr11: the APK Installer is not under Open with for {extension} files")
+check(get(r"SOFTWARE\Classes\.aab") is None, "fr11: .aab files are taken from the tools that build them")
+check(get(r"SOFTWARE\Classes\.aab\OpenWithProgids", "Dsa.ApkBundle") is not None,
+      "fr11: the APK Installer is not under Open with for .aab files")
+for extension in [".xapk", ".apks", ".apkm", ".aab"]:
+    check(get(app + r"\SupportedTypes", extension) is not None,
+          f"fr11: the program does not list {extension} as a type it opens")
 aumid = r"SOFTWARE\Classes\AppUserModelId\Thisisthepy.DSA.ApkInstaller"
 check(get(aumid, "DisplayName") == NAME, "fr11: the APK Installer's AppUserModelID has no display name")
 for value in values.values():
@@ -67,5 +87,5 @@ for why in failed:
     print(f"not ok - {why}")
 if failed:
     sys.exit(1)
-print("ok   - .apk files open in the APK Installer")
+print("ok   - .apk files and split-APK bundles open in the APK Installer")
 PY

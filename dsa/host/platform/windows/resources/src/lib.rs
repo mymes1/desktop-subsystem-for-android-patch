@@ -58,6 +58,9 @@ pub mod shell {
     pub const SERVICE_DESCRIPTION: u16 = 109;
     /// The APK Installer's name, as Open with and the taskbar show it.
     pub const APK_INSTALLER_NAME: u16 = 110;
+    /// The kind of file a split-APK bundle (`.xapk`, `.apks`, `.apkm`) is, as Explorer's Type
+    /// column shows it.
+    pub const APK_BUNDLE_FILE_TYPE: u16 = 111;
 
     /// Every string, as (ID, English, Korean).
     pub const STRINGS: &[(u16, &str, &str)] = &[
@@ -82,6 +85,7 @@ pub mod shell {
             "사용자마다 Android를 자체 가상 머신에서 실행하고, dsa 명령과 데스크톱 앱의 요청에 응답합니다.",
         ),
         (APK_INSTALLER_NAME, "APK Installer", "APK 설치 관리자"),
+        (APK_BUNDLE_FILE_TYPE, "Split APK bundle", "분할 APK 묶음"),
     ];
 
     /// The English string `id`, which the installer also writes as the plain fallback.
