@@ -104,35 +104,36 @@
             <sys:String x:Key="ToggleOnText">On</sys:String>
             <sys:String x:Key="ToggleOffText">Off</sys:String>
 
+            <!-- These styles are based on the library's named styles, never on
+                 {StaticResource {x:Type ...}}. Inside this dictionary a style's own type is its own
+                 key, and a style based on that key loses the library's setters: ui:Button fell
+                 back to the default Win32 button template. The library names no style for
+                 ui:InfoBar, so each page sets the info bars' 4 px margin itself. -->
+
             <!-- Pop-ups do not inherit the window's font. -->
-            <Style TargetType="ToolTip" BasedOn="{StaticResource {x:Type ToolTip}}">
+            <Style TargetType="ToolTip" BasedOn="{StaticResource DefaultToolTipStyle}">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
             </Style>
-            <Style TargetType="ContextMenu" BasedOn="{StaticResource {x:Type ContextMenu}}">
+            <Style TargetType="ContextMenu" BasedOn="{StaticResource UiContextMenu}">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
             </Style>
 
             <!-- A WinUI button in a settings card is at least 120 px wide (the toolkit's
                  content minimum), so a short label such as "Stop" still reads as a button. -->
-            <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+            <Style TargetType="ui:Button" BasedOn="{StaticResource DefaultUiButtonStyle}">
                 <Setter Property="MinWidth" Value="120" />
             </Style>
 
             <!-- The Settings app's navigation items are 40 px high. -->
-            <Style TargetType="ui:NavigationViewItem" BasedOn="{StaticResource {x:Type ui:NavigationViewItem}}">
+            <Style TargetType="ui:NavigationViewItem" BasedOn="{StaticResource NavigationViewItemDefaultStyle}">
                 <Setter Property="MinHeight" Value="40" />
-            </Style>
-
-            <!-- Info bars stacked on a page keep the cards' 4 px gap. -->
-            <Style TargetType="ui:InfoBar" BasedOn="{StaticResource {x:Type ui:InfoBar}}">
-                <Setter Property="Margin" Value="0,0,0,4" />
             </Style>
 
             <!-- A settings card as WinUI's SettingsCard draws it: 16 px padding, at least 68 px
                  high, a 20 px icon 20 px before the header, the control 24 px after it on the
                  right. A card that is not a button does not light up under the pointer or when
                  pressed; the library's card does both. -->
-            <Style TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
+            <Style TargetType="ui:CardControl" BasedOn="{StaticResource DefaultUiCardControlStyle}">
                 <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
                 <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
@@ -191,7 +192,7 @@
 
             <!-- A clickable settings card: the same layout, and a 13 px chevron 14 px after the
                  header in place of the library's 16 px one 4 px after it. -->
-            <Style TargetType="ui:CardAction" BasedOn="{StaticResource {x:Type ui:CardAction}}">
+            <Style TargetType="ui:CardAction" BasedOn="{StaticResource DefaultUiCardActionStyle}">
                 <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
                 <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
@@ -260,7 +261,7 @@
                  of the switch, 12 px from it. The library puts the text on the right. The
                  switch itself is the library's (WPF UI, MIT licence, Leszek Pomianowski and
                  WPF UI contributors): the same 40 by 20 track, knob and animation. -->
-            <Style TargetType="ui:ToggleSwitch" BasedOn="{StaticResource {x:Type ui:ToggleSwitch}}">
+            <Style TargetType="ui:ToggleSwitch" BasedOn="{StaticResource DefaultUiToggleSwitchStyle}">
                 <Setter Property="OnContent" Value="{DynamicResource ToggleOnText}" />
                 <Setter Property="OffContent" Value="{DynamicResource ToggleOffText}" />
                 <Setter Property="Template">
