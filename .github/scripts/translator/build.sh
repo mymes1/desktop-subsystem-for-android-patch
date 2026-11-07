@@ -32,6 +32,11 @@ uv run "$repo/dsa/guest/arm-translation/assemble-digitalis.py" targets \
 echo "building $(wc -l < "$top/.dsa-targets") files and berberis_arm64_host_tests"
 
 export ALLOW_MISSING_DEPENDENCIES=true
+# An unbundled build, as AOSP builds its modules on their own from a partial tree: Soong then
+# makes no device (its generated android_device and partition images, which stopped the
+# fifth run's analysis), no boot image and no dist artifacts. Modules still install into
+# out/target/product/<device>.
+export TARGET_BUILD_UNBUNDLED=true
 # Soong alone builds every module this needs; kati would read Android.mk files the tree
 # does not have reasons to carry.
 export SOONG_ONLY=true

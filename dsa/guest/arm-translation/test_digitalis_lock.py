@@ -155,6 +155,9 @@ class LockTests(unittest.TestCase):
                      "EXPERIMENTAL_USE_OPENJDK17_TOOLCHAIN", "EXPERIMENTAL_USE_OPENJDK21_TOOLCHAIN"):
             self.assertNotRegex(build, rf"export\s+{name}=")
         self.assertRegex(build, r"export BUILD_USERNAME=")
+        # A bundled build makes a device and its images from the product, which this tree
+        # cannot (the fifth run stopped there).
+        self.assertRegex(build, r"export TARGET_BUILD_UNBUNDLED=true")
 
     def test_fr25_the_build_product_is_x86_64_only_with_an_arm64_bridge(self):
         board = (DEVICE / "BoardConfig.mk").read_text()

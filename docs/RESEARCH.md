@@ -1214,6 +1214,14 @@ Soong 분석 단계는 흉내 낼 수 없는 부분이 남는다. 이 트리의 
 
 보드 설정에 `WITH_DEXPREOPT := false`를 넣었다. 그러면 `dex_preopt_config.mk`가 앱과 부트 이미지의 dexpreopt를 모두 끄고(`DisablePreopt`, `DisablePreoptBootImages`), `IsDex2oatNeeded`가 거짓이 되어 dex2oat를 찾는 곳이 모두 빈 값을 받는다. Soong 안에서 dex2oat를 찾는 다섯 곳(`dexpreopt.go`, `dexpreopt_bootjars.go`)이 모두 이 검사를 거친다. 같은 이유로 프레임워크가 없는 트리에서 숨은 API 목록을 만들지 않도록 `UNSAFE_DISABLE_HIDDENAPI_FLAGS=true`를 둔다.
 
+### 다섯 번째 실행(run 42396287578, android17)과 고친 것
+
+dexpreopt를 끈 뒤 `dex_bootjars`는 지나갔고, 분석이 다시 `GenerateBuildActions`에서 패닉으로 멈추었다. 이번에는 `soong_filesystem_creator`가 제품으로부터 만든 `dsa_translator_generated_device`(`android_device`)가 target_files의 메타데이터를 모으다 없는 모듈의 출력을 읽었다(`android_device.go`의 `copyMetadataToTargetZip`, nil 포인터). Soong-only 빌드는 제품마다 기기와 파티션 이미지 모듈을 스스로 만드는데(`build/soong/fsgen`), 이 트리에는 그 재료가 없다.
+
+`fsgen`은 묶지 않은(unbundled) 빌드에서는 아무것도 만들지 않는다(`shouldEnableFilesystemCreator`). 그래서 `build.sh`가 `TARGET_BUILD_UNBUNDLED=true`를 둔다. AOSP가 메인라인 모듈을 부분 트리에서 따로 빌드할 때(`module_*` 제품, `ALLOW_MISSING_DEPENDENCIES`)와 같은 방식이라, 기기 단위의 싱글톤(기기, 파티션, 부트 이미지, dist)이 꺼진 상태로 쓰이고 시험되는 경로다. `unbundled_builder`는 `TARGET_BUILD_APPS`가 비어 있으면 아무것도 하지 않는다. cc와 Rust 빌드는 이 값에 따라 달라지지 않고(`cc`, `rust`, `genrule`에 `UnbundledBuild()`를 보는 곳이 없다), 설치는 그대로 `out/target/product/dsa_translator`로 간다. 함께 정해지는 `TARGET_BUILD_USE_PREBUILT_SDKS`는 Java SDK에만 쓰인다.
+
+앞을 내다보고 이 트리의 위험한 모듈도 살폈다. 기기 단위 모듈은 `build/make/target/product/generic`과 `gsi`의 `android_system_image`, `bionic/apex`의 `runtime_apex`, `sdk`, `module_exports`, `build/soong`의 `product_config`, `build_prop` 정도이고, 모두 메인라인 모듈의 부분 트리 빌드에도 있는 것들이다. dexpreopt는 이미 꺼져 있다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
