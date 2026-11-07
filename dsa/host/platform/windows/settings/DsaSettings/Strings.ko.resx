@@ -922,9 +922,6 @@
   <data name="ApkWindow_NotApkTitle" xml:space="preserve">
     <value>이 파일은 설치할 수 없습니다</value>
   </data>
-  <data name="ApkWindow_NotApkText" xml:space="preserve">
-    <value>{0}은(는) Android가 설치할 수 있는 APK가 아닙니다: {1}.</value>
-  </data>
   <data name="ApkWindow_StartFailed" xml:space="preserve">
     <value>Android가 시작되지 않아 앱을 설치하지 못했습니다. {0}</value>
   </data>

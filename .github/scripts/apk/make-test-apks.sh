@@ -7,6 +7,8 @@
 #   notes-old.apk      the same app at 4.1 (41), signed with the same key
 #   notes-other.apk    the same app at 4.3 (43), signed with another key
 #   adaptive.apk       "Adaptive", com.example.adaptive, an adaptive icon (a colour and an image)
+#   vector.apk         "Vector", com.example.vector, an adaptive icon (a colour and a vector
+#                      drawable)
 #   many.apk           "Many", com.example.many 3.20.8107, 40 permissions, native code only for
 #                      armeabi-v7a, an icon with transparent corners and a colour profile
 #
@@ -121,6 +123,40 @@ cat >"$adaptive_res/mipmap-anydpi-v26/ic_launcher.xml" <<'EOF'
 EOF
 cp "$here/foreground.png" "$adaptive_res/mipmap-xxxhdpi/ic_launcher_foreground.png"
 app adaptive com.example.adaptive Adaptive 1 1.0 notes "$adaptive_res"
+
+# An adaptive icon as most apps made since Android 8 have it, Chrome among them: a colour
+# behind a vector drawable, with a group that moves its paths and a fill from a colour
+# resource.
+vector_res="$work/vector-res"
+mkdir -p "$vector_res/values" "$vector_res/mipmap-anydpi-v26" "$vector_res/drawable"
+cat >"$vector_res/values/strings.xml" <<'EOF'
+<resources>
+    <string name="app_name">Vector</string>
+    <color name="ic_launcher_background">#FFFFFFFF</color>
+    <color name="ring">#FFDB4437</color>
+</resources>
+EOF
+cat >"$vector_res/mipmap-anydpi-v26/ic_launcher.xml" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>
+EOF
+cat >"$vector_res/drawable/ic_launcher_foreground.xml" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="30" android:translateY="30">
+        <path android:fillColor="@color/ring"
+            android:pathData="M24,0A24,24 0,1 1,24 48A24,24 0,1 1,24 0z" />
+        <path android:fillColor="#FF4285F4"
+            android:pathData="M24,14a10,10 0,1 1,-.01 0z" />
+    </group>
+</vector>
+EOF
+app vector com.example.vector Vector 1 1.0 notes "$vector_res"
 
 many_res="$work/many-res"
 mkdir -p "$many_res/values" "$many_res/mipmap-xxxhdpi"

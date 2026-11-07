@@ -11,6 +11,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:local="clr-namespace:Dsa.ApkInstaller"
     Width="600"
     Height="580"
     MinWidth="480"
@@ -48,14 +49,32 @@
                 <StackPanel Grid.Column="0" Margin="0,0,24,0" VerticalAlignment="Top">
                     <TextBlock x:Name="HeroTitle" Style="{StaticResource AppNameText}"
                                AutomationProperties.AutomationId="HeroTitle" />
-                    <TextBlock x:Name="HeroPackage" Style="{StaticResource DetailLine}"
-                               AutomationProperties.AutomationId="HeroPackage" />
-                    <TextBlock x:Name="PublisherText" Style="{StaticResource DetailLine}"
-                               AutomationProperties.AutomationId="PublisherText" />
-                    <TextBlock x:Name="VersionChip" Style="{StaticResource DetailLine}"
-                               AutomationProperties.AutomationId="VersionChip" />
-                    <TextBlock x:Name="SourceText" Style="{StaticResource DetailLine}"
-                               AutomationProperties.AutomationId="SourceText" />
+                    <!-- App Installer's lines: the labels in one column and the values in the
+                         next, one 20 px line each with nothing added between them. -->
+                    <Grid x:Name="DetailRows" Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="PackageLabel" Grid.Row="0" Style="{StaticResource DetailLabel}" />
+                        <TextBlock x:Name="HeroPackage" Grid.Row="0" Grid.Column="1" Style="{StaticResource DetailLine}"
+                                   AutomationProperties.AutomationId="HeroPackage" />
+                        <TextBlock x:Name="PublisherLabel" Grid.Row="1" Style="{StaticResource DetailLabel}" />
+                        <TextBlock x:Name="PublisherText" Grid.Row="1" Grid.Column="1" Style="{StaticResource DetailLine}"
+                                   AutomationProperties.AutomationId="PublisherText" />
+                        <TextBlock x:Name="VersionLabel" Grid.Row="2" Style="{StaticResource DetailLabel}" />
+                        <TextBlock x:Name="VersionChip" Grid.Row="2" Grid.Column="1" Style="{StaticResource DetailLine}"
+                                   AutomationProperties.AutomationId="VersionChip" />
+                        <TextBlock x:Name="SourceLabel" Grid.Row="3" Style="{StaticResource DetailLabel}" />
+                        <TextBlock x:Name="SourceText" Grid.Row="3" Grid.Column="1" Style="{StaticResource DetailLine}"
+                                   AutomationProperties.AutomationId="SourceText" />
+                    </Grid>
                 </StackPanel>
                 <Border x:Name="AppIconTile" Grid.Column="1" VerticalAlignment="Top" CornerRadius="8"
                         Width="{StaticResource AppIconTileSize}" Height="{StaticResource AppIconTileSize}"
@@ -79,35 +98,32 @@
                 </StackPanel>
 
                 <!-- What the app asks for: the first permissions and More; after More, all of them
-                     and the rest of what the file says, scrolling inside the window. -->
+                     and the rest of what the file says, and Less, which folds them again, as App
+                     Installer's link does. All of it scrolls inside the window. -->
                 <DockPanel x:Name="DetailsPanel" Margin="0,20,0,0">
                     <TextBlock x:Name="PermissionsHeader" DockPanel.Dock="Top" Style="{StaticResource BodyText}"
                                Margin="0,0,0,4" AutomationProperties.AutomationId="PermissionsHeader" />
-                    <StackPanel x:Name="PreviewPanel" DockPanel.Dock="Top">
-                        <ItemsControl x:Name="PermissionPreview" Focusable="False"
-                                      AutomationProperties.AutomationId="PermissionPreview">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="16" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="&#x2022;" Style="{StaticResource BodyText}"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Description}" Style="{StaticResource BodyText}"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <Button x:Name="MoreLink" Style="{StaticResource LinkButton}" Margin="0,4,0,0"
-                                Click="OnMore" AutomationProperties.AutomationId="MoreLink" />
-                    </StackPanel>
-                    <ScrollViewer x:Name="ExpandedPanel" VerticalScrollBarVisibility="Auto" Focusable="False"
+                    <ScrollViewer x:Name="DetailsScroller" VerticalScrollBarVisibility="Auto" Focusable="False"
                                   AutomationProperties.AutomationId="DetailsScroller">
                         <StackPanel Margin="0,0,16,8">
+                            <ItemsControl x:Name="PermissionPreview" Focusable="False"
+                                          AutomationProperties.AutomationId="PermissionPreview">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="16" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="&#x2022;" Style="{StaticResource BodyText}"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Description}" Style="{StaticResource BodyText}"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <ItemsControl x:Name="PermissionList" Focusable="False"
                                           AutomationProperties.AutomationId="PermissionList">
                                 <ItemsControl.ItemTemplate>
@@ -142,24 +158,32 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <ItemsControl x:Name="FactList" Margin="0,8,0,0" Focusable="False"
-                                          AutomationProperties.AutomationId="FactList">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,0,0,6">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="120" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding Name}" Style="{StaticResource CaptionText}" Margin="0,2,8,0" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource BodyText}" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <!-- More and Less: one link, a button to the keyboard, and an expand
+                                 and collapse control to UI Automation. -->
+                            <local:ExpandLink x:Name="MoreLink" Style="{StaticResource LinkButton}" Margin="0,4,0,0"
+                                              Click="OnMore" AutomationProperties.AutomationId="MoreLink" />
 
-                            <TextBlock x:Name="TrademarkText" Style="{StaticResource CaptionText}" Margin="0,8,0,0"
-                                       AutomationProperties.AutomationId="TrademarkText" />
+                            <StackPanel x:Name="ExpandedPanel" Margin="0,12,0,0"
+                                        AutomationProperties.AutomationId="ExpandedPanel">
+                                <ItemsControl x:Name="FactList" Focusable="False"
+                                              AutomationProperties.AutomationId="FactList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource CaptionText}" Margin="0,2,8,0" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource BodyText}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock x:Name="TrademarkText" Style="{StaticResource CaptionText}" Margin="0,8,0,0"
+                                           AutomationProperties.AutomationId="TrademarkText" />
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>
