@@ -37,6 +37,21 @@ public class LogViewModelTests
     }
 
     [Fact]
+    public void Fr21_a_line_splits_into_the_page_columns_and_a_dropped_record_has_only_its_body()
+    {
+        var line = LogLine.Parse(Record("ActivityManager", "시작"))!;
+        Assert.Equal("2026-11-04 10:00:00.000", line.TimeColumn);
+        Assert.Equal("12", line.PidColumn);
+        Assert.Equal("13", line.TidColumn);
+        Assert.Equal("I", line.PriorityColumn);
+        Assert.Equal("ActivityManager: 시작", line.BodyColumn);
+
+        var dropped = LogLine.Parse("{\"time\":\"2026-11-04 10:00:00.000\",\"priority\":\"W\",\"dropped\":3}")!;
+        Assert.Equal("", dropped.TimeColumn + dropped.PidColumn + dropped.TidColumn + dropped.PriorityColumn);
+        Assert.Equal("--------- 3 records dropped", dropped.BodyColumn);
+    }
+
+    [Fact]
     public async Task Fr21_the_viewer_reads_the_log_at_the_chosen_priority_and_shows_each_line()
     {
         var (model, stream, _) = Make();
