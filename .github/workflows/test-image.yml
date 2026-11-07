@@ -54,11 +54,12 @@ on:
         default: ""
 
 concurrency:
-  # Every push to develop is checked to the end in a group of its own: a newer merge
-  # used to cancel the run in progress, and with merges minutes apart the long runs
-  # never finished. A newer push to one pull request still replaces its older run.
-  group: test-image-${{ github.event_name == 'push' && github.sha || github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # On develop a run in progress finishes and only the newest waiting run stays: GitHub
+  # keeps one pending run per group, so a newer merge replaces the one still waiting.
+  # The newest run tests everything the dropped ones held. Anywhere else, such as a pull
+  # request, a newer run still replaces the older one.
+  group: test-image-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' }}
 
 permissions:
   contents: read
