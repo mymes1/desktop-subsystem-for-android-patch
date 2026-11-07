@@ -71,6 +71,9 @@ final class StringCatalogTests: XCTestCase {
                     "fingerprint_id", "fingerprint_incremental", "fingerprint_type", "fingerprint_tags", "fingerprint"] {
             built += ["Identity_\(key)", "Identity_\(key)_Description", "Identity_\(key)_Invalid"]
         }
+        for key in ["model_name", "device_name", "soc_manufacturer", "soc_model"] {
+            built += ["Identity_\(key)", "Identity_\(key)_Description"]
+        }
         for key in built {
             XCTAssertNotNil(texts[key], "\(key) is asked for but is not in Localizable.xcstrings")
         }

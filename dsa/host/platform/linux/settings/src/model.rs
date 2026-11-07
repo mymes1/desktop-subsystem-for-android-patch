@@ -804,29 +804,48 @@ impl Gapps {
     }
 }
 
-/// The device identity: what the user chose (empty where they chose nothing) and what
-/// Android reports, keyed by the names `dsa settings set device.<name>` takes.
+/// The device identity: what the user chose (empty where they chose nothing), what Android
+/// reports, and where each default came from (`computer` or `dsa`), keyed by the names
+/// `dsa settings set device.<name>` takes. `computer` holds the values that follow the
+/// computer and are not chosen: the model name, the device name and the chip.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identity {
     pub chosen: Vec<(String, String)>,
     pub effective: Vec<(String, String)>,
+    pub sources: Vec<(String, String)>,
+    pub computer: Vec<(String, String)>,
 }
 
 impl Identity {
     pub fn read(json: &Value) -> Identity {
-        let read = |side: &Value| -> Vec<(String, String)> {
+        let fields = || {
             dsa_host_core::device_identity::Field::ALL
                 .iter()
-                .map(|field| {
-                    let key = field.key();
-                    let value = text(side, &key.replace('.', "_"));
-                    (key.to_string(), value)
-                })
+                .map(|field| field.key())
+        };
+        let read = |side: &Value| -> Vec<(String, String)> {
+            fields()
+                .map(|key| (key.to_string(), text(side, &key.replace('.', "_"))))
                 .collect()
         };
+        let all = fields().chain(dsa_host_core::device_identity::COMPUTER_KEYS);
         Identity {
             chosen: read(&json["chosen"]),
             effective: read(&json["effective"]),
+            // A service from before the computer's identity names no source: DSA's.
+            sources: all
+                .map(|key| {
+                    let origin = match text(&json["sources"], &key.replace('.', "_")).as_str() {
+                        "computer" => "computer",
+                        _ => "dsa",
+                    };
+                    (key.to_string(), origin.to_string())
+                })
+                .collect(),
+            computer: dsa_host_core::device_identity::COMPUTER_KEYS
+                .iter()
+                .map(|key| (key.to_string(), text(&json["effective"], key)))
+                .collect(),
         }
     }
 
@@ -836,6 +855,19 @@ impl Identity {
 
     pub fn effective(&self, key: &str) -> &str {
         Self::find(&self.effective, key)
+    }
+
+    /// Where the default of `key` came from: `computer` or `dsa`.
+    pub fn origin(&self, key: &str) -> &str {
+        match Self::find(&self.sources, key) {
+            "" => "dsa",
+            origin => origin,
+        }
+    }
+
+    /// One of the values that follow the computer; empty when the computer does not say.
+    pub fn computer(&self, key: &str) -> &str {
+        Self::find(&self.computer, key)
     }
 
     fn find<'a>(list: &'a [(String, String)], key: &str) -> &'a str {

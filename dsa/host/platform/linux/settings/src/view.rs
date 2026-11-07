@@ -686,8 +686,31 @@ pub fn identity_label(key: &str) -> String {
         "fingerprint.incremental" => "Incremental version",
         "fingerprint.type" => "Build type",
         "fingerprint.tags" => "Tags",
+        "model_name" => "Model name",
+        "device_name" => "Device name",
+        "soc_manufacturer" => "Chip manufacturer",
+        "soc_model" => "Chip model",
         _ => "Whole fingerprint",
     })
+}
+
+/// Where a default came from, as the page says it: `computer` or `dsa`.
+pub fn origin_label(origin: &str) -> String {
+    if origin == "computer" {
+        tr("Default: from this computer")
+    } else {
+        tr("Default: DSA's value")
+    }
+}
+
+/// A value that follows the computer, as the page shows it: the value, or a note that the
+/// computer does not say it and Android keeps its own.
+pub fn computer_value(value: &str) -> String {
+    if value.is_empty() {
+        tr("This computer does not say; Android keeps its own.")
+    } else {
+        value.to_string()
+    }
 }
 
 /// Checks a value typed for the device identity as the service will; `None` when it is

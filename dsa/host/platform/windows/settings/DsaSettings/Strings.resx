@@ -1094,7 +1094,7 @@
     <value>Reset the device identity?</value>
   </data>
   <data name="IdentityResetConfirmBody" xml:space="preserve">
-    <value>Every value goes back to DSA's own. It applies from the next start of Android.</value>
+    <value>Every value goes back to its default: this computer's, or DSA's own where the computer does not say. It applies from the next start of Android.</value>
   </data>
   <data name="IdentityNamesHeader.Text" xml:space="preserve">
     <value>Device</value>
@@ -1119,6 +1119,45 @@
   </data>
   <data name="Identity_Restarted" xml:space="preserve">
     <value>Android started again with this identity.</value>
+  </data>
+  <data name="Identity_FromComputer" xml:space="preserve">
+    <value>Default: from this computer</value>
+  </data>
+  <data name="Identity_FromDsa" xml:space="preserve">
+    <value>Default: DSA's value</value>
+  </data>
+  <data name="Identity_NotSaid" xml:space="preserve">
+    <value>This computer does not say; Android keeps its own.</value>
+  </data>
+  <data name="IdentityComputerHeader.Text" xml:space="preserve">
+    <value>From this computer</value>
+  </data>
+  <data name="IdentityComputerNote.Text" xml:space="preserve">
+    <value>These follow this computer and are read again each time Android starts, so a renamed computer is followed from the next start. Android's own Settings shows the device name and the chip; the model name is shown only here, as Android's Settings has no place for it.</value>
+  </data>
+  <data name="Identity_model_name" xml:space="preserve">
+    <value>Model name</value>
+  </data>
+  <data name="Identity_model_name_Description" xml:space="preserve">
+    <value>The name the computer is sold under (ro.product.marketname).</value>
+  </data>
+  <data name="Identity_device_name" xml:space="preserve">
+    <value>Device name</value>
+  </data>
+  <data name="Identity_device_name_Description" xml:space="preserve">
+    <value>The computer's name, which Settings, Bluetooth and Wi-Fi Direct show for the device.</value>
+  </data>
+  <data name="Identity_soc_manufacturer" xml:space="preserve">
+    <value>Chip manufacturer</value>
+  </data>
+  <data name="Identity_soc_manufacturer_Description" xml:space="preserve">
+    <value>Build.SOC_MANUFACTURER: the maker of the computer's processor.</value>
+  </data>
+  <data name="Identity_soc_model" xml:space="preserve">
+    <value>Chip model</value>
+  </data>
+  <data name="Identity_soc_model_Description" xml:space="preserve">
+    <value>Build.SOC_MODEL: the computer's processor.</value>
   </data>
   <data name="Identity_manufacturer" xml:space="preserve">
     <value>Manufacturer</value>

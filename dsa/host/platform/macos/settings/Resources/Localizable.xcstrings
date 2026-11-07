@@ -4064,19 +4064,110 @@
         }
       }
     },
+    "Identity_FromComputer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Default: from this Mac" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "기본값: 이 Mac의 정보" } }
+      }
+    },
+    "Identity_FromDsa": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Default: DSA's value" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "기본값: DSA의 값" } }
+      }
+    },
+    "Identity_NotSaid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "This Mac does not say; Android keeps its own." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 Mac이 알려 주지 않아 Android의 값을 그대로 씁니다." } }
+      }
+    },
+    "IdentityComputerHeader.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "From this Mac" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 Mac의 정보" } }
+      }
+    },
+    "IdentityComputerNote.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "These follow this Mac and are read again each time Android starts, so a renamed Mac is followed from the next start. Android's own Settings shows the device name and the chip; the model name is shown only here, as Android's Settings has no place for it." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "이 값은 이 Mac을 따르고 Android를 시작할 때마다 다시 읽으므로, Mac 이름을 바꾸면 다음 시작부터 따라갑니다. 기기 이름과 칩은 Android 설정에도 보입니다. 모델 이름은 Android 설정에 자리가 없어 여기에만 보입니다." } }
+      }
+    },
+    "Identity_model_name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Model name" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "모델 이름" } }
+      }
+    },
+    "Identity_model_name_Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The name the Mac is sold under (ro.product.marketname)." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "Mac이 판매되는 이름입니다(ro.product.marketname)." } }
+      }
+    },
+    "Identity_device_name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Device name" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "기기 이름" } }
+      }
+    },
+    "Identity_device_name_Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The Mac's name, which Settings, Bluetooth and Wi-Fi Direct show for the device." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "Mac의 이름입니다. 설정, 블루투스, Wi-Fi Direct가 이 기기의 이름으로 보여 줍니다." } }
+      }
+    },
+    "Identity_soc_manufacturer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Chip manufacturer" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "칩 제조사" } }
+      }
+    },
+    "Identity_soc_manufacturer_Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Build.SOC_MANUFACTURER: the maker of the Mac's chip." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "Build.SOC_MANUFACTURER, Mac 칩의 제조사입니다." } }
+      }
+    },
+    "Identity_soc_model": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Chip model" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "칩 모델" } }
+      }
+    },
+    "Identity_soc_model_Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Build.SOC_MODEL: the Mac's chip." } },
+        "ko": { "stringUnit": { "state": "translated", "value": "Build.SOC_MODEL, Mac의 칩입니다." } }
+      }
+    },
     "IdentityResetConfirmBody": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Every value goes back to DSA's own. It applies from the next start of Android."
+            "value": "Every value goes back to its default: this Mac's, or DSA's own where the Mac does not say. It applies from the next start of Android."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "모든 값이 DSA의 기본값으로 돌아갑니다. Android를 다음에 시작할 때부터 적용됩니다."
+            "value": "모든 값이 기본값으로 돌아갑니다. 기본값은 이 Mac의 정보이고, Mac이 알려 주지 않는 값은 DSA의 값입니다. Android를 다음에 시작할 때부터 적용됩니다."
           }
         }
       }
