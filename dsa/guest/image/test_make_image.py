@@ -3732,16 +3732,19 @@ class ArmTranslationImageTests(unittest.TestCase):
             keys_dir.mkdir()
             (img_dir / "image.json").write_text(json.dumps({"files": {}, "kernel_cmdline": ""}))
             (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            on_trigger = "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n"
+            default_trigger = "on post-fs-data && property:ro.boot.dsa.arm_translation=default\n"
             outputs = []
-            for complete in [False, True]:
+            # Three images: one without the translation files, one whose rc only mounts an
+            # installed package and never the default translator, and a complete one.
+            for rc in [None, on_trigger, on_trigger + default_trigger]:
+                complete = rc is not None
                 with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
                     archive.writestr("META/apkcerts.txt", "")
                     bridge = "0" if complete else "libhoudini.so"
                     archive.writestr("SYSTEM/build.prop", f"ro.debuggable=0\nro.dalvik.vm.native.bridge={bridge}\n")
                     if complete:
-                        archive.writestr("SYSTEM/etc/init/dsa-arm-translation.rc",
-                                         "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n"
-                                         "on post-fs-data && property:ro.boot.dsa.arm_translation=default\n")
+                        archive.writestr("SYSTEM/etc/init/dsa-arm-translation.rc", rc)
                         archive.writestr("SYSTEM/etc/dsa/arm-translation-on.prop", "")
                         archive.writestr("SYSTEM/etc/dsa/arm-translation-off.prop", "")
                         archive.writestr("PRODUCT/etc/build.prop", make_image.add_arm_translation_import(""))
@@ -3751,11 +3754,16 @@ class ArmTranslationImageTests(unittest.TestCase):
                     [sys.executable, str(check_script), str(img_dir), str(keys_dir)],
                     capture_output=True, text=True,
                 ).stdout)
+        missing, without_default, whole = outputs
         for problem in ["dsa-arm-translation.rc is missing", "does not end with the ARM translation import",
-                        "sets ro.dalvik.vm.native.bridge=libhoudini.so",
-                        "never lays the image's default ARM translation package"]:
-            self.assertIn(problem, outputs[0])
-            self.assertNotIn(problem, outputs[1])
+                        "sets ro.dalvik.vm.native.bridge=libhoudini.so"]:
+            self.assertIn(problem, missing)
+            self.assertNotIn(problem, without_default)
+            self.assertNotIn(problem, whole)
+        # Checked only once the rc is there: a missing rc is reported as missing above.
+        laid_over = "never lays the image's default ARM translation package"
+        self.assertIn(laid_over, without_default)
+        self.assertNotIn(laid_over, whole)
 
     def test_fr32_the_product_props_import_the_google_play_properties_before_the_arm_ones(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
