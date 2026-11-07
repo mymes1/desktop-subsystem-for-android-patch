@@ -189,7 +189,10 @@ These bind the agent and whoever dispatches it equally.
    closes, resizes or captures an app or window on this machine, including DSA and Windows' own
    apps, because the owner is working at that desktop. It verifies from CI artifacts. The
    dispatching session says so first before it installs or launches anything on the PC.
-6. **`cargo fmt` is not allowed unless the owner approves.** Do not add it.
+6. **Run `cargo fmt` on the crates you changed before you push.** It is the one exception to
+   (1): it rewrites only whitespace and line breaks, takes seconds and barely loads the
+   machine. CI checks formatting first, so a branch pushed unformatted never reaches its real
+   tests. Run it in your own worktree only, and nothing else that `cargo` offers.
 
 ## Writing
 
