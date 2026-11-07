@@ -415,3 +415,114 @@ pub fn notes_apk() -> Vec<u8> {
         &block,
     )
 }
+
+/// An APK whose launcher icon is an adaptive icon, as most apps made since Android 8 have:
+/// the background a colour resource, the foreground a vector drawable with one path in a
+/// group moved 10 units right.
+pub fn adaptive_vector_apk() -> Vec<u8> {
+    let manifest = document(&[
+        El(
+            "manifest",
+            vec![
+                Attr::Typed("versionCode", attr::VERSION_CODE, TYPE_INT_DEC, 1),
+                Attr::Str("package", 0, "com.example.vector"),
+            ],
+            false,
+        ),
+        El(
+            "application",
+            vec![Attr::Typed("icon", attr::ICON, TYPE_REFERENCE, 0x7f01_0000)],
+            true,
+        ),
+    ]);
+    let adaptive = document(&[
+        El("adaptive-icon", vec![], false),
+        El(
+            "background",
+            vec![Attr::Typed(
+                "drawable",
+                attr::DRAWABLE,
+                TYPE_REFERENCE,
+                0x7f04_0000,
+            )],
+            true,
+        ),
+        El(
+            "foreground",
+            vec![Attr::Typed(
+                "drawable",
+                attr::DRAWABLE,
+                TYPE_REFERENCE,
+                0x7f03_0000,
+            )],
+            true,
+        ),
+    ]);
+    let float = |value: f32| value.to_bits();
+    let foreground = document(&[
+        El(
+            "vector",
+            vec![
+                Attr::Typed("viewportWidth", 0x0101_0402, 0x04, float(108.0)),
+                Attr::Typed("viewportHeight", 0x0101_0403, 0x04, float(108.0)),
+            ],
+            false,
+        ),
+        El("group", vec![Attr::Str("translateX", 0, "10")], false),
+        El(
+            "path",
+            vec![
+                Attr::Str("pathData", 0x0101_0405, "M0,0L10,0L10,10z"),
+                Attr::Typed("fillColor", 0x0101_0404, 0x1c, 0xffdb_4437),
+            ],
+            true,
+        ),
+    ]);
+    let resources = table(
+        &[
+            "res/mipmap-anydpi-v26/ic_launcher.xml",
+            "res/drawable/ic_launcher_foreground.xml",
+        ],
+        &[
+            Res {
+                type_id: 1,
+                entry: 0,
+                language: "",
+                density: 0xffff,
+                value: Value {
+                    kind: TYPE_STRING,
+                    data: 0,
+                },
+            },
+            Res {
+                type_id: 3,
+                entry: 0,
+                language: "",
+                density: 0,
+                value: Value {
+                    kind: TYPE_STRING,
+                    data: 1,
+                },
+            },
+            Res {
+                type_id: 4,
+                entry: 0,
+                language: "",
+                density: 0,
+                value: Value {
+                    kind: 0x1c,
+                    data: 0xff42_85f4,
+                },
+            },
+        ],
+    );
+    archive(
+        &[
+            ("AndroidManifest.xml", &manifest[..]),
+            ("resources.arsc", &resources[..]),
+            ("res/mipmap-anydpi-v26/ic_launcher.xml", &adaptive[..]),
+            ("res/drawable/ic_launcher_foreground.xml", &foreground[..]),
+        ],
+        b"",
+    )
+}

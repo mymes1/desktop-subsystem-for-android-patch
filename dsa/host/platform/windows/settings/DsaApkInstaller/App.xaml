@@ -46,14 +46,26 @@
                 <Setter Property="TextTrimming" Value="CharacterEllipsis" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             </Style>
+            <!-- A line under the app's name: exactly one 20 px line, as App Installer's rows sit,
+                 about 4 px of air between one line's text and the next. No margin: a margin on
+                 each line stacks on top of the line's own leading. BlockLineHeight holds the
+                 line at 20 px; the default stacking lets a font with a taller line box (Segoe UI
+                 Variable's, or a fallback's) push every row further apart. -->
             <Style x:Key="DetailLine" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
                 <Setter Property="FontWeight" Value="Normal" />
                 <Setter Property="FontSize" Value="14" />
                 <Setter Property="LineHeight" Value="20" />
-                <Setter Property="Margin" Value="0,4,0,0" />
+                <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="TextWrapping" Value="NoWrap" />
                 <Setter Property="TextTrimming" Value="CharacterEllipsis" />
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            </Style>
+            <!-- A line's label, in the column before the values. -->
+            <Style x:Key="DetailLabel" TargetType="TextBlock" BasedOn="{StaticResource DetailLine}">
+                <Setter Property="Margin" Value="0,0,8,0" />
+                <Setter Property="TextTrimming" Value="None" />
             </Style>
             <Style x:Key="SectionHeader" TargetType="TextBlock">
                 <Setter Property="FontFamily" Value="{DynamicResource StrongTextFont}" />

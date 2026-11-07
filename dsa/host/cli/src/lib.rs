@@ -251,7 +251,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::apk::{ApkFile, InstallKind, InstallOutcome, InstalledPackage};
-use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer};
+use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer, Vector};
 use dsa_host_core::app_windows::AppWindowSettings;
 use dsa_host_core::arm_translation::{self, google};
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
@@ -3030,13 +3030,32 @@ pub fn apk_info_json(
     installed: Option<&InstalledPackage>,
     kind: Option<InstallKind>,
 ) -> Value {
+    let colour = |argb: Option<u32>| argb.map(|argb| format!("#{argb:08X}"));
+    let vector = |vector: &Vector| {
+        json!({
+            "kind": "vector",
+            "width": vector.width,
+            "height": vector.height,
+            "inset": vector.inset,
+            "paths": vector.paths.iter().map(|path| json!({
+                "data": path.data,
+                "fill": colour(path.fill),
+                "stroke": colour(path.stroke),
+                "stroke_width": path.stroke_width,
+                "even_odd": path.even_odd,
+                "transform": path.transform,
+            })).collect::<Vec<_>>(),
+        })
+    };
     let layer = |layer: &Layer| match layer {
         Layer::Image(png) => json!({ "kind": "image", "png": base64(png) }),
         Layer::Color(argb) => json!({ "kind": "color", "color": format!("#{argb:08X}") }),
+        Layer::Vector(v) => vector(v),
         Layer::Unknown => json!({ "kind": "unknown" }),
     };
     let icon = match &info.icon {
         Some(Icon::Image(png)) => json!({ "kind": "image", "png": base64(png) }),
+        Some(Icon::Vector(v)) => vector(v),
         Some(Icon::Adaptive {
             background,
             foreground,
