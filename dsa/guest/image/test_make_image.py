@@ -3593,6 +3593,26 @@ class ArmTranslationImageTests(unittest.TestCase):
             for rule in make_image.ARM_TRANSLATION_FS_CONFIG:
                 self.assertIn(rule, config)
 
+    def test_fr25_x86_64_stays_first_in_every_abi_list_when_translation_is_on(self):
+        # The package manager and the stores take the first ABI an app has code for, so an app
+        # with x86_64 code runs without the translator only while x86_64 comes first.
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            on = archive.read("SYSTEM/etc/dsa/arm-translation-on.prop").decode().splitlines()
+            lists = {}
+            for line in on:
+                name, _, value = line.partition("=")
+                if not line.startswith("#") and ".cpu.abilist" in name:
+                    lists[name] = value.split(",")
+            for name in [
+                "ro.product.cpu.abilist",
+                "ro.product.cpu.abilist64",
+                "ro.product.product.cpu.abilist",
+                "ro.product.product.cpu.abilist64",
+            ]:
+                self.assertIn(name, lists)
+            for name, abis in lists.items():
+                self.assertEqual(abis, ["x86_64", "arm64-v8a"], name)
+
     def test_fr25_the_package_is_mounted_over_system_only_when_the_host_turns_it_on(self):
         rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
         trigger = "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n"
