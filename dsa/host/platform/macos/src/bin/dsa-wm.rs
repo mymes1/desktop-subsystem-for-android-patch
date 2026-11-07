@@ -1,9 +1,10 @@
 //! `dsa-wm` on macOS: the window manager of Desktop Subsystem for Android.
 //!
 //! Runs as the user, from its launchd agent (installed by `dsa-hostd install-agent` beside
-//! the service's own) or started by `dsa-hostd` when there is no agent. It serves the guest's
-//! graphics streams, shows each Android task in a window of the app's own window host, and
-//! exits cleanly on SIGTERM, which launchd sends at logout.
+//! the service's own) or started by `dsa-hostd` when there is no agent. It starts the graphics
+//! renderer (`dsa-gfx`), which serves the guest's graphics streams, shows each Android task
+//! in a window of the app's own window host, and exits cleanly on SIGTERM, which launchd sends
+//! at logout.
 //!
 //! `DSA_RENDERER` names the renderer library to load instead of the one in DSA.app.
 

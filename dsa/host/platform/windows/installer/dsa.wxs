@@ -3,8 +3,8 @@
   The DSA package (MSI). build.ps1 builds it; see README.md.
 
   It installs dsa-hostd as the DsaHost service (SYSTEM, started automatically), the dsa
-  command on the system PATH, the DSA Window Manager (dsa-wm, started at each sign-in) and
-  the app window host it makes each app's window program from, the service's configuration, the guest kernel and, when the
+  command on the system PATH, the DSA Window Manager (dsa-wm, started at each sign-in), the
+  graphics renderer it starts (dsa-gfx) and the app window host it makes each app's window program from, the service's configuration, the guest kernel and, when the
   build has one, the first Android image. Uninstalling removes all of that, the Android
   images the service downloaded since, the setup files it downloaded to update DSA, the
   service's settings, logs and tmp folder, and in every user's profile the files, shortcuts
@@ -118,6 +118,15 @@
                                CloseMessage="yes"
                                PromptToContinue="no"
                                RebootPrompt="no" />
+        <!-- The graphics renderer has no window to be asked to close, and it holds
+             gfxstream_backend.dll open: it ends with its window manager, and is ended here if
+             it is still running, so its files can be replaced. -->
+        <util:CloseApplication Id="CloseRenderer"
+                               Target="dsa-gfx.exe"
+                               CloseMessage="no"
+                               TerminateProcess="1"
+                               PromptToContinue="no"
+                               RebootPrompt="no" />
         <!-- Earlier releases called the window manager dsa-compositor.exe; an upgrade
              from one closes it too, so its files can be replaced. -->
         <util:CloseApplication Id="CloseCompositor"
@@ -197,6 +206,12 @@
             </Component>
             <Component Id="WindowManagerExe" Guid="*">
                 <File Id="WindowManagerExe" Source="$(SourceDir)\dsa-wm.exe" KeyPath="yes" />
+            </Component>
+            <!-- The graphics renderer, which the window manager starts in a process of its own
+                 and starts again when it ends. It loads gfxstream_backend.dll from beside
+                 itself. -->
+            <Component Id="RendererExe" Guid="*">
+                <File Id="RendererExe" Source="$(SourceDir)\dsa-gfx.exe" KeyPath="yes" />
             </Component>
             <!-- The app window host. The window manager copies it for each Android app into
                  the user's profile (%LOCALAPPDATA%\DSA\apps\<package>\<Label>.exe), named and drawn as the app. -->

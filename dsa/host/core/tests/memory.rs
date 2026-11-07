@@ -372,6 +372,7 @@ fn snapshot() -> MemorySnapshot {
         host: vec![
             host(HostRole::Vm, 4, 600),
             host(HostRole::WindowManager, 10, 120),
+            host(HostRole::Renderer, 13, 80),
             host(HostRole::AppWindow, 11, 50),
             host(HostRole::AppWindow, 12, 50),
         ],
@@ -382,8 +383,9 @@ fn snapshot() -> MemorySnapshot {
 fn nfr1_the_log_line_sums_the_host_and_says_where_the_guests_memory_goes() {
     assert_eq!(
         snapshot().summary_line(),
-        "memory: host 820 MiB (vm 600, window manager 120, 2 app windows 100); \
-         guest 2048/4096 MiB used, cache 910, apps 700, swap 100 (zram 30), pss 650 MiB, 42 s ago"
+        "memory: host 900 MiB (vm 600, window manager 120, graphics renderer 80, 2 app windows \
+         100); guest 2048/4096 MiB used, cache 910, apps 700, swap 100 (zram 30), pss 650 MiB, \
+         42 s ago"
     );
     let no_guest = MemorySnapshot {
         guest: None,
@@ -391,7 +393,8 @@ fn nfr1_the_log_line_sums_the_host_and_says_where_the_guests_memory_goes() {
     };
     assert_eq!(
         no_guest.summary_line(),
-        "memory: host 600 MiB (vm 600, window manager 0, 0 app windows 0); guest has not reported"
+        "memory: host 600 MiB (vm 600, window manager 0, graphics renderer 0, 0 app windows 0); \
+         guest has not reported"
     );
 }
 
@@ -405,9 +408,10 @@ fn nfr1_the_snapshot_crosses_the_local_api_unchanged() {
 fn nfr1_the_report_dsa_memory_prints_names_every_part() {
     let text = snapshot().to_string();
     for part in [
-        "Host: 820 MiB in all",
+        "Host: 900 MiB in all",
         "vm",
         "window manager",
+        "graphics renderer pid 13",
         "app window",
         "Android (42 s ago): 2048 of 4096 MiB in use",
         "page cache 900 MiB",
@@ -574,7 +578,7 @@ fn nfr2_a_still_screen_gets_the_gpu_driver_trim_within_seconds() {
 
 #[test]
 fn nfr2_the_window_managers_committed_memory_is_broken_down_by_owner() {
-    use dsa_host_core::memory::{committed_line, CommittedMemory, RendererMemory};
+    use dsa_host_core::memory::{committed_line, CommittedMemory};
     let committed = CommittedMemory {
         private_kb: Some(453 * MIB),
         walked_private_kb: 450 * MIB,
@@ -585,7 +589,32 @@ fn nfr2_the_window_managers_committed_memory_is_broken_down_by_owner() {
         direct_kb: 300 * MIB,
         largest_private_kb: vec![64 * MIB, 3 * MIB / 2],
         own_live_kb: Some(12 * MIB),
-        renderer: Some(RendererMemory {
+        gpu_local_kb: Some(220 * MIB),
+        gpu_non_local_kb: None,
+    };
+    assert_eq!(
+        committed_line(&committed),
+        "committed memory by owner: private 453 MiB (450 found); default heap 20 (the window \
+         manager's own allocations 12); 4 other heaps 30; GPU-mapped 100; allocated directly 300 \
+         (largest allocations 64.0, 1.5 MiB); GPU memory 220 MiB, GPU-mapped system memory ? MiB"
+    );
+    let unknown = CommittedMemory::default();
+    assert!(committed_line(&unknown).contains("(largest allocations none MiB)"));
+}
+
+#[test]
+fn nfr5_the_renderers_memory_is_logged_under_its_own_process() {
+    use dsa_host_core::memory::{HeldMemory, RendererMemory};
+    use dsa_host_core::renderer::{renderer_line, RendererProcessMemory};
+    let memory = RendererProcessMemory {
+        process_id: 4242,
+        held: HeldMemory {
+            working_set_kb: Some(310 * MIB),
+            private_kb: Some(290 * MIB),
+            gpu_local_kb: None,
+            gpu_non_local_kb: None,
+        },
+        counted: Some(RendererMemory {
             device_local_kb: 200 * MIB,
             device_local_count: 40,
             host_visible_kb: 96 * MIB,
@@ -595,19 +624,22 @@ fn nfr2_the_window_managers_committed_memory_is_broken_down_by_owner() {
             largest_kb: 32 * MIB,
             guest_processes: 7,
         }),
-        gpu_local_kb: Some(220 * MIB),
-        gpu_non_local_kb: None,
     };
     assert_eq!(
-        committed_line(&committed),
-        "committed memory by owner: private 453 MiB (450 found); default heap 20 (the window \
-         manager's own allocations 12); 4 other heaps 30; GPU-mapped 100; allocated directly 300 \
-         (largest allocations 64.0, 1.5 MiB); renderer: GPU-only 200 MiB in 40, CPU-mapped 96 \
-         MiB in 6, imported 0 MiB in 0, largest 32 MiB, 7 guest processes connected; GPU memory \
-         220 MiB, GPU-mapped system memory ? MiB"
+        renderer_line(Some(&memory)),
+        "graphics renderer (dsa-gfx, pid 4242): working set 310 MiB, private 290 MiB; GPU-only \
+         200 MiB in 40, CPU-mapped 96 MiB in 6, imported 0 MiB in 0, largest 32 MiB, 7 guest \
+         processes connected"
     );
-    // A renderer that cannot count says so rather than showing zeros.
-    let unknown = CommittedMemory::default();
-    assert!(committed_line(&unknown).contains("renderer: no count"));
-    assert!(committed_line(&unknown).contains("(largest allocations none MiB)"));
+    // The report the renderer sends carries all of it to the window manager.
+    let carried = RendererProcessMemory::from_report(&memory.to_report(9));
+    assert_eq!(carried, memory);
+    // A renderer that cannot count says so rather than showing zeros, and one that does not
+    // answer says that.
+    let uncounted = RendererProcessMemory {
+        counted: None,
+        ..memory
+    };
+    assert!(renderer_line(Some(&uncounted)).contains("its GPU allocations: no count"));
+    assert!(renderer_line(None).contains("not running or not answering"));
 }

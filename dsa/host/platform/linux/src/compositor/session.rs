@@ -4,8 +4,10 @@
 //! The windows and the window rules (`TaskWindows`) live on the main thread with the Wayland
 //! connection. Each connection to the service runs on a thread of its own and reconnects
 //! when the service restarts; what a thread has for the windows goes through a channel, and
-//! a pipe wakes the main thread. A broken stream, a dead guest or a missing renderer is
-//! reported and waited out; nothing of it ends the compositor.
+//! a pipe wakes the main thread. The graphics renderer runs in a process of its own (`dsa-gfx`),
+//! which the compositor starts and starts again whenever it ends. A broken stream, a dead
+//! guest, a crashed or missing renderer is reported and waited out; nothing of it ends the
+//! compositor, and the windows keep their last frame meanwhile.
 
 use std::collections::BTreeMap;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
@@ -29,12 +31,15 @@ use dsa_host_unix::socket::UnixLocalConnector;
 use dsa_transport::Connector;
 
 use super::frames::{LatestFrames, Shown};
-use super::gfxstream::{self, FrameSink, Listen, Renderer};
+use super::gfxstream::{self, FrameSink};
 use super::wayland::{Desktop, Event, Events, Wake};
 use crate::input::evdev::EvdevGamepads;
+use crate::renderer::client::RendererClient;
 use crate::shell::dbus::{Notifier, Signal};
 use crate::shell::desktop_entry::{self, Folders};
 use crate::shell::notifications::Shown as ShownNotifications;
+use dsa_host_core::renderer::{spawn_supervisor, RendererHandler};
+use dsa_host_unix::renderer_launch::{CurrentFds, UnixLauncher};
 
 /// The build this program reports to the service.
 pub const BUILD: &str = env!("CARGO_PKG_VERSION");
@@ -440,30 +445,38 @@ fn follow_gamepads(active: Arc<AtomicBool>) {
     });
 }
 
-fn start_graphics(
+/// Starts the graphics renderer process (`dsa-gfx`), and starts it again whenever it ends;
+/// its frames go to `frames` and `images`. The renderer runs on the GPU the user's render GPU
+/// setting names, read once now.
+fn start_renderer(
     frames: Arc<Mutex<LatestFrames>>,
     images: Option<gfxstream::GpuImages>,
     waker: Arc<PipeWaker>,
-) {
-    let path = gfxstream::backend_path();
+) -> Arc<RendererClient> {
+    let render_gpu = connect()
+        .and_then(|mut client| client.settings().map_err(|error| error.to_string()))
+        .map(|report| report.settings.render_gpu)
+        .unwrap_or_default();
     let sink = FrameSink {
         frames,
         waker,
         images,
     };
-    match Renderer::load(&path, sink) {
-        Ok(renderer) => {
-            let renderer = Arc::new(renderer);
-            let listen = Listen::from_env();
-            let log: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(log);
-            for port in [gfxstream::COMMAND_PORT, gfxstream::PROCESS_PIPE_PORT] {
-                gfxstream::serve_port(renderer.clone(), listen.clone(), port, log.clone());
-            }
-        }
-        Err(why) => log(&format!(
-            "graphics: {why}; task windows open but show no frames until the renderer is installed"
-        )),
+    let fds: CurrentFds = Arc::default();
+    let client = RendererClient::new(sink, Arc::clone(&fds), render_gpu, Box::new(log));
+    let stop = Arc::new(AtomicBool::new(false));
+    if let Err(why) = spawn_supervisor(
+        Box::new(UnixLauncher::installed(fds)),
+        Arc::clone(&client) as Arc<dyn RendererHandler>,
+        format!("dsa-compositor {BUILD}"),
+        stop,
+    ) {
+        log(&format!(
+            "graphics: the renderer cannot be started ({why}); task windows open but show no \
+             frames"
+        ));
     }
+    client
 }
 
 /// The main thread's state.
@@ -739,7 +752,7 @@ pub fn run() -> Result<(), String> {
         .state
         .takes_gpu_frames()
         .then(|| Arc::new(Mutex::new(Vec::new())));
-    start_graphics(frames.clone(), images.clone(), waker);
+    let _renderer = start_renderer(frames.clone(), images.clone(), waker);
 
     let mut main = Main {
         desktop,

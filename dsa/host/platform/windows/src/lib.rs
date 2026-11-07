@@ -33,6 +33,8 @@
 //! - [`user_registry`]: removing the keys DSA wrote in each user's classes (Windows only).
 //! - [`account`]: the Windows account the host runs as (Windows only).
 //! - [`render_gpu`]: which GPU the host renderer runs on, and the setting that chooses it.
+//! - [`renderer`]: the graphics renderer in a process of its own, `dsa-gfx.exe`, and the
+//!   window manager's side of it (the processes are Windows only).
 //! - [`window_manager`]: starting a user's window manager in their session (Windows only).
 //! - [`compositor`]: the DSA Window Manager, which owns no window and hands each task's
 //!   frames to its app's window host (Windows only).
@@ -108,6 +110,7 @@ pub mod power;
 pub mod profile;
 pub mod pstore_disk;
 pub mod render_gpu;
+pub mod renderer;
 #[cfg(windows)]
 pub mod scheduling;
 #[cfg(windows)]

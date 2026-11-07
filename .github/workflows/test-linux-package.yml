@@ -128,6 +128,7 @@ jobs:
           dpkg-deb --contents "$deb" | tee .scratch/deb-contents
           rpm -qlp "$rpm" | tee .scratch/rpm-contents
           for path in /usr/bin/dsa /usr/lib/dsa/bin/dsa /usr/lib/dsa/bin/dsa-devices \
+              /usr/lib/dsa/bin/dsa-compositor /usr/lib/dsa/bin/dsa-gfx \
               /usr/lib/systemd/user/dsa-devices.service /usr/lib/udev/rules.d/70-dsa.rules \
               /usr/lib/modules-load.d/dsa.conf /usr/share/applications/dsa-open.desktop \
               /usr/share/applications/dsa-apk.desktop /etc/geoclue/conf.d/90-dsa.conf \

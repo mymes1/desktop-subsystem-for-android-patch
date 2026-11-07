@@ -1,7 +1,8 @@
 //! What installing and upgrading need from dsa-hostd besides copying files.
 //!
 //! Before the package replaces its files, every DSA program still running from them has to
-//! go, in every user's session: the window manager (`dsa-wm.exe`), the app window host and the
+//! go, in every user's session: the window manager (`dsa-wm.exe`), the graphics renderer it
+//! starts (`dsa-gfx.exe`, which holds `gfxstream_backend.dll` open), the app window host and the
 //! copies of it made for each Android app (in each user's `%LOCALAPPDATA%\DSA\apps`), and the
 //! settings app. A program left running keeps its file in use, so Windows Installer cannot
 //! replace it, and an old window manager then holds its single-instance lock against the new
@@ -15,8 +16,9 @@ use std::path::{Path, PathBuf};
 /// The programs in the program folder that run in a user's session and are ended. The
 /// service is stopped by Windows Installer itself, and `dsa.exe` is left alone: it may be
 /// the very command (`dsa update`) that is waiting for this installation to finish.
-const SESSION_PROGRAMS: [&str; 4] = [
+const SESSION_PROGRAMS: [&str; 5] = [
     "dsa-wm.exe",
+    "dsa-gfx.exe",
     "dsa-compositor.exe",
     "dsa-app-window.exe",
     "dsasettings.exe",

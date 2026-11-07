@@ -16,6 +16,7 @@ fn fr1_programs_running_from_the_program_folder_are_ended_before_an_upgrade() {
     let program = Path::new(r"C:\Program Files\DSA\");
     for image in [
         r"C:\Program Files\DSA\dsa-wm.exe",
+        r"C:\Program Files\DSA\dsa-gfx.exe",
         r"c:\program files\dsa\DSA-APP-WINDOW.EXE",
         r"\\?\C:\Program Files\DSA\settings\DsaSettings.exe",
         "C:/Program Files/DSA/dsa-wm.exe",

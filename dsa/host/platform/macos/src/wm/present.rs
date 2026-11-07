@@ -10,10 +10,14 @@
 //! a frame does not fit, so resizing a window does not remake it; each frame says how much of
 //! the surface it fills. A task whose route is withdrawn (its window closed or minimized)
 //! lets go of its surfaces at once, and the renderer of what it held for that display.
+//!
+//! The renderer runs in a process of its own (`dsa-gfx`, see `crate::gfx`): its requests for
+//! a frame's surface, and its word that a frame is in it, reach [`Presenter::target_for`] and
+//! [`FrameSink::copied`] over its connection.
 
 use std::collections::HashMap;
 use std::ffi::c_void;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use dsa_host_core::compositor::window_hosts::HostId;
@@ -24,7 +28,7 @@ use super::frame_slots::{Announce, FrameSlots, SLOTS};
 use super::hosts::{HostLink, Links};
 use super::log;
 use super::manager::Route;
-use crate::compositor::renderer::{FrameSink, Renderer};
+use crate::compositor::renderer::FrameSink;
 use crate::compositor::surface::Surface;
 use crate::compositor::surface_port::SurfacePorts;
 
@@ -60,7 +64,9 @@ pub struct Presenter {
     state: Mutex<State>,
     links: Links,
     ports: Option<Arc<SurfacePorts>>,
-    renderer: Mutex<Option<Weak<Renderer>>>,
+    /// Told of each display no longer shown, so the renderer lets go of what it held for it.
+    #[allow(clippy::type_complexity)]
+    forget: Mutex<Option<Box<dyn Fn(u32) + Send + Sync>>>,
 }
 
 impl Presenter {
@@ -72,13 +78,50 @@ impl Presenter {
             }),
             links,
             ports,
-            renderer: Mutex::new(None),
+            forget: Mutex::new(None),
         }
     }
 
-    /// The renderer whose frames these are, told when a display is no longer shown.
-    pub fn set_renderer(&self, renderer: &Arc<Renderer>) {
-        *self.renderer.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::downgrade(renderer));
+    /// Tells `forget` of each display no longer shown: the renderer (in its own process)
+    /// lets go of what it holds for it.
+    pub fn on_forget(&self, forget: Box<dyn Fn(u32) + Send + Sync>) {
+        *self.forget.lock().unwrap_or_else(|e| e.into_inner()) = Some(forget);
+    }
+
+    /// The window manager's Mach service, when it has one: surfaces go to the renderer
+    /// process through it too.
+    pub fn ports(&self) -> Option<&Arc<SurfacePorts>> {
+        self.ports.as_ref()
+    }
+
+    /// The `IOSurfaceRef` to put display `display_id`'s next frame in: of `exact`ly
+    /// `width` x `height` pixels for a copy on the GPU, at least that for a frame written by the
+    /// CPU. Null drops the frame. The surface stays valid until the display gets another or is
+    /// no longer shown.
+    pub fn target_for(&self, display_id: u32, width: u32, height: u32, exact: bool) -> *mut c_void {
+        if !valid_size(width, height) {
+            return std::ptr::null_mut();
+        }
+        let mut guard = self.lock();
+        let State {
+            displays,
+            next_texture,
+        } = &mut *guard;
+        let Some(shown) = displays.get_mut(&display_id) else {
+            return std::ptr::null_mut();
+        };
+        let slot = shown.slots.begin();
+        match self.surface(next_texture, shown, slot, (width, height), exact) {
+            Some(target) => {
+                let raw = target.surface.as_raw();
+                shown.copying = Some(slot);
+                raw
+            }
+            None => {
+                shown.slots.abandon();
+                std::ptr::null_mut()
+            }
+        }
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
@@ -120,14 +163,14 @@ impl Presenter {
                 state.displays.insert(route.display_id, shown);
             }
         }
-        let renderer = self
-            .renderer
+        if let Some(forget) = self
+            .forget
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .clone();
-        if let Some(renderer) = renderer.and_then(|weak| weak.upgrade()) {
+            .as_ref()
+        {
             for display_id in forgotten {
-                renderer.forget_display(display_id);
+                forget(display_id);
             }
         }
     }
@@ -304,29 +347,7 @@ impl FrameSink for Presenter {
     }
 
     fn target(&self, display_id: u32, width: u32, height: u32) -> *mut c_void {
-        if !valid_size(width, height) {
-            return std::ptr::null_mut();
-        }
-        let mut guard = self.lock();
-        let State {
-            displays,
-            next_texture,
-        } = &mut *guard;
-        let Some(shown) = displays.get_mut(&display_id) else {
-            return std::ptr::null_mut();
-        };
-        let slot = shown.slots.begin();
-        match self.surface(next_texture, shown, slot, (width, height), true) {
-            Some(target) => {
-                let raw = target.surface.as_raw();
-                shown.copying = Some(slot);
-                raw
-            }
-            None => {
-                shown.slots.abandon();
-                std::ptr::null_mut()
-            }
-        }
+        self.target_for(display_id, width, height, true)
     }
 
     fn copied(&self, display_id: u32, width: u32, height: u32) {

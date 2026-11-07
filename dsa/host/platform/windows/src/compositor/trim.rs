@@ -1,6 +1,6 @@
 //! Giving back the memory the window manager is not using while no task window is shown.
 //!
-//! The window manager holds the renderer and every task's frames. While windows are shown
+//! The window manager holds every task's frames. While windows are shown
 //! that memory is in use; once the last one has closed or been minimized, most of it is not,
 //! but Windows takes it back only when it runs short, so until then it counts as the window
 //! manager's. As soon as no task window is shown ([`IdleTrim`]), the window
@@ -14,7 +14,8 @@
 //!
 //! Each give-back logs what the process still holds (working set, private commit and GPU
 //! memory) and its committed memory by owner (`committed`), so a log shows where the window
-//! manager's memory goes.
+//! manager's memory goes. The graphics renderer runs in its own process (`dsa-gfx`): it is asked
+//! to give back what it does not use at the same moment, and its own line says what it holds.
 //!
 //! [`IdleTrim`]: dsa_host_core::memory::IdleTrim
 
@@ -24,6 +25,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::memory::{committed_line, held_line, HeldMemory, IdleTrim};
+use dsa_host_core::renderer::renderer_line;
 use windows_sys::Win32::System::ProcessStatus::{
     K32EmptyWorkingSet, K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
     PROCESS_MEMORY_COUNTERS_EX,
@@ -81,10 +83,9 @@ pub fn empty_working_set() {
 }
 
 /// The log line that says whose this process's committed memory is.
-fn by_owner(held: &HeldMemory, renderer: Option<&dyn DisplayPresenter>) -> String {
+fn by_owner(held: &HeldMemory) -> String {
     committed_line(&committed::breakdown(
         held.private_kb,
-        renderer.and_then(|renderer| renderer.memory()),
         (held.gpu_local_kb, held.gpu_non_local_kb),
     ))
 }
@@ -118,7 +119,11 @@ pub fn give_back(
         )
     };
     note(logger, &message);
-    note(logger, &by_owner(&after, renderer));
+    note(logger, &by_owner(&after));
+    // The renderer's process gives back what it does not use too, and says what it holds.
+    if let Some(renderer) = renderer {
+        note(logger, &renderer_line(renderer.give_back().as_ref()));
+    }
 }
 
 /// Checks `idle` every second until `stop` is set, and gives memory back when it says so.
@@ -154,7 +159,13 @@ pub fn run(
                         held_line(&before, &after)
                     ),
                 );
-                note(logger.as_deref(), &by_owner(&after, renderer.as_deref()));
+                note(logger.as_deref(), &by_owner(&after));
+                if let Some(renderer) = renderer.as_deref() {
+                    note(
+                        logger.as_deref(),
+                        &renderer_line(renderer.memory().as_ref()),
+                    );
+                }
             }
         }
     }

@@ -193,6 +193,9 @@
   <data name="Role_WindowManager" xml:space="preserve">
     <value>창 관리자</value>
   </data>
+  <data name="Role_Renderer" xml:space="preserve">
+    <value>그래픽 렌더러</value>
+  </data>
   <data name="Role_AppWindow" xml:space="preserve">
     <value>앱 창</value>
   </data>

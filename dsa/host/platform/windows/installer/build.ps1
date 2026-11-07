@@ -83,11 +83,11 @@ New-Item -ItemType Directory -Force $stage | Out-Null
 $env:DSA_VERSION = $Version
 Push-Location $dsa
 try {
-    cargo build --release --target $rustTarget -p dsa-host-windows --bin dsa-hostd --bin dsa-wm --bin dsa-app-window -p dsa-cli --bin dsa
+    cargo build --release --target $rustTarget -p dsa-host-windows --bin dsa-hostd --bin dsa-wm --bin dsa-gfx --bin dsa-app-window -p dsa-cli --bin dsa
     if ($LASTEXITCODE -ne 0) { throw "cargo build for $rustTarget failed (rustup target add $rustTarget adds the target)" }
 } finally { Pop-Location }
 $built = Join-Path $dsa "target\$rustTarget\release"
-foreach ($program in @("dsa-hostd.exe", "dsa-wm.exe", "dsa-app-window.exe", "dsa.exe")) {
+foreach ($program in @("dsa-hostd.exe", "dsa-wm.exe", "dsa-gfx.exe", "dsa-app-window.exe", "dsa.exe")) {
     Copy-Item (Join-Path $built $program) $stage
 }
 

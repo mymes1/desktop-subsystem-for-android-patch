@@ -290,6 +290,8 @@ impl Settings {
 pub enum HostRole {
     Vm,
     WindowManager,
+    /// The graphics renderer (`dsa-gfx`), which the window manager starts.
+    Renderer,
     AppWindow,
 }
 
@@ -354,6 +356,7 @@ impl Memory {
                 let role = match p["role"].as_str()? {
                     "vm" => HostRole::Vm,
                     "window manager" => HostRole::WindowManager,
+                    "graphics renderer" => HostRole::Renderer,
                     "app window" => HostRole::AppWindow,
                     _ => return None,
                 };
