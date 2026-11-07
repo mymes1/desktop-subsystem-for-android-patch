@@ -188,9 +188,14 @@ jobs:
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/error.log
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/soong.log
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/verbose.log*
+            ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/soong_ui.log*
+            ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/soong/soong.variables
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/.dsa-targets
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/.dsa-sources.json
             ${{ env.DSA_TRANSLATOR_WORK }}/reports/
             ${{ env.DSA_TRANSLATOR_WORK }}/CONTENTS.sha256
           if-no-files-found: ignore
+          # .dsa-targets and .dsa-sources.json start with a dot, which upload-artifact skips
+          # unless told otherwise.
+          include-hidden-files: true
           retention-days: 30
