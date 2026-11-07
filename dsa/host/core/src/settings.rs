@@ -26,6 +26,8 @@
 //!                             the user's window settings for each app
 //! <dir>/users/<user>.arm-translation.json
 //!                             the ARM translation package the user installed, if any
+//! <dir>/users/<user>.arm-translation-boot.json
+//!                             the translator the user's latest boot of Android was told to use
 //! <dir>/users/<user>.gapps.json
 //!                             the build of Google's apps the user installed, if any
 //! ```
@@ -40,7 +42,7 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::app_windows::AppWindowSettings;
-use crate::arm_translation::Package;
+use crate::arm_translation::{Package, Translator};
 use crate::file_share;
 use crate::gapps::GappsPackage;
 
@@ -299,6 +301,21 @@ pub trait SettingsStore: Send + Sync {
     fn arm_translation(&self, user: &str) -> Result<Option<Package>, String>;
     /// Records the ARM translation package `user` has installed, or that there is none.
     fn set_arm_translation(&self, user: &str, package: Option<&Package>) -> Result<(), String>;
+    /// The ARM translator `user`'s latest boot of Android was told to use, if any.
+    fn arm_translation_boot(&self, user: &str) -> Result<Option<Translator>, String> {
+        let _ = user;
+        Ok(None)
+    }
+    /// Records the ARM translator a boot of `user`'s Android is told to use, or that it is told
+    /// to use none.
+    fn set_arm_translation_boot(
+        &self,
+        user: &str,
+        translator: Option<&Translator>,
+    ) -> Result<(), String> {
+        let _ = (user, translator);
+        Ok(())
+    }
     /// The window settings of `user` for every app that has any, by package name.
     fn app_windows(&self, user: &str) -> Result<Vec<AppWindowSettings>, String> {
         let _ = user;
@@ -376,6 +393,13 @@ impl FileSettings {
             .dir
             .join("users")
             .join(format!("{}.gapps.json", user_file_stem(user)?)))
+    }
+
+    fn arm_translation_boot_file(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self.dir.join("users").join(format!(
+            "{}.arm-translation-boot.json",
+            user_file_stem(user)?
+        )))
     }
 
     fn read_machine(&self) -> Result<MachineSettings, String> {
@@ -512,6 +536,29 @@ impl SettingsStore for FileSettings {
         }
     }
 
+    fn arm_translation_boot(&self, user: &str) -> Result<Option<Translator>, String> {
+        let file = self.arm_translation_boot_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        read_json(&file)
+    }
+
+    fn set_arm_translation_boot(
+        &self,
+        user: &str,
+        translator: Option<&Translator>,
+    ) -> Result<(), String> {
+        let file = self.arm_translation_boot_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        match translator {
+            Some(translator) => write_json(&file, translator),
+            None => match std::fs::remove_file(&file) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(format!("removing {}: {e}", file.display())),
+            },
+        }
+    }
+
     fn app_windows(&self, user: &str) -> Result<Vec<AppWindowSettings>, String> {
         let file = self.app_windows_file(user)?;
         let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
@@ -550,6 +597,7 @@ pub struct MemorySettings {
     users: Mutex<std::collections::HashMap<String, UserSettings>>,
     machine: Mutex<MachineSettings>,
     arm_translation: Mutex<std::collections::HashMap<String, Package>>,
+    arm_translation_boot: Mutex<std::collections::HashMap<String, Translator>>,
     app_windows: Mutex<std::collections::HashMap<String, Vec<AppWindowSettings>>>,
     gapps: Mutex<std::collections::HashMap<String, GappsPackage>>,
 }
@@ -608,6 +656,31 @@ impl SettingsStore for MemorySettings {
         match package {
             Some(package) => packages.insert(user.to_string(), package.clone()),
             None => packages.remove(user),
+        };
+        Ok(())
+    }
+
+    fn arm_translation_boot(&self, user: &str) -> Result<Option<Translator>, String> {
+        Ok(self
+            .arm_translation_boot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(user)
+            .cloned())
+    }
+
+    fn set_arm_translation_boot(
+        &self,
+        user: &str,
+        translator: Option<&Translator>,
+    ) -> Result<(), String> {
+        let mut boots = self
+            .arm_translation_boot
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        match translator {
+            Some(translator) => boots.insert(user.to_string(), translator.clone()),
+            None => boots.remove(user),
         };
         Ok(())
     }
@@ -1025,6 +1098,45 @@ mod tests {
                 .get("uid:1000")
                 .unwrap()
                 .arm_translation
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr25_the_translator_a_boot_was_told_to_use_is_kept_per_user() {
+        use crate::arm_translation::Source;
+        let dir = scratch("arm-translation-boot");
+        let store = FileSettings::new(&dir);
+        assert_eq!(store.arm_translation_boot("uid:1000").unwrap(), None);
+        let booted = Translator {
+            source: Source::Default,
+            package: Package {
+                name: "Digitalis".into(),
+                version: "17-abefbe2b1600".into(),
+                library: "libberberis_arm64.so".into(),
+                abis: vec!["arm64-v8a".into()],
+                license: "Apache-2.0".into(),
+            },
+        };
+        store
+            .set_arm_translation_boot("uid:1000", Some(&booted))
+            .unwrap();
+        let again = FileSettings::new(&dir);
+        assert_eq!(
+            again.arm_translation_boot("uid:1000").unwrap(),
+            Some(booted.clone())
+        );
+        assert_eq!(again.arm_translation_boot("uid:1001").unwrap(), None);
+        again.set_arm_translation_boot("uid:1000", None).unwrap();
+        assert_eq!(again.arm_translation_boot("uid:1000").unwrap(), None);
+        again.set_arm_translation_boot("uid:1000", None).unwrap();
+        let memory = MemorySettings::default();
+        memory
+            .set_arm_translation_boot("uid:1000", Some(&booted))
+            .unwrap();
+        assert_eq!(
+            memory.arm_translation_boot("uid:1000").unwrap(),
+            Some(booted)
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

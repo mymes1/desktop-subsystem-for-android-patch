@@ -68,7 +68,7 @@ use crate::accessibility::{
 use crate::apk::{self, InstallOutcome, InstalledPackage};
 use crate::app_windows::{self, AppWindowSettings};
 use crate::apps::{self, UninstallOutcome};
-use crate::arm_translation::{self, GuestArmTranslation, Package};
+use crate::arm_translation::{self, GuestArmTranslation, Package, Source, Translator};
 use crate::background::{
     self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundWatch, MediaCommand,
     MediaSession, Playback,
@@ -1294,8 +1294,13 @@ pub type NetworkSource = Arc<dyn Fn(&str, &Settings) -> Option<NetworkStatus> + 
 /// Where ARM translation stands for a user.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArmTranslationStatus {
-    /// The package the user installed, if any.
+    /// The package the user installed (their own or Google's), if any.
     pub package: Option<Package>,
+    /// The default package of the image the user's Android starts from; only an x86_64 image
+    /// has one.
+    pub default: Option<Package>,
+    /// The translator the user's Android uses with these settings, from its next start.
+    pub translator: Option<Translator>,
     /// The user's `arm-translation` setting.
     pub enabled: bool,
     /// What the user's running Android says; `None` when it is not running.
@@ -1315,12 +1320,30 @@ impl ArmTranslationStatus {
             guest_active: guest.active,
             abilist: guest.abilist,
             restart_needed: self.restart_needed,
+            default_package: self.default.as_ref().map(package_to_wire),
+            translator: self
+                .translator
+                .as_ref()
+                .map(|translator| translator.source.as_str())
+                .unwrap_or_default()
+                .to_string(),
         }
     }
 
     fn from_wire(status: types::ArmTranslation) -> ArmTranslationStatus {
+        let package = status.package.map(package_from_wire);
+        let default = status.default_package.map(package_from_wire);
+        let translator = Source::parse(&status.translator).and_then(|source| {
+            let described = match source {
+                Source::Default => default.clone(),
+                Source::User | Source::Google => package.clone(),
+            };
+            described.map(|package| Translator { source, package })
+        });
         ArmTranslationStatus {
-            package: status.package.map(package_from_wire),
+            package,
+            default,
+            translator,
             enabled: status.enabled,
             guest: status.guest_known.then_some(GuestArmTranslation {
                 installed: status.guest_installed,
@@ -1474,10 +1497,16 @@ pub struct HostApiService {
     versions: Option<Arc<dyn crate::update::versions::AndroidVersions>>,
     /// Where Google Play is downloaded from, and where it is made ready.
     gapps: Option<gapps::Source>,
+    /// The default ARM translation package of the image each user's Android starts from.
+    default_arm_translation: Option<DefaultArmTranslationSource>,
 }
 
 /// Says what the build of the image a user's Android starts from is, by user.
 pub type ImageBuildSource = Arc<dyn Fn(&str) -> Option<ImageBuild> + Send + Sync>;
+
+/// Says which default ARM translation package the image a user's Android starts from carries,
+/// by user: `None` for an image that has none, as every arm64 image.
+pub type DefaultArmTranslationSource = Arc<dyn Fn(&str) -> Option<Package> + Send + Sync>;
 
 /// Names the host's log files that go in a user's diagnostics archive: the service's own and
 /// those of the processes in that user's session, never another user's.
@@ -1506,7 +1535,18 @@ impl HostApiService {
             data_reset_wait: RESET_STOP_WAIT,
             versions: None,
             gapps: None,
+            default_arm_translation: None,
         }
+    }
+
+    /// Reports the default ARM translation package of the image each user's Android starts
+    /// from, as `source` gives it, which their Android uses while they have installed none.
+    pub fn with_default_arm_translation(
+        mut self,
+        source: DefaultArmTranslationSource,
+    ) -> HostApiService {
+        self.default_arm_translation = Some(source);
+        self
     }
 
     /// Installs Google Play for users who ask, downloading it through `source`.
@@ -3781,8 +3821,9 @@ impl HostApiService {
 }
 
 impl HostApiService {
-    /// Where ARM translation stands for `peer`: the package they installed, their setting,
-    /// and what their running Android says.
+    /// Where ARM translation stands for `peer`: the package they installed, the image's
+    /// default one, their setting, the translator those choose, and what their running Android
+    /// says.
     fn arm_translation_status(
         &self,
         peer: &Peer,
@@ -3791,19 +3832,33 @@ impl HostApiService {
     ) -> Result<ArmTranslationStatus, String> {
         let package = store.arm_translation(&peer.user)?;
         let enabled = store.get(&peer.user)?.arm_translation;
+        let default = self
+            .default_arm_translation
+            .as_ref()
+            .and_then(|source| source(&peer.user));
+        let translator = arm_translation::choose(package.as_ref(), default.as_ref(), enabled);
         let guest = guest.or_else(|| {
             self.androids
                 .android(&peer.user)
                 .ok()
                 .and_then(|android| android.arm_translation())
         });
+        // A record that cannot be read only takes away telling one translator from another.
+        let booted = store
+            .arm_translation_boot(&peer.user)
+            .unwrap_or_else(|why| {
+                eprintln!("arm translation: {why}");
+                None
+            });
         Ok(ArmTranslationStatus {
             restart_needed: arm_translation::restart_needed(
-                package.as_ref(),
-                enabled,
+                translator.as_ref(),
+                booted.as_ref(),
                 guest.as_ref(),
             ),
             package,
+            default,
+            translator,
             enabled,
             guest,
         })

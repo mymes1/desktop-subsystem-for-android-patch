@@ -1140,6 +1140,10 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::unusable_arm_translation_is_refused(&mut || $make);
         }
         #[test]
+        fn fr25_the_images_default_translator_is_used_until_a_package_replaces_it() {
+            $crate::host_api_conformance::default_arm_translation_reaches_the_caller(&mut || $make);
+        }
+        #[test]
         fn fr32_google_play_is_installed_reported_and_removed() {
             $crate::host_api_conformance::gapps_reach_the_caller(&mut || $make);
         }
@@ -2618,6 +2622,90 @@ pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
     assert!(!removed.restart_needed);
     assert!(android.arm_image.lock().unwrap().is_none());
     assert_eq!(store.arm_translation(&user).unwrap(), None);
+}
+
+fn default_arm_package() -> Package {
+    Package {
+        name: "Digitalis".into(),
+        version: "17-abefbe2b1600".into(),
+        library: "libberberis_arm64.so".into(),
+        abis: vec!["arm64-v8a".into()],
+        license: "Apache-2.0".into(),
+    }
+}
+
+pub fn default_arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
+    use crate::arm_translation::Source;
+    use sha2::Digest;
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service = HostApiService::new(androids.clone(), "test service")
+        .with_settings(store.clone(), facts())
+        .with_default_arm_translation(Arc::new(|_: &str| Some(default_arm_package())));
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    let first = client
+        .arm_translation()
+        .expect("asking where translation stands");
+    assert_eq!(first.package, None);
+    assert_eq!(first.default, Some(default_arm_package()));
+    let translator = first.translator.clone().expect("the default translates");
+    assert_eq!(translator.source, Source::Default);
+    assert_eq!(translator.package, default_arm_package());
+    assert!(!first.restart_needed, "Android is not running");
+
+    client.start().unwrap();
+    let image: Vec<u8> = (0..4096u32).map(|i| (i % 251) as u8).collect();
+    let installed = connect(&mut *connector)
+        .install_arm_translation(
+            &arm_package(),
+            image.len() as u64,
+            &sha2::Sha256::digest(&image),
+            &mut image.as_slice(),
+        )
+        .expect("installing the package");
+    let translator = installed
+        .translator
+        .clone()
+        .expect("the package translates");
+    assert_eq!(translator.source, Source::User);
+    assert_eq!(translator.package, arm_package());
+    assert_eq!(
+        installed.default,
+        Some(default_arm_package()),
+        "still offered"
+    );
+    assert!(installed.restart_needed);
+
+    // Removing the package brings the default back.
+    let removed = client
+        .remove_arm_translation()
+        .expect("removing the package");
+    assert_eq!(removed.package, None);
+    assert_eq!(
+        removed.translator.map(|translator| translator.source),
+        Some(Source::Default)
+    );
+    let off = client
+        .set_settings(&Settings {
+            arm_translation: false,
+            ..Settings::default()
+        })
+        .unwrap();
+    assert!(!off.settings.arm_translation);
+    let off = client.arm_translation().unwrap();
+    assert_eq!(off.translator, None, "turned off");
+    assert_eq!(off.default, Some(default_arm_package()));
+
+    // An image without a default package (every arm64 image) offers none.
+    let (listener, mut connector, _) = make();
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(Arc::new(MemorySettings::default()), facts())
+        .with_default_arm_translation(Arc::new(|_: &str| None));
+    let _arm64 = RunningService::start_service(listener, service);
+    let none = connect(&mut *connector).arm_translation().unwrap();
+    assert_eq!((none.default, none.translator), (None, None));
 }
 
 /// Serves LiteGapps' file host from memory: the feed of x86_64 builds for API level 36, and
