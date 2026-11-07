@@ -57,6 +57,8 @@ pub(crate) mod gpt;
 pub(crate) mod pstore_disk;
 
 #[cfg(target_os = "macos")]
+pub mod adb_discovery;
+#[cfg(target_os = "macos")]
 pub mod android_vm;
 #[cfg(target_os = "macos")]
 pub mod fetch;

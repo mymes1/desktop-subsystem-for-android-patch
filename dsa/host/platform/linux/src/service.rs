@@ -404,6 +404,10 @@ pub fn create_user_android(
             Duration::from_secs(5),
         )
     }));
+    // Developer mode's port is attached to the user's own adb server, and advertised over
+    // mDNS on the loopback address, so adb finds it without `adb connect`.
+    session.set_adb_server(crate::adb_discovery::adb_server_of(uid));
+    session.set_adb_advertise(crate::adb_discovery::advertiser());
     session.serve_log_port(Box::new(log_listener), build);
     // The user's folders, served with the user's own rights.
     let folders = crate::devices::file_share::UserFolders::for_uid(uid)
@@ -757,6 +761,7 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
                             s.shared_folders.clone()
                         }),
                 );
+                android.adb_auto_connect(settings.as_ref().is_none_or(|s| s.adb_auto_connect));
                 if let Some(settings) = settings.as_ref().filter(|s| s.developer_mode) {
                     if let Err(why) = android.developer_mode(true, settings.adb_port) {
                         eprintln!("{user}: developer mode: {why}");

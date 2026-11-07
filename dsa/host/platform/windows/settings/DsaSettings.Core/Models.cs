@@ -48,7 +48,9 @@ public sealed record SettingsInfo(
     bool AdvancedNetworking = false,
     NetworkInfo? Network = null,
     bool FileSharing = true,
-    IReadOnlyList<string>? SharedFolders = null)
+    IReadOnlyList<string>? SharedFolders = null,
+    bool AdbAutoConnect = true,
+    AdbAutoConnectState AdbAutoConnectState = AdbAutoConnectState.Off)
 {
     /// <summary>The Windows folders that can be shared with Android, in the order the service
     /// keeps them.</summary>
@@ -73,6 +75,23 @@ public sealed record SettingsInfo(
         "discrete" => RenderGpuKind.Discrete,
         _ => RenderGpuKind.Named,
     };
+}
+
+/// <summary>Where attaching developer mode's port to this computer's adb server stands, as
+/// the service reports it.</summary>
+public enum AdbAutoConnectState
+{
+    /// <summary>Developer mode or auto-connect is off.</summary>
+    Off,
+    /// <summary>No adb server runs on this computer yet.</summary>
+    WaitingForServer,
+    /// <summary>Android is not running, or adb in Android has not answered yet.</summary>
+    WaitingForAndroid,
+    /// <summary>The adb server lists DSA.</summary>
+    Attached,
+    /// <summary>The user ran adb disconnect; DSA is attached again when the adb server
+    /// restarts.</summary>
+    Detached,
 }
 
 /// <summary>How Android reaches the network.</summary>

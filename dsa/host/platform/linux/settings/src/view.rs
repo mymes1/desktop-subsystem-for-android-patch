@@ -6,8 +6,8 @@ use std::collections::VecDeque;
 use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
-    AndroidVersion, App, AppWindow, ArmTranslation, Gapps, GappsState, GuestMemory, HostRole,
-    Memory, Network, NetworkMode, Outcome, State, Status, ALL_FOLDERS,
+    AdbAutoConnectState, AndroidVersion, App, AppWindow, ArmTranslation, Gapps, GappsState,
+    GuestMemory, HostRole, Memory, Network, NetworkMode, Outcome, State, Status, ALL_FOLDERS,
 };
 
 /// A problem in the user's language, with what the client said after it.
@@ -28,6 +28,25 @@ pub fn problem_text(failure: &Failure) -> String {
     } else {
         format!("{words}\n{}", failure.detail)
     }
+}
+
+/// Where attaching developer mode's port to the adb server stands, in the user's language.
+pub fn adb_auto_connect_text(state: AdbAutoConnectState) -> String {
+    tr(match state {
+        AdbAutoConnectState::Off => {
+            "Not connecting: developer mode or automatic connection is off."
+        }
+        AdbAutoConnectState::WaitingForServer => {
+            "Waiting for adb: Android connects when adb starts on this computer."
+        }
+        AdbAutoConnectState::WaitingForAndroid => {
+            "Waiting for Android: it connects once Android is running."
+        }
+        AdbAutoConnectState::Attached => "Connected: adb lists Android.",
+        AdbAutoConnectState::Detached => {
+            "Disconnected with adb disconnect. Android connects again when the adb server restarts."
+        }
+    })
 }
 
 pub fn state_text(state: State) -> String {

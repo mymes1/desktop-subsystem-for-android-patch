@@ -80,6 +80,8 @@ public final class DsaService {
         s.network = json["network"].isObject ? readNetwork(json["network"]) : nil
         s.fileSharing = json.bool("file_sharing", missing: true)
         s.sharedFolders = json["shared_folders"].isArray ? json.strings("shared_folders") : nil
+        s.adbAutoConnect = json.bool("adb_auto_connect", missing: true)
+        s.adbAutoConnectState = AdbAutoConnectState.read(json.optionalString("adb_auto_connect_state"))
         return s
     }
 
@@ -116,6 +118,8 @@ public final class DsaService {
     /// Whether stopping an app from the menu bar skips the question that confirms it.
     public func setStopWithoutAsking(_ on: Bool) async throws -> SettingsInfo { try await set("stop-without-asking", onOff(on)) }
     public func setAdbPort(_ port: Int) async throws -> SettingsInfo { try await set("adb-port", String(port)) }
+    /// Whether developer mode's port is attached to this Mac's adb server by itself.
+    public func setAdbAutoConnect(_ on: Bool) async throws -> SettingsInfo { try await set("adb-auto-connect", onOff(on)) }
     public func setArmTranslation(_ on: Bool) async throws -> SettingsInfo { try await set("arm-translation", onOff(on)) }
     /// Whether the chosen Mac folders show in Android's shared storage.
     public func setFileSharing(_ on: Bool) async throws -> SettingsInfo { try await set("file-sharing", onOff(on)) }

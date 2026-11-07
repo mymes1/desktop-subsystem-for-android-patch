@@ -65,6 +65,7 @@ use dsa_transport::{Connection, Connector, TransportError};
 use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
+use crate::adb_discovery::AutoConnectState;
 use crate::apk::{self, InstallOutcome, InstallPart, InstalledPackage};
 use crate::app_windows::{self, AppWindowSettings};
 use crate::apps::{self, UninstallOutcome};
@@ -214,6 +215,15 @@ pub trait UserAndroid: Send + Sync {
         } else {
             Ok(())
         }
+    }
+    /// Turns the user's adb auto-connect setting on or off: whether, while developer mode is
+    /// on, the port is attached to the user's adb server by itself.
+    fn adb_auto_connect(&self, on: bool) {
+        let _ = on;
+    }
+    /// Where auto-connect stands for this Android.
+    fn adb_auto_connect_state(&self) -> AutoConnectState {
+        AutoConnectState::Off
     }
     /// Sends a file to this Android, which asks the user which app opens or takes it.
     fn open_file(&self, file: &FileTransfer) -> Result<(), TaskRequestError> {
@@ -658,6 +668,12 @@ impl UserAndroid for Session {
     }
     fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
         Session::developer_mode(self, on, port)
+    }
+    fn adb_auto_connect(&self, on: bool) {
+        Session::adb_auto_connect(self, on)
+    }
+    fn adb_auto_connect_state(&self) -> AutoConnectState {
+        Session::adb_auto_connect_state(self)
     }
     fn watch_links(&self) -> Option<Receiver<String>> {
         Some(Session::watch_links(self))
@@ -1320,6 +1336,9 @@ pub struct SettingsReport {
     pub facts: ServiceFacts,
     /// The caller's network as it stands now; `None` from a service that does not report it.
     pub network: Option<NetworkStatus>,
+    /// Where adb auto-connect stands for the caller's Android. Off from a service that does
+    /// not report it.
+    pub adb_auto_connect_state: AutoConnectState,
 }
 
 /// How a user's Android reaches the network.
@@ -4493,10 +4512,22 @@ impl HostApiService {
             Ok(settings) => {
                 let mut wire = settings_to_wire(&settings, &self.facts_now(facts));
                 wire.network = self.network_now(&peer.user, &settings);
+                wire.adb_auto_connect_state = self.adb_auto_connect_now(&peer.user);
                 response::Body::Settings(wire)
             }
             Err(why) => error(ErrorCode::Unavailable, why),
         }
+    }
+
+    /// Where adb auto-connect stands for the caller's Android, or off when it has none.
+    fn adb_auto_connect_now(&self, user: &str) -> String {
+        self.androids
+            .android(user)
+            .map_or(AutoConnectState::Off, |android| {
+                android.adb_auto_connect_state()
+            })
+            .as_str()
+            .to_string()
     }
 
     /// The caller's network as the platform reports it, or "off" when it cannot say (no
@@ -4529,6 +4560,7 @@ impl HostApiService {
             input_trace: wanted.input_trace,
             resize_trace: wanted.resize_trace,
             developer_mode: wanted.developer_mode,
+            adb_auto_connect: wanted.adb_auto_connect,
             arm_translation: wanted.arm_translation,
             file_sharing: wanted.file_sharing,
             shared_folders: wanted.shared_folders,
@@ -4583,6 +4615,7 @@ impl HostApiService {
                     android.share_clipboard(settings.clipboard);
                     android.links_in_android(settings.links_in_android);
                     android.share_folders(settings.file_sharing, settings.shared_folders.clone());
+                    android.adb_auto_connect(settings.adb_auto_connect);
                     if let Err(why) =
                         android.developer_mode(settings.developer_mode, settings.adb_port)
                     {
@@ -4600,9 +4633,8 @@ impl HostApiService {
                 eprintln!(
                     "local API: {} changed the settings: render GPU {}, freeze {}, clipboard \
                      {}, links in Android {}, program updates {}, image updates {}, input \
-                     trace {}, resize trace {}, developer mode {} (adb port {}), file sharing {} \
-                     ({}), advanced \
-                     networking {}",
+                     trace {}, resize trace {}, developer mode {} (adb port {}, auto-connect \
+                     {}), file sharing {} ({}), advanced networking {}",
                     peer.user,
                     settings.render_gpu,
                     on_off(settings.freeze),
@@ -4614,12 +4646,14 @@ impl HostApiService {
                     on_off(settings.resize_trace),
                     on_off(settings.developer_mode),
                     settings.adb_port,
+                    on_off(settings.adb_auto_connect),
                     on_off(settings.file_sharing),
                     settings.shared_folders.join(", "),
                     on_off(settings.advanced_networking)
                 );
                 let mut wire = settings_to_wire(&settings, &self.facts_now(facts));
                 wire.network = self.network_now(&peer.user, &settings);
+                wire.adb_auto_connect_state = self.adb_auto_connect_now(&peer.user);
                 response::Body::Settings(wire)
             }
             Err(why) => error(ErrorCode::InvalidSetting, why),
@@ -4660,6 +4694,8 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         resize_trace: settings.resize_trace,
         developer_mode: settings.developer_mode,
         adb_port: settings.adb_port.into(),
+        adb_auto_connect: settings.adb_auto_connect,
+        adb_auto_connect_state: String::new(),
         arm_translation: settings.arm_translation,
         file_sharing: settings.file_sharing,
         shared_folders: settings.shared_folders.clone(),
@@ -4690,6 +4726,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             adb_port: crate::settings::normalise_adb_port(
                 u16::try_from(settings.adb_port).unwrap_or(0),
             ),
+            adb_auto_connect: settings.adb_auto_connect,
             arm_translation: settings.arm_translation,
             file_sharing: settings.file_sharing,
             shared_folders: settings.shared_folders,
@@ -4703,6 +4740,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             android_version: Some(settings.android_version).filter(|v| !v.is_empty()),
         },
         network: settings.network.map(NetworkStatus::from_wire),
+        adb_auto_connect_state: AutoConnectState::parse(&settings.adb_auto_connect_state),
     }
 }
 

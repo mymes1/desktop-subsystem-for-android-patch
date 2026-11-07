@@ -811,6 +811,12 @@ impl UserAndroid for WithProgramStatus {
     fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
         self.android.developer_mode(on, port)
     }
+    fn adb_auto_connect(&self, on: bool) {
+        self.android.adb_auto_connect(on)
+    }
+    fn adb_auto_connect_state(&self) -> crate::adb_discovery::AutoConnectState {
+        self.android.adb_auto_connect_state()
+    }
     fn watch_links(&self) -> Option<std::sync::mpsc::Receiver<String>> {
         self.android.watch_links()
     }

@@ -25,6 +25,8 @@
 //! the window system, the buses, the devices and the VM build on Linux only, so the workspace
 //! builds everywhere.
 
+#[cfg(target_os = "linux")]
+pub mod adb_discovery;
 pub mod compositor;
 pub mod computer_identity;
 pub mod config;

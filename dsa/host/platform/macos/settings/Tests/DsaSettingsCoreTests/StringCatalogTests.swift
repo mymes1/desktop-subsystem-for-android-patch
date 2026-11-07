@@ -67,6 +67,7 @@ final class StringCatalogTests: XCTestCase {
             .map { "Install_Reason_\($0)" }
         built += ["not-installed", "system-app", "blocked", "other"].map { "Apps_Refused_\($0)" }
         built += ["Documents", "Downloads", "Pictures", "Music", "Videos", "Desktop"].map { "Folder_\($0)" }
+        built += ["Off", "WaitingForServer", "WaitingForAndroid", "Attached", "Detached"].map { "AdbAutoConnect_\($0)" }
         for key in ["manufacturer", "brand", "model", "device", "name", "characteristics", "fingerprint_release",
                     "fingerprint_id", "fingerprint_incremental", "fingerprint_type", "fingerprint_tags", "fingerprint"] {
             built += ["Identity_\(key)", "Identity_\(key)_Description", "Identity_\(key)_Invalid"]

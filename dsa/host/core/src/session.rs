@@ -115,6 +115,7 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::adb_bridge::{AdbBridge, BridgeStream, GuestAdb};
+use crate::adb_discovery::{AdbAdvertise, AdbServerLink, AutoConnectState, AutoConnectWatcher};
 use crate::apk::{self, InstallOutcome, InstallPart, InstalledPackage};
 use crate::apps::UninstallOutcome;
 use crate::arm_translation::GuestArmTranslation;
@@ -1127,6 +1128,16 @@ pub struct Session {
     android_files_connect: Mutex<Option<AdbConnect>>,
     /// The loopback bridge to the guest's shared storage, once a client has asked for it.
     android_files_bridge: Mutex<Option<AdbBridge>>,
+    /// The user's auto-connect setting: whether developer mode's port is attached to the
+    /// user's adb server by itself. On unless the user turned it off.
+    adb_auto_connect: AtomicBool,
+    /// What attaches developer mode's port to the user's adb server, once the platform says
+    /// how to reach that server.
+    adb_watcher: Mutex<Option<AutoConnectWatcher>>,
+    /// How the platform advertises developer mode's port over mDNS, when it can.
+    adb_advertise: Mutex<Option<AdbAdvertise>>,
+    /// The advertisement of developer mode's port and the port it names, while it lasts.
+    adb_advert: Mutex<Option<(u16, Box<dyn Send>)>>,
 }
 
 impl Session {
@@ -1253,6 +1264,10 @@ impl Session {
             adb_bridge: Mutex::new(None),
             android_files_connect: Mutex::new(None),
             android_files_bridge: Mutex::new(None),
+            adb_auto_connect: AtomicBool::new(true),
+            adb_watcher: Mutex::new(None),
+            adb_advertise: Mutex::new(None),
+            adb_advert: Mutex::new(None),
         }
     }
 
@@ -1311,7 +1326,9 @@ impl Session {
         } else if bridge.take().is_some() {
             eprintln!("developer mode: off; the adb port is closed");
         }
+        let open = bridge.as_ref().map(|(_, bridge)| bridge.address().port());
         drop(bridge);
+        self.follow_adb_port(open);
         if self.shared.developer_mode.swap(on, Ordering::SeqCst) != on {
             send_quietly(
                 &self.shared,
@@ -1320,6 +1337,96 @@ impl Session {
             );
         }
         Ok(())
+    }
+
+    /// Lets developer mode attach its port to the user's adb server, reached through `link`,
+    /// so adb lists the guest without `adb connect`. It watches from now on, while developer
+    /// mode and the auto-connect setting are both on.
+    pub fn set_adb_server(&self, link: AdbServerLink) {
+        let shared = Arc::clone(&self.shared);
+        // Android answers adb once it has booted with its agent connected; frozen, starting or
+        // stopping, it does not.
+        let guest_ready: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || {
+            matches!(
+                shared.status.lock().unwrap_or_else(|e| e.into_inner()).0,
+                SessionState::Active | SessionState::Dozing
+            )
+        });
+        match AutoConnectWatcher::start(link, guest_ready, crate::adb_discovery::POLL_INTERVAL) {
+            Ok(watcher) => {
+                watcher.set_auto_connect(self.adb_auto_connect.load(Ordering::SeqCst));
+                watcher.set_developer_mode(self.adb_address().map(|address| address.port()));
+                *self.adb_watcher.lock().unwrap_or_else(|e| e.into_inner()) = Some(watcher);
+            }
+            Err(error) => {
+                eprintln!("adb auto-connect: cannot watch the adb server ({error}); adb connect still works")
+            }
+        }
+    }
+
+    /// Lets developer mode advertise its port over mDNS through `advertise`, while it is on.
+    pub fn set_adb_advertise(&self, advertise: AdbAdvertise) {
+        *self.adb_advertise.lock().unwrap_or_else(|e| e.into_inner()) = Some(advertise);
+        self.follow_adb_port(self.adb_address().map(|address| address.port()));
+    }
+
+    /// Turns the user's auto-connect setting on or off. Off, the host sends the adb server
+    /// nothing more, and a device already attached stays as it is.
+    pub fn adb_auto_connect(&self, on: bool) {
+        self.adb_auto_connect.store(on, Ordering::SeqCst);
+        if let Some(watcher) = self
+            .adb_watcher
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            watcher.set_auto_connect(on);
+        }
+    }
+
+    /// Where auto-connect stands: off, waiting for an adb server or for Android, attached, or
+    /// detached by the user.
+    pub fn adb_auto_connect_state(&self) -> AutoConnectState {
+        self.adb_watcher
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map_or(AutoConnectState::Off, AutoConnectWatcher::state)
+    }
+
+    /// Points auto-connect and the mDNS advertisement at developer mode's port, or ends both
+    /// when it is closed.
+    fn follow_adb_port(&self, open: Option<u16>) {
+        if let Some(watcher) = self
+            .adb_watcher
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            watcher.set_developer_mode(open);
+        }
+        let mut advert = self.adb_advert.lock().unwrap_or_else(|e| e.into_inner());
+        if advert.as_ref().map(|(port, _)| *port) == open {
+            return;
+        }
+        // The old advertisement ends before a new one names another port.
+        *advert = None;
+        let Some(port) = open else {
+            return;
+        };
+        let advertise = self
+            .adb_advertise
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if let Some(handle) = advertise.and_then(|advertise| advertise(port)) {
+            eprintln!(
+                "developer mode: advertised {} over mDNS as {} on 127.0.0.1 only",
+                crate::adb_discovery::mdns_instance_name(port),
+                crate::adb_discovery::MDNS_SERVICE_TYPE
+            );
+            *advert = Some((port, handle));
+        }
     }
 
     /// Shares the user's host folders named in `folders` with the guest while `on`, as the
@@ -3440,6 +3547,19 @@ fn deliver_log(shared: &Shared, commands: &Sender<Command>, message: LogPortMess
 
 impl Drop for Session {
     fn drop(&mut self) {
+        // The adb server lets go of developer mode's port before it closes.
+        drop(
+            self.adb_watcher
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take(),
+        );
+        drop(
+            self.adb_advert
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take(),
+        );
         self.shared.log_port_stop.store(true, Ordering::Relaxed);
         let _ = self.commands.send(Command::Shutdown);
         if let Some(worker) = self.worker.take() {

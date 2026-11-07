@@ -16,8 +16,8 @@ A project may be fetched in part:
                                       their build files out so the build never sees their
                                       modules
 
-"{clang}" stands for the Clang the build uses, which the fetch reads from the build system
-itself (see clang_versions).
+"{clang}" and "{rust}" stand for the Clang and the Rust toolchain the build uses, which the
+fetch reads from the build system itself (see clang_versions and rust_versions).
 """
 
 import json
@@ -28,6 +28,7 @@ LOCK = Path(__file__).with_name("digitalis-lock.json")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 PROJECT_PATH = re.compile(r"^[A-Za-z0-9_.+-]+(/[A-Za-z0-9_.+-]+)*$")
 CLANG_TOKEN = "{clang}"
+RUST_TOKEN = "{rust}"
 # Where the translator's own repository sits in the tree, and what the package is called.
 TRANSLATOR_PATH = "frameworks/libs/binary_translation"
 TRANSLATOR_NAME = "Digitalis"
@@ -121,17 +122,20 @@ def translator_version(version):
     return f"{version['android_major']}-{project(version, TRANSLATOR_PATH)['commit'][:12]}"
 
 
-def sparse_entries(project, clang=()):
-    """The project's cone folders or patterns, with {clang} replaced by each Clang version."""
+def sparse_entries(project, clang=(), rust=()):
+    """The project's cone folders or patterns, with {clang} and {rust} replaced by each Clang
+    and Rust toolchain version the build uses."""
     key = "cone" if "cone" in project else "patterns" if "patterns" in project else None
     if key is None:
         return None, []
     out = []
     for entry in project[key]:
-        if CLANG_TOKEN in entry:
-            if not clang:
-                raise LockError(f"{project['path']} needs the Clang version, which is not known yet")
-            out.extend(entry.replace(CLANG_TOKEN, version) for version in clang)
+        for token, versions, what in ((CLANG_TOKEN, clang, "Clang"), (RUST_TOKEN, rust, "Rust")):
+            if token in entry:
+                if not versions:
+                    raise LockError(f"{project['path']} needs the {what} version, which is not known yet")
+                out.extend(entry.replace(token, version) for version in versions)
+                break
         else:
             out.append(entry)
     return key, list(dict.fromkeys(out))
@@ -139,6 +143,17 @@ def sparse_entries(project, clang=()):
 
 def needs_clang(project):
     return any(CLANG_TOKEN in e for e in project.get("cone", []) + project.get("patterns", []))
+
+
+RUST_DEFAULT = re.compile(r'RustDefaultVersion\s*=\s*"([0-9][A-Za-z0-9.]*)"')
+
+
+def rust_versions(top):
+    """The Rust toolchain folder the build uses (Soong's RustDefaultVersion), or none when the
+    tree's Soong names none."""
+    config = Path(top) / "build/soong/rust/config/global.go"
+    found = RUST_DEFAULT.search(config.read_text()) if config.is_file() else None
+    return [found.group(1)] if found else []
 
 
 CLANG_DEFAULT = re.compile(r'ClangDefaultVersion\s*=\s*"(clang-[A-Za-z0-9.]+)"')

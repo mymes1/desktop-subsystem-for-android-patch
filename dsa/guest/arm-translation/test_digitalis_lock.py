@@ -106,6 +106,40 @@ class LockTests(unittest.TestCase):
             digitalis_lock.sparse_entries(project, [])
         self.assertEqual(digitalis_lock.sparse_entries({"path": "bionic"}), (None, []))
 
+    def test_fr25_rust_entries_take_soong_s_rust_toolchain(self):
+        # Bionic's libc and linker link Rust (icu4x, the no_std allocator and panic handler),
+        # so the build needs the one Rust toolchain Soong names, and nothing more.
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            self.assertEqual(digitalis_lock.rust_versions(top), [])
+            (top / "build/soong/rust/config").mkdir(parents=True)
+            (top / "build/soong/rust/config/global.go").write_text('\tRustDefaultVersion = "1.93.1"\n')
+            self.assertEqual(digitalis_lock.rust_versions(top), ["1.93.1"])
+        project = {"path": "prebuilts/rust", "cone": ["soong", "linux-x86/{rust}"]}
+        self.assertEqual(digitalis_lock.sparse_entries(project, ["clang-r1"], ["1.88.0"]),
+                         ("cone", ["soong", "linux-x86/1.88.0"]))
+        with self.assertRaises(digitalis_lock.LockError):
+            digitalis_lock.sparse_entries(project, ["clang-r1"], [])
+        for version in self.lock["versions"]:
+            rust = [p for p in version["projects"] if digitalis_lock.RUST_TOKEN in "".join(p.get("cone", []))]
+            self.assertEqual(len(rust), 1, version["android"])
+
+    def test_fr25_soong_ui_s_go_packages_are_fetched(self):
+        # soong_ui is built from these before anything else; one missing stops the build at
+        # its first step (external/pogreb did in the first run).
+        for version in self.lock["versions"]:
+            paths = [p["path"] for p in version["projects"]]
+            for path in ("external/golang-protobuf", "external/starlark-go", "external/pogreb"):
+                self.assertIn(path, paths, f"{version['android']} lacks {path}")
+
+    def test_fr25_the_makefiles_product_configuration_includes_are_fetched(self):
+        # build/make/core/soong_config.mk includes toolchain/pgo-profiles/sampling/afdo_profiles.mk
+        # without a dash, so product configuration stops without it (the second run did).
+        for version in self.lock["versions"]:
+            profiles = digitalis_lock.project(version, "toolchain/pgo-profiles")
+            self.assertIn("sampling", profiles["cone"])
+            self.assertEqual(profiles["url"], "https://android.googlesource.com/toolchain/pgo-profiles")
+
     def test_fr25_the_prebuilt_framework_libraries_are_the_ones_taken_from_the_image(self):
         text = (DEVICE / "prebuilts/Android.bp").read_text()
         names = re.findall(r'cc_prebuilt_library_shared \{\s*name: "([^"]+)"', text)

@@ -934,6 +934,47 @@ fn fr19_trace_switches_are_settings_dsa_reads_and_parses() {
 }
 
 #[test]
+fn fr20_adb_auto_connect_is_on_by_default_and_dsa_turns_it_off() {
+    use dsa_cli::Change;
+    assert_eq!(
+        parse(&args("settings set adb-auto-connect off"))
+            .unwrap()
+            .change,
+        Some(Change::AdbAutoConnect(false))
+    );
+    assert_eq!(
+        parse(&args("settings set adb-auto-connect on"))
+            .unwrap()
+            .change,
+        Some(Change::AdbAutoConnect(true))
+    );
+    assert!(parse(&args("settings set adb-auto-connect maybe")).is_err());
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let settings = json_of(&dsa(&endpoint, "settings --json"));
+    assert_eq!(settings["adb_auto_connect"], true);
+    assert_eq!(settings["adb_auto_connect_state"], "off");
+    let changed = json_of(&dsa(&endpoint, "settings set adb-auto-connect off --json"));
+    assert_eq!(changed["adb_auto_connect"], false);
+    let output = dsa(&endpoint, "settings");
+    assert!(
+        stdout(&output).contains("adb auto-connect: off"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn fr20_the_auto_connect_state_is_described_in_words() {
+    use dsa_host_core::adb_discovery::AutoConnectState;
+    assert_eq!(
+        dsa_cli::describe_auto_connect(AutoConnectState::Attached),
+        "adb lists DSA"
+    );
+    assert!(dsa_cli::describe_auto_connect(AutoConnectState::Detached).contains("restarts"));
+}
+
+#[test]
 fn fr20_developer_mode_is_off_by_default_and_dsa_turns_it_on_with_the_adb_address() {
     use dsa_cli::Change;
     assert_eq!(
@@ -2781,6 +2822,7 @@ fn fr15_settings_say_where_program_updates_come_from() {
             android_version: None,
         },
         network: None,
+        adb_auto_connect_state: Default::default(),
     };
     let text = dsa_cli::describe_settings(&report);
     let line = text

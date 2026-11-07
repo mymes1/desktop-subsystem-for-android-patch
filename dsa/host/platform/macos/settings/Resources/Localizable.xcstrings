@@ -205,6 +205,125 @@
         }
       }
     },
+    "AdbAutoConnectCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On by default. While developer mode is on, Android shows up in adb devices and Android Studio without running adb connect. If you run adb disconnect, it stays off until the adb server restarts."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본값은 켜짐입니다. 개발자 모드가 켜져 있으면 adb connect를 실행하지 않아도 adb devices와 Android Studio에 Android가 나타납니다. adb disconnect로 끊으면 adb 서버가 다시 시작될 때까지 연결하지 않습니다."
+          }
+        }
+      }
+    },
+    "AdbAutoConnectCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect adb automatically"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adb 자동 연결"
+          }
+        }
+      }
+    },
+    "AdbAutoConnect_Attached": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected: adb lists Android."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결됨: adb 기기 목록에 Android가 있습니다."
+          }
+        }
+      }
+    },
+    "AdbAutoConnect_Detached": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnected with adb disconnect. Android connects again when the adb server restarts."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adb disconnect로 끊었습니다. adb 서버가 다시 시작되면 Android가 다시 연결됩니다."
+          }
+        }
+      }
+    },
+    "AdbAutoConnect_Off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connecting: developer mode or automatic connection is off."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결하지 않음: 개발자 모드나 자동 연결이 꺼져 있습니다."
+          }
+        }
+      }
+    },
+    "AdbAutoConnect_WaitingForAndroid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for Android: it connects once Android is running."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android를 기다리는 중: Android가 실행되면 연결됩니다."
+          }
+        }
+      }
+    },
+    "AdbAutoConnect_WaitingForServer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for adb: Android connects when adb starts on this Mac."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adb를 기다리는 중: 이 Mac에서 adb가 시작되면 Android가 연결됩니다."
+          }
+        }
+      }
+    },
     "AdbCard.Description": {
       "extractionState": "manual",
       "localizations": {

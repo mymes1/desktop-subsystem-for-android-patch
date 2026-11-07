@@ -1338,6 +1338,17 @@ message Settings {
   // The loopback port adb connects to while developer mode is on. 58526 unless the user
   // chooses another; 0 in a request means the default.
   uint32 adb_port = 15;
+  // Whether, while developer mode is on, the service attaches 127.0.0.1:adb_port to the
+  // caller's adb server by itself (as `adb connect` would), so adb and Android Studio list it
+  // with nothing typed. On unless the user turned it off; a client sends back the value it
+  // read. Off, the service sends the adb server nothing.
+  bool adb_auto_connect = 21;
+  // Where auto-connect stands: "off" (developer mode or auto-connect is off),
+  // "waiting-for-server" (no adb server runs), "waiting-for-android" (Android is not running
+  // or adb in Android has not answered yet), "attached" (the adb server lists it) or
+  // "detached" (the user ran adb disconnect; it is attached again when the adb server
+  // restarts). Empty from a service that does not report it. A client cannot change it.
+  string adb_auto_connect_state = 22;
   // Whether the caller's Android uses an installed ARM translation package. On unless the
   // user turned it off; a client sends back the value it read. It applies from the next start
   // of Android, because the ABIs Android installs apps for are fixed at boot.

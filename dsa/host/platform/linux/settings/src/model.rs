@@ -198,6 +198,40 @@ pub struct Settings {
     pub network: Option<Network>,
     pub file_sharing: bool,
     pub shared_folders: Vec<String>,
+    /// Whether developer mode's port is attached to the user's adb server by itself.
+    pub adb_auto_connect: bool,
+    /// Where that stands, as the service last said.
+    pub adb_auto_connect_state: AdbAutoConnectState,
+}
+
+/// Where attaching developer mode's port to the user's adb server stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AdbAutoConnectState {
+    /// Developer mode or auto-connect is off.
+    #[default]
+    Off,
+    /// No adb server runs on this computer yet.
+    WaitingForServer,
+    /// Android is not running, or adb in Android has not answered yet.
+    WaitingForAndroid,
+    /// The adb server lists Android.
+    Attached,
+    /// The user ran `adb disconnect`; it is attached again when the adb server restarts.
+    Detached,
+}
+
+impl AdbAutoConnectState {
+    /// The state a name the service gives stands for. An empty or unknown name, as an older
+    /// service gives, is off.
+    pub fn read(name: &str) -> AdbAutoConnectState {
+        match name {
+            "waiting-for-server" => AdbAutoConnectState::WaitingForServer,
+            "waiting-for-android" => AdbAutoConnectState::WaitingForAndroid,
+            "attached" => AdbAutoConnectState::Attached,
+            "detached" => AdbAutoConnectState::Detached,
+            _ => AdbAutoConnectState::Off,
+        }
+    }
 }
 
 impl Settings {
@@ -237,6 +271,11 @@ impl Settings {
             } else {
                 ALL_FOLDERS.iter().map(|f| f.to_string()).collect()
             },
+            adb_auto_connect: flag(json, "adb_auto_connect", true),
+            adb_auto_connect_state: AdbAutoConnectState::read(&text(
+                json,
+                "adb_auto_connect_state",
+            )),
         }
     }
 

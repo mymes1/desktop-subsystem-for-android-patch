@@ -256,6 +256,19 @@
                     <ui:ToggleSwitch x:Name="DeveloperModeSwitch" IsChecked="{Binding DeveloperMode, Mode=OneWay}"
                                      IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnDeveloperModeToggled" />
                 </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text AdbAutoConnectCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text AdbAutoConnectCard.Description}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{Binding AdbAutoConnectStateText, Mode=OneWay}"
+                                       Style="{StaticResource CardDescription}" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:ToggleSwitch x:Name="AdbAutoConnectSwitch" IsChecked="{Binding AdbAutoConnect, Mode=OneWay}"
+                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnAdbAutoConnectToggled"
+                                     AutomationProperties.Name="{l:Text AdbAutoConnectCard.Header}" />
+                </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon PlugConnected24}">
                     <ui:CardControl.Header>
                         <StackPanel>

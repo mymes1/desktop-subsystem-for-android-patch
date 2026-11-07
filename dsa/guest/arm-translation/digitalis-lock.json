@@ -383,6 +383,118 @@
               "dest": ".claude"
             }
           ]
+        },
+        {
+          "path": "external/pogreb",
+          "name": "platform/external/pogreb",
+          "url": "https://android.googlesource.com/platform/external/pogreb",
+          "commit": "46b62444a3e31bf834331a78234deedee386ad88"
+        },
+        {
+          "path": "system/media",
+          "cone": [
+            "audio"
+          ],
+          "name": "platform/system/media",
+          "url": "https://android.googlesource.com/platform/system/media",
+          "commit": "440eb272fd3da0ca7bdae932e61e7fd9be1fd324"
+        },
+        {
+          "path": "system/timezone",
+          "cone": [
+            "output_data"
+          ],
+          "name": "platform/system/timezone",
+          "url": "https://android.googlesource.com/platform/system/timezone",
+          "commit": "cbd571efcf6b551ba83a31147ec7a06182f8ec31"
+        },
+        {
+          "path": "system/apex",
+          "patterns": [
+            "/Android.bp"
+          ],
+          "name": "platform/system/apex",
+          "url": "https://android.googlesource.com/platform/system/apex",
+          "commit": "ce2bb9f710183c864040401d859874b5723e44d8"
+        },
+        {
+          "path": "packages/modules/common",
+          "cone": [
+            "sdk"
+          ],
+          "name": "platform/packages/modules/common",
+          "url": "https://android.googlesource.com/platform/packages/modules/common",
+          "commit": "2c5d816b30e439bdfaf3a52a94e4ee8fbf6d739c"
+        },
+        {
+          "path": "external/google-highway",
+          "name": "platform/external/google-highway",
+          "url": "https://android.googlesource.com/platform/external/google-highway",
+          "commit": "94b90ab8cb9df9b3719a64751ea2fcb62caa3391"
+        },
+        {
+          "path": "system/librustutils",
+          "cone": [
+            "no_std"
+          ],
+          "name": "platform/system/librustutils",
+          "url": "https://android.googlesource.com/platform/system/librustutils",
+          "commit": "7fbb3e4aaf608e51eaa210cf6ba94df5cb782bbc"
+        },
+        {
+          "path": "prebuilts/rust-toolchain/linux-x86",
+          "cone": [
+            "{rust}"
+          ],
+          "name": "platform/prebuilts/rust-toolchain/linux-x86",
+          "url": "https://android.googlesource.com/platform/prebuilts/rust-toolchain/linux-x86",
+          "commit": "fa2b1777b1f5c0471bb54ad4026feb1f6e94ea70"
+        },
+        {
+          "path": "external/rust/android-crates-io",
+          "cone": [
+            "crates/displaydoc",
+            "crates/icu_casemap",
+            "crates/icu_casemap_data",
+            "crates/icu_collections",
+            "crates/icu_locale_core",
+            "crates/icu_properties",
+            "crates/icu_properties_data",
+            "crates/icu_provider",
+            "crates/litemap",
+            "crates/potential_utf",
+            "crates/proc-macro2",
+            "crates/quote",
+            "crates/serde",
+            "crates/serde_core",
+            "crates/serde_derive",
+            "crates/stable_deref_trait",
+            "crates/syn",
+            "crates/synstructure",
+            "crates/tinystr",
+            "crates/unicode-bidi",
+            "crates/unicode-ident",
+            "crates/writeable",
+            "crates/yoke",
+            "crates/yoke-derive",
+            "crates/zerofrom",
+            "crates/zerofrom-derive",
+            "crates/zerotrie",
+            "crates/zerovec",
+            "crates/zerovec-derive"
+          ],
+          "name": "platform/external/rust/android-crates-io",
+          "url": "https://android.googlesource.com/platform/external/rust/android-crates-io",
+          "commit": "1f5e95cd6e996995023c9c0f7df0f15a8a43269e"
+        },
+        {
+          "path": "toolchain/pgo-profiles",
+          "cone": [
+            "sampling"
+          ],
+          "name": "toolchain/pgo-profiles",
+          "url": "https://android.googlesource.com/toolchain/pgo-profiles",
+          "commit": "44bae3346df2d8657cde54a5ee069067d607e689"
         }
       ],
       "superproject": {
@@ -774,6 +886,104 @@
               "dest": ".claude"
             }
           ]
+        },
+        {
+          "path": "external/pogreb",
+          "name": "platform/external/pogreb",
+          "url": "https://android.googlesource.com/platform/external/pogreb",
+          "commit": "c7851d75ff3a7b8228f548f7235d48cee9130971"
+        },
+        {
+          "path": "system/media",
+          "cone": [
+            "audio"
+          ],
+          "name": "platform/system/media",
+          "url": "https://android.googlesource.com/platform/system/media",
+          "commit": "74807f54ac951b3e7064b8153ef900c6b387b7cf"
+        },
+        {
+          "path": "system/timezone",
+          "cone": [
+            "output_data"
+          ],
+          "name": "platform/system/timezone",
+          "url": "https://android.googlesource.com/platform/system/timezone",
+          "commit": "eb1eda717eca4335d9f15109a86efe91fcb78c13"
+        },
+        {
+          "path": "system/apex",
+          "patterns": [
+            "/Android.bp"
+          ],
+          "name": "platform/system/apex",
+          "url": "https://android.googlesource.com/platform/system/apex",
+          "commit": "97548ed51112062a4d1762a7dffa0cadcc09bda9"
+        },
+        {
+          "path": "packages/modules/common",
+          "cone": [
+            "sdk"
+          ],
+          "name": "platform/packages/modules/common",
+          "url": "https://android.googlesource.com/platform/packages/modules/common",
+          "commit": "deef1ed99f28b761fe55ab4cac61027f6f78f3e8"
+        },
+        {
+          "path": "prebuilts/rust",
+          "cone": [
+            "soong",
+            "linux-x86/{rust}"
+          ],
+          "name": "platform/prebuilts/rust",
+          "url": "https://android.googlesource.com/platform/prebuilts/rust",
+          "commit": "06a4f29f8512c6b77bdce81dd036a3e39954803b"
+        },
+        {
+          "path": "external/rust/android-crates-io",
+          "cone": [
+            "crates/displaydoc",
+            "crates/icu_casemap",
+            "crates/icu_casemap_data",
+            "crates/icu_collections",
+            "crates/icu_locale_core",
+            "crates/icu_properties",
+            "crates/icu_properties_data",
+            "crates/icu_provider",
+            "crates/icu_provider_baked",
+            "crates/litemap",
+            "crates/potential_utf",
+            "crates/proc-macro2",
+            "crates/quote",
+            "crates/serde",
+            "crates/serde_derive",
+            "crates/stable_deref_trait",
+            "crates/syn",
+            "crates/synstructure",
+            "crates/tinystr",
+            "crates/unicode-bidi",
+            "crates/unicode-ident",
+            "crates/writeable",
+            "crates/yoke",
+            "crates/yoke-derive",
+            "crates/zerofrom",
+            "crates/zerofrom-derive",
+            "crates/zerotrie",
+            "crates/zerovec",
+            "crates/zerovec-derive"
+          ],
+          "name": "platform/external/rust/android-crates-io",
+          "url": "https://android.googlesource.com/platform/external/rust/android-crates-io",
+          "commit": "0bb9c7a4cb26e195379037742a853fa381ecc102"
+        },
+        {
+          "path": "toolchain/pgo-profiles",
+          "cone": [
+            "sampling"
+          ],
+          "name": "toolchain/pgo-profiles",
+          "url": "https://android.googlesource.com/toolchain/pgo-profiles",
+          "commit": "09143208038651bf107b8557d79a206b962cb7b6"
         }
       ],
       "superproject": {
