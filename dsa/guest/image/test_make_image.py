@@ -2639,6 +2639,73 @@ class SettingsWithoutBluetoothTests(unittest.TestCase):
             ("Preference", "flash_notifications_preference_accessibility"),
         ])
 
+    def test_fr1_the_connected_devices_screen_opens_without_saved_bluetooth_devices(self):
+        # Settings died opening Connected devices: the previously connected devices list
+        # asked the null default adapter isEnabled() in SavedBluetoothDeviceUpdater.forceUpdate,
+        # from PreviouslyConnectedDevicePreferenceController.displayPreference. Its category goes,
+        # and with it the controller, so the fragment's use() returns null and onAttach must not
+        # call init on it.
+        self.assertIn(
+            PREVIOUSLY_CONNECTED,
+            make_image.SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH["res/xml/connected_devices.xml"],
+        )
+        self.assertIn(("skip call", PREVIOUSLY_CONNECTED_INIT),
+                      make_image.SETTINGS_CODE_WITHOUT_BLUETOOTH[CONNECTED_DEVICES_ON_ATTACH])
+        dex = connected_devices_dex()
+        apk = self.modified_settings({
+            "classes2.dex": dex,
+            "res/xml/connected_devices.xml": compiled_xml(CONNECTED_DEVICES_SCREEN),
+        })
+        with zipfile.ZipFile(io.BytesIO(apk)) as archive:
+            edited = archive.read("classes2.dex")
+            screen = archive.read("res/xml/connected_devices.xml")
+        original = dex_code(dex, CONNECTED_DEVICES_ON_ATTACH)
+        code = dex_code(edited, CONNECTED_DEVICES_ON_ATTACH)
+        # Only the init call (three code units, from unit 11) is gone; use() and its cast stay.
+        self.assertEqual(code[:22], original[:22])
+        self.assertEqual(code[22:28], bytes(6))
+        self.assertEqual(code[28:], original[28:])
+        self.assert_dex_is_sealed(edited)
+        self.assertEqual(make_image.edit_dex(edited, make_image.SETTINGS_CODE_WITHOUT_BLUETOOTH)[1], [])
+        self.assertEqual(elements(screen), [
+            ("PreferenceScreen", "connected_devices_screen"),
+            ("PreferenceCategory", "connected_device_list"),
+            ("UntitledPreferenceCategory", None),
+            ("Preference", "connection_preferences"),
+        ])
+
+    def test_fr1_the_saved_and_hearing_devices_pages_open_without_bluetooth(self):
+        # Search still opens both pages. The saved devices list calls the same forceUpdate on
+        # the null adapter, and the available hearing devices list registers with the null
+        # LocalBluetoothManager in onStart. Both go from their screens, and their fragments'
+        # onAttach must not call init on the use() lookup that now returns null.
+        for xml, controller, fragment, init in [
+            ("res/xml/previously_connected_devices.xml", SAVED_DEVICES, SAVED_DEVICES_ON_ATTACH,
+             SAVED_DEVICES_INIT),
+            ("res/xml/accessibility_hearing_aids.xml", AVAILABLE_HEARING, HEARING_AIDS_ON_ATTACH,
+             AVAILABLE_HEARING_INIT),
+        ]:
+            with self.subTest(xml=xml):
+                self.assertIn(controller, make_image.SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH[xml])
+                self.assertIn(("skip call", init), make_image.SETTINGS_CODE_WITHOUT_BLUETOOTH[fragment])
+                dex = on_attach_dex(fragment, init)
+                screen = preference("PreferenceScreen", "screen", children=[
+                    preference("PreferenceCategory", "devices", controller),
+                    preference("Preference", "stays"),
+                ])
+                apk = self.modified_settings({"classes.dex": dex, xml: compiled_xml(screen)})
+                with zipfile.ZipFile(io.BytesIO(apk)) as archive:
+                    edited = archive.read("classes.dex")
+                    edited_screen = archive.read(xml)
+                code = dex_code(edited, fragment)
+                original = dex_code(dex, fragment)
+                self.assertEqual(code[:22], original[:22])
+                self.assertEqual(code[22:28], bytes(6))
+                self.assertEqual(code[28:], original[28:])
+                self.assert_dex_is_sealed(edited)
+                self.assertEqual(elements(edited_screen),
+                                 [("PreferenceScreen", "screen"), ("Preference", "stays")])
+
     def test_fr1_a_dex_edit_that_would_break_the_method_is_refused(self):
         dex = settings_dex()
         with self.assertRaises(ValueError):
@@ -2692,6 +2759,27 @@ ACCESSIBILITY_SCREEN = preference("PreferenceScreen", "accessibility_settings_sc
         preference("Preference", "flash_notifications_preference_accessibility",
                    "com.android.settings.accessibility.FlashNotificationsPreferenceController"),
         preference("Preference", "hearing_aid_preference", HEARING_AID),
+    ]),
+])
+
+
+PREVIOUSLY_CONNECTED = "com.android.settings.connecteddevice.PreviouslyConnectedDevicePreferenceController"
+PREVIOUSLY_CONNECTED_INIT = ("Lcom/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceController;"
+                             "->init")
+CONNECTED_DEVICES_ON_ATTACH = ("Lcom/android/settings/connecteddevice/ConnectedDeviceDashboardFragment;"
+                               "->onAttach")
+
+# The part of Android 16's connected devices screen that matters here: the previously
+# connected devices category with its "see all" entry, between entries that stay.
+CONNECTED_DEVICES_SCREEN = preference("PreferenceScreen", "connected_devices_screen", children=[
+    preference("PreferenceCategory", "connected_device_list",
+               "com.android.settings.connecteddevice.ConnectedDeviceGroupController"),
+    preference("PreferenceCategory", "previously_connected_devices", PREVIOUSLY_CONNECTED, children=[
+        preference("Preference", "previously_connected_devices_see_all"),
+    ]),
+    ("UntitledPreferenceCategory", [], [
+        preference("Preference", "connection_preferences",
+                   "com.android.settings.connecteddevice.AdvancedConnectedDeviceController"),
     ]),
 ])
 
@@ -2813,6 +2901,45 @@ def settings_dex():
         "0e00"  # return-void
     )
     return dex_file(methods, {0: (3, audio_sharing_supported), 3: (2, on_attach)})
+
+
+SAVED_DEVICES = "com.android.settings.connecteddevice.SavedDeviceGroupController"
+SAVED_DEVICES_INIT = "Lcom/android/settings/connecteddevice/SavedDeviceGroupController;->init"
+SAVED_DEVICES_ON_ATTACH = ("Lcom/android/settings/connecteddevice/PreviouslyConnectedDeviceDashboardFragment;"
+                           "->onAttach")
+AVAILABLE_HEARING = "com.android.settings.accessibility.AvailableHearingDevicePreferenceController"
+AVAILABLE_HEARING_INIT = ("Lcom/android/settings/accessibility/AvailableHearingDevicePreferenceController;"
+                          "->init")
+HEARING_AIDS_ON_ATTACH = "Lcom/android/settings/accessibility/AccessibilityHearingAidsFragment;->onAttach"
+
+
+def on_attach_dex(fragment, init):
+    """A fragment's onAttach in Android 16's Settings.apk as d8 compiled it, cut down to the
+    use(Controller.class).init(this) call that reaches a controller."""
+    cls, name = fragment.split("->")
+    init_cls, init_name = init.split("->")
+    methods = [
+        (cls, name, "VL"),
+        ("Lcom/android/settings/dashboard/DashboardFragment;", "onAttach", "VL"),
+        ("Lcom/android/settings/dashboard/DashboardFragment;", "use", "LL"),
+        (init_cls, init_name, "VL"),
+    ]
+    on_attach = bytes.fromhex(
+        "6f200100 1000"  # invoke-super {v0, v1}, DashboardFragment.onAttach
+        "1c010000"  # const-class v1, the controller
+        "6e200200 1000"  # invoke-virtual {v0, v1}, use
+        "0c01"  # move-result-object v1
+        "1f010000"  # check-cast v1, the controller
+        "6e200300 0100"  # invoke-virtual {v1, v0}, init
+        "0e00"  # return-void
+    )
+    return dex_file(methods, {0: (2, on_attach)})
+
+
+def connected_devices_dex():
+    """ConnectedDeviceDashboardFragment.onAttach, cut down to the call that reaches the
+    previously connected devices controller."""
+    return on_attach_dex(CONNECTED_DEVICES_ON_ATTACH, PREVIOUSLY_CONNECTED_INIT)
 
 
 def dex_code(dex, method):
