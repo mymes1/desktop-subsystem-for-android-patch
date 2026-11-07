@@ -46,7 +46,9 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   text input goes through the host's input method.
 - Apps a desktop has no use for are removed too (`UNNEEDED_APPS` in `make-image.py`, each
   with its reason): telephony apps without a modem, screen savers and wallpaper pickers, the
-  launcher's search widget, Bluetooth MIDI, and developer and demo apps. Each is a leaf that
+  launcher's search widget, Bluetooth MIDI, the old AOSP Calendar, Gallery and Music apps
+  (no longer maintained upstream; the user installs their own), and developer and demo apps.
+  Each is a leaf that
   nothing else needs; WebView, the providers, PackageInstaller, PermissionController,
   DocumentsUI and the other apps that apps call stay. `make-image.py` prints each file it
   removes.
