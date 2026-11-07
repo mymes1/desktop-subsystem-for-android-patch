@@ -1008,8 +1008,8 @@ mod win {
         SW_SHOWNOACTIVATE, ULW_ALPHA, WINDOWPOS, WM_APP, WM_CAPTURECHANGED, WM_CLOSE,
         WM_CONTEXTMENU, WM_DESTROY, WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE,
         WM_GETMINMAXINFO, WM_GETOBJECT, WM_KEYDOWN, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP,
-        WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NCHITTEST, WM_SETFOCUS, WM_SETTINGCHANGE, WM_SIZE,
-        WM_SYSCOLORCHANGE, WM_THEMECHANGED, WM_TIMER, WM_WINDOWPOSCHANGING, WNDCLASSEXW,
+        WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NCDESTROY, WM_NCHITTEST, WM_SETFOCUS, WM_SETTINGCHANGE,
+        WM_SIZE, WM_SYSCOLORCHANGE, WM_THEMECHANGED, WM_TIMER, WM_WINDOWPOSCHANGING, WNDCLASSEXW,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible, GW_HWNDNEXT};
 
@@ -1572,6 +1572,10 @@ mod win {
                     });
                     return;
                 }
+                // A finger's press reaches the widget at once, and a finger held on it moves
+                // it as a held mouse button does, rather than becoming a right click.
+                // SAFETY: the window was just made on this thread.
+                unsafe { crate::app_window::pointer::deliver_contacts_at_once(hwnd) };
                 with_state(|s| {
                     s.by_id.insert(widget.widget_id, hwnd as isize);
                     s.windows.insert(
@@ -2258,6 +2262,13 @@ mod win {
                 0
             }
             WM_CLOSE => 0,
+            WM_NCDESTROY => {
+                // SAFETY: the window is still alive until this message returns.
+                unsafe {
+                    crate::app_window::pointer::forget_contacts(hwnd);
+                    DefWindowProcW(hwnd, msg, wparam, lparam)
+                }
+            }
             m if m != 0 && with_state(|s| s.taskbar_created).unwrap_or(0) == m => {
                 // The shell restarted: the window belongs to its new desktop.
                 // SAFETY: a window of this thread.
