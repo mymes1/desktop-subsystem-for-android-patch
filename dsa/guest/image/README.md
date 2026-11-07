@@ -93,8 +93,17 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   `speed`, the others with `speed-profile` when the APK carries a profile and `speed`
   otherwise. It prints the size each app adds. `check-image.py` fails an image whose compiled
   app is missing, was made for other dex checksums than the APK's, uses another filter, boot
-  image or set of shared libraries. PermissionController is not compiled: it is inside the
-  permission APEX, where ART takes no odex.
+  image or set of shared libraries. The apps whose dex it edits (`EDITED_APPS`: Settings and
+  Files) are compiled with `--abort-on-hard-verifier-error`, so an edited method the verifier
+  rejects stops the build instead of closing the app when it loads. PermissionController is
+  not compiled: it is inside the permission APEX, where ART takes no odex.
+- The apps the published build itself compiled into their own partition (KeyChain,
+  SettingsProvider, Telecom and a few more on Android 16) keep their odex, vdex and app image:
+  signing leaves an APK's dex as it is. `make-image.py` records them from the published
+  target_files (`META/dsa_prebuilt_oat.json`), and compiles any of them whose dex it changes
+  again, with the filter, shared libraries and boot image the published build used.
+  `check-image.py` fails an image where one of them lost a file, or has one made for another
+  dex, another boot image or another filter.
 - A static overlay (`/vendor/overlay/DsaFrameworkOverlay.apk`) sets the framework's tap
   timeout to 0. A view inside anything that scrolls, which includes every list row, waits that
   long before it shows that it is pressed, in case the touch becomes a scroll, so a mouse
@@ -115,6 +124,20 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   list, so rows still scroll to the edge. The overlay names what it replaces in a resource
   map (`android:resourcesMap`), which makes the framework rewrite the layout's id and style
   attribute to Settings' own.
+- The lists that set their own padding get the same 24 dp, edited in the apps themselves
+  (`LIST_BOTTOM_MARGIN_DP`). Settings' home page: on Android 16 its
+  `TopLevelSettings.onCreateRecyclerView` no longer calls `setPadding(0, 0, 0, 0)` over the
+  overlay's layout; on Android 17, `isRunningInFreeformWindow` says yes (the host draws the
+  caption), so Android's own freeform padding applies, and the overlay sets that
+  `dashboard_padding_bottom` to 24 dp. Settings' All apps list gets `paddingBottom` in its
+  compiled `manage_applications_apps.xml`. PermissionController's `preference_recyclerview`
+  gets it too; the app declares `<overlayable>`, so no overlay may replace its layouts, and it
+  lives in the permission APEX, which `make-image.py` unpacks with otatools' `deapexer`,
+  edits and packs with `apexer` before signing, as signing itself packs it, and checks again
+  after signing. Files (DocumentsUI) on Android 16 pads its list's bottom by the height of
+  the bar below it, and by 0 in windows without one: `getSaveLayoutHeight` now returns at
+  least 24 dp in pixels. Android 17's Files keeps 48 dp of its own. The dex edits keep each
+  method's size; `check-image.py` fails an image without them.
 - With the input trace on (`androidboot.hardware.dsa_input_trace=1`), `dsa-trace.rc` makes every
   app's main thread log each message it takes 16 ms or more to handle, or starts 16 ms or more
   late.
