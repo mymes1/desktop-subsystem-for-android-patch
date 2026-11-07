@@ -1,0 +1,317 @@
+// The connection between the window manager and the graphics renderer process in a user's
+// session.
+//
+// The graphics renderer (gfxstream) runs in a process of its own, `dsa-gfx`, so that a crash
+// in it, or in the GPU driver under it, takes only that process down. It owns the guest's
+// graphics streams and the render GPU, and puts each Android task's frames into GPU shared
+// textures the window manager hands it. The window manager starts it, restarts it when it
+// ends, and keeps compositing the frames into the app windows. This file is the only
+// definition of the messages between the two; the codecs are generated from it (see
+// README.md).
+//
+// The window manager starts the renderer and tells it where to dial. The renderer sends the
+// Hello, the window manager answers, and sends Start. The renderer loads gfxstream and
+// answers Started. From then on the renderer asks for a texture for each frame
+// (TargetRequest), fills it on the GPU and says so (FrameDone), and the window manager tells
+// it which guest VM to take streams from and which displays no window shows any more.
+//
+// How a texture crosses between the two processes depends on the host:
+// - Windows: a Direct3D 11 texture shared by an NT handle. The window manager duplicates the
+//   handle into the renderer's process and sends its value in Target.
+// - macOS: an IOSurface. The window manager sends its Mach port to the renderer's Mach port
+//   (registered with the window manager's Mach service, as the window hosts do) with the
+//   texture ID as the message's value, or names a global surface by its ID in Target.
+// - Linux: the renderer exports its own images as dmabufs and sends their descriptors with
+//   GpuImage over the Unix socket (SCM_RIGHTS); frames it reads back travel in a memfd sent
+//   with PixelFrame.
+//
+// The same rules as control.proto keep the handshake readable across versions: Envelope
+// fields 1 to 3, and every field of Hello, HelloAccepted, HelloRejected and RejectReason,
+// keep their numbers and types forever.
+
+syntax = "proto3";
+
+package dsa.renderer.v1;
+
+option java_package = "io.github.thisisthepy.dsa.renderer.v1";
+option java_multiple_files = true;
+option optimize_for = LITE_RUNTIME;
+
+// The protocol version. CURRENT goes up when the meaning of existing messages changes.
+enum ProtocolVersion {
+  PROTOCOL_VERSION_UNSPECIFIED = 0;
+  PROTOCOL_VERSION_CURRENT = 1;
+}
+
+// Which end of the connection a peer is.
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_WINDOW_MANAGER = 1;
+  ROLE_RENDERER = 2;
+}
+
+// The first frame on a new connection, sent by the renderer.
+message Hello {
+  // ProtocolVersion.PROTOCOL_VERSION_CURRENT of the sender's build.
+  uint32 protocol_version = 1;
+  // SHA-256 of the normalised definition the sender was generated from (32 bytes).
+  bytes schema_hash = 2;
+  Role role = 3;
+  // Free text naming the sender's build, for error reports only.
+  string build = 4;
+}
+
+// The window manager's answer when the renderer's Hello matches.
+message HelloAccepted {
+  Hello window_manager = 1;
+}
+
+// Why the window manager refused a connection.
+enum RejectReason {
+  REJECT_REASON_UNSPECIFIED = 0;
+  REJECT_REASON_PROTOCOL_VERSION_MISMATCH = 1;
+  REJECT_REASON_SCHEMA_HASH_MISMATCH = 2;
+  REJECT_REASON_UNEXPECTED_ROLE = 3;
+  REJECT_REASON_MALFORMED_HELLO = 4;
+}
+
+// The window manager's answer when it refuses the renderer. It closes the connection after
+// it.
+message HelloRejected {
+  RejectReason reason = 1;
+  // A sentence a person can act on, naming both sides' values.
+  string detail = 2;
+  Hello window_manager = 3;
+}
+
+// Which GPU the renderer runs on, as the user's render GPU setting and the primary monitor
+// decide it.
+enum GpuRule {
+  // gfxstream's own ranking.
+  GPU_RULE_RANKING = 0;
+  // The GPU whose locally unique ID is `gpu_luid`.
+  GPU_RULE_LUID = 1;
+  // The first integrated GPU.
+  GPU_RULE_INTEGRATED = 2;
+  // The first discrete GPU.
+  GPU_RULE_DISCRETE = 3;
+  // The first GPU whose name contains `gpu_name`, ignoring case.
+  GPU_RULE_NAME = 4;
+}
+
+// Window manager to renderer, after the handshake: how to start.
+message Start {
+  GpuRule gpu_rule = 1;
+  // The GPU's locally unique ID (8 bytes, little endian), for GPU_RULE_LUID.
+  bytes gpu_luid = 2;
+  // Part of the GPU's name, for GPU_RULE_NAME.
+  string gpu_name = 3;
+  // The guest display's size, which the renderer starts its first surface at.
+  uint32 display_width = 4;
+  uint32 display_height = 5;
+  // The vsock ports of the command stream and the process pipe: on Windows on the Hyper-V
+  // sockets of the VM GuestVm names, on Linux on vsock.
+  uint32 command_port = 6;
+  uint32 process_pipe_port = 7;
+  // Unix sockets to listen on instead of vsock (Linux and macOS): where a relay or a virtual
+  // machine monitor puts the guest's streams. Empty means vsock.
+  string command_socket = 8;
+  string process_pipe_socket = 9;
+  // Whether the window manager takes frames on the GPU. When false (a Linux desktop that
+  // takes no dmabufs) every frame is read back.
+  bool frames_on_gpu = 10;
+}
+
+// Whether the renderer runs on the GPU Start asked for.
+enum GpuMatch {
+  // Nothing was asked for, or the renderer cannot say.
+  GPU_MATCH_UNKNOWN = 0;
+  // It runs on the GPU asked for.
+  GPU_MATCH_MATCHED = 1;
+  // No GPU matched, so gfxstream ranked them.
+  GPU_MATCH_RANKED = 2;
+}
+
+// How the frames reach the window manager.
+enum FramePath {
+  FRAME_PATH_UNSPECIFIED = 0;
+  // Copied on the GPU into shared textures.
+  FRAME_PATH_GPU = 1;
+  // Read back to memory, where the GPU path cannot start.
+  FRAME_PATH_READ_BACK = 2;
+  // The renderer shows no frames (it could not present on this host).
+  FRAME_PATH_NOWHERE = 3;
+}
+
+// Renderer to window manager: the answer to Start.
+message Started {
+  // The renderer's process ID.
+  uint32 process_id = 1;
+  // Why the renderer could not start, when it could not: it ends after sending this.
+  string error = 2;
+  // What the start said that the window manager's log should keep (a GPU request that could
+  // not be passed on, a presentation that could not start).
+  repeated string notes = 3;
+  // The GPU the renderer runs on.
+  bool gpu_known = 4;
+  string gpu_name = 5;
+  // Its locally unique ID (8 bytes, little endian), or empty when the driver gives none.
+  bytes gpu_luid = 6;
+  GpuMatch gpu_match = 7;
+  FramePath frame_path = 8;
+  // The locally unique ID of the GPU the frames are on, which the window manager makes its
+  // textures on (Windows). Empty when unknown.
+  bytes adapter_luid = 9;
+}
+
+// Window manager to renderer: the guest VM whose graphics streams to take (Windows, where a
+// Hyper-V socket is bound to one VM). Sent after Start and whenever it changes; an empty ID
+// means no VM runs.
+message GuestVm {
+  string vm_id = 1;
+}
+
+// Renderer to window manager: display `display_id` has a new frame in a color buffer of
+// `width` x `height` pixels; where does it go? The renderer waits for the Target with the
+// same `request`.
+message TargetRequest {
+  uint64 request = 1;
+  uint32 display_id = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  // Whether the texture must be exactly that size (a GPU copy) or at least that size (a
+  // frame read back and written by the CPU, macOS).
+  bool exact = 5;
+}
+
+// Window manager to renderer: the answer to TargetRequest.
+message Target {
+  uint64 request = 1;
+  // No window shows the display: the frame is dropped.
+  bool drop = 2;
+  // Names the texture; the same ID as the last Target for the display means the same
+  // texture.
+  uint64 texture_id = 3;
+  // For a texture not given before: on Windows the value of its NT handle in the renderer's
+  // process, which the renderer closes when the display gets another texture; on macOS the
+  // ID of a global IOSurface, or 0 when the surface came over the renderer's Mach port with
+  // `texture_id` as its value.
+  uint64 handle = 4;
+  // The texture's size.
+  uint32 width = 5;
+  uint32 height = 6;
+}
+
+// Renderer to window manager: the frame is in texture `texture_id`, filling its top-left
+// `width` x `height` pixels, and the GPU has finished writing it. The renderer does not write
+// the texture again until the window manager has answered its next TargetRequest for the
+// display.
+message FrameDone {
+  uint32 display_id = 1;
+  uint64 texture_id = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+}
+
+// Renderer to window manager (Linux): one GPU image of a display's ring, exported as a
+// dmabuf whose descriptor travels with this message.
+message GpuImage {
+  uint32 display_id = 1;
+  uint32 slot = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 stride = 5;
+  uint32 offset = 6;
+  // The DRM format and modifier.
+  uint32 fourcc = 7;
+  uint64 modifier = 8;
+}
+
+// Renderer to window manager (Linux): a frame is in GPU image `slot` of the display, filling
+// its top-left `width` x `height` pixels.
+message GpuFrame {
+  uint32 display_id = 1;
+  uint32 slot = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+}
+
+// Renderer to window manager (Linux): a frame read back to memory, `width` x `height` RGBA
+// pixels with rows from the top and no padding, in the memfd that travels with this message.
+message PixelFrame {
+  uint32 display_id = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+}
+
+// Window manager to renderer: no window shows display `display_id` now; the renderer lets go
+// of what it holds for it.
+message ForgetDisplay {
+  uint32 display_id = 1;
+}
+
+// Window manager to renderer: how much memory do you hold? With `give_back`, the renderer
+// first gives back the memory it is not using (no task window is shown).
+message MemoryRequest {
+  uint64 request = 1;
+  bool give_back = 2;
+}
+
+// Renderer to window manager: the answer to MemoryRequest, in KiB.
+message MemoryReport {
+  uint64 request = 1;
+  uint32 process_id = 2;
+  // As the operating system counts the process; 0 when it cannot be read.
+  uint64 working_set_kb = 3;
+  uint64 private_kb = 4;
+  // Whether the renderer counted its own GPU allocations, and what it counted.
+  bool counted = 5;
+  uint64 device_local_kb = 6;
+  uint32 device_local_count = 7;
+  uint64 host_visible_kb = 8;
+  uint32 host_visible_count = 9;
+  uint64 imported_kb = 10;
+  uint32 imported_count = 11;
+  uint64 largest_kb = 12;
+  int32 guest_processes = 13;
+}
+
+// Renderer to window manager: one of gfxstream's warnings ('W'), errors ('E') or fatal
+// errors ('F'), as the character's code. A fatal error is sent before gfxstream acts on it.
+message RendererLog {
+  uint32 severity = 1;
+  string message = 2;
+}
+
+// Renderer to window manager: a line for the window manager's log from the renderer process
+// itself (a stream that could not be served, a panic).
+message Note {
+  string text = 1;
+}
+
+// Window manager to renderer: end now. The renderer closes the guest's streams and exits.
+message Stop {}
+
+// The one message type on the wire. Each frame carries exactly one.
+message Envelope {
+  oneof body {
+    Hello hello = 1;
+    HelloAccepted hello_accepted = 2;
+    HelloRejected hello_rejected = 3;
+    Start start = 4;
+    Started started = 5;
+    GuestVm guest_vm = 6;
+    TargetRequest target_request = 7;
+    Target target = 8;
+    FrameDone frame_done = 9;
+    GpuImage gpu_image = 10;
+    GpuFrame gpu_frame = 11;
+    PixelFrame pixel_frame = 12;
+    ForgetDisplay forget_display = 13;
+    MemoryRequest memory_request = 14;
+    MemoryReport memory_report = 15;
+    RendererLog renderer_log = 16;
+    Note note = 17;
+    Stop stop = 18;
+  }
+}

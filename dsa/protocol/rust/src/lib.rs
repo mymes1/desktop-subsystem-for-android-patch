@@ -1,6 +1,7 @@
 //! The control protocol in Rust: the generated message types, the frame codec and the
-//! connection handshake. [`host_api`] holds the same for the local API, and [`window_host`]
-//! for the connection between the window manager and the app window hosts.
+//! connection handshake. [`host_api`] holds the same for the local API, [`window_host`] for
+//! the connection between the window manager and the app window hosts, and [`renderer`] for
+//! the connection between the window manager and the graphics renderer process.
 //!
 //! The message types come from `dsa/protocol/control.proto` through
 //! `dsa-protocol-codegen`; nothing in [`control`] is written by hand. Every frame on the
@@ -22,6 +23,7 @@ mod schema {
 pub mod auth;
 pub mod handshake;
 pub mod host_api;
+pub mod renderer;
 pub mod window_host;
 
 pub use schema::{SCHEMA_HASH, SCHEMA_HASH_HEX};
