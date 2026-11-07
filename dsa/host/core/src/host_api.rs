@@ -69,6 +69,7 @@ use crate::apk::{self, InstallOutcome, InstalledPackage};
 use crate::app_windows::{self, AppWindowSettings};
 use crate::apps::{self, UninstallOutcome};
 use crate::arm_translation::{self, GuestArmTranslation, Package};
+use crate::gapps::{self, GappsPackage, GuestGapps};
 use crate::background::{
     self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundWatch, MediaCommand,
     MediaSession, Playback,
@@ -377,6 +378,27 @@ pub trait UserAndroid: Send + Sync {
     fn arm_translation(&self) -> Option<GuestArmTranslation> {
         None
     }
+    /// Sends the Google apps' system image, `size` bytes read from `content` whose SHA-256 is
+    /// `sha256`, to this Android's disk, and returns where the Google apps stand once the image
+    /// is in place. The image is used from Android's next start.
+    fn install_gapps(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<GuestGapps, InstallError> {
+        let _ = (size, sha256, content);
+        Err(InstallError::Refused("this Android cannot take Google's apps".into()))
+    }
+    /// Removes the Google apps' image from this Android's disk.
+    fn remove_gapps(&self) -> Result<GuestGapps, InstallError> {
+        Err(InstallError::Refused("this Android cannot take Google's apps".into()))
+    }
+    /// Where the Google apps stand in this Android while it runs, with the Android version
+    /// and processor it reports; `None` when it is not running or does not say.
+    fn gapps(&self) -> Option<GuestGapps> {
+        None
+    }
     /// What this Android has installed of `package`, if anything: its version and signing
     /// certificates.
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
@@ -681,6 +703,20 @@ impl UserAndroid for Session {
     }
     fn arm_translation(&self) -> Option<GuestArmTranslation> {
         Session::arm_translation(self).ok()
+    }
+    fn install_gapps(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<GuestGapps, InstallError> {
+        Session::install_gapps(self, size, sha256, content).map_err(arm_install_error)
+    }
+    fn remove_gapps(&self) -> Result<GuestGapps, InstallError> {
+        Session::remove_gapps(self).map_err(arm_install_error)
+    }
+    fn gapps(&self) -> Option<GuestGapps> {
+        Session::gapps(self).ok()
     }
     fn refresh_apps(&self) -> Result<(), TaskRequestError> {
         Session::refresh_apps(self, apps::REFRESH_WAIT).map_err(request_error)
@@ -1136,6 +1172,10 @@ const APK_CHUNK_WAIT: Duration = Duration::from_secs(30);
 /// another, and the guest may take minutes to verify and compile a large app.
 const INSTALL_ANSWER_WAIT: Duration = Duration::from_secs(30 * 60);
 
+/// How long a client waits for the service to say where the Google apps stand: the service
+/// asks the running Android, and its agent for the device's Android ID.
+const GAPPS_ANSWER_WAIT: Duration = Duration::from_secs(30);
+
 /// How long a connection that carries links waits for its client before it looks for links
 /// again.
 const LINK_POLL: Duration = Duration::from_millis(100);
@@ -1288,6 +1328,96 @@ impl ArmTranslationStatus {
     }
 }
 
+/// Where Google Play stands for a user.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GappsStatus {
+    /// The build the user installed, if any.
+    pub package: Option<GappsPackage>,
+    /// What the user's running Android says; `None` when it is not running.
+    pub guest: Option<GuestGapps>,
+    /// What is installed applies only once Android starts again.
+    pub restart_needed: bool,
+}
+
+impl GappsStatus {
+    fn to_wire(&self) -> types::Gapps {
+        let guest = self.guest.clone().unwrap_or_default();
+        types::Gapps {
+            package: self.package.as_ref().map(|package| types::GappsPackage {
+                variant: package.variant.clone(),
+                version: package.version.clone(),
+                android_version: package.android_version.clone(),
+                sdk: package.sdk,
+                arch: package.arch.clone(),
+                file: package.file.clone(),
+                source: package.source.clone(),
+                md5: package.md5.clone(),
+            }),
+            guest_known: self.guest.is_some(),
+            guest_installed: guest.installed,
+            guest_active: guest.active,
+            sdk: guest.sdk,
+            abi: guest.abi,
+            abilist: guest.abilist,
+            device_id: guest.device_id,
+            restart_needed: self.restart_needed,
+        }
+    }
+
+    fn from_wire(status: types::Gapps) -> GappsStatus {
+        GappsStatus {
+            package: status.package.map(|package| GappsPackage {
+                variant: package.variant,
+                version: package.version,
+                android_version: package.android_version,
+                sdk: package.sdk,
+                arch: package.arch,
+                file: package.file,
+                source: package.source,
+                md5: package.md5,
+            }),
+            guest: status.guest_known.then_some(GuestGapps {
+                installed: status.guest_installed,
+                active: status.guest_active,
+                sdk: status.sdk,
+                abi: status.abi,
+                abilist: status.abilist,
+                device_id: status.device_id,
+            }),
+            restart_needed: status.restart_needed,
+        }
+    }
+}
+
+fn gapps_progress_to_wire(progress: gapps::Progress) -> types::GappsProgress {
+    let stage = match progress.stage {
+        gapps::Stage::Listing => types::GappsStage::Listing,
+        gapps::Stage::Downloading => types::GappsStage::Downloading,
+        gapps::Stage::Building => types::GappsStage::Building,
+        gapps::Stage::Sending => types::GappsStage::Sending,
+    };
+    types::GappsProgress {
+        stage: stage as i32,
+        done: progress.done,
+        total: progress.total,
+    }
+}
+
+fn gapps_progress_from_wire(progress: &types::GappsProgress) -> Option<gapps::Progress> {
+    let stage = match types::GappsStage::try_from(progress.stage).ok()? {
+        types::GappsStage::Listing => gapps::Stage::Listing,
+        types::GappsStage::Downloading => gapps::Stage::Downloading,
+        types::GappsStage::Building => gapps::Stage::Building,
+        types::GappsStage::Sending => gapps::Stage::Sending,
+        types::GappsStage::Unspecified => return None,
+    };
+    Some(gapps::Progress {
+        stage,
+        done: progress.done,
+        total: progress.total,
+    })
+}
+
 fn package_to_wire(package: &Package) -> types::ArmTranslationPackage {
     types::ArmTranslationPackage {
         name: package.name.clone(),
@@ -1338,6 +1468,8 @@ pub struct HostApiService {
     data_reset_wait: Duration,
     /// Which Android version runs, and choosing another.
     versions: Option<Arc<dyn crate::update::versions::AndroidVersions>>,
+    /// Where Google Play is downloaded from, and where it is made ready.
+    gapps: Option<gapps::Source>,
 }
 
 /// Says what the build of the image a user's Android starts from is, by user.
@@ -1369,7 +1501,14 @@ impl HostApiService {
             data_reset: None,
             data_reset_wait: RESET_STOP_WAIT,
             versions: None,
+            gapps: None,
         }
+    }
+
+    /// Installs Google Play for users who ask, downloading it through `source`.
+    pub fn with_gapps(mut self, source: gapps::Source) -> HostApiService {
+        self.gapps = Some(source);
+        self
     }
 
     /// Lets users see the Android version and choose another through `versions`.
@@ -1605,6 +1744,9 @@ impl HostApiService {
                     request.id,
                     install.clone(),
                 );
+            }
+            if let Some(request::Body::InstallGapps(_)) = &request.body {
+                return self.install_gapps(connection, &peer, request.id);
             }
             if let Some(request::Body::WatchLinks(_)) = request.body {
                 return self.watch_links(connection, &peer, request.id);
@@ -3435,6 +3577,8 @@ impl HostApiService {
             Some(request::Body::ListWidgetProviders(_)) => self.widget_providers(peer),
             Some(request::Body::GetArmTranslation(_)) => self.get_arm_translation(peer),
             Some(request::Body::RemoveArmTranslation(_)) => self.remove_arm_translation(peer),
+            Some(request::Body::GetGapps(_)) => self.get_gapps(peer),
+            Some(request::Body::RemoveGapps(_)) => self.remove_gapps(peer),
             Some(request::Body::GetPackage(get)) => self.package_state(peer, &get.package_name),
             Some(request::Body::DragOut(out)) => self.drag_out(peer, out),
             Some(request::Body::ReadDrag(read)) => self.read_drag(peer, read),
@@ -3489,6 +3633,9 @@ impl HostApiService {
                         | request::Body::InstallArmTranslation(_)
                         | request::Body::GetArmTranslation(_)
                         | request::Body::RemoveArmTranslation(_)
+                        | request::Body::InstallGapps(_)
+                        | request::Body::GetGapps(_)
+                        | request::Body::RemoveGapps(_)
                         | request::Body::WatchLinks(_)
                         | request::Body::OpenFile(_)
                         | request::Body::WatchNotifications(_)
@@ -3789,6 +3936,179 @@ impl HostApiService {
             Err(InstallError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
             Err(InstallError::Refused(why)) => error(ErrorCode::InstallRefused, why),
         };
+        answer(&mut *connection, body);
+        connection.close();
+    }
+
+    /// Where Google Play stands for `peer`: the build they installed, and what their running
+    /// Android says.
+    fn gapps_status(
+        &self,
+        peer: &Peer,
+        store: &dyn SettingsStore,
+        guest: Option<GuestGapps>,
+    ) -> Result<GappsStatus, String> {
+        let package = store.gapps(&peer.user)?;
+        let guest = guest.or_else(|| {
+            self.androids
+                .android(&peer.user)
+                .ok()
+                .and_then(|android| android.gapps())
+        });
+        Ok(GappsStatus {
+            restart_needed: gapps::restart_needed(package.as_ref(), guest.as_ref()),
+            package,
+            guest,
+        })
+    }
+
+    fn get_gapps(&self, peer: &Peer) -> response::Body {
+        let Some((store, _)) = &self.settings else {
+            return Self::no_settings();
+        };
+        match self.gapps_status(peer, &**store, None) {
+            Ok(status) => response::Body::Gapps(status.to_wire()),
+            Err(why) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    /// Removes the caller's Google apps: from their Android's disk when it runs, and from
+    /// their settings, so no later boot lays them over the system.
+    fn remove_gapps(&self, peer: &Peer) -> response::Body {
+        let Some((store, _)) = &self.settings else {
+            return Self::no_settings();
+        };
+        let mut guest = None;
+        if let Ok(android) = self.androids.android(&peer.user) {
+            if matches!(
+                android.state(),
+                SessionState::Active | SessionState::Dozing | SessionState::Frozen
+            ) {
+                match android.remove_gapps() {
+                    Ok(state) => guest = Some(state),
+                    Err(InstallError::NotRunning(why)) => return error(ErrorCode::NotRunning, why),
+                    Err(InstallError::Refused(why)) => return error(ErrorCode::Unavailable, why),
+                }
+            }
+        }
+        if let Err(why) = store.set_gapps(&peer.user, None) {
+            return error(ErrorCode::Unavailable, why);
+        }
+        eprintln!("gapps: {} removed Google Play", peer.user);
+        match self.gapps_status(peer, &**store, guest) {
+            Ok(status) => response::Body::Gapps(status.to_wire()),
+            Err(why) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
+    /// Answers an InstallGapps request: finds the build for the Android the caller runs,
+    /// downloads and checks it, makes its image and sends that to the caller's Android,
+    /// answering with GappsProgress on the way. Once Android has the image the build is
+    /// recorded with the caller's settings, and the last answer says where Google Play stands.
+    /// A build that is refused leaves the settings as they were. The connection ends with the
+    /// install.
+    fn install_gapps(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
+        let answer = |connection: &mut dyn Connection, body: response::Body| {
+            let _ = send(
+                connection,
+                Body::Response(Response {
+                    id,
+                    body: Some(body),
+                }),
+            );
+        };
+        let refuse = |mut connection: Box<dyn Connection>, body: response::Body| {
+            answer(&mut *connection, body);
+            connection.close();
+        };
+        let Some((store, _)) = &self.settings else {
+            return refuse(connection, Self::no_settings());
+        };
+        let Some(source) = &self.gapps else {
+            let why = "this service cannot download Google Play; update DSA".to_string();
+            return refuse(connection, error(ErrorCode::Unavailable, why));
+        };
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return refuse(connection, error(ErrorCode::Unavailable, why)),
+        };
+        let state = android.state();
+        if !matches!(
+            state,
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) {
+            let why = format!("Android is {state}; start it and install Google Play again");
+            return refuse(connection, error(ErrorCode::NotRunning, why));
+        }
+        let Some(guest) = android.gapps() else {
+            let why = "Android did not say which version it runs; try again once it has \
+                       finished starting"
+                .to_string();
+            return refuse(connection, error(ErrorCode::NotRunning, why));
+        };
+        let target = match gapps::Target::for_guest(guest.sdk, &guest.abi) {
+            Ok(target) => target,
+            Err(why) => return refuse(connection, error(ErrorCode::InstallRefused, why)),
+        };
+        eprintln!(
+            "gapps: {} is installing Google Play for {} Android at API level {}",
+            peer.user, target.arch, target.sdk
+        );
+        let prepared = source.prepare(&peer.user, &target, &mut |progress| {
+            answer(
+                &mut *connection,
+                response::Body::GappsProgress(gapps_progress_to_wire(progress)),
+            )
+        });
+        let prepared = match prepared {
+            Ok(prepared) => prepared,
+            Err(why) => {
+                eprintln!("gapps: refused the build for {}: {why}", peer.user);
+                return refuse(connection, error(ErrorCode::InstallRefused, why));
+            }
+        };
+        let mut image = match std::fs::File::open(&prepared.image) {
+            Ok(image) => image,
+            Err(e) => {
+                let why = format!("the Google apps image cannot be read: {e}");
+                return refuse(connection, error(ErrorCode::Unavailable, why));
+            }
+        };
+        let size = prepared.size;
+        let mut report = |done: u64| {
+            let news = gapps::Progress {
+                stage: gapps::Stage::Sending,
+                done,
+                total: size,
+            };
+            answer(
+                &mut *connection,
+                response::Body::GappsProgress(gapps_progress_to_wire(news)),
+            )
+        };
+        let mut sending = gapps::Reporting::new(&mut image, &mut report);
+        let installed = android.install_gapps(size, &prepared.sha256, &mut sending);
+        drop(sending);
+        let body = match installed {
+            Ok(guest) => match store.set_gapps(&peer.user, Some(&prepared.package)) {
+                Ok(()) => {
+                    let package = &prepared.package;
+                    let files = prepared.built.files;
+                    eprintln!(
+                        "gapps: {} installed LiteGapps {} {} ({files} files)",
+                        peer.user, package.variant, package.version
+                    );
+                    match self.gapps_status(peer, &**store, Some(guest)) {
+                        Ok(status) => response::Body::Gapps(status.to_wire()),
+                        Err(why) => error(ErrorCode::Unavailable, why),
+                    }
+                }
+                Err(why) => error(ErrorCode::Unavailable, why),
+            },
+            Err(InstallError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(InstallError::Refused(why)) => error(ErrorCode::InstallRefused, why),
+        };
+        drop(prepared);
         answer(&mut *connection, body);
         connection.close();
     }
@@ -4598,6 +4918,63 @@ impl HostApiClient {
             _ => Err(ClientError::Malformed(
                 "expected where ARM translation stands".into(),
             )),
+        }
+    }
+
+    /// Where Google Play stands for the caller.
+    pub fn gapps(&mut self) -> Result<GappsStatus, ClientError> {
+        let body = request::Body::GetGapps(types::GetGapps {});
+        match self.exchange(body, GAPPS_ANSWER_WAIT)? {
+            response::Body::Gapps(status) => Ok(GappsStatus::from_wire(status)),
+            _ => Err(ClientError::Malformed(
+                "expected where Google Play stands".into(),
+            )),
+        }
+    }
+
+    /// Removes the caller's Google apps; Android goes without them from its next start.
+    pub fn remove_gapps(&mut self) -> Result<GappsStatus, ClientError> {
+        let body = request::Body::RemoveGapps(types::RemoveGapps {});
+        match self.exchange(body, INSTALL_ANSWER_WAIT)? {
+            response::Body::Gapps(status) => Ok(GappsStatus::from_wire(status)),
+            _ => Err(ClientError::Malformed(
+                "expected where Google Play stands".into(),
+            )),
+        }
+    }
+
+    /// Installs Google Play for the caller: the service downloads the build for the caller's
+    /// Android and sends its image there, which Android uses from its next start. `progress`
+    /// hears what the service is doing on the way. The connection ends with the install, so
+    /// the client is used up.
+    pub fn install_gapps(
+        mut self,
+        progress: &mut dyn FnMut(gapps::Progress),
+    ) -> Result<GappsStatus, ClientError> {
+        let id = self.next_id;
+        self.next_id += 1;
+        send(
+            &mut *self.connection,
+            Body::Request(Request {
+                id,
+                body: Some(request::Body::InstallGapps(types::InstallGapps {})),
+            }),
+        )
+        .map_err(ClientError::Transport)?;
+        loop {
+            match self.answer(id, INSTALL_ANSWER_WAIT)? {
+                response::Body::GappsProgress(news) => {
+                    if let Some(news) = gapps_progress_from_wire(&news) {
+                        progress(news);
+                    }
+                }
+                response::Body::Gapps(status) => return Ok(GappsStatus::from_wire(status)),
+                _ => {
+                    return Err(ClientError::Malformed(
+                        "expected news of the install or where Google Play stands".into(),
+                    ))
+                }
+            }
         }
     }
 

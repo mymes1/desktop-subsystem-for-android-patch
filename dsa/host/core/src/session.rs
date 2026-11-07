@@ -127,6 +127,7 @@ use crate::drag::{self, DragChunk, DragItem, DragOffer, DragOut, DragRead};
 use crate::file_share::{self, ShareHost, Sharing, SharingNow};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadRumble, GamepadTable};
+use crate::gapps::GuestGapps;
 use crate::guest_log::{
     serve_log_connection, DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogHub,
     LogPortMessage, LogWatch, STREAM_TAIL,
@@ -620,6 +621,13 @@ struct Shared {
     arm_translation: Mutex<Option<Sender<control::ArmTranslationState>>>,
     /// Held for the length of an exchange about ARM translation, so they go one at a time.
     arm_translation_turn: Mutex<()>,
+    /// Who waits for the control daemon's word on the Google apps, while one exchange is under
+    /// way.
+    gapps: Mutex<Option<Sender<control::GappsState>>>,
+    /// Held for the length of an exchange about the Google apps, so they go one at a time.
+    gapps_turn: Mutex<()>,
+    /// Who waits for the agent's word on the Google Services Framework Android ID.
+    device_id: Mutex<Option<Sender<String>>>,
     /// The widgets the agent hosts and who is watching them.
     widgets: Mutex<WidgetHub>,
     /// The requests about widgets waiting for the agent's answer, by request ID.
@@ -906,6 +914,29 @@ impl Shared {
         }
     }
 
+    /// Hands the control daemon's word on the Google apps to whoever waits for it.
+    fn gapps_event(&self, state: control::GappsState) {
+        let waiting = self.gapps.lock().unwrap_or_else(|e| e.into_inner());
+        match waiting.as_ref() {
+            Some(waiting) => {
+                let _ = waiting.send(state);
+            }
+            None => eprintln!("gapps: dropped the guest's word, which nobody waits for"),
+        }
+    }
+
+    /// Hands the agent's Google Services Framework Android ID to whoever asked for it.
+    fn device_id_event(&self, id: String) {
+        if let Some(waiting) = self
+            .device_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
+            let _ = waiting.send(id);
+        }
+    }
+
     fn install_event(&self, transfer_id: u32, event: InstallEvent) {
         let installs = self.installs.lock().unwrap_or_else(|e| e.into_inner());
         match installs.get(&transfer_id) {
@@ -1102,6 +1133,9 @@ impl Session {
             install_turn: Mutex::new(()),
             arm_translation: Mutex::new(None),
             arm_translation_turn: Mutex::new(()),
+            gapps: Mutex::new(None),
+            gapps_turn: Mutex::new(()),
+            device_id: Mutex::new(None),
             widgets: Mutex::new(WidgetHub::default()),
             widget_requests: Mutex::new(HashMap::new()),
             last_widget_request: AtomicU32::new(0),
@@ -1910,6 +1944,142 @@ impl Session {
             .arm_translation
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = None;
+        answer
+    }
+
+    /// Sends the Google apps' system image, `size` bytes read from `content` whose SHA-256 is
+    /// `sha256`, to the guest's control daemon, which keeps it on the user's disk for the next
+    /// boot. Returns where the Google apps stand once the image is in place, or why it is not.
+    /// Needs a running guest.
+    pub fn install_gapps(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn Read,
+    ) -> Result<GuestGapps, SessionError> {
+        let _turn = self
+            .shared
+            .gapps_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let state = self.state();
+        if !matches!(
+            state,
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) {
+            return Err(SessionError::NotActive(state));
+        }
+        let transfer_id = self
+            .shared
+            .last_install
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1);
+        let (tx, events) = mpsc::channel();
+        *self.shared.gapps.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        eprintln!("gapps: sending a {size} byte image to Android as transfer {transfer_id}");
+        let begin = Body::GappsInstall(control::GappsInstall {
+            transfer_id,
+            size,
+            sha256: sha256.to_vec(),
+        });
+        let result = self.send_image(
+            "the Google apps image",
+            transfer_id,
+            size,
+            content,
+            begin,
+            &|offset, data| {
+                Body::GappsChunk(control::GappsChunk {
+                    transfer_id,
+                    offset,
+                    data,
+                })
+            },
+            &events,
+            &|state: &control::GappsState| {
+                (
+                    state.transfer_id,
+                    state.received,
+                    state.done,
+                    state.error.clone(),
+                )
+            },
+        );
+        *self.shared.gapps.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        match &result {
+            Ok(_) => eprintln!("gapps: the image is in place for the next start of Android"),
+            Err(why) => eprintln!("gapps: the image did not reach Android: {why}"),
+        }
+        result.map(guest_gapps)
+    }
+
+    /// Asks the guest's control daemon to remove the Google apps' image.
+    pub fn remove_gapps(&self) -> Result<GuestGapps, SessionError> {
+        let state = self.gapps_exchange(Body::GappsRemove(control::GappsRemove {}))?;
+        if state.error.is_empty() {
+            Ok(guest_gapps(state))
+        } else {
+            Err(SessionError::InstallRefused(state.error))
+        }
+    }
+
+    /// Asks the guest where the Google apps stand, with the Google Services Framework Android
+    /// ID when they run. Needs a guest that is active or dozing: a frozen one is not thawed
+    /// for it.
+    pub fn gapps(&self) -> Result<GuestGapps, SessionError> {
+        let state = self.state();
+        if !matches!(state, SessionState::Active | SessionState::Dozing) {
+            return Err(SessionError::NotActive(state));
+        }
+        let mut guest = self
+            .gapps_exchange(Body::GappsQuery(control::GappsQuery {}))
+            .map(guest_gapps)?;
+        if guest.active {
+            guest.device_id = self.google_device_id();
+        }
+        Ok(guest)
+    }
+
+    /// The Google Services Framework Android ID the agent reads, or empty when it does not
+    /// answer in time or there is none yet.
+    fn google_device_id(&self) -> String {
+        let (tx, answers) = mpsc::channel();
+        *self
+            .shared
+            .device_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        let sent = self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(Body::GoogleDeviceIdQuery(control::GoogleDeviceIdQuery {})),
+        }));
+        let id = match sent {
+            Ok(()) => answers.recv_timeout(DEVICE_ID_WAIT).unwrap_or_default(),
+            Err(_) => String::new(),
+        };
+        *self
+            .shared
+            .device_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+        id
+    }
+
+    /// Sends `body` to the control daemon and waits for its GappsState.
+    fn gapps_exchange(&self, body: Body) -> Result<control::GappsState, SessionError> {
+        let _turn = self
+            .shared
+            .gapps_turn
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let (tx, events) = mpsc::channel();
+        *self.shared.gapps.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
+        let sent = self.send(dsa_protocol::encode(&control::Envelope { body: Some(body) }));
+        let answer = sent.and_then(|()| {
+            events.recv_timeout(GAPPS_WAIT).map_err(|_| {
+                SessionError::NoAnswer("Android did not say where the Google apps stand".into())
+            })
+        });
+        *self.shared.gapps.lock().unwrap_or_else(|e| e.into_inner()) = None;
         answer
     }
 
@@ -3140,6 +3310,25 @@ const POLL: Duration = Duration::from_millis(20);
 
 /// How long a question about ARM translation waits for the guest's control daemon.
 const ARM_TRANSLATION_WAIT: Duration = Duration::from_secs(5);
+
+/// How long a question about the Google apps waits for the guest.
+const GAPPS_WAIT: Duration = Duration::from_secs(5);
+
+/// How long the agent has to say the Google Services Framework Android ID, which it reads
+/// at once.
+const DEVICE_ID_WAIT: Duration = Duration::from_secs(2);
+
+/// What the guest's control daemon says of the Google apps, as the host keeps it.
+fn guest_gapps(state: control::GappsState) -> GuestGapps {
+    GuestGapps {
+        installed: state.installed,
+        active: state.active,
+        sdk: state.sdk,
+        abi: state.abi,
+        abilist: state.abilist,
+        device_id: String::new(),
+    }
+}
 
 /// What the guest's control daemon says of ARM translation, as the host keeps it.
 fn guest_arm_translation(state: control::ArmTranslationState) -> GuestArmTranslation {
@@ -5005,6 +5194,8 @@ impl Worker {
                 InstallEvent::Progress(progress.received),
             ),
             Some(Body::ArmTranslationState(state)) => self.shared.arm_translation_event(state),
+            Some(Body::GappsState(state)) => self.shared.gapps_event(state),
+            Some(Body::GoogleDeviceId(id)) => self.shared.device_id_event(id.id),
             Some(Body::InstallResult(result)) => self.shared.install_event(
                 result.transfer_id,
                 InstallEvent::Done(InstallOutcome::from_control(&result)),
@@ -5148,6 +5339,11 @@ impl Worker {
             | Some(Body::ArmTranslationChunk(_))
             | Some(Body::ArmTranslationRemove(_))
             | Some(Body::ArmTranslationQuery(_))
+            | Some(Body::GappsInstall(_))
+            | Some(Body::GappsChunk(_))
+            | Some(Body::GappsRemove(_))
+            | Some(Body::GappsQuery(_))
+            | Some(Body::GoogleDeviceIdQuery(_))
             | Some(Body::NotificationClicked(_))
             | Some(Body::NotificationDismissed(_))
             | Some(Body::BackgroundAppAction(_))

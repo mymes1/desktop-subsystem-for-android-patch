@@ -349,9 +349,13 @@ pub fn create_user_android(
         plan,
     )
     .with_bootconfig({
-        // An installed ARM translation package is used only while the user's setting is on.
+        // An installed ARM translation package is used only while the user's setting is on;
+        // the Google apps the user installed, while they are installed.
         let (store, user) = (Arc::clone(&store), user.to_string());
-        Box::new(move || arm_translation_bootconfig(&*store, &user))
+        Box::new(move || {
+            arm_translation_bootconfig(&*store, &user)
+                + &dsa_host_core::gapps::bootconfig_for(&*store, &user)
+        })
     })
     .with_boot_properties({
         // The user's device identity, which Android reads once while it boots.
@@ -834,6 +838,12 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
     if let Some(source) = android_version {
         service = service.with_android_version(source);
     }
+    // Google Play, for a user who asks: downloaded from LiteGapps and made ready in the
+    // service's own folder.
+    service = service.with_gapps(dsa_host_core::gapps::Source::new(
+        Arc::new(crate::fetch::CurlFetch),
+        config.settings_dir().with_file_name("gapps"),
+    ));
     if let Some(updates) = &updates {
         service = service.with_android_versions(Arc::new(StoreVersions {
             store: Arc::clone(&updates.store),

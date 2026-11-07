@@ -25,6 +25,7 @@
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
 //! dsa arm-translation [status | install <folder> | fetch google [--yes] | remove]
+//! dsa gapps [status | install [--progress] | remove]
 //! dsa reset-data --yes
 //! ```
 //!
@@ -197,6 +198,19 @@
 //! nothing to fetch. The `DSA_GOOGLE_REPOSITORY` environment variable points at a mirror of
 //! Google's repository (a URL or a folder) instead.
 //!
+//! `dsa gapps status` (or `dsa gapps`) says whether Google Play is installed: which LiteGapps
+//! build, for which Android, where it came from, whether the running Android has it, and the
+//! Android ID Google's page for uncertified devices asks for. DSA ships no Google app.
+//! `dsa gapps install` has the service download the newest LiteGapps Core build for the Android
+//! version and processor the running Android reports, check it, make a system image of its
+//! apps and permission files, and send it to Android; with `--progress` it prints a `stage`
+//! line as each step starts and as bytes arrive. `dsa gapps remove` removes it. Android is
+//! started first when it is not running, and both apply from its next start, and say so.
+//! Google's apps follow Google's terms. With `--json` each prints `package` (`variant`,
+//! `version`, `android_version`, `sdk`, `arch`, `file`, `source`, `md5`, or null),
+//! `installed`, `android` (`installed`, `active`, `sdk`, `abi`, `abilist` and `device_id`, or
+//! null while Android is not running), `restart_needed`, `terms_url` and `registration_url`.
+//!
 //! `dsa settings device` shows the device identity Android reports to its apps: what the user
 //! chose, and each value as Android reports it from its next start.
 //! `dsa settings set device.<field> <value>` changes one value: `manufacturer`, `brand`,
@@ -242,9 +256,10 @@ use dsa_host_core::app_windows::AppWindowSettings;
 use dsa_host_core::arm_translation::{self, google};
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
+use dsa_host_core::gapps;
 use dsa_host_core::host_api::{
-    ArmTranslationStatus, ClientError, HostApiClient, NetworkStatus, SettingsReport, Status,
-    TaskList,
+    ArmTranslationStatus, ClientError, GappsStatus, HostApiClient, NetworkStatus,
+    SettingsReport, Status, TaskList,
 };
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::session::SessionState;
@@ -266,7 +281,7 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
      arm-translation [status | install <folder> | fetch google [--yes] | remove] | \
-     files [open] | reset-data --yes | \
+     files [open] | gapps [status | install [--progress] | remove] | reset-data --yes | \
      android [version | use <major>|latest [--erase-data]]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
@@ -322,6 +337,12 @@ pub enum Command {
     ArmTranslationRemove,
     /// Make a translation package from Google's ARM translator, and install it.
     ArmTranslationFetchGoogle,
+    /// Say whether Google Play is installed, and which build.
+    GappsStatus,
+    /// Download Google Play and install it.
+    GappsInstall,
+    /// Remove Google Play.
+    GappsRemove,
     /// List, describe or uninstall the installed apps, or open their settings in Android
     /// ([`Invocation::apps`]).
     Apps,
@@ -829,6 +850,23 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     }
                 });
             }
+            "gapps" if command.is_none() => {
+                // A bare option such as --json belongs to the default action, status.
+                let action = match args.peek() {
+                    Some(next) if next.starts_with("--") => None,
+                    _ => args.next().map(String::as_str),
+                };
+                command = Some(match action {
+                    None | Some("status") => Command::GappsStatus,
+                    Some("install") => Command::GappsInstall,
+                    Some("remove") => Command::GappsRemove,
+                    Some(other) => {
+                        return Err(format!(
+                            "dsa gapps takes status, install or remove, not {other:?}\n{USAGE}"
+                        ))
+                    }
+                });
+            }
             "-d" if command == Some(Command::Logcat) => dump = true,
             "-b" if command == Some(Command::Logcat) => {
                 let names = args
@@ -974,7 +1012,9 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             }
             "--erase-data" if command == Some(Command::AndroidUse) => erase_data = true,
             "reset-data" if command.is_none() => command = Some(Command::ResetData),
-            "--progress" if command == Some(Command::Install) => progress = true,
+            "--progress" if matches!(command, Some(Command::Install | Command::GappsInstall)) => {
+                progress = true
+            }
             "--wait-first-frame" if command == Some(Command::Launch) => wait_first_frame = true,
             number
                 if command == Some(Command::Tap)
@@ -2588,6 +2628,151 @@ pub fn google_notice(image: &google::SdkImage) -> String {
     )
 }
 
+/// Starts Android when it is not running, as both `dsa gapps install` and `remove` need it.
+fn start_for_gapps(invocation: &Invocation, client: &mut HostApiClient) -> Result<(), String> {
+    #[cfg(windows)]
+    if invocation.endpoint.is_none() {
+        ensure_window_manager()?;
+    }
+    client
+        .ensure_running(invocation.timeout, Duration::from_millis(250), |_| {})
+        .map_err(|e| format!("Android did not start: {e}"))
+}
+
+/// `dsa gapps install`: starts Android when it is not running, then has the service download,
+/// check and send Google Play, printing each step with `--progress`.
+fn install_gapps(
+    invocation: &Invocation,
+    mut client: HostApiClient,
+    connector: &mut dyn Connector,
+) -> Result<String, String> {
+    start_for_gapps(invocation, &mut client)?;
+    drop(client);
+    let mut shown: Option<(gapps::Stage, u64)> = None;
+    let mut step = |news: gapps::Progress| {
+        if !invocation.progress {
+            return;
+        }
+        // One line per step, and one per tenth of the bytes of a step that counts them.
+        let tenth = (news.total / 10).max(1);
+        let new_step = shown.is_none_or(|(stage, _)| stage != news.stage);
+        let new_tenth = shown.is_some_and(|(_, done)| news.done / tenth > done / tenth);
+        if !new_step && !new_tenth {
+            return;
+        }
+        shown = Some((news.stage, news.done));
+        let name = match news.stage {
+            gapps::Stage::Listing => "listing",
+            gapps::Stage::Downloading => "downloading",
+            gapps::Stage::Building => "building",
+            gapps::Stage::Sending => "sending",
+        };
+        use std::io::Write as _;
+        let mut out = std::io::stdout().lock();
+        let _ = if news.total > 0 {
+            writeln!(out, "stage {name} {} {}", news.done, news.total)
+        } else {
+            writeln!(out, "stage {name}")
+        };
+        let _ = out.flush();
+    };
+    let status = connect(connector, None, false, Duration::from_secs(10))?
+        .install_gapps(&mut step)
+        .map_err(|e| format!("Google Play was not installed: {e}"))?;
+    let done = match &status.package {
+        Some(package) => format!(
+            "Installed LiteGapps {} {} for Android {} ({})",
+            package.variant, package.version, package.android_version, package.arch
+        ),
+        None => "Installed Google Play".to_string(),
+    };
+    Ok(show_gapps(invocation, &status, Some(&done)))
+}
+
+/// `dsa gapps remove`: starts Android when it is not running, so the image leaves its disk too.
+fn remove_gapps(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
+    start_for_gapps(invocation, &mut client)?;
+    let status = client.remove_gapps().map_err(|e| e.to_string())?;
+    Ok(show_gapps(invocation, &status, Some("Removed Google Play")))
+}
+
+/// Where Google Play stands as one JSON object.
+pub fn gapps_json(status: &GappsStatus) -> Value {
+    json!({
+        "package": status.package.as_ref().map(|package| json!({
+            "variant": package.variant,
+            "version": package.version,
+            "android_version": package.android_version,
+            "sdk": package.sdk,
+            "arch": package.arch,
+            "file": package.file,
+            "source": package.source,
+            "md5": package.md5,
+        })),
+        "installed": status.package.is_some(),
+        "android": status.guest.as_ref().map(|guest| json!({
+            "installed": guest.installed,
+            "active": guest.active,
+            "sdk": guest.sdk,
+            "abi": guest.abi,
+            "abilist": guest.abilist,
+            "device_id": guest.device_id,
+        })),
+        "restart_needed": status.restart_needed,
+        "terms_url": gapps::TERMS_URL,
+        "registration_url": gapps::REGISTRATION_URL,
+    })
+}
+
+/// Where Google Play stands, one fact per line, after `done` when an action was taken.
+pub fn describe_gapps(status: &GappsStatus, done: Option<&str>) -> String {
+    let mut lines: Vec<String> = done.map(str::to_string).into_iter().collect();
+    lines.push(match &status.package {
+        None => "Google Play: not installed (dsa gapps install downloads it)".to_string(),
+        Some(package) => format!(
+            "Google Play: LiteGapps {} {} for Android {} ({}), from {}",
+            package.variant, package.version, package.android_version, package.arch,
+            package.source
+        ),
+    });
+    match &status.guest {
+        Some(guest) => {
+            lines.push(format!(
+                "Android: {}",
+                if guest.active {
+                    "runs with Google's apps in this boot"
+                } else {
+                    "runs without Google's apps in this boot"
+                }
+            ));
+            if !guest.device_id.is_empty() {
+                lines.push(format!("Android ID for Google: {}", guest.device_id));
+            }
+        }
+        None => lines.push("Android is not running".to_string()),
+    }
+    if status.restart_needed {
+        lines.push("Restart Android to apply this (dsa stop --wait, then dsa start)".to_string());
+    }
+    if status.package.is_some() {
+        lines.push(format!(
+            "Google's apps follow Google's terms ({}); DSA does not distribute them. Google lets \
+             an uncertified device sign in once it is registered at {}",
+            gapps::TERMS_URL,
+            gapps::REGISTRATION_URL
+        ));
+    }
+    lines.join("\n")
+}
+
+fn show_gapps(invocation: &Invocation, status: &GappsStatus, done: Option<&str>) -> String {
+    if invocation.json {
+        gapps_json(status).to_string()
+    } else {
+        describe_gapps(status, done)
+    }
+}
+
 /// Where ARM translation stands as one JSON object.
 pub fn arm_translation_json(status: &ArmTranslationStatus) -> Value {
     json!({
@@ -3353,6 +3538,12 @@ pub fn run_with_starter(
             let done = "Removed the ARM translation package";
             return Ok(show_arm_translation(invocation, &status, Some(done)));
         }
+        Command::GappsStatus => {
+            let status = client.gapps().map_err(|e| e.to_string())?;
+            return Ok(show_gapps(invocation, &status, None));
+        }
+        Command::GappsInstall => return install_gapps(invocation, client, connector),
+        Command::GappsRemove => return remove_gapps(invocation, client),
         Command::Widgets => return widgets(invocation, client, connector),
         Command::Apps => return apps(invocation, client, connector),
         Command::Background => return background(invocation, client),

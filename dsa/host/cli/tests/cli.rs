@@ -2508,3 +2508,100 @@ fn fr14_dsa_android_shows_the_version_and_moves_down_only_with_erase_data() {
     assert!(parse(&args("android use seventeen")).is_err());
     assert!(parse(&args("android use")).is_err());
 }
+
+#[test]
+fn fr32_dsa_gapps_commands_are_parsed() {
+    assert_eq!(parse(&args("gapps")).unwrap().command, Cmd::GappsStatus);
+    assert_eq!(
+        parse(&args("gapps --json")).unwrap().command,
+        Cmd::GappsStatus
+    );
+    assert_eq!(
+        parse(&args("gapps status")).unwrap().command,
+        Cmd::GappsStatus
+    );
+    let install = parse(&args("gapps install --progress")).unwrap();
+    assert_eq!(install.command, Cmd::GappsInstall);
+    assert!(install.progress);
+    assert_eq!(
+        parse(&args("gapps remove")).unwrap().command,
+        Cmd::GappsRemove
+    );
+    assert!(parse(&args("gapps enable")).is_err());
+}
+
+/// LiteGapps' file host, from memory: one x86_64 build for API level 36.
+struct FakeLiteGapps(std::collections::HashMap<String, Vec<u8>>);
+
+impl dsa_host_core::update::store::Fetch for FakeLiteGapps {
+    fn fetch(&self, url: &str, out: &mut dyn std::io::Write) -> Result<u64, String> {
+        let body = self.0.get(url).ok_or_else(|| format!("404 for {url}"))?;
+        out.write_all(body).map_err(|e| e.to_string())?;
+        Ok(body.len() as u64)
+    }
+}
+
+fn gapps_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> RunningService {
+    use dsa_host_core::gapps::{listing, md5, package, Source};
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::MemorySettings;
+    let project = "https://litegapps.test/projects/litegapps";
+    let path =
+        "/litegapps/x86_64/36/core/2026-10-01/LiteGapps-core-x86_64-16.0-20261001-official.zip";
+    let zip = package::fixture::sample();
+    let mut digest = md5::Md5::new();
+    digest.update(&zip);
+    let feed = listing::fixture::feed(&[listing::fixture::item(
+        path,
+        zip.len() as u64,
+        &md5::hex(&digest.finish()),
+    )]);
+    let host = FakeLiteGapps(std::collections::HashMap::from([
+        (
+            format!("{project}/rss?path=/litegapps/x86_64/36/core"),
+            feed.into_bytes(),
+        ),
+        (format!("{project}/files{path}/download"), zip),
+    ]));
+    let work = std::env::temp_dir().join(format!("dsa-cli-gapps-{}", std::process::id()));
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
+        .with_gapps(Source::new(Arc::new(host), work).with_project(project));
+    RunningService::start_service(listener, service)
+}
+
+#[test]
+fn fr32_dsa_installs_reports_and_removes_google_play() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = gapps_service(listener);
+    let none = json_of(&dsa(&endpoint, "gapps --json"));
+    assert!(none["package"].is_null());
+    assert_eq!(none["installed"], false);
+    assert!(none["android"].is_null(), "Android is not running yet");
+    assert_eq!(
+        none["registration_url"],
+        "https://www.google.com/android/uncertified/"
+    );
+
+    let installed = json_of(&dsa(&endpoint, "gapps install --json"));
+    assert_eq!(installed["package"]["variant"], "core");
+    assert_eq!(installed["package"]["version"], "20261001");
+    assert_eq!(installed["package"]["android_version"], "16.0");
+    assert_eq!(installed["package"]["arch"], "x86_64");
+    assert_eq!(installed["installed"], true);
+    assert_eq!(installed["android"]["installed"], true);
+    assert_eq!(installed["android"]["active"], false);
+    assert_eq!(installed["restart_needed"], true);
+    let text = stdout(&dsa(&endpoint, "gapps status"));
+    assert!(
+        text.contains("Google Play: LiteGapps core 20261001 for Android 16.0 (x86_64)"),
+        "{text}"
+    );
+    assert!(text.contains("Restart Android"), "{text}");
+    assert!(text.contains("google.com/android/uncertified"), "{text}");
+
+    let removed = json_of(&dsa(&endpoint, "gapps remove --json"));
+    assert!(removed["package"].is_null());
+    assert_eq!(removed["android"]["installed"], false);
+    assert_eq!(removed["restart_needed"], false);
+}
