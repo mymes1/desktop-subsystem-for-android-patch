@@ -276,6 +276,80 @@ message InstalledApp {
   uint64 app_bytes = 9;
   uint64 data_bytes = 10;
   uint64 cache_bytes = 11;
+  // The ABI the app's native code runs as (the package manager's primary CPU ABI), such as
+  // "x86_64" or "arm64-v8a". Empty for an app without native code.
+  string primary_abi = 12;
+  // The native libraries the app's APKs on the device hold, base and splits together, by
+  // ABI, in ABI order. Empty for an app without native code.
+  repeated NativeLibraries native_libraries = 13;
+}
+
+// The native libraries of one ABI: the file names under `lib/<abi>/` of an APK, or of an APK
+// and its splits together.
+message NativeLibraries {
+  // Such as "x86_64" or "arm64-v8a".
+  string abi = 1;
+  // The library file names, such as "libmain.so", in name order, each once.
+  repeated string names = 2;
+}
+
+// Host to guest: install an app again from the APKs it has on the device (base and splits),
+// with its native code for `abi`, as the "Run as ARM" switch of the host's settings does. The
+// agent replaces the installed app, which keeps its data. When Android will not replace it
+// with the other ABI, the agent answers REINSTALL_STATUS_DATA_WOULD_BE_ERASED and changes
+// nothing, unless `erase_data` is set: then it keeps a copy of the APKs, uninstalls the app
+// (its data goes) and installs the copy. Answered with ReinstallResult of the same
+// `request_id`.
+message ReinstallApp {
+  uint32 request_id = 1;
+  string package_name = 2;
+  // "arm64-v8a" or "x86_64".
+  string abi = 3;
+  bool erase_data = 4;
+}
+
+// How an install with another ABI went. The reasons are stable, so the host can say in the
+// user's language what went wrong; the message beside them gives the guest's own words.
+enum ReinstallStatus {
+  REINSTALL_STATUS_UNSPECIFIED = 0;
+  // The app is installed again, with its native code for the ABI asked for.
+  REINSTALL_STATUS_SUCCESS = 1;
+  // Android will not replace the app with the other ABI while it keeps its data; nothing
+  // changed. Asking again with `erase_data` reinstalls it and erases its data.
+  REINSTALL_STATUS_DATA_WOULD_BE_ERASED = 2;
+  // No app of that package is installed.
+  REINSTALL_STATUS_NOT_INSTALLED = 3;
+  // The app is part of the Android image, which is not installed again.
+  REINSTALL_STATUS_SYSTEM_APP = 4;
+  // The app's APKs on the device hold no native libraries for that ABI.
+  REINSTALL_STATUS_NO_LIBRARIES = 5;
+  // Anything else. The message says what.
+  REINSTALL_STATUS_OTHER = 6;
+}
+
+// Guest to host, from the agent: how a ReinstallApp went.
+message ReinstallResult {
+  uint32 request_id = 1;
+  string package_name = 2;
+  ReinstallStatus status = 3;
+  // The guest's own words, for the log and a bug report.
+  string message = 4;
+  // The ABI the app's native code runs as now; empty when it has none or is not installed.
+  string primary_abi = 5;
+}
+
+// Guest to host, from the agent: an app ended because it could not load one of its native
+// libraries (an UnsatisfiedLinkError, or "dlopen failed"), as the system's crash record
+// says. The host offers to install the app again as arm64-v8a when it can. The agent sends
+// one for an app at most every few minutes.
+message NativeLibraryCrash {
+  string package_name = 1;
+  // The line of the crash record that names the library, for the log; at most 512
+  // characters.
+  string detail = 2;
+  // Whether the guest's ABI list holds arm64-v8a this boot (a translator is in place), so
+  // the app could run as ARM.
+  bool arm64_supported = 3;
 }
 
 // Host to guest: read the installed apps again, sizes included, and send the InstalledApp of
@@ -998,6 +1072,12 @@ message InstallApk {
   string name = 2;
   // The APK's length in bytes.
   uint64 size = 3;
+  // The ABI to install the app's native code for, which the agent gives the package
+  // installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+  // take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+  // only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+  // ones.
+  string abi = 4;
 }
 
 // Host to guest: part of the APK an InstallApk announced.
@@ -2201,5 +2281,8 @@ message Envelope {
     DragRead drag_read = 352;
     DragData drag_data = 353;
     DragEnd drag_end = 354;
+    ReinstallApp reinstall_app = 380;
+    ReinstallResult reinstall_result = 381;
+    NativeLibraryCrash native_library_crash = 382;
   }
 }
