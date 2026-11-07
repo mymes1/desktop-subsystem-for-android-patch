@@ -178,8 +178,9 @@ public sealed class ApkInstallViewModel : ObservableObject
             var result = await Run(new[] { "apk-info", Path, "--json" }).ConfigureAwait(true);
             if (result.ExitCode != 0)
             {
-                // dsa's reason is for developers; the user is told what the file is instead.
-                FailUnsupported();
+                // dsa's reason is for developers; the user is told what the file is instead,
+                // with dsa's words only on what is wrong with a bundle.
+                FailUnsupported(result.Error);
                 return;
             }
             Show(ApkDetails.Parse(result.Output));
@@ -195,8 +196,11 @@ public sealed class ApkInstallViewModel : ObservableObject
         }
     }
 
-    private void FailUnsupported() =>
-        Fail(_text.Get("ApkWindow_NotApkTitle"), UnsupportedFile.Message(UnsupportedFile.Classify(Path), FileName));
+    private void FailUnsupported(string error = "")
+    {
+        var (kind, detail) = UnsupportedFile.FromRefusal(error) ?? (UnsupportedFile.Classify(Path), "");
+        Fail(_text.Get("ApkWindow_NotApkTitle"), UnsupportedFile.Message(kind, FileName, detail));
+    }
 
     /// <summary>The file read again keeps the icon read before when this reading has none, so
     /// a second look never takes the app's icon away.</summary>
@@ -212,7 +216,7 @@ public sealed class ApkInstallViewModel : ObservableObject
         PackageValue = apk.Package;
         VersionValue = apk.VersionName ?? apk.VersionCode.ToString(CultureInfo.InvariantCulture);
         SourceValue = ApkSource.Of(Path);
-        SizeChip = Size(apk.Size);
+        SizeChip = Size(apk.InstallSize);
         AndroidChip = F("ApkWindow_AndroidChip", apk.MinAndroid ?? apk.MinSdk.ToString(CultureInfo.CurrentCulture));
         PublisherValue = apk.SignerSha256 is { } signer
             ? F("ApkWindow_Signer", apk.SignerScheme ?? "", signer)
@@ -239,6 +243,13 @@ public sealed class ApkInstallViewModel : ObservableObject
             ApkInstallKind.SignatureMismatch => _text.Get("ApkWindow_SignatureTitle"),
             _ => "",
         };
+        if (Summary.Length == 0 && apk.IsBundle)
+        {
+            // A new install of a split app: which of its files go, and their size together.
+            SummaryTitle = _text.Get("ApkWindow_BundleTitle");
+            Summary = F(apk.Obbs is { Count: > 0 } ? "ApkWindow_BundleSummaryObb" : "ApkWindow_BundleSummary",
+                Title, apk.Apks?.Count ?? 0, Size(apk.InstallSize));
+        }
         var facts = new List<ApkFact>
         {
             new(_text.Get("ApkWindow_FactPackage"), apk.Package),
@@ -250,7 +261,15 @@ public sealed class ApkInstallViewModel : ObservableObject
         }
         facts.Add(new(_text.Get("ApkWindow_FactAndroid"), F("ApkWindow_AndroidRange",
             AndroidText(apk.MinAndroid, apk.MinSdk), AndroidText(apk.TargetAndroid, apk.TargetSdk))));
-        facts.Add(new(_text.Get("ApkWindow_FactSize"), Size(apk.Size)));
+        facts.Add(new(_text.Get("ApkWindow_FactSize"), Size(apk.InstallSize)));
+        if (apk.IsBundle)
+        {
+            facts.Add(new(_text.Get("ApkWindow_FactApks"), F("ApkWindow_ApksValue", apk.Apks?.Count ?? 0, apk.SplitCount)));
+            if (apk.Obbs is { Count: > 0 } obbs)
+            {
+                facts.Add(new(_text.Get("ApkWindow_FactObbs"), string.Join(", ", obbs)));
+            }
+        }
         if (apk.Abis.Count > 0)
         {
             facts.Add(new(_text.Get("ApkWindow_FactAbis"), string.Join(", ", apk.Abis)));

@@ -53,7 +53,7 @@ public partial class App : Application
             var picker = new Microsoft.Win32.OpenFileDialog
             {
                 Title = ApkInstallerTitle.For(CultureInfo.CurrentUICulture),
-                Filter = "APK (*.apk)|*.apk",
+                Filter = "APK and split APK bundles (*.apk, *.xapk, *.apks, *.apkm)|*.apk;*.xapk;*.apks;*.apkm|All files (*.*)|*.*",
                 CheckFileExists = true,
             };
             if (picker.ShowDialog() != true)

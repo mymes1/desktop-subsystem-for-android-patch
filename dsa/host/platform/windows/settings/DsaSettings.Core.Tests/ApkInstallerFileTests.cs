@@ -63,11 +63,54 @@ public class ApkInstallerFileTests
     [Fact]
     public void Fr11_each_kind_of_file_has_its_plain_sentence()
     {
-        Assert.Equal("a.xapk is a split APK bundle, an app packed as several APKs. Bundles like this are not supported yet, so only single APK files can be installed.",
+        // Bundles install now; one is refused only for what is wrong with it.
+        Assert.Equal("a.xapk is a split APK bundle that cannot be read, so it cannot be installed.",
             UnsupportedFile.Message(UnsupportedKind.SplitBundle, "a.xapk"));
-        Assert.Equal("a.aab is an Android App Bundle. App Bundles are a publishing format for app stores and cannot be installed directly. Get the APK from the app's publisher.",
-            UnsupportedFile.Message(UnsupportedKind.AppBundle, "a.aab"));
+        Assert.Equal("a.xapk is a split APK bundle that cannot be installed: the bundle holds no base APK.",
+            UnsupportedFile.Message(UnsupportedKind.SplitBundle, "a.xapk", "the bundle holds no base APK"));
+        foreach (var kind in Enum.GetValues<UnsupportedKind>())
+        {
+            Assert.DoesNotContain("not supported", UnsupportedFile.Message(kind, "a.xapk"));
+        }
+        var aab = UnsupportedFile.Message(UnsupportedKind.AppBundle, "a.aab");
+        Assert.StartsWith("a.aab is an Android App Bundle.", aab);
+        Assert.Contains("another key", aab);
+        Assert.Contains("Get the app as an APK", aab);
+        Assert.StartsWith("a.apkm is an encrypted bundle", UnsupportedFile.Message(UnsupportedKind.EncryptedBundle, "a.apkm"));
+        Assert.Contains("another certificate", UnsupportedFile.Message(UnsupportedKind.SplitSignatureMismatch, "a.xapk"));
         Assert.Equal("a.bin is not a valid APK file.", UnsupportedFile.Message(UnsupportedKind.NotApk, "a.bin"));
+    }
+
+    [Theory]
+    [InlineData("dsa: not installed (app-bundle): a.aab: this is an Android App Bundle", UnsupportedKind.AppBundle)]
+    [InlineData("dsa: not installed (encrypted-bundle): a.apkm: the bundle is encrypted", UnsupportedKind.EncryptedBundle)]
+    [InlineData("dsa: not installed (split-signature-mismatch): a.xapk: config.ko.apk is signed with another certificate", UnsupportedKind.SplitSignatureMismatch)]
+    [InlineData("dsa: not installed (invalid-bundle): a.apks: the bundle holds two base APKs", UnsupportedKind.SplitBundle)]
+    public void Fr11_a_bundle_dsa_refuses_is_named_by_its_reason(string error, UnsupportedKind kind)
+    {
+        var refusal = UnsupportedFile.FromRefusal(error);
+        Assert.NotNull(refusal);
+        Assert.Equal(kind, refusal!.Value.Kind);
+        Assert.Null(UnsupportedFile.FromRefusal("dsa: the file is not a ZIP archive, so it is not an APK"));
+        Assert.Null(UnsupportedFile.FromRefusal("dsa: not installed (incompatible): a.apk: The app does not run"));
+    }
+
+    [Fact]
+    public void Fr11_a_bundle_reads_as_its_base_with_what_installing_it_sends()
+    {
+        var details = ApkDetails.Parse(Head + "\"icon\":null,\"signer\":null,\"abis\":[\"arm64-v8a\",\"x86_64\"]," +
+            "\"android\":\"stopped\",\"installed\":null,\"install\":null,\"format\":\"xapk\"," +
+            "\"apks\":[\"base.apk\",\"split_config.x86_64.apk\",\"split_config.en.apk\"],\"split_count\":2," +
+            "\"obbs\":[\"main.1.com.example.vector.obb\"],\"total_size\":3000,\"install_abi\":\"x86_64\"}");
+        Assert.True(details.IsBundle);
+        Assert.Equal(3, details.Apks!.Count);
+        Assert.Equal(2, details.SplitCount);
+        Assert.Equal("main.1.com.example.vector.obb", Assert.Single(details.Obbs!));
+        Assert.Equal(3000, details.InstallSize);
+        var apk = ApkDetails.Parse(Head + "\"icon\":null,\"signer\":null,\"abis\":[],\"android\":\"stopped\"," +
+            "\"installed\":null,\"install\":null}");
+        Assert.False(apk.IsBundle);
+        Assert.Equal(1, apk.InstallSize);
     }
 
     private const string Head =
