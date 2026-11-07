@@ -47,3 +47,9 @@ if grep -Fq 'VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json' "$wo
 fi
 # On the Mac runner the GPU selection tests look for MoltenVK's device, not Lavapipe.
 grep -Fq 'DSA_TEST_GPU_NAME=apple' "$workflow"
+# The renderer process is killed while a guest draws, on every host, and the windows stay
+# (NFR-5); the installer carries dsa-gfx.exe with its name.
+grep -Fq 'cargo test -p dsa-host-windows --test renderer_process' "$workflow"
+grep -Fq 'cargo test -p dsa-host-linux --test renderer_process' "$workflow"
+grep -Fq 'cargo test -p dsa-host-macos --test renderer_process' "$workflow"
+grep -Fq "'Graphics renderer for Android'" "$workflow"

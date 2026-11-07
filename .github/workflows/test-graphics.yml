@@ -11,6 +11,9 @@ on:
       - "dsa/host/platform/windows/**"
       - "dsa/host/platform/linux/**"
       - "dsa/host/platform/macos/**"
+      - "dsa/host/platform/unix/**"
+      - "dsa/host/core/src/renderer.rs"
+      - "dsa/protocol/renderer.proto"
       - ".github/workflows/test-graphics.yml"
       - "scripts/tests/graphics-workflow.test.sh"
   workflow_dispatch:
@@ -154,6 +157,16 @@ jobs:
           export VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd"
           uv run dsa/graphics/host/test_host_renderer.py
 
+      - name: Check killing the renderer process keeps the windows and frames resume
+        working-directory: dsa
+        env:
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}/.scratch/build-host/dist/bin/libgfxstream_backend.so
+        run: |
+          icd="$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -n 1)"
+          export VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd"
+          cargo test -p dsa-host-unix --test fd_frames
+          cargo test -p dsa-host-linux --test renderer_process -- --nocapture
+
       - name: Keep the host renderer library and headers
         uses: actions/upload-artifact@v4
         with:
@@ -296,6 +309,16 @@ jobs:
         run: |
           cargo test -p dsa-host-windows --test window_manager -- nfr5_a_lost_device_is_reported_to_the_guest_and_made_again --nocapture
 
+      - name: Check killing the renderer process keeps the windows and frames resume
+        shell: pwsh
+        working-directory: dsa
+        env:
+          VK_ICD_FILENAMES: ${{ env.LVP_ICD }}
+          VK_DRIVER_FILES: ${{ env.LVP_ICD }}
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}\.scratch\build-host\dist\bin\gfxstream_backend.dll
+        run: |
+          cargo test -p dsa-host-windows --test renderer_process -- --nocapture
+
       - name: Keep the host renderer library and headers
         uses: actions/upload-artifact@v4
         with:
@@ -356,6 +379,16 @@ jobs:
           export DSA_TEST_GPU_NAME=apple
           uv run dsa/graphics/host/test_host_renderer.py
 
+      - name: Check killing the renderer process keeps the windows and frames resume
+        working-directory: dsa
+        env:
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}/.scratch/build-host-macos/dist/bin/libgfxstream_backend.dylib
+        run: |
+          export VK_ICD_FILENAMES="$(brew --prefix molten-vk)/etc/vulkan/icd.d/MoltenVK_icd.json"
+          export DYLD_FALLBACK_LIBRARY_PATH="$(brew --prefix vulkan-loader)/lib:$(brew --prefix molten-vk)/lib"
+          export ANDROID_EMU_VK_ICD=moltenvk
+          cargo test -p dsa-host-macos --test renderer_process -- --nocapture
+
       - name: Keep the host renderer library and headers
         uses: actions/upload-artifact@v4
         with:
@@ -392,7 +425,7 @@ jobs:
           dsa/host/platform/windows/installer/build.ps1 -Version 0.1.0 -PlaceholderKernel `
             -GfxstreamBackend $dll
 
-      - name: Verify gfxstream_backend.dll is packaged beside dsa-wm.exe
+      - name: Verify gfxstream_backend.dll and dsa-gfx.exe are packaged beside dsa-wm.exe
         shell: pwsh
         run: |
           $msi = (Resolve-Path "dsa/target/installer/dsa-test-0.1.0.msi").Path
@@ -400,6 +433,13 @@ jobs:
           $dll = Get-ChildItem -Recurse msi-extracted -Filter "gfxstream_backend.dll"
           if (-not $dll) {
             throw "gfxstream_backend.dll was not found beside dsa-wm.exe in the MSI"
+          }
+          $renderer = Get-ChildItem -Recurse msi-extracted -Filter "dsa-gfx.exe" | Select-Object -First 1
+          if (-not $renderer -or $renderer.DirectoryName -ne $dll.DirectoryName) {
+            throw "dsa-gfx.exe is not packaged beside gfxstream_backend.dll and dsa-wm.exe"
+          }
+          if ($renderer.VersionInfo.FileDescription -cne 'Graphics renderer for Android') {
+            throw "dsa-gfx.exe calls itself '$($renderer.VersionInfo.FileDescription)'"
           }
           $lic = Get-ChildItem -Recurse msi-extracted -Filter "gfxstream.txt"
           if (-not $lic) {

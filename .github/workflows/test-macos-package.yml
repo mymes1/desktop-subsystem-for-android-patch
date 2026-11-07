@@ -103,6 +103,10 @@ jobs:
           test -x DSA.app/Contents/MacOS/dsa-wm
           test -x DSA.app/Contents/MacOS/dsa-hostd
           DSA.app/Contents/MacOS/dsa-wm version | grep -Fq dsa-wm
+          # The graphics renderer, which the window manager starts in a process of its own, and
+          # signed like the other programs.
+          test -x DSA.app/Contents/MacOS/dsa-gfx
+          codesign --verify --strict DSA.app/Contents/MacOS/dsa-gfx
           # The device lender ships beside them too, with its identity and the reasons for
           # its camera, microphone and location prompts embedded in it.
           test -x DSA.app/Contents/MacOS/dsa-devices

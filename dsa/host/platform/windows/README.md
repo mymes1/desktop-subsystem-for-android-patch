@@ -181,8 +181,8 @@ installer starts it at sign-in. One copy runs per session, and it ends at sign-o
 writes its messages to `%LOCALAPPDATA%\DSA\logs\dsa-wm.log`. Earlier releases called it
 `dsa-compositor`.
 
-Android cannot finish booting without the renderer in `dsa-wm.exe`, so the service makes sure it
-runs. When a user's Android starts, and about once a second while it runs, the service looks
+Android cannot finish booting without the renderer `dsa-wm.exe` starts, so the service makes sure
+it runs. When a user's Android starts, and about once a second while it runs, the service looks
 for the window manager's pipe in the user's sessions. When it is not there the service starts
 `dsa-wm.exe` in the user's session, as the user, with the limited token Windows gives it for that
 session (`WTSQueryUserToken` and `CreateProcessAsUserW`, which SYSTEM may call). A window manager
@@ -243,11 +243,22 @@ after two minutes. `"keep_window_manager": false` turns this off.
   local API, starts each app's window program, and tells it to open a window for each
   task, titled by the task's label and sized by the task's size in Android, and to close
   it when the task ends. Closing a window asks Android to end its task.
-- It accepts the guest's graphics streams on Hyper-V sockets, ports 5566 and 5567, and
-  hands them to `gfxstream_backend.dll`, which is installed beside it. The renderer
-  copies each task's frames on the GPU into a Direct3D 11 texture the window manager
-  shares with the app's window program, which shows it through DirectComposition; no
-  frame passes through the CPU.
+- The graphics renderer runs in a process of its own, `dsa-gfx.exe`, which Task Manager
+  shows as "Graphics renderer for Android" ("Android용 그래픽 렌더러" on a Korean desktop).
+  `dsa-wm` starts it from beside itself and tells it which VM to take streams from. The
+  renderer accepts the guest's graphics streams on Hyper-V sockets, ports 5566 and 5567, and
+  hands them to `gfxstream_backend.dll`, which is installed beside it. It copies each task's
+  frames on the GPU into a Direct3D 11 texture the window manager makes and shares with the
+  app's window program, which shows it through DirectComposition. The window manager
+  duplicates each texture's NT handle into the renderer once; no frame passes through the
+  CPU.
+- When the renderer ends (a crash in it or in the GPU driver, or End task in Task Manager),
+  the window manager and the app windows stay, and each window keeps its last frame.
+  `dsa-wm` starts the renderer again at once, then waiting longer after each quick failure,
+  up to 30 seconds, and logs why it ended in `dsa-wm.log`. The guest sees its graphics
+  streams drop and connects again, and the windows draw again with its next frames. The
+  renderer ends with its window manager. `dsa memory` lists it as the graphics renderer,
+  and its memory is logged on a line of its own.
 - Frames reach a window only for a display that Android named as a task's. Frames for any
   other display, such as Android's whole screen, are dropped, so no window shows more
   than one app.
@@ -432,7 +443,8 @@ The value is one of:
 - any other text: the first GPU whose name contains it, ignoring case, such as `"RTX"`
   or `"Arc"`.
 
-The renderer chooses its GPU when it starts, so a change takes effect the next time
+The window manager reads the setting when it starts and the renderer runs on that GPU from
+then on, also after a restart of the renderer, so a change takes effect the next time
 `dsa-wm` starts (sign out and back in, or restart it from DSA Settings). A setting that cannot be read is logged
 and the default is used. Unknown keys are an error, so a misspelt setting is reported.
 
