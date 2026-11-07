@@ -124,9 +124,10 @@
                 <Setter Property="MinWidth" Value="120" />
             </Style>
 
-            <!-- The Settings app's navigation items are 40 px high. -->
+<!-- Task Manager's navigation items: a 36 px highlight every 40 px. -->
             <Style TargetType="ui:NavigationViewItem" BasedOn="{StaticResource NavigationViewItemDefaultStyle}">
-                <Setter Property="MinHeight" Value="40" />
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Margin" Value="0,2,0,2" />
             </Style>
 
             <!-- A settings card as WinUI's SettingsCard draws it: 16 px padding, at least 68 px

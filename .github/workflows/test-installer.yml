@@ -292,6 +292,35 @@ jobs:
           }
           Set-AppTheme
 
+      # The pane in Task Manager's layout, open and closed, with an item under the pointer.
+      - name: Take pictures of the settings app's navigation pane
+        run: |
+          . .github/scripts/installer/setup-ui.ps1
+          Add-Type -Namespace Dsa -Name Pointer -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);'
+          New-Item -ItemType Directory -Force screens | Out-Null
+          $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
+          foreach ($theme in 'light', 'dark') {
+            Set-AppTheme -Dark:($theme -eq 'dark')
+            $app = Start-Process $exe -ArgumentList '--page', 'general' -PassThru
+            $window = Wait-ProcessWindow $app.Id 90
+            if (-not $window) { throw "DSA Settings showed no window within 90 seconds" }
+            Start-Sleep -Seconds 5
+            $r = $window.Current.BoundingRectangle
+            # The third item below the hamburger: rows are 40 px apart, under a 48 px title bar.
+            [Dsa.Pointer]::SetCursorPos([int]$r.X + 24, [int]$r.Y + 48 + 40 * 3 + 20) | Out-Null
+            Save-WindowScreen $window "$PWD\screens\settings-$theme-pane-open.png"
+            $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'PART_ToggleButton')
+            $toggle = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+            if (-not $toggle) { throw "the navigation pane has no toggle button" }
+            $toggle.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+            Start-Sleep -Seconds 2
+            Save-WindowScreen $window "$PWD\screens\settings-$theme-pane-closed.png"
+            if ($app.HasExited) { throw "DSA Settings exited after closing its pane (code $($app.ExitCode))" }
+            Stop-Process -Id $app.Id -Force
+            $app.WaitForExit(10000) | Out-Null
+          }
+          Set-AppTheme
+
       # The Widgets page, in both themes and both languages. The stand-in Android here offers
       # no widget, so a stand-in dsa answers the page's widget commands (widgets-fixture.ps1).
       - name: Take pictures of the settings app's Widgets page
