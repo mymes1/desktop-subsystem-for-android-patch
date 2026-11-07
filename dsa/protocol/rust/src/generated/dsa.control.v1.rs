@@ -2256,6 +2256,14 @@ pub struct SystemSettings {
     #[prost(fixed32, tag = "7")]
     pub accent_color: u32,
 }
+/// Host to guest: the computer's name, which the agent makes the guest's device name: the name
+/// Settings shows, and the one Bluetooth and Wi-Fi Direct show other devices when the guest has
+/// them. Sent each time the agent connects. Empty leaves the guest's as it is.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DeviceName {
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+}
 /// Host to guest, for the control daemon: a game controller was connected to the host, or was
 /// already there when the guest connected. The daemon makes it a gamepad input device in the
 /// guest, which apps see as any USB or Bluetooth gamepad.
@@ -2329,7 +2337,7 @@ pub struct GamepadRumble {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2599,6 +2607,8 @@ pub mod envelope {
         SetTaskCaption(super::SetTaskCaption),
         #[prost(message, tag = "340")]
         SystemSettings(super::SystemSettings),
+        #[prost(message, tag = "383")]
+        DeviceName(super::DeviceName),
         #[prost(message, tag = "341")]
         GamepadConnected(super::GamepadConnected),
         #[prost(message, tag = "342")]

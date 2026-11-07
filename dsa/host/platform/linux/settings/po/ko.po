@@ -834,8 +834,8 @@ msgstr "저장했습니다. 지금 쓰려면 Android를 다시 시작하세요."
 msgid "Reset the device identity?"
 msgstr "기기 정보를 되돌릴까요?"
 
-msgid "Every value goes back to DSA's own. It applies from the next start of Android."
-msgstr "모든 값이 DSA의 기본값으로 돌아갑니다. Android를 다음에 시작할 때부터 적용됩니다."
+msgid "Every value goes back to its default: this computer's, or DSA's own where the computer does not say. It applies from the next start of Android."
+msgstr "모든 값이 기본값으로 돌아갑니다. 기본값은 이 컴퓨터의 정보이고, 컴퓨터가 알려 주지 않는 값은 DSA의 값입니다. Android를 다음에 시작할 때부터 적용됩니다."
 
 msgid "Back to the defaults. Android uses them from its next start."
 msgstr "기본값으로 되돌렸습니다. Android를 다음에 시작할 때부터 씁니다."
@@ -1217,3 +1217,30 @@ msgstr "지우고 다시 설치"
 
 msgid "Not installed again"
 msgstr "다시 설치하지 않음"
+
+msgid "Default: from this computer"
+msgstr "기본값: 이 컴퓨터의 정보"
+
+msgid "Default: DSA's value"
+msgstr "기본값: DSA의 값"
+
+msgid "This computer does not say; Android keeps its own."
+msgstr "이 컴퓨터가 알려 주지 않아 Android의 값을 그대로 씁니다."
+
+msgid "From this computer"
+msgstr "이 컴퓨터의 정보"
+
+msgid "These follow this computer and are read again each time Android starts, so a renamed computer is followed from the next start. Android's own Settings shows the device name and the chip; the model name is shown only here, as Android's Settings has no place for it."
+msgstr "이 값은 이 컴퓨터를 따르고 Android를 시작할 때마다 다시 읽으므로, 컴퓨터 이름을 바꾸면 다음 시작부터 따라갑니다. 기기 이름과 칩은 Android 설정에도 보입니다. 모델 이름은 Android 설정에 자리가 없어 여기에만 보입니다."
+
+msgid "Model name"
+msgstr "모델 이름"
+
+msgid "Device name"
+msgstr "기기 이름"
+
+msgid "Chip manufacturer"
+msgstr "칩 제조사"
+
+msgid "Chip model"
+msgstr "칩 모델"

@@ -31,13 +31,26 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
         .iter()
         .map(|f| f.key())
         .collect();
-    let entries: Rc<Vec<(&'static str, adw::EntryRow)>> = Rc::new(
+    // Where each default came from, beside its box.
+    let origins: Rc<Vec<(&'static str, gtk::Label)>> = Rc::new(
         keys.iter()
             .map(|key| {
+                let label = gtk::Label::new(None);
+                label.add_css_class("dim-label");
+                label.add_css_class("caption");
+                (*key, label)
+            })
+            .collect(),
+    );
+    let entries: Rc<Vec<(&'static str, adw::EntryRow)>> = Rc::new(
+        keys.iter()
+            .zip(origins.iter())
+            .map(|(key, (_, origin))| {
                 let row = adw::EntryRow::builder()
                     .title(view::identity_label(key))
                     .use_markup(false)
                     .build();
+                row.add_suffix(origin);
                 if key.starts_with("fingerprint") {
                     print.add(&row);
                 } else {
@@ -48,6 +61,22 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
             .collect(),
     );
     page.add(&names);
+    // The values that follow the computer, which are shown and not chosen.
+    let computer = group(
+        &tr("From this computer"),
+        Some(&tr("These follow this computer and are read again each time Android starts, so a renamed computer is followed from the next start. Android's own Settings shows the device name and the chip; the model name is shown only here, as Android's Settings has no place for it.")),
+    );
+    let computer_rows: Rc<Vec<(&'static str, adw::ActionRow, gtk::Label)>> = Rc::new(
+        dsa_host_core::device_identity::COMPUTER_KEYS
+            .iter()
+            .map(|key| {
+                let (row, value) = value_row(&view::identity_label(key), "");
+                computer.add(&row);
+                (*key, row, value)
+            })
+            .collect(),
+    );
+    page.add(&computer);
     page.add(&print);
     let (preview_row, preview) = value_row(&tr("Fingerprint from the next start"), "");
     print.add(&preview_row);
@@ -109,15 +138,24 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
         entry.connect_changed(move |_| update_preview());
     }
     let show: Rc<dyn Fn(Result<Identity, crate::api::Failure>)> = {
-        let (page, entries, known, update_preview) = (
+        let (page, entries, known, update_preview, origins, computer_rows) = (
             page.clone(),
             entries.clone(),
             known.clone(),
             update_preview.clone(),
+            origins.clone(),
+            computer_rows.clone(),
         );
         Rc::new(move |r: Result<Identity, crate::api::Failure>| {
             page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
             let Ok(identity) = r else { return };
+            for (key, origin) in origins.iter() {
+                origin.set_label(&view::origin_label(identity.origin(key)));
+            }
+            for (key, row, value) in computer_rows.iter() {
+                value.set_label(&view::computer_value(identity.computer(key)));
+                row.set_subtitle(&view::origin_label(identity.origin(key)));
+            }
             for (key, entry) in entries.iter() {
                 entry.set_text(identity.chosen(key));
                 // The value Android reports shows where nothing is chosen.
@@ -200,7 +238,7 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
             confirm(
                 &ctx,
                 &tr("Reset the device identity?"),
-                &tr("Every value goes back to DSA's own. It applies from the next start of Android."),
+                &tr("Every value goes back to its default: this computer's, or DSA's own where the computer does not say. It applies from the next start of Android."),
                 &tr("Reset to defaults"),
                 true,
                 move || {

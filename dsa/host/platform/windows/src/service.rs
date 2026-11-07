@@ -28,9 +28,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use dsa_host_core::device_identity::{
-    DeviceIdentity, DeviceIdentityStore, FileDeviceIdentities, ImageBuild,
-};
+use dsa_host_core::device_identity::{BootIdentity, FileDeviceIdentities, ImageBuild};
 use dsa_host_core::diagnostics::HostFile;
 use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
 use dsa_host_core::guest_log::{LogFilter, LogWatch, DEFAULT_BUFFERS, WARN};
@@ -270,6 +268,12 @@ pub fn create_user_android(
     let disk_size_gb = user.data_disk_size_gb;
     let console_log = user.console_log.clone();
     let owner = sid.to_string();
+    // What this PC says it is, with what the user chose, read at each start.
+    let boot_identity = BootIdentity::new(
+        Arc::new(FileDeviceIdentities::new(config.settings_dir())),
+        sid,
+        Arc::new(crate::computer_identity::read),
+    );
     // Set each time the guest's configuration is built, from the command line it boots with.
     let trace_on = Arc::new(AtomicBool::new(false));
     let traced = Arc::clone(&trace_on);
@@ -368,20 +372,16 @@ pub fn create_user_android(
         })
     })
     .with_boot_properties({
-        // The user's device identity, which Android reads once while it boots.
-        let identities = FileDeviceIdentities::new(config.settings_dir());
-        let (owner, build) = (sid.to_string(), build.to_string());
+        // The user's device identity on this PC, which Android reads once while it boots. The
+        // PC is read again at each start, so a renamed PC is followed.
+        let identity = Arc::clone(&boot_identity);
         Box::new(move |vm: &AndroidVmConfig| {
-            let identity = identities.get(&owner).unwrap_or_else(|why| {
-                eprintln!("{build}: {why}; Android starts with the image's device identity");
-                DeviceIdentity::default()
-            });
             let image = vm
                 .initrd
                 .as_deref()
                 .and_then(std::path::Path::parent)
                 .and_then(ImageBuild::from_image_dir);
-            identity.boot_properties(image.as_ref())
+            Some(identity.boot_properties(image.as_ref()))
         })
     });
     let launcher = if config.keep_window_manager {
@@ -421,6 +421,8 @@ pub fn create_user_android(
     let session_config = config.session_config();
     let handshake = ControlHandshake::new(build, session_config.connect_timeout);
     let session = Session::new(launcher, Box::new(listener), handshake, session_config);
+    // The PC's name becomes the guest's device name.
+    session.set_device_name_source(Arc::new(move || boot_identity.device_name()));
     // Developer mode's bridge reaches the guest's adbd over a Hyper-V socket to its vsock port.
     session.set_adb_connect(Arc::new(|vm_id: &str| {
         let vm: Guid = vm_id.parse().map_err(|_| {
@@ -1004,6 +1006,8 @@ where
                 Arc::new(move |_: &str| current_image_build(&config, identity_images.as_deref()))
             },
         )
+        // The defaults the settings show are what this PC says it is now.
+        .with_computer_identity(Arc::new(crate::computer_identity::read))
         // The default ARM translator of the image the next start boots: only an x86_64 image
         // has one.
         .with_default_arm_translation({

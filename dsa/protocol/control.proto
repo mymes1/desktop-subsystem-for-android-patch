@@ -2088,6 +2088,13 @@ message SystemSettings {
   fixed32 accent_color = 7;
 }
 
+// Host to guest: the computer's name, which the agent makes the guest's device name: the name
+// Settings shows, and the one Bluetooth and Wi-Fi Direct show other devices when the guest has
+// them. Sent each time the agent connects. Empty leaves the guest's as it is.
+message DeviceName {
+  string name = 1;
+}
+
 // Host to guest, for the control daemon: a game controller was connected to the host, or was
 // already there when the guest connected. The daemon makes it a gamepad input device in the
 // guest, which apps see as any USB or Bluetooth gamepad.
@@ -2292,6 +2299,7 @@ message Envelope {
     CameraError camera_error = 267;
     SetTaskCaption set_task_caption = 155;
     SystemSettings system_settings = 340;
+    DeviceName device_name = 383;
     GamepadConnected gamepad_connected = 341;
     GamepadDisconnected gamepad_disconnected = 342;
     GamepadState gamepad_state = 343;
