@@ -353,7 +353,7 @@
     <value>Android 파일</value>
   </data>
   <data name="AndroidFilesCard.Description" xml:space="preserve">
-    <value>Android 공유 저장소를 파일 탐색기에서 엽니다. 사진과 다운로드처럼 Android 앱이 저장한 파일이 있습니다. Android가 실행 중이 아니면 시작합니다. 시작 메뉴의 DSA Files 항목도 같은 일을 합니다.</value>
+    <value>Android 공유 저장소를 파일 탐색기에서 엽니다. 사진과 다운로드처럼 Android 앱이 저장한 파일이 있습니다. Android가 실행 중이 아니면 시작합니다. 파일 탐색기 탐색 창의 Android 항목도 같은 일을 합니다.</value>
   </data>
   <data name="FilesNote.Text" xml:space="preserve">
     <value>Android 앱에 파일을 보내려면 파일 탐색기에서 앱 창으로 끌어 놓습니다. 끌어 놓은 APK는 설치됩니다.</value>

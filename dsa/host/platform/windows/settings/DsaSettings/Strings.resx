@@ -353,7 +353,7 @@
     <value>Android files</value>
   </data>
   <data name="AndroidFilesCard.Description" xml:space="preserve">
-    <value>Opens Android's shared storage in File Explorer: the files Android apps saved, such as photos and downloads. Android starts if it is not running. The DSA Files entry in the Start menu does the same.</value>
+    <value>Opens Android's shared storage in File Explorer: the files Android apps saved, such as photos and downloads. Android starts if it is not running. Android in File Explorer's navigation pane does the same.</value>
   </data>
   <data name="FilesNote.Text" xml:space="preserve">
     <value>To send a file to an Android app, drag it from File Explorer onto the app's window. An APK you drop is installed.</value>

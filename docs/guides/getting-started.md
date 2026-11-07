@@ -43,7 +43,8 @@ Platform** turned on.
 
 - The `DsaHost` service, which runs each user's Android.
 - The `dsa` command.
-- **DSA Settings** and **DSA Files** in the Start menu.
+- **DSA Settings** in the Start menu.
+- **Android** in the navigation pane of File Explorer, which opens Android's files.
 - The APK Installer, which opens `.apk` files.
 - The DSA Window Manager (`dsa-wm`). It starts when you sign in and starts Android then,
   so the first app you open does not wait for Android to boot.
