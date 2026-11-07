@@ -71,6 +71,7 @@ pub mod camera;
 pub mod clipboard;
 pub mod clock_trace;
 pub mod compositor;
+pub mod computer_identity;
 pub mod data_reset;
 pub mod device_identity;
 pub mod diagnostics;

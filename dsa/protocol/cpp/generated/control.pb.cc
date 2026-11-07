@@ -2421,6 +2421,19 @@ struct SystemSettingsDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SystemSettingsDefaultTypeInternal _SystemSettings_default_instance_;
+PROTOBUF_CONSTEXPR DeviceName::DeviceName(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct DeviceNameDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR DeviceNameDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~DeviceNameDefaultTypeInternal() {}
+  union {
+    DeviceName _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 DeviceNameDefaultTypeInternal _DeviceName_default_instance_;
 PROTOBUF_CONSTEXPR GamepadConnected::GamepadConnected(
     ::_pbi::ConstantInitialized): _impl_{
     /*decltype(_impl_.name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
@@ -46233,6 +46246,211 @@ std::string SystemSettings::GetTypeName() const {
 
 // ===================================================================
 
+class DeviceName::_Internal {
+ public:
+};
+
+DeviceName::DeviceName(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:dsa.control.v1.DeviceName)
+}
+DeviceName::DeviceName(const DeviceName& from)
+  : ::PROTOBUF_NAMESPACE_ID::MessageLite() {
+  DeviceName* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_name().empty()) {
+    _this->_impl_.name_.Set(from._internal_name(), 
+      _this->GetArenaForAllocation());
+  }
+  // @@protoc_insertion_point(copy_constructor:dsa.control.v1.DeviceName)
+}
+
+inline void DeviceName::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.name_){}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+}
+
+DeviceName::~DeviceName() {
+  // @@protoc_insertion_point(destructor:dsa.control.v1.DeviceName)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<std::string>()) {
+  (void)arena;
+    return;
+  }
+  SharedDtor();
+}
+
+inline void DeviceName::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.name_.Destroy();
+}
+
+void DeviceName::SetCachedSize(int size) const {
+  _impl_._cached_size_.Set(size);
+}
+
+void DeviceName::Clear() {
+// @@protoc_insertion_point(message_clear_start:dsa.control.v1.DeviceName)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  _impl_.name_.ClearToEmpty();
+  _internal_metadata_.Clear<std::string>();
+}
+
+const char* DeviceName::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string name = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, nullptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<std::string>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* DeviceName::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:dsa.control.v1.DeviceName)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string name = 1;
+  if (!this->_internal_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "dsa.control.v1.DeviceName.name");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_name(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
+        static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:dsa.control.v1.DeviceName)
+  return target;
+}
+
+size_t DeviceName::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:dsa.control.v1.DeviceName)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // string name = 1;
+  if (!this->_internal_name().empty()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_name());
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
+  }
+  int cached_size = ::_pbi::ToCachedSize(total_size);
+  SetCachedSize(cached_size);
+  return total_size;
+}
+
+void DeviceName::CheckTypeAndMergeFrom(
+    const ::PROTOBUF_NAMESPACE_ID::MessageLite& from) {
+  MergeFrom(*::_pbi::DownCast<const DeviceName*>(
+      &from));
+}
+
+void DeviceName::MergeFrom(const DeviceName& from) {
+  DeviceName* const _this = this;
+  // @@protoc_insertion_point(class_specific_merge_from_start:dsa.control.v1.DeviceName)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (!from._internal_name().empty()) {
+    _this->_internal_set_name(from._internal_name());
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void DeviceName::CopyFrom(const DeviceName& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:dsa.control.v1.DeviceName)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool DeviceName::IsInitialized() const {
+  return true;
+}
+
+void DeviceName::InternalSwap(DeviceName* other) {
+  using std::swap;
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.name_, lhs_arena,
+      &other->_impl_.name_, rhs_arena
+  );
+}
+
+std::string DeviceName::GetTypeName() const {
+  return "dsa.control.v1.DeviceName";
+}
+
+
+// ===================================================================
+
 class GamepadConnected::_Internal {
  public:
 };
@@ -47477,6 +47695,7 @@ class Envelope::_Internal {
   static const ::dsa::control::v1::CameraError& camera_error(const Envelope* msg);
   static const ::dsa::control::v1::SetTaskCaption& set_task_caption(const Envelope* msg);
   static const ::dsa::control::v1::SystemSettings& system_settings(const Envelope* msg);
+  static const ::dsa::control::v1::DeviceName& device_name(const Envelope* msg);
   static const ::dsa::control::v1::GamepadConnected& gamepad_connected(const Envelope* msg);
   static const ::dsa::control::v1::GamepadDisconnected& gamepad_disconnected(const Envelope* msg);
   static const ::dsa::control::v1::GamepadState& gamepad_state(const Envelope* msg);
@@ -48016,6 +48235,10 @@ Envelope::_Internal::set_task_caption(const Envelope* msg) {
 const ::dsa::control::v1::SystemSettings&
 Envelope::_Internal::system_settings(const Envelope* msg) {
   return *msg->_impl_.body_.system_settings_;
+}
+const ::dsa::control::v1::DeviceName&
+Envelope::_Internal::device_name(const Envelope* msg) {
+  return *msg->_impl_.body_.device_name_;
 }
 const ::dsa::control::v1::GamepadConnected&
 Envelope::_Internal::gamepad_connected(const Envelope* msg) {
@@ -50038,6 +50261,21 @@ void Envelope::set_allocated_system_settings(::dsa::control::v1::SystemSettings*
   }
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.system_settings)
 }
+void Envelope::set_allocated_device_name(::dsa::control::v1::DeviceName* device_name) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_body();
+  if (device_name) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalGetOwningArena(device_name);
+    if (message_arena != submessage_arena) {
+      device_name = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, device_name, submessage_arena);
+    }
+    set_has_device_name();
+    _impl_.body_.device_name_ = device_name;
+  }
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.Envelope.device_name)
+}
 void Envelope::set_allocated_gamepad_connected(::dsa::control::v1::GamepadConnected* gamepad_connected) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
   clear_body();
@@ -50918,6 +51156,11 @@ Envelope::Envelope(const Envelope& from)
     case kSystemSettings: {
       _this->_internal_mutable_system_settings()->::dsa::control::v1::SystemSettings::MergeFrom(
           from._internal_system_settings());
+      break;
+    }
+    case kDeviceName: {
+      _this->_internal_mutable_device_name()->::dsa::control::v1::DeviceName::MergeFrom(
+          from._internal_device_name());
       break;
     }
     case kGamepadConnected: {
@@ -51815,6 +52058,12 @@ void Envelope::clear_body() {
     case kSystemSettings: {
       if (GetArenaForAllocation() == nullptr) {
         delete _impl_.body_.system_settings_;
+      }
+      break;
+    }
+    case kDeviceName: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete _impl_.body_.device_name_;
       }
       break;
     }
@@ -53030,6 +53279,14 @@ const char* Envelope::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx)
         } else
           goto handle_unusual;
         continue;
+      // .dsa.control.v1.DeviceName device_name = 383;
+      case 383:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 250)) {
+          ptr = ctx->ParseMessage(_internal_mutable_device_name(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       // .dsa.control.v1.GappsInstall gapps_install = 400;
       case 400:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 130)) {
@@ -54081,6 +54338,13 @@ uint8_t* Envelope::_InternalSerialize(
         _Internal::native_library_crash(this).GetCachedSize(), target, stream);
   }
 
+  // .dsa.control.v1.DeviceName device_name = 383;
+  if (_internal_has_device_name()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(383, _Internal::device_name(this),
+        _Internal::device_name(this).GetCachedSize(), target, stream);
+  }
+
   // .dsa.control.v1.GappsInstall gapps_install = 400;
   if (_internal_has_gapps_install()) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -55064,6 +55328,13 @@ size_t Envelope::ByteSizeLong() const {
           *_impl_.body_.system_settings_);
       break;
     }
+    // .dsa.control.v1.DeviceName device_name = 383;
+    case kDeviceName: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *_impl_.body_.device_name_);
+      break;
+    }
     // .dsa.control.v1.GamepadConnected gamepad_connected = 341;
     case kGamepadConnected: {
       total_size += 2 +
@@ -55843,6 +56114,11 @@ void Envelope::MergeFrom(const Envelope& from) {
           from._internal_system_settings());
       break;
     }
+    case kDeviceName: {
+      _this->_internal_mutable_device_name()->::dsa::control::v1::DeviceName::MergeFrom(
+          from._internal_device_name());
+      break;
+    }
     case kGamepadConnected: {
       _this->_internal_mutable_gamepad_connected()->::dsa::control::v1::GamepadConnected::MergeFrom(
           from._internal_gamepad_connected());
@@ -56567,6 +56843,10 @@ Arena::CreateMaybeMessage< ::dsa::control::v1::CameraError >(Arena* arena) {
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::SystemSettings*
 Arena::CreateMaybeMessage< ::dsa::control::v1::SystemSettings >(Arena* arena) {
   return Arena::CreateMessageInternal< ::dsa::control::v1::SystemSettings >(arena);
+}
+template<> PROTOBUF_NOINLINE ::dsa::control::v1::DeviceName*
+Arena::CreateMaybeMessage< ::dsa::control::v1::DeviceName >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::dsa::control::v1::DeviceName >(arena);
 }
 template<> PROTOBUF_NOINLINE ::dsa::control::v1::GamepadConnected*
 Arena::CreateMaybeMessage< ::dsa::control::v1::GamepadConnected >(Arena* arena) {

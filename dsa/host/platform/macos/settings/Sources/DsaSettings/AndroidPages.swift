@@ -258,6 +258,7 @@ struct IdentityFieldRow: View {
             } label: {
                 RowLabel(title: vm.label(field), detail: vm.detail(field))
             }
+            Text(vm.originText(field.origin)).font(.caption).foregroundStyle(.secondary)
             if !problem.isEmpty {
                 Text(problem).font(.callout).foregroundStyle(.red)
             }
@@ -300,6 +301,22 @@ struct DeviceIdentityPage: View {
             }
             Section(T("IdentityNamesHeader.Text")) {
                 ForEach(vm.names) { IdentityFieldRow(vm: vm, key: $0.key) }
+            }
+            Section {
+                ForEach(vm.computerValues) { value in
+                    VStack(alignment: .leading, spacing: 4) {
+                        LabeledContent {
+                            Text(vm.shown(value)).textSelection(.enabled).foregroundStyle(.secondary)
+                        } label: {
+                            RowLabel(title: vm.label(value), detail: vm.detail(value))
+                        }
+                        Text(vm.originText(value.origin)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text(T("IdentityComputerHeader.Text"))
+            } footer: {
+                Text(T("IdentityComputerNote.Text")).font(.callout).foregroundStyle(.secondary)
             }
             Section(T("IdentityFingerprintHeader.Text")) {
                 LabeledContent(T("IdentityPreview.Text")) {

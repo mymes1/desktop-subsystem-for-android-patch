@@ -58,6 +58,8 @@ import io.github.thisisthepy.dsa.agent.print.QueuedPrintJob
 import io.github.thisisthepy.dsa.agent.requests.HostRequests
 import io.github.thisisthepy.dsa.agent.requests.RequestResult
 import io.github.thisisthepy.dsa.agent.requests.TaskActions
+import io.github.thisisthepy.dsa.agent.settings.DeviceNamePort
+import io.github.thisisthepy.dsa.agent.settings.DeviceNameSync
 import io.github.thisisthepy.dsa.agent.settings.SystemSettingsPort
 import io.github.thisisthepy.dsa.agent.settings.SystemSettingsSync
 import io.github.thisisthepy.dsa.agent.tasks.AppInfoSource
@@ -116,7 +118,7 @@ import io.github.thisisthepy.dsa.control.v1.PointerAction
  * the dropbox ([DiagnosticsCollector]). Documents apps print to the agent's print service go
  * to the host, which prints them on its printers ([HostPrinter]). The host's time zone, display
  * languages, regional format, dark theme and accent color become the guest's
- * ([SystemSettingsSync]).
+ * ([SystemSettingsSync]), and the computer's name becomes the guest's device name ([DeviceNameSync]).
  */
 class Agent(
     private val ownPackage: String,
@@ -166,6 +168,7 @@ class Agent(
     diagnostics: DiagnosticsSource = DiagnosticsSource.NONE,
     diagnosticsRunner: (Runnable) -> Unit = { Thread(it, "dsa-diagnostics").start() },
     systemSettings: SystemSettingsPort = SystemSettingsPort.NONE,
+    deviceName: DeviceNamePort = DeviceNamePort.NONE,
     wifi: WifiPort = WifiPort.NONE,
     dragCatcher: DragCatcher = DragCatcher.NONE,
     dragRunner: ((Runnable) -> Unit)? = null,
@@ -219,6 +222,7 @@ class Agent(
     }
     private val clipboardSync = ClipboardSync(clipboard, { frame -> channel.send(frame) }, log, isConnected = { channel.connected })
     private val settingsSync = SystemSettingsSync(systemSettings, log)
+    private val deviceNameSync = DeviceNameSync(deviceName, log)
     private val diagnosticsCollector = DiagnosticsCollector(diagnostics, { frame -> channel.send(frame) }, log, diagnosticsRunner)
     private val backgroundApps = BackgroundApps(
         ownPackage,
@@ -443,6 +447,7 @@ class Agent(
         channel.send(Envelope.newBuilder().setAgentConnected(AgentConnected.getDefaultInstance()).build().toByteArray())
         reporter.resend()
         settingsSync.connected()
+        deviceNameSync.connected()
         lifecycle.connected()
         clipboardSync.connected()
         notificationForwarder.connected()
@@ -465,6 +470,7 @@ class Agent(
         if (stopRequest(frame)) return
         if (diagnosticsCollector.handle(frame)) return
         if (settingsSync.handle(frame)) return
+        if (deviceNameSync.handle(frame)) return
         if (linksOrFiles(frame)) return
         val result = try {
             requests.handle(frame)

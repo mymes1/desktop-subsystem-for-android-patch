@@ -28,6 +28,7 @@
 #[cfg(target_os = "linux")]
 pub mod adb_discovery;
 pub mod compositor;
+pub mod computer_identity;
 pub mod config;
 pub mod console;
 pub mod crosvm;

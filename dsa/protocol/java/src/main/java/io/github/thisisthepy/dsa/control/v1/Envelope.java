@@ -151,6 +151,7 @@ public  final class Envelope extends
     CAMERA_ERROR(267),
     SET_TASK_CAPTION(155),
     SYSTEM_SETTINGS(340),
+    DEVICE_NAME(383),
     GAMEPAD_CONNECTED(341),
     GAMEPAD_DISCONNECTED(342),
     GAMEPAD_STATE(343),
@@ -311,6 +312,7 @@ public  final class Envelope extends
         case 267: return CAMERA_ERROR;
         case 155: return SET_TASK_CAPTION;
         case 340: return SYSTEM_SETTINGS;
+        case 383: return DEVICE_NAME;
         case 341: return GAMEPAD_CONNECTED;
         case 342: return GAMEPAD_DISCONNECTED;
         case 343: return GAMEPAD_STATE;
@@ -6891,6 +6893,56 @@ public  final class Envelope extends
    */
   private void clearSystemSettings() {
     if (bodyCase_ == 340) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DEVICE_NAME_FIELD_NUMBER = 383;
+  /**
+   * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+   */
+  @java.lang.Override
+  public boolean hasDeviceName() {
+    return bodyCase_ == 383;
+  }
+  /**
+   * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DeviceName getDeviceName() {
+    if (bodyCase_ == 383) {
+       return (io.github.thisisthepy.dsa.control.v1.DeviceName) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DeviceName.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+   */
+  private void setDeviceName(io.github.thisisthepy.dsa.control.v1.DeviceName value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 383;
+  }
+  /**
+   * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+   */
+  private void mergeDeviceName(io.github.thisisthepy.dsa.control.v1.DeviceName value) {
+    value.getClass();
+  if (bodyCase_ == 383 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DeviceName.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DeviceName.newBuilder((io.github.thisisthepy.dsa.control.v1.DeviceName) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 383;
+  }
+  /**
+   * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+   */
+  private void clearDeviceName() {
+    if (bodyCase_ == 383) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -13996,6 +14048,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+     */
+    @java.lang.Override
+    public boolean hasDeviceName() {
+      return instance.hasDeviceName();
+    }
+    /**
+     * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DeviceName getDeviceName() {
+      return instance.getDeviceName();
+    }
+    /**
+     * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+     */
+    public Builder setDeviceName(io.github.thisisthepy.dsa.control.v1.DeviceName value) {
+      copyOnWrite();
+      instance.setDeviceName(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+     */
+    public Builder setDeviceName(
+        io.github.thisisthepy.dsa.control.v1.DeviceName.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDeviceName(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+     */
+    public Builder mergeDeviceName(io.github.thisisthepy.dsa.control.v1.DeviceName value) {
+      copyOnWrite();
+      instance.mergeDeviceName(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+     */
+    public Builder clearDeviceName() {
+      copyOnWrite();
+      instance.clearDeviceName();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
      */
     @java.lang.Override
@@ -14823,6 +14923,7 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.ReinstallApp.class,
             io.github.thisisthepy.dsa.control.v1.ReinstallResult.class,
             io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash.class,
+            io.github.thisisthepy.dsa.control.v1.DeviceName.class,
             io.github.thisisthepy.dsa.control.v1.GappsInstall.class,
             io.github.thisisthepy.dsa.control.v1.GappsChunk.class,
             io.github.thisisthepy.dsa.control.v1.GappsRemove.class,
@@ -14832,7 +14933,7 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.GoogleDeviceId.class,
           };
           java.lang.String info =
-              "\u0000\u0091\u0001\u0000\u0001\u0196\u0091\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u0092\u0001\u0000\u0001\u0196\u0092\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -14850,8 +14951,8 @@ public  final class Envelope extends
               "\u0104<\u0000\u0105<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a" +
               "<\u0000\u010b<\u0000\u0122<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000" +
               "\u0157<\u0000\u0158<\u0000\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162" +
-              "<\u0000\u0179<\u0000\u017c<\u0000\u017d<\u0000\u017e<\u0000\u0190<\u0000\u0191<\u0000" +
-              "\u0192<\u0000\u0193<\u0000\u0194<\u0000\u0195<\u0000\u0196<\u0000";
+              "<\u0000\u0179<\u0000\u017c<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0190<\u0000" +
+              "\u0191<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000\u0195<\u0000\u0196<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
