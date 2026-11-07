@@ -445,9 +445,13 @@ pub enum Gesture {
         slid: bool,
     },
     /// Pressed on the More button, at `down` on the screen.
-    Button { down: (i32, i32) },
+    Button {
+        down: (i32, i32),
+    },
     /// Moving the window, the pointer `grab` pixels from its top left corner.
-    Moving { grab: (i32, i32) },
+    Moving {
+        grab: (i32, i32),
+    },
 }
 
 /// What a step of a gesture asks of the window.
@@ -462,7 +466,10 @@ pub enum Step {
     OpenMenu,
     /// The window starts moving, to this top left corner; Android's press is cancelled
     /// first when `cancel`.
-    StartMove { cancel: bool, to: (i32, i32) },
+    StartMove {
+        cancel: bool,
+        to: (i32, i32),
+    },
     /// The window moves to this top left corner.
     MoveTo((i32, i32)),
     /// The move ended: the service is told where the window is.
@@ -994,15 +1001,15 @@ mod win {
         FindWindowW, GetCursorPos, GetMessageW, GetWindow, GetWindowRect, KillTimer, LoadCursorW,
         PostMessageW, PostQuitMessage, RegisterClassExW, RegisterWindowMessageW, SetCursor,
         SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-        TranslateMessage, UpdateLayeredWindow, GWLP_HWNDPARENT, GW_HWNDPREV, HTBOTTOM, HTBOTTOMLEFT,
-        HTBOTTOMRIGHT, HTCLIENT, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, HWND_BOTTOM,
-        HWND_MESSAGE, IDC_ARROW, IDC_SIZEALL, MA_NOACTIVATE, MINMAXINFO, MSG, SM_CXDRAG, SM_CYDRAG,
-        SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_SHOWNOACTIVATE, ULW_ALPHA,
-        WINDOWPOS, WM_APP, WM_CAPTURECHANGED, WM_CLOSE, WM_CONTEXTMENU, WM_DESTROY, WM_DPICHANGED,
-        WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_GETMINMAXINFO, WM_GETOBJECT, WM_KEYDOWN, WM_KILLFOCUS,
-        WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NCHITTEST, WM_SETFOCUS,
-        WM_SETTINGCHANGE, WM_SIZE, WM_SYSCOLORCHANGE, WM_THEMECHANGED, WM_TIMER,
-        WM_WINDOWPOSCHANGING, WNDCLASSEXW,
+        TranslateMessage, UpdateLayeredWindow, GWLP_HWNDPARENT, GW_HWNDPREV, HTBOTTOM,
+        HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCLIENT, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT,
+        HWND_BOTTOM, HWND_MESSAGE, IDC_ARROW, IDC_SIZEALL, MA_NOACTIVATE, MINMAXINFO, MSG,
+        SM_CXDRAG, SM_CYDRAG, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+        SW_SHOWNOACTIVATE, ULW_ALPHA, WINDOWPOS, WM_APP, WM_CAPTURECHANGED, WM_CLOSE,
+        WM_CONTEXTMENU, WM_DESTROY, WM_DPICHANGED, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE,
+        WM_GETMINMAXINFO, WM_GETOBJECT, WM_KEYDOWN, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP,
+        WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_NCHITTEST, WM_SETFOCUS, WM_SETTINGCHANGE, WM_SIZE,
+        WM_SYSCOLORCHANGE, WM_THEMECHANGED, WM_TIMER, WM_WINDOWPOSCHANGING, WNDCLASSEXW,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{IsIconic, IsWindowVisible, GW_HWNDNEXT};
 
@@ -1011,9 +1018,9 @@ mod win {
     use super::{
         android_density, draw_more_button, frame_overdue, hit_test, min_window_size, more_button,
         more_button_shown, more_glyph_size, on_more_button, placement_of, px_of_dip,
-        reachable_origin, right_above_desktop, to_frame, window_size, window_styles, z_place, Below,
-        ButtonLook, Fade, Gesture, Hit, Step, WindowCommand, WindowReport, ZPlace, HOLD_TO_MOVE,
-        MORE_GLYPH_DIP, NO_FRAME, NO_FRAME_CHECK, RESTACK_CHECK,
+        reachable_origin, right_above_desktop, to_frame, window_size, window_styles, z_place,
+        Below, ButtonLook, Fade, Gesture, Hit, Step, WindowCommand, WindowReport, ZPlace,
+        HOLD_TO_MOVE, MORE_GLYPH_DIP, NO_FRAME, NO_FRAME_CHECK, RESTACK_CHECK,
     };
     use crate::compositor::fluent::text::{self, Align, ICON_FACES};
     use crate::compositor::fluent::{button_palette, glyph, read_theme, Theme};
@@ -2889,7 +2896,9 @@ mod tests {
     #[test]
     fn fr12_pictures_of_the_widget_menu_and_its_more_button() {
         use crate::compositor::fluent::text::{self, Align, ICON_FACES, TEXT_FACES};
-        use crate::compositor::fluent::{button_palette, glyph, menu_palette, premultiplied, Theme};
+        use crate::compositor::fluent::{
+            button_palette, glyph, menu_palette, premultiplied, Theme,
+        };
         use crate::compositor::fluent_menu::{self, metrics, Look, Mask, MenuEntry};
         use crate::compositor::widget_menu;
 

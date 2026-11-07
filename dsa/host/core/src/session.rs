@@ -1879,7 +1879,9 @@ impl Session {
         events: &Receiver<S>,
         answer: &dyn Fn(&S) -> (u32, u64, bool, String),
     ) -> Result<S, SessionError> {
-        self.send(dsa_protocol::encode(&control::Envelope { body: Some(begin) }))?;
+        self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(begin),
+        }))?;
         let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;
         let mut sent = 0u64;
         let mut written = 0u64;
@@ -2116,7 +2118,9 @@ impl Session {
             .unwrap_or_else(|e| e.into_inner());
         let (tx, events) = mpsc::channel();
         *self.shared.gapps.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
-        let sent = self.send(dsa_protocol::encode(&control::Envelope { body: Some(body) }));
+        let sent = self.send(dsa_protocol::encode(&control::Envelope {
+            body: Some(body),
+        }));
         let answer = sent.and_then(|()| {
             events.recv_timeout(GAPPS_WAIT).map_err(|_| {
                 SessionError::NoAnswer("Android did not say where the Google apps stand".into())

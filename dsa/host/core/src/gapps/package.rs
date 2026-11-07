@@ -76,7 +76,10 @@ pub fn inside(path: &str) -> Result<String, String> {
     let leaves = trimmed.starts_with('/')
         || trimmed.contains('\\')
         || trimmed.contains('\0')
-        || trimmed.split('/').next().is_some_and(|first| first.contains(':'))
+        || trimmed
+            .split('/')
+            .next()
+            .is_some_and(|first| first.contains(':'))
         || trimmed.split('/').any(|part| part == ".." || part == ".");
     if leaves || trimmed.is_empty() {
         return Err(format!(
@@ -113,9 +116,7 @@ struct IntoImage<'a, W: std::io::Write + Seek> {
 impl<W: std::io::Write + Seek> TarSink for IntoImage<'_, W> {
     fn begin(&mut self, path: &str, size: u64) -> Result<(), String> {
         let path = inside(path)?;
-        let target = path
-            .strip_prefix(&self.prefix)
-            .and_then(image_path);
+        let target = path.strip_prefix(&self.prefix).and_then(image_path);
         match target {
             Some(target) => {
                 self.builder.begin_file(&target, size)?;
@@ -283,16 +284,15 @@ pub fn build_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, S
 }
 
 fn write_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, String> {
-    let file =
-        File::open(zip).map_err(|e| format!("{} cannot be read: {e}", zip.display()))?;
+    let file = File::open(zip).map_err(|e| format!("{} cannot be read: {e}", zip.display()))?;
     let mut archive = Archive::open(file)
         .map_err(|why| format!("the downloaded build is not a zip archive: {why}"))?;
     for entry in &archive.entries {
         inside(&entry.name)?;
     }
     check_build(&mut archive, target)?;
-    let out = File::create(image)
-        .map_err(|e| format!("{} cannot be written: {e}", image.display()))?;
+    let out =
+        File::create(image).map_err(|e| format!("{} cannot be written: {e}", image.display()))?;
     let mut builder = Stream::new(BufWriter::new(out))?;
     for partition in PARTITIONS {
         builder.add_dir(partition)?;
@@ -342,7 +342,11 @@ fn write_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, Strin
             return Err(format!(
                 "the build holds no {} for {} Android at API level {}, so it is not a Core build \
                  for this Android",
-                required.trim_end_matches('/').rsplit('/').next().unwrap_or(required),
+                required
+                    .trim_end_matches('/')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(required),
                 target.arch,
                 target.sdk
             ));
@@ -454,7 +458,10 @@ pub mod fixture {
                 "system_ext/etc/permissions/privapp-permissions-google-se.xml",
                 "<permissions/>",
             ),
-            ("product/framework/com.google.android.dialer.support.jar", "jar"),
+            (
+                "product/framework/com.google.android.dialer.support.jar",
+                "jar",
+            ),
             ("vendor/etc/left-out.xml", "x"),
             ("product/lib64/left-out.so", "x"),
         ]
@@ -614,8 +621,14 @@ mod tests {
             "x86_64",
             36,
             &[
-                ("arm64/36/system/product/priv-app/GmsCore/GmsCore.apk", b"gms"),
-                ("arm64/36/system/product/priv-app/Phonesky/Phonesky.apk", b"v"),
+                (
+                    "arm64/36/system/product/priv-app/GmsCore/GmsCore.apk",
+                    b"gms",
+                ),
+                (
+                    "arm64/36/system/product/priv-app/Phonesky/Phonesky.apk",
+                    b"v",
+                ),
             ],
             &[],
         );
@@ -640,13 +653,7 @@ mod tests {
         let no_prop = archive(&[("files/files.tar.xz", b"x")], b"");
         let why = make(&no_prop, &X86_36, "no-prop").unwrap_err();
         assert!(why.contains("module.prop"), "{why}");
-        let lite = build_of(
-            "lite",
-            "x86_64",
-            36,
-            &[(GMS, b"gms"), (VENDING, b"v")],
-            &[],
-        );
+        let lite = build_of("lite", "x86_64", 36, &[(GMS, b"gms"), (VENDING, b"v")], &[]);
         let why = make(&lite, &X86_36, "lite").unwrap_err();
         assert!(why.contains("lite"), "{why}");
     }

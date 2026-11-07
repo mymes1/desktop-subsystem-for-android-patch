@@ -360,7 +360,6 @@ impl Builder {
     }
 }
 
-
 /// Splits `path` (`a/b/c`) into its names, refusing an empty name, `.`, `..`, a name with a
 /// NUL or a backslash, and a name longer than erofs takes.
 pub fn split_path(path: &str) -> Result<Vec<String>, String> {
@@ -492,8 +491,7 @@ impl<W: Write + Seek> Stream<W> {
             .map_err(|_| format!("{path} is {size} bytes, more than an image file can hold"))?;
         let names = split_path(path)?;
         let (name, parent) = names.split_last().expect("at least one name");
-        if let Some(StreamNode::Folder(_)) = self.folder_mut(parent)?.entries.get(name.as_bytes())
-        {
+        if let Some(StreamNode::Folder(_)) = self.folder_mut(parent)?.entries.get(name.as_bytes()) {
             return Err(format!("{path} is a folder in the image, not a file"));
         }
         self.open = Some(Open {
@@ -607,7 +605,10 @@ impl<W: Write + Seek> Stream<W> {
         let meta_blocks = ((inodes.len() + 1) * INODE).div_ceil(BLOCK);
         let mut next_block = u64::from(meta_block) + meta_blocks as u64;
         let mut folders = Vec::new();
-        for inode in inodes.iter_mut().filter(|inode| inode.mode & 0o170_000 == S_IFDIR) {
+        for inode in inodes
+            .iter_mut()
+            .filter(|inode| inode.mode & 0o170_000 == S_IFDIR)
+        {
             let mut entries: Vec<(&[u8], u64, u8)> = inode
                 .entries
                 .iter()
@@ -847,7 +848,12 @@ mod tests {
     #[test]
     fn fr32_a_directory_with_many_entries_spans_blocks() {
         let files: Vec<(String, Vec<u8>)> = (0..600)
-            .map(|i| (format!("product/etc/sysconfig/config-{i:04}.xml"), vec![i as u8]))
+            .map(|i| {
+                (
+                    format!("product/etc/sysconfig/config-{i:04}.xml"),
+                    vec![i as u8],
+                )
+            })
             .collect();
         let mut builder = Stream::new(Cursor::new(Vec::new())).unwrap();
         for (path, data) in &files {
@@ -880,8 +886,14 @@ mod tests {
             assert!(builder.begin_file(path, 1).is_err(), "{path:?} is taken");
         }
         builder.add_file("a/b", b"x").unwrap();
-        assert!(builder.add_file("a/b/c", b"x").is_err(), "a file is not a directory");
-        assert!(builder.add_file("a", b"x").is_err(), "a directory is not a file");
+        assert!(
+            builder.add_file("a/b/c", b"x").is_err(),
+            "a file is not a directory"
+        );
+        assert!(
+            builder.add_file("a", b"x").is_err(),
+            "a directory is not a file"
+        );
         builder.begin_file("c", 4).unwrap();
         builder.write_data(b"ab").unwrap();
         assert!(builder.write_data(b"cde").is_err(), "more than announced");
@@ -904,7 +916,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut files: Vec<(String, Vec<u8>)> = (0..300)
-            .map(|i| (format!("product/etc/sysconfig/config-{i:04}.xml"), vec![i as u8; i]))
+            .map(|i| {
+                (
+                    format!("product/etc/sysconfig/config-{i:04}.xml"),
+                    vec![i as u8; i],
+                )
+            })
             .collect();
         files.push((
             "product/priv-app/GmsCore/GmsCore.apk".into(),
@@ -929,7 +946,11 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         for (path, data) in &files {
-            assert_eq!(&std::fs::read(extracted.join(path)).unwrap(), data, "{path}");
+            assert_eq!(
+                &std::fs::read(extracted.join(path)).unwrap(),
+                data,
+                "{path}"
+            );
         }
         // The tree written in one go, with a link, reads back the same way.
         let mut tree = Builder::new();

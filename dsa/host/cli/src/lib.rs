@@ -272,8 +272,8 @@ use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, 
 use dsa_host_core::files::{FileAction, FileTransfer};
 use dsa_host_core::gapps;
 use dsa_host_core::host_api::{
-    ArmTranslationStatus, ClientError, GappsStatus, HostApiClient, NetworkStatus,
-    SettingsReport, Status, TaskList,
+    ArmTranslationStatus, ClientError, GappsStatus, HostApiClient, NetworkStatus, SettingsReport,
+    Status, TaskList,
 };
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::native_abi;
@@ -2845,8 +2845,7 @@ pub fn describe_gapps(status: &GappsStatus, done: Option<&str>) -> String {
         None => "Google Play: not installed (dsa gapps install downloads it)".to_string(),
         Some(package) => format!(
             "Google Play: LiteGapps {} {} for Android {} ({}), from {}",
-            package.variant, package.version, package.android_version, package.arch,
-            package.source
+            package.variant, package.version, package.android_version, package.arch, package.source
         ),
     });
     match &status.guest {

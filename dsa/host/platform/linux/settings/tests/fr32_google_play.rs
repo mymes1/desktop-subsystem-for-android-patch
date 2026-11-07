@@ -92,7 +92,10 @@ fn fr32_the_report_is_read_and_missing_fields_are_tolerated() {
     assert_eq!(package.android_version, "16.0");
     assert_eq!(package.sdk, 36);
     assert_eq!(package.arch, "x86_64");
-    assert_eq!(package.file, "LiteGapps-core-x86_64-16.0-20261001-official.zip");
+    assert_eq!(
+        package.file,
+        "LiteGapps-core-x86_64-16.0-20261001-official.zip"
+    );
     assert_eq!(gapps.active, Some(true));
     assert_eq!(gapps.device_id.as_deref(), Some("3987654321012345678"));
     assert!(!gapps.restart_needed);
@@ -105,7 +108,10 @@ fn fr32_the_report_is_read_and_missing_fields_are_tolerated() {
     assert_eq!(empty.device_id, None);
     assert_eq!(empty.state(), GappsState::NotInstalled);
     assert_eq!(empty.terms_url, "https://policies.google.com/terms");
-    assert_eq!(empty.registration_url, "https://www.google.com/android/uncertified/");
+    assert_eq!(
+        empty.registration_url,
+        "https://www.google.com/android/uncertified/"
+    );
     let partial = Gapps::read(&json!({ "package": { "version": "20261001" }, "android": null }));
     assert_eq!(partial.package.unwrap().version, "20261001");
     assert_eq!(partial.active, None);
@@ -137,7 +143,10 @@ fn fr32_the_item_shows_before_install_after_install_and_while_a_restart_is_pendi
         view::gapps_source(&after),
         "Downloaded from the LiteGapps project: LiteGapps-core-x86_64-16.0-20261001-official.zip"
     );
-    assert_eq!(view::gapps_device_id(&after), "Enter this number on Google's registration page.");
+    assert_eq!(
+        view::gapps_device_id(&after),
+        "Enter this number on Google's registration page."
+    );
 
     let waiting = Gapps::read(&installed_json(false, true));
     assert_eq!(waiting.state(), GappsState::RestartPending);
