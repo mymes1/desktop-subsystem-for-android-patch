@@ -162,6 +162,9 @@ public  final class Envelope extends
     DRAG_READ(352),
     DRAG_DATA(353),
     DRAG_END(354),
+    REINSTALL_APP(380),
+    REINSTALL_RESULT(381),
+    NATIVE_LIBRARY_CRASH(382),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -319,6 +322,9 @@ public  final class Envelope extends
         case 352: return DRAG_READ;
         case 353: return DRAG_DATA;
         case 354: return DRAG_END;
+        case 380: return REINSTALL_APP;
+        case 381: return REINSTALL_RESULT;
+        case 382: return NATIVE_LIBRARY_CRASH;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -7440,6 +7446,156 @@ public  final class Envelope extends
     }
   }
 
+  public static final int REINSTALL_APP_FIELD_NUMBER = 380;
+  /**
+   * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+   */
+  @java.lang.Override
+  public boolean hasReinstallApp() {
+    return bodyCase_ == 380;
+  }
+  /**
+   * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.ReinstallApp getReinstallApp() {
+    if (bodyCase_ == 380) {
+       return (io.github.thisisthepy.dsa.control.v1.ReinstallApp) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.ReinstallApp.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+   */
+  private void setReinstallApp(io.github.thisisthepy.dsa.control.v1.ReinstallApp value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 380;
+  }
+  /**
+   * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+   */
+  private void mergeReinstallApp(io.github.thisisthepy.dsa.control.v1.ReinstallApp value) {
+    value.getClass();
+  if (bodyCase_ == 380 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.ReinstallApp.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.ReinstallApp.newBuilder((io.github.thisisthepy.dsa.control.v1.ReinstallApp) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 380;
+  }
+  /**
+   * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+   */
+  private void clearReinstallApp() {
+    if (bodyCase_ == 380) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int REINSTALL_RESULT_FIELD_NUMBER = 381;
+  /**
+   * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+   */
+  @java.lang.Override
+  public boolean hasReinstallResult() {
+    return bodyCase_ == 381;
+  }
+  /**
+   * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.ReinstallResult getReinstallResult() {
+    if (bodyCase_ == 381) {
+       return (io.github.thisisthepy.dsa.control.v1.ReinstallResult) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.ReinstallResult.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+   */
+  private void setReinstallResult(io.github.thisisthepy.dsa.control.v1.ReinstallResult value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 381;
+  }
+  /**
+   * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+   */
+  private void mergeReinstallResult(io.github.thisisthepy.dsa.control.v1.ReinstallResult value) {
+    value.getClass();
+  if (bodyCase_ == 381 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.ReinstallResult.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.ReinstallResult.newBuilder((io.github.thisisthepy.dsa.control.v1.ReinstallResult) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 381;
+  }
+  /**
+   * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+   */
+  private void clearReinstallResult() {
+    if (bodyCase_ == 381) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int NATIVE_LIBRARY_CRASH_FIELD_NUMBER = 382;
+  /**
+   * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+   */
+  @java.lang.Override
+  public boolean hasNativeLibraryCrash() {
+    return bodyCase_ == 382;
+  }
+  /**
+   * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash getNativeLibraryCrash() {
+    if (bodyCase_ == 382) {
+       return (io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+   */
+  private void setNativeLibraryCrash(io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 382;
+  }
+  /**
+   * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+   */
+  private void mergeNativeLibraryCrash(io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash value) {
+    value.getClass();
+  if (bodyCase_ == 382 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash.newBuilder((io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 382;
+  }
+  /**
+   * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+   */
+  private void clearNativeLibraryCrash() {
+    if (bodyCase_ == 382) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -14367,6 +14523,150 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+     */
+    @java.lang.Override
+    public boolean hasReinstallApp() {
+      return instance.hasReinstallApp();
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.ReinstallApp getReinstallApp() {
+      return instance.getReinstallApp();
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+     */
+    public Builder setReinstallApp(io.github.thisisthepy.dsa.control.v1.ReinstallApp value) {
+      copyOnWrite();
+      instance.setReinstallApp(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+     */
+    public Builder setReinstallApp(
+        io.github.thisisthepy.dsa.control.v1.ReinstallApp.Builder builderForValue) {
+      copyOnWrite();
+      instance.setReinstallApp(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+     */
+    public Builder mergeReinstallApp(io.github.thisisthepy.dsa.control.v1.ReinstallApp value) {
+      copyOnWrite();
+      instance.mergeReinstallApp(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+     */
+    public Builder clearReinstallApp() {
+      copyOnWrite();
+      instance.clearReinstallApp();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+     */
+    @java.lang.Override
+    public boolean hasReinstallResult() {
+      return instance.hasReinstallResult();
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.ReinstallResult getReinstallResult() {
+      return instance.getReinstallResult();
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+     */
+    public Builder setReinstallResult(io.github.thisisthepy.dsa.control.v1.ReinstallResult value) {
+      copyOnWrite();
+      instance.setReinstallResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+     */
+    public Builder setReinstallResult(
+        io.github.thisisthepy.dsa.control.v1.ReinstallResult.Builder builderForValue) {
+      copyOnWrite();
+      instance.setReinstallResult(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+     */
+    public Builder mergeReinstallResult(io.github.thisisthepy.dsa.control.v1.ReinstallResult value) {
+      copyOnWrite();
+      instance.mergeReinstallResult(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+     */
+    public Builder clearReinstallResult() {
+      copyOnWrite();
+      instance.clearReinstallResult();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+     */
+    @java.lang.Override
+    public boolean hasNativeLibraryCrash() {
+      return instance.hasNativeLibraryCrash();
+    }
+    /**
+     * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash getNativeLibraryCrash() {
+      return instance.getNativeLibraryCrash();
+    }
+    /**
+     * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+     */
+    public Builder setNativeLibraryCrash(io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash value) {
+      copyOnWrite();
+      instance.setNativeLibraryCrash(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+     */
+    public Builder setNativeLibraryCrash(
+        io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash.Builder builderForValue) {
+      copyOnWrite();
+      instance.setNativeLibraryCrash(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+     */
+    public Builder mergeNativeLibraryCrash(io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash value) {
+      copyOnWrite();
+      instance.mergeNativeLibraryCrash(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+     */
+    public Builder clearNativeLibraryCrash() {
+      copyOnWrite();
+      instance.clearNativeLibraryCrash();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.Envelope)
   }
   @java.lang.Override
@@ -14520,6 +14820,9 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.DragData.class,
             io.github.thisisthepy.dsa.control.v1.DragEnd.class,
             io.github.thisisthepy.dsa.control.v1.ImeDeleteSurrounding.class,
+            io.github.thisisthepy.dsa.control.v1.ReinstallApp.class,
+            io.github.thisisthepy.dsa.control.v1.ReinstallResult.class,
+            io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash.class,
             io.github.thisisthepy.dsa.control.v1.GappsInstall.class,
             io.github.thisisthepy.dsa.control.v1.GappsChunk.class,
             io.github.thisisthepy.dsa.control.v1.GappsRemove.class,
@@ -14529,7 +14832,7 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.GoogleDeviceId.class,
           };
           java.lang.String info =
-              "\u0000\u008e\u0001\u0000\u0001\u0196\u008e\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u0091\u0001\u0000\u0001\u0196\u0091\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -14547,8 +14850,8 @@ public  final class Envelope extends
               "\u0104<\u0000\u0105<\u0000\u0106<\u0000\u0107<\u0000\u0108<\u0000\u0109<\u0000\u010a" +
               "<\u0000\u010b<\u0000\u0122<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000" +
               "\u0157<\u0000\u0158<\u0000\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162" +
-              "<\u0000\u0179<\u0000\u0190<\u0000\u0191<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000" +
-              "\u0195<\u0000\u0196<\u0000";
+              "<\u0000\u0179<\u0000\u017c<\u0000\u017d<\u0000\u017e<\u0000\u0190<\u0000\u0191<\u0000" +
+              "\u0192<\u0000\u0193<\u0000\u0194<\u0000\u0195<\u0000\u0196<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
