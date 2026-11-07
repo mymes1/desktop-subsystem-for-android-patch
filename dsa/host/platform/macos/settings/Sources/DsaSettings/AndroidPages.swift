@@ -441,6 +441,9 @@ struct AdvancedPage: View {
             Section(T("DeveloperHeader.Text")) {
                 SwitchRow(title: T("DeveloperModeCard.Header"), detail: T("DeveloperModeCard.Description"),
                           isOn: vm.developerMode, enabled: vm.canChange, set: { await vm.setDeveloperMode($0) })
+                SwitchRow(title: T("AdbAutoConnectCard.Header"), detail: T("AdbAutoConnectCard.Description"),
+                          isOn: vm.adbAutoConnect, enabled: vm.canChange, set: { await vm.setAdbAutoConnect($0) })
+                Text(vm.adbAutoConnectStateText).font(.callout).foregroundStyle(.secondary)
                 LabeledContent {
                     Text(vm.adbConnect).font(.system(.body, design: .monospaced)).textSelection(.enabled)
                 } label: {
@@ -487,6 +490,12 @@ struct AdvancedPage: View {
         .task {
             await vm.load()
             adbPort = String(vm.adbPort)
+            // Where auto-connect stands changes by itself, so it is read again while the page
+            // is shown; the task ends when the page goes away.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await vm.pollAdbAutoConnect()
+            }
         }
         .onChange(of: vm.adbPort) { port in adbPort = String(port) }
     }

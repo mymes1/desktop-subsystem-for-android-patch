@@ -53,8 +53,7 @@ pub const INSTALL_EXTENSIONS: [&str; 5] = ["apk", "xapk", "apks", "apkm", "aab"]
 /// Whether the file at `path` goes to the install flow, by its extension. What it is, the flow
 /// tells from its content.
 pub fn is_install_file(path: &Path) -> bool {
-    path
-        .extension()
+    path.extension()
         .and_then(|extension| extension.to_str())
         .is_some_and(|extension| {
             INSTALL_EXTENSIONS
@@ -156,13 +155,24 @@ pub enum SplitKind {
     /// A feature split, which every device gets.
     Feature,
     /// The native libraries for one ABI of the base (`of` empty) or of feature `of`.
-    Abi { of: String, abi: String },
+    Abi {
+        of: String,
+        abi: String,
+    },
     /// The resources for one screen density.
-    Density { of: String, dpi: u32 },
+    Density {
+        of: String,
+        dpi: u32,
+    },
     /// The resources for one language.
-    Language { of: String, language: String },
+    Language {
+        of: String,
+        language: String,
+    },
     /// Any other configuration, such as a texture format.
-    Config { of: String },
+    Config {
+        of: String,
+    },
 }
 
 /// The ABI a configuration split names (`arm64_v8a`), as the package manager names it.
@@ -719,9 +729,12 @@ impl Bundle {
             };
             if apk_entry {
                 let source = match source {
-                    Source::Deflated { offset, length } => {
-                        Source::Unpacked(bundle.unpack(&entry.name, offset, length, entry.size())?)
-                    }
+                    Source::Deflated { offset, length } => Source::Unpacked(bundle.unpack(
+                        &entry.name,
+                        offset,
+                        length,
+                        entry.size(),
+                    )?),
                     source => source,
                 };
                 let apk = bundle.read_apk(&entry.name, entry.size(), source)?;
@@ -869,7 +882,10 @@ impl Bundle {
                     split: apk.entry.clone(),
                 });
             }
-            if self.apks[..index].iter().any(|other| other.split == apk.split) {
+            if self.apks[..index]
+                .iter()
+                .any(|other| other.split == apk.split)
+            {
                 return Err(Refusal::Invalid(format!(
                     "the bundle holds the split {} twice",
                     apk.split.as_deref().unwrap_or_default()
@@ -928,9 +944,7 @@ impl Bundle {
         let apks = (0..self.apks.len())
             .filter(|&index| match &self.apks[index].kind {
                 SplitKind::Base | SplitKind::Feature | SplitKind::Config { .. } => true,
-                SplitKind::Abi { abi: split_abi, .. } => {
-                    abi.as_deref() == Some(split_abi.as_str())
-                }
+                SplitKind::Abi { abi: split_abi, .. } => abi.as_deref() == Some(split_abi.as_str()),
                 SplitKind::Density { of, dpi } => best_density.get(of.as_str()) == Some(dpi),
                 SplitKind::Language { language, .. } => wants_language(language.as_str()),
             })
@@ -1528,7 +1542,10 @@ mod tests {
     fn fr11_a_file_is_installed_as_what_its_content_says() {
         let test = "install-file";
         let bundle = file(test, "notes.bin", &xapk(false));
-        assert!(matches!(InstallFile::open(&bundle), Ok(InstallFile::Bundle(_))));
+        assert!(matches!(
+            InstallFile::open(&bundle),
+            Ok(InstallFile::Bundle(_))
+        ));
         match InstallFile::open(&file(test, "notes.xapk", &notes_apk())) {
             Ok(InstallFile::Apk(apk)) => assert_eq!(apk.name, "notes.apk"),
             Ok(InstallFile::Bundle(_)) => panic!("an APK was read as a bundle"),

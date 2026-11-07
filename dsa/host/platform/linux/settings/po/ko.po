@@ -936,6 +936,30 @@ msgstr "개발자 모드"
 msgid "Off by default. When on, adb on this computer can connect to Android without asking in Android, through a port only this computer can reach. Turn it off when you are done."
 msgstr "기본값은 꺼짐입니다. 켜면 이 컴퓨터의 adb가 Android에서 승인하지 않고 Android에 연결할 수 있습니다. 포트는 이 컴퓨터에서만 닿습니다. 다 쓰면 끄세요."
 
+msgid "Connect adb automatically"
+msgstr "adb 자동 연결"
+
+msgid "On by default. While developer mode is on, Android shows up in adb devices and Android Studio without running adb connect. If you run adb disconnect, it stays off until the adb server restarts."
+msgstr "기본값은 켜짐입니다. 개발자 모드가 켜져 있으면 adb connect를 실행하지 않아도 adb devices와 Android Studio에 Android가 나타납니다. adb disconnect로 끊으면 adb 서버가 다시 시작될 때까지 연결하지 않습니다."
+
+msgid "Automatic connection"
+msgstr "자동 연결 상태"
+
+msgid "Not connecting: developer mode or automatic connection is off."
+msgstr "연결하지 않음: 개발자 모드나 자동 연결이 꺼져 있습니다."
+
+msgid "Waiting for adb: Android connects when adb starts on this computer."
+msgstr "adb를 기다리는 중: 이 컴퓨터에서 adb가 시작되면 Android가 연결됩니다."
+
+msgid "Waiting for Android: it connects once Android is running."
+msgstr "Android를 기다리는 중: Android가 실행되면 연결됩니다."
+
+msgid "Connected: adb lists Android."
+msgstr "연결됨: adb 기기 목록에 Android가 있습니다."
+
+msgid "Disconnected with adb disconnect. Android connects again when the adb server restarts."
+msgstr "adb disconnect로 끊었습니다. adb 서버가 다시 시작되면 Android가 다시 연결됩니다."
+
 msgid "Connect adb"
 msgstr "adb 연결"
 

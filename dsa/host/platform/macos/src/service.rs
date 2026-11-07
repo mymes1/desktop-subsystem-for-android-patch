@@ -512,6 +512,10 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
         })
     };
     session.set_adb_connect(dial(dsa_host_core::adb_bridge::GUEST_ADB_PORT));
+    // Developer mode's port is attached to the user's adb server, and advertised over mDNS on
+    // the loopback address, so adb finds it without `adb connect`.
+    session.set_adb_server(crate::adb_discovery::adb_server());
+    session.set_adb_advertise(crate::adb_discovery::advertiser());
     session.set_android_files_connect(dial(dsa_host_core::file_share::ANDROID_FILES_PORT));
     let session = Arc::new(session);
     Ok(match &shared.store {
@@ -556,6 +560,7 @@ fn apply_settings(
                 s.shared_folders.clone()
             }),
     );
+    android.adb_auto_connect(settings.as_ref().is_none_or(|s| s.adb_auto_connect));
     if let Some(settings) = settings.as_ref().filter(|s| s.developer_mode) {
         if let Err(why) = android.developer_mode(true, settings.adb_port) {
             eprintln!("{build}: developer mode: {why}");

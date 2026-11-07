@@ -435,6 +435,10 @@ pub fn create_user_android(
             Duration::from_secs(5),
         )
     }));
+    // Developer mode's port is attached to the user's own adb server, and advertised over
+    // mDNS on the loopback address, so adb finds it without `adb connect`.
+    session.set_adb_server(crate::adb_discovery::adb_server_of(sid));
+    session.set_adb_advertise(crate::adb_discovery::advertiser());
     session.serve_log_port(Box::new(log_listener), build);
     // The user's folders, served with the user's own rights.
     session.serve_file_shares(
@@ -930,6 +934,9 @@ where
                             s.shared_folders.clone()
                         }),
                 );
+                // So is attaching developer mode's port to their adb server, on unless they
+                // turned it off.
+                android.adb_auto_connect(settings.as_ref().is_none_or(|s| s.adb_auto_connect));
                 // So is developer mode, off unless they turned it on, and its adb port.
                 if let Some(settings) = settings.as_ref().filter(|s| s.developer_mode) {
                     if let Err(why) = android.developer_mode(true, settings.adb_port) {

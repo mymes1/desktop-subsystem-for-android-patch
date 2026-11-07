@@ -186,7 +186,10 @@
 //! resize (`resize-trace`) to its log, off by default. Those last four are the computer's, so
 //! only an administrator changes them. `developer-mode` (off by default) lets adb reach the
 //! user's Android: while it is on, `adb connect 127.0.0.1:58526` connects, with no prompt to
-//! accept in Android. `adb-port` picks another loopback port than 58526. `stop-without-asking` (off by default)
+//! accept in Android. `adb-port` picks another loopback port than 58526. `adb-auto-connect`
+//! (on by default) attaches that port to this computer's adb server by itself while developer
+//! mode is on, so `adb devices` and Android Studio list DSA without `adb connect`; `dsa
+//! settings` says whether the adb server lists it. `stop-without-asking` (off by default)
 //! is whether stopping an app that runs in the background skips the question that confirms it.
 //! `advanced-networking` (off by default) puts the user's Android on this computer's network as
 //! a device of its own, so other devices there reach it, instead of behind a NAT network of its
@@ -490,6 +493,7 @@ pub enum Change {
     MemoryLimit(u32),
     DeveloperMode(bool),
     AdbPort(u16),
+    AdbAutoConnect(bool),
     ArmTranslation(bool),
     /// Show the device identity.
     ShowDevice,
@@ -525,6 +529,7 @@ impl Change {
             "resize-trace" => switch().map(Change::ResizeTrace),
             "memory-limit" => parse_memory_limit(value).map(Change::MemoryLimit),
             "developer-mode" => switch().map(Change::DeveloperMode),
+            "adb-auto-connect" => switch().map(Change::AdbAutoConnect),
             "arm-translation" => switch().map(Change::ArmTranslation),
             "stop-without-asking" => switch().map(Change::StopWithoutAsking),
             "file-sharing" => switch().map(Change::FileSharing),
@@ -539,8 +544,8 @@ impl Change {
             _ => Err(format!(
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, image-updates, input-trace, \
-                 resize-trace, memory-limit, developer-mode, adb-port, arm-translation, \
-                 stop-without-asking, file-sharing, shared-folders, \
+                 resize-trace, memory-limit, developer-mode, adb-port, adb-auto-connect, \
+                 arm-translation, stop-without-asking, file-sharing, shared-folders, \
                  advanced-networking and device.<field>"
             )),
         }
@@ -1935,6 +1940,8 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "developer_mode": report.settings.developer_mode,
         "adb_port": report.settings.adb_port,
         "adb_address": adb_address(&report.settings),
+        "adb_auto_connect": report.settings.adb_auto_connect,
+        "adb_auto_connect_state": report.adb_auto_connect_state.as_str(),
         "arm_translation": report.settings.arm_translation,
         "stop_without_asking": report.settings.stop_without_asking,
         "file_sharing": report.settings.file_sharing,
@@ -2004,6 +2011,22 @@ pub fn describe_network(report: &SettingsReport) -> String {
         lines.push("The change applies the next time Android starts.".into());
     }
     lines.join("\n")
+}
+
+/// Where adb auto-connect stands, in words.
+pub fn describe_auto_connect(
+    state: dsa_host_core::adb_discovery::AutoConnectState,
+) -> &'static str {
+    use dsa_host_core::adb_discovery::AutoConnectState;
+    match state {
+        AutoConnectState::Off => "not watching the adb server",
+        AutoConnectState::WaitingForServer => "waiting for an adb server on this computer",
+        AutoConnectState::WaitingForAndroid => "waiting for Android to answer adb",
+        AutoConnectState::Attached => "adb lists DSA",
+        AutoConnectState::Detached => {
+            "you ran adb disconnect; DSA is attached again when the adb server restarts"
+        }
+    }
 }
 
 /// The address `adb connect` takes in developer mode.
@@ -2184,6 +2207,11 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         } else {
             format!("Developer mode: off (adb port {})", settings.adb_port)
         },
+        format!(
+            "adb auto-connect: {} ({})",
+            on_off(settings.adb_auto_connect),
+            describe_auto_connect(report.adb_auto_connect_state)
+        ),
         format!(
             "ARM translation: {} (dsa arm-translation status says whether a package is installed)",
             on_off(settings.arm_translation)
@@ -2414,6 +2442,7 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::MemoryLimit(mb) => wanted.memory_limit_mb = *mb,
             Change::DeveloperMode(on) => wanted.developer_mode = *on,
             Change::AdbPort(port) => wanted.adb_port = *port,
+            Change::AdbAutoConnect(on) => wanted.adb_auto_connect = *on,
             Change::ArmTranslation(on) => wanted.arm_translation = *on,
             Change::ShowDevice | Change::Device(..) | Change::ResetDevice(_) => {
                 unreachable!("answered above")
@@ -3502,7 +3531,9 @@ fn apk_info(invocation: &Invocation, connector: &mut dyn Connector) -> Result<St
         let device = device.unwrap_or_else(|| bundle_device(None));
         (bundle, bundle.select(&device))
     });
-    let chosen = chosen.as_ref().map(|(bundle, selection)| (*bundle, selection));
+    let chosen = chosen
+        .as_ref()
+        .map(|(bundle, selection)| (*bundle, selection));
     Ok(if invocation.json {
         let mut json = apk_info_json(&info, android, installed.as_ref(), kind);
         add_install_files(&mut json, &info, chosen);

@@ -565,6 +565,27 @@
   <data name="DeveloperModeCard.Description" xml:space="preserve">
     <value>Off by default. When on, adb on this PC can connect to Android without asking in Android, through a port only this PC can reach. Turn it off when you are done.</value>
   </data>
+  <data name="AdbAutoConnectCard.Header" xml:space="preserve">
+    <value>Connect adb automatically</value>
+  </data>
+  <data name="AdbAutoConnectCard.Description" xml:space="preserve">
+    <value>On by default. While developer mode is on, Android shows up in adb devices and Android Studio without running adb connect. If you run adb disconnect, it stays off until the adb server restarts.</value>
+  </data>
+  <data name="AdbAutoConnect_Off" xml:space="preserve">
+    <value>Not connecting: developer mode or automatic connection is off.</value>
+  </data>
+  <data name="AdbAutoConnect_WaitingForServer" xml:space="preserve">
+    <value>Waiting for adb: Android connects when adb starts on this PC.</value>
+  </data>
+  <data name="AdbAutoConnect_WaitingForAndroid" xml:space="preserve">
+    <value>Waiting for Android: it connects once Android is running.</value>
+  </data>
+  <data name="AdbAutoConnect_Attached" xml:space="preserve">
+    <value>Connected: adb lists Android.</value>
+  </data>
+  <data name="AdbAutoConnect_Detached" xml:space="preserve">
+    <value>Disconnected with adb disconnect. Android connects again when the adb server restarts.</value>
+  </data>
   <data name="AdbCard.Header" xml:space="preserve">
     <value>Connect adb</value>
   </data>

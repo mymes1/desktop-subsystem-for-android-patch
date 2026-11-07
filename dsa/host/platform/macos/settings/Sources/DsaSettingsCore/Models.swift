@@ -72,6 +72,35 @@ public struct NetworkInfo: Equatable, Sendable {
     }
 }
 
+/// Where attaching developer mode's port to this Mac's adb server stands.
+public enum AdbAutoConnectState: String, CaseIterable, Equatable, Sendable {
+    /// Developer mode or auto-connect is off.
+    case off = "Off"
+    /// No adb server runs on this Mac yet.
+    case waitingForServer = "WaitingForServer"
+    /// Android is not running, or adb in Android has not answered yet.
+    case waitingForAndroid = "WaitingForAndroid"
+    /// The adb server lists Android.
+    case attached = "Attached"
+    /// The user ran adb disconnect; it is attached again when the adb server restarts.
+    case detached = "Detached"
+
+    /// The state a name the service gives stands for. An empty or unknown name, as an older
+    /// service gives, is off.
+    public static func read(_ name: String?) -> AdbAutoConnectState {
+        switch name {
+        case "waiting-for-server": return .waitingForServer
+        case "waiting-for-android": return .waitingForAndroid
+        case "attached": return .attached
+        case "detached": return .detached
+        default: return .off
+        }
+    }
+
+    /// The key of its text in the String Catalog.
+    public var textKey: String { "AdbAutoConnect_\(rawValue)" }
+}
+
 public struct SettingsInfo: Equatable, Sendable {
     /// The folders that can be shared with Android, in the order the service keeps them.
     public static let allFolders = ["Documents", "Downloads", "Pictures", "Music", "Videos", "Desktop"]
@@ -101,6 +130,10 @@ public struct SettingsInfo: Equatable, Sendable {
     public var network: NetworkInfo?
     public var fileSharing = true
     public var sharedFolders: [String]?
+    /// Whether developer mode's port is attached to this Mac's adb server by itself.
+    public var adbAutoConnect = true
+    /// Where that stands, as the service last said.
+    public var adbAutoConnectState: AdbAutoConnectState = .off
 
     public init() {}
 
