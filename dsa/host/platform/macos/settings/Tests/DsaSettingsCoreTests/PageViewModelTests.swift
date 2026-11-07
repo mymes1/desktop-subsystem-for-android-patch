@@ -170,6 +170,22 @@ final class PageViewModelTests: XCTestCase {
         XCTAssertEqual(dropped.bodyColumn, "--------- 3 records dropped")
     }
 
+    func test_fr21_copying_selected_log_lines_gives_each_whole_line_in_page_order() {
+        let cli = FakeCli()
+        let logs = LogViewModel(stream: cli, service: DsaService(cli: cli), text: KeyText())
+        let record = { (tag: String, message: String) in
+            #"{"time":"2026-11-04 10:00:00.000","priority":"I","tag":"\#(tag)","pid":12,"tid":13,"message":"\#(message)"}"#
+        }
+        logs.addMany([record("A", "one"), record("B", "two"), record("C", "three"), #"{"dropped":3}"#])
+        let selected: Set<LogLine.ID> = [logs.lines[3].id, logs.lines[0].id, logs.lines[2].id]
+        XCTAssertEqual(logs.copyText(selected), [
+            "2026-11-04 10:00:00.000    12    13 I A: one",
+            "2026-11-04 10:00:00.000    12    13 I C: three",
+            "--------- 3 records dropped",
+        ].joined(separator: "\n"))
+        XCTAssertEqual(logs.copyText([]), "")
+    }
+
     func test_fr17_log_page_reads_the_log_through_dsa_logcat() async throws {
         let cli = FakeCli()
         cli.streams["logcat --json *:I"] = [#"{"tag":"A","message":"one"}"#, #"{"tag":"B","message":"two"}"#]

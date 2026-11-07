@@ -125,6 +125,12 @@ public final class LogViewModel: ObservableObject {
 
     private func rebuild() { lines = all.filter(passes) }
 
+    /// What copying the selected lines puts on the pasteboard: each whole line as the log
+    /// prints it, one per line, in the order the page shows them.
+    public func copyText(_ selected: Set<LogLine.ID>) -> String {
+        lines.filter { selected.contains($0.id) }.map(\.text).joined(separator: "\n")
+    }
+
     /// Takes one line of dsa's output.
     public func add(_ output: String) { addMany([output]) }
 
