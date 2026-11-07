@@ -386,7 +386,9 @@ pub enum Key {
     /// Enter or Space.
     Enter,
     Escape,
-    Tab { back: bool },
+    Tab {
+        back: bool,
+    },
     /// Alt, F10 or Alt+F4, which close the menu as they close a Windows menu.
     Alt,
     /// A letter or a digit, which chooses the item it is the access key of.
@@ -483,12 +485,7 @@ impl MenuState {
         entries
     }
 
-    fn item<'a>(
-        &self,
-        menu: &'a [MenuEntry],
-        level: usize,
-        entry: usize,
-    ) -> Option<&'a MenuItem> {
+    fn item<'a>(&self, menu: &'a [MenuEntry], level: usize, entry: usize) -> Option<&'a MenuItem> {
         self.entries(menu, level).get(entry)?.item()
     }
 

@@ -555,11 +555,7 @@ impl Lzma {
                     let bits = (slot >> 1) - 1;
                     let base = (2 | (slot & 1)) << bits;
                     if slot < DIST_MODEL_END {
-                        base + rc.tree_reverse(
-                            &mut self.dist_special,
-                            (base - slot) as usize,
-                            bits,
-                        )
+                        base + rc.tree_reverse(&mut self.dist_special, (base - slot) as usize, bits)
                     } else {
                         let high = rc.direct(bits - ALIGN_BITS) << ALIGN_BITS;
                         base + high + rc.tree_reverse(&mut self.dist_align, 1, ALIGN_BITS)

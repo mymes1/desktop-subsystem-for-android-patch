@@ -31,7 +31,11 @@ enum Body {
 
 enum State {
     Header,
-    Body { left: u64, padding: u64, body: Body },
+    Body {
+        left: u64,
+        padding: u64,
+        body: Body,
+    },
     Padding(u64),
     /// The two empty blocks that end an archive have been read.
     Ended,

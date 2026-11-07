@@ -343,9 +343,7 @@ impl RunAsArmStatus {
             }
             RunAsArmStatus::NotInstalled => "No app of this package is installed in Android",
             RunAsArmStatus::SystemApp => "The app is part of Android and is not installed again",
-            RunAsArmStatus::NoLibraries => {
-                "The app's APKs on the device hold no code for that ABI"
-            }
+            RunAsArmStatus::NoLibraries => "The app's APKs on the device hold no code for that ABI",
             RunAsArmStatus::TranslationOff => {
                 "ARM translation is not on; turn it on under ARM apps and restart Android"
             }
@@ -388,9 +386,9 @@ impl RunAsArmStatus {
             Ok(types::RunAsArmStatus::SystemApp) => RunAsArmStatus::SystemApp,
             Ok(types::RunAsArmStatus::NoLibraries) => RunAsArmStatus::NoLibraries,
             Ok(types::RunAsArmStatus::TranslationOff) => RunAsArmStatus::TranslationOff,
-            Ok(types::RunAsArmStatus::Other)
-            | Ok(types::RunAsArmStatus::Unspecified)
-            | Err(_) => RunAsArmStatus::Other,
+            Ok(types::RunAsArmStatus::Other) | Ok(types::RunAsArmStatus::Unspecified) | Err(_) => {
+                RunAsArmStatus::Other
+            }
         }
     }
 }
@@ -497,9 +495,14 @@ impl Notice {
     pub fn parse(key: &str) -> Option<(Notice, &str)> {
         let rest = key.strip_prefix(NOTICE_PREFIX)?;
         let (word, package) = rest.split_once(':')?;
-        let notice = [Notice::Offer, Notice::Done, Notice::NeedsErase, Notice::Failed]
-            .into_iter()
-            .find(|notice| notice.word() == word)?;
+        let notice = [
+            Notice::Offer,
+            Notice::Done,
+            Notice::NeedsErase,
+            Notice::Failed,
+        ]
+        .into_iter()
+        .find(|notice| notice.word() == word)?;
         crate::apk::valid_package_name(package).then_some((notice, package))
     }
 
@@ -735,7 +738,12 @@ mod tests {
 
     #[test]
     fn fr25_the_keys_of_the_run_as_arm_notices_name_their_app() {
-        for notice in [Notice::Offer, Notice::Done, Notice::NeedsErase, Notice::Failed] {
+        for notice in [
+            Notice::Offer,
+            Notice::Done,
+            Notice::NeedsErase,
+            Notice::Failed,
+        ] {
             let key = notice.key("com.example.game");
             assert!(key.starts_with(crate::notifications::HOST_KEY_PREFIX));
             assert_eq!(Notice::parse(&key), Some((notice, "com.example.game")));

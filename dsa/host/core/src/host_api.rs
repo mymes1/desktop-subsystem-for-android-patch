@@ -69,7 +69,6 @@ use crate::apk::{self, InstallOutcome, InstalledPackage};
 use crate::app_windows::{self, AppWindowSettings};
 use crate::apps::{self, UninstallOutcome};
 use crate::arm_translation::{self, GuestArmTranslation, Package};
-use crate::gapps::{self, GappsPackage, GuestGapps};
 use crate::background::{
     self, BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundWatch, MediaCommand,
     MediaSession, Playback,
@@ -80,6 +79,7 @@ use crate::diagnostics::HostFile;
 use crate::drag::{self, DragChunk, DragItem, DragOffer, DragOut, DragRead};
 use crate::files::{self, FileAction, FileTransfer};
 use crate::gamepads::{GamepadEvent, GamepadInfo, GamepadRumble, GamepadState};
+use crate::gapps::{self, GappsPackage, GuestGapps};
 use crate::guest_log::{DiagnosticsEvent, LogDumpEvent, LogEntry, LogFilter, LogWatch};
 use crate::ime::{ImeCursor, ImeEvent};
 use crate::input::{InputEvent, PointerEvent};
@@ -416,11 +416,15 @@ pub trait UserAndroid: Send + Sync {
         content: &mut dyn Read,
     ) -> Result<GuestGapps, InstallError> {
         let _ = (size, sha256, content);
-        Err(InstallError::Refused("this Android cannot take Google's apps".into()))
+        Err(InstallError::Refused(
+            "this Android cannot take Google's apps".into(),
+        ))
     }
     /// Removes the Google apps' image from this Android's disk.
     fn remove_gapps(&self) -> Result<GuestGapps, InstallError> {
-        Err(InstallError::Refused("this Android cannot take Google's apps".into()))
+        Err(InstallError::Refused(
+            "this Android cannot take Google's apps".into(),
+        ))
     }
     /// Where the Google apps stand in this Android while it runs, with the Android version
     /// and processor it reports; `None` when it is not running or does not say.

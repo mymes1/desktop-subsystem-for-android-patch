@@ -14,10 +14,8 @@ use dsa_protocol::control::{
 use sha2::{Digest, Sha256};
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "dsa-channeld-gapps-{name}-{}",
-        std::process::id()
-    ));
+    let dir =
+        std::env::temp_dir().join(format!("dsa-channeld-gapps-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     dir
 }

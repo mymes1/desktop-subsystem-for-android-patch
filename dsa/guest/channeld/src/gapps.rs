@@ -87,10 +87,12 @@ impl Gapps {
     pub fn handle(&self, body: &Body) -> Option<GappsState> {
         let progress = match body {
             Body::GappsInstall(install) => {
-                self.store.begin(install.transfer_id, install.size, &install.sha256)
+                self.store
+                    .begin(install.transfer_id, install.size, &install.sha256)
             }
             Body::GappsChunk(chunk) => {
-                self.store.write(chunk.transfer_id, chunk.offset, &chunk.data)
+                self.store
+                    .write(chunk.transfer_id, chunk.offset, &chunk.data)
             }
             Body::GappsRemove(_) => self.store.remove(),
             Body::GappsQuery(_) => Progress::default(),

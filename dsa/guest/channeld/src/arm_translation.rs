@@ -72,10 +72,12 @@ impl ArmTranslation {
     pub fn handle(&self, body: &Body) -> Option<ArmTranslationState> {
         let progress = match body {
             Body::ArmTranslationInstall(install) => {
-                self.store.begin(install.transfer_id, install.size, &install.sha256)
+                self.store
+                    .begin(install.transfer_id, install.size, &install.sha256)
             }
             Body::ArmTranslationChunk(chunk) => {
-                self.store.write(chunk.transfer_id, chunk.offset, &chunk.data)
+                self.store
+                    .write(chunk.transfer_id, chunk.offset, &chunk.data)
             }
             Body::ArmTranslationRemove(_) => self.store.remove(),
             Body::ArmTranslationQuery(_) => Progress::default(),

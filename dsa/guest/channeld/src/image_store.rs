@@ -173,7 +173,8 @@ impl ImageStore {
         }
         drop(file);
         if hasher.finalize().as_slice() != sha256.as_slice() {
-            let why = format!("{name} did not arrive intact (its SHA-256 differs); install it again");
+            let why =
+                format!("{name} did not arrive intact (its SHA-256 differs); install it again");
             return self.failed(id, received, why);
         }
         if let Err(error) = fs::rename(self.dir.join(PARTIAL), self.dir.join(IMAGE)) {
