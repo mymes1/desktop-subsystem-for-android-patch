@@ -53,11 +53,6 @@ def glyph(badge, c):
             f'<circle cx="50" cy="50" r="4.4" fill="{c}"/>'
             '<circle cx="50" cy="50" r="1.9" fill="#ffffff"/>'
         )
-    if badge == "apk":
-        return (
-            f'<path d="M50 42.5v9 M45.6 47.6l4.4 4.4 4.4-4.4 M44.5 56h11" stroke="{c}" '
-            'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
-        )
     if badge == "files":
         return (
             f'<path d="M43 45.2a1.6 1.6 0 0 1 1.6-1.6h3.6l2 2h5.2a1.6 1.6 0 0 1 1.6 1.6v6.8'
@@ -141,7 +136,10 @@ def write(out, path, data):
 def windows(out):
     large, small = master("symbol"), master("symbol-small")
     for path, badge in icons.WINDOWS_ICONS:
-        big, little = with_badge(large, badge), with_badge(small, badge)
+        if badge in icons.OWN_MASTERS:
+            big = little = master(icons.OWN_MASTERS[badge])
+        else:
+            big, little = with_badge(large, badge), with_badge(small, badge)
         images = [
             (size, render(little if size <= icons.SMALL_MAX else big, size))
             for size in icons.ICO_SIZES
@@ -162,6 +160,11 @@ def linux(out):
     tint = re.search(r'fill="(#[0-9a-f]{6})"', symbolic).group(1)
     for badge, app_id in icons.LINUX_APPS.items():
         scalable, symbolic_path = icons.linux_paths(app_id)
+        if badge in icons.OWN_MASTERS:
+            own = icons.OWN_MASTERS[badge]
+            write(out, scalable, master(own))
+            write(out, symbolic_path, master(f"{own}-symbolic"))
+            continue
         write(out, scalable, with_badge(colour, badge))
         write(out, symbolic_path, symbolic_with_badge(symbolic, badge, tint))
 

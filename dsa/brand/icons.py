@@ -24,7 +24,12 @@ ICNS_IMAGES = [
 ]
 
 # The companion apps' badges, drawn on the symbol's lower right corner.
-BADGES = ["settings", "apk", "files"]
+BADGES = ["settings", "files"]
+
+# Companion apps drawn from their own master instead of the symbol with a badge: the APK
+# Installer is a parcel with an arrow, with no DSA mark on it. Each also has a
+# `<master>-symbolic.svg` for Linux.
+OWN_MASTERS = {"apk": "apk-installer"}
 
 WINDOWS = DSA / "host" / "platform" / "windows"
 LINUX_ICONS = DSA / "host" / "platform" / "linux" / "settings" / "data" / "icons" / "hicolor"
