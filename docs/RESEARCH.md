@@ -1259,3 +1259,121 @@ android.googlesource.com의 웹 보기로 소스를 읽었다. 기기에서는 �
 
 - Android 17 이미지에서 `SessionParams`에 `abiOverride` 필드가 있는지. 없으면 에이전트 로그에 "this Android's package installer takes no ABI override"가 남고 설치가 거부된다.
 - 실제 PC(수동 확인): x86_64와 arm64를 모두 가진 앱을 설치해 `dumpsys package <package>`의 `primaryCpuAbi`가 `x86_64`인지, "ARM으로 실행"을 켜면 `arm64-v8a`로 바뀌고 앱 데이터(로그인, 설정)가 남는지, 끄면 `x86_64`로 돌아오는지 본다. 공유 사용자 ID를 쓰는 앱에서 교체가 거절되는지도 본다. 결과는 이 절에 기록한다.
+
+## R18. GPU 장치를 잃었을 때 SurfaceFlinger와 HWUI가 다시 그리기 (NFR-5, D24)
+
+질문: 호스트 GPU가 리셋되어 렌더러가 게스트에 장치 손실(`VK_ERROR_DEVICE_LOST`, `EGL_CONTEXT_LOST`)을 돌려줄 때, DSA 이미지의 SurfaceFlinger와 HWUI는 지금 어떻게 반응하는가. 다시 시작하지 않고 복구하려면 무엇을 고쳐야 하는가. 게스트의 GLES와 Vulkan 드라이버도 고쳐야 하는가. 2026-11-08에 확인했다.
+
+### 확인한 자료
+
+| 대상 | 버전 |
+|---|---|
+| Android 16 이미지 입력 | `aosp_cf_x86_64_only_phone-userdebug` 빌드 15581820 (`BP4A.251205.006`, 릴리스 설정 `bp4a`, `clang-r563880c`) |
+| Android 17 이미지 입력 | 빌드 16373615 (`CP2A.260605.016`, `cp2a`, `clang-r584948b`) |
+| 빌드의 소스 | ci.android.com의 `manifest_15581820.xml`, `manifest_16373615.xml`. `frameworks/native` `fcbde2b`(16)와 `ae266dc`(17), `frameworks/base` `45034f0`와 `94b4c16`, `external/skia` `22f5edb`(16), `external/angle` `ff25cbd`(16) |
+| 게스트 Vulkan 드라이버 | DSA가 빌드하는 `vulkan.ranchu.so`: gfxstream `d047a57`, mesa3d `224e91e`의 `src/gfxstream/guest/vulkan_enc` |
+| 크래시 기록 | 2026-11-07 소유자 PC(Intel Arc)의 Android 16 이미지 logcat과 tombstone |
+
+target_files에서는 `SYSTEM/build.prop`, `SYSTEM/etc/build_flags.json`, `SYSTEM/etc/aconfig_flags.pb`, `VENDOR/etc/init/init_graphics.vendor.rc`를 읽었다. Android 17 것은 2.3 GB zip 전체를 받지 않고 HTTP Range로 필요한 항목만 꺼냈다. 소스는 해당 커밋을 `--filter=blob:none`과 sparse checkout으로 받아 읽었다. 빌드는 하지 않았다.
+
+### 이 이미지들이 쓰는 경로
+
+- SurfaceFlinger는 스레드를 쓰는 SkiaGL RenderEngine(`skiaglthreaded`)을 쓴다. `debug.renderengine.backend`를 정하는 곳이 없고, `bp4a`와 `cp2a`의 aconfig 값 묶음은 `vulkan_renderengine`과 `graphite_renderengine`을 켜지 않는다. tombstone의 `SkiaGLRenderEngine::flushGL`과 스레드 이름 `RenderEngine`이 이를 보인다.
+- HWUI는 `SkiaOpenGLPipeline`을 쓴다. `ro.hwui.use_vulkan`이 비어 있고, `init_graphics.vendor.rc`가 `debug.hwui.renderer`에 넣는 `ro.boot.hardware.guest_hwui_renderer`를 DSA가 주지 않는다.
+- 두 GL 경로는 모두 ANGLE(`ro.hardware.egl=angle`)을 지나 DSA의 gfxstream Vulkan 드라이버로, Hyper-V 소켓을 거쳐 호스트 렌더러에 닿는다. 그래서 호스트 장치를 잃으면 게스트에는 Vulkan의 장치 손실로 먼저 오고, GL 쪽에는 ANGLE이 그것을 컨텍스트 손실로 바꾸어 전한다.
+- Vulkan RenderEngine(Ganesh, Graphite)과 `SkiaVulkanPipeline`은 지금 쓰이지 않지만, 속성 하나로 켜지므로 같은 복구를 넣었다.
+
+### 2026-11-07의 크래시
+
+호스트 렌더러 프로세스가 끝나 연결이 끊긴 경우다.
+
+- 앱의 RenderThread: `EglManager::beginFrame` → ANGLE `WindowSurfaceVk::prepareSwap` → `vkAcquireImageANDROID` → `VulkanStreamGuest::read`의 `abort()`. 연결에서 응답을 읽지 못하면 드라이버가 프로세스를 끝낸다.
+- SurfaceFlinger의 RenderEngine 스레드: `mapExternalTextureBuffer` → `GaneshBackendTexture`의 `LOG_ALWAYS_FATAL("Failed to create a valid texture")`, 또는 `SkiaGLRenderEngine::flushGL` → `eglCreateSyncKHR` → `vkCreateFence`에서 같은 `abort()`.
+- SurfaceFlinger가 끝나면 system_server와 함께 프레임워크 전체가 다시 시작하고, 열린 앱이 모두 닫힌다.
+
+### 지금의 반응
+
+| 위치 | 장치 손실에서 하는 일 |
+|---|---|
+| RenderEngine `drawLayersInternal` 시작 | `LOG_ALWAYS_FATAL_IF(context->isAbandonedOrDeviceLost())` |
+| RenderEngine `GaneshBackendTexture` 생성과 `makeImage`/`makeSurface` | 텍스처나 이미지를 만들지 못하면 `LOG_ALWAYS_FATAL` |
+| RenderEngine `VulkanInterface::onVkDeviceFault`(Skia의 `fDeviceLostProc`) | 16은 `LOG_ALWAYS_FATAL`, 17은 `LOG_THREAD_STATE_AND_CRASH` |
+| RenderEngine `GraphiteVkRenderEngine::flushAndSubmit` | `insertRecording`이나 `submit`이 실패하면 끝낸다 |
+| `SkiaGLRenderEngine` | `EGL_CONTEXT_LOST`를 보는 곳이 없다. RenderEngine은 `SurfaceFlinger::init`에서 한 번 만들어지고, 다시 만드는 길이 없다. Vulkan 장치(`VulkanInterface`)는 정적 객체다 |
+| HWUI `CanvasContext::draw` 시작 | `LOG_ALWAYS_FATAL("Lost GPU device unexpectedly")` |
+| HWUI `EglManager::swapBuffers` | `EGL_BAD_SURFACE`, `EGL_BAD_NATIVE_WINDOW`가 아닌 오류는 모두 `LOG_ALWAYS_FATAL`. `EGL_CONTEXT_LOST`도 여기에 든다 |
+| HWUI `EglManager::makeCurrent`(오류를 받지 않는 호출), `damageFrame`, `createSurface` | 실패하면 `LOG_ALWAYS_FATAL` |
+| HWUI `VulkanManager`의 장치 손실 콜백 | `LOG_ALWAYS_FATAL` |
+
+복구에 쓸 수 있는 것은 이미 있다.
+
+- HWUI의 `RenderThread::destroyRenderingContext`. `trimMemory`가 `TRIM_MEMORY_BACKGROUND` 이상일 때와 `CacheManager`의 컨텍스트 시한에서 부른다. WebView functor에 컨텍스트가 사라진다고 알리고(`onContextDestroyed`), `setGrContext(nullptr)`가 `RenderState::onContextDestroyed`로 각 창의 레이어와 파이프라인의 EGL/Vulkan surface와 TextureView 이미지를 놓은 뒤 `GrDirectContext`를 버리며, `EglManager::destroy`(`eglTerminate`)나 `VulkanManager`를 놓는다. 다음 `makeCurrent`가 컨텍스트와 surface를 다시 만든다(`SkiaOpenGLPipeline::makeCurrent`의 주석이 trimMemory 뒤의 이 경우를 말한다). display list는 남는다.
+- HWUI의 `SyncResult::UIRedrawRequired`. 동기화 결과에 이 비트가 있으면 Java의 `ThreadedRenderer`가 `ViewRootImpl.invalidate()`를 불러 UI 스레드가 창 전체를 다시 그린다.
+- Skia의 `GrDirectContext::abandonContext()`. GPU API를 부르지 않고 컨텍스트를 버리며, 감싼 텍스처의 release proc은 이때 부른다. Vulkan에서는 Skia가 `VK_ERROR_DEVICE_LOST`를 보면 스스로 컨텍스트를 버린다(`abandoned()`가 참). GL에서는 장치 손실을 보지 못한다. `GrGpu::isDeviceLost()`의 기본값이 거짓이고 `GrGLGpu`가 바꾸지 않는다.
+
+### ANGLE과 libEGL이 손실을 전하는 방법
+
+- ANGLE Vulkan 백엔드: `VK_ERROR_DEVICE_LOST`를 받으면 `DisplayVk::handleError` → `Renderer::notifyDeviceLost` → `DisplayState::notifyDeviceLost`가 디스플레이의 모든 컨텍스트를 잃은 것으로 표시한다(`UnknownContextReset`). 그 뒤 GL 호출은 아무것도 하지 않고, EGL 호출 대부분이 검증 단계(`ValidateDisplay`)에서 `EGL_CONTEXT_LOST`로 실패한다. `eglDestroyContext`와 `eglDestroySurface`도 실패한다. `eglMakeCurrent(NO_CONTEXT)`와 `eglTerminate`만 된다.
+- ANGLE은 잃은 Vulkan 디스플레이를 되살리지 못한다(`DisplayVk::restoreLostDevice`가 `EGL_BAD_DISPLAY`). 복구는 컨텍스트를 놓고 `eglTerminate`한 뒤 `eglInitialize`로 새 `Renderer`(새 `VkInstance`와 `VkDevice`)를 만드는 것뿐이다. `eglTerminate`는 현재로 쓰이는 컨텍스트가 있으면 미뤄진다. 손실을 처리할 때 ANGLE은 큐가 비기를 기다리고, 진행 중인 펜스마다 `vkWaitForFences`로 기다린다.
+- 반응 알림 전략을 정하지 않은 컨텍스트에서 `glGetGraphicsResetStatus`는 언제나 `GL_NO_ERROR`를 돌려준다. 그래서 GL 쪽 손실은 EGL로 묻는다. `eglQueryContext`가 `EGL_CONTEXT_LOST`로 실패하는지가 가장 싸다.
+- ANGLE은 EGL 객체 ID를 지울 때 돌려받아 다시 쓴다(`HandleAllocator`). GL 이름도 컨텍스트마다 처음부터 다시 매긴다. 잃은 디스플레이를 다시 초기화한 뒤에 옛 텍스처의 release proc이 `eglDestroyImageKHR`나 `glDeleteTextures`를 부르면, 새로 만든 같은 번호의 객체를 지울 수 있다. 그래서 옛 컨텍스트가 만든 것은 모두 `eglTerminate` 전에 놓아야 한다.
+- libEGL(`frameworks/native/opengl/libs/EGL`)은 `eglInitialize`와 `eglTerminate`를 센다. 드라이버의 디스플레이는 셈이 0이 될 때만 terminate한다. 한 프로세스에서 HWUI 말고도 디스플레이를 쥔 사용자가 있으면(WebView의 GPU 스레드, HWUI의 비트맵 업로더) HWUI의 `eglTerminate`는 드라이버에 닿지 않고, 디스플레이는 모두에게 잃은 채로 남는다. 또 드라이버의 `eglInitialize`가 실패해도 libEGL의 `eglInitialize`는 `EGL_TRUE`를 돌려준다.
+
+### 게스트 드라이버
+
+- ANGLE(`libEGL_angle.so`, `libGLESv2_angle.so`)은 위처럼 손실을 표준 오류로 전하고, 다시 초기화하면 새 장치를 만든다. 고칠 것이 없다.
+- gfxstream 게스트 Vulkan 드라이버는 호스트의 결과를 그대로 돌려준다. 비동기 제출(`vkQueueSubmitAsyncGOOGLE`)은 `VK_SUCCESS`를 돌려주고, 손실은 펜스와 대기(`vkWaitForFences`, `vkGetFenceStatus`, `vkGetFenceFdKHR`의 `VK_ERROR_DEVICE_LOST`)에서 드러난다. 표준이 허용하는 동작이다. 드라이버가 스스로 끝내는 곳은 연결에서 응답을 읽지 못할 때(`VulkanStreamGuest::read`의 `abort()`)뿐이다.
+- 그래서 게스트 드라이버는 고치지 않는다. 대신 호스트 렌더러가 지켜야 할 것이 있다. 이것은 렌더러를 고치는 작업에 넘긴다.
+  - 장치를 잃어도 게스트 프로세스마다의 연결을 끊지 않고, 모든 호출에 답한다.
+  - 잃은 객체에 대한 호출, 특히 `vkQueueWaitIdle`, `vkWaitForFences`, `vkGetFenceStatus`, `vkAcquireImageANDROID`에는 곧바로 `VK_ERROR_DEVICE_LOST`를 돌려준다. 잃은 작업의 sync fd와 펜스는 신호한다. ANGLE이 손실을 처리하며 이것들을 기다린다.
+  - 잃은 객체의 `vkDestroy*`와 `vkFree*`를 받아들인다.
+  - 새 장치가 준비되기 전의 `vkCreateInstance`, `vkCreateDevice`에는 오류를 돌려주고, 준비된 뒤에는 새 장치를 준다.
+  - gralloc 버퍼(color buffer)의 핸들은 새 장치에서도 다시 가져올 수 있어야 한다. 내용은 잃어도 된다. 게스트가 다시 그린다.
+
+### 결정
+
+SurfaceFlinger(RenderEngine 포함), HWUI, libEGL을 고친다. 패치는 `dsa/guest/framework/patches/<project>/<android>/`에 있고 16과 17에 각각 맞췄다. 두 렌더러가 따르는 정책은 하나의 헤더(`DeviceLossRecovery.h`)로 두 패치에 같이 들어가고, 저장소에는 그 원본과 C++ 시험이 있다. 손실은 한 번만 처리하고, 다시 만들기가 실패하면 50 ms에서 1.6 s까지 늘려 가며 다시 시도하고, 포기하지 않는다. 성공할 때마다 리셋 수를 센다.
+
+- `frameworks/native` 0001(RenderEngine): GPU를 쓰기 전마다 손실을 확인한다(Skia의 컨텍스트, GL은 EGL 디스플레이). 손실이면 텍스처와 Skia 컨텍스트를 옛 디스플레이가 있을 때 놓고, EGL 디스플레이를 terminate와 initialize로 다시 만들거나(GL) Vulkan 장치를 새로 만들고(Vk), 컨텍스트를 다시 만들고, SurfaceFlinger가 매핑해 둔 버퍼를 모두 다시 가져온다. 호스트가 아직 답하지 않으면 RenderEngine 스레드에서 10초까지 기다린다. 잃은 장치에서 그린 프레임은 펜스 대신 `DEAD_OBJECT`를 돌려준다. 위 표의 abort는 장치 손실일 때 경고로 바뀐다. `getDeviceResetCount()`와 리스너로 SurfaceFlinger에 알린다.
+- `frameworks/native` 0002(SurfaceFlinger): 리셋 수가 바뀌면 각 디스플레이의 client composition 캐시와 planner의 평탄화한 레이어를 버리고 전체를 다시 합성한다. 그리고 `debug.dsa.gpu.resets`를 바꾼다. 같은 GPU에서 다른 프로세스의 장치도 잃었기 때문이다. 이 속성은 SurfaceFlinger가 처음 시작할 때 만든다.
+- `frameworks/native` 0003(libEGL): 셈이 0이 아니어도, 드라이버의 디스플레이가 잃은 상태이거나 앞선 초기화가 실패했으면 `eglInitialize`가 드라이버의 디스플레이를 terminate하고 다시 초기화한다. 그 디스플레이에서 만든 객체는 `eglTerminate` 뒤처럼 거절한다.
+- `frameworks/base` 0001(HWUI): 창을 그리기 전마다(`CanvasContext::makeCurrent`) 손실을 확인한다. 손실이면 `GrDirectContext`를 버리고 `destroyRenderingContext`로 EGL/Vulkan 컨텍스트와 창들의 surface를 놓는다. 호스트가 답하는지 버리는 컨텍스트로 먼저 시험해 보고 다시 만든다. 기다리는 동안 RenderThread를 막지 않고 다음 시도를 큐에 넣는다. 다시 만들면 창마다 마지막 display list로 전체를 다시 그리고, 다음 동기화에서 UI 스레드에 다시 그리기를 요청한다(`UIRedrawRequired`). `debug.dsa.gpu.resets`가 바뀌어도 같은 일을 한다. 그래서 아무것도 그리지 않던 창도 다시 그려진다. 컨텍스트가 없는 동안 레이어, TextureView 프레임, readback, 하드웨어 비트맵 업로드는 기다리거나 실패로 답하고 앱을 끝내지 않는다.
+- GL이나 Vulkan을 직접 쓰는 앱은 ANGLE과 드라이버가 주는 표준 오류(`EGL_CONTEXT_LOST`, `GL_CONTEXT_LOST`, `VK_ERROR_DEVICE_LOST`)를 받는다. 다시 초기화하면 libEGL 0003 덕분에 새 장치를 얻는다.
+- 이미지: `make-image.py --framework`가 Framework build의 `surfaceflinger`, `libhwui.so`, `libEGL.so`로 빌드의 파일을 바꾼다. 같은 빌드 번호와 아키텍처에서 만든 것만 받는다. SurfaceFlinger가 `debug_prop`을 쓸 수 있게 하는 규칙을 더하고(`sepolicy/gpu-reset.cil`), `image.json`의 `framework`에 각 파일의 SHA-256을 적는다. `check-image.py`가 이미지 안의 파일과 그 해시를 대조한다.
+
+### 빌드 설계
+
+R16의 번역기 빌드와 같은 방법이다. 받기 스크립트(`fetch-source.py`)와 러너 정리(`free-disk.sh`)는 그대로 함께 쓴다.
+
+- 잠금 파일 `dsa/guest/framework/framework-lock.json`: 버전마다 이미지의 빌드 번호와 대상, 그 빌드의 매니페스트(URL과 SHA-256), 릴리스 설정, Clang과 Rust 판, 받을 프로젝트(16은 99개, 17은 98개). 모든 커밋은 그 빌드의 매니페스트에서 왔다. 워크플로가 매번 매니페스트를 받아 대조한다(`framework_lock.py check-manifest`). 이미지와 같은 소스에서 빌드해야, 바꾼 파일이 이미지에 남는 공개 빌드의 라이브러리와 맞는다.
+- 프로젝트 목록은 빌드 파일만 받아 정적으로 찾았다(R16과 같은 방법). `surfaceflinger`, `libhwui`, `libEGL`의 의존을 Android.bp에서 따라가, 정의가 없는 모듈이 이 빌드가 만들지 않는 변형(host musl, Windows, NDK 등)이나 APEX 스텁만 남을 때까지 프로젝트를 더했다. 모두 소스에서 빌드한다. 이미지의 라이브러리를 prebuilt로 링크하지 않는 것은, AIDL과 aconfig가 만든 헤더를 어차피 생성해야 하고 정적 라이브러리(Skia, perfetto, RenderEngine)는 소스가 있어야 하기 때문이다.
+  - Skia와 코덱(webp, png, jpeg-turbo, giflib, freetype, harfbuzz, expat, dng_sdk, piex, wuffs, libjxl, libultrahdr, image_io, XMP, brotli, libyuv), Skia의 Rust FFI와 AVIF(`crabbyavif`, `cxx`).
+  - perfetto 클라이언트, protobuf와 abseil(호스트 aprotoc와 기기용 lite), boringssl, zstd, lzma, pcre, selinux.
+  - `libhwui`가 `android_graphics_jni` → `libmediandk`로 미디어 스택을 끌어온다(`frameworks/av` 39개 폴더, minikin, icu, sonivox, speex, libogg, pdfium).
+  - AIDL/HIDL HAL(`hardware/interfaces` 29개 폴더 등), aidl, hidl-gen, sysprop, aconfig와 그 Rust crate 약 96개.
+  - Rust 툴체인(16은 1.88.0, 17은 1.93.1)이 기기와 호스트 모두에 필요하다. Java는 빌드하지 않는다.
+- 제품: `module_common.mk`와 `core_64_bit_only.mk`에서 시작한 `dsa_framework`. 보드는 Cuttlefish의 `vsoc_x86_64_only`(silvermont)와 `vsoc_arm64_only`(armv8-a, cortex-a53)를 따른다. 세 모듈의 Android.bp는 제품 변수와 Soong config 변수를 읽지 않으므로, 플래그는 빌드 자신의 릴리스 설정이 정한다. `lunch dsa_framework-<release>-userdebug`.
+- 빌드(`.github/scripts/framework/build.sh`): 패치를 적용하고(`apply-patches.py`, 정확히 적용되지 않으면 멈춘다) 세 설치 경로만 빌드한다. 환경 변수와 ccache는 번역기 빌드와 같다. ccache는 빌드마다 2 GB까지 GitHub 캐시에 둔다(넷이면 8 GB).
+- 워크플로 `framework.yml`("Framework build"): 먼저 잠금과 매니페스트를 대조하고, 패치가 받은 소스에 적용되는지 패치가 바꾸는 폴더만 받아 확인한다. 그다음 Android 판 2개와 아키텍처 2개로 4개 작업을 돌려 `framework-<android>-<arch>-<version>` artifact를 남긴다. `<version>`은 Android 판과 잠금과 패치의 해시다. 이미지 배포는 develop에서 성공한 가장 최근 실행 중 지금의 version을 가진 artifact를 찾아 쓴다.
+
+### 단계별 예상 (실측 전, 작업 하나)
+
+| 단계 | 디스크 | 시간 |
+|---|---|---|
+| 러너 정리 | 여유 약 45 GB 이상 | 2 ~ 4분 |
+| 소스 받기(98 ~ 99개) | 약 9 ~ 12 GB(prebuilt 약 7 ~ 8 GB, 소스 약 1.5 ~ 2.5 GB) | 10 ~ 25분 |
+| 패치와 Soong 분석 | `out/` 1 ~ 3 GB, RAM 6 ~ 12 GB | 10 ~ 25분 |
+| 컴파일(C/C++ 소스 약 4,600 ~ 4,700개와 perfetto 약 600개, 생성 코드, 호스트 도구, Rust 약 140개 모듈) | `out/` 15 ~ 30 GB, ccache 2 GB | 처음 1.5 ~ 3시간, ccache가 차면 30 ~ 60분 |
+| 모으기와 올리기 | 세 파일 약 25 MB | 1분 |
+
+최대 사용량은 약 30 ~ 45 GB다. 처음 실행이 시간을 넘어도 ccache가 남아 다음 실행이 이어 간다.
+
+### 남은 위험과 확인할 것
+
+- 프로젝트 목록은 읽어서 만든 추정이다. 첫 실행의 `m -k` 요약이 빠진 프로젝트를 보이고, `update-lock.py --add`로 더한다. kati가 `bp4a`, `cp2a`와 이 제품을 받아들이는지, Soong만 쓰는 빌드에서 설치 경로를 대상으로 줄 수 있는지는 번역기 빌드와 같이 실행에서 확인한다.
+- 패치는 받은 소스에 정확히 적용됨을 확인했지만 컴파일하지 않았다. 컴파일 오류는 첫 실행에서 고친다.
+- 실제 복구는 PC에서 본다(NFR-5의 수동 확인). 앱 창 여러 개를 연 채 `dxcap -forcetdr`로 GPU를 리셋하고, 몇 초 안에 모든 창이 다시 그려지는지, system_server의 pid가 그대로인지, 스크롤 위치와 입력한 글자가 남는지 본다. 결과는 이 절에 적는다.
+- 아무 프로세스도 GPU를 쓰지 않는 동안 리셋되면, 처음으로 그리는 프로세스가 손실을 만날 때까지 아무도 알지 못한다. 그 프로세스가 SurfaceFlinger면 모든 앱에 알린다. 앱이면 그 앱만 다시 그리고, SurfaceFlinger는 그 앱의 새 버퍼를 가져오다 손실을 만난다. 완전히 멈춘 화면에서 곧바로 다시 그리려면 호스트가 리셋을 게스트에 알려야 한다(예: 제어 채널의 알림을 받아 `debug.dsa.gpu.resets`를 바꾸는 시스템 쪽 처리). 제어 프로토콜과 정책을 바꾸는 일이라 소유자에게 따로 제안한다.
+- WebView(Chromium)는 자기 GPU 스레드의 컨텍스트 손실을 스스로 처리한다. 그 동작은 확인하지 않았다.
+- `SkiaVulkanPipeline`과 하드웨어 비트맵 업로더의 Vulkan 경로는 이 이미지들에서 쓰이지 않는다. 업로더의 Vulkan 경로는 `GrDirectContext`를 만들지 못하면 여전히 끝낸다.
+- 보호 콘텐츠(protected) 컨텍스트는 다시 만들지만, 보호 버퍼의 다시 가져오기는 시험하지 않았다(DSA에 DRM 경로가 없다).
