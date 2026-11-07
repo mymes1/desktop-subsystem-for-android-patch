@@ -24,7 +24,7 @@
 //! dsa app-window [<package> [--fixed-size on|off] [--start-size <width>x<height>|auto] | <package> reset]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
-//! dsa arm-translation [status | install <folder> | fetch google [--yes] | remove]
+//! dsa arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default]
 //! dsa gapps [status | install [--progress] | remove]
 //! dsa reset-data --yes
 //! ```
@@ -174,17 +174,25 @@
 //! choosing the render GPU.
 //!
 //! `dsa arm-translation status` (or `dsa arm-translation`) says whether apps built only for
-//! 64-bit ARM (`arm64-v8a`) can be installed and run: which translation package is installed,
-//! whether the `arm-translation` setting is on, and which ABIs the running Android installs apps
-//! for. `dsa arm-translation install <folder>` installs a translation package: a folder holding
+//! 64-bit ARM (`arm64-v8a`) can be installed and run: which translator Android uses (the
+//! image's default one, a package the user installed, or Google's), whether the
+//! `arm-translation` setting is on, and which ABIs the running Android installs apps for. An
+//! x86_64 image carries a default translator, which Android uses from its first start; an arm64
+//! image runs ARM apps itself and has none. `dsa arm-translation install <folder>` installs a
+//! translation package, which is used in place of the default one: a folder holding
 //! `arm-translation.json` and `system.img`, as `dsa/guest/arm-translation/make-package.py`
 //! makes one. Android is started first when it is not running. `dsa arm-translation remove`
-//! removes it. Both apply from the next start of Android, and say so. With `--json` each prints
-//! `package` (`name`, `version`, `library`, `abis`, `license`, or null), `enabled`,
-//! `supported` (a package is installed and on), `android` (`installed`, `active` and `abilist`,
-//! or null while Android is not running) and `restart_needed`. `dsa settings set
-//! arm-translation off` keeps the package but boots Android without it. The JSON also says
-//! `google_fetch_available`: whether `fetch google` is offered here.
+//! removes it, and the default translator, if the image has one, is used again;
+//! `dsa arm-translation use-default` does the same, and refuses where there is no default
+//! translator. Each applies from the next start of Android, and says so. With `--json` each
+//! prints `package` (the installed one: `name`, `version`, `library`, `abis`, `license`, or
+//! null), `default` (the image's default package, the same fields, or null), `translator`
+//! (what Android uses from its next start: `source`, which is `default`, `user` or `google`,
+//! with `name`, `version` and `license`, or null), `enabled`, `supported` (a translator is
+//! used), `android` (`installed`, `active` and `abilist`, or null while Android is not running)
+//! and `restart_needed`. `dsa settings set arm-translation off` keeps the package but boots
+//! Android without any translator. The JSON also says `google_fetch_available`: whether
+//! `fetch google` is offered here.
 //!
 //! `dsa arm-translation fetch google` gets Google's own ARM translator, which DSA does not ship:
 //! it reads Google's list of emulator system images, downloads the Google APIs x86_64 image of
@@ -280,7 +288,7 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      background [list | open <package> | stop <package>] | \
      app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
-     arm-translation [status | install <folder> | fetch google [--yes] | remove] | \
+     arm-translation [status | install <folder> | fetch google [--yes] | remove | use-default] | \
      files [open] | gapps [status | install [--progress] | remove] | reset-data --yes | \
      android [version | use <major>|latest [--erase-data]]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
@@ -335,6 +343,9 @@ pub enum Command {
     ArmTranslationInstall,
     /// Remove the ARM translation package.
     ArmTranslationRemove,
+    /// Go back to the image's default ARM translator, removing the package installed in its
+    /// place.
+    ArmTranslationUseDefault,
     /// Make a translation package from Google's ARM translator, and install it.
     ArmTranslationFetchGoogle,
     /// Say whether Google Play is installed, and which build.
@@ -833,6 +844,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                         Command::ArmTranslationInstall
                     }
                     Some("remove") => Command::ArmTranslationRemove,
+                    Some("use-default") => Command::ArmTranslationUseDefault,
                     Some("fetch") => match args.next().map(String::as_str) {
                         Some("google") => Command::ArmTranslationFetchGoogle,
                         _ => {
@@ -844,8 +856,8 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     },
                     Some(other) => {
                         return Err(format!(
-                            "dsa arm-translation takes status, install <folder>, fetch google or \
-                             remove, not {other:?}\n{USAGE}"
+                            "dsa arm-translation takes status, install <folder>, fetch google, \
+                             remove or use-default, not {other:?}\n{USAGE}"
                         ))
                     }
                 });
@@ -2774,17 +2786,27 @@ fn show_gapps(invocation: &Invocation, status: &GappsStatus, done: Option<&str>)
 
 /// Where ARM translation stands as one JSON object.
 pub fn arm_translation_json(status: &ArmTranslationStatus) -> Value {
-    json!({
-        "google_fetch_available": GOOGLE_FETCH_AVAILABLE,
-        "package": status.package.as_ref().map(|package| json!({
+    let package_json = |package: &arm_translation::Package| {
+        json!({
             "name": package.name,
             "version": package.version,
             "library": package.library,
             "abis": package.abis,
             "license": package.license,
+        })
+    };
+    json!({
+        "google_fetch_available": GOOGLE_FETCH_AVAILABLE,
+        "package": status.package.as_ref().map(package_json),
+        "default": status.default.as_ref().map(package_json),
+        "translator": status.translator.as_ref().map(|translator| json!({
+            "source": translator.source.as_str(),
+            "name": translator.package.name,
+            "version": translator.package.version,
+            "license": translator.package.license,
         })),
         "enabled": status.enabled,
-        "supported": status.package.is_some() && status.enabled,
+        "supported": status.translator.is_some(),
         "android": status.guest.as_ref().map(|guest| json!({
             "installed": guest.installed,
             "active": guest.active,
@@ -2796,25 +2818,37 @@ pub fn arm_translation_json(status: &ArmTranslationStatus) -> Value {
 
 /// Where ARM translation stands, one fact per line, after `done` when an action was taken.
 pub fn describe_arm_translation(status: &ArmTranslationStatus, done: Option<&str>) -> String {
+    use arm_translation::Source;
     let mut lines: Vec<String> = done.map(str::to_string).into_iter().collect();
-    lines.push(match (&status.package, status.enabled) {
-        (None, _) => "ARM apps: not supported (no translation package is installed)".to_string(),
-        (Some(package), true) => format!(
-            "ARM apps: supported by {} {} ({})",
-            package.name,
-            package.version,
-            if package.license.is_empty() {
+    let off = status.package.as_ref().or(status.default.as_ref());
+    lines.push(match (&status.translator, off) {
+        (Some(translator), _) => format!(
+            "ARM apps: supported by {} {} ({}), {}",
+            translator.package.name,
+            translator.package.version,
+            if translator.package.license.is_empty() {
                 "licence not given"
             } else {
-                &package.license
+                &translator.package.license
+            },
+            match translator.source {
+                Source::Default => "this Android's default translator",
+                Source::User => "the package you installed",
+                Source::Google => "Google's translator, which you installed",
             }
         ),
-        (Some(package), false) => format!(
-            "ARM apps: not supported ({} {} is installed but turned off; dsa settings set \
-             arm-translation on)",
+        (None, Some(package)) if !status.enabled => format!(
+            "ARM apps: not supported ({} {} is turned off; dsa settings set arm-translation on)",
             package.name, package.version
         ),
+        (None, _) => "ARM apps: not supported (no translation package is installed)".to_string(),
     });
+    if let (Some(default), Some(_)) = (&status.default, &status.package) {
+        lines.push(format!(
+            "Default translator: {} {} (dsa arm-translation use-default goes back to it)",
+            default.name, default.version
+        ));
+    }
     match &status.guest {
         Some(guest) => lines.push(format!(
             "Android installs apps for: {}{}",
@@ -2980,6 +3014,41 @@ fn fetch_google(
     });
     let _ = std::fs::remove_dir_all(&base);
     installed
+}
+
+/// `dsa arm-translation use-default`: removes the package installed in place of the image's
+/// default translator, so Android uses the default one from its next start. Refused where
+/// there is no default translator, and changes nothing where it is already the one chosen.
+fn use_default_translator(
+    invocation: &Invocation,
+    mut client: HostApiClient,
+) -> Result<String, String> {
+    let status = client.arm_translation().map_err(|e| e.to_string())?;
+    let Some(default) = status.default.clone() else {
+        return Err(if GOOGLE_FETCH_AVAILABLE {
+            "this Android's image has no default ARM translator; dsa arm-translation install \
+             <folder> or fetch google installs one"
+                .into()
+        } else {
+            "Android on this computer is ARM64 and runs ARM apps without a translator, so it \
+             has no default translator"
+                .into()
+        });
+    };
+    if status.package.is_none() {
+        let done = format!(
+            "Android already uses its default translator, {} {}",
+            default.name, default.version
+        );
+        return Ok(show_arm_translation(invocation, &status, Some(&done)));
+    }
+    let status = client.remove_arm_translation().map_err(|e| e.to_string())?;
+    let done = format!(
+        "Android uses its default translator, {} {}, again; the package installed in its place \
+         is removed",
+        default.name, default.version
+    );
+    Ok(show_arm_translation(invocation, &status, Some(&done)))
 }
 
 fn show_arm_translation(
@@ -3553,9 +3622,17 @@ pub fn run_with_starter(
         }
         Command::ArmTranslationRemove => {
             let status = client.remove_arm_translation().map_err(|e| e.to_string())?;
-            let done = "Removed the ARM translation package";
-            return Ok(show_arm_translation(invocation, &status, Some(done)));
+            let done = match &status.default {
+                Some(default) => format!(
+                    "Removed the ARM translation package; Android uses its default translator, \
+                     {} {}, again",
+                    default.name, default.version
+                ),
+                None => "Removed the ARM translation package".to_string(),
+            };
+            return Ok(show_arm_translation(invocation, &status, Some(&done)));
         }
+        Command::ArmTranslationUseDefault => return use_default_translator(invocation, client),
         Command::GappsStatus => {
             let status = client.gapps().map_err(|e| e.to_string())?;
             return Ok(show_gapps(invocation, &status, None));
