@@ -828,7 +828,11 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                          com.example.notes"
                     ));
                 }
-                let on = match args.next().map(|value| value.to_ascii_lowercase()).as_deref() {
+                let on = match args
+                    .next()
+                    .map(|value| value.to_ascii_lowercase())
+                    .as_deref()
+                {
                     Some("on") => true,
                     Some("off") => false,
                     _ => return Err(usage.to_string()),

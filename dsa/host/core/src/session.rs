@@ -3895,9 +3895,10 @@ impl Worker {
     /// Removes one of the host's own notifications, if it is shown.
     fn remove_notice(&mut self, key: &str) {
         if self.notifications.remove(key).is_some() {
-            self.shared.publish_notification(NotificationEvent::Removed {
-                key: key.to_string(),
-            });
+            self.shared
+                .publish_notification(NotificationEvent::Removed {
+                    key: key.to_string(),
+                });
         }
     }
 

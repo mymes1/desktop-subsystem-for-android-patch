@@ -45,7 +45,10 @@ impl Dsa for Fake {
         match self.answers.iter().find(|(l, _)| *l == line) {
             Some((_, Ok(out))) => Ok(out.clone()),
             Some((_, Err(error))) => Err(Failure::from_client(error)),
-            None => Err(Failure::new(Problem::Refused, format!("no answer for {line}"))),
+            None => Err(Failure::new(
+                Problem::Refused,
+                format!("no answer for {line}"),
+            )),
         }
     }
 }
@@ -80,7 +83,11 @@ fn fr25_the_switch_is_off_with_its_reason_when_it_cannot_be_changed() {
         }));
         let shown = view::run_as_arm_view(&game);
         assert!(!shown.sensitive, "{reason}");
-        assert!(shown.subtitle.contains(says), "{reason}: {}", shown.subtitle);
+        assert!(
+            shown.subtitle.contains(says),
+            "{reason}: {}",
+            shown.subtitle
+        );
     }
     let available = app(json!({"on": false, "available": true, "reason": ""}));
     let on = view::run_as_arm_view(&available);
