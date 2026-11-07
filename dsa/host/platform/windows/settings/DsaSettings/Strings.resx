@@ -439,6 +439,33 @@
   <data name="Arm_NotRunning" xml:space="preserve">
     <value>Android is not running, so what it supports now is not known.</value>
   </data>
+  <data name="ArmGoogleCard.Header" xml:space="preserve">
+    <value>Google's ARM translator</value>
+  </data>
+  <data name="ArmGoogleCard.Description" xml:space="preserve">
+    <value>Gets the ARM translator from the Android emulator image Google offers for this Android version and installs it as a translation package. DSA does not include or pass on Google's translator: your computer downloads the image from Google, under Google's Android SDK License, keeps only the translator and deletes the rest (about 2 GB). Nothing is downloaded until you agree. A package built from another translator, such as Digitalis, does the same job.</value>
+  </data>
+  <data name="ArmGoogleButton.Content" xml:space="preserve">
+    <value>Get</value>
+  </data>
+  <data name="ArmGoogleTermsLink.Content" xml:space="preserve">
+    <value>Android SDK License</value>
+  </data>
+  <data name="ArmGoogleConfirm.Title" xml:space="preserve">
+    <value>Get Google's ARM translator?</value>
+  </data>
+  <data name="ArmGoogleConfirm.Action" xml:space="preserve">
+    <value>Accept and download</value>
+  </data>
+  <data name="ArmGoogle_Notice" xml:space="preserve">
+    <value>DSA downloads the Android emulator image for this Android version from Google's SDK repository ({0}) and takes out only its ARM translator. The translator is Google's software, offered under the Android SDK License ({1}); by downloading it you accept those terms. DSA does not ship or pass it on. The image is about 2 GB and is deleted afterwards. The translator works from the next start of Android.</value>
+  </data>
+  <data name="ArmGoogleFetchingBar.Title" xml:space="preserve">
+    <value>Getting Google's ARM translator</value>
+  </data>
+  <data name="ArmGoogleFetchingBar.Message" xml:space="preserve">
+    <value>Downloading about 2 GB from Google and taking the translator out. This takes a few minutes.</value>
+  </data>
   <data name="GappsHeader.Text" xml:space="preserve">
     <value>Google Play</value>
   </data>

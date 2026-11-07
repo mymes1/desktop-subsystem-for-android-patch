@@ -425,6 +425,23 @@ pub fn arm_abis(arm: &ArmTranslation) -> String {
     }
 }
 
+/// What the confirmation says before Google's ARM translator is downloaded: where it comes
+/// from, and the terms the user accepts.
+pub fn arm_google_notice() -> String {
+    trf(
+        "DSA downloads the Android emulator image for this Android version from Google's SDK repository ({0}) and takes out only its ARM translator. The translator is Google's software, offered under the Android SDK License ({1}); by downloading it you accept those terms. DSA does not ship or pass it on. The image is about 2 GB and is deleted afterwards. The translator works from the next start of Android.",
+        &[
+            crate::model::GOOGLE_ARM_SOURCE,
+            crate::model::GOOGLE_ARM_TERMS_URL,
+        ],
+    )
+}
+
+/// What the ARM apps section says while Google's translator is fetched.
+pub fn arm_google_busy_text() -> String {
+    tr("Downloading about 2 GB from Google and taking out the translator. It takes minutes.")
+}
+
 /// What the Google Play item says of the package and whether Android uses it.
 pub fn gapps_status(gapps: &Gapps) -> String {
     let package = match &gapps.package {

@@ -495,10 +495,12 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     );
     arm_remove.add_css_class("destructive-action");
     arm_group.add(&arm_remove_row);
+    let google = google_arm_rows(&arm_group);
     page.add(&arm_group);
     let show_arm: Rc<dyn Fn(Result<crate::model::ArmTranslation, crate::api::Failure>)> = {
         let (page, arm_restart, arm_remove_row) =
             (page.clone(), arm_restart.clone(), arm_remove_row.clone());
+        let google = google.clone();
         Rc::new(
             move |r: Result<crate::model::ArmTranslation, crate::api::Failure>| {
                 page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
@@ -507,9 +509,11 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
                 arm_status_row.set_subtitle(&view::arm_abis(&status));
                 arm_restart.set_visible(status.restart_needed);
                 arm_remove_row.set_sensitive(status.package.is_some());
+                google.offer(status.google_fetch_available);
             },
         )
     };
+    google.connect(ctx, show_arm.clone());
     {
         let (ctx, show_arm) = (ctx.clone(), show_arm.clone());
         arm_remove.connect_clicked(move |_| {
@@ -687,6 +691,87 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         );
     }
     page.root.clone().upcast()
+}
+
+/// The rows of the ARM apps section for Google's ARM translator: getting it, the notice while
+/// it downloads, and Google's terms. They show only where dsa can fetch it.
+#[derive(Clone)]
+struct GoogleArm {
+    get_row: adw::ActionRow,
+    get: gtk::Button,
+    busy: adw::ActionRow,
+    terms: adw::ActionRow,
+}
+
+fn google_arm_rows(arm_group: &adw::PreferencesGroup) -> GoogleArm {
+    let (get_row, get) = button_row(
+        &tr("Google's ARM translator"),
+        &tr("Gets the ARM translator from the Android emulator image Google offers for this Android version and installs it as a translation package. DSA does not include or pass on Google's translator: your computer downloads the image from Google, under Google's Android SDK License, keeps only the translator and deletes the rest (about 2 GB). Nothing is downloaded until you agree. A package built from another translator, such as Digitalis, does the same job."),
+        &tr("Get"),
+    );
+    get.add_css_class("suggested-action");
+    let busy = action_row(&view::arm_google_busy_text(), "");
+    let terms = link_row(
+        &tr("Android SDK License"),
+        &tr("Google's terms for the emulator image the translator comes from."),
+    );
+    for row in [&get_row, &busy, &terms] {
+        row.set_visible(false);
+        arm_group.add(row);
+    }
+    GoogleArm {
+        get_row,
+        get,
+        busy,
+        terms,
+    }
+}
+
+impl GoogleArm {
+    /// Shows the rows where dsa can fetch Google's translator, and hides them elsewhere.
+    fn offer(&self, available: bool) {
+        self.get_row.set_visible(available);
+        self.terms.set_visible(available);
+    }
+
+    /// Asks first, saying where the download comes from and under which terms, then fetches
+    /// the translator and shows the section as dsa reports it.
+    fn connect(
+        &self,
+        ctx: &Shared,
+        show: Rc<dyn Fn(Result<crate::model::ArmTranslation, crate::api::Failure>)>,
+    ) {
+        let this = self.clone();
+        let asking = ctx.clone();
+        self.get.connect_clicked(move |_| {
+            let (this, ctx, show) = (this.clone(), asking.clone(), show.clone());
+            confirm(
+                &asking,
+                &tr("Get Google's ARM translator?"),
+                &view::arm_google_notice(),
+                &tr("Accept and download"),
+                false,
+                move || {
+                    this.busy.set_visible(true);
+                    this.get_row.set_sensitive(false);
+                    let (this, show) = (this.clone(), show.clone());
+                    request(
+                        &ctx,
+                        |c| c.fetch_google_arm_translator(),
+                        move |r| {
+                            this.busy.set_visible(false);
+                            this.get_row.set_sensitive(true);
+                            show(r);
+                        },
+                    );
+                },
+            );
+        });
+        let ctx = ctx.clone();
+        self.terms.connect_activated(move |_| {
+            open_page(&ctx, crate::model::GOOGLE_ARM_TERMS_URL);
+        });
+    }
 }
 
 /// The Google Play item: whether Google's apps are installed, installing and removing them,

@@ -3,7 +3,9 @@
 Most Android apps ship native code for ARM only. The guest is x86_64, so such an app installs
 and runs only through a translator that plugs into Android as its native bridge. DSA ships no
 translator yet: the ones Android products use (Houdini, Google's libndk_translation) are
-proprietary, and upstream Berberis translates RISC-V only. The user installs one as a package.
+proprietary, and upstream Berberis translates RISC-V only. The user installs one as a package,
+either one they build (such as from Digitalis, below) or Google's, which the host makes on
+request from Google's own emulator image (`dsa arm-translation fetch google`).
 
 A package is a folder holding:
 
@@ -14,10 +16,21 @@ A package is a folder holding:
 
 ```
 dsa arm-translation install <folder>   # sends it to Android, used from the next start
+dsa arm-translation fetch google       # makes and installs a package of Google's translator
 dsa arm-translation status             # whether ARM apps run, and the ABIs Android installs for
 dsa arm-translation remove
 dsa settings set arm-translation off   # keeps the package, boots without it
 ```
+
+`fetch google` asks first, saying where the download comes from and that Google's Android SDK
+License covers it (`--yes` agrees). It reads Google's list of Google APIs x86_64 system images,
+downloads the one for the guest's API level, checks its size and SHA-1 against the list, and
+takes only the translator's files out of the image's system partition:
+`libndk_translation.so` and the `libndk_translation_*.so` libraries it loads, `lib64/arm64/`
+and `bin/arm64/`, the arm64 program runner, the arm64 binfmt_misc rules,
+`ld.config.arm64.txt` and the arm64 cpuinfo. They become a package like any other, named
+"Google ARM translator". The download is deleted afterwards. DSA never ships or redistributes
+those files.
 
 At boot the host adds `androidboot.dsa.arm_translation=on` to the bootconfig only while a
 package is installed and the setting is on. The image then imports the native bridge and ABI

@@ -966,3 +966,59 @@ Digitalis의 배포 묶음(`docker/build-digitalis.sh`)은 번역기(`libberberi
 
 - `androidboot.boot_devices=vmbus`는 VMBus 아래 모든 디스크의 파티션에 `by-name` 링크를 만든다. 다른 디스크가 `misc`, `super`, `userdata` 같은 같은 이름의 GPT 파티션을 가지면 링크가 충돌한다. pstore 디스크는 파티션 표가 없는 원시 디스크여야 한다.
 - 하드웨어 확인(예정): pstore 디스크를 SCSI 0번, 1번, 2번에 각각 붙여 부팅하고, 콘솔 로그의 파티션 줄(`sdX: (vbmeta_a)(...)(super)`)이 시스템 디스크에 붙는지, `ls -l /dev/block/by-name/`이 같은 디스크를 가리키는지, `/data`가 마운트되는지 본다. 결과는 이 절에 기록한다.
+
+## R14. Google의 ARM 번역기: SDK 저장소 목록과 에뮬레이터 이미지의 구조 (FR-25)
+
+**기준.** 2026-11-07. Google SDK 저장소의 시스템 이미지 목록 `https://dl.google.com/android/repository/sys-img/google_apis/sys-img2-1.xml`부터 `sys-img2-5.xml`까지를 받아 읽었다(`sys-img2-6.xml`은 없다). Google APIs x86_64 이미지 두 개, `x86_64-36_r07.zip`(API 36, 1,895,447,397바이트, SHA-1 `c6bf44bdcd885bb902b4ba752d111a073ad7a817`)과 `x86_64-37.0_r08.zip`(API 37.0, 2,143,899,425바이트, SHA-1 `a266cfbcf4d6c769b166c0af4d68eff0e4f4a5e3`)을 `.scratch/google-ndk/`에 받아 목록의 해시와 맞는지 확인하고, 그 안의 `system.img`를 Python 스크립트(`.scratch/ndk-probe-*.py`)로 GPT, liblp 메타데이터, ext4 순서로 읽었다. 받은 파일은 저장소에 넣지 않았다. 게스트에 넣어 부팅해 보지는 않았다.
+
+### 저장소 목록
+
+- 목록은 스키마 버전마다 따로 있다(`sys-img2-1`부터 `-5`). API 36은 1부터, API 36.1과 37.0은 3부터 나온다. 같은 이미지를 가리키므로 가장 새 스키마부터 읽는다.
+- 이미지 하나는 `<remotePackage path="system-images;android-36;google_apis;x86_64">`이다. `<type-details>` 안에 `<api-level>`(`36`, `36.1`, `37.0`, 확장판은 `36x`), `<extension-level>`, `<base-extension>`(확장판은 `false`), `<tag><id>`(`google_apis`, `google_apis_playstore`, `google_apis_ps16k` 등), `<abi>`와 `<abis>`, `<translatedAbis>arm64-v8a</translatedAbis>`가 있다. 그 밖에 `<revision><major>`, `<uses-license ref="android-sdk-license"/>`, `<channelRef ref="channel-0"/>`(0이 안정판, 나머지는 베타와 카나리), `<archives><archive><complete>`의 `<size>`, `<checksum type="sha1">`, `<url>`(목록과 같은 폴더의 파일 이름)이 있다.
+- 해시는 SHA-1뿐이다. 크기와 함께 맞춰 본다. 목록은 HTTPS로 Google에서 받는다.
+- x86_64 Google APIs 이미지의 약관은 `android-sdk-license`(Android SDK License Agreement)다. arm64 이미지는 `android-sdk-arm-dbt-license`라는 다른 약관을 쓴다. DSA는 x86_64 이미지만 받는다.
+- 2026-11-07의 안정판은 API 36 r7, 36.1 r4, 37.0 r8이다. 36-ext18과 36-ext19는 확장판이다.
+
+### 이미지의 구조
+
+- zip 안에 `x86_64/system.img`(API 36은 4,415,553,536바이트, 37.0은 5,498,732,544바이트, deflate로 압축)가 있다. 4 GiB를 넘으므로 zip64다. `source.properties`의 `Pkg.Revision`은 목록의 리비전과 다를 수 있다(37.0 r8의 파일은 7이라고 쓴다). 그래서 버전은 목록에서 정한다.
+- `system.img`는 디스크 전체다. GPT에 `vbmeta`(1 MiB부터)와 `super`(2 MiB부터) 두 파티션이 있다.
+- `super`는 liblp 메타데이터(4096바이트 뒤의 기하 정보, 그 뒤 8192바이트에서 시작하는 메타데이터, 버전 10.0, 헤더 128바이트, 표의 SHA-256 확인)로 `system`, `system_dlkm`, `system_ext`, `product`, `vendor`를 담는다. `system`은 `super`의 1 MiB부터 선형 구간 하나이고, API 36은 1,049,964,544바이트, 37.0은 1,254,883,328바이트다.
+- `system`은 ext4(블록 4 KiB, 64비트 기능 없음, 익스텐트, 공유 블록)다. 루트 아래 `system/` 폴더가 있는 system-as-root 구조다.
+- 번역기 속성은 `system/build.prop`에 있다: `ro.dalvik.vm.native.bridge=libndk_translation.so`, `ro.dalvik.vm.isa.arm64=x86_64`, `ro.enable.native.bridge.exec=1`, `ro.system.product.cpu.abilist=x86_64,arm64-v8a`. 번역기 버전을 따로 적은 속성은 없다. 그래서 묶음 버전은 `ro.system.build.id`(36은 `BE2A.250530.026.F3`, 37.0은 `CE2A.260420.051.A3`), API 수준, 리비전으로 만든다.
+
+### 번역기 파일
+
+| 경로(`system/` 아래) | API 36 | API 37.0 |
+|---|---|---|
+| `lib64/libndk_translation.so` | 5,403,704바이트 | 8,743,696바이트 |
+| `lib64/libndk_translation_proxy_*.so` | 21개(libEGL, libGLESv1_CM, libGLESv2, libGLESv3, libOpenMAXAL, libOpenSLES, libaaudio, libamidi, libandroid, libandroid_runtime, libbinder_ndk, libc, libcamera2ndk, libjnigraphics, libmediandk, libnativehelper, libnativewindow, libneuralnetworks, libvulkan, libwebviewchromium_plat_support) | 없음(번역기 안에 들었다) |
+| `lib64/arm64/` | arm64 라이브러리 56개(bionic, libc++, libEGL과 GLES, libvulkan, ICU, libandroid, libmediandk, RenderScript 등) | 같은 56개 |
+| `bin/arm64/` | `app_process64`, `linker64` | 같음 |
+| `bin/ndk_translation_program_runner_binfmt_misc_arm64` | 있음 | 있음 |
+| `etc/binfmt_misc/arm64_exe`, `arm64_dyn` | 있음 | 있음 |
+| `etc/ld.config.arm64.txt` | 있음 | 있음 |
+| `etc/cpuinfo.arm64.txt` | 있음 | 없음 |
+| `etc/berberis/cpuinfo.arm64.txt` | 없음 | 있음 |
+
+- 두 binfmt_misc 규칙은 `/system/bin/ndk_translation_program_runner_binfmt_misc_arm64`를 실행한다. DSA의 init 스크립트가 묶음의 규칙을 등록하므로 이미지의 `etc/init/ndk_translation.rc`는 필요 없다. 그 스크립트는 `/system/etc`를 덮기 전에 읽히므로 넣어도 쓰이지 않는다.
+- 32비트 파일(`etc/binfmt_misc/arm_exe`, `arm_dyn`, `ld.config.arm.txt`, `cpuinfo.arm.txt`)도 있지만 32비트 라이브러리(`lib/arm`)는 없다. DSA 게스트에 32비트 zygote가 없으므로 넣지 않는다.
+- `libndk_translation.so`가 링크하는 x86_64 라이브러리(`liblog`, `libandroid`(36만), `libdl_android`, `libc++`, `libc`, `libm`, `libdl`)와 프록시가 링크하는 것(`libEGL`, `libGLESv2`, `libvulkan`, `libmediandk` 등)은 모두 AOSP 시스템 라이브러리다. arm64 라이브러리가 서로 링크하는 것도 `lib64/arm64/` 안에 있다.
+- 꺼내는 파일은 API 36이 84개 30,536,301바이트, 37.0이 64개 32,242,207바이트다. 묶음 이미지는 압축하지 않은 erofs라 그보다 조금 크다(블록 단위로 놓인다).
+
+### 결정
+
+1. 호스트(명령줄)가 목록을 읽고 게스트와 같은 API 수준(Android 16은 36, 17은 37.0)의 안정판, 기본판(`base-extension`이 `false`가 아님), `google_apis` x86_64, `translatedAbis`에 `arm64-v8a`가 있는 이미지를 고른다. 여럿이면 부 버전이 가장 낮은 것(36보다 36.1을 뒤로), 그다음 리비전이 가장 높은 것이다. 목록의 `<url>`은 같은 폴더의 파일 이름이거나 `https://dl.google.com/` 주소일 때만 받는다.
+2. 받은 zip은 크기와 SHA-1을 목록과 맞춘다. 다르면 거부하고 아무것도 바꾸지 않는다.
+3. zip을 풀지 않고 `system.img`를 스트리밍으로 inflate하면서 GPT와 liblp를 읽고, `system` 구간만 임시 파일로 쓴다(디스크 전체를 쓰지 않는다). 그 ext4에서 위 표의 파일만 꺼낸다. 이 일은 Rust로 직접 한다(inflate, SHA-1, GPT, liblp, ext4 읽기, erofs 쓰기). 세 호스트 모두 같은 코드이고, `mkfs.erofs`나 다른 도구를 새로 쓰지 않는다. 다운로드는 각 호스트가 이미 쓰는 것(Windows는 WinHTTP, macOS와 Linux는 curl)으로 한다.
+4. 꺼낸 파일은 FR-25 묶음 형식 그대로다(`arm-translation.json`의 이름 `Google ARM translator`, 브리지 `libndk_translation.so`, ABI `arm64-v8a`, 라이선스 `Android SDK License`). 그래서 설치, 검사, 부팅 값, 오버레이는 사용자 묶음과 같은 길을 지난다. 받은 이미지와 임시 파일은 성공해도 실패해도 지운다.
+
+### 대가
+
+- 한 번에 약 2 GB를 받고, 그동안 zip(약 2 GB)과 `system` 구간(약 1 GB)을 임시 폴더에 둔다.
+- Google이 목록 형식이나 이미지 구조(예: `system`을 erofs로 바꾸기)를 바꾸면 읽지 못하고 거부한다. 그때는 이 절을 다시 조사한다.
+
+### 확인하지 못한 것
+
+- 이 번역기를 DSA 게스트(AOSP Cuttlefish 빌드)에 얹었을 때 `arm64-v8a` 전용 앱이 도는지. 에뮬레이터 빌드와 Cuttlefish 빌드의 시스템 라이브러리가 같은 AOSP 가지에서 나와도 빌드가 다르다. 실제 PC에서 확인한다(FR-25 수동 기준).
+- 36.1 이미지가 36 게스트에 더 맞는지. 지금은 기본판(36)을 고른다.

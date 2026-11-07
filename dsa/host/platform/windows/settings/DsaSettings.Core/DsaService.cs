@@ -212,7 +212,7 @@ public sealed partial class DsaService
             android = new ArmGuestInfo(Bool(a, "installed"), Bool(a, "active"), String(a, "abilist"));
         }
         return new ArmTranslationInfo(package, Bool(json, "enabled", missing: true), Bool(json, "supported"),
-            android, Bool(json, "restart_needed"));
+            android, Bool(json, "restart_needed"), Bool(json, "google_fetch_available"));
     }
 
     /// <summary>Whether ARM apps can run, and with which translation package.</summary>
