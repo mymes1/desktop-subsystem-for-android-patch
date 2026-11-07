@@ -146,6 +146,18 @@ message TaskUpdated {
   // Whether the task's app went into picture-in-picture. The host makes the task's window a
   // small window that stays above the others.
   bool picture_in_picture = 22;
+  // Whether the task's app asked to draw its own title bar: it set a transparent caption bar
+  // background (WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND), as
+  // an app does on Android's own desktop windows to put its controls, such as a browser's
+  // tabs, in the title bar. The host then draws only its caption buttons and the app's icon
+  // over the app, not the app's name, and leaves the rest of the band to the app.
+  bool transparent_caption = 23;
+  // While `transparent_caption` is set: the parts of the title bar band where the app has
+  // controls, which take the pointer, relative to the task's top left corner in guest
+  // display pixels. They are what the app asked the system to keep its gestures out of
+  // (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+  // The rest of the band drags the window.
+  repeated Rect caption_interactive = 24;
 }
 
 // The orientation a task's top activity asks for.
@@ -190,6 +202,10 @@ message CloseTask {
 // agent answers with TaskUpdated once the task is there.
 message LaunchApp {
   string package_name = 1;
+  // Start another task of the app even when it has one, in a window of its own, as the
+  // system menu's New window does. Only for an app that supports several windows
+  // (AppInfo.multiple_windows); otherwise the app's task comes to the front.
+  bool new_window = 2;
 }
 
 // Host to guest: the user's Stop. The agent ends every process of the app, even one a
@@ -231,9 +247,17 @@ message SetTaskDensity {
 // toolbar below the caption buttons and draws its status bar background behind them. The
 // host sends it when the window opens and whenever the height changes, as on a move to a
 // monitor of another scale. 0 removes the inset.
+//
+// `start_width` and `end_width` are how far the parts the host draws over the band reach in
+// from its left end (the app's icon) and from its right end (the caption buttons), in guest
+// display pixels. An app that draws its own title bar (TaskUpdated.transparent_caption)
+// receives them as the bounding rectangles of its caption bar inset
+// (WindowInsets.getBoundingRects), so it keeps its controls out of them.
 message SetTaskCaption {
   int32 task_id = 1;
   uint32 height = 2;
+  uint32 start_width = 3;
+  uint32 end_width = 4;
 }
 
 // Guest to host, from the agent: the name and launcher icon of an app the host shows a task
@@ -248,6 +272,14 @@ message AppInfo {
   // The app's launcher icon, as a square PNG image of at most 256 pixels on a side. Empty
   // when the app has no icon the agent could draw.
   bytes icon_png = 3;
+  // The icon a window's title bar shows: an adaptive icon's foreground layer alone, without
+  // its background plate, as a square PNG image of the same size as `icon_png`. Empty for an
+  // app whose icon is not adaptive, which shows `icon_png` there too.
+  bytes caption_icon_png = 4;
+  // Whether the app supports several windows at once (its launcher activity or the app
+  // declares android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), so the window's
+  // system menu offers New window.
+  bool multiple_windows = 5;
 }
 
 // Guest to host, from the agent: an app a launcher lists is installed in the guest, or
@@ -362,6 +394,20 @@ message RefreshApps {}
 // every installed app instead.
 message OpenAppSettings {
   string package_name = 1;
+  // Which of Android's pages for the app. Ignored without a package.
+  AppSettingsPage page = 2;
+}
+
+// One of Android's settings pages for an app.
+enum AppSettingsPage {
+  // The app's info: its permissions, storage and notifications.
+  APP_SETTINGS_PAGE_DETAILS = 0;
+  // The app's aspect ratio, which the user may override
+  // (Settings.ACTION_MANAGE_USER_ASPECT_RATIO_SETTINGS).
+  APP_SETTINGS_PAGE_ASPECT_RATIO = 1;
+  // Whether the links the app supports open in the app or in the browser
+  // (Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS).
+  APP_SETTINGS_PAGE_OPEN_BY_DEFAULT = 2;
 }
 
 // Whether an app was uninstalled, and if not, why. The reasons are stable, so the host can say
