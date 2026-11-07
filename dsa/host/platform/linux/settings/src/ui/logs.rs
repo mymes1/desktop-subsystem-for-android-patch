@@ -14,6 +14,7 @@ use gtk::{gio, glib};
 use super::common::*;
 use crate::api::{self, Failure};
 use crate::i18n::{tr, trf};
+use crate::model::LogLine;
 use crate::view::{self, LogView};
 
 struct Reading {
@@ -72,13 +73,9 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
     status.add_css_class("dim-label");
     body.append(&status);
 
-    let text = gtk::TextView::builder()
-        .editable(false)
-        .cursor_visible(false)
-        .wrap_mode(gtk::WrapMode::WordChar)
-        .build();
+    let list = gtk::ListBox::new();
     let scroll = gtk::ScrolledWindow::builder()
-        .child(&text)
+        .child(&list)
         .vexpand(true)
         .build();
     scroll.add_css_class("card");
@@ -87,11 +84,18 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
     let model = Rc::new(RefCell::new(LogView::default()));
     let reading: Rc<RefCell<Option<Reading>>> = Rc::default();
 
+    // The lines the list shows, in its order: row n is line n.
+    let shown: Rc<RefCell<Vec<LogLine>>> = Rc::default();
+
     let redraw = {
-        let (model, text) = (model.clone(), text.clone());
+        let (model, list, shown) = (model.clone(), list.clone(), shown.clone());
         Rc::new(move || {
-            let shown = model.borrow().shown().join("\n");
-            text.buffer().set_text(&shown);
+            list.remove_all();
+            let lines: Vec<LogLine> = model.borrow().shown().into_iter().cloned().collect();
+            for line in &lines {
+                list.append(&log_row(line));
+            }
+            *shown.borrow_mut() = lines;
         })
     };
     let stop = {
@@ -136,10 +140,11 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
     // Takes what has come since the last look, a batch at a time, so a busy log does not
     // redraw for every line.
     {
-        let (reading, model, text, banner, status) = (
+        let (reading, model, list, shown, banner, status) = (
             reading.clone(),
             model.clone(),
-            text.clone(),
+            list.clone(),
+            shown.clone(),
             banner.clone(),
             status.clone(),
         );
@@ -157,7 +162,7 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
                             if model.add(&line) {
                                 if let Some(last) = model.last() {
                                     if model.matches(last) {
-                                        appended.push(last.to_string());
+                                        appended.push(last.clone());
                                     }
                                 }
                             }
@@ -175,10 +180,18 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
                 status.set_label(&model.paused_text());
             }
             if !appended.is_empty() {
-                let buffer = text.buffer();
-                let mut end = buffer.end_iter();
-                let lead = if buffer.char_count() > 0 { "\n" } else { "" };
-                buffer.insert(&mut end, &format!("{lead}{}", appended.join("\n")));
+                let mut shown = shown.borrow_mut();
+                for line in appended {
+                    list.append(&log_row(&line));
+                    shown.push(line);
+                }
+                // The page keeps as many lines as the model does; the oldest rows go first.
+                while shown.len() > LogView::LIMIT {
+                    if let Some(first) = list.row_at_index(0) {
+                        list.remove(&first);
+                    }
+                    shown.remove(0);
+                }
                 let adjustment = scroll.vadjustment();
                 adjustment.set_value(adjustment.upper());
             }
@@ -250,4 +263,33 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
         });
     }
     root.upcast()
+}
+
+/// One log line as a row of columns: time, PID, TID, priority and the body. The app's font is
+/// proportional, so the fields have fixed widths to line up; the body has none and runs into
+/// the list's horizontal scroll bar.
+fn log_row(line: &LogLine) -> gtk::Widget {
+    let columns = line.columns();
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    row.set_margin_start(6);
+    row.set_margin_end(6);
+    let cell = |text: &str, width: i32, xalign: f32| {
+        let label = gtk::Label::builder()
+            .label(text)
+            .xalign(xalign)
+            .use_markup(false)
+            .single_line_mode(true)
+            .build();
+        if width > 0 {
+            label.set_size_request(width, -1);
+        }
+        row.append(&label);
+        label
+    };
+    cell(&columns.time, 164, 0.0);
+    cell(&columns.pid, 56, 1.0);
+    cell(&columns.tid, 56, 1.0);
+    cell(&columns.priority, 32, 0.5);
+    cell(&columns.body, 0, 0.0).set_margin_start(6);
+    row.upcast()
 }

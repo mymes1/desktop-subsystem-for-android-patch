@@ -547,8 +547,8 @@ pub fn logcat_args(priority: &str) -> Vec<String> {
 /// The log page's lines: the newest records, filtered by text, which can be paused.
 #[derive(Debug, Default)]
 pub struct LogView {
-    lines: VecDeque<String>,
-    waiting: Vec<String>,
+    lines: VecDeque<crate::model::LogLine>,
+    waiting: Vec<crate::model::LogLine>,
     pub filter: String,
     paused: bool,
 }
@@ -562,17 +562,16 @@ impl LogView {
         let Some(line) = crate::model::LogLine::parse(json_line) else {
             return false;
         };
-        let text = line.text();
         if self.paused {
-            self.waiting.push(text);
+            self.waiting.push(line);
             return false;
         }
-        self.push(text);
+        self.push(line);
         true
     }
 
-    fn push(&mut self, text: String) {
-        self.lines.push_back(text);
+    fn push(&mut self, line: crate::model::LogLine) {
+        self.lines.push_back(line);
         while self.lines.len() > Self::LIMIT {
             self.lines.pop_front();
         }
@@ -597,8 +596,8 @@ impl LogView {
     pub fn set_paused(&mut self, paused: bool) {
         self.paused = paused;
         if !paused {
-            for text in std::mem::take(&mut self.waiting) {
-                self.push(text);
+            for line in std::mem::take(&mut self.waiting) {
+                self.push(line);
             }
         }
     }
@@ -608,23 +607,19 @@ impl LogView {
         self.waiting.clear();
     }
 
-    pub fn matches(&self, text: &str) -> bool {
+    pub fn matches(&self, line: &crate::model::LogLine) -> bool {
         let filter = self.filter.trim().to_lowercase();
-        filter.is_empty() || text.to_lowercase().contains(&filter)
+        filter.is_empty() || line.text().to_lowercase().contains(&filter)
     }
 
     /// The lines the filter shows, oldest first.
-    pub fn shown(&self) -> Vec<&str> {
-        self.lines
-            .iter()
-            .filter(|l| self.matches(l))
-            .map(String::as_str)
-            .collect()
+    pub fn shown(&self) -> Vec<&crate::model::LogLine> {
+        self.lines.iter().filter(|l| self.matches(l)).collect()
     }
 
     /// The newest line, for appending it to what is shown.
-    pub fn last(&self) -> Option<&str> {
-        self.lines.back().map(String::as_str)
+    pub fn last(&self) -> Option<&crate::model::LogLine> {
+        self.lines.back()
     }
 }
 
