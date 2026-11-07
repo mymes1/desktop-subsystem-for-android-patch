@@ -118,6 +118,31 @@ class LockTests(unittest.TestCase):
         build = (REPO / ".github/scripts/framework/build.sh").read_text()
         self.assertIn('cp -r "$here/device/hosttools" "$device/"', build)
 
+    def test_nfr5_modules_soong_analyses_find_their_sources_and_licenses(self):
+        # The second Framework build run's analysis stopped on errors that missing dependencies
+        # do not excuse: an aidl_interface whose srcs glob matches nothing ("No sources
+        # provided"), and a package whose default license is in a folder the cone left out.
+        # The run named only android.security.rkp_aidl; the other aidl_interface globs that
+        # matched nothing (in frameworks/base/media) are fetched too, their folders being small.
+        wanted = {
+            "android16": {
+                "frameworks/base": ["core/java/android/security/rkp",
+                                    "media/aidl/android/media/soundtrigger_middleware"],
+                "external/libultrahdr": ["adobe-hdr-gain-map-license"],
+            },
+            "android17": {
+                "frameworks/base": ["core/java/android/security/rkp",
+                                    "media/aidl/android/media/audio",
+                                    "media/aidl/android/media/soundtrigger_middleware"],
+                "external/libultrahdr": ["adobe-hdr-gain-map-license"],
+            },
+        }
+        for version in self.lock["versions"]:
+            projects = {p["path"]: p for p in version["projects"]}
+            for path, folders in wanted[version["android"]].items():
+                for folder in folders:
+                    self.assertIn(folder, projects[path]["cone"], f"{version['android']} {path}")
+
     def test_nfr5_a_lock_for_another_build_than_the_image_is_refused(self):
         lock = copy.deepcopy(self.lock)
         lock["versions"][0]["build_id"] = "1"
