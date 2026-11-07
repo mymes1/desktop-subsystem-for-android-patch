@@ -103,7 +103,7 @@ jobs:
         arch: ${{ fromJSON(needs.versions.outputs.arch) }}
     env:
       ANDROID_BRANCH: ${{ matrix.android }}
-      CCACHE_DIR: /home/runner/.cache/ccache
+      CCACHE_DIR: /tmp/dsa-ccache
     steps:
       - uses: actions/checkout@v4
 
@@ -129,7 +129,7 @@ jobs:
       - name: Restore the compiler cache
         uses: actions/cache/restore@v4
         with:
-          path: /home/runner/.cache/ccache
+          path: /tmp/dsa-ccache
           key: framework-ccache-${{ matrix.android }}-${{ matrix.arch }}-${{ hashFiles('dsa/guest/framework/framework-lock.json') }}-${{ github.run_id }}
           restore-keys: |
             framework-ccache-${{ matrix.android }}-${{ matrix.arch }}-${{ hashFiles('dsa/guest/framework/framework-lock.json') }}-
@@ -159,7 +159,7 @@ jobs:
         if: always() && steps.pins.outcome == 'success'
         uses: actions/cache/save@v4
         with:
-          path: /home/runner/.cache/ccache
+          path: /tmp/dsa-ccache
           key: framework-ccache-${{ matrix.android }}-${{ matrix.arch }}-${{ hashFiles('dsa/guest/framework/framework-lock.json') }}-${{ github.run_id }}
 
       - name: Collect the files the image takes

@@ -1228,6 +1228,14 @@ dexpreopt를 끈 뒤 `dex_bootjars`는 지나갔고, 분석이 다시 `GenerateB
 
 런타임 APEX에서 나오는 것은 묶음에 하나도 없다. 대상 파일에서 의존을 따라가도 `bionic/apex`의 모듈(`com.android.runtime`, 그 키와 인증서, `runtime-module-sdk`, `runtime-module-host-exports`, `bionic-linker-config`)에 닿지 않는다. 다른 `.bp`가 이 파일에서 모듈 형식을 가져오지도 않는다(`bionic/libc`의 `visibility`에 `//bionic/apex`가 있지만, Soong은 보이는 범위에 적힌 패키지가 있는지 묻지 않는다). 트리에 있는 APEX는 이것 하나다. 그래서 `system/sepolicy`와 APEX 키를 더하는 대신 이 파일을 트리에서 뺀다. 잠금에 `exclude`(체크아웃 뒤 지우는 파일)를 더했고, bionic이 `apex/Android.bp`를 뺀다.
 
+### 일곱 번째 실행(run 42399261076, android17)과 고친 것
+
+분석이 통과하고 컴파일이 시작되었다. 실패한 동작 1,663개 중 1,652개는 컴파일러 앞의 ccache가 `/home/runner/.cache/ccache/lock`을 만들지 못한 것이다(`Read-only file system`). soong_ui는 ninja를 nsjail 안에서 돌리고, 그 안에서 쓸 수 있는 곳은 `/tmp`와 `out/`뿐이다(`ui/build/sandbox_linux.go`의 `-B`). 그래서 캐시를 `/tmp/dsa-ccache`로 옮겼다. 워크플로의 캐시 복원과 저장도 같은 폴더를 쓰고, `build.sh`는 캐시가 그 두 곳 밖에 있으면 시작하지 않는다. 새 "Framework build" 워크플로도 같은 스크립트 구조라 함께 고쳤다(그쪽 `build.sh`에 남아 있던 `TEMPORARY_DISABLE_PATH_RESTRICTIONS`도 뺐다).
+
+나머지 11개는 Python 빌드 도구(`gen_asm`, `gensyscalls`, `gen_intrinsics` 등)의 `missing dependencies: libsqlite, aprotoc`다. Soong은 모든 `python_binary_host`에 실행기용 `libsqlite`와 protobuf 컴파일러 `aprotoc`를 의존으로 붙인다(`build/soong/python/python.go`). 쓰는 실행기는 `prebuilts/build-tools`의 프리빌트(`py3-launcher-autorun64`)인데, 이 파일의 `DT_NEEDED`는 glibc 라이브러리뿐이고 SQLite를 링크하지 않는다. 이 빌드의 Python 도구에는 `.proto` 소스가 없다. 진짜를 빌드하려면 `external/sqlite`가 호스트 ICU(`external/icu`)를, `external/protobuf`가 abseil을 끌고 온다. 그래서 제품 폴더에 대역을 둔다. 빈 호스트 공유 라이브러리 `libsqlite`와, 실행되면 이유를 말하고 실패하는 `aprotoc`(`sh_binary_host`)다.
+
+ccache 때문에 컴파일이 모두 실패해서, 진짜 컴파일 오류는 이번 로그에 아직 하나도 없다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
