@@ -296,6 +296,19 @@ impl SurfacePorts {
     /// waiting at most `wait` for that window host's hello. False when it cannot be sent;
     /// the surface must then go another way.
     pub fn send(&self, pid: u32, texture_id: u64, surface: &Surface, wait: Duration) -> bool {
+        self.send_raw(pid, texture_id, surface.as_raw(), wait)
+    }
+
+    /// [`SurfacePorts::send`] for a surface known by its `IOSurfaceRef`, which the caller
+    /// keeps alive through the call: the graphics renderer process gets each task window's
+    /// surface this way.
+    pub fn send_raw(
+        &self,
+        pid: u32,
+        texture_id: u64,
+        surface: *mut std::ffi::c_void,
+        wait: Duration,
+    ) -> bool {
         let deadline = Instant::now() + wait;
         let mut hosts = self.hosts.lock().unwrap_or_else(|e| e.into_inner());
         let remote = loop {
@@ -313,7 +326,7 @@ impl SurfacePorts {
                 .0;
         };
         drop(hosts);
-        let right = surface.mach_port();
+        let right = Surface::mach_port_of(surface);
         if right == MACH_PORT_NULL {
             return false;
         }

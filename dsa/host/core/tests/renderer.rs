@@ -84,7 +84,7 @@ fn fake_renderer(connector: &mut dyn Connector, life: Arc<Life>, pid: u32) {
     let asking = Arc::clone(&link);
     let asked_life = Arc::clone(&life);
     let presenter = thread::spawn(move || {
-        if let Some(target) = asking.target(3, 640, 480, true, 0) {
+        if let Some(target) = asking.target(3, 640, 480, true, Vec::new()) {
             asking.send(Body::FrameDone(FrameDone {
                 display_id: 3,
                 texture_id: target.texture_id,
@@ -156,7 +156,7 @@ impl RendererHandler for Window {
                 let given = self.book.lock().unwrap().give(
                     request.display_id,
                     Some(0x1234),
-                    request.held_texture,
+                    &request.held_textures,
                 );
                 let (texture_id, handle) = match given {
                     Given::New(id) => (id, 0x55),
@@ -290,28 +290,27 @@ fn nfr5_an_answer_reaches_the_thread_that_waits_and_a_late_one_is_dropped() {
 #[test]
 fn nfr5_a_texture_crosses_to_the_renderer_once_and_again_after_a_restart() {
     let mut book: TextureBook<isize> = TextureBook::new();
-    let first = book.give(3, Some(0x10), 0);
-    let Given::New(id) = first else {
+    let first = book.give(3, Some(0x10), &[]);
+    let Given::New(a) = first else {
         panic!("expected a new texture, got {first:?}");
     };
-    assert_eq!(book.give(3, Some(0x10), id), Given::Same(id));
-    // The answer that carried the texture came too late, so the renderer does not hold it:
-    // it goes over again.
-    let again = book.give(3, Some(0x10), 0);
-    assert!(
-        matches!(again, Given::New(other) if other != id),
-        "{again:?}"
-    );
-    let Given::New(id) = again else {
-        unreachable!()
+    assert_eq!(book.give(3, Some(0x10), &[a]), Given::Same(a));
+    // The display takes turns between two textures: each crosses once.
+    let second = book.give(3, Some(0x11), &[a]);
+    let Given::New(b) = second else {
+        panic!("expected a new texture, got {second:?}");
     };
-    // A resize makes another texture.
-    assert!(matches!(book.give(3, Some(0x20), id), Given::New(other) if other != id));
+    assert_eq!(book.give(3, Some(0x10), &[a, b]), Given::Same(a));
+    assert_eq!(book.give(3, Some(0x11), &[a, b]), Given::Same(b));
+    assert_eq!(book.texture_of(3), Some(b));
+    // The answer that carried a texture came too late, so the renderer does not hold it: it
+    // goes over again.
+    assert!(matches!(book.give(3, Some(0x10), &[b]), Given::New(other) if other != a));
     // A display without a window drops its frames.
-    assert_eq!(book.give(4, None, 0), Given::Drop);
+    assert_eq!(book.give(4, None, &[]), Given::Drop);
     // A new renderer gets every texture again.
     book.clear();
-    assert!(matches!(book.give(3, Some(0x20), 0), Given::New(_)));
+    assert!(matches!(book.give(3, Some(0x11), &[]), Given::New(_)));
 }
 
 #[test]
@@ -323,21 +322,26 @@ fn nfr5_the_renderer_lets_go_of_a_texture_only_after_it_has_the_next() {
         ..Target::default()
     };
     let open = |t: &Target| (t.handle != 0).then_some(t.handle as isize);
-    assert_eq!(held.take(3, &target(1, 0x40), open), (Some(0x40), None));
+    assert_eq!(held.take(3, &target(1, 0x40), open), (Some(0x40), vec![]));
     // The same texture again: no handle comes, and the one held is used.
-    assert_eq!(held.take(3, &target(1, 0), open), (Some(0x40), None));
-    // A new texture: the old handle is let go of after the new one is open.
+    assert_eq!(held.take(3, &target(1, 0), open), (Some(0x40), vec![]));
+    assert_eq!(held.held(3), vec![1]);
+    // Textures beyond what a display keeps go, oldest first, once the newest is open.
+    for id in 2..=4 {
+        held.take(3, &target(id, 0x40 + id), open);
+    }
     assert_eq!(
-        held.take(3, &target(2, 0x44), open),
-        (Some(0x44), Some(0x40))
+        held.take(3, &target(5, 0x45), open),
+        (Some(0x45), vec![0x40])
     );
-    // Dropped: the held one goes.
+    assert_eq!(held.current(3), Some((5, 0x45)));
+    // Dropped: every texture held goes.
     let dropped = Target {
         drop: true,
         ..Target::default()
     };
-    assert_eq!(held.take(3, &dropped, open), (None, Some(0x44)));
-    assert_eq!(held.forget(3), None);
+    assert_eq!(held.take(3, &dropped, open).1.len(), 4);
+    assert!(held.forget(3).is_empty());
 }
 
 #[test]

@@ -73,14 +73,14 @@ impl RemoteSink {
         }
     }
 
-    /// No window shows `display_id` now: its texture's handle goes.
+    /// No window shows `display_id` now: its textures' handles go.
     pub fn forget(&self, display_id: u32) {
         let released = self
             .held
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .forget(display_id);
-        if let Some(handle) = released {
+        for handle in released {
             close(handle);
         }
     }
@@ -92,8 +92,7 @@ impl DisplaySink for RemoteSink {
             .held
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .current(display_id)
-            .map_or(0, |(texture_id, _)| texture_id);
+            .held(display_id);
         // No answer in time: this frame is dropped, and the texture held stays for the next.
         let target = self.link.target(display_id, width, height, true, held)?;
         let (write, release) = self.held.lock().unwrap_or_else(|e| e.into_inner()).take(
@@ -101,7 +100,7 @@ impl DisplaySink for RemoteSink {
             &target,
             |target| (target.handle != 0).then_some(target.handle as usize as isize),
         );
-        if let Some(old) = release {
+        for old in release {
             close(old);
         }
         write

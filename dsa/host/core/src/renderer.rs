@@ -170,7 +170,7 @@ pub fn describe_exit_code(code: i64) -> String {
     };
     match named {
         Some(what) => format!("{what} (exit code 0x{status:08X})"),
-        None if code > 255 || code < 0 => format!("it exited with code 0x{status:08X}"),
+        None if !(0..=255).contains(&code) => format!("it exited with code 0x{status:08X}"),
         None => format!("it exited with code {code}"),
     }
 }
@@ -669,12 +669,17 @@ pub fn spawn_supervisor(
         .spawn(move || supervise(&mut *launcher, &*handler, &build, &stop))
 }
 
-/// Which texture each display was last given, on the window manager's side: a texture
-/// crosses to the renderer once, and a frame into the same texture names it by its ID.
-/// `H` is the platform's texture handle in the window manager's process.
+/// How many textures one display keeps on each side: a display may take turns between two
+/// (one shown while the next is written), and a resize brings new ones.
+pub const TEXTURES_PER_DISPLAY: usize = 4;
+
+/// Which textures each display was given, on the window manager's side: a texture crosses
+/// to the renderer once, and a frame into the same texture names it by its ID. `H` is the
+/// platform's texture handle in the window manager's process.
 #[derive(Debug)]
 pub struct TextureBook<H> {
-    given: HashMap<u32, (H, u64)>,
+    given: HashMap<u32, Vec<(H, u64)>>,
+    last: HashMap<u32, u64>,
     next: u64,
 }
 
@@ -682,6 +687,7 @@ impl<H> Default for TextureBook<H> {
     fn default() -> Self {
         TextureBook {
             given: HashMap::new(),
+            last: HashMap::new(),
             next: 1,
         }
     }
@@ -692,9 +698,9 @@ impl<H> Default for TextureBook<H> {
 pub enum Given {
     /// No window shows the display: the frame is dropped.
     Drop,
-    /// The texture the display was given before, by its ID.
+    /// A texture the renderer holds, by its ID.
     Same(u64),
-    /// A texture the renderer has not had: it must be handed over, with this new ID.
+    /// A texture the renderer does not hold: it must be handed over, with this new ID.
     New(u64),
 }
 
@@ -703,40 +709,48 @@ impl<H: PartialEq + Copy> TextureBook<H> {
         TextureBook::default()
     }
 
-    /// `display_id`'s next frame goes into `handle` (`None`: nowhere). `held` is the
-    /// texture the renderer says it holds for the display: when it is not the one given last,
-    /// the texture goes over again, under a new ID.
-    pub fn give(&mut self, display_id: u32, handle: Option<H>, held: u64) -> Given {
+    /// `display_id`'s next frame goes into `handle` (`None`: nowhere). `held` are the
+    /// textures the renderer says it holds for the display: one it does not hold goes over
+    /// again, under a new ID.
+    pub fn give(&mut self, display_id: u32, handle: Option<H>, held: &[u64]) -> Given {
         let Some(handle) = handle else {
-            self.given.remove(&display_id);
+            self.withdraw(display_id);
             return Given::Drop;
         };
-        if let Some((given, texture_id)) = self.given.get(&display_id) {
-            if *given == handle && *texture_id == held {
-                return Given::Same(*texture_id);
+        let list = self.given.entry(display_id).or_default();
+        if let Some(at) = list.iter().position(|(given, _)| *given == handle) {
+            let texture_id = list[at].1;
+            if held.contains(&texture_id) {
+                self.last.insert(display_id, texture_id);
+                return Given::Same(texture_id);
             }
+            list.remove(at);
         }
         let texture_id = self.next;
         self.next += 1;
-        self.given.insert(display_id, (handle, texture_id));
+        list.push((handle, texture_id));
+        if list.len() > TEXTURES_PER_DISPLAY {
+            list.remove(0);
+        }
+        self.last.insert(display_id, texture_id);
         Given::New(texture_id)
     }
 
-    /// The texture `display_id` was given, by its ID, when it still has it.
+    /// The texture `display_id`'s last frame was given, by its ID.
     pub fn texture_of(&self, display_id: u32) -> Option<u64> {
-        self.given
-            .get(&display_id)
-            .map(|(_, texture_id)| *texture_id)
+        self.last.get(&display_id).copied()
     }
 
-    /// The handover of `display_id`'s new texture failed: it is not given.
+    /// `display_id` has no textures now (its window closed, or a handover failed).
     pub fn withdraw(&mut self, display_id: u32) {
         self.given.remove(&display_id);
+        self.last.remove(&display_id);
     }
 
     /// A new renderer has none of the textures: each goes over again with its next frame.
     pub fn clear(&mut self) {
         self.given.clear();
+        self.last.clear();
     }
 }
 
@@ -744,13 +758,15 @@ impl<H: PartialEq + Copy> TextureBook<H> {
 /// texture as the renderer opened it (a handle, a surface).
 #[derive(Debug)]
 pub struct HeldTargets<H> {
-    held: HashMap<u32, (u64, H)>,
+    held: HashMap<u32, Vec<(u64, H)>>,
+    last: HashMap<u32, u64>,
 }
 
 impl<H> Default for HeldTargets<H> {
     fn default() -> Self {
         HeldTargets {
             held: HashMap::new(),
+            last: HashMap::new(),
         }
     }
 }
@@ -760,49 +776,71 @@ impl<H: Copy> HeldTargets<H> {
         HeldTargets::default()
     }
 
+    /// The IDs of the textures held for `display_id`, for the next request.
+    pub fn held(&self, display_id: u32) -> Vec<u64> {
+        self.held
+            .get(&display_id)
+            .map(|list| list.iter().map(|(texture_id, _)| *texture_id).collect())
+            .unwrap_or_default()
+    }
+
     /// Takes the window manager's answer for `display_id`'s next frame. `open` opens a
-    /// texture the renderer does not hold yet. Returns the texture to write into, if any,
-    /// and the one to let go of now, if any (after the new one was opened, so the two never
-    /// share a handle value).
+    /// texture the renderer does not hold yet. Returns the texture to write into, if any, and
+    /// those to let go of now (after the new one was opened, so two never share a handle
+    /// value).
     pub fn take(
         &mut self,
         display_id: u32,
         target: &Target,
         open: impl FnOnce(&Target) -> Option<H>,
-    ) -> (Option<H>, Option<H>) {
+    ) -> (Option<H>, Vec<H>) {
         if target.drop {
-            return (None, self.held.remove(&display_id).map(|(_, held)| held));
+            return (None, self.forget(display_id));
         }
-        if let Some((texture_id, held)) = self.held.get(&display_id) {
-            if *texture_id == target.texture_id {
-                return (Some(*held), None);
-            }
+        let list = self.held.entry(display_id).or_default();
+        if let Some((_, held)) = list.iter().find(|(id, _)| *id == target.texture_id) {
+            let held = *held;
+            self.last.insert(display_id, target.texture_id);
+            return (Some(held), Vec::new());
         }
-        match open(target) {
-            Some(opened) => {
-                let old = self
-                    .held
-                    .insert(display_id, (target.texture_id, opened))
-                    .map(|(_, held)| held);
-                (Some(opened), old)
-            }
-            None => (None, self.held.remove(&display_id).map(|(_, held)| held)),
+        let Some(opened) = open(target) else {
+            return (None, Vec::new());
+        };
+        list.push((target.texture_id, opened));
+        let mut released = Vec::new();
+        while list.len() > TEXTURES_PER_DISPLAY {
+            released.push(list.remove(0).1);
         }
+        self.last.insert(display_id, target.texture_id);
+        (Some(opened), released)
     }
 
-    /// The texture `display_id`'s frames go into now, with its ID.
+    /// The texture `display_id`'s last frame went into, with its ID.
     pub fn current(&self, display_id: u32) -> Option<(u64, H)> {
-        self.held.get(&display_id).copied()
+        let last = *self.last.get(&display_id)?;
+        self.held
+            .get(&display_id)?
+            .iter()
+            .find(|(texture_id, _)| *texture_id == last)
+            .copied()
     }
 
-    /// `display_id` is shown nowhere now: its texture, to let go of.
-    pub fn forget(&mut self, display_id: u32) -> Option<H> {
-        self.held.remove(&display_id).map(|(_, held)| held)
+    /// `display_id` is shown nowhere now: its textures, to let go of.
+    pub fn forget(&mut self, display_id: u32) -> Vec<H> {
+        self.last.remove(&display_id);
+        self.held
+            .remove(&display_id)
+            .map(|list| list.into_iter().map(|(_, held)| held).collect())
+            .unwrap_or_default()
     }
 
     /// Every texture held, to let go of.
     pub fn drain(&mut self) -> Vec<H> {
-        self.held.drain().map(|(_, (_, held))| held).collect()
+        self.last.clear();
+        self.held
+            .drain()
+            .flat_map(|(_, list)| list.into_iter().map(|(_, held)| held))
+            .collect()
     }
 }
 
@@ -840,14 +878,14 @@ impl WindowManagerLink {
     /// Asks where display `display_id`'s new frame of `width` x `height` goes, and waits for
     /// the answer. `None` when the window manager did not answer in time or is gone; the
     /// frame is then dropped.
-    /// `held` is the texture the renderer holds for the display (0 for none).
+    /// `held` are the textures the renderer holds for the display.
     pub fn target(
         &self,
         display_id: u32,
         width: u32,
         height: u32,
         exact: bool,
-        held: u64,
+        held: Vec<u64>,
     ) -> Option<Target> {
         let request = self.targets.begin();
         let asked = self.send(Body::TargetRequest(TargetRequest {
@@ -856,7 +894,7 @@ impl WindowManagerLink {
             width,
             height,
             exact,
-            held_texture: held,
+            held_textures: held,
         }));
         if !asked {
             return None;

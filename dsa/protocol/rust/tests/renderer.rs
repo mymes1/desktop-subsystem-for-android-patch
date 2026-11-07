@@ -147,7 +147,7 @@ fn nfr5_a_frames_request_its_target_and_its_completion_survive_the_wire() {
         width: 1920,
         height: 1080,
         exact: true,
-        held_texture: 11,
+        held_textures: vec![11, 12],
     });
     assert_eq!(decode_body(&encode_body(request.clone())).unwrap(), request);
     let target = Body::Target(Target {

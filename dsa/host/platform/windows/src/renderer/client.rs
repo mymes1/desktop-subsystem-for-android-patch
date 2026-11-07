@@ -425,7 +425,7 @@ impl RendererClient {
             let mut state = self.lock();
             match state
                 .book
-                .give(request.display_id, handle, request.held_texture)
+                .give(request.display_id, handle, &request.held_textures)
             {
                 Given::Drop => {}
                 Given::Same(texture_id) => {

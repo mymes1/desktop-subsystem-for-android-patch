@@ -104,6 +104,19 @@ impl Surface {
         unsafe { IOSurfaceCreateMachPort(self.surface) }
     }
 
+    /// A send right to the surface `raw` names (an `IOSurfaceRef` the caller holds), for
+    /// another process. The caller owns the right.
+    pub fn mach_port_of(raw: *mut c_void) -> u32 {
+        // SAFETY: a live IOSurfaceRef, as the caller promises.
+        unsafe { IOSurfaceCreateMachPort(raw) }
+    }
+
+    /// The ID of the surface `raw` names, which another process finds a global surface by.
+    pub fn id_of(raw: *mut c_void) -> u32 {
+        // SAFETY: a live IOSurfaceRef, as the caller promises.
+        unsafe { IOSurfaceGetID(raw) }
+    }
+
     /// The `IOSurfaceRef`, valid while this value lives.
     pub fn as_raw(&self) -> *mut c_void {
         self.surface
