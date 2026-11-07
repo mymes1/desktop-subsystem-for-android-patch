@@ -437,12 +437,12 @@ jobs:
             }
             foreach ($theme in 'light', 'dark') {
               Set-AppTheme -Dark:($theme -eq 'dark')
-              $app = Start-Process $exe -ArgumentList '--lang', 'en-US' -PassThru
+              $app = Start-Process $exe -ArgumentList '--page', 'network', '--lang', 'en-US' -PassThru
               $window = Wait-ProcessWindow $app.Id 90
-              if (-not $window) { throw "DSA Settings showed no window within 90 seconds" }
+              if (-not $window) { throw "DSA Settings showed no window for the Network page within 90 seconds" }
               Start-Sleep -Seconds 5
-              if (-not (Select-Named $window 'Network')) { throw "the settings app has no Network page to select" }
-              Start-Sleep -Seconds 3
+              # An unknown page name opens General, so this card's title proves the page opened.
+              Assert-RowsShown $window "Android's network"
               Save-WindowScreen $window "$PWD\screens\settings-$theme-network.png"
               Stop-Process -Id $app.Id -Force
               $app.WaitForExit(10000) | Out-Null
