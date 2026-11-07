@@ -4140,5 +4140,111 @@ class DefaultArmTranslationTests(unittest.TestCase):
                 make_image.default_arm_translation(package, "x86_64", out)
 
 
+class FrameworkImageTests(unittest.TestCase):
+    """The patched SurfaceFlinger, libhwui and libEGL from the Framework build, which recover
+    from a GPU device loss, in place of the published build's own."""
+
+    @staticmethod
+    def _elf(machine, body):
+        header = bytearray(64)
+        header[:4] = b"\x7fELF"
+        header[4] = 2
+        header[5] = 1
+        header[18:20] = machine.to_bytes(2, "little")
+        return bytes(header) + body
+
+    def _framework(self, root, build_id="16373615", arch="x86_64", machine=62):
+        folder = root / "framework"
+        files = {}
+        for name in make_image.FRAMEWORK_FILES:
+            data = self._elf(machine, b"patched " + name.encode())
+            (folder / name).parent.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_bytes(data)
+            files[name] = {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        (folder / "framework.json").write_text(json.dumps({
+            "android": "android17", "android_major": 17, "build_id": build_id, "release": "cp2a",
+            "arch": arch, "version": "17-0123456789ab", "files": files}))
+        return folder
+
+    def _source(self, root, names=None):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type surfaceflinger)\n")
+            archive.writestr("SYSTEM/build.prop", "ro.debuggable=1\n")
+            for name in make_image.FRAMEWORK_FILES if names is None else names:
+                archive.writestr(name, self._elf(62, b"published " + name.encode()))
+        return source
+
+    def test_nfr5_the_framework_replaces_surfaceflinger_libhwui_and_libegl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payloads, description = make_image.checked_framework(self._framework(root), "16373615", 17, "x86_64")
+            self.assertEqual(sorted(payloads), sorted(["SYSTEM/bin/surfaceflinger", "SYSTEM/lib64/libhwui.so",
+                                                       "SYSTEM/lib64/libEGL.so"]))
+            modified = root / "modified.zip"
+            make_image.modify(self._source(root), modified, framework=payloads)
+            with zipfile.ZipFile(modified) as archive:
+                for name, data in payloads.items():
+                    self.assertEqual(archive.read(name), data)
+                policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertIn(make_image.GPU_RESET_RULE, policy)
+            entry = make_image.framework_entry(description)
+            self.assertEqual(entry["build_id"], "16373615")
+            self.assertEqual(entry["files"], {n: hashlib.sha256(d).hexdigest() for n, d in payloads.items()})
+
+    def test_nfr5_without_the_framework_the_image_keeps_the_builds_files_and_policy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            modified = root / "modified.zip"
+            make_image.modify(self._source(root), modified)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertIn(b"published", archive.read("SYSTEM/lib64/libhwui.so"))
+                policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertNotIn(make_image.GPU_RESET_RULE, policy)
+
+    def test_nfr5_the_framework_must_replace_files_the_build_has(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payloads, _ = make_image.checked_framework(self._framework(root), "16373615", 17, "x86_64")
+            source = self._source(root, names=["SYSTEM/bin/surfaceflinger"])
+            with self.assertRaisesRegex(ValueError, "libEGL.so, SYSTEM/lib64/libhwui.so, which the patched"):
+                make_image.modify(source, root / "modified.zip", framework=payloads)
+
+    def test_nfr5_a_framework_built_for_another_build_or_architecture_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(SystemExit, "image is made from build 16373615"):
+                make_image.checked_framework(self._framework(root, build_id="1"), "16373615", 17, "x86_64")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(SystemExit, "built for arm64, not x86_64"):
+                make_image.checked_framework(self._framework(root, arch="arm64", machine=183),
+                                             "16373615", 17, "x86_64")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = self._framework(root)
+            (folder / "SYSTEM/lib64/libhwui.so").write_bytes(self._elf(62, b"something else"))
+            with self.assertRaisesRegex(SystemExit, "libhwui.so is not the file framework.json describes"):
+                make_image.checked_framework(folder, "16373615", 17, "x86_64")
+
+    def test_nfr5_check_image_finds_the_framework_build_files_in_the_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payloads, description = make_image.checked_framework(self._framework(root), "16373615", 17, "x86_64")
+            modified = root / "modified.zip"
+            make_image.modify(self._source(root), modified, framework=payloads)
+            manifest = {"arch": "x86_64", "source": {"build_id": "16373615"},
+                        "framework": make_image.framework_entry(description)}
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(make_image.check_framework(manifest, archive.namelist(), archive.read), [])
+            # The build's own files, or a policy without the rule, are found.
+            with zipfile.ZipFile(self._source(root)) as archive:
+                problems = make_image.check_framework(manifest, archive.namelist(), archive.read)
+            self.assertEqual(len([p for p in problems if "not the framework build's file" in p]), 3)
+            self.assertTrue(any("never hear of a GPU reset" in p for p in problems), problems)
+            # An image without a framework has nothing to check.
+            self.assertEqual(make_image.check_framework({"arch": "x86_64"}, [], None), [])
+
+
 if __name__ == "__main__":
     unittest.main()

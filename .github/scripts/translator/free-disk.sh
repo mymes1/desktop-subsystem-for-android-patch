@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Makes room on a GitHub-hosted Ubuntu runner for the translator build, and picks where the
-# tree goes. The runner's image carries SDKs and toolchains the build never uses (the
-# build brings its own Clang, JDK and Go), so they go. It prints the free space before and
-# after, adds swap for the compiler's peaks, and writes DSA_TRANSLATOR_WORK (a folder on
-# the disk with the most room) to $GITHUB_ENV.
+# Makes room on a GitHub-hosted Ubuntu runner for the translator build, or another AOSP
+# build from a reduced tree (the framework build), and picks where the tree goes. The
+# runner's image carries SDKs and toolchains the build never uses (the build brings its own
+# Clang, JDK and Go), so they go. It prints the free space before and after, adds swap for the
+# compiler's peaks, and writes DSA_TRANSLATOR_WORK (a folder on the disk with the most room,
+# named after the build: free-disk.sh [name], dsa-translator by default) to $GITHUB_ENV.
 set -euo pipefail
+name="${1:-dsa-translator}"
 
 echo "::group::Disk before"
 df -h / /mnt 2>/dev/null || df -h /
@@ -32,10 +34,10 @@ fi
 # The tree and its output go on the disk with more room; swap goes on the other one when
 # there is one, so that the two never compete.
 if (( mnt_free > root_free )); then
-  work=/mnt/dsa-translator
+  work="/mnt/$name"
   swap_dir="$HOME"
 else
-  work="$HOME/dsa-translator"
+  work="$HOME/$name"
   swap_dir=/mnt
   (( mnt_free > 0 )) || swap_dir="$HOME"
 fi

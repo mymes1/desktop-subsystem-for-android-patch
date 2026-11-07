@@ -9,7 +9,9 @@ trace script is missing, when the agent is missing or not signed with the platfo
 Settings still has the preferences or code that crash it without Bluetooth, when a system
 app users open is not compiled for the guest's boot image and its own dex, when the files
 do not match image.json, when an arm64 image carries an ARM translation package or an x86_64
-image's default one does not match image.json or would be refused by the host, when the kernel or a DSA guest binary is built for another
+image's default one does not match image.json or would be refused by the host, when the patched
+framework image.json names (SurfaceFlinger, libhwui and libEGL from the Framework build) is not
+in the image as built, when the kernel or a DSA guest binary is built for another
 architecture than the image's, when the ramdisk lacks the directories and links Android's
 first stage init needs, when the network adapter is not shown to Android as Wi-Fi with its
 address and DNS servers from DHCP, or when the kernel command line, a mount table or an init script
@@ -338,6 +340,8 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     # The default translator: in an x86_64 image's system partition when image.json describes
     # one, and nowhere in an arm64 image.
     problems += make_image.check_builtin_arm_translation(manifest, names, z.read)
+    # The patched framework: the Framework build's files, for this build and architecture.
+    problems += make_image.check_framework(manifest, names, z.read)
     # The ABIs translation adds come after the guest's own, so the Play Store hands out the
     # x86_64 builds of Google Play services and the other system apps, not their ARM builds.
     if "SYSTEM/etc/dsa/arm-translation-on.prop" in names:
