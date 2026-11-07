@@ -65,7 +65,9 @@ check vector .icon.background.color '#FFFFFFFF'
 check vector .icon.foreground.kind vector
 check vector '.icon.foreground.paths | length' 2
 check vector '.icon.foreground.paths[0].fill' '#FFDB4437'
-check vector '.icon.foreground.paths[0].transform[4:6] | join(",")' 30,30
+# The translation is compared as numbers: jq keeps the 30.0 dsa writes for a float, so a
+# joined string would test how the number is spelled rather than its value.
+check vector '.icon.foreground.paths[0].transform[4:6] == [30, 30]' true
 
 if [ "$(fingerprint notes)" = "$(fingerprint notes-other)" ]; then
   echo "::error::the two keys made the same signer"
