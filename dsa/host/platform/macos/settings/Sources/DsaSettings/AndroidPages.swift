@@ -447,6 +447,22 @@ struct AdvancedPage: View {
     }
 }
 
+/// One log line as columns: time, PID, TID, priority and the body. The app's font is
+/// proportional, so the fields have fixed widths to line up; the body takes the rest.
+struct LogRow: View {
+    let line: LogLine
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(line.timeColumn).frame(width: 164, alignment: .leading)
+            Text(line.pidColumn).frame(width: 56, alignment: .trailing)
+            Text(line.tidColumn).frame(width: 56, alignment: .trailing)
+            Text(line.priorityColumn).frame(width: 32, alignment: .center)
+            Text(line.bodyColumn).padding(.leading, 6)
+        }
+    }
+}
+
 /// Android log: Android's log as it comes, filtered by priority and text, which can be paused,
 /// and saving the diagnostics.
 struct LogsPage: View {
@@ -476,7 +492,7 @@ struct LogsPage: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(vm.lines) { line in
-                            Text(line.text)
+                            LogRow(line: line)
                                 .foregroundStyle(color(line.priority))
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
