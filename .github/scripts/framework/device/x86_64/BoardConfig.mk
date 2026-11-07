@@ -6,3 +6,7 @@ TARGET_ARCH_VARIANT := silvermont
 
 TARGET_NO_KERNEL := true
 TARGET_NO_BOOTLOADER := true
+
+# Nothing here is Java, and the tree has no ART to compile with: with dexpreopt on, Soong's
+# boot image step looks for dex2oat and stops the whole analysis without it.
+WITH_DEXPREOPT := false

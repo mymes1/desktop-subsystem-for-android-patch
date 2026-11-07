@@ -1410,7 +1410,7 @@ R16의 번역기 빌드와 같은 방법이다. 받기 스크립트(`fetch-sourc
   - AIDL/HIDL HAL(`hardware/interfaces` 29개 폴더 등), aidl, hidl-gen, sysprop, aconfig와 그 Rust crate 약 96개.
   - Rust 툴체인(16은 1.88.0, 17은 1.93.1)이 기기와 호스트 모두에 필요하다. Java는 빌드하지 않는다.
 - 제품: `module_common.mk`와 `core_64_bit_only.mk`에서 시작한 `dsa_framework`. 보드는 Cuttlefish의 `vsoc_x86_64_only`(silvermont)와 `vsoc_arm64_only`(armv8-a, cortex-a53)를 따른다. 세 모듈의 Android.bp는 제품 변수와 Soong config 변수를 읽지 않으므로, 플래그는 빌드 자신의 릴리스 설정이 정한다. `lunch dsa_framework-<release>-userdebug`.
-- 빌드(`.github/scripts/framework/build.sh`): 패치를 적용하고(`apply-patches.py`, 정확히 적용되지 않으면 멈춘다) 세 설치 경로만 빌드한다. 환경 변수와 ccache는 번역기 빌드와 같다. ccache는 빌드마다 2 GB까지 GitHub 캐시에 둔다(넷이면 8 GB).
+- 빌드(`.github/scripts/framework/build.sh`): 패치를 적용하고(`apply-patches.py`, 정확히 적용되지 않으면 멈춘다) 세 설치 경로만 빌드한다. 환경 변수와 ccache는 번역기 빌드와 같다. 번역기 빌드의 실행에서 배운 대로 unbundled 빌드(`TARGET_BUILD_UNBUNDLED`)로 하고, dexpreopt를 끄고, 이 빌드가 쓰지 않으면서 트리에 없는 프로젝트를 찾는 APEX와 boot jar 모듈의 Android.bp(`bionic/apex`, `art/build`의 `apex`, `boot`, `sdk`, 전원 HAL의 APEX, `libapexsupport`의 시험)를 체크아웃 뒤 지운다(잠금의 `exclude`). ccache는 빌드마다 2 GB까지 GitHub 캐시에 둔다(넷이면 8 GB).
 - 워크플로 `framework.yml`("Framework build"): 먼저 잠금과 매니페스트를 대조하고, 패치가 받은 소스에 적용되는지 패치가 바꾸는 폴더만 받아 확인한다. 그다음 Android 판 2개와 아키텍처 2개로 4개 작업을 돌려 `framework-<android>-<arch>-<version>` artifact를 남긴다. `<version>`은 Android 판과 잠금과 패치의 해시다. 이미지 배포는 develop에서 성공한 가장 최근 실행 중 지금의 version을 가진 artifact를 찾아 쓴다.
 
 ### 단계별 예상 (실측 전, 작업 하나)

@@ -24,12 +24,20 @@
             "libdexfile",
             "libnativebridge",
             "libnativeloader"
+          ],
+          "exclude": [
+            "build/apex/Android.bp",
+            "build/boot/Android.bp",
+            "build/sdk/Android.bp"
           ]
         },
         {
           "path": "bionic",
           "url": "https://android.googlesource.com/platform/bionic",
-          "commit": "f22516cbc67e81c13cf943ce02f01b8929a98726"
+          "commit": "f22516cbc67e81c13cf943ce02f01b8929a98726",
+          "exclude": [
+            "apex/Android.bp"
+          ]
         },
         {
           "path": "build/blueprint",
@@ -902,6 +910,9 @@
             "power/1.2",
             "power/1.3",
             "power/aidl"
+          ],
+          "exclude": [
+            "power/aidl/default/apex/Android.bp"
           ]
         },
         {
@@ -1000,6 +1011,9 @@
           "cone": [
             "libs/libapexsupport",
             "proto"
+          ],
+          "exclude": [
+            "libs/libapexsupport/tests/Android.bp"
           ]
         },
         {
@@ -1208,12 +1222,20 @@
             "libdexfile",
             "libnativebridge",
             "libnativeloader"
+          ],
+          "exclude": [
+            "build/apex/Android.bp",
+            "build/boot/Android.bp",
+            "build/sdk/Android.bp"
           ]
         },
         {
           "path": "bionic",
           "url": "https://android.googlesource.com/platform/bionic",
-          "commit": "06356e41c5ed7b12220b24c05ba4fdb873b126a7"
+          "commit": "06356e41c5ed7b12220b24c05ba4fdb873b126a7",
+          "exclude": [
+            "apex/Android.bp"
+          ]
         },
         {
           "path": "build/blueprint",
@@ -2087,6 +2109,9 @@
             "power/1.2",
             "power/1.3",
             "power/aidl"
+          ],
+          "exclude": [
+            "power/aidl/default/apex/Android.bp"
           ]
         },
         {
@@ -2184,6 +2209,9 @@
           "cone": [
             "libs/libapexsupport",
             "proto"
+          ],
+          "exclude": [
+            "libs/libapexsupport/tests/Android.bp"
           ]
         },
         {

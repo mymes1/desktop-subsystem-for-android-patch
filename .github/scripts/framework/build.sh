@@ -54,6 +54,12 @@ export SKIP_ABI_CHECKS=true
 export DISABLE_ARTIFACT_PATH_REQUIREMENTS=true
 export TEMPORARY_DISABLE_PATH_RESTRICTIONS=true
 export BUILD_USERNAME=dsa-framework BUILD_HOSTNAME=github-actions
+# An unbundled build, as the translator build learned: Soong then makes no device (its
+# generated android_device and partition images stop the analysis of a partial tree), no boot
+# image and no dist artifacts. Modules still install into out/target/product/<device>.
+export TARGET_BUILD_UNBUNDLED=true
+# The tree has no framework jars, so there are no hidden API lists to make for boot jars.
+export UNSAFE_DISABLE_HIDDENAPI_FLAGS=true
 if command -v ccache >/dev/null; then
   export CC_WRAPPER="$(command -v ccache)"
   # soong_ui hands ninja only the environment it knows; ccache needs its own.

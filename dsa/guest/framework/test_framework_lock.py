@@ -72,6 +72,21 @@ class LockTests(unittest.TestCase):
         self.assertEqual(pins["android16"], ("bp4a", "clang-r563880c"))
         self.assertEqual(pins["android17"], ("cp2a", "clang-r584948b"))
 
+    def test_nfr5_apex_and_boot_jar_modules_the_build_never_uses_are_left_out(self):
+        # Their Android.bp files need projects the tree leaves out (system/sepolicy's APEX file
+        # contexts, the boot jars), and stopped the translator build's analysis; nothing the
+        # framework build makes comes from them.
+        wanted = {
+            "bionic": ["apex/Android.bp"],
+            "art": ["build/apex/Android.bp", "build/boot/Android.bp", "build/sdk/Android.bp"],
+            "hardware/interfaces": ["power/aidl/default/apex/Android.bp"],
+            "system/apex": ["libs/libapexsupport/tests/Android.bp"],
+        }
+        for version in self.lock["versions"]:
+            projects = {p["path"]: p for p in version["projects"]}
+            for path, files in wanted.items():
+                self.assertEqual(projects[path].get("exclude"), files, f"{version['android']} {path}")
+
     def test_nfr5_a_lock_for_another_build_than_the_image_is_refused(self):
         lock = copy.deepcopy(self.lock)
         lock["versions"][0]["build_id"] = "1"
