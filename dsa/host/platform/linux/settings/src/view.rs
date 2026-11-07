@@ -623,6 +623,24 @@ impl LogView {
     }
 }
 
+/// What copying log lines puts on the clipboard: each whole line as the log prints it, one
+/// per line. `shown` is what the page shows and `selected` the positions in it the user
+/// picked, in any order; the lines keep the page's order.
+pub fn log_copy_text(shown: &[crate::model::LogLine], selected: &[usize]) -> String {
+    let mut picked: Vec<usize> = selected
+        .iter()
+        .copied()
+        .filter(|&i| i < shown.len())
+        .collect();
+    picked.sort_unstable();
+    picked.dedup();
+    picked
+        .iter()
+        .map(|&i| shown[i].text())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// The user's DSA logs: the window manager's and the app windows'.
 pub fn user_log_folder() -> std::path::PathBuf {
     let data = std::env::var_os("XDG_DATA_HOME")
