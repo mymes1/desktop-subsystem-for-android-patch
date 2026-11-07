@@ -421,6 +421,8 @@ pub fn create_user_android(
     let session_config = config.session_config();
     let handshake = ControlHandshake::new(build, session_config.connect_timeout);
     let session = Session::new(launcher, Box::new(listener), handshake, session_config);
+    // The PC's name becomes the guest's device name.
+    session.set_device_name_source(Arc::new(move || boot_identity.device_name()));
     // Developer mode's bridge reaches the guest's adbd over a Hyper-V socket to its vsock port.
     session.set_adb_connect(Arc::new(|vm_id: &str| {
         let vm: Guid = vm_id.parse().map_err(|_| {

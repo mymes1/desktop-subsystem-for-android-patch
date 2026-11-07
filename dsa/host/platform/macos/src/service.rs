@@ -503,6 +503,8 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
         session_config,
     );
     session.serve_log_port(Box::new(log), &shared.build);
+    // The Mac's name becomes the guest's device name.
+    session.set_device_name_source(Arc::new(move || boot_identity.device_name()));
     session.serve_file_shares(Box::new(share), Arc::new(user_folders()));
     let dial = |port: u32| {
         let slot = slot.clone();

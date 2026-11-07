@@ -4802,6 +4802,45 @@ fn fr30_the_hosts_system_settings_reach_the_agent_when_it_connects_and_on_each_c
 }
 
 #[test]
+fn fr17_the_agent_is_given_the_computers_name_as_the_device_name_each_time_it_connects() {
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.windows_shown(true).unwrap();
+    session.set_device_name_source(std::sync::Arc::new(|| Some("BREW-BOOK".to_string())));
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    assert_eq!(
+        next_body(&mut agent),
+        Body::DeviceName(dsa_protocol::control::DeviceName {
+            name: "BREW-BOOK".into()
+        })
+    );
+}
+
+#[test]
+fn fr17_without_a_device_name_the_agent_is_told_nothing_of_it() {
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.windows_shown(true).unwrap();
+    session.set_device_name_source(std::sync::Arc::new(|| None));
+    session.set_system_settings(seoul_settings(true));
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    // The first thing the agent hears is the system settings; no device name comes after.
+    assert_eq!(
+        next_body(&mut agent),
+        Body::SystemSettings(seoul_settings(true).to_control())
+    );
+    session.set_system_settings(seoul_settings(false));
+    assert_eq!(
+        next_body(&mut agent),
+        Body::SystemSettings(seoul_settings(false).to_control())
+    );
+}
+
+#[test]
 fn fr30_a_controller_connected_before_the_guest_reaches_it_and_its_rumble_comes_back() {
     use dsa_host_core::gamepads::{
         buttons, GamepadEvent, GamepadInfo, GamepadRumble, GamepadState,
