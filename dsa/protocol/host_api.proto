@@ -871,6 +871,11 @@ message PointerEvent {
   // positive `scroll_x` scrolls right.
   float scroll_x = 9;
   float scroll_y = 10;
+  // A pen's tilt, in degrees from upright, from -90 to 90: positive `tilt_x` leans its top
+  // toward the right of the screen, positive `tilt_y` toward the bottom (toward the user).
+  // 0 for a pointer that does not measure it.
+  float tilt_x = 11;
+  float tilt_y = 12;
 }
 
 // What a key did.

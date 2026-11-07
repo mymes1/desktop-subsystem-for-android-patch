@@ -6,7 +6,7 @@ use dsa_host_core::input::{
     buttons, ContactPhase, MouseButton, PointerMapper, PointerTool, WindowGeometry, WindowInput,
 };
 use dsa_host_windows::app_window::pointer::{
-    contact_phase, made_from_touch_or_pen, message_point, mouse_button, pen_input,
+    contact_phase, made_from_touch_or_pen, message_point, mouse_button, pen_input, pen_tilt,
     pen_tool_and_buttons, pressure, touch_input, wheel_notches,
 };
 use dsa_protocol::control;
@@ -16,10 +16,11 @@ use windows_sys::Win32::UI::Input::Pointer::{
     POINTER_FLAG_UP, POINTER_FLAG_UPDATE, POINTER_PEN_INFO, POINTER_TOUCH_INFO,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    PEN_FLAG_BARREL, PEN_FLAG_ERASER, PEN_FLAG_INVERTED, PEN_MASK_PRESSURE, PT_PEN, PT_TOUCH,
-    TOUCH_MASK_PRESSURE, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MOUSEHWHEEL,
-    WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERLEAVE,
-    WM_POINTERUP, WM_POINTERUPDATE, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_XBUTTONDOWN, WM_XBUTTONUP,
+    PEN_FLAG_BARREL, PEN_FLAG_ERASER, PEN_FLAG_INVERTED, PEN_MASK_PRESSURE, PEN_MASK_TILT_X,
+    PEN_MASK_TILT_Y, PT_PEN, PT_TOUCH, TOUCH_MASK_PRESSURE, WM_LBUTTONDOWN, WM_LBUTTONUP,
+    WM_MBUTTONDOWN, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_POINTERCAPTURECHANGED,
+    WM_POINTERDOWN, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_RBUTTONDOWN, WM_RBUTTONUP,
+    WM_XBUTTONDOWN, WM_XBUTTONUP,
 };
 
 fn lparam(x: i16, y: i16) -> isize {
@@ -252,6 +253,7 @@ fn fr5_a_fingers_pointer_message_is_a_touch_contact_in_client_pixels() {
             position: (250.0, 300.0),
             pressure: None,
             buttons: 0,
+            tilt: (0.0, 0.0),
         })
     );
     touch.touchMask = TOUCH_MASK_PRESSURE;
@@ -384,11 +386,15 @@ fn fr5_a_pens_pointer_message_brings_its_pressure_barrel_button_eraser_and_hover
             position: (40.0, 60.0),
             pressure: Some(0.0),
             buttons: buttons::STYLUS_PRIMARY,
+            tilt: (0.0, 0.0),
         })
     );
     pen.pointerInfo.pointerFlags = DOWN;
     pen.penFlags = PEN_FLAG_ERASER;
+    pen.penMask = PEN_MASK_PRESSURE | PEN_MASK_TILT_X | PEN_MASK_TILT_Y;
     pen.pressure = 768;
+    pen.tiltX = 30;
+    pen.tiltY = -45;
     assert_eq!(
         pen_input(WM_POINTERDOWN, &pen, (100, 200)),
         Some(WindowInput::Contact {
@@ -398,6 +404,22 @@ fn fr5_a_pens_pointer_message_brings_its_pressure_barrel_button_eraser_and_hover
             position: (40.0, 60.0),
             pressure: Some(0.75),
             buttons: 0,
+            tilt: (30.0, -45.0),
         })
     );
+}
+
+#[test]
+fn fr5_a_pens_tilt_is_read_only_on_the_axes_it_measures() {
+    // SAFETY: plain data, for which all zero is a valid value.
+    let mut pen: POINTER_PEN_INFO = unsafe { std::mem::zeroed() };
+    pen.tiltX = 40;
+    pen.tiltY = -20;
+    assert_eq!(pen_tilt(&pen), (0.0, 0.0));
+    pen.penMask = PEN_MASK_TILT_X;
+    assert_eq!(pen_tilt(&pen), (40.0, 0.0));
+    pen.penMask = PEN_MASK_TILT_X | PEN_MASK_TILT_Y;
+    assert_eq!(pen_tilt(&pen), (40.0, -20.0));
+    pen.tiltX = 300;
+    assert_eq!(pen_tilt(&pen), (90.0, -20.0));
 }
