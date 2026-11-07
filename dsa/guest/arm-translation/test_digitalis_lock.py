@@ -162,6 +162,8 @@ class LockTests(unittest.TestCase):
         self.assertNotIn("TARGET_2ND_ARCH", board)
         self.assertIn("TARGET_NATIVE_BRIDGE_ARCH := arm64", board)
         self.assertIn("TARGET_NATIVE_BRIDGE_ABI := arm64-v8a", board)
+        # Without ART in the tree, boot image dexpreopt stops Soong's analysis.
+        self.assertIn("WITH_DEXPREOPT := false", board)
         product = (DEVICE / "dsa_translator.mk").read_text()
         self.assertIn("soong_config_set,berberis,translation_arch,arm64_to_x86_64", product)
 
