@@ -405,6 +405,36 @@ class PointerInputTest {
     }
 
     @Test
+    fun fr5_a_pens_tilt_is_the_angle_from_upright_and_the_direction_it_leans() {
+        val pen = PointerTool.POINTER_TOOL_PEN
+        fun tilted(x: Float, y: Float) = event(PointerAction.POINTER_ACTION_HOVER_MOVE, 5f, 5f, tool = pen)
+            .toBuilder().setTiltX(x).setTiltY(y).build()
+        input.handle(tilted(0f, 0f))
+        input.handle(tilted(30f, 0f))
+        input.handle(tilted(0f, 45f))
+        input.handle(tilted(0f, -45f))
+
+        val pointers = injector.injected.drop(1).map { it.pointers.single() }
+        assertEquals(0f, pointers[0].tilt)
+        // Its top leaning right: 30 degrees from upright, its tip pointing left.
+        assertEquals(Math.toRadians(30.0).toFloat(), pointers[1].tilt, 1e-5f)
+        assertEquals((-Math.PI / 2).toFloat(), pointers[1].orientation, 1e-5f)
+        // Leaning toward the user, and away from the user.
+        assertEquals(Math.toRadians(45.0).toFloat(), pointers[2].tilt, 1e-5f)
+        assertEquals(0f, pointers[2].orientation, 1e-5f)
+        assertEquals(Math.PI.toFloat(), kotlin.math.abs(pointers[3].orientation), 1e-5f)
+    }
+
+    @Test
+    fun fr5_a_finger_has_no_tilt() {
+        input.handle(
+            touch(PointerAction.POINTER_ACTION_DOWN, 1, 10f, 10f).toBuilder().setTiltX(40f).setTiltY(10f).build(),
+        )
+
+        assertEquals(0f, injector.injected.single().pointers.single().tilt)
+    }
+
+    @Test
     fun fr5_each_task_keeps_its_own_gesture() {
         input.handle(event(PointerAction.POINTER_ACTION_DOWN, 1f, 1f, buttons = MotionEvent.BUTTON_PRIMARY, taskId = 7))
         input.handle(event(PointerAction.POINTER_ACTION_DOWN, 1f, 1f, buttons = MotionEvent.BUTTON_PRIMARY, taskId = 8))

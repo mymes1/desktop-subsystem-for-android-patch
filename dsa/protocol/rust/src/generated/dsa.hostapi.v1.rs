@@ -890,6 +890,13 @@ pub struct PointerEvent {
     pub scroll_x: f32,
     #[prost(float, tag = "10")]
     pub scroll_y: f32,
+    /// A pen's tilt, in degrees from upright, from -90 to 90: positive `tilt_x` leans its top
+    /// toward the right of the screen, positive `tilt_y` toward the bottom (toward the user).
+    /// 0 for a pointer that does not measure it.
+    #[prost(float, tag = "11")]
+    pub tilt_x: f32,
+    #[prost(float, tag = "12")]
+    pub tilt_y: f32,
 }
 /// A key pressed or released in a task's window, sent on a connection that streams input.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]

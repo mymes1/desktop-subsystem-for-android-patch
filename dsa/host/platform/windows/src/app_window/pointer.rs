@@ -37,9 +37,9 @@ use windows_sys::Win32::UI::Input::Pointer::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     GetClientRect, GetMessageExtraInfo, RemovePropW, SetPropW, PEN_FLAG_BARREL, PEN_FLAG_ERASER,
-    PEN_FLAG_INVERTED, PEN_MASK_PRESSURE, POINTER_INPUT_TYPE, PT_PEN, PT_TOUCH,
-    TOUCH_MASK_PRESSURE, WHEEL_DELTA, WM_CAPTURECHANGED, WM_LBUTTONDOWN, WM_LBUTTONUP,
-    WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL,
+    PEN_FLAG_INVERTED, PEN_MASK_PRESSURE, PEN_MASK_TILT_X, PEN_MASK_TILT_Y, POINTER_INPUT_TYPE,
+    PT_PEN, PT_TOUCH, TOUCH_MASK_PRESSURE, WHEEL_DELTA, WM_CAPTURECHANGED, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL,
     WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE,
     WM_RBUTTONDOWN, WM_RBUTTONUP, WM_XBUTTONDOWN, WM_XBUTTONUP, XBUTTON1, XBUTTON2,
 };
@@ -235,6 +235,7 @@ pub fn touch_input(
         position: in_client(info, client_origin),
         pressure: measured,
         buttons: 0,
+        tilt: (0.0, 0.0),
     })
 }
 
@@ -260,7 +261,24 @@ pub fn pen_input(
             measured
         },
         buttons: barrel,
+        tilt: pen_tilt(pen),
     })
+}
+
+/// A pen's tilt in degrees, (toward the right, toward the user), as Windows measures it;
+/// 0 on an axis the pen does not measure.
+pub fn pen_tilt(pen: &POINTER_PEN_INFO) -> (f32, f32) {
+    let axis = |mask: u32, degrees: i32| {
+        if pen.penMask & mask != 0 {
+            degrees.clamp(-90, 90) as f32
+        } else {
+            0.0
+        }
+    };
+    (
+        axis(PEN_MASK_TILT_X, pen.tiltX),
+        axis(PEN_MASK_TILT_Y, pen.tiltY),
+    )
 }
 
 /// A pointer's position in the client area that begins at `client_origin` on the screen.

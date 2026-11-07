@@ -226,6 +226,18 @@ public final class VectorsTest {
                         .setY(599.0f)
                         .setButtons(32))
                 .build());
+        cases.put("pointer_event_pen_tilt", Envelope.newBuilder()
+                .setPointerEvent(PointerEvent.newBuilder()
+                        .setTaskId(42)
+                        .setAction(PointerAction.POINTER_ACTION_DOWN)
+                        .setTool(PointerTool.POINTER_TOOL_PEN)
+                        .setPointerId(1)
+                        .setX(100.0f)
+                        .setY(200.0f)
+                        .setPressure(0.5f)
+                        .setTiltX(30.0f)
+                        .setTiltY(-45.0f))
+                .build());
         cases.put("key_event_ctrl_a_down", Envelope.newBuilder()
                 .setKeyEvent(KeyEvent.newBuilder()
                         .setTaskId(42)

@@ -360,6 +360,21 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
             })),
         ),
         (
+            "pointer_event_pen_tilt",
+            wrap(Body::PointerEvent(PointerEvent {
+                task_id: 42,
+                action: PointerAction::Down as i32,
+                tool: PointerTool::Pen as i32,
+                pointer_id: 1,
+                x: 100.0,
+                y: 200.0,
+                pressure: 0.5,
+                tilt_x: 30.0,
+                tilt_y: -45.0,
+                ..PointerEvent::default()
+            })),
+        ),
+        (
             "key_event_ctrl_a_down",
             wrap(Body::KeyEvent(KeyEvent {
                 task_id: 42,
