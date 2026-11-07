@@ -23,7 +23,9 @@
 //! - [`location`]: the host's location, which the guest's GNSS HAL gives its apps.
 //! - [`links`]: web links apps in the guest open, which the host opens in its browser.
 //! - [`apk_info`]: what an APK on the host says about itself (its name, icon, version,
-//!   permissions and signer), read from the file before Android sees it.
+//!   permissions and signer), read from the file before Android sees it, and
+//!   [`apk_bundle`]: split-APK bundles (`.xapk`, `.apks`, `.apkm`) and the splits a device
+//!   takes from them.
 //! - [`guest_log`]: the guest's log, streamed only while someone reads it, and
 //!   [`diagnostics`]: the archive a problem report carries.
 //! - [`files`]: host files the user opens or shares in an app in the guest.
@@ -54,6 +56,7 @@
 pub mod accessibility;
 pub mod adb_bridge;
 pub mod apk;
+pub mod apk_bundle;
 pub mod apk_info;
 pub mod app_windows;
 pub mod apps;

@@ -14,8 +14,8 @@ use dsa_protocol::control::{
     AuthProof, CancelInstall, ClipboardSharing, ClipboardText, ClockAnswer, ClockProbe, CloseTask,
     DeviceIdle, Envelope, FileAction, FileChunk, FileProgress, GuestBoot, GuestMemory,
     GuestNotification, Hello, HelloAccepted, HelloRejected, ImeCommit, ImeComposition, ImeCursor,
-    InstallApk, InstallProgress, InstallResult, InstallStatus, KeyAction, KeyEvent, LaunchApp,
-    LinkHandling, NodeAction, NodeRange, NotificationClicked, NotificationDismissed,
+    InstallApk, InstallPart, InstallProgress, InstallResult, InstallStatus, KeyAction, KeyEvent,
+    LaunchApp, LinkHandling, NodeAction, NodeRange, NotificationClicked, NotificationDismissed,
     NotificationRemoved, OpenFile, OpenLink, PackageState, PointerAction, PointerEvent,
     PointerTool, PowerHint, PowerHintKind, PowerState, ProcessMemory, QueryPackage, Rect,
     RejectReason, RequestGuestMemory, ResizeTask, Role, ScreenState, SetTaskDensity, TaskFrames,
@@ -546,6 +546,29 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
                 transfer_id: 3,
                 name: "notes.apk".into(),
                 size: 1000,
+                abi: String::new(),
+                parts: vec![],
+            })),
+        ),
+        (
+            "install_apk_split",
+            wrap(Body::InstallApk(InstallApk {
+                transfer_id: 4,
+                name: "notes.xapk".into(),
+                size: 13,
+                abi: String::new(),
+                parts: vec![
+                    InstallPart {
+                        name: "base.apk".into(),
+                        size: 10,
+                        obb: false,
+                    },
+                    InstallPart {
+                        name: "main.1.com.example.notes.obb".into(),
+                        size: 3,
+                        obb: true,
+                    },
+                ],
             })),
         ),
         (

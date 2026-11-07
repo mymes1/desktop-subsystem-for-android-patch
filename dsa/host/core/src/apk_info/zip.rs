@@ -12,6 +12,7 @@ use super::inflate::inflate;
 #[derive(Debug, Clone)]
 pub struct Entry {
     pub name: String,
+    flags: u16,
     method: u16,
     compressed_size: u64,
     size: u64,
@@ -22,6 +23,12 @@ impl Entry {
     /// The entry's length once uncompressed.
     pub fn size(&self) -> u64 {
         self.size
+    }
+
+    /// Whether the entry is encrypted (bit 0 of its general purpose flags), so that it
+    /// cannot be read without a key.
+    pub fn encrypted(&self) -> bool {
+        self.flags & 1 != 0
     }
 }
 
@@ -103,6 +110,7 @@ impl<R: Read + Seek> Archive<R> {
             {
                 return Err("the archive's directory is damaged".into());
             }
+            let flags = u16_at(&directory, at + 8)?;
             let method = u16_at(&directory, at + 10)?;
             let mut compressed_size = u64::from(u32_at(&directory, at + 20)?);
             let mut size = u64::from(u32_at(&directory, at + 24)?);
@@ -135,6 +143,7 @@ impl<R: Read + Seek> Archive<R> {
             }
             entries.push(Entry {
                 name,
+                flags,
                 method,
                 compressed_size,
                 size,

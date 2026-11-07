@@ -687,3 +687,23 @@ fn fr17_the_desktop_entry_appstream_and_icons_are_there() {
         assert!(svg.contains("<svg"), "{icon} is not an SVG");
     }
 }
+
+#[test]
+fn fr11_a_bundle_refused_before_android_sees_it_says_its_reason() {
+    let refused = Outcome::refusal(&Failure {
+        problem: Problem::Refused,
+        detail: "not installed (app-bundle): notes.aab: this is an Android App Bundle".into(),
+    })
+    .expect("a refusal");
+    assert_eq!(refused.status, "app-bundle");
+    assert!(view::install_reason(&refused.status).contains("App Bundle"));
+    let fallback = view::install_reason("other");
+    for code in [
+        "app-bundle",
+        "encrypted-bundle",
+        "split-signature-mismatch",
+        "invalid-bundle",
+    ] {
+        assert_ne!(view::install_reason(code), fallback, "{code}");
+    }
+}

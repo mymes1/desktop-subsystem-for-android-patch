@@ -262,6 +262,10 @@ final class PageViewModelTests: XCTestCase {
         let install = InstallViewModel(service: DsaService(cli: cli), text: KeyText())
         XCTAssertTrue(install.accepts(["/tmp/notes.APK"]))
         XCTAssertFalse(install.accepts(["/tmp/notes.txt"]))
+        // Split-APK bundles are installed as APKs are, and App Bundles told why they are not.
+        for bundle in ["/tmp/notes.xapk", "/tmp/notes.apks", "/tmp/notes.APKM", "/tmp/notes.aab"] {
+            XCTAssertTrue(install.accepts([bundle]), bundle)
+        }
         await install.drop(["/tmp/notes.apk", "/tmp/old.apk", "/tmp/readme.txt"])
         XCTAssertEqual(install.severity, .error)
         XCTAssertEqual(install.title, "Install_FailedTitle")

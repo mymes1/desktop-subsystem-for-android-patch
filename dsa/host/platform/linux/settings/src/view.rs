@@ -464,6 +464,10 @@ pub fn install_reason(status: &str) -> String {
         "insufficient-storage" => "Android has no room for the app.",
         "downgrade" => "a newer version of the app is installed. Uninstall it in Android first.",
         "blocked" => "a policy of this Android does not allow the app.",
+        "app-bundle" => "it is an Android App Bundle, made to be uploaded to an app store. Get the app as an APK, or as an .xapk, .apks or .apkm bundle.",
+        "encrypted-bundle" => "the bundle is encrypted, so its APKs cannot be read. Get the app as an APK, or as a newer bundle.",
+        "split-signature-mismatch" => "a split APK of the bundle is signed with another key than its base APK, so Android would refuse it.",
+        "invalid-bundle" => "the bundle is not one app that Android can install.",
         _ => "Android did not install the app.",
     })
 }

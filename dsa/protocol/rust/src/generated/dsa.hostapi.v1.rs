@@ -767,17 +767,34 @@ pub struct WidgetPointer {
     #[prost(float, tag = "5")]
     pub y: f32,
 }
-/// Installs an APK in the caller's Android. The service answers at once: Done when it takes an
-/// APK of this name and size, or an error. After Done the client sends the APK's `size` bytes
-/// in ApkChunk frames, which are not answered, and the service answers the same request id once
-/// more: InstallResult once Android has installed the app or refused it, or an error when the
-/// APK did not reach Android. The connection then ends. A second install waits for the first.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct InstallApk {
-    /// The file's name, without any folder. It ends in ".apk".
+/// One file of an install made of several: an APK of an app that comes as a base APK and
+/// split APKs, or an expansion (OBB) file of that app.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct InstallPart {
+    /// The file's name, without any folder. An APK's ends in ".apk", an expansion file's in ".obb".
     #[prost(string, tag = "1")]
     pub name: ::prost::alloc::string::String,
-    /// The APK's length in bytes.
+    /// The file's length in bytes.
+    #[prost(uint64, tag = "2")]
+    pub size: u64,
+    /// True for an expansion file, which Android gets in the app's folder under Android/obb/ once
+    /// the app is installed.
+    #[prost(bool, tag = "3")]
+    pub obb: bool,
+}
+/// Installs an APK, or an app made of several APKs, in the caller's Android. The service answers
+/// at once: Done when it takes an install of this name, size and parts, or an error. After Done
+/// the client sends the `size` bytes in ApkChunk frames, which are not answered, and the service
+/// answers the same request id once more: InstallResult once Android has installed the app or
+/// refused it, or an error when the files did not reach Android. The connection then ends. A
+/// second install waits for the first.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct InstallApk {
+    /// The file's name, without any folder. With no parts it ends in ".apk"; with parts it is the
+    /// name of the bundle the parts come from, such as "notes.xapk".
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    /// The APK's length in bytes, or with parts the sum of their sizes.
     #[prost(uint64, tag = "2")]
     pub size: u64,
     /// The native libraries the APK holds, by ABI, as the client read them from the file's
@@ -786,6 +803,11 @@ pub struct InstallApk {
     /// otherwise what Android chooses. Empty for an APK without native code.
     #[prost(message, repeated, tag = "3")]
     pub native_libraries: ::prost::alloc::vec::Vec<NativeLibraries>,
+    /// Empty for one APK. Otherwise the files of the install, in the order their bytes follow one
+    /// another in the ApkChunk frames: the APKs first, then any expansion files. The native
+    /// libraries are then those of the APKs among them, together.
+    #[prost(message, repeated, tag = "4")]
+    pub parts: ::prost::alloc::vec::Vec<InstallPart>,
 }
 /// The native libraries of one ABI: the file names under `lib/<abi>/` of an APK, or of an APK
 /// and its splits together.

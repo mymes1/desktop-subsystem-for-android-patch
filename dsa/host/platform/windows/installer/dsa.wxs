@@ -242,12 +242,53 @@
                                Name="Content Type" Type="string" Value="application/vnd.android.package-archive" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.apk\OpenWithProgids"
                                Name="Dsa.ApkFile" Type="string" Value="" />
+                <!-- Split-APK bundles (.xapk, .apks, .apkm) open the same way: the APK Installer
+                     tells them apart by what is in them and installs the splits the user's
+                     Android takes. An App Bundle (.aab) is only under Open with, so the tools of
+                     a developer who builds one keep opening it; the APK Installer says why it
+                     does not install one. -->
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkBundle"
+                               Type="string" Value="!(loc.ApkBundleType)" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkBundle"
+                               Name="FriendlyTypeName" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-111" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkBundle\DefaultIcon"
+                               Type="string" Value="&quot;[SETTINGSFOLDER]DsaApkInstaller.exe&quot;,0" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkBundle\shell"
+                               Type="string" Value="open" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkBundle\shell\open"
+                               Name="MUIVerb" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-105" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkBundle\shell\open"
+                               Name="FriendlyAppName" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-110" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkBundle\shell\open\command"
+                               Type="string" Value="&quot;[SETTINGSFOLDER]DsaApkInstaller.exe&quot; --install-apk &quot;%1&quot;" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.xapk"
+                               Type="string" Value="Dsa.ApkBundle" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.xapk\OpenWithProgids"
+                               Name="Dsa.ApkBundle" Type="string" Value="" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.apks"
+                               Type="string" Value="Dsa.ApkBundle" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.apks\OpenWithProgids"
+                               Name="Dsa.ApkBundle" Type="string" Value="" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.apkm"
+                               Type="string" Value="Dsa.ApkBundle" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.apkm\OpenWithProgids"
+                               Name="Dsa.ApkBundle" Type="string" Value="" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.aab\OpenWithProgids"
+                               Name="Dsa.ApkBundle" Type="string" Value="" />
                 <!-- The program's own entry, which Open with reads its name from, and the types
                      it opens. -->
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe"
                                Name="FriendlyAppName" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-110" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe\SupportedTypes"
                                Name=".apk" Type="string" Value="" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe\SupportedTypes"
+                               Name=".xapk" Type="string" Value="" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe\SupportedTypes"
+                               Name=".apks" Type="string" Value="" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe\SupportedTypes"
+                               Name=".apkm" Type="string" Value="" />
+                <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe\SupportedTypes"
+                               Name=".aab" Type="string" Value="" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe\DefaultIcon"
                                Type="string" Value="&quot;[SETTINGSFOLDER]DsaApkInstaller.exe&quot;,0" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe\shell\open\command"

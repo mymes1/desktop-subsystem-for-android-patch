@@ -21,7 +21,7 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, Node, NodeAction,
     TreeUpdate,
 };
-use crate::apk::{self, InstallOutcome, InstallStatus, InstalledPackage};
+use crate::apk::{self, InstallOutcome, InstallPart, InstallStatus, InstalledPackage};
 use crate::arm_translation::{GuestArmTranslation, Package};
 use crate::background::{
     BackgroundApp, BackgroundCommand, BackgroundEvent, BackgroundHub, BackgroundWatch,
@@ -111,6 +111,9 @@ pub struct FakeAndroid {
     pub background_requests: Mutex<Vec<BackgroundRequest>>,
     /// The APKs it installed or refused, by name, with their whole content, in order.
     pub installs: Mutex<Vec<(String, Vec<u8>)>>,
+    /// The installs of several files it took, in order: the bundle's name, the parts, the ABI
+    /// it was told, and the parts' bytes one after another.
+    pub part_installs: Mutex<Vec<PartInstall>>,
     /// When each install began and ended, by name, in order: `+name` and `-name`.
     pub install_steps: Mutex<Vec<String>>,
     /// How long each install takes once its content is in.
@@ -181,6 +184,15 @@ pub fn sample_installed_apps() -> Vec<crate::tasks::AppInfo> {
     ]
 }
 
+/// One install of several files the fake Android took.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartInstall {
+    pub name: String,
+    pub parts: Vec<InstallPart>,
+    pub abi: Option<String>,
+    pub content: Vec<u8>,
+}
+
 /// What the fake Android says of an APK: one whose content starts with [`BAD_APK`] is not an APK
 /// it can read; any other is installed as [`INSTALLED_PACKAGE`].
 pub const BAD_APK: &[u8] = b"not a zip";
@@ -234,6 +246,7 @@ impl FakeAndroid {
             background: Mutex::new(BackgroundHub::default()),
             background_requests: Mutex::new(Vec::new()),
             installs: Mutex::new(Vec::new()),
+            part_installs: Mutex::new(Vec::new()),
             install_steps: Mutex::new(Vec::new()),
             install_time: Mutex::new(Duration::ZERO),
             install_turn: Mutex::new(()),
@@ -691,6 +704,40 @@ impl UserAndroid for FakeAndroid {
             },
         })
     }
+    fn install_parts(
+        &self,
+        name: &str,
+        parts: &[InstallPart],
+        abi: Option<&str>,
+        content: &mut dyn std::io::Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        let _turn = self.install_turn.lock().unwrap();
+        if !matches!(
+            self.state(),
+            SessionState::Active | SessionState::Dozing | SessionState::Frozen
+        ) {
+            return Err(InstallError::NotRunning(format!(
+                "Android is {}, not running",
+                self.state()
+            )));
+        }
+        let size: u64 = parts.iter().map(|part| part.size).sum();
+        let mut bytes = vec![0u8; size as usize];
+        content
+            .read_exact(&mut bytes)
+            .map_err(|e| InstallError::Refused(format!("the files did not arrive whole: {e}")))?;
+        self.part_installs.lock().unwrap().push(PartInstall {
+            name: name.to_string(),
+            parts: parts.to_vec(),
+            abi: abi.map(str::to_string),
+            content: bytes,
+        });
+        Ok(InstallOutcome {
+            status: InstallStatus::Installed,
+            package_name: Some(INSTALLED_PACKAGE.into()),
+            message: String::new(),
+        })
+    }
     fn install_apk_for(
         &self,
         name: &str,
@@ -1143,6 +1190,16 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr11_an_apk_a_client_sends_is_installed_in_the_callers_android() {
             $crate::host_api_conformance::apk_is_installed(&mut || $make);
+        }
+        #[test]
+        fn fr11_the_files_of_a_split_app_reach_the_callers_android_as_one_install() {
+            $crate::host_api_conformance::split_app_is_installed(&mut || $make);
+        }
+        #[test]
+        fn fr11_parts_that_do_not_add_up_or_that_android_cannot_take_are_refused() {
+            $crate::host_api_conformance::wrong_parts_are_refused_before_they_are_sent(
+                &mut || $make,
+            );
         }
         #[test]
         fn fr11_an_apk_android_refuses_is_answered_with_the_reason() {
@@ -2189,6 +2246,103 @@ pub fn run_as_arm_reaches_the_caller(make: MakeLocal<'_>) {
     assert_eq!(android.run_as_arm.lock().unwrap().len(), before);
 }
 
+pub fn split_app_is_installed(make: MakeLocal<'_>) {
+    use crate::native_abi::NativeLibraries;
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let base = sample_apk();
+    let parts = vec![
+        InstallPart {
+            name: "base.apk".into(),
+            size: base.len() as u64,
+            obb: false,
+        },
+        InstallPart {
+            name: "split_config.x86_64.apk".into(),
+            size: 3,
+            obb: false,
+        },
+        InstallPart {
+            name: "main.42.com.example.notes.obb".into(),
+            size: 5,
+            obb: true,
+        },
+    ];
+    let content = [&base[..], b"abi", b"games"].concat();
+    let mut libraries = NativeLibraries::new();
+    libraries.add("x86_64", "libnotes.so");
+    let outcome = connect(&mut *connector)
+        .install_parts("notes.xapk", &parts, &libraries, &mut &content[..])
+        .expect("installing");
+    assert!(outcome.installed(), "{outcome:?}");
+    let android = androids.of(&user).unwrap();
+    let installs = android.part_installs.lock().unwrap();
+    assert_eq!(installs.len(), 1);
+    assert_eq!(installs[0].name, "notes.xapk");
+    assert_eq!(installs[0].parts, parts);
+    assert_eq!(installs[0].abi.as_deref(), Some("x86_64"));
+    assert!(installs[0].content == content, "the files arrived changed");
+    assert!(android.installs.lock().unwrap().is_empty());
+}
+
+pub fn wrong_parts_are_refused_before_they_are_sent(make: MakeLocal<'_>) {
+    use crate::native_abi::NativeLibraries;
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let part = |name: &str, size: u64, obb: bool| InstallPart {
+        name: name.into(),
+        size,
+        obb,
+    };
+    for parts in [
+        vec![part("main.1.com.example.notes.obb", 3, true)],
+        vec![part("base.apk", 3, false), part("base.apk", 3, false)],
+        vec![part("base.txt", 3, false)],
+    ] {
+        let mut never = Unread;
+        let none = NativeLibraries::new();
+        match connect(&mut *connector).install_parts("notes.xapk", &parts, &none, &mut never) {
+            Err(ClientError::Service { code, detail }) => {
+                assert_eq!(code, ErrorCode::InstallRefused, "{detail}");
+            }
+            other => panic!("expected {parts:?} to be refused, got {other:?}"),
+        }
+    }
+    // A client whose parts add up to another size than it announces is refused as well.
+    let mut connection = connector.connect(WAIT).unwrap();
+    client_connect(&mut *connection, &local_hello(Role::Client, "client"), WAIT).unwrap();
+    let request = types::Request {
+        id: 8,
+        body: Some(types::request::Body::InstallApk(types::InstallApk {
+            name: "notes.xapk".into(),
+            size: 10,
+            native_libraries: Vec::new(),
+            parts: vec![part("base.apk", 3, false).to_wire()],
+        })),
+    };
+    send(&mut *connection, envelope::Body::Request(request)).unwrap();
+    let response = match decode(&connection.recv(Some(WAIT)).expect("an answer")) {
+        Ok(types::Envelope {
+            body: Some(envelope::Body::Response(response)),
+        }) => response,
+        other => panic!("expected an answer, got {other:?}"),
+    };
+    assert_eq!(response.id, 8);
+    match response.body {
+        Some(types::response::Body::Error(error)) => {
+            let detail = &error.detail;
+            assert!(detail.contains("add up to 3 bytes"), "{detail}");
+        }
+        other => panic!("expected the install to be refused, got {other:?}"),
+    }
+    let android = androids.of(&user).unwrap();
+    assert!(android.part_installs.lock().unwrap().is_empty());
+}
+
 pub fn refused_apk_has_its_reason(make: MakeLocal<'_>) {
     let (listener, mut connector, _) = make();
     let androids = Arc::new(FakeAndroids::default());
@@ -2298,6 +2452,7 @@ pub fn malformed_install_is_refused(make: MakeLocal<'_>) {
             name: "notes.apk".into(),
             size: 1000,
             native_libraries: Vec::new(),
+            parts: Vec::new(),
         })),
     };
     send(&mut *connection, envelope::Body::Request(request)).unwrap();

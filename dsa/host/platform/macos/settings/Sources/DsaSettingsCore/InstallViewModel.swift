@@ -24,9 +24,11 @@ public final class InstallViewModel: ObservableObject {
         self.text = text
     }
 
-    /// Whether `path` names an APK file.
+    /// Whether `path` names what the install takes: an APK file, a split-APK bundle (`.xapk`,
+    /// `.apks`, `.apkm`), or an App Bundle, which it refuses with its reason.
     public nonisolated static func isApk(_ path: String) -> Bool {
-        path.lowercased().hasSuffix(".apk")
+        let lower = path.lowercased()
+        return [".apk", ".xapk", ".apks", ".apkm", ".aab"].contains { lower.hasSuffix($0) }
     }
 
     /// Whether a drop of `paths` would install anything, so the window shows a drop is welcome.

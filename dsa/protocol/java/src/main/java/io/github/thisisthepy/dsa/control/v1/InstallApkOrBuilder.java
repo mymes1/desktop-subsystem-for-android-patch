@@ -74,4 +74,36 @@ public interface InstallApkOrBuilder extends
    */
   com.google.protobuf.ByteString
       getAbiBytes();
+
+  /**
+   * <pre>
+   * Empty for one APK. Otherwise the files of the install, in the order their bytes follow one
+   * another in the chunks: the APKs first, which the agent writes into one install session,
+   * then any expansion files. `size` is then the sum of their sizes.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.InstallPart parts = 5;</code>
+   */
+  java.util.List<io.github.thisisthepy.dsa.control.v1.InstallPart> 
+      getPartsList();
+  /**
+   * <pre>
+   * Empty for one APK. Otherwise the files of the install, in the order their bytes follow one
+   * another in the chunks: the APKs first, which the agent writes into one install session,
+   * then any expansion files. `size` is then the sum of their sizes.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.InstallPart parts = 5;</code>
+   */
+  io.github.thisisthepy.dsa.control.v1.InstallPart getParts(int index);
+  /**
+   * <pre>
+   * Empty for one APK. Otherwise the files of the install, in the order their bytes follow one
+   * another in the chunks: the APKs first, which the agent writes into one install session,
+   * then any expansion files. `size` is then the sum of their sizes.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.InstallPart parts = 5;</code>
+   */
+  int getPartsCount();
 }

@@ -1,6 +1,7 @@
-//! Installing an APK opened in Explorer.
+//! Installing an APK, or a split-APK bundle, opened in Explorer.
 //!
-//! The installer associates `.apk` files with the APK Installer
+//! The installer associates `.apk` files, and the bundles `.xapk`, `.apks` and `.apkm`, with
+//! the APK Installer
 //! (`settings\DsaApkInstaller.exe`), which it runs with [`INSTALL_APK_ARGUMENT`] and the file's path when the user opens one.
 //! Earlier releases associated them with the window host instead, with the same argument; the
 //! window host hands such an APK on to the APK Installer ([`install_window`]) when it is
@@ -12,7 +13,8 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use dsa_host_core::apk::{ApkFile, InstallOutcome};
+use dsa_host_core::apk::InstallOutcome;
+use dsa_host_core::apk_bundle::{Device, InstallFile};
 use dsa_host_core::host_api::HostApiClient;
 use dsa_transport::Connector;
 
@@ -44,21 +46,44 @@ pub fn install_request(args: &[String]) -> Option<PathBuf> {
     argument(args, INSTALL_APK_ARGUMENT).map(PathBuf::from)
 }
 
-/// Opens the APK at `path`, refusing it before Android is started when it cannot be installed.
-pub fn open(path: &Path) -> Result<ApkFile, String> {
-    ApkFile::open(path)
+/// Opens the APK or the split-APK bundle at `path`, refusing it before Android is started when
+/// it cannot be installed, with the reason.
+pub fn open(path: &Path) -> Result<InstallFile, String> {
+    InstallFile::open(path).map_err(|refusal| refusal.to_string())
 }
 
-/// Streams `apk` to the caller's Android through the service at `api`, and returns how the
-/// install ended. An error means the APK did not get there.
-pub fn install(api: &mut dyn Connector, apk: &mut ApkFile) -> Result<InstallOutcome, String> {
-    let name = apk.name.clone();
-    let size = apk.size;
-    let libraries = apk.native_libraries.clone();
-    HostApiClient::connect(api, BUILD, Duration::from_secs(5))
-        .map_err(|e| format!("the DSA service cannot be reached: {e}"))?
-        .install_apk_with_libraries(&name, size, &libraries, apk.reader())
-        .map_err(|e| e.to_string())
+/// Streams `file` to the caller's Android through the service at `api`, and returns how the
+/// install ended. Of a bundle, the APKs this computer's Android takes go, with its expansion
+/// files, as one install. An error means the app did not get there.
+pub fn install(api: &mut dyn Connector, file: &mut InstallFile) -> Result<InstallOutcome, String> {
+    let mut client = HostApiClient::connect(api, BUILD, Duration::from_secs(5))
+        .map_err(|e| format!("the DSA service cannot be reached: {e}"))?;
+    match file {
+        InstallFile::Apk(apk) => {
+            let name = apk.name.clone();
+            let size = apk.size;
+            let libraries = apk.native_libraries.clone();
+            client
+                .install_apk_with_libraries(&name, size, &libraries, apk.reader())
+                .map_err(|e| e.to_string())
+        }
+        InstallFile::Bundle(bundle) => {
+            let translation = client.arm_translation().ok();
+            let device = Device::of_host(
+                translation.as_ref(),
+                cfg!(target_arch = "aarch64"),
+                crate::monitors::system_density(),
+                &crate::compositor::system_settings::read().locales,
+            );
+            let selection = bundle.select(&device);
+            let parts = bundle.parts(&selection);
+            let libraries = bundle.libraries(&selection);
+            let mut content = bundle.content(&selection);
+            client
+                .install_parts(&bundle.name, &parts, &libraries, &mut content)
+                .map_err(|e| e.to_string())
+        }
+    }
 }
 
 /// What the message box says when the install ended, and whether it is good news.

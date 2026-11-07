@@ -18,6 +18,8 @@
 #   systemd units            dsa-hostd.service (system) and dsa-devices.service (user)
 #   udev rules, modules      /dev/kvm and /dev/vhost-vsock for the service and the user
 #   desktop files            DSA Settings, DSA Files, and Open, Share and Install in Android
+#   MIME type                split-APK bundles (.xapk, .apks, .apkm), which Install in Android
+#                            opens
 #                            for files
 #   icons                    DSA's and DSA Settings' icons in the hicolor theme
 #   translations             DSA Settings' gettext catalogues
@@ -220,6 +222,8 @@ install -m 0644 "$here/udev/dsa-modules.conf" "$stage/usr/lib/modules-load.d/dsa
 # The desktop: the file actions and DSA's name for GeoClue.
 install -d "$stage/usr/share/applications" "$stage/etc/geoclue/conf.d"
 install -m 0644 "$here"/desktop/*.desktop "$stage/usr/share/applications/"
+install -d "$stage/usr/share/mime/packages"
+install -m 0644 "$here"/mime/*.xml "$stage/usr/share/mime/packages/"
 install -m 0644 "$here/geoclue/dsa.conf" "$stage/etc/geoclue/conf.d/90-dsa.conf"
 
 # DSA's icons, in the hicolor theme: the colour icon and the symbolic one of DSA and of
@@ -362,6 +366,9 @@ fi
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database -q /usr/share/applications || true
 fi
+if command -v update-mime-database >/dev/null 2>&1; then
+    update-mime-database /usr/share/mime || true
+fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
 fi
@@ -388,6 +395,9 @@ if [ ! -e /usr/lib/dsa/vm/image/image.json ]; then
 fi
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database -q /usr/share/applications || true
+fi
+if command -v update-mime-database >/dev/null 2>&1; then
+    update-mime-database /usr/share/mime || true
 fi
 EOF
 

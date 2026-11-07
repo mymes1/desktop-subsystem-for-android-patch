@@ -3,7 +3,7 @@
   The privileged permissions the guest agent holds. The image installs this file next to the
   agent (system_ext/etc/permissions/); the framework refuses to boot when a privileged app
   requests a privileged permission this list does not grant. It names every permission in
-  the agent's manifest.
+  the agent's manifest but the runtime ones, which default-permissions-dsa-agent.xml grants.
 -->
 <permissions>
     <privapp-permissions package="io.github.thisisthepy.dsa.agent">
