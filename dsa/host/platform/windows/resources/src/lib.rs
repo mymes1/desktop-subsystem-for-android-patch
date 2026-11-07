@@ -43,8 +43,6 @@ pub mod shell {
     pub const OPEN_IN_ANDROID_APP: u16 = 101;
     /// "Share with an Android app", the context menu entry of every file.
     pub const SHARE_WITH_ANDROID_APP: u16 = 102;
-    /// The description of the "DSA Files" Start menu shortcut.
-    pub const FILES_SHORTCUT_DESCRIPTION: u16 = 103;
     /// The description of the "DSA Settings" Start menu shortcut.
     pub const SETTINGS_SHORTCUT_DESCRIPTION: u16 = 104;
     /// "Install in Android", the open verb of an `.apk` file.
@@ -63,11 +61,6 @@ pub mod shell {
     pub const STRINGS: &[(u16, &str, &str)] = &[
         (OPEN_IN_ANDROID_APP, "Open in an Android app", "Android 앱에서 열기"),
         (SHARE_WITH_ANDROID_APP, "Share with an Android app", "Android 앱으로 공유"),
-        (
-            FILES_SHORTCUT_DESCRIPTION,
-            "Files of your Android, in Explorer",
-            "내 Android의 파일을 탐색기에서 엽니다",
-        ),
         (
             SETTINGS_SHORTCUT_DESCRIPTION,
             "Settings and state of Desktop Subsystem for Android",
