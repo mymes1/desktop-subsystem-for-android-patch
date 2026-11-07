@@ -29,7 +29,9 @@ The results go to dsa/target/image/<version>/:
 - initrd.img: the vendor and generic ramdisks, which the VM boots with DSA's kernel;
 - image.json: the version, the kernel command line the VM needs, and the files' SHA-256;
 - arm-translation.zip, with --arm-translation (x86_64 only): the default ARM translation
-  package released beside the image, which image.json describes under "arm_translation".
+  package released beside the image, which image.json describes under "arm_translation". The
+  system partition carries the same package's system image, which Android uses from its first
+  start while the user has installed no package of their own.
 """
 
 import argparse
@@ -1498,18 +1500,32 @@ TRACE_FS_CONFIG = [
     "system/etc/init/dsa-trace.rc 0 0 644 capabilities=0x0",
     "system/etc/init/dsa-console.rc 0 0 644 capabilities=0x0",
 ]
-# ARM app translation, for a translation package the user installs (`dsa arm-translation
-# install`). The host puts androidboot.dsa.arm_translation=on in the boot's bootconfig only
-# while one is installed and on. The product build.prop, read last, then imports the native
-# bridge and ABI properties from the "on" file; otherwise from the "off" file, which sets
-# nothing. ro.* properties are fixed once read, so this is decided at boot. The init script
-# mounts the package over /system before the zygote starts; a system script, because only init
-# itself may mount there.
+# ARM app translation. The host puts androidboot.dsa.arm_translation=on in the boot's
+# bootconfig while the user has a translation package installed (`dsa arm-translation
+# install`) and on, and androidboot.dsa.arm_translation=default while they have none and the
+# image carries its own default package (ARM_TRANSLATION_DEFAULT_IMAGE). The product
+# build.prop, read last, then imports the native bridge and ABI properties from the "on" or
+# "default" file; otherwise from the "off" file, which sets nothing. An image without a default
+# package has no "default" file, so a boot told to use one still installs x86_64 apps only.
+# ro.* properties are fixed once read, so this is decided at boot. The init script mounts the
+# package over /system before the zygote starts; a system script, because only init itself may
+# mount there.
 ARM_TRANSLATION_RC = "SYSTEM/etc/init/dsa-arm-translation.rc"
 ARM_TRANSLATION_PROPS = {
     "SYSTEM/etc/dsa/arm-translation-on.prop": HERE / "arm-translation-on.prop",
     "SYSTEM/etc/dsa/arm-translation-off.prop": HERE / "arm-translation-off.prop",
 }
+# The default package's system image and properties, in an x86_64 image made with
+# --arm-translation. The properties are the "on" file's: the default package is laid over the
+# system exactly as a user's is.
+ARM_TRANSLATION_DEFAULT_IMAGE = "SYSTEM/etc/dsa/arm-translation/default.img"
+ARM_TRANSLATION_DEFAULT_PROPS = "SYSTEM/etc/dsa/arm-translation-default.prop"
+ARM_TRANSLATION_DEFAULT_GUEST_PATH = "/system/etc/dsa/arm-translation/default.img"
+ARM_TRANSLATION_DEFAULT_FS_CONFIG = [
+    "system/etc/dsa/arm-translation 0 0 755 capabilities=0x0",
+    "system/etc/dsa/arm-translation/default.img 0 0 644 capabilities=0x0",
+    "system/etc/dsa/arm-translation-default.prop 0 0 644 capabilities=0x0",
+]
 ARM_TRANSLATION_PRODUCT_PROPS = "PRODUCT/etc/build.prop"
 ARM_TRANSLATION_IMPORT = "import /system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop"
 ARM_TRANSLATION_FS_CONFIG = [
@@ -1520,10 +1536,13 @@ ARM_TRANSLATION_FS_CONFIG = [
 ]
 
 
-# The default ARM translation package of an x86_64 image's release (Digitalis, built by the
-# "Translator build" workflow): the package folder `dsa arm-translation install` takes,
-# zipped beside the image and described in image.json under "arm_translation". It is not
-# one of the image's own files: the host boots the image without it. An arm64 image runs ARM
+# The default ARM translation package of an x86_64 image (Digitalis, built by the "Translator
+# build" workflow). Its system image goes into the system partition
+# (ARM_TRANSLATION_DEFAULT_IMAGE), so it is signed and verified with the image, updated with
+# it, and shared by every user of the computer. image.json describes it under
+# "arm_translation", which is how the host knows the image has one ("system_image" says where).
+# The package folder `dsa arm-translation install` takes is also zipped beside the image, so a
+# user can install it as their own; the host never downloads the zip. An arm64 image runs ARM
 # apps itself, so it never has one.
 ARM_TRANSLATION_ZIP = "arm-translation.zip"
 ARM_TRANSLATION_MANIFEST = "arm-translation.json"
@@ -1554,9 +1573,9 @@ def arm_translation_problems(description, image_head):
     return problems
 
 
-def default_arm_translation(package, arch, out):
-    """Zips the translation package folder `package` into `out` as the image's default
-    translator, and returns what image.json says of it."""
+def checked_arm_translation(package, arch):
+    """The description of the translation package folder `package`, once it is one the host
+    takes and `arch` is an architecture that needs a translator."""
     if arch != "x86_64":
         raise SystemExit(f"an {arch} image runs ARM apps without a translator, so it takes no "
                          "ARM translation package")
@@ -1567,6 +1586,14 @@ def default_arm_translation(package, arch, out):
     problems = arm_translation_problems(description, head)
     if problems:
         raise SystemExit("; ".join(problems))
+    return description
+
+
+def default_arm_translation(package, arch, out):
+    """Zips the translation package folder `package` into `out` as the image's default
+    translator, and returns what image.json says of it."""
+    description = checked_arm_translation(package, arch)
+    package = Path(package)
     target = Path(out) / ARM_TRANSLATION_ZIP
     with zipfile.ZipFile(target, "w", zipfile.ZIP_STORED) as z:
         z.write(package / ARM_TRANSLATION_MANIFEST, ARM_TRANSLATION_MANIFEST)
@@ -1577,6 +1604,8 @@ def default_arm_translation(package, arch, out):
         "sha256": sha256(target),
         **{key: description[key] for key in ("name", "version", "library", "abis")},
         "license": description.get("license", ""),
+        "system_image": ARM_TRANSLATION_DEFAULT_GUEST_PATH,
+        "system_image_sha256": sha256(package / ARM_TRANSLATION_IMAGE),
     }
 
 
@@ -1608,6 +1637,40 @@ def check_default_arm_translation(manifest, image_dir):
     for key in ("name", "version", "library", "abis", "license"):
         if description.get(key, "") != entry.get(key):
             problems.append(f"image.json's ARM translation {key} is not the package's")
+    if entry.get("system_image") != ARM_TRANSLATION_DEFAULT_GUEST_PATH:
+        problems.append("image.json does not say the default ARM translation package is at "
+                        f"{ARM_TRANSLATION_DEFAULT_GUEST_PATH}, so the host never uses it")
+    return problems
+
+
+def check_builtin_arm_translation(manifest, names, read):
+    """The problems with the default translator in an image's system partition, given the
+    names in its target files and a function that reads one. An x86_64 image that image.json
+    says has one carries its system image and properties; any other image carries neither, so
+    Android never offers ARM64 without a translator to run it."""
+    entry = manifest.get("arm_translation")
+    arch = manifest.get("arch") or DEFAULT_ARCH
+    inside = [name for name in (ARM_TRANSLATION_DEFAULT_IMAGE, ARM_TRANSLATION_DEFAULT_PROPS) if name in names]
+    if arch != "x86_64":
+        return [f"the {arch} image's system partition has {name}, but it runs ARM apps without a translator"
+                for name in inside]
+    if entry is None:
+        return [f"the system partition has {name}, which image.json does not describe, so the host never "
+                "uses it" for name in inside]
+    problems = []
+    for name in (ARM_TRANSLATION_DEFAULT_IMAGE, ARM_TRANSLATION_DEFAULT_PROPS):
+        if name not in names:
+            problems.append(f"{name} is missing, so Android does not translate ARM apps from its first start")
+    if ARM_TRANSLATION_DEFAULT_IMAGE in names:
+        found = hashlib.sha256(read(ARM_TRANSLATION_DEFAULT_IMAGE)).hexdigest()
+        if found != entry.get("system_image_sha256"):
+            problems.append(f"{ARM_TRANSLATION_DEFAULT_IMAGE} is not the system image of the package "
+                            "image.json describes")
+    if ARM_TRANSLATION_DEFAULT_PROPS in names:
+        on = ARM_TRANSLATION_PROPS["SYSTEM/etc/dsa/arm-translation-on.prop"].read_bytes()
+        if read(ARM_TRANSLATION_DEFAULT_PROPS) != on:
+            problems.append("arm-translation-default.prop is not arm-translation-on.prop, so the default "
+                            "package is not laid over the system as a user's is")
     return problems
 
 
@@ -2087,7 +2150,7 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, settings_overlay=None, power_hal=None,
            codec2=None, audio=None, gnss_hal=None,
-           sensors=None, camera=None):
+           sensors=None, camera=None, arm_translation=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -2099,8 +2162,10 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     and DSA's GNSS HAL, which gives the guest the host's location, in place of Cuttlefish's
     when `gnss_hal` names it, and DSA's sensors HAL in place of Cuttlefish's when `sensors`
     names it, and DSA's camera HAL, which lends the host's cameras, in place of Cuttlefish's
-    emulated cameras when `camera` names it."""
+    emulated cameras when `camera` names it, and the default ARM translation package's system
+    image when `arm_translation` names the package's folder."""
     fstab = (HERE / "fstab.dsa").read_bytes()
+    default_translator = (Path(arm_translation) / ARM_TRANSLATION_IMAGE).read_bytes() if arm_translation else None
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
     vulkan_payload = Path(vulkan_driver).read_bytes() if vulkan_driver else None
     channeld_payload = Path(channeld).read_bytes() if channeld else None
@@ -2340,6 +2405,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 elif name == SYSTEM_FS_CONFIG:
                     data = add_filesystem_config(data.decode(),
                                                  TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG
+                                                 + (ARM_TRANSLATION_DEFAULT_FS_CONFIG
+                                                    if default_translator is not None else [])
                                                  + GAPPS_FS_CONFIG).encode()
                 elif name == SYSTEM_EXT_FS_CONFIG and agent_payload is not None:
                     data = add_filesystem_config(data.decode(), AGENT_FS_CONFIG).encode()
@@ -2384,6 +2451,10 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         zout.writestr(ARM_TRANSLATION_RC, (HERE / "dsa-arm-translation.rc").read_bytes())
         for target, source_file in ARM_TRANSLATION_PROPS.items():
             zout.writestr(target, source_file.read_bytes())
+        if default_translator is not None:
+            zout.writestr(ARM_TRANSLATION_DEFAULT_IMAGE, default_translator)
+            zout.writestr(ARM_TRANSLATION_DEFAULT_PROPS,
+                          ARM_TRANSLATION_PROPS["SYSTEM/etc/dsa/arm-translation-on.prop"].read_bytes())
         zout.writestr(GAPPS_RC, (HERE / "dsa-gapps.rc").read_bytes())
         for target, source_file in GAPPS_PROPS.items():
             zout.writestr(target, source_file.read_bytes())
@@ -3114,12 +3185,11 @@ def main():
     parser.add_argument("--graphics-dir", type=Path,
                         help="a directory containing guest graphics libraries (vulkan.ranchu.so, libOpenglSystemCommon.so)")
     parser.add_argument("--arm-translation", type=Path,
-                        help="an ARM translation package folder (arm-translation.json and system.img) to "
-                             "release beside an x86_64 image as its default translator")
+                        help="an ARM translation package folder (arm-translation.json and system.img) that "
+                             "an x86_64 image carries as its default translator, and releases beside it")
     args = parser.parse_args()
-    if args.arm_translation and args.arch != "x86_64":
-        raise SystemExit(f"an {args.arch} image runs ARM apps without a translator, so it takes no "
-                         "ARM translation package")
+    if args.arm_translation:
+        checked_arm_translation(args.arm_translation, args.arch)
 
     spec = image_spec(json.loads((HERE / "inputs.json").read_text())["images"], args.major, args.arch)
     use_arch(args.arch)
@@ -3171,7 +3241,7 @@ def main():
            otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
            framework_overlay=framework_overlay, settings_overlay=settings_overlay, power_hal=args.power_hal,
            codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
-           sensors=args.sensors, camera=args.camera)
+           sensors=args.sensors, camera=args.camera, arm_translation=args.arm_translation)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path

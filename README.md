@@ -65,7 +65,8 @@ rough edges. Linux, macOS and ARM64 Windows are in progress (see
   idle memory returned to the host. Freezing Android is an option, off by default.
 - Host devices lent to Android: GPU (Vulkan remoting through gfxstream, OpenGL ES through
   ANGLE), audio, video codecs, microphone, camera, location, sensors and power.
-- An optional ARM translation layer, installed separately, for ARM-only apps on x64.
+- An ARM translation layer for ARM-only apps on x64: the open source translator Digitalis
+  comes with the x64 image, and Google's translator or another package can replace it.
 - Signed automatic updates of both the Android image and DSA itself, with a failed image
   rolled back to the last good one.
 - Each Windows user gets their own Android and data disk, in their own profile.

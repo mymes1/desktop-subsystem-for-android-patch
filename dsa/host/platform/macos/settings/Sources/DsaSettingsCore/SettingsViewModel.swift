@@ -72,17 +72,39 @@ public final class SettingsViewModel: ObservableObject {
     public var hasArmPackage: Bool { arm?.package != nil }
     public var canRemoveArmTranslation: Bool { canChange && hasArmPackage }
     public var armRestartNeeded: Bool { arm?.restartNeeded ?? false }
+    /// Whether the image carries a default translator. Only an x86_64 image does; an arm64
+    /// one, which every Apple silicon Mac runs, runs ARM apps itself.
+    public var hasArmDefault: Bool { arm?.defaultPackage != nil }
+    /// The remove row shows only where there is no default translator: where there is one,
+    /// removing the package is going back to it, which its own row does.
+    public var showsArmRemove: Bool { !hasArmDefault }
+    /// Whether the default translator can be chosen again: a package is installed in its place.
+    public var canUseDefaultArmTranslator: Bool { canChange && hasArmDefault && hasArmPackage }
+    /// What the default translator is, and what going back to it does.
+    public var armDefaultDescription: String {
+        guard let d = arm?.defaultPackage else { return "" }
+        return text.format("Arm_DefaultDescription", d.name, d.version, d.license.isEmpty ? text.get("Arm_NoLicense") : d.license)
+    }
 
     /// One line on whether ARM apps run, and with what.
     public var armStatus: String {
-        guard let arm, let package = arm.package else {
+        guard let arm else {
             return text.get("Arm_NotSupported")
         }
-        if !arm.enabled {
+        if let translator = arm.translator {
+            let license = translator.license.isEmpty ? text.get("Arm_NoLicense") : translator.license
+            if translator.source == .builtIn {
+                return text.format("Arm_SupportedDefault", translator.name, translator.version, license)
+            }
+            return text.format("Arm_Supported", translator.name, translator.version, license)
+        }
+        if !arm.enabled, let package = arm.package {
             return text.format("Arm_TurnedOff", package.name, package.version)
         }
-        let license = package.license.isEmpty ? text.get("Arm_NoLicense") : package.license
-        return text.format("Arm_Supported", package.name, package.version, license)
+        if !arm.enabled, let builtIn = arm.defaultPackage {
+            return text.format("Arm_DefaultTurnedOff", builtIn.name, builtIn.version)
+        }
+        return text.get("Arm_NotSupported")
     }
 
     /// The ABIs the running Android installs apps for, or that it is not running.
@@ -343,6 +365,19 @@ public final class SettingsViewModel: ObservableObject {
         error = nil
         do {
             arm = try await service.removeArmTranslation()
+        } catch {
+            self.error = Format.problem(text, error)
+        }
+        isBusy = false
+    }
+
+    /// Goes back to the image's default translator: the package installed in its place is
+    /// removed, from the next start of Android.
+    public func useDefaultArmTranslator() async {
+        isBusy = true
+        error = nil
+        do {
+            arm = try await service.useDefaultArmTranslator()
         } catch {
             self.error = Format.problem(text, error)
         }

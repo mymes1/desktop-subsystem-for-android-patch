@@ -155,17 +155,6 @@ fn settings_store(config: &HostConfig) -> Arc<dyn SettingsStore> {
     Arc::new(FileSettings::new(config.settings_dir()))
 }
 
-/// The bootconfig that tells `user`'s next boot to use their ARM translation package, or
-/// nothing.
-fn arm_translation_bootconfig(store: &dyn SettingsStore, user: &str) -> String {
-    let package = store.arm_translation(user).unwrap_or_else(|why| {
-        eprintln!("{user}: arm translation: the package is not known ({why}); booting without it");
-        None
-    });
-    let enabled = store.get(user).map(|s| s.arm_translation).unwrap_or(true);
-    dsa_host_core::arm_translation::bootconfig(package.as_ref(), enabled).to_string()
-}
-
 /// The image folder the next boot starts from, and its version.
 fn current_image(
     config: &HostConfig,
@@ -349,11 +338,13 @@ pub fn create_user_android(
         plan,
     )
     .with_bootconfig({
-        // An installed ARM translation package is used only while the user's setting is on;
-        // the Google apps the user installed, while they are installed.
+        // An ARM translator (the package the user installed, else the image's default one) is
+        // used only while the user's setting is on; the Google apps the user installed, while
+        // they are installed.
         let (store, user) = (Arc::clone(&store), user.to_string());
-        Box::new(move || {
-            arm_translation_bootconfig(&*store, &user)
+        Box::new(move |image: &ImageFiles| {
+            let dir = image.initrd.as_deref().and_then(Path::parent);
+            dsa_host_core::arm_translation::bootconfig_for(&*store, &user, dir)
                 + &dsa_host_core::gapps::bootconfig_for(&*store, &user)
         })
     })
@@ -731,6 +722,7 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
     };
     let networks: Networks = Arc::default();
     let identity_updates = updates.clone();
+    let translator_updates = updates.clone();
     let reset_updates = updates.clone();
     let factory_config = config.clone();
     let factory_build = build.to_string();
@@ -807,6 +799,7 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
     )
     .with_beside("version");
     let identity_config = config.clone();
+    let translator_config = config.clone();
     let mut service = HostApiService::new(androids.clone(), build)
         .with_data_reset(Arc::new(data_reset))
         .with_program_updates(Arc::new(crate::package_updates::PackageManagerUpdates))
@@ -834,7 +827,13 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
                 let (dir, _) = current_image(&identity_config, identity_updates.as_ref()).ok()?;
                 ImageBuild::from_image_dir(&dir)
             }),
-        );
+        )
+        // The default ARM translator of the image the next start boots: only an x86_64 image
+        // has one.
+        .with_default_arm_translation(Arc::new(move |_: &str| {
+            let (dir, _) = current_image(&translator_config, translator_updates.as_ref()).ok()?;
+            dsa_host_core::arm_translation::default_package(&dir)
+        }));
     if let Some(source) = android_version {
         service = service.with_android_version(source);
     }

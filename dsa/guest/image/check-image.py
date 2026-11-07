@@ -331,6 +331,12 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if "on post-fs-data && property:ro.boot.dsa.arm_translation=on" not in rc:
             problems.append("dsa-arm-translation.rc mounts the ARM translation package without waiting "
                             "for the host to say one is installed")
+        if "on post-fs-data && property:ro.boot.dsa.arm_translation=default" not in rc:
+            problems.append("dsa-arm-translation.rc never lays the image's default ARM translation package "
+                            "over the system")
+    # The default translator: in an x86_64 image's system partition when image.json describes
+    # one, and nowhere in an arm64 image.
+    problems += make_image.check_builtin_arm_translation(manifest, names, z.read)
     # The ABIs translation adds come after the guest's own, so the Play Store hands out the
     # x86_64 builds of Google Play services and the other system apps, not their ARM builds.
     if "SYSTEM/etc/dsa/arm-translation-on.prop" in names:

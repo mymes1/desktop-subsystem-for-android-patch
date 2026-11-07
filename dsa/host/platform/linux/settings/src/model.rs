@@ -607,11 +607,36 @@ impl AndroidVersion {
     }
 }
 
+/// Where an ARM translator comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArmSource {
+    /// The default translator the image of this Android carries.
+    Default,
+    /// A package the user installed.
+    User,
+    /// Google's translator, which the user fetched.
+    Google,
+}
+
+/// The ARM translator Android uses: where it comes from, its name, version and licence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArmTranslator {
+    pub source: ArmSource,
+    pub name: String,
+    pub version: String,
+    pub license: String,
+}
+
 /// Whether ARM apps can run, and with which translation package.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArmTranslation {
-    /// The package's name, version and licence, when one is installed.
+    /// The installed package's name, version and licence, when one is installed.
     pub package: Option<(String, String, String)>,
+    /// The name, version and licence of the default package the image carries; only an
+    /// x86_64 image has one.
+    pub default: Option<(String, String, String)>,
+    /// What Android uses from its next start; `None` when it uses no translator.
+    pub translator: Option<ArmTranslator>,
     pub enabled: bool,
     pub supported: bool,
     /// The ABIs the running Android installs apps for, when it runs.
@@ -624,13 +649,45 @@ pub struct ArmTranslation {
 
 impl ArmTranslation {
     pub fn read(json: &Value) -> ArmTranslation {
-        let package = json
-            .get("package")
-            .filter(|p| p.is_object())
-            .map(|p| (text(p, "name"), text(p, "version"), text(p, "license")));
+        let described = |key: &str| {
+            json.get(key)
+                .filter(|p| p.is_object())
+                .map(|p| (text(p, "name"), text(p, "version"), text(p, "license")))
+        };
+        let package = described("package");
+        let enabled = flag(json, "enabled", true);
+        let translator = match json.get("translator") {
+            Some(t) if t.is_object() => {
+                let source = match text(t, "source").as_str() {
+                    "default" => Some(ArmSource::Default),
+                    "google" => Some(ArmSource::Google),
+                    "user" => Some(ArmSource::User),
+                    _ => None,
+                };
+                source.map(|source| ArmTranslator {
+                    source,
+                    name: text(t, "name"),
+                    version: text(t, "version"),
+                    license: text(t, "license"),
+                })
+            }
+            Some(_) => None,
+            // A dsa from before the default translator: the installed package, while on.
+            None => package
+                .clone()
+                .filter(|_| enabled)
+                .map(|(name, version, license)| ArmTranslator {
+                    source: ArmSource::User,
+                    name,
+                    version,
+                    license,
+                }),
+        };
         ArmTranslation {
             package,
-            enabled: flag(json, "enabled", true),
+            default: described("default"),
+            translator,
+            enabled,
             supported: flag(json, "supported", false),
             abilist: json
                 .get("android")
@@ -1060,6 +1117,14 @@ impl Client {
     pub fn remove_arm_translation(&self) -> Result<ArmTranslation, Failure> {
         Ok(ArmTranslation::read(
             &self.json(&["arm-translation", "remove"])?,
+        ))
+    }
+
+    /// Goes back to the default translator the image carries, removing the package installed
+    /// in its place. It applies from the next start of Android.
+    pub fn use_default_arm_translator(&self) -> Result<ArmTranslation, Failure> {
+        Ok(ArmTranslation::read(
+            &self.json(&["arm-translation", "use-default"])?,
         ))
     }
 

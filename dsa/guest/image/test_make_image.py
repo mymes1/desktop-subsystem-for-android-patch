@@ -3563,7 +3563,7 @@ class Arm64GuestTests(unittest.TestCase):
 class ArmTranslationImageTests(unittest.TestCase):
     """The image's half of ARM app translation: nothing is on unless the host says a package is."""
 
-    def _modify(self, root):
+    def _modify(self, root, arm_translation=None):
         source = root / "target-files.zip"
         with zipfile.ZipFile(source, "w") as archive:
             archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
@@ -3571,8 +3571,19 @@ class ArmTranslationImageTests(unittest.TestCase):
             archive.writestr("META/filesystem_config.txt", "system/bin/sh 0 2000 755 capabilities=0x0\n")
             archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\nro.dalvik.vm.native.bridge=0\n")
         modified = root / "modified.zip"
-        make_image.modify(source, modified)
+        make_image.modify(source, modified, arm_translation=arm_translation)
         return zipfile.ZipFile(modified)
+
+    @staticmethod
+    def _sections(rc):
+        """Each action of an init script: its trigger line and its command lines."""
+        sections = []
+        for line in rc.splitlines():
+            if line.startswith("on "):
+                sections.append((line, []))
+            elif line.strip() and not line.lstrip().startswith("#") and sections:
+                sections[-1][1].append(line.strip())
+        return sections
 
     def test_fr25_the_product_props_import_the_bridge_only_when_the_host_turns_it_on(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
@@ -3620,26 +3631,96 @@ class ArmTranslationImageTests(unittest.TestCase):
 
     def test_fr25_the_package_is_mounted_over_system_only_when_the_host_turns_it_on(self):
         rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()
-        trigger = "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n"
-        before, after = rc.split(trigger, 1)
-        section, rest = after.split("\n\n", 1)
-        self.assertIn("mount erofs loop@/data/vendor/dsa/arm-translation/system.img /mnt/dsa-arm-translation ro",
-                      section)
-        for directory in ["lib64", "bin", "etc"]:
-            self.assertIn(
-                f"mount overlay overlay /system/{directory} ro nodev nosuid "
-                f"lowerdir=/mnt/dsa-arm-translation/system/{directory}:/system/{directory}",
-                section,
-            )
-        self.assertIn("/proc/sys/fs/binfmt_misc/register", section)
+        sections = dict(self._sections(rc))
+        images = {
+            "on": "/data/vendor/dsa/arm-translation/system.img",
+            "default": "/system/etc/dsa/arm-translation/default.img",
+        }
+        for value, image in images.items():
+            section = sections[f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"]
+            self.assertIn(f"mount erofs loop@{image} /mnt/dsa-arm-translation ro nodev nosuid "
+                          "context=u:object_r:system_lib_file:s0", section)
+            for directory in ["lib64", "bin", "etc"]:
+                self.assertIn(
+                    f"mount overlay overlay /system/{directory} ro nodev nosuid "
+                    f"lowerdir=/mnt/dsa-arm-translation/system/{directory}:/system/{directory}",
+                    section,
+                )
+            # Nothing else in Android mounts binfmt_misc, so the handlers are registered only
+            # once it is mounted here.
+            mount = section.index("mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid")
+            for rule in ["arm64_exe", "arm64_dyn"]:
+                register = section.index(f"copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/{rule} "
+                                         "/proc/sys/fs/binfmt_misc/register")
+                self.assertGreater(register, mount)
         # Every mount waits for the host's word.
-        self.assertNotIn("mount ", before)
-        self.assertNotIn("mount ", rest)
+        for trigger, commands in self._sections(rc):
+            if trigger not in {f"on post-fs-data && property:ro.boot.dsa.arm_translation={value}"
+                               for value in images}:
+                self.assertFalse([c for c in commands if c.startswith("mount ")], trigger)
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             self.assertEqual(archive.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(), rc)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
             self.assertIn("(allow init system_lib_file (dir (mounton)))", policy)
+            self.assertIn("(allow init proc (dir (mounton)))", policy)
+            self.assertIn("(allow init binfmt_miscfs (filesystem (mount)))", policy)
             self.assertIn("(allow init binfmt_miscfs (file (write open getattr)))", policy)
+
+    def test_fr25_an_image_made_with_a_default_package_carries_it_in_its_system_partition(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            package = DefaultArmTranslationTests._package(root)
+            with self._modify(root, arm_translation=package) as archive:
+                self.assertEqual(archive.read("SYSTEM/etc/dsa/arm-translation/default.img"),
+                                 (package / "system.img").read_bytes())
+                # The default package is laid over the system as a user's is.
+                self.assertEqual(archive.read("SYSTEM/etc/dsa/arm-translation-default.prop"),
+                                 archive.read("SYSTEM/etc/dsa/arm-translation-on.prop"))
+                config = archive.read("META/filesystem_config.txt").decode()
+                for rule in make_image.ARM_TRANSLATION_DEFAULT_FS_CONFIG:
+                    self.assertIn(rule, config)
+            # Without one, a boot told to use the default has no properties to import, so it
+            # stays x86_64 only.
+            (root / "modified.zip").unlink()
+            with self._modify(root) as archive:
+                names = archive.namelist()
+                self.assertNotIn("SYSTEM/etc/dsa/arm-translation/default.img", names)
+                self.assertNotIn("SYSTEM/etc/dsa/arm-translation-default.prop", names)
+                config = archive.read("META/filesystem_config.txt").decode()
+                for rule in make_image.ARM_TRANSLATION_DEFAULT_FS_CONFIG:
+                    self.assertNotIn(rule, config)
+
+    def test_fr25_check_image_wants_the_default_package_in_the_system_partition_of_an_x86_64_image_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            package = DefaultArmTranslationTests._package(root)
+            out = root / "image"
+            out.mkdir()
+            entry = make_image.default_arm_translation(package, "x86_64", out)
+            self.assertEqual(entry["system_image"], "/system/etc/dsa/arm-translation/default.img")
+            on = (Path(make_image.__file__).with_name("arm-translation-on.prop")).read_bytes()
+            good = {
+                "SYSTEM/etc/dsa/arm-translation/default.img": (package / "system.img").read_bytes(),
+                "SYSTEM/etc/dsa/arm-translation-default.prop": on,
+            }
+
+            def check(manifest, files):
+                return make_image.check_builtin_arm_translation(manifest, list(files), files.__getitem__)
+
+            x86 = {"arch": "x86_64", "arm_translation": entry}
+            self.assertEqual(check(x86, good), [])
+            self.assertTrue(check(x86, {}), "described but not carried")
+            changed = dict(good, **{"SYSTEM/etc/dsa/arm-translation/default.img": b"other"})
+            self.assertTrue(check(x86, changed), "not the described package")
+            other_props = dict(good, **{"SYSTEM/etc/dsa/arm-translation-default.prop": b"ro.x=1\n"})
+            self.assertTrue(check(x86, other_props))
+            self.assertEqual(check({"arch": "x86_64"}, {}), [])
+            self.assertTrue(check({"arch": "x86_64"}, good), "carried but not described")
+            # An arm64 image runs ARM apps itself: no default package, described or carried.
+            self.assertEqual(check({"arch": "arm64"}, {}), [])
+            self.assertTrue(check({"arch": "arm64"}, good))
+            for name, data in good.items():
+                self.assertTrue(check({"arch": "arm64"}, {name: data}), name)
 
     def test_fr25_check_image_rejects_an_image_that_turns_a_bridge_on_by_itself(self):
         check_script = Path(__file__).with_name("check-image.py")
@@ -3659,7 +3740,8 @@ class ArmTranslationImageTests(unittest.TestCase):
                     archive.writestr("SYSTEM/build.prop", f"ro.debuggable=0\nro.dalvik.vm.native.bridge={bridge}\n")
                     if complete:
                         archive.writestr("SYSTEM/etc/init/dsa-arm-translation.rc",
-                                         "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n")
+                                         "on post-fs-data && property:ro.boot.dsa.arm_translation=on\n"
+                                         "on post-fs-data && property:ro.boot.dsa.arm_translation=default\n")
                         archive.writestr("SYSTEM/etc/dsa/arm-translation-on.prop", "")
                         archive.writestr("SYSTEM/etc/dsa/arm-translation-off.prop", "")
                         archive.writestr("PRODUCT/etc/build.prop", make_image.add_arm_translation_import(""))
@@ -3670,7 +3752,8 @@ class ArmTranslationImageTests(unittest.TestCase):
                     capture_output=True, text=True,
                 ).stdout)
         for problem in ["dsa-arm-translation.rc is missing", "does not end with the ARM translation import",
-                        "sets ro.dalvik.vm.native.bridge=libhoudini.so"]:
+                        "sets ro.dalvik.vm.native.bridge=libhoudini.so",
+                        "never lays the image's default ARM translation package"]:
             self.assertIn(problem, outputs[0])
             self.assertNotIn(problem, outputs[1])
 
@@ -3766,9 +3849,10 @@ class DefaultArmTranslationTests(unittest.TestCase):
     """The default translator an x86_64 image's release carries (the Translator build's
     Digitalis package), and that an arm64 image never carries one."""
 
-    def _package(self, root, **changes):
+    @staticmethod
+    def _package(root, **changes):
         package = Path(root) / "package"
-        package.mkdir()
+        package.mkdir(exist_ok=True)
         description = {"name": "Digitalis", "version": "17-abefbe2b1600", "library": "libberberis_arm64.so",
                        "abis": ["arm64-v8a"], "license": "Apache-2.0", **changes}
         (package / "arm-translation.json").write_text(json.dumps(description))
@@ -3787,8 +3871,15 @@ class DefaultArmTranslationTests(unittest.TestCase):
                              ("Digitalis", "17-abefbe2b1600", ["arm64-v8a"], "Apache-2.0"))
             with zipfile.ZipFile(out / "arm-translation.zip") as z:
                 self.assertEqual(sorted(z.namelist()), ["arm-translation.json", "system.img"])
+            self.assertEqual(entry["system_image"], "/system/etc/dsa/arm-translation/default.img")
+            self.assertEqual(entry["system_image_sha256"],
+                             hashlib.sha256((Path(tmp) / "package/system.img").read_bytes()).hexdigest())
             manifest = {"arch": "x86_64", "files": {}, "arm_translation": entry}
             self.assertEqual(make_image.check_default_arm_translation(manifest, out), [])
+            # The host uses only a default package image.json says is in the system partition.
+            elsewhere = dict(entry, system_image="/data/default.img")
+            self.assertTrue(make_image.check_default_arm_translation(
+                {"arch": "x86_64", "files": {}, "arm_translation": elsewhere}, out))
             # The zip is what install takes, so a changed one is caught before it is published.
             with zipfile.ZipFile(out / "arm-translation.zip", "a") as z:
                 z.writestr("extra", "x")

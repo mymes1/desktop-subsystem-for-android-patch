@@ -1445,7 +1445,8 @@ message RemoveArmTranslation {}
 
 // Where ARM translation stands for the caller.
 message ArmTranslation {
-  // The installed package; absent when there is none.
+  // The package the caller installed (their own, or Google's translator); absent when there
+  // is none. It is used in place of the default package.
   ArmTranslationPackage package = 1;
   // The arm_translation setting.
   bool enabled = 2;
@@ -1461,6 +1462,13 @@ message ArmTranslation {
   // What is installed and switched on differs from what the running Android booted with, so
   // it applies once Android starts again.
   bool restart_needed = 7;
+  // The default package of the image the caller's Android starts from, which it uses while
+  // the caller has installed none. Only an x86_64 image has one; absent otherwise.
+  ArmTranslationPackage default_package = 8;
+  // The translator the caller's Android uses with these settings, from its next start: "default"
+  // (default_package), "user" (package, the caller's own), "google" (package, Google's
+  // translator), or empty for none.
+  string translator = 9;
 }
 
 // The Google apps package a user installed: LiteGapps' Core build for their Android, which the

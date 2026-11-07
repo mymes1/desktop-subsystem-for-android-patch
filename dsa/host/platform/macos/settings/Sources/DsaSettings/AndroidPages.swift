@@ -410,9 +410,17 @@ struct AdvancedPage: View {
                 if vm.armRestartNeeded {
                     Banner(kind: .info, title: T("ArmRestartBar.Title"), message: T("ArmRestartBar.Message"))
                 }
-                ButtonRow(title: T("ArmRemoveCard.Header"), detail: T("ArmRemoveCard.Description"),
-                          action: T("ArmRemoveButton.Content"), enabled: vm.canRemoveArmTranslation) {
-                    Task { await vm.removeArmTranslation() }
+                if vm.hasArmDefault {
+                    ButtonRow(title: T("ArmDefaultCard.Header"), detail: vm.armDefaultDescription,
+                              action: T("ArmDefaultButton.Content"), enabled: vm.canUseDefaultArmTranslator) {
+                        Task { await vm.useDefaultArmTranslator() }
+                    }
+                }
+                if vm.showsArmRemove {
+                    ButtonRow(title: T("ArmRemoveCard.Header"), detail: T("ArmRemoveCard.Description"),
+                              action: T("ArmRemoveButton.Content"), enabled: vm.canRemoveArmTranslation) {
+                        Task { await vm.removeArmTranslation() }
+                    }
                 }
                 if vm.showsGoogleArm {
                     ButtonRow(title: T("ArmGoogleCard.Header"),
