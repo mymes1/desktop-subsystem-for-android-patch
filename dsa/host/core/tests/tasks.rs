@@ -222,7 +222,8 @@ fn fr3_close_task_and_launch_app_from_a_client_reach_the_guest() {
     assert_eq!(
         launch.body,
         Some(Body::LaunchApp(control::LaunchApp {
-            package_name: "com.example.clock".into()
+            package_name: "com.example.clock".into(),
+            ..Default::default()
         }))
     );
     let close = dsa_protocol::decode(&setup.agent.recv(Some(WAIT)).unwrap()).unwrap();
@@ -358,6 +359,7 @@ fn fr3_an_apps_name_and_icon_reach_a_watching_client_before_its_task() {
             package_name: "com.example.app1".into(),
             label: "Clock".into(),
             icon_png: icon.clone(),
+            ..Default::default()
         }),
     );
     send(&mut setup.agent, updated(1, "Alarm"));

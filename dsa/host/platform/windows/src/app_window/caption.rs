@@ -33,15 +33,32 @@
 //! would leave it black. The presenter samples the band and the row under it from the app's
 //! frames ([`WindowPresenter::on_band_colour`]), and the band is then filled with the app's
 //! top color, with glyphs in the tone that color calls for.
+//!
+//! The icon is the one the title bar of an app's program carries: an adaptive icon's
+//! foreground layer alone (`CAPTION_ICON_ID`), so no square plate stands over the app, else
+//! the program's own icon. While the task can go back (`ToHost::CaptionBack`), the icon's cell
+//! shows a back arrow instead, a button of the caption buttons' look whose click sends the task
+//! Back; its hit test code is `HTHELP`, which a window without a help button never otherwise
+//! answers, so Windows leaves the press to this window.
+//!
+//! An app that draws its own title bar (`ToHost::CaptionMode`) fills the band with its own
+//! content. The window then draws only the icon's cell and the buttons over it, and the points
+//! of the band on the app's controls are `HTCLIENT`, so they reach the app as any point of the
+//! client area does; the rest still drags the window.
 
 use std::cell::{Cell, RefCell};
 
+use std::sync::mpsc::Sender;
+
 use dsa_host_core::compositor::caption::{
-    caption_tone, paint_title_bar, scaled, CaptionButton, CaptionHit, CaptionLayout,
-    CaptionPalette, CaptionState, CaptionTone, TitleBarContent, TITLE_TEXT_AT_100,
+    caption_tone, paint_title_bar, scaled, title_bar_hit, BackButton, CaptionBand, CaptionButton,
+    CaptionHit, CaptionLayout, CaptionPalette, CaptionState, CaptionTone, TitleBarContent,
+    TitleBarHit, TitleBarMode, TITLE_TEXT_AT_100,
 };
 use dsa_host_core::compositor::window_hosts::FromHost;
-use dsa_host_core::tasks::StatusBarAppearance;
+use dsa_host_core::input::InputEvent;
+use dsa_host_core::keys::{keycode, KeyAction, KeyEvent as GuestKey};
+use dsa_host_core::tasks::{Bounds, StatusBarAppearance};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Dwm::{
     DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE,
@@ -61,11 +78,12 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     TrackMouseEvent, TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    DefWindowProcW, GetClientRect, IsZoomed, PostMessageW, SystemParametersInfoW, HTCAPTION,
-    HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, HTSYSMENU, HTTOP, HTTOPLEFT, HTTOPRIGHT,
-    NCCALCSIZE_PARAMS, SC_CLOSE, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SPI_GETHIGHCONTRAST,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDBLCLK,
-    WM_NCLBUTTONDOWN, WM_NCLBUTTONUP, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_SYSCOMMAND,
+    DefWindowProcW, GetClientRect, GetMessageTime, IsZoomed, PostMessageW, SystemParametersInfoW,
+    HTCAPTION, HTCLIENT, HTCLOSE, HTHELP, HTMAXBUTTON, HTMINBUTTON, HTSYSMENU, HTTOP, HTTOPLEFT,
+    HTTOPRIGHT, NCCALCSIZE_PARAMS, SC_CLOSE, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE,
+    SPI_GETHIGHCONTRAST, WINDOW_EX_STYLE, WINDOW_STYLE, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST,
+    WM_NCLBUTTONDBLCLK, WM_NCLBUTTONDOWN, WM_NCLBUTTONUP, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE,
+    WM_SYSCOMMAND,
 };
 
 use crate::compositor::present::WindowPresenter;
@@ -172,14 +190,35 @@ fn code_of(hit: CaptionHit) -> u32 {
     }
 }
 
-/// The hit test code of the client point (`x`, `y`) of a window laid out as `layout`. The
-/// app's icon is `HTSYSMENU`, so a press on it opens the system menu as a caption icon's
-/// does; the rest is as the layout says.
-fn hit_code(layout: &CaptionLayout, x: i32, y: i32) -> u32 {
-    if layout.on_icon(x, y) {
-        return HTSYSMENU;
+/// The hit test code of the back arrow in the icon's cell. A window without a help button
+/// never answers it otherwise, and this window presses it itself, as it does its buttons.
+const HT_BACK: u32 = HTHELP;
+
+/// The hit test code of the client point (`x`, `y`) of a window laid out as `layout`, its
+/// title bar showing `mode`. The app's icon is `HTSYSMENU`, so a press on it opens the system
+/// menu as a caption icon's does; the back arrow in its place is [`HT_BACK`]; an app's control
+/// in a band it draws itself is `HTCLIENT`; the rest is as the layout says.
+fn hit_code(layout: &CaptionLayout, x: i32, y: i32, mode: &TitleBarMode) -> u32 {
+    match title_bar_hit(layout, x, y, mode) {
+        TitleBarHit::SystemMenu => HTSYSMENU,
+        TitleBarHit::Back => HT_BACK,
+        TitleBarHit::Window(hit) => code_of(hit),
     }
-    code_of(layout.hit(x, y))
+}
+
+/// The key events a click on the back arrow sends the task: Back pressed and released, at
+/// `time_ms` of the host's clock.
+pub fn back_keys(task_id: i32, time_ms: u32) -> [GuestKey; 2] {
+    let key = |action| GuestKey {
+        task_id,
+        action,
+        key_code: keycode::BACK,
+        repeat_count: 0,
+        meta_state: 0,
+        event_time_ms: time_ms,
+        canceled: false,
+    };
+    [key(KeyAction::Down), key(KeyAction::Up)]
 }
 
 /// The faces the app's name is written in, the first one installed winning: Segoe UI
@@ -305,7 +344,9 @@ unsafe fn title_mask(title: &str, size: (u32, u32), dpi: u32) -> Option<Vec<u8>>
     Some(mask)
 }
 
-/// What a title bar was drawn from, so a message that changes nothing draws nothing.
+/// What a title bar was drawn from, so a message that changes nothing draws nothing: the
+/// layout, the buttons' state, the colors, the DPI, the name, the fill, whether the app draws
+/// its own title bar, and the back arrow.
 type Drawn = (
     CaptionLayout,
     CaptionState,
@@ -313,6 +354,8 @@ type Drawn = (
     u32,
     String,
     Option<u32>,
+    bool,
+    Option<BackButton>,
 );
 
 /// A task window's title bar: the tone and state of its buttons, the app's icon and name,
@@ -338,8 +381,18 @@ pub struct CaptionWindow {
     hovered: Cell<Option<CaptionButton>>,
     pressed: Cell<Option<CaptionButton>>,
     active: Cell<bool>,
-    /// The height last reported; 0 before the first report.
-    reported: Cell<u32>,
+    /// The band last reported; all 0 before the first report.
+    reported: Cell<CaptionBand>,
+    /// Whether the app draws its own title bar, and where its controls are in the band.
+    app_drawn: Cell<bool>,
+    interactive: RefCell<Vec<Bounds>>,
+    /// Whether the icon's cell shows the back arrow, and whether the pointer is over it or
+    /// presses it.
+    back: Cell<bool>,
+    back_hovered: Cell<bool>,
+    back_pressed: Cell<bool>,
+    /// Where the back arrow's Back goes: the window host's input for the guest.
+    input: Sender<InputEvent>,
     /// Whether Windows will say when the pointer leaves the non-client area.
     tracking: Cell<bool>,
     /// What was last drawn, so a message that changes nothing draws nothing.
@@ -352,6 +405,7 @@ impl CaptionWindow {
         style: WINDOW_STYLE,
         ex_style: WINDOW_EX_STYLE,
         icon_id: usize,
+        input: Sender<InputEvent>,
     ) -> CaptionWindow {
         CaptionWindow {
             task_id,
@@ -366,10 +420,83 @@ impl CaptionWindow {
             hovered: Cell::new(None),
             pressed: Cell::new(None),
             active: Cell::new(true),
-            reported: Cell::new(0),
+            reported: Cell::new(CaptionBand::default()),
+            app_drawn: Cell::new(false),
+            interactive: RefCell::new(Vec::new()),
+            back: Cell::new(false),
+            back_hovered: Cell::new(false),
+            back_pressed: Cell::new(false),
+            input,
             tracking: Cell::new(false),
             drawn: RefCell::new(None),
         }
+    }
+
+    /// Whether the app draws its own title bar, and where its controls are in the band, in
+    /// client pixels.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
+    pub unsafe fn set_mode(
+        &self,
+        hwnd: HWND,
+        app_drawn: bool,
+        interactive: Vec<Bounds>,
+        presenter: Option<&WindowPresenter>,
+    ) {
+        let before = self.shown_tone();
+        self.app_drawn.set(app_drawn);
+        *self.interactive.borrow_mut() = interactive;
+        if self.shown_tone() != before {
+            self.apply_tone(hwnd);
+        }
+        self.paint(hwnd, presenter);
+    }
+
+    /// Whether the icon's cell shows the back arrow: the task has somewhere to go back to.
+    ///
+    /// # Safety
+    ///
+    /// `hwnd` is this window, a live window of the calling thread.
+    pub unsafe fn set_back(&self, hwnd: HWND, back: bool, presenter: Option<&WindowPresenter>) {
+        if self.back.replace(back) != back {
+            self.back_hovered.set(false);
+            self.back_pressed.set(false);
+        }
+        self.paint(hwnd, presenter);
+    }
+
+    /// Whether the icon's cell shows the back arrow now, for the window's accessibility.
+    pub fn shows_back(&self) -> bool {
+        self.back.get()
+    }
+
+    /// Sends the task Back, as a click on the back arrow does.
+    pub fn go_back(&self) {
+        // SAFETY: GetMessageTime only reads this thread's message state.
+        let time = unsafe { GetMessageTime() } as u32;
+        for key in back_keys(self.task_id, time) {
+            // The sender ends only when the window host stops; Back then has nowhere to go.
+            let _ = self.input.send(InputEvent::Key(key));
+        }
+    }
+
+    /// What the title bar shows besides its layout, for its hit test.
+    fn mode<'a>(&self, interactive: &'a [Bounds]) -> TitleBarMode<'a> {
+        TitleBarMode {
+            app_drawn: self.app_drawn.get(),
+            interactive,
+            back: self.back.get(),
+        }
+    }
+
+    /// The back arrow as the icon's cell draws it now; `None` while it shows the icon.
+    fn back_button(&self) -> Option<BackButton> {
+        self.back.get().then(|| BackButton {
+            hovered: self.back_hovered.get(),
+            pressed: self.back_pressed.get(),
+        })
     }
 
     /// Where the title bar and its buttons are in `hwnd` now.
@@ -463,21 +590,27 @@ impl CaptionWindow {
     }
 
     /// The tone the glyphs, the name and the frame are drawn in: the one the fill calls for
-    /// while the band is filled, otherwise the app's.
+    /// while the band is filled, otherwise the app's. An app that draws its own title bar is
+    /// never filled over, so its own tone counts.
     fn shown_tone(&self) -> CaptionTone {
         match self.fill.get() {
-            Some(fill) => caption_tone(StatusBarAppearance::Unspecified, fill),
-            None => self.tone.get(),
+            Some(fill) if !self.app_drawn.get() => {
+                caption_tone(StatusBarAppearance::Unspecified, fill)
+            }
+            _ => self.tone.get(),
         }
     }
 
-    /// The app's icon `side` pixels square, read once for each side.
+    /// The title bar's icon `side` pixels square, read once for each side: the adaptive icon's
+    /// foreground the program carries for it, else the program's own icon.
     fn icon_pixels(&self, side: u32) -> Option<Vec<u8>> {
         let mut cache = self.icon.borrow_mut();
         if cache.as_ref().map(|(at, _)| *at) != Some(side) {
-            let pixels = super::splash::icon_pixels(self.icon_id, side)
-                .filter(|(_, size)| *size == (side, side))
-                .map(|(pixels, _)| pixels);
+            let pixels = super::splash::caption_icon_pixels(side).or_else(|| {
+                super::splash::icon_pixels(self.icon_id, side)
+                    .filter(|(_, size)| *size == (side, side))
+                    .map(|(pixels, _)| pixels)
+            });
             *cache = Some((side, pixels));
         }
         cache.as_ref().and_then(|(_, pixels)| pixels.clone())
@@ -505,17 +638,23 @@ impl CaptionWindow {
         );
     }
 
-    /// Reports the title bar's height when it differs from the one last reported.
+    /// Reports the title bar's band (its height, and how far the icon's cell and the buttons
+    /// reach in) when it differs from the one last reported.
     ///
     /// # Safety
     ///
     /// `hwnd` is this window, a live window of the calling thread.
     pub unsafe fn report_height(&self, hwnd: HWND, report: &dyn Fn(FromHost)) {
-        let height = title_bar_height(self.style, self.ex_style, GetDpiForWindow(hwnd).max(96));
-        if self.reported.replace(height) != height {
+        let dpi = GetDpiForWindow(hwnd).max(96);
+        let height = title_bar_height(self.style, self.ex_style, dpi);
+        let band = CaptionBand {
+            height,
+            ..CaptionLayout::new(0, height, dpi, 0).band()
+        };
+        if self.reported.replace(band) != band {
             report(FromHost::Caption {
                 task_id: self.task_id,
-                height,
+                band,
             });
         }
     }
@@ -545,6 +684,8 @@ impl CaptionWindow {
             dpi,
             self.title.borrow().clone(),
             self.fill.get(),
+            self.app_drawn.get(),
+            self.back_button(),
         ));
         if *self.drawn.borrow() == now {
             return;
@@ -557,6 +698,8 @@ impl CaptionWindow {
             fill: self.fill.get(),
             icon: icon.as_deref(),
             title: title.as_deref(),
+            app_drawn: self.app_drawn.get(),
+            back: self.back_button(),
         };
         let pixels = paint_title_bar(&layout, dpi, &palette, &state, &content);
         if presenter
@@ -638,7 +781,9 @@ impl CaptionWindow {
                     y: ((lparam >> 16) & 0xffff) as i16 as i32,
                 };
                 ScreenToClient(hwnd, &mut point);
-                Some(hit_code(&self.layout(hwnd), point.x, point.y) as LRESULT)
+                let interactive = self.interactive.borrow();
+                let mode = self.mode(&interactive);
+                Some(hit_code(&self.layout(hwnd), point.x, point.y, &mode) as LRESULT)
             }
             WM_NCMOUSEMOVE => {
                 if !self.tracking.get() {
@@ -653,22 +798,41 @@ impl CaptionWindow {
                     }
                 }
                 let button = button_of(wparam as u32);
-                if self.hover(button) {
+                let on_back = wparam as u32 == HT_BACK;
+                let back_changed = self.back_hovered.replace(on_back) != on_back;
+                if self.hover(button) | back_changed {
                     self.paint(hwnd, presenter);
                 }
                 // Over a button, Windows would draw its own; elsewhere it does the rest.
                 match button {
                     Some(_) => Some(0),
+                    None if on_back => Some(0),
                     None => Some(DefWindowProcW(hwnd, message, wparam, lparam)),
                 }
             }
             WM_NCMOUSELEAVE => {
                 self.tracking.set(false);
-                let changed = self.hover(None) | self.pressed.replace(None).is_some();
+                let changed = self.hover(None)
+                    | self.pressed.replace(None).is_some()
+                    | self.back_hovered.replace(false)
+                    | self.back_pressed.replace(false);
                 if changed {
                     self.paint(hwnd, presenter);
                 }
                 Some(DefWindowProcW(hwnd, message, wparam, lparam))
+            }
+            WM_NCLBUTTONDOWN | WM_NCLBUTTONDBLCLK if wparam as u32 == HT_BACK => {
+                self.back_pressed.set(true);
+                self.paint(hwnd, presenter);
+                Some(0)
+            }
+            WM_NCLBUTTONUP if wparam as u32 == HT_BACK => {
+                let pressed = self.back_pressed.replace(false);
+                self.paint(hwnd, presenter);
+                if pressed && self.back.get() {
+                    self.go_back();
+                }
+                Some(0)
             }
             WM_NCLBUTTONDOWN | WM_NCLBUTTONDBLCLK => match button_of(wparam as u32) {
                 Some(button) => {
@@ -696,7 +860,7 @@ impl CaptionWindow {
                     Some(0)
                 }
                 None => {
-                    if self.pressed.replace(None).is_some() {
+                    if self.pressed.replace(None).is_some() | self.back_pressed.replace(false) {
                         self.paint(hwnd, presenter);
                     }
                     None
@@ -734,16 +898,88 @@ mod tests {
             let layout = CaptionLayout::new(scaled(800, dpi), scaled(31, dpi), dpi, 0);
             let (left, top, side, _) = layout.icon_rect().unwrap();
             let middle = (left + side as i32 / 2, top + side as i32 / 2);
-            assert_eq!(hit_code(&layout, middle.0, middle.1), HTSYSMENU, "at {dpi}");
+            let icon = TitleBarMode::default();
+            assert_eq!(
+                hit_code(&layout, middle.0, middle.1, &icon),
+                HTSYSMENU,
+                "at {dpi}"
+            );
             // The name and the rest of the band still drag the window, and the buttons
             // keep their codes, the maximize one showing the snap layouts.
             let (title_left, _, _, _) = layout.title_rect().unwrap();
-            assert_eq!(hit_code(&layout, title_left + 4, middle.1), HTCAPTION);
+            assert_eq!(
+                hit_code(&layout, title_left + 4, middle.1, &icon),
+                HTCAPTION
+            );
             let (max_left, _, width, _) = layout.button_rect(CaptionButton::Maximize);
             let over_max = max_left + width as i32 / 2;
-            assert_eq!(hit_code(&layout, over_max, middle.1), HTMAXBUTTON);
-            assert_eq!(hit_code(&layout, middle.0, layout.height as i32), HTCLIENT);
+            assert_eq!(hit_code(&layout, over_max, middle.1, &icon), HTMAXBUTTON);
+            assert_eq!(
+                hit_code(&layout, middle.0, layout.height as i32, &icon),
+                HTCLIENT
+            );
         }
+    }
+
+    #[test]
+    fn fr22_the_icon_becomes_a_back_button_when_the_task_can_go_back() {
+        let layout = CaptionLayout::new(800, 31, 96, 0);
+        let (left, top, side, _) = layout.icon_rect().unwrap();
+        let middle = (left + side as i32 / 2, top + side as i32 / 2);
+        let back = TitleBarMode {
+            back: true,
+            ..TitleBarMode::default()
+        };
+        // The arrow is pressed by this window, never by Windows, and the system menu stays
+        // on the rest of the band (right click, Alt+Space).
+        assert_eq!(hit_code(&layout, middle.0, middle.1, &back), HT_BACK);
+        assert_eq!(button_of(HT_BACK), None);
+        let (title_left, _, _, _) = layout.title_rect().unwrap();
+        assert_eq!(
+            hit_code(&layout, title_left + 4, middle.1, &back),
+            HTCAPTION
+        );
+        // A click sends the task Back, pressed then released.
+        let [down, up] = back_keys(7, 1234);
+        assert_eq!((down.task_id, down.key_code), (7, 4));
+        assert_eq!(down.action, KeyAction::Down);
+        assert_eq!(up.action, KeyAction::Up);
+        assert_eq!((up.key_code, up.event_time_ms), (4, 1234));
+        assert!(!down.canceled && !up.canceled);
+    }
+
+    #[test]
+    fn fr22_an_app_drawn_title_bar_gives_the_app_its_controls_and_keeps_the_rest() {
+        let layout = CaptionLayout::new(800, 31, 96, 8);
+        let tabs = [Bounds {
+            left: 48,
+            top: 0,
+            right: 500,
+            bottom: 31,
+        }];
+        let app_drawn = TitleBarMode {
+            app_drawn: true,
+            interactive: &tabs,
+            back: false,
+        };
+        assert_eq!(hit_code(&layout, 100, 20, &app_drawn), HTCLIENT, "a tab");
+        assert_eq!(
+            hit_code(&layout, 600, 20, &app_drawn),
+            HTCAPTION,
+            "between the tabs"
+        );
+        assert_eq!(hit_code(&layout, 708, 20, &app_drawn), HTMAXBUTTON);
+        assert_eq!(hit_code(&layout, 20, 20, &app_drawn), HTSYSMENU);
+        assert_eq!(
+            hit_code(&layout, 100, 3, &app_drawn),
+            HTTOP,
+            "the top edge first"
+        );
+        let withdrawn = TitleBarMode {
+            interactive: &tabs,
+            ..TitleBarMode::default()
+        };
+        assert_eq!(hit_code(&layout, 100, 20, &withdrawn), HTCAPTION);
     }
 
     #[test]

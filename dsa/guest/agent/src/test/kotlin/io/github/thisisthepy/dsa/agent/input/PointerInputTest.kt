@@ -16,7 +16,10 @@ class PointerInputTest {
     private val injector = FakeInjector()
     private val log = RecordingLog()
     private val bounds = mutableMapOf(7 to TaskBounds(100, 50, 500, 650), 8 to TaskBounds(600, 50, 1000, 650))
-    private val input = PointerInput(injector, { bounds[it] }, log)
+    private val navigation = mutableListOf<Triple<Int, Int, Boolean>>()
+    private val input = PointerInput(injector, { bounds[it] }, log) { taskId, keyCode, down ->
+        navigation += Triple(taskId, keyCode, down)
+    }
 
     private fun event(
         action: PointerAction,
@@ -39,6 +42,57 @@ class PointerInputTest {
         .build()
 
     private fun actions() = injector.injected.map { it.action }
+
+    @Test
+    fun fr5_the_mouse_back_and_forward_buttons_are_keys_that_press_nothing() {
+        val back = MotionEvent.BUTTON_BACK
+        val forward = MotionEvent.BUTTON_FORWARD
+        input.handle(event(PointerAction.POINTER_ACTION_DOWN, 10f, 10f, buttons = back))
+        input.handle(event(PointerAction.POINTER_ACTION_UP, 10f, 10f, buttons = 0))
+        input.handle(event(PointerAction.POINTER_ACTION_DOWN, 10f, 10f, buttons = forward, taskId = 8))
+        input.handle(event(PointerAction.POINTER_ACTION_UP, 10f, 10f, buttons = 0, taskId = 8))
+
+        assertEquals(
+            listOf(
+                Triple(7, android.view.KeyEvent.KEYCODE_BACK, true),
+                Triple(7, android.view.KeyEvent.KEYCODE_BACK, false),
+                Triple(8, android.view.KeyEvent.KEYCODE_FORWARD, true),
+                Triple(8, android.view.KeyEvent.KEYCODE_FORWARD, false),
+            ),
+            navigation,
+        )
+        // Nothing under the pointer was pressed.
+        assertTrue(injector.injected.none { it.action == MotionEvent.ACTION_DOWN })
+    }
+
+    @Test
+    fun fr5_back_while_the_primary_button_is_held_keeps_the_press_and_adds_the_key() {
+        val primary = MotionEvent.BUTTON_PRIMARY
+        input.handle(event(PointerAction.POINTER_ACTION_DOWN, 10f, 10f, buttons = primary))
+        input.handle(event(PointerAction.POINTER_ACTION_MOVE, 12f, 10f, buttons = primary or MotionEvent.BUTTON_BACK))
+        input.handle(event(PointerAction.POINTER_ACTION_UP, 12f, 10f, buttons = 0))
+
+        assertEquals(
+            listOf(Triple(7, android.view.KeyEvent.KEYCODE_BACK, true), Triple(7, android.view.KeyEvent.KEYCODE_BACK, false)),
+            navigation,
+        )
+        assertTrue(injector.injected.all { it.buttonState and MotionEvent.BUTTON_BACK == 0 })
+        assertEquals(MotionEvent.ACTION_UP, injector.injected.last().action)
+    }
+
+    @Test
+    fun fr5_a_press_that_begins_with_back_starts_with_the_next_button() {
+        input.handle(event(PointerAction.POINTER_ACTION_DOWN, 10f, 10f, buttons = MotionEvent.BUTTON_BACK))
+        input.handle(event(PointerAction.POINTER_ACTION_MOVE, 10f, 10f, buttons = MotionEvent.BUTTON_BACK or MotionEvent.BUTTON_PRIMARY))
+        input.handle(event(PointerAction.POINTER_ACTION_MOVE, 10f, 10f, buttons = MotionEvent.BUTTON_BACK))
+        input.handle(event(PointerAction.POINTER_ACTION_UP, 10f, 10f, buttons = 0))
+
+        assertEquals(
+            listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_BUTTON_PRESS, MotionEvent.ACTION_BUTTON_RELEASE, MotionEvent.ACTION_UP),
+            actions(),
+        )
+        assertEquals(2, navigation.size)
+    }
 
     @Test
     fun fr5_a_position_relative_to_the_task_lands_at_the_tasks_place_on_the_display() {

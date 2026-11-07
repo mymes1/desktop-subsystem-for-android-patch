@@ -672,10 +672,12 @@ impl Main {
                     self.shown.reported(task_id, shown);
                     self.after_changes();
                 }
-                FromHost::Caption { task_id, height } => {
-                    let requests = self.windows.window_caption(task_id, height);
+                FromHost::Caption { task_id, band } => {
+                    let requests = self.windows.window_caption(task_id, band);
                     self.requests(requests);
                 }
+                // The Linux windows have no system menu with Android items, so none is chosen.
+                FromHost::MenuChosen { .. } => {}
             },
         }
     }

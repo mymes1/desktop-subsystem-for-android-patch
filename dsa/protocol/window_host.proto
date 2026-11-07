@@ -227,9 +227,70 @@ message WindowShown {
 // opens and whenever the height changes (a move to a monitor of another scale, a change of
 // the system's caption size). The window manager asks Android to give the task a top inset
 // of that height.
+//
+// `start_width` and `end_width` are how far the app's icon (with the space around it) and
+// the caption buttons reach into the band from its left and right ends, in client pixels. An
+// app that draws its own title bar is told them, so it keeps its controls out of them.
 message WindowCaption {
   int32 task_id = 1;
   uint32 height = 2;
+  uint32 start_width = 3;
+  uint32 end_width = 4;
+}
+
+// A rectangle in client pixels: left and top inclusive, right and bottom exclusive.
+message ClientRect {
+  int32 left = 1;
+  int32 top = 2;
+  int32 right = 3;
+  int32 bottom = 4;
+}
+
+// Window manager to window host: whether the task's app draws its own title bar (it asked
+// Android for a transparent caption bar background). While it does, the window draws only its
+// caption buttons and the app's icon over the app, not the app's name, and the points of the
+// band inside `interactive` (the app's controls there, in client pixels) go to the app; the
+// rest of the band still drags the window. Sent when it changes; a window opens with the
+// window's own title bar.
+message SetCaptionMode {
+  int32 task_id = 1;
+  bool app_drawn = 2;
+  repeated ClientRect interactive = 3;
+}
+
+// Window manager to window host: whether the task has somewhere to go back to (it is past
+// its first screen). While it has, the title bar shows a back arrow in the place of the app's
+// icon, in the same cell, and a click on it sends the task Back; otherwise the cell shows the
+// icon and opens the system menu. Sent when it changes; a window opens with the icon.
+message SetCaptionBack {
+  int32 task_id = 1;
+  bool back = 2;
+}
+
+// Window manager to window host: what the app's windows offer in their system menu. Sent
+// after Attached, and again when the app changes.
+message AppMenu {
+  // Whether the app supports several windows, so the menu offers New window.
+  bool new_window = 1;
+}
+
+// An item of a task window's system menu that the window manager carries out.
+enum MenuAction {
+  MENU_ACTION_UNSPECIFIED = 0;
+  // Start another task of the app in a window of its own.
+  MENU_ACTION_NEW_WINDOW = 1;
+  // Android's setting of the app's aspect ratio.
+  MENU_ACTION_ASPECT_RATIO = 2;
+  // Android's setting of whether the app opens the links it supports.
+  MENU_ACTION_OPEN_BY_DEFAULT = 3;
+  // The app's page in DSA's settings.
+  MENU_ACTION_APP_INFO = 4;
+}
+
+// Window host to window manager: the user chose an item of the task window's system menu.
+message MenuChosen {
+  int32 task_id = 1;
+  MenuAction action = 2;
 }
 
 // The tone of a window's caption buttons, so they stay readable over the app's status bar.
@@ -294,6 +355,10 @@ message Envelope {
     WindowShown window_shown = 30;
     WindowCaption window_caption = 31;
     SetCaptionTone set_caption_tone = 32;
+    SetCaptionMode set_caption_mode = 33;
+    AppMenu app_menu = 34;
+    MenuChosen menu_chosen = 35;
+    SetCaptionBack set_caption_back = 36;
     SetWindowMode set_window_mode = 60;
   }
 }

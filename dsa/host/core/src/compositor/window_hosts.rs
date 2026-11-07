@@ -23,10 +23,10 @@ use dsa_protocol::window_host::{
 };
 use dsa_transport::Connection;
 
-use super::caption::CaptionTone;
+use super::caption::{CaptionBand, CaptionTone};
 use super::task_windows::WindowChange;
 use super::window_mode::WindowMode;
-use crate::tasks::AppInfo;
+use crate::tasks::{AppInfo, AppSettingsPage, Bounds, TaskRequest};
 
 /// Whether `name` is an Android package name: two or more dot-separated parts, each an ASCII
 /// letter followed by letters, digits and underscores. Only such a name becomes a file name
@@ -100,11 +100,30 @@ pub enum ToHost {
         mode: WindowMode,
         resizable: bool,
     },
+    /// Whether the app draws its own title bar, and where its controls are in the band, in
+    /// client pixels.
+    CaptionMode {
+        task_id: i32,
+        app_drawn: bool,
+        interactive: Vec<Bounds>,
+    },
+    /// Whether the title bar shows a back arrow in the place of the app's icon.
+    CaptionBack {
+        task_id: i32,
+        back: bool,
+    },
+    /// What every window of the app offers in its system menu: New window only when the app
+    /// supports several windows. It is about the app, not one window, so it names no task.
+    AppMenu {
+        new_window: bool,
+    },
 }
 
 impl ToHost {
-    pub fn task_id(&self) -> i32 {
-        match self {
+    /// The task whose window the message is about; `None` for a message about the app.
+    pub fn task_id(&self) -> Option<i32> {
+        Some(match self {
+            ToHost::AppMenu { .. } => return None,
             ToHost::Show { task_id, .. }
             | ToHost::Retitle { task_id, .. }
             | ToHost::Resize { task_id, .. }
@@ -112,9 +131,34 @@ impl ToHost {
             | ToHost::ImeCursor { task_id, .. }
             | ToHost::CaptionTone { task_id, .. }
             | ToHost::Mode { task_id, .. }
+            | ToHost::CaptionMode { task_id, .. }
+            | ToHost::CaptionBack { task_id, .. }
             | ToHost::Close { task_id } => *task_id,
-        }
+        })
     }
+}
+
+/// An item of a task window's system menu that the window manager carries out. The window
+/// host takes the Screenshot itself, since it has the window's frames.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MenuAction {
+    /// Start another task of the app in a window of its own.
+    NewWindow,
+    /// Open Android's setting of the app's aspect ratio.
+    AspectRatio,
+    /// Open Android's setting of whether the app opens the links it supports.
+    OpenByDefault,
+    /// Open the app's page in DSA's settings.
+    AppInfo,
+}
+
+/// What the window manager does for a choice in a task window's system menu.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MenuWork {
+    /// Ask the guest for this.
+    Request(TaskRequest),
+    /// Open DSA's settings on the page of the app `package`.
+    AppPage { package: String },
 }
 
 /// What a window host reports the user did to one of its windows.
@@ -136,8 +180,12 @@ pub enum FromHost {
     Dragging { task_id: i32, dragging: bool },
     /// The window was minimized (`shown` false), or shown again after it was.
     Shown { task_id: i32, shown: bool },
-    /// The window draws its title bar over its top `height` client pixels.
-    Caption { task_id: i32, height: u32 },
+    /// The window draws its title bar over its top `band.height` client pixels, with its
+    /// icon's cell and its caption buttons reaching `band.start_width` and `band.end_width`
+    /// in from the ends.
+    Caption { task_id: i32, band: CaptionBand },
+    /// The user chose `action` in the window's system menu.
+    MenuChosen { task_id: i32, action: MenuAction },
 }
 
 impl FromHost {
@@ -149,7 +197,8 @@ impl FromHost {
             | FromHost::Focus { task_id, .. }
             | FromHost::Dragging { task_id, .. }
             | FromHost::Shown { task_id, .. }
-            | FromHost::Caption { task_id, .. } => *task_id,
+            | FromHost::Caption { task_id, .. }
+            | FromHost::MenuChosen { task_id, .. } => *task_id,
         }
     }
 }
@@ -226,8 +275,20 @@ impl WindowHosts {
         if !is_valid_package(&app.package_name) {
             return Vec::new();
         }
+        let offered = self.offers_new_window(&app.package_name);
         self.apps.insert(app.package_name.clone(), app.clone());
         match self.hosts.get_mut(&app.package_name) {
+            // A window host that runs hears when its app starts or stops supporting several
+            // windows, as an update of the app may change it.
+            Some(AppHost {
+                link: Link::Attached { host, .. },
+                ..
+            }) if offered != app.multiple_windows => vec![HostAction::Send {
+                host: *host,
+                message: ToHost::AppMenu {
+                    new_window: app.multiple_windows,
+                },
+            }],
             Some(AppHost {
                 link: Link::Starting { since, named, .. },
                 ..
@@ -246,6 +307,50 @@ impl WindowHosts {
     /// The app's name and icon, when the guest gave them.
     pub fn app_info(&self, package: &str) -> Option<&AppInfo> {
         self.apps.get(package)
+    }
+
+    /// Whether the system menu of the app's windows offers New window: only when the guest
+    /// said the app supports several windows.
+    fn offers_new_window(&self, package: &str) -> bool {
+        self.apps
+            .get(package)
+            .is_some_and(|app| app.multiple_windows)
+    }
+
+    /// The menu of the app `package`'s windows, for its window host once it attaches.
+    fn app_menu(&self, host: HostId, package: &str) -> HostAction {
+        HostAction::Send {
+            host,
+            message: ToHost::AppMenu {
+                new_window: self.offers_new_window(package),
+            },
+        }
+    }
+
+    /// What the window manager does for `action`, chosen in the system menu of `task_id`'s
+    /// window. `None` for a window it does not know, and for New window of an app that does
+    /// not support several windows, which its menu never offers.
+    pub fn menu_chosen(&self, task_id: i32, action: MenuAction) -> Option<MenuWork> {
+        let package = self.packages.get(&task_id)?.clone();
+        let settings = |page| {
+            MenuWork::Request(TaskRequest::OpenAppSettings {
+                package_name: package.clone(),
+                page,
+            })
+        };
+        Some(match action {
+            MenuAction::NewWindow if self.offers_new_window(&package) => {
+                MenuWork::Request(TaskRequest::NewWindow {
+                    package_name: package.clone(),
+                })
+            }
+            MenuAction::NewWindow => return None,
+            MenuAction::AspectRatio => settings(AppSettingsPage::AspectRatio),
+            MenuAction::OpenByDefault => settings(AppSettingsPage::OpenByDefault),
+            MenuAction::AppInfo => MenuWork::AppPage {
+                package: package.clone(),
+            },
+        })
     }
 
     /// The connection of the window host that shows `task_id`'s window, once it is connected.
@@ -376,11 +481,27 @@ impl WindowHosts {
                 mode: *mode,
                 resizable: *resizable,
             }),
+            WindowChange::CaptionMode {
+                task_id,
+                app_drawn,
+                interactive,
+            } => self.forward(ToHost::CaptionMode {
+                task_id: *task_id,
+                app_drawn: *app_drawn,
+                interactive: interactive.clone(),
+            }),
+            WindowChange::CaptionBack { task_id, back } => self.forward(ToHost::CaptionBack {
+                task_id: *task_id,
+                back: *back,
+            }),
         }
     }
 
     fn forward(&mut self, message: ToHost) -> Vec<HostAction> {
-        let Some(package) = self.packages.get(&message.task_id()) else {
+        let Some(package) = message
+            .task_id()
+            .and_then(|task_id| self.packages.get(&task_id))
+        else {
             return Vec::new();
         };
         let Some(app) = self.hosts.get_mut(package) else {
@@ -409,7 +530,7 @@ impl WindowHosts {
         match &mut app.link {
             Link::Starting { pending, named, .. } => {
                 // The window was never shown; nothing about it needs to reach the window host.
-                pending.retain(|message| message.task_id() != task_id);
+                pending.retain(|message| message.task_id() != Some(task_id));
                 if !*named && app.tasks.is_empty() {
                     // Nothing was started, so nothing is left to wait for.
                     self.hosts.remove(&package);
@@ -471,7 +592,12 @@ impl WindowHosts {
                 });
                 actions
             }
-            Some(app) => {
+            Some(_) => {
+                // The menu goes first, so the windows open with it.
+                let menu = self.app_menu(host, package);
+                let Some(app) = self.hosts.get_mut(package) else {
+                    unreachable!("matched above");
+                };
                 let Link::Starting { pending, .. } = std::mem::replace(
                     &mut app.link,
                     Link::Attached {
@@ -481,9 +607,12 @@ impl WindowHosts {
                 ) else {
                     unreachable!("matched above");
                 };
-                let mut actions: Vec<HostAction> = pending
-                    .into_iter()
-                    .map(|message| HostAction::Send { host, message })
+                let mut actions: Vec<HostAction> = std::iter::once(menu)
+                    .chain(
+                        pending
+                            .into_iter()
+                            .map(|message| HostAction::Send { host, message }),
+                    )
                     .collect();
                 if app.tasks.is_empty() {
                     if launch {
@@ -494,10 +623,10 @@ impl WindowHosts {
                         actions.push(launch_action());
                     } else {
                         self.hosts.remove(package);
-                        actions.push(HostAction::Disconnect {
+                        actions = vec![HostAction::Disconnect {
                             host,
                             why: format!("{package} has no window left"),
-                        });
+                        }];
                     }
                 }
                 actions
@@ -513,7 +642,7 @@ impl WindowHosts {
                         tasks: BTreeSet::new(),
                     },
                 );
-                vec![launch_action()]
+                vec![self.app_menu(host, package), launch_action()]
             }
             None => vec![HostAction::Disconnect {
                 host,
@@ -729,6 +858,32 @@ pub fn to_wire(message: &ToHost) -> Body {
                 resizable,
             })
         }
+        ToHost::CaptionMode {
+            task_id,
+            app_drawn,
+            interactive,
+        } => {
+            use dsa_protocol::window_host::types::{ClientRect, SetCaptionMode};
+            Body::SetCaptionMode(SetCaptionMode {
+                task_id,
+                app_drawn,
+                interactive: interactive
+                    .iter()
+                    .map(|area| ClientRect {
+                        left: area.left,
+                        top: area.top,
+                        right: area.right,
+                        bottom: area.bottom,
+                    })
+                    .collect(),
+            })
+        }
+        ToHost::CaptionBack { task_id, back } => {
+            Body::SetCaptionBack(dsa_protocol::window_host::types::SetCaptionBack { task_id, back })
+        }
+        ToHost::AppMenu { new_window } => {
+            Body::AppMenu(dsa_protocol::window_host::types::AppMenu { new_window })
+        }
     }
 }
 
@@ -796,6 +951,31 @@ pub fn to_host_from_wire(body: &Body) -> Option<ToHost> {
                 resizable: set.resizable,
             }
         }
+        Body::SetCaptionMode(set) => ToHost::CaptionMode {
+            task_id: set.task_id,
+            app_drawn: set.app_drawn,
+            // The controls count only while the app draws its own title bar.
+            interactive: if set.app_drawn {
+                set.interactive
+                    .iter()
+                    .map(|area| Bounds {
+                        left: area.left,
+                        top: area.top,
+                        right: area.right,
+                        bottom: area.bottom,
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            },
+        },
+        Body::SetCaptionBack(set) => ToHost::CaptionBack {
+            task_id: set.task_id,
+            back: set.back,
+        },
+        Body::AppMenu(menu) => ToHost::AppMenu {
+            new_window: menu.new_window,
+        },
         _ => return None,
     })
 }
@@ -822,8 +1002,26 @@ pub fn report_to_wire(report: &FromHost) -> Body {
             Body::WindowDragging(WindowDragging { task_id, dragging })
         }
         FromHost::Shown { task_id, shown } => Body::WindowShown(WindowShown { task_id, shown }),
-        FromHost::Caption { task_id, height } => {
-            Body::WindowCaption(dsa_protocol::window_host::types::WindowCaption { task_id, height })
+        FromHost::Caption { task_id, band } => {
+            Body::WindowCaption(dsa_protocol::window_host::types::WindowCaption {
+                task_id,
+                height: band.height,
+                start_width: band.start_width,
+                end_width: band.end_width,
+            })
+        }
+        FromHost::MenuChosen { task_id, action } => {
+            use dsa_protocol::window_host::types::{MenuAction as WireAction, MenuChosen};
+            let action = match action {
+                MenuAction::NewWindow => WireAction::NewWindow,
+                MenuAction::AspectRatio => WireAction::AspectRatio,
+                MenuAction::OpenByDefault => WireAction::OpenByDefault,
+                MenuAction::AppInfo => WireAction::AppInfo,
+            };
+            Body::MenuChosen(MenuChosen {
+                task_id,
+                action: action as i32,
+            })
         }
     }
 }
@@ -857,8 +1055,26 @@ pub fn report_from_wire(body: &Body) -> Option<FromHost> {
         },
         Body::WindowCaption(ref caption) => FromHost::Caption {
             task_id: caption.task_id,
-            height: caption.height,
+            band: CaptionBand {
+                height: caption.height,
+                start_width: caption.start_width,
+                end_width: caption.end_width,
+            },
         },
+        Body::MenuChosen(ref chosen) => {
+            use dsa_protocol::window_host::types::MenuAction as WireAction;
+            FromHost::MenuChosen {
+                task_id: chosen.task_id,
+                // An item this build does not know is no choice at all.
+                action: match chosen.action() {
+                    WireAction::NewWindow => MenuAction::NewWindow,
+                    WireAction::AspectRatio => MenuAction::AspectRatio,
+                    WireAction::OpenByDefault => MenuAction::OpenByDefault,
+                    WireAction::AppInfo => MenuAction::AppInfo,
+                    WireAction::Unspecified => return None,
+                },
+            }
+        }
         _ => return None,
     })
 }
@@ -963,6 +1179,14 @@ mod tests {
         }
     }
 
+    /// The system menu a window host hears of when it attaches.
+    fn menu(host: HostId, new_window: bool) -> HostAction {
+        HostAction::Send {
+            host,
+            message: ToHost::AppMenu { new_window },
+        }
+    }
+
     /// Window hosts that know the name of every app the tests open.
     fn named_hosts(now: Instant) -> WindowHosts {
         let mut hosts = WindowHosts::new();
@@ -1026,10 +1250,13 @@ mod tests {
         // The window waits for the window host, as any window does.
         assert_eq!(
             hosts.attached(HostId(1), CLOCK, false, now),
-            vec![HostAction::Send {
-                host: HostId(1),
-                message: show(1)
-            }]
+            vec![
+                menu(HostId(1), false),
+                HostAction::Send {
+                    host: HostId(1),
+                    message: show(1)
+                }
+            ]
         );
     }
 
@@ -1083,6 +1310,7 @@ mod tests {
         assert_eq!(
             hosts.attached(host, CLOCK, false, now),
             vec![
+                menu(host, false),
                 HostAction::Send {
                     host,
                     message: show(1)
@@ -1186,9 +1414,12 @@ mod tests {
         let host = HostId(4);
         assert_eq!(
             hosts.attached(host, CLOCK, true, now),
-            vec![HostAction::Launch {
-                package: CLOCK.into()
-            }]
+            vec![
+                menu(host, false),
+                HostAction::Launch {
+                    package: CLOCK.into()
+                }
+            ]
         );
         // The app's task arrives and its window goes to the waiting window host.
         assert_eq!(
@@ -1213,6 +1444,95 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn fr22_the_system_menu_carries_the_android_window_menu() {
+        let now = Instant::now();
+        let mut hosts = WindowHosts::new();
+        let several = AppInfo {
+            multiple_windows: true,
+            ..info(CLOCK)
+        };
+        hosts.app(&several, now);
+        hosts.app(&info(MAPS), now);
+        hosts.change(&open(1, CLOCK), now);
+        hosts.change(&open(2, MAPS), now);
+        // Each window host hears first whether its app's windows offer New window.
+        assert_eq!(
+            hosts.attached(HostId(1), CLOCK, false, now)[0],
+            menu(HostId(1), true)
+        );
+        assert_eq!(
+            hosts.attached(HostId(2), MAPS, false, now)[0],
+            menu(HostId(2), false)
+        );
+        // An app that changes says so again; the same answer says nothing.
+        assert!(hosts.app(&several, now).is_empty());
+        assert_eq!(hosts.app(&info(CLOCK), now), vec![menu(HostId(1), false)]);
+        assert_eq!(hosts.app(&several, now), vec![menu(HostId(1), true)]);
+        assert!(hosts.app(&info(MAPS), now).is_empty());
+
+        // Each choice becomes what the window manager does for the window's app.
+        assert_eq!(
+            hosts.menu_chosen(1, MenuAction::NewWindow),
+            Some(MenuWork::Request(TaskRequest::NewWindow {
+                package_name: CLOCK.into()
+            }))
+        );
+        // New window of an app that takes one window is never offered, so it does nothing.
+        assert_eq!(hosts.menu_chosen(2, MenuAction::NewWindow), None);
+        assert_eq!(
+            hosts.menu_chosen(2, MenuAction::AspectRatio),
+            Some(MenuWork::Request(TaskRequest::OpenAppSettings {
+                package_name: MAPS.into(),
+                page: AppSettingsPage::AspectRatio
+            }))
+        );
+        assert_eq!(
+            hosts.menu_chosen(2, MenuAction::OpenByDefault),
+            Some(MenuWork::Request(TaskRequest::OpenAppSettings {
+                package_name: MAPS.into(),
+                page: AppSettingsPage::OpenByDefault
+            }))
+        );
+        assert_eq!(
+            hosts.menu_chosen(1, MenuAction::AppInfo),
+            Some(MenuWork::AppPage {
+                package: CLOCK.into()
+            })
+        );
+        // A window it does not know chooses nothing.
+        assert_eq!(hosts.menu_chosen(9, MenuAction::AppInfo), None);
+        // A choice is a report like any other: only the window's own window host makes it.
+        let chosen = FromHost::MenuChosen {
+            task_id: 1,
+            action: MenuAction::AppInfo,
+        };
+        assert_eq!(
+            hosts.from_host(HostId(1), chosen.clone()),
+            Some(chosen.clone())
+        );
+        assert_eq!(hosts.from_host(HostId(2), chosen), None);
+    }
+
+    #[test]
+    fn fr22_a_menu_item_this_build_does_not_know_is_no_choice() {
+        use dsa_protocol::window_host::types::MenuChosen;
+        assert_eq!(
+            report_from_wire(&Body::MenuChosen(MenuChosen {
+                task_id: 1,
+                action: 0
+            })),
+            None
+        );
+        assert_eq!(
+            report_from_wire(&Body::MenuChosen(MenuChosen {
+                task_id: 1,
+                action: 99
+            })),
+            None
+        );
     }
 
     #[test]
@@ -1318,6 +1638,27 @@ mod tests {
                 task_id: 9,
                 tone: CaptionTone::DarkGlyphs,
             },
+            ToHost::CaptionMode {
+                task_id: 10,
+                app_drawn: true,
+                interactive: vec![Bounds {
+                    left: 48,
+                    top: 0,
+                    right: 600,
+                    bottom: 31,
+                }],
+            },
+            ToHost::CaptionMode {
+                task_id: 10,
+                app_drawn: false,
+                interactive: Vec::new(),
+            },
+            ToHost::CaptionBack {
+                task_id: 11,
+                back: true,
+            },
+            ToHost::AppMenu { new_window: true },
+            ToHost::AppMenu { new_window: false },
         ] {
             assert_eq!(to_host_from_wire(&to_wire(&message)), Some(message));
         }
@@ -1346,7 +1687,27 @@ mod tests {
             },
             FromHost::Caption {
                 task_id: 9,
-                height: 62,
+                band: CaptionBand {
+                    height: 62,
+                    start_width: 80,
+                    end_width: 276,
+                },
+            },
+            FromHost::MenuChosen {
+                task_id: 10,
+                action: MenuAction::NewWindow,
+            },
+            FromHost::MenuChosen {
+                task_id: 11,
+                action: MenuAction::AspectRatio,
+            },
+            FromHost::MenuChosen {
+                task_id: 12,
+                action: MenuAction::OpenByDefault,
+            },
+            FromHost::MenuChosen {
+                task_id: 13,
+                action: MenuAction::AppInfo,
             },
         ] {
             assert_eq!(report_from_wire(&report_to_wire(&report)), Some(report));

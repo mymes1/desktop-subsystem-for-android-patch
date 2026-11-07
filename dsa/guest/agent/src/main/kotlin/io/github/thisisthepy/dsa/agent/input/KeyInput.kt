@@ -46,6 +46,21 @@ data class InjectedKey(
  * them. A release for a key this class never saw go down is dropped, and a release the host
  * marks canceled carries FLAG_CANCELED, so the app lets the key go without acting on it.
  *
+ * Esc and Backspace go to the app first, and become Back only when the app leaves them, so a
+ * game or an editor that uses them keeps working; on a task's first screen they never do, so
+ * a key never closes the window or sends it away. Each takes the framework's own way of
+ * telling that an app left a key:
+ *
+ * - Esc goes as Escape. When the focused window does not take a plain Escape, the framework's
+ *   key gesture controller makes it its "close all dialogs" gesture, which only an unhandled
+ *   Escape does; the agent hears it ([escapeUnhandled]) and sends Back to the task the Escape
+ *   went to, unless that task is on its first screen.
+ * - Backspace with no text field focused goes as Backspace with Ctrl and Alt held. The
+ *   framework's key character map of its virtual keyboard makes Ctrl+Alt+Backspace that no app
+ *   takes into Back (a fallback key), sent to the same window right after the app declined it.
+ *   On a task's first screen, and whenever a text field has the focus, Backspace goes as it is,
+ *   with no fallback, so it deletes text as before.
+ *
  * Not thread safe: the agent calls it from one thread.
  */
 class KeyInput(
@@ -57,9 +72,16 @@ class KeyInput(
     /** Gives the task the input focus; false when the framework refused. */
     private val focus: (Int) -> Boolean,
     private val log: Log,
+    /** Whether the task is on its first screen (its first activity), where Back closes it. */
+    private val onFirstScreen: (Int) -> Boolean = { true },
+    /** Whether a text field of the focused window takes typed text now. */
+    private val editorFocused: () -> Boolean = { false },
 ) {
-    /** A held key: when it went down, and the key code the guest was given for it. */
-    private class Held(val downTime: Long, val hostDownTime: Long, val guestKeyCode: Int)
+    /** A held key: when it went down, the key code and meta state the guest was given for it. */
+    private class Held(val downTime: Long, val hostDownTime: Long, val guestKeyCode: Int, val extraMeta: Int = 0)
+
+    /** The task the last plain Escape went to, and when, until the framework says no app took it. */
+    private var escape: Pair<Int, Long>? = null
 
     /** The keys held in each task, by key code. */
     private val held = HashMap<Int, HashMap<Int, Held>>()
@@ -91,9 +113,12 @@ class KeyInput(
                     if (!isFocused(taskId) && !focus(taskId)) {
                         log.warn("could not give task $taskId the input focus; the key may reach another task")
                     }
-                    Held(now, hostTime, guestKeyCode(keyCode, event.metaState)).also { keys[keyCode] = it }
+                    Held(now, hostTime, keyCode, backFallback(taskId, keyCode, event.metaState)).also { keys[keyCode] = it }
                 } else {
                     known
+                }
+                if (known == null && keyCode == android.view.KeyEvent.KEYCODE_ESCAPE) {
+                    escape = if (event.metaState and MODIFIERS == 0) taskId to now else null
                 }
                 inject(
                     InjectedKey(
@@ -102,7 +127,7 @@ class KeyInput(
                         action = android.view.KeyEvent.ACTION_DOWN,
                         keyCode = key.guestKeyCode,
                         repeatCount = if (known == null) 0 else event.repeatCount.coerceAtLeast(1),
-                        metaState = event.metaState,
+                        metaState = event.metaState or key.extraMeta,
                         flags = 0,
                     ),
                 )
@@ -116,7 +141,7 @@ class KeyInput(
                         action = android.view.KeyEvent.ACTION_UP,
                         keyCode = key.guestKeyCode,
                         repeatCount = 0,
-                        metaState = event.metaState,
+                        metaState = event.metaState or key.extraMeta,
                         flags = if (event.canceled) android.view.KeyEvent.FLAG_CANCELED else 0,
                     ),
                 )
@@ -126,20 +151,68 @@ class KeyInput(
     }
 
     /**
-     * The key code the guest is given for a key the host sent. Esc alone is Back: Android's
-     * apps go back, close a dialog or leave a search on Back, and most never look at Escape.
-     * The framework's own key map makes an Escape no app handled into Back only after the app
-     * has declined it, which an injected key does not reliably reach, so the agent does it up
-     * front. Esc with a modifier stays Escape, for the apps and shortcuts that use it. The
-     * choice is made when the key goes down and kept until it is released, so the app sees a
-     * whole press of one key.
+     * The modifiers a key the host sent goes with besides its own: Ctrl and Alt for a plain
+     * Backspace that may become Back (no text field focused, past the task's first screen), so
+     * that the framework's fallback makes it Back if the app leaves it. The choice is made when
+     * the key goes down and kept until it is released, so the app sees a whole press of one
+     * key.
      */
-    private fun guestKeyCode(hostKeyCode: Int, metaState: Int): Int =
-        if (hostKeyCode == android.view.KeyEvent.KEYCODE_ESCAPE && metaState and MODIFIERS == 0) {
-            android.view.KeyEvent.KEYCODE_BACK
-        } else {
-            hostKeyCode
+    private fun backFallback(taskId: Int, keyCode: Int, metaState: Int): Int = when {
+        keyCode != android.view.KeyEvent.KEYCODE_DEL -> 0
+        metaState and MODIFIERS != 0 -> 0
+        editorFocused() -> 0
+        onFirstScreen(taskId) -> 0
+        else -> BACK_FALLBACK
+    }
+
+    /**
+     * The framework says the focused window took no plain Escape (its key gesture controller
+     * made the Escape its close-all-dialogs gesture). The task the last Escape went to goes
+     * back, unless it is on its first screen, where Back would close it.
+     */
+    fun escapeUnhandled() {
+        val (taskId, at) = escape ?: return
+        escape = null
+        if (injector.now() - at > ESCAPE_ANSWER_MILLIS) return
+        if (!isReported(taskId) || onFirstScreen(taskId)) return
+        pressBack(taskId, android.view.KeyEvent.KEYCODE_BACK)
+    }
+
+    /**
+     * A mouse's back or forward button went down ([down]) or up over task [taskId]: Back or
+     * Forward ([keyCode]) goes to the task as a key, pressed and released with the button.
+     */
+    fun navigationButton(taskId: Int, keyCode: Int, down: Boolean) {
+        handle(
+            KeyEvent.newBuilder()
+                .setTaskId(taskId)
+                .setAction(if (down) KeyAction.KEY_ACTION_DOWN else KeyAction.KEY_ACTION_UP)
+                .setKeyCode(keyCode)
+                .setEventTimeMs(injector.now().toInt())
+                .build(),
+        )
+    }
+
+    /** Presses and releases [keyCode] in [taskId] at once, as one tap of the key. */
+    private fun pressBack(taskId: Int, keyCode: Int) {
+        if (!isFocused(taskId) && !focus(taskId)) {
+            log.warn("could not give task $taskId the input focus; Back may reach another task")
         }
+        val now = injector.now()
+        for (action in intArrayOf(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.ACTION_UP)) {
+            inject(
+                InjectedKey(
+                    downTime = now,
+                    eventTime = now,
+                    action = action,
+                    keyCode = keyCode,
+                    repeatCount = 0,
+                    metaState = 0,
+                    flags = 0,
+                ),
+            )
+        }
+    }
 
     /** Forgets the keys held in every task not in [taskIds], as tasks end. */
     fun retainTasks(taskIds: Set<Int>) {
@@ -177,8 +250,17 @@ class KeyInput(
         // The host sends key codes up to this; the framework's own end well below it.
         const val MAX_KEY_CODE = 1023
 
-        // The modifiers that keep Esc an Escape. The locks (Caps, Num, Scroll) do not count.
+        // The modifiers that keep Esc and Backspace from ever going back. The locks (Caps, Num,
+        // Scroll) do not count.
         const val MODIFIERS = android.view.KeyEvent.META_SHIFT_ON or android.view.KeyEvent.META_CTRL_ON or
             android.view.KeyEvent.META_ALT_ON or android.view.KeyEvent.META_META_ON
+
+        // Ctrl and Alt, left side: the virtual keyboard's key map has Ctrl+Alt+Backspace fall
+        // back to Back when no app takes it.
+        const val BACK_FALLBACK = android.view.KeyEvent.META_CTRL_ON or android.view.KeyEvent.META_CTRL_LEFT_ON or
+            android.view.KeyEvent.META_ALT_ON or android.view.KeyEvent.META_ALT_LEFT_ON
+
+        // How long after an Escape the framework's word that no app took it still counts.
+        const val ESCAPE_ANSWER_MILLIS = 1000L
     }
 }

@@ -6,6 +6,14 @@ class AppDetails(
     val label: String,
     /** The launcher icon as a square PNG image; empty when the app has none to draw. */
     val iconPng: ByteArray,
+    /**
+     * The icon a window's title bar shows: an adaptive icon's foreground layer alone, at the
+     * same size and scale as [iconPng], so no square plate stands over the app. Empty for an
+     * app whose icon is not adaptive, which shows [iconPng] there too.
+     */
+    val captionIconPng: ByteArray = ByteArray(0),
+    /** Whether the app supports several windows at once, so its windows offer New window. */
+    val multipleWindows: Boolean = false,
 )
 
 /** Looks up the name and icon of an installed app. */

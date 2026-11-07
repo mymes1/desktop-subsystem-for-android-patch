@@ -18,4 +18,23 @@ public interface OpenAppSettingsOrBuilder extends
    */
   com.google.protobuf.ByteString
       getPackageNameBytes();
+
+  /**
+   * <pre>
+   * Which of Android's pages for the app. Ignored without a package.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+   * @return The enum numeric value on the wire for page.
+   */
+  int getPageValue();
+  /**
+   * <pre>
+   * Which of Android's pages for the app. Ignored without a package.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+   * @return The page.
+   */
+  io.github.thisisthepy.dsa.control.v1.AppSettingsPage getPage();
 }

@@ -1810,3 +1810,30 @@ Windows의 Hyper-V VM 대신 USB로 연결한 폰의 AVF(Android Virtualization 
 - adb 처리량: https://xdaforums.com/t/xiaomi-13-ultra-adb-pull-push-speed-file-transfer-speed-via-usb-cable.4606831/ , https://x.com/fabynou/status/1009201231896563712
 - scrcpy 지연(영상 경로, 참고만): https://github.com/Genymobile/scrcpy/pull/646
 - Doze 조건: https://developer.android.com/training/monitoring-device-state/doze-standby
+
+## R22. 앱이 그리는 제목 표시줄과 뒤로 가기 키: 시스템과 앱이 주고받는 것 (FR-22, FR-5)
+
+### 확인한 자료
+- `frameworks/base`의 고정 커밋 두 개: Android 16(빌드 15581820, `45034f0663f960d9ee5fb0a101a4732b71f6e2f4`)과 Android 17(빌드 16373615, `94b4c163b7dfe5ce3607f7bb8456f9573f7de57d`). `framework-lock.json`이 고정한 커밋이다. `frameworks/native`는 Android 16의 `fcbde2bcff56ca1d7bec9cabf8bdca5e288bf103`.
+- 읽은 파일: WM Shell의 `DesktopModeWindowDecoration.java`, `DesktopModeWindowDecorViewModel.java`, `WindowDecoration.java`, `WindowDecorationInsets.kt`, `common/CaptionRegionHelper.kt`, `common/WindowDecorationGestureExclusionTracker.kt`, `extension/TaskInfo.kt`. 코어의 `InsetsSource.java`, `WindowContainerTransaction.java`, `WindowInsetsController.java`, `ISystemGestureExclusionListener.aidl`, `IWindowManager.aidl`, `Activity.java`, `InputMethodManager.java`, `KeyGestureEvent.java`, `InputManager.java`, `data/keyboards/Virtual.kcm`, `Generic.kcm`, `core/res/AndroidManifest.xml`. 서비스의 `WindowManagerService.java`, `PhoneWindowManager.java`, `InputManagerService.java`, `KeyGestureController.java`, `InputGestureManager.java`. 네이티브의 `inputflinger/dispatcher/InputDispatcher.cpp`.
+
+### 방법
+- 각 파일을 고정 커밋에서 `android.googlesource.com`의 `?format=TEXT`로 받아 `.scratch/caption-research/a16`, `a17`에 두고 읽었다. 같은 파일을 두 버전에서 비교했다.
+
+### 찾은 것
+- **투명한 캡션 요청을 아는 법**: 셸의 `TaskInfo.isTransparentCaptionBarAppearance`는 `taskDescription.topOpaqueSystemBarsAppearance`에 `APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND`(`1 << 7`)가 있는지 본다. 앱은 `WindowInsetsController.setSystemBarsAppearance`로 이 비트를 켠다. 16과 17이 같다. 에이전트가 이미 상태 표시줄 밝기를 읽는 `getTopOpaqueSystemBarsAppearance`와 같은 값이다.
+- **캡션 요소의 자리를 앱에 알리는 법**: 셸은 캡션을 `WindowContainerTransaction.addInsetsSource(token, owner, index, captionBar(), frame, Rect[] boundingRects, flags)`로 태스크의 인셋으로 준다. `boundingRects`는 캡션 요소(왼쪽의 앱 칩, 오른쪽의 단추들)가 차지하는 곳이고(`CaptionRegionHelper.calculateBoundingRectsInsets`, 요소마다 START나 END에 붙은 너비), 앱은 `WindowInsets.getBoundingRects(captionBar())`로 받는다. 16의 `InsetsSource.calculateBoundingRects`는 `captionBar` 형식의 사각형을 창 기준으로 그대로 쓰고, 17은 모든 형식을 프레임 기준으로 바꾼다. 그래서 사각형을 줄 때는 프레임을 태스크의 가로 범위와 같게 두어야 두 버전에서 뜻이 같다. 17은 `InsetsBoundingRect[]`를 받는 형식을 더했지만 `Rect[]` 형식도 남아 있다.
+- **앱의 조작 요소와 끌기 자리를 가르는 법**: 셸은 투명 캡션이면 캡션 창을 `INPUT_FEATURE_SPY`로 두고, `ENABLE_ACCESSIBLE_CUSTOM_HEADERS`이면 캡션의 터치 영역을 시스템 자리로만 줄인다(`calculateLimitedTouchableRegion`). 시스템 자리는 캡션에서, 요소의 사각형을 뺀 "꾸밀 수 있는 영역"과 디스플레이의 시스템 제스처 제외 영역이 겹치는 곳("꾸민 영역")을 뺀 나머지다. 제외 영역은 `IWindowManager.registerSystemGestureExclusionListener`로 받는다(`WindowDecorationGestureExclusionTracker`). 곧 앱은 `View.setSystemGestureExclusionRects`로 조작 요소를 알리고, 알리지 않은 곳은 끌기 자리다. 이 등록에는 권한 검사가 없다(`WindowManagerService` 5222행, 17은 5378행). 리스너는 제한을 둔 영역과 제한 전 영역 두 개를 받는다. 제한은 뒤로 제스처를 위한 화면 가장자리 제한이다.
+- **뒤로 단추와 키**: `Virtual.kcm`(16과 17이 같다)에서 `ESCAPE`의 기본 동작은 `none`이고, `DEL`은 `ctrl+alt: fallback BACK`뿐이다. 키 하나가 앱에서 처리되지 않으면 `InputDispatcher::afterKeyEventLockedInterruptable`이 정책의 `dispatchUnhandledKey`를 부르고, `InputManagerService.dispatchUnhandledKey`는 먼저 `KeyGestureController.interceptUnhandledKey`를 부른 뒤 키 맵의 대체 키를 만든다. 처리되지 않은 Escape(조합키 없음, 첫 누름)는 그 단계에서 `KEY_GESTURE_TYPE_CLOSE_ALL_DIALOGS`(61)가 되고, 이 동작을 만드는 다른 길은 없다. `PhoneWindowManager`가 이 동작의 처리기로 늘 등록하므로 동작은 처리되고, `InputManager.registerKeyGestureEventListener`(권한 `MANAGE_KEY_GESTURES`, 서명 보호)의 리스너에 전해진다. 주입한 이벤트의 처리 결과는 주입한 쪽에 돌아오지 않는다(`setInjectionResult`는 처리 여부를 담지 않는다).
+- **글자 입력란**: `InputMethodManager.createInputConnection`은 입력란이 아닌 뷰에도 입력을 시작하되 연결이 없으면 `fieldId`를 0으로 지운다. 터미널처럼 `TYPE_NULL`로 키를 직접 받는 입력란은 연결이 있다.
+- **첫 화면**: `TaskInfo.numActivities`가 태스크의 액티비티 수다. 1이면 맨 아래 액티비티이고, 그때 뒤로는 태스크를 끝내거나 뒤로 보낸다.
+
+### 결정
+- 에이전트가 셸의 일을 한다. DSA 게스트에는 SystemUI와 WM Shell의 데스크톱 장식이 없기 때문이다. 투명 캡션 비트를 태스크마다 읽어 보내고, 그런 앱의 `captionBar` 인셋에 호스트의 아이콘 칸과 캡션 단추의 사각형을 `Rect[]`로 주며, 그때 프레임은 태스크의 가로 범위로 둔다. 제외 영역 리스너를 등록해, 띠 안에서 아이콘 칸과 단추 사이에 든 제외 영역을 태스크 기준 사각형으로 보낸다. 호스트는 그 사각형 위를 `HTCLIENT`로, 나머지 띠를 `HTCAPTION`으로 답한다. 게스트에는 뒤로 제스처가 없으므로 제한 전 영역을 쓴다.
+- ESC는 Escape로 앱에 보내고, `CLOSE_ALL_DIALOGS` 동작이 오면(1초 안, 가상 키보드, 키가 Escape) 첫 화면이 아닐 때만 뒤로를 보낸다. Backspace는 입력란에 초점이 없고 첫 화면이 아닐 때 Ctrl과 Alt를 더해 보내, 키 맵의 대체 키가 앱이 쓰지 않은 것만 뒤로로 바꾸게 한다. 둘 다 프레임워크가 "앱이 이 키를 쓰지 않았다"고 아는 유일한 자리를 쓴다. 앱이 키를 썼는지를 에이전트가 추측하는 방법(화면 변화 등)은 믿을 수 없다. 키 맵 파일을 이미지에서 바꾸는 방법은 adb와 다른 주입에도 영향을 주고 이미지 빌드를 바꿔야 해서 쓰지 않았다.
+- 마우스의 뒤로와 앞으로 단추는 포인터 누름이 아니라 `KEYCODE_BACK`과 `KEYCODE_FORWARD` 키다. 실제 마우스에서 입력 리더가 하는 일과 같고, 단추 아래의 뷰를 누르지 않는다.
+
+### 확인하지 못한 것
+- 이 PC에서 아무것도 실행하지 않았다. 특히 `CLOSE_ALL_DIALOGS` 동작이 주입한 Escape에도 오는지, `MANAGE_KEY_GESTURES`가 플랫폼 서명 앱에 실제로 주어지는지, 제외 영역 리스너가 앱 창의 제외 영역을 이 디스플레이에서 보고하는지는 설치한 이미지에서 확인해야 한다.
+- Ctrl과 Alt가 붙은 Backspace를 조합키가 없을 때만 처리하는 앱(`hasNoModifiers`를 보는 게임 등)은 그 Backspace를 쓰지 않아 뒤로 가기가 된다. 실제 앱에서 이런 경우가 있는지 확인해야 한다.
+- Chrome이 제외 영역으로 탭을 알리는지는 Chromium 소스나 실제 실행으로 확인해야 한다(FR-22의 수동 확인).

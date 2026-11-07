@@ -18,4 +18,16 @@ public interface LaunchAppOrBuilder extends
    */
   com.google.protobuf.ByteString
       getPackageNameBytes();
+
+  /**
+   * <pre>
+   * Start another task of the app even when it has one, in a window of its own, as the
+   * system menu's New window does. Only for an app that supports several windows
+   * (AppInfo.multiple_windows); otherwise the app's task comes to the front.
+   * </pre>
+   *
+   * <code>bool new_window = 2;</code>
+   * @return The newWindow.
+   */
+  boolean getNewWindow();
 }

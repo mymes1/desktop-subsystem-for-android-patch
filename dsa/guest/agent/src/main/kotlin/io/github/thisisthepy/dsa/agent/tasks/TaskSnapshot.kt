@@ -55,6 +55,19 @@ data class TaskSnapshot(
     val fullscreen: Boolean = false,
     /** Whether the task's app went into picture-in-picture. */
     val pictureInPicture: Boolean = false,
+    /**
+     * Whether the task's app asked to draw its own title bar (a transparent caption bar
+     * background), as apps do on Android's own desktop windows.
+     */
+    val transparentCaption: Boolean = false,
+    /** Whether the task is past its first activity, so Back has somewhere to go. */
+    val canGoBack: Boolean = false,
+    /**
+     * Where in the title bar band the app has controls, relative to the task's top left
+     * corner: filled in by the agent from what the app keeps clear of system gestures, while
+     * [transparentCaption] is set.
+     */
+    val captionInteractive: List<TaskBounds> = emptyList(),
 )
 
 /**

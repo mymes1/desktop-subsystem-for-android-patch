@@ -35,6 +35,18 @@ class InsetsSourceFormTest {
     }
 
     @Test
+    fun fr22_android_17_is_given_the_form_that_takes_rect_bounding_rectangles() {
+        // Android 17 has a frame form with InsetsBoundingRect[] too; the Rect[] one is chosen.
+        val forms = listOf(
+            form("android.graphics.Rect", "android.view.InsetsBoundingRect[]", "int"),
+            form("android.graphics.Insets", "android.graphics.Rect[]", "int"),
+            form("android.graphics.Rect", "android.graphics.Rect[]", "int"),
+            form("android.graphics.Insets", "android.view.InsetsBoundingRect[]", "int"),
+        )
+        assertEquals(InsetsSourceForm.Frame(2, 7), InsetsSourceForm.choose(forms))
+    }
+
+    @Test
     fun fr4_no_known_form_is_reported_as_none() {
         assertNull(InsetsSourceForm.choose(listOf(head)))
     }

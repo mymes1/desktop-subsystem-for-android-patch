@@ -200,6 +200,9 @@ impl State {
                 self.after_mode(*task_id);
                 self.picture_in_picture(*task_id, small);
             }
+            // The compositor draws its own title bar above every app's content, with its name;
+            // an app's own title bar and the back arrow are drawn by the Windows host only.
+            WindowChange::CaptionMode { .. } | WindowChange::CaptionBack { .. } => {}
         }
     }
 
@@ -241,7 +244,13 @@ impl State {
             .get_mut(&task_id)
             .and_then(|window| window.model.caption_change());
         if let Some(height) = caption {
-            self.report(FromHost::Caption { task_id, height });
+            self.report(FromHost::Caption {
+                task_id,
+                band: dsa_host_core::compositor::caption::CaptionBand {
+                    height,
+                    ..Default::default()
+                },
+            });
         }
         self.redraw(task_id);
     }
@@ -565,7 +574,13 @@ impl Dispatch<XdgSurface, i32> for State {
             };
             state.report(FromHost::Dpi { task_id, dpi });
             if let Some(height) = caption {
-                state.report(FromHost::Caption { task_id, height });
+                state.report(FromHost::Caption {
+                    task_id,
+                    band: dsa_host_core::compositor::caption::CaptionBand {
+                        height,
+                        ..Default::default()
+                    },
+                });
             }
         }
         state.redraw(task_id);

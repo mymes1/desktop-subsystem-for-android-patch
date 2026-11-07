@@ -126,6 +126,11 @@ pub const RT_RCDATA: u16 = 10;
 /// is scaled down to its size on a monitor of any scale up to 320% rather than up from 256.
 pub const SPLASH_ICON_ID: u16 = 1;
 
+/// The `RT_RCDATA` ID of the icon a window's title bar shows, a PNG, in an app's window
+/// program: an adaptive icon's foreground layer alone, without its background plate. An app
+/// whose icon is not adaptive has none, and its title bar shows the program's icon.
+pub const CAPTION_ICON_ID: u16 = 2;
+
 /// The largest image an icon resource holds, in pixels on a side.
 pub const MAX_ICON_IMAGE_SIDE: u32 = 256;
 

@@ -35,6 +35,8 @@
     <uses-permission android:name="android.permission.INTERNAL_SYSTEM_WINDOW" />
     <!-- Injecting the pointer input of each task's host window into the task. -->
     <uses-permission android:name="android.permission.INJECT_EVENTS" />
+    <!-- Hearing the Escapes no app takes (key gesture events), which become Back. -->
+    <uses-permission android:name="android.permission.MANAGE_KEY_GESTURES" />
     <!-- Reading the label and launcher activity of any app. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <!--

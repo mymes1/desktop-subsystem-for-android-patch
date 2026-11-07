@@ -80,6 +80,10 @@ class AndroidTaskSource(
             fullscreen = fields.windowingMode(info) == WINDOWING_MODE_FULLSCREEN ||
                 hidesBothSystemBars(fields.requestedVisibleTypes(info)),
             pictureInPicture = fields.windowingMode(info) == WINDOWING_MODE_PINNED,
+            transparentCaption = fields.transparentCaption(info),
+            // The task's first activity is at the bottom of its stack; past it, Back has
+            // somewhere to go.
+            canGoBack = info.numActivities > 1,
         )
     }
 
@@ -198,6 +202,20 @@ private class TaskFields(private val log: Log) {
         }
     }
 
+    /**
+     * Whether the task's app asked to draw its own title bar: its task description carries
+     * WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND, which is how
+     * Android's own desktop windows tell (TaskInfo.isTransparentCaptionBarAppearance in the
+     * window manager shell reads the same bit of the top opaque activity's appearance). False
+     * when the framework does not say.
+     */
+    fun transparentCaption(info: ActivityManager.RunningTaskInfo): Boolean {
+        val description = info.taskDescription ?: return false
+        val appearance = read("caption bar appearance") { barsAppearance!!.invoke(description) as Int }
+            ?: return false
+        return appearance and APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND != 0
+    }
+
     /** The status bar color the app set, as ARGB; 0 when it set none or it cannot be read. */
     fun statusBarColor(info: ActivityManager.RunningTaskInfo): Int {
         val description = info.taskDescription ?: return 0
@@ -255,5 +273,8 @@ private class TaskFields(private val log: Log) {
         // WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS and APPEARANCE_LIGHT_CAPTION_BARS.
         const val APPEARANCE_LIGHT_STATUS_BARS = 8
         const val APPEARANCE_LIGHT_CAPTION_BARS = 256
+
+        // WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND.
+        const val APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND = 128
     }
 }

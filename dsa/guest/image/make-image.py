@@ -889,8 +889,10 @@ def framework_overlay_sources(dest):
     )
     integers = "".join(f'    <integer name="{name}">{value}</integer>\n'
                        for name, value in FRAMEWORK_OVERLAY_INTEGERS.items())
+    booleans = "".join(f'    <bool name="{name}">{str(value).lower()}</bool>\n'
+                       for name, value in FRAMEWORK_OVERLAY_BOOLEANS.items())
     (dest / "res/values/dsa.xml").write_text(
-        f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{integers}</resources>\n')
+        f'<?xml version="1.0" encoding="utf-8"?>\n<resources>\n{integers}{booleans}</resources>\n')
 
 
 def build_framework_overlay(aapt2, framework_res, work):
@@ -2361,6 +2363,11 @@ AGENT_APKCERTS = (
 FRAMEWORK_OVERLAY_APK = "VENDOR/overlay/DsaFrameworkOverlay.apk"
 FRAMEWORK_OVERLAY_PACKAGE = "io.github.thisisthepy.dsa.overlay.framework"
 FRAMEWORK_OVERLAY_INTEGERS = {"config_tapTimeoutMillis": 0}
+# The user's aspect ratio override of an app, which Settings offers on the app's aspect ratio
+# page and a task window's system menu opens. The window manager applies the override only
+# while this flag is on, and Android leaves it off unless a device turns it on, as large
+# screen devices do.
+FRAMEWORK_OVERLAY_BOOLEANS = {"config_appCompatUserAppAspectRatioSettingsIsEnabled": True}
 FRAMEWORK_OVERLAY_APKCERTS = (
     'name="DsaFrameworkOverlay.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="vendor"'

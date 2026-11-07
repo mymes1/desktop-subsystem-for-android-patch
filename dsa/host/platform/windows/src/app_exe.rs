@@ -20,8 +20,8 @@ use std::time::UNIX_EPOCH;
 
 use dsa_exe_resources::{
     dib_icon, icon_group, icon_image_side, names, png_icon, version_info, IconImage,
-    VersionStrings, ICON_GROUP_ID, LANG_EN_US, MAX_ICON_IMAGE_SIDE, RT_GROUP_ICON, RT_ICON,
-    RT_RCDATA, RT_VERSION, SPLASH_ICON_ID, VERSION_ID,
+    VersionStrings, CAPTION_ICON_ID, ICON_GROUP_ID, LANG_EN_US, MAX_ICON_IMAGE_SIDE, RT_GROUP_ICON,
+    RT_ICON, RT_RCDATA, RT_VERSION, SPLASH_ICON_ID, VERSION_ID,
 };
 use dsa_host_core::compositor::window_hosts::is_valid_package;
 use dsa_host_core::tasks::AppInfo;
@@ -131,6 +131,10 @@ struct Made {
     label: String,
     /// SHA-256 of the icon, in hexadecimal; empty for none.
     icon: String,
+    /// SHA-256 of the title bar's icon (an adaptive icon's foreground), in hexadecimal; empty
+    /// for none. A note written before it was recorded reads as none.
+    #[serde(default)]
+    caption_icon: String,
 }
 
 fn template_stamp(template: &Path) -> io::Result<String> {
@@ -177,11 +181,18 @@ pub fn ensure(
     let icon = app
         .map(|app| app.icon_png.as_slice())
         .filter(|png| png_icon(png).is_some());
+    // The title bar's icon goes in only beside the app's own: it never stands alone.
+    let caption_icon = app
+        .map(|app| app.caption_icon_png.as_slice())
+        .filter(|png| icon.is_some() && crate::compositor::widgets::png::size(png).is_some());
     let made = Made {
         template: template_stamp(template)
             .map_err(|e| format!("the app window host {}: {e}", template.display()))?,
         label,
         icon: icon
+            .map(|png| hex(&Sha256::digest(png)))
+            .unwrap_or_default(),
+        caption_icon: caption_icon
             .map(|png| hex(&Sha256::digest(png)))
             .unwrap_or_default(),
     };
@@ -204,7 +215,7 @@ pub fn ensure(
             fresh.display()
         )
     })?;
-    if let Err(why) = write_resources(&fresh, package, &made.label, icon) {
+    if let Err(why) = write_resources(&fresh, package, &made.label, icon, caption_icon) {
         let _ = fs::remove_file(&fresh);
         return Err(why);
     }
@@ -293,12 +304,16 @@ fn icon_image(png: &[u8]) -> Option<IconImage> {
         .or(Some(image))
 }
 
-/// Rewrites the version information and icon of the program at `path`.
+/// Rewrites the version information and icon of the program at `path`, and puts the title
+/// bar's icon (`caption_icon`, an adaptive icon's foreground layer) beside it when the app has
+/// one. The taskbar and the Start menu show the program's icon, plate and all; only the
+/// window's title bar shows the foreground.
 fn write_resources(
     path: &Path,
     package: &str,
     label: &str,
     icon: Option<&[u8]>,
+    caption_icon: Option<&[u8]>,
 ) -> Result<(), String> {
     let version = crate::VERSION.to_string();
     let strings = VersionStrings {
@@ -361,6 +376,9 @@ fn write_resources(
     // has on the window's monitor.
     if let Some(png) = icon {
         ok &= put(RT_RCDATA, SPLASH_ICON_ID, 0, Some(png));
+    }
+    if let Some(png) = caption_icon {
+        ok &= put(RT_RCDATA, CAPTION_ICON_ID, 0, Some(png));
     }
     let error = io::Error::last_os_error();
     // SAFETY: ends the update begun above; discards it when something failed.

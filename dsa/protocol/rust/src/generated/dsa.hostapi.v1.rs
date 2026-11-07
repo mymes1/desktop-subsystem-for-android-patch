@@ -72,6 +72,9 @@ pub struct ListApps {
 pub struct OpenAppSettings {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
+    /// Which of Android's pages for the app. Ignored without a package.
+    #[prost(enumeration = "AppSettingsPage", tag = "2")]
+    pub page: i32,
 }
 /// Uninstalls an app the user installed in the caller's Android. Android must be running. The
 /// answer is UninstallResult.
@@ -104,6 +107,10 @@ pub struct CloseTask {
 pub struct LaunchApp {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
+    /// Start another task of the app even when it has one, in a window of its own. Only for an
+    /// app that supports several windows (AppInfo.multiple_windows).
+    #[prost(bool, tag = "2")]
+    pub new_window: bool,
 }
 /// The user's Stop: asks the caller's Android to end every process of an app and give its
 /// memory back, even one a placed widget or a foreground service keeps running.
@@ -138,12 +145,20 @@ pub struct SetTaskDensity {
 }
 /// A task's window draws its title bar over the top `height` pixels of the task: asks the
 /// caller's Android to give the task a top system bar inset of that height. 0 removes it.
+///
+/// `start_width` and `end_width` are how far the window's icon and its caption buttons reach
+/// into the band from its left and right ends, in Android display pixels, which an app that
+/// draws its own title bar keeps its controls out of.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetTaskCaption {
     #[prost(int32, tag = "1")]
     pub task_id: i32,
     #[prost(uint32, tag = "2")]
     pub height: u32,
+    #[prost(uint32, tag = "3")]
+    pub start_width: u32,
+    #[prost(uint32, tag = "4")]
+    pub end_width: u32,
 }
 /// Turns the connection into a stream of input for the caller's Android: after the answer
 /// (Done), the client sends only PointerEvent, KeyEvent, ImeComposition and ImeCommit frames, which the service passes on
@@ -981,7 +996,7 @@ pub struct Rect {
 }
 /// One app task of the caller's Android. Every field is sent each time, so the latest one
 /// replaces what came before.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Task {
     /// Android's task ID, unique while the task lives.
     #[prost(int32, tag = "1")]
@@ -1029,6 +1044,19 @@ pub struct Task {
     /// Whether the task's app went into picture-in-picture.
     #[prost(bool, tag = "22")]
     pub picture_in_picture: bool,
+    /// Whether the task's app draws its own title bar (it asked for a transparent caption bar
+    /// background): the window then draws only its caption buttons and the app's icon.
+    #[prost(bool, tag = "23")]
+    pub transparent_caption: bool,
+    /// While `transparent_caption` is set: where in the title bar band the app has controls,
+    /// relative to the task's top left corner in Android display pixels. The rest of the band
+    /// drags the window.
+    #[prost(message, repeated, tag = "24")]
+    pub caption_interactive: ::prost::alloc::vec::Vec<Rect>,
+    /// Whether the task has somewhere to go back to (it is past its first activity), so the
+    /// window shows a back button in the place of the app's icon.
+    #[prost(bool, tag = "25")]
+    pub can_go_back: bool,
 }
 /// The task ended.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1088,6 +1116,13 @@ pub struct AppInfo {
     /// ABI. Empty for an app without native code.
     #[prost(message, repeated, tag = "13")]
     pub native_libraries: ::prost::alloc::vec::Vec<NativeLibraries>,
+    /// The icon a window's title bar shows: an adaptive icon's foreground layer alone, as a
+    /// square PNG image. Empty for an app whose icon is not adaptive, which shows `icon_png`.
+    #[prost(bytes = "vec", tag = "14")]
+    pub caption_icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// Whether the app supports several windows at once, so its windows offer New window.
+    #[prost(bool, tag = "15")]
+    pub multiple_windows: bool,
 }
 /// Installs an app of the caller's Android again from the APKs it has there, with its native
 /// code for arm64-v8a (`on`, run through the ARM translator) or for x86_64. Android must be
@@ -2552,6 +2587,39 @@ impl SessionState {
             "SESSION_STATE_FROZEN" => Some(Self::Frozen),
             "SESSION_STATE_STOPPING" => Some(Self::Stopping),
             "SESSION_STATE_STALLED" => Some(Self::Stalled),
+            _ => None,
+        }
+    }
+}
+/// One of Android's settings pages for an app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum AppSettingsPage {
+    /// The app's info: its permissions, storage and notifications.
+    Details = 0,
+    /// The app's aspect ratio, which the user may override.
+    AspectRatio = 1,
+    /// Whether the links the app supports open in the app or in the browser.
+    OpenByDefault = 2,
+}
+impl AppSettingsPage {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Details => "APP_SETTINGS_PAGE_DETAILS",
+            Self::AspectRatio => "APP_SETTINGS_PAGE_ASPECT_RATIO",
+            Self::OpenByDefault => "APP_SETTINGS_PAGE_OPEN_BY_DEFAULT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "APP_SETTINGS_PAGE_DETAILS" => Some(Self::Details),
+            "APP_SETTINGS_PAGE_ASPECT_RATIO" => Some(Self::AspectRatio),
+            "APP_SETTINGS_PAGE_OPEN_BY_DEFAULT" => Some(Self::OpenByDefault),
             _ => None,
         }
     }

@@ -4,6 +4,7 @@ import com.google.protobuf.InvalidProtocolBufferException
 import io.github.thisisthepy.dsa.agent.tasks.ScreenDp
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
 import io.github.thisisthepy.dsa.agent.windowing.Size
+import io.github.thisisthepy.dsa.control.v1.AppSettingsPage
 import io.github.thisisthepy.dsa.control.v1.Envelope
 
 /** What the agent does to the guest's tasks on the host's behalf. */
@@ -16,11 +17,24 @@ interface TaskActions {
     fun launchApp(packageName: String): Boolean
 
     /**
-     * Opens Android Settings' page of [packageName] (its permissions, storage and
-     * notifications), or the list of every installed app when it is null, as a new task in its
-     * own freeform window. False when the framework refused.
+     * Whether [packageName] says it supports several windows, so New window may start another
+     * task of it. False when it says nothing.
      */
-    fun openAppSettings(packageName: String?): Boolean = false
+    fun supportsMultipleWindows(packageName: String): Boolean = false
+
+    /**
+     * Starts the launcher activity of [packageName] as an additional task in its own freeform
+     * window, even when the app has a task already. False when the package has no launcher
+     * activity or the framework refused.
+     */
+    fun launchNewWindow(packageName: String): Boolean = false
+
+    /**
+     * Opens Android Settings' [page] of [packageName], or the list of every installed app when
+     * it is null, as a new task in its own freeform window. A Settings without that page opens
+     * the app's info instead. False when the framework refused.
+     */
+    fun openAppSettings(packageName: String?, page: SettingsPage = SettingsPage.DETAILS): Boolean = false
 
     /** Ends the task. False when the framework has no such task or refused. */
     fun closeTask(taskId: Int): Boolean
@@ -65,10 +79,24 @@ interface TaskActions {
     /**
      * Gives the task a top system bar inset covering [frame] (guest display pixels): the band
      * of the task the host's window draws its title bar over. The task's app receives it as its
-     * status bar, system bar and caption bar inset. A null [frame] removes it. False when the
-     * framework has no way to give a task an inset, or refused.
+     * status bar, system bar and caption bar inset. A null [frame] removes it. The caption bar
+     * inset carries [boundingRects] (relative to [frame]) as the places in it the host draws
+     * over, for an app that draws its own title bar; none otherwise. False when the framework
+     * has no way to give a task an inset, or refused.
      */
-    fun setCaptionInset(taskId: Int, frame: TaskBounds?): Boolean
+    fun setCaptionInset(taskId: Int, frame: TaskBounds?, boundingRects: List<TaskBounds> = emptyList()): Boolean
+}
+
+/** Which of Android Settings' pages of an app to open. */
+enum class SettingsPage {
+    /** The app's info: its permissions, storage and notifications. */
+    DETAILS,
+
+    /** The user's override of the app's aspect ratio. */
+    ASPECT_RATIO,
+
+    /** Whether the links the app supports open in the app or in the browser. */
+    OPEN_BY_DEFAULT,
 }
 
 /** What the framework took of a resize. */
@@ -88,10 +116,11 @@ enum class ResizeOutcome {
 
 /** What became of one frame from the channel. */
 sealed interface RequestResult {
-    data class Launched(val packageName: String) : RequestResult
+    /** The app started, or came to the front; [newWindow] when it started another task. */
+    data class Launched(val packageName: String, val newWindow: Boolean = false) : RequestResult
     data class LaunchFailed(val packageName: String, val reason: String) : RequestResult
-    /** Android's settings of [packageName] opened; null for the list of every app. */
-    data class SettingsOpened(val packageName: String?) : RequestResult
+    /** Android's [page] of [packageName] opened; null for the list of every app. */
+    data class SettingsOpened(val packageName: String?, val page: SettingsPage = SettingsPage.DETAILS) : RequestResult
     data class SettingsFailed(val packageName: String?, val reason: String) : RequestResult
     data class Closed(val taskId: Int) : RequestResult
     data class CloseRefused(val taskId: Int, val reason: String) : RequestResult
@@ -110,7 +139,7 @@ sealed interface RequestResult {
      * The host's window for the task draws its title bar over the task's top [height] pixels;
      * the task gets a top inset of that height (0 removes it).
      */
-    data class Caption(val taskId: Int, val height: Int) : RequestResult
+    data class Caption(val taskId: Int, val height: Int, val startWidth: Int = 0, val endWidth: Int = 0) : RequestResult
 
     /** A resize or density for a task the host was never told about. */
     data class SizeRefused(val taskId: Int, val reason: String) : RequestResult
@@ -125,7 +154,8 @@ sealed interface RequestResult {
 /**
  * Turns the frames the channel delivers into actions on the guest's tasks.
  *
- * LaunchApp starts an app; CloseTask ends a task, but only one the host was told about, so
+ * LaunchApp starts an app, or with new_window another task of an app that supports several
+ * windows; OpenAppSettings opens one of Android's settings pages of an app; CloseTask ends a task, but only one the host was told about, so
  * the host cannot end the agent's own task or anything else that has no window. ResizeTask
  * and SetTaskDensity are checked the same way and handed back for the agent to apply with
  * the rest of the task layout, and so is SetTaskCaption, the height of the host's title bar
@@ -145,34 +175,56 @@ class HostRequests(
             return RequestResult.Malformed("the frame is not a control message (${e.message})")
         }
         return when (envelope.bodyCase) {
-            Envelope.BodyCase.LAUNCH_APP -> launch(envelope.launchApp.packageName)
-            Envelope.BodyCase.OPEN_APP_SETTINGS -> settings(envelope.openAppSettings.packageName)
+            Envelope.BodyCase.LAUNCH_APP -> launch(envelope.launchApp.packageName, envelope.launchApp.newWindow)
+            Envelope.BodyCase.OPEN_APP_SETTINGS ->
+                settings(envelope.openAppSettings.packageName, pageOf(envelope.openAppSettings.page))
             Envelope.BodyCase.CLOSE_TASK -> close(envelope.closeTask.taskId)
             Envelope.BodyCase.RESIZE_TASK -> envelope.resizeTask.let {
                 resize(it.taskId, it.width, it.height, it.live)
             }
             Envelope.BodyCase.SET_TASK_DENSITY ->
                 density(envelope.setTaskDensity.taskId, envelope.setTaskDensity.densityDpi)
-            Envelope.BodyCase.SET_TASK_CAPTION ->
-                caption(envelope.setTaskCaption.taskId, envelope.setTaskCaption.height)
+            Envelope.BodyCase.SET_TASK_CAPTION -> caption(
+                envelope.setTaskCaption.taskId,
+                envelope.setTaskCaption.height,
+                envelope.setTaskCaption.startWidth,
+                envelope.setTaskCaption.endWidth,
+            )
             Envelope.BodyCase.BODY_NOT_SET, null -> RequestResult.Malformed("the frame carries no message")
             else -> RequestResult.NotForTheAgent(envelope.bodyCase)
         }
     }
 
-    private fun launch(packageName: String): RequestResult = when {
+    private fun launch(packageName: String, newWindow: Boolean): RequestResult = when {
         packageName.isEmpty() -> RequestResult.Malformed("LaunchApp names no package")
         packageName == ownPackage -> RequestResult.LaunchFailed(packageName, "the agent has no window to launch")
+        // Another task only of an app that supports several windows; any other app comes to
+        // the front, as its launch does, rather than open a second copy it was not made for.
+        newWindow && actions.supportsMultipleWindows(packageName) ->
+            if (actions.launchNewWindow(packageName)) {
+                RequestResult.Launched(packageName, newWindow = true)
+            } else {
+                RequestResult.LaunchFailed(packageName, "the framework refused to start another task of it")
+            }
         actions.launchApp(packageName) -> RequestResult.Launched(packageName)
         else -> RequestResult.LaunchFailed(packageName, "the package has no launcher activity, or the framework refused to start it")
     }
 
-    private fun settings(name: String): RequestResult {
+    // A page this build does not know opens the app's info, the page every Settings has.
+    private fun pageOf(page: AppSettingsPage): SettingsPage = when (page) {
+        AppSettingsPage.APP_SETTINGS_PAGE_ASPECT_RATIO -> SettingsPage.ASPECT_RATIO
+        AppSettingsPage.APP_SETTINGS_PAGE_OPEN_BY_DEFAULT -> SettingsPage.OPEN_BY_DEFAULT
+        else -> SettingsPage.DETAILS
+    }
+
+    private fun settings(name: String, asked: SettingsPage): RequestResult {
         val packageName = name.ifEmpty { null }
+        // The list of every app has no pages of its own.
+        val page = if (packageName == null) SettingsPage.DETAILS else asked
         return when {
             packageName != null && !PACKAGE_NAME.matches(packageName) ->
                 RequestResult.Malformed("OpenAppSettings names ${packageName.take(80)}, which is not a package name")
-            actions.openAppSettings(packageName) -> RequestResult.SettingsOpened(packageName)
+            actions.openAppSettings(packageName, page) -> RequestResult.SettingsOpened(packageName, page)
             else -> RequestResult.SettingsFailed(packageName, "Settings has no such page, or the framework refused to start it")
         }
     }
@@ -199,11 +251,16 @@ class HostRequests(
     }
 
     // The height is unsigned on the wire; a value past Int.MAX_VALUE reads as negative here.
-    private fun caption(taskId: Int, height: Int): RequestResult = when {
+    private fun caption(taskId: Int, height: Int, startWidth: Int, endWidth: Int): RequestResult = when {
         height < 0 || height > MAX_LENGTH ->
             RequestResult.Malformed("SetTaskCaption asks for a title bar ${Integer.toUnsignedString(height)} pixels high")
+        startWidth < 0 || startWidth > MAX_LENGTH || endWidth < 0 || endWidth > MAX_LENGTH ->
+            RequestResult.Malformed(
+                "SetTaskCaption says its icon and buttons reach ${Integer.toUnsignedString(startWidth)} and " +
+                    "${Integer.toUnsignedString(endWidth)} pixels into the title bar",
+            )
         !reported(taskId) -> RequestResult.SizeRefused(taskId, "the host was never told about this task")
-        else -> RequestResult.Caption(taskId, height)
+        else -> RequestResult.Caption(taskId, height, startWidth, endWidth)
     }
 
     private companion object {

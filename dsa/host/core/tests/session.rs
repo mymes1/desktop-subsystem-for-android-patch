@@ -1249,7 +1249,8 @@ fn fr3_closing_a_task_and_launching_an_app_reach_the_guest() {
     assert_eq!(
         second.body,
         Some(Body::LaunchApp(dsa_protocol::control::LaunchApp {
-            package_name: "com.example.clock".into()
+            package_name: "com.example.clock".into(),
+            ..Default::default()
         }))
     );
 }
@@ -1261,6 +1262,8 @@ fn fr22_a_windows_caption_height_reaches_the_guest() {
         .request(TaskRequest::SetCaption {
             task_id: 7,
             height: 62,
+            start_width: 48,
+            end_width: 138,
         })
         .expect("the caption height is sent");
     let sent = dsa_protocol::decode(&agent.recv(Some(WAIT)).unwrap()).unwrap();
@@ -1269,7 +1272,9 @@ fn fr22_a_windows_caption_height_reaches_the_guest() {
         Some(Body::SetTaskCaption(
             dsa_protocol::control::SetTaskCaption {
                 task_id: 7,
-                height: 62
+                height: 62,
+                start_width: 48,
+                end_width: 138,
             }
         ))
     );

@@ -66,6 +66,15 @@ pub struct Task {
     pub fullscreen: bool,
     /// Whether the task's app went into picture-in-picture.
     pub picture_in_picture: bool,
+    /// Whether the task's app draws its own title bar: it asked for a transparent caption bar
+    /// background, so the window draws only its caption buttons and the app's icon over it.
+    pub transparent_caption: bool,
+    /// While [`Task::transparent_caption`] is set: where in the title bar band the app has
+    /// controls, relative to the task's top left corner. The rest of the band drags the
+    /// window.
+    pub caption_interactive: Vec<Bounds>,
+    /// Whether the task is past its first screen, so it has somewhere to go back to.
+    pub can_go_back: bool,
 }
 
 /// The orientation a task's top activity asks for.
@@ -102,6 +111,18 @@ impl Task {
     }
 }
 
+/// One of Android's settings pages for an app.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum AppSettingsPage {
+    /// The app's info: its permissions, storage and notifications.
+    #[default]
+    Details,
+    /// The app's aspect ratio, which the user may override.
+    AspectRatio,
+    /// Whether the links the app supports open in the app or in the browser.
+    OpenByDefault,
+}
+
 /// The name and launcher icon of an app the guest has a task of.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AppInfo {
@@ -129,6 +150,11 @@ pub struct AppInfo {
     pub primary_abi: String,
     /// The native libraries the app's APKs on the device hold, base and splits together.
     pub native_libraries: NativeLibraries,
+    /// The icon a window's title bar shows: an adaptive icon's foreground layer alone, as a
+    /// PNG image; empty for an app whose icon is not adaptive, which shows `icon_png` there.
+    pub caption_icon_png: Vec<u8>,
+    /// Whether the app supports several windows at once, so its windows offer New window.
+    pub multiple_windows: bool,
 }
 
 impl AppInfo {
@@ -191,6 +217,15 @@ pub enum TaskRequest {
     Close { task_id: i32 },
     /// Start the app's launcher activity as a new task in its own window.
     Launch { package_name: String },
+    /// Start another task of an app that supports several windows, even when it has one, in
+    /// a window of its own: the system menu's New window.
+    NewWindow { package_name: String },
+    /// Open one of Android's settings pages of the app (`page`) in a window of its own, as
+    /// the system menu's Aspect ratio and Open by default do.
+    OpenAppSettings {
+        package_name: String,
+        page: AppSettingsPage,
+    },
     /// The user resized the task's window: the task takes its client size, in guest
     /// display pixels. `live` is true while the user is still dragging the window's edge:
     /// the task takes the size without being reconfigured, so its activities lay out again
@@ -205,8 +240,15 @@ pub enum TaskRequest {
     /// The task's window is on a monitor of another scale: the task draws at this density.
     SetDensity { task_id: i32, density_dpi: u32 },
     /// The task's window draws its title bar over the top `height` pixels of the task: the
-    /// task gets a top system bar inset of that height. 0 removes it.
-    SetCaption { task_id: i32, height: u32 },
+    /// task gets a top system bar inset of that height. 0 removes it. `start_width` and
+    /// `end_width` are how far the window's icon and its caption buttons reach into the band
+    /// from its left and right ends, which an app drawing its own title bar keeps clear.
+    SetCaption {
+        task_id: i32,
+        height: u32,
+        start_width: u32,
+        end_width: u32,
+    },
     /// Whether any task window is shown: open and not minimized. Once none has been shown for
     /// a while the guest's screen goes off and the guest goes into Doze; it wakes as soon as
     /// a window is shown again.
@@ -222,6 +264,17 @@ impl TaskRequest {
         match self {
             TaskRequest::Close { task_id } => format!("end task {task_id}"),
             TaskRequest::Launch { package_name } => format!("launch {package_name}"),
+            TaskRequest::NewWindow { package_name } => {
+                format!("open a new window of {package_name}")
+            }
+            TaskRequest::OpenAppSettings { package_name, page } => {
+                let page = match page {
+                    AppSettingsPage::Details => "info",
+                    AppSettingsPage::AspectRatio => "aspect ratio",
+                    AppSettingsPage::OpenByDefault => "open by default",
+                };
+                format!("open Android's {page} page of {package_name}")
+            }
             TaskRequest::Resize {
                 task_id,
                 width,
@@ -238,9 +291,9 @@ impl TaskRequest {
                 task_id,
                 density_dpi,
             } => format!("draw task {task_id} at {density_dpi} dpi"),
-            TaskRequest::SetCaption { task_id, height } => {
-                format!("give task {task_id} a title bar inset of {height} pixels")
-            }
+            TaskRequest::SetCaption {
+                task_id, height, ..
+            } => format!("give task {task_id} a title bar inset of {height} pixels"),
             TaskRequest::WindowsShown { shown: true } => "wake for a shown window".into(),
             TaskRequest::WindowsShown { shown: false } => {
                 "let the screen go off with no window shown".into()
@@ -701,7 +754,12 @@ mod tests {
 
     #[test]
     fn fr22_only_the_latest_caption_height_of_each_task_is_sent() {
-        let caption = |task_id, height| TaskRequest::SetCaption { task_id, height };
+        let caption = |task_id, height| TaskRequest::SetCaption {
+            task_id,
+            height,
+            start_width: 0,
+            end_width: 0,
+        };
         let requests = vec![
             caption(1, 31),
             resize(1, 500),
