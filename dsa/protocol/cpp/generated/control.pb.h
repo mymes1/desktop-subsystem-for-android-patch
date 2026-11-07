@@ -5643,6 +5643,8 @@ class PointerEvent final :
     kPressureFieldNumber = 8,
     kScrollXFieldNumber = 9,
     kScrollYFieldNumber = 10,
+    kTiltXFieldNumber = 11,
+    kTiltYFieldNumber = 12,
   };
   // int32 task_id = 1;
   void clear_task_id();
@@ -5734,6 +5736,24 @@ class PointerEvent final :
   void _internal_set_scroll_y(float value);
   public:
 
+  // float tilt_x = 11;
+  void clear_tilt_x();
+  float tilt_x() const;
+  void set_tilt_x(float value);
+  private:
+  float _internal_tilt_x() const;
+  void _internal_set_tilt_x(float value);
+  public:
+
+  // float tilt_y = 12;
+  void clear_tilt_y();
+  float tilt_y() const;
+  void set_tilt_y(float value);
+  private:
+  float _internal_tilt_y() const;
+  void _internal_set_tilt_y(float value);
+  public:
+
   // @@protoc_insertion_point(class_scope:dsa.control.v1.PointerEvent)
  private:
   class _Internal;
@@ -5752,6 +5772,8 @@ class PointerEvent final :
     float pressure_;
     float scroll_x_;
     float scroll_y_;
+    float tilt_x_;
+    float tilt_y_;
     mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   };
   union { Impl_ _impl_; };
@@ -33973,6 +33995,46 @@ inline void PointerEvent::_internal_set_scroll_y(float value) {
 inline void PointerEvent::set_scroll_y(float value) {
   _internal_set_scroll_y(value);
   // @@protoc_insertion_point(field_set:dsa.control.v1.PointerEvent.scroll_y)
+}
+
+// float tilt_x = 11;
+inline void PointerEvent::clear_tilt_x() {
+  _impl_.tilt_x_ = 0;
+}
+inline float PointerEvent::_internal_tilt_x() const {
+  return _impl_.tilt_x_;
+}
+inline float PointerEvent::tilt_x() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PointerEvent.tilt_x)
+  return _internal_tilt_x();
+}
+inline void PointerEvent::_internal_set_tilt_x(float value) {
+  
+  _impl_.tilt_x_ = value;
+}
+inline void PointerEvent::set_tilt_x(float value) {
+  _internal_set_tilt_x(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PointerEvent.tilt_x)
+}
+
+// float tilt_y = 12;
+inline void PointerEvent::clear_tilt_y() {
+  _impl_.tilt_y_ = 0;
+}
+inline float PointerEvent::_internal_tilt_y() const {
+  return _impl_.tilt_y_;
+}
+inline float PointerEvent::tilt_y() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.PointerEvent.tilt_y)
+  return _internal_tilt_y();
+}
+inline void PointerEvent::_internal_set_tilt_y(float value) {
+  
+  _impl_.tilt_y_ = value;
+}
+inline void PointerEvent::set_tilt_y(float value) {
+  _internal_set_tilt_y(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.PointerEvent.tilt_y)
 }
 
 // -------------------------------------------------------------------

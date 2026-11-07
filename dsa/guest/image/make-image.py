@@ -765,7 +765,8 @@ def build_framework_overlay(aapt2, framework_res, work):
 
 
 def settings_overlay_sources(dest):
-    """Writes the Settings overlay's manifest and its back button drawables into `dest`."""
+    """Writes the Settings overlay's manifest, its resource map, its back button drawables and
+    its preference list layout into `dest`."""
     (dest / "res").mkdir(parents=True, exist_ok=True)
     (dest / "AndroidManifest.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -774,12 +775,47 @@ def settings_overlay_sources(dest):
         '    <uses-sdk android:minSdkVersion="34" android:targetSdkVersion="35" />\n'
         '    <application android:hasCode="false" />\n'
         f'    <overlay android:targetPackage="{SETTINGS_OVERLAY_TARGET}" android:isStatic="true" '
-        'android:priority="100" />\n'
+        f'android:priority="100" android:resourcesMap="@xml/{SETTINGS_OVERLAY_MAP}" />\n'
         '</manifest>\n'
     )
     for folder, theme in (("drawable", "light"), ("drawable-night", "dark")):
         (dest / "res" / folder).mkdir(exist_ok=True)
         (dest / "res" / folder / f"{SETTINGS_BACK_ICON}.xml").write_text(settings_back_icon(theme))
+    (dest / "res/layout").mkdir(exist_ok=True)
+    (dest / "res/layout" / f"{SETTINGS_LIST_LAYOUT}.xml").write_text(settings_preference_list())
+    (dest / "res/values").mkdir(exist_ok=True)
+    (dest / "res/values/dsa.xml").write_text(
+        '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
+        f'    <attr name="{SETTINGS_LIST_STYLE_ATTR}" format="reference" />\n'
+        '</resources>\n')
+    (dest / "res/xml").mkdir(exist_ok=True)
+    items = "".join(f'    <item target="{name}" value="@{name}" />\n' for name in SETTINGS_OVERLAID)
+    (dest / "res/xml" / f"{SETTINGS_OVERLAY_MAP}.xml").write_text(
+        f'<?xml version="1.0" encoding="utf-8"?>\n<overlay>\n{items}</overlay>\n')
+
+
+def settings_preference_list():
+    """The RecyclerView every preference screen in Settings lists its rows in.
+
+    androidx.preference's own layout, with room below the last row. Settings takes the space
+    under a list from the navigation bar alone: SettingsLib's EdgeToEdgeUtils pads the
+    content view by the system bar inset, and the list's own bottom padding is 0. A DSA
+    window has no navigation bar, so the last row met the window's bottom edge. The padding
+    is inside the list (clipToPadding is false), so rows still scroll to the edge and only
+    the end of the list stops short of it. The id and the style attribute are Settings' own:
+    the resource map rewrites the overlay's references to them to Settings' ids."""
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<androidx.recyclerview.widget.RecyclerView\n'
+        '    xmlns:android="http://schemas.android.com/apk/res/android"\n'
+        '    android:id="@+id/recycler_view"\n'
+        '    android:layout_width="match_parent"\n'
+        '    android:layout_height="match_parent"\n'
+        '    android:paddingTop="0dp"\n'
+        f'    android:paddingBottom="{SETTINGS_LIST_BOTTOM_MARGIN_DP}dp"\n'
+        '    android:clipToPadding="false"\n'
+        f'    style="?attr/{SETTINGS_LIST_STYLE_ATTR}" />\n'
+    )
 
 
 def settings_back_icon(theme):
@@ -1948,6 +1984,27 @@ SETTINGS_OVERLAY_PACKAGE = "io.github.thisisthepy.dsa.overlay.settings"
 SETTINGS_OVERLAY_TARGET = "com.android.settings"
 SETTINGS_BACK_ICON = "settingslib_expressive_icon_back"
 SETTINGS_BACK_INSET_DP = 8
+# The same overlay gives Settings' preference lists room below their last row, about what a
+# phone's navigation bar leaves there. A DSA window has no navigation bar and the guest
+# reports no bottom inset, and that inset is the only space Settings keeps under a list, so
+# the last row sat on the window's bottom edge. The space is the list's own, like an app's
+# content margin; nothing tells apps there is a navigation bar. The home page
+# (TopLevelSettings) sets its list's padding in code, which replaces this layout's; Android 17
+# adds 16 dp there itself when the window has a caption bar.
+SETTINGS_LIST_LAYOUT = "preference_recyclerview"
+SETTINGS_LIST_STYLE_ATTR = "preferenceFragmentListStyle"
+SETTINGS_LIST_BOTTOM_MARGIN_DP = 24
+# The overlay names what it replaces in a resource map (android:resourcesMap) instead of by
+# matching names. Only then does the framework rewrite the overlay layout's references to
+# its own id and attribute into Settings' ids, which the code and the theme look up. The
+# id and the attribute map onto themselves: nothing reads their values.
+SETTINGS_OVERLAY_MAP = "dsa_overlay"
+SETTINGS_OVERLAID = [
+    f"drawable/{SETTINGS_BACK_ICON}",
+    f"layout/{SETTINGS_LIST_LAYOUT}",
+    "id/recycler_view",
+    f"attr/{SETTINGS_LIST_STYLE_ATTR}",
+]
 # SettingsLib's arrow (packages/SettingsLib/CollapsingToolbarBaseActivity, Android 16).
 SETTINGS_BACK_ARROW = (
     "M3.626,9L8.526,13.9C8.726,14.1 8.817,14.333 8.801,14.6C8.801,14.867 8.701,15.1 8.501,15.3"

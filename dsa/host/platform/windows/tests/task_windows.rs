@@ -1650,8 +1650,8 @@ mod real_input {
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         IsIconic, WindowFromPoint, HTMINBUTTON, HWND_TOPMOST, PEN_FLAG_BARREL, PEN_FLAG_ERASER,
-        PEN_MASK_PRESSURE, POINTER_INPUT_TYPE, PT_PEN, PT_TOUCH, SWP_NOSIZE,
-        TOUCH_MASK_CONTACTAREA, TOUCH_MASK_PRESSURE, WM_NCHITTEST,
+        PEN_MASK_PRESSURE, PEN_MASK_TILT_X, PEN_MASK_TILT_Y, POINTER_INPUT_TYPE, PT_PEN, PT_TOUCH,
+        SWP_NOSIZE, TOUCH_MASK_CONTACTAREA, TOUCH_MASK_PRESSURE, WM_NCHITTEST,
     };
 
     /// One contact of a synthetic pointer device's frame (`POINTER_TYPE_INFO`).
@@ -1767,8 +1767,10 @@ mod real_input {
         pen.pointerInfo.pointerFlags = flags;
         pen.pointerInfo.ptPixelLocation = at;
         pen.penFlags = pen_flags;
-        pen.penMask = PEN_MASK_PRESSURE;
+        pen.penMask = PEN_MASK_PRESSURE | PEN_MASK_TILT_X | PEN_MASK_TILT_Y;
         pen.pressure = pressure;
+        pen.tiltX = 30;
+        pen.tiltY = -20;
         PointerTypeInfo {
             kind: PT_PEN,
             contact: Contact { pen },
@@ -1957,6 +1959,7 @@ mod real_input {
             .unwrap_or_else(|| panic!("the pen never pressed: {tip:?}"));
         assert!((down.pressure - 0.5).abs() <= 0.05, "{down:?}");
         assert_ne!(down.buttons & buttons::STYLUS_PRIMARY, 0, "{down:?}");
+        assert_eq!((down.tilt_x, down.tilt_y), (30.0, -20.0), "{down:?}");
         assert!((down.x - point.0 as f32).abs() <= 2.0, "{down:?}");
         assert!((down.y - point.1 as f32).abs() <= 2.0, "{down:?}");
         assert!(count(&tip, PointerAction::HoverMove) >= 1, "{tip:?}");

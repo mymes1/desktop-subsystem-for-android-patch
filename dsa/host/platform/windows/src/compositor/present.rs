@@ -759,6 +759,26 @@ impl WindowPresenter {
         taken
     }
 
+    /// The window's monitor changed scale and the window takes a client area of `proposed`
+    /// pixels there at once, the size the desktop suggests, and whoever calls this has asked
+    /// the guest for it. Until a frame of it comes, the window shows its last frame 1:1, and
+    /// the frames the app still draws at the old size are not shown and do not move the
+    /// window back: that would put it on the other monitor again.
+    pub fn scale_changed(&self, proposed: (u32, u32)) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed {
+            return;
+        }
+        state.follow.scale_changed(proposed);
+        if proposed != state.asked {
+            state.asked = proposed;
+            self.size_asked(&mut state, proposed);
+        }
+        drop(state);
+        // A frame that waited for a claim the change of scale let go goes on.
+        self.claim_released.notify_all();
+    }
+
     /// The client area is now `view` pixels. The frame kept for that size is presented now,
     /// together with the visual's new scale. Returns once the compositor has taken it, so a
     /// live resize shows it with the new window size.
@@ -1090,6 +1110,19 @@ impl WindowPresenter {
                 arrival => break arrival,
             }
         };
+        if arrival == Arrival::Stale {
+            // Drawn at the size the window had before its monitor changed scale: it is not
+            // shown, the window keeps the size it took for the new scale, and the back buffer
+            // keeps any frame kept for the window to take.
+            trace_stage(
+                self.logger.as_deref(),
+                self.task_id,
+                "app.frame_stale",
+                region,
+                &format!("view={}x{}", state.follow.view().0, state.follow.view().1),
+            );
+            return Ok(());
+        }
         let keep = arrival == Arrival::Keep;
         let shown =
             self.present_locked(&mut state, &texture.texture, texture.size, region, keep)?;

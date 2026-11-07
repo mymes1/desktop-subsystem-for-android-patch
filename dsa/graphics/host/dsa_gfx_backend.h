@@ -61,6 +61,24 @@ typedef struct dsa_gfx_gpu_info {
 /* Fills `info`. Returns 0 on success, -1 when the renderer is not initialised. */
 DSA_GFX_EXPORT int dsa_gfx_get_gpu_info(dsa_gfx_gpu_info* info);
 
+/* Where the renderer's warnings ('W'), errors ('E') and fatal errors ('F') go: one line each,
+ * from any thread, with the source file and line first. A fatal error is passed on before
+ * the renderer acts on it, so the embedder's log says why even when the process then ends.
+ * Set it before dsa_gfx_init to see what the start says; NULL stops it. */
+typedef void (*dsa_gfx_log_fn)(void* context, char severity, const char* message);
+DSA_GFX_EXPORT void dsa_gfx_set_log_callback(dsa_gfx_log_fn cb, void* context);
+
+/* A GPU reset loses every Vulkan device on the GPU. The renderer then answers the guest's
+ * calls on its lost devices with VK_ERROR_DEVICE_LOST, so the guest can make new ones, and
+ * makes its own device again, with every color buffer at its size, before its next
+ * operation. dsa_gfx_device_generation says how many times it has made its device again.
+ *
+ * dsa_gfx_simulate_device_loss makes every device's queue and fence calls fail with
+ * VK_ERROR_DEVICE_LOST, as a reset does, so a test can see this on any driver. Returns 0, or
+ * -1 when the renderer is not running. */
+DSA_GFX_EXPORT int dsa_gfx_simulate_device_loss(void);
+DSA_GFX_EXPORT uint64_t dsa_gfx_device_generation(void);
+
 /* Initializes the host gfxstream renderer (Vulkan only, surfaceless). */
 DSA_GFX_EXPORT int dsa_gfx_init(uint32_t width, uint32_t height);
 

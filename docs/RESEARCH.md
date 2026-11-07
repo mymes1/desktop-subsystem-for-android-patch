@@ -1200,6 +1200,34 @@ soong_ui는 만들어졌고, 제품 설정(kati)에서 멈추었다. `build/make
 
 Soong 분석 단계는 흉내 낼 수 없는 부분이 남는다. 이 트리의 Java, APEX, 파일 시스템 모듈(`android_app` 15개, `runtime_apex`, `soong_filesystem_creator` 등)은 빌드하지 않지만 분석은 된다. 그 단계에서 의존 누락이 아닌 오류(싱글톤의 검사 등)가 나면 다음 로그에 나온다. 앞의 두 실행에서 로그 artifact가 비었던 것은 `.dsa-targets`와 `.dsa-sources.json`이 점으로 시작해 `upload-artifact`가 건너뛰었기 때문이다. `include-hidden-files`를 켜고 `soong_ui.log`와 `soong.variables`를 더했다.
 
+### 세 번째 실행(run 42392409794, android17)과 고친 것
+
+제품 설정과 release config는 통과했다(`lunch`가 `TARGET_PRODUCT=dsa_translator`, `BUILD_ID=CP2A.260605.016`, `SOONG_ONLY=true`를 보였다). 그다음 soong_ui가 PATH를 꾸미는 단계(`ui/build/path.go`)에서 멈추었다. `build.sh`가 정한 `TEMPORARY_DISABLE_PATH_RESTRICTIONS`는 이제 쓰지 않는 값이라, 정해져 있으면 soong_ui가 곧바로 끝낸다. 그래서 Soong 부트스트랩과 분석은 시작하지 않았다. 이 오류는 `error.log`가 아니라 콘솔과 `soong.log`에만 남으므로, 실패하면 `soong.log`의 끝도 보인다.
+
+그 값을 빼면 PATH 제한이 켜진다. 빌드가 쓰는 `python3`와 기본 명령은 `prebuilts/build-tools/path/linux-x86`에 있고(잠금이 `path` 폴더를 받는다), ccache는 `CC_WRAPPER`에 절대 경로로 주므로 제한에 걸리지 않는다. soong_ui가 환경 변수 때문에 멈추는 다른 경우(JDK 실험 값, `BUILD_USERNAME` 없음)도 `build.sh`에 없다.
+
+### 네 번째 실행(run 42394768870, android17)과 고친 것
+
+처음으로 Soong까지 갔다. soong_ui, blueprint, `soong_build`(플러그인 포함)가 약 58초 만에 빌드되었고, Android.bp 분석이 끝까지 돌아 모듈마다 빌드 동작을 만드는 단계(`GenerateBuildActions`)에서 멈추었다. Go 의존과 모듈 형식에서는 오류가 없었다.
+
+멈춘 곳은 `dex_bootjars`의 패닉이다(`Failed to lookup dex2oatd dependency`, `build/soong/dexpreopt/config.go`). `module_common.mk`가 기본 ART 설정을 가져오고, 보드가 dexpreopt를 끄지 않아서(`WITH_DEXPREOPT ?= true`), Soong이 부트 이미지를 만들려고 dex2oat를 찾았다. 트리에 ART가 없으므로 의존이 없고, 패닉은 다른 오류를 모으기 전에 분석 전체를 끝낸다. 그래서 이번 로그에는 이 하나만 있다.
+
+보드 설정에 `WITH_DEXPREOPT := false`를 넣었다. 그러면 `dex_preopt_config.mk`가 앱과 부트 이미지의 dexpreopt를 모두 끄고(`DisablePreopt`, `DisablePreoptBootImages`), `IsDex2oatNeeded`가 거짓이 되어 dex2oat를 찾는 곳이 모두 빈 값을 받는다. Soong 안에서 dex2oat를 찾는 다섯 곳(`dexpreopt.go`, `dexpreopt_bootjars.go`)이 모두 이 검사를 거친다. 같은 이유로 프레임워크가 없는 트리에서 숨은 API 목록을 만들지 않도록 `UNSAFE_DISABLE_HIDDENAPI_FLAGS=true`를 둔다.
+
+### 다섯 번째 실행(run 42396287578, android17)과 고친 것
+
+dexpreopt를 끈 뒤 `dex_bootjars`는 지나갔고, 분석이 다시 `GenerateBuildActions`에서 패닉으로 멈추었다. 이번에는 `soong_filesystem_creator`가 제품으로부터 만든 `dsa_translator_generated_device`(`android_device`)가 target_files의 메타데이터를 모으다 없는 모듈의 출력을 읽었다(`android_device.go`의 `copyMetadataToTargetZip`, nil 포인터). Soong-only 빌드는 제품마다 기기와 파티션 이미지 모듈을 스스로 만드는데(`build/soong/fsgen`), 이 트리에는 그 재료가 없다.
+
+`fsgen`은 묶지 않은(unbundled) 빌드에서는 아무것도 만들지 않는다(`shouldEnableFilesystemCreator`). 그래서 `build.sh`가 `TARGET_BUILD_UNBUNDLED=true`를 둔다. AOSP가 메인라인 모듈을 부분 트리에서 따로 빌드할 때(`module_*` 제품, `ALLOW_MISSING_DEPENDENCIES`)와 같은 방식이라, 기기 단위의 싱글톤(기기, 파티션, 부트 이미지, dist)이 꺼진 상태로 쓰이고 시험되는 경로다. `unbundled_builder`는 `TARGET_BUILD_APPS`가 비어 있으면 아무것도 하지 않는다. cc와 Rust 빌드는 이 값에 따라 달라지지 않고(`cc`, `rust`, `genrule`에 `UnbundledBuild()`를 보는 곳이 없다), 설치는 그대로 `out/target/product/dsa_translator`로 간다. 함께 정해지는 `TARGET_BUILD_USE_PREBUILT_SDKS`는 Java SDK에만 쓰인다.
+
+앞을 내다보고 이 트리의 위험한 모듈도 살폈다. 기기 단위 모듈은 `build/make/target/product/generic`과 `gsi`의 `android_system_image`, `bionic/apex`의 `runtime_apex`, `sdk`, `module_exports`, `build/soong`의 `product_config`, `build_prop` 정도이고, 모두 메인라인 모듈의 부분 트리 빌드에도 있는 것들이다. dexpreopt는 이미 꺼져 있다.
+
+### 여섯 번째 실행(run 42397789226, android17)과 고친 것
+
+패닉 없이 분석이 끝까지 돌았다(`[100% 256/256]`). 오류는 하나였다. `bionic/apex/Android.bp`의 `com.android.runtime`(런타임 APEX)이 `system/sepolicy/apex/com.android.runtime-file_contexts`를 찾지 못했다. 분석의 다른 단계에서는 오류가 없었다. 앞에서 걱정한 `build/make/target/product/generic`과 `gsi`의 `android_system_image`는 이 단계를 지나갔으므로 그대로 둔다.
+
+런타임 APEX에서 나오는 것은 묶음에 하나도 없다. 대상 파일에서 의존을 따라가도 `bionic/apex`의 모듈(`com.android.runtime`, 그 키와 인증서, `runtime-module-sdk`, `runtime-module-host-exports`, `bionic-linker-config`)에 닿지 않는다. 다른 `.bp`가 이 파일에서 모듈 형식을 가져오지도 않는다(`bionic/libc`의 `visibility`에 `//bionic/apex`가 있지만, Soong은 보이는 범위에 적힌 패키지가 있는지 묻지 않는다). 트리에 있는 APEX는 이것 하나다. 그래서 `system/sepolicy`와 APEX 키를 더하는 대신 이 파일을 트리에서 뺀다. 잠금에 `exclude`(체크아웃 뒤 지우는 파일)를 더했고, bionic이 `apex/Android.bp`를 뺀다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
@@ -1260,7 +1288,35 @@ android.googlesource.com의 웹 보기로 소스를 읽었다. 기기에서는 �
 - Android 17 이미지에서 `SessionParams`에 `abiOverride` 필드가 있는지. 없으면 에이전트 로그에 "this Android's package installer takes no ABI override"가 남고 설치가 거부된다.
 - 실제 PC(수동 확인): x86_64와 arm64를 모두 가진 앱을 설치해 `dumpsys package <package>`의 `primaryCpuAbi`가 `x86_64`인지, "ARM으로 실행"을 켜면 `arm64-v8a`로 바뀌고 앱 데이터(로그인, 설정)가 남는지, 끄면 `x86_64`로 돌아오는지 본다. 공유 사용자 ID를 쓰는 앱에서 교체가 거절되는지도 본다. 결과는 이 절에 기록한다.
 
-## R18. GPU 장치를 잃었을 때 SurfaceFlinger와 HWUI가 다시 그리기 (NFR-5, D24)
+## R18. 창 관리자(dsa-wm)가 되풀이해 끝난 원인: 렌더러의 장치 손실 abort (NFR-5, INTENT D24)
+
+### 확인한 자료
+- 소유자 PC(Intel Arc, Windows 11 26100, DSA 0.1.9)의 `dsa-wm.exe` 크래시 덤프 10개(2026-11-07 10:48 ~ 11-08 01:31 KST). 모두 `0xc0000409`(`FAST_FAIL_FATAL_APP_EXIT`), `ucrtbase!abort`.
+- 앞의 6개는 2026-11-06 13:10 UTC에 빌드한 `gfxstream_backend.dll`이고, Graphics test 42222816694의 PDB와 DLL이 맞는다. 뒤의 4개는 cfe0b545의 Graphics test 42336149590의 것이 맞는다(PDB GUID `A1BCDDEF…`).
+- `dsa-wm.log`, 같은 시각의 게스트 logcat(`.scratch/guest-crash-1108/all.txt`), 응용 프로그램 이벤트 로그의 `Application Error` 기록.
+
+### 방법
+- `cdb -z <덤프> -i <DLL 폴더> -y <PDB 폴더> -lines -c ".ecxr; kn"`로 스택을 풀었다. 덤프에 DLL 이미지가 없어서 앞의 6개는 그 빌드의 DLL을 `-i`로 주어야 풀린다.
+- `AbortMessage`의 문자열은 덤프의 힙에 없어서 읽지 못했다. 대신 줄 번호로 소스의 abort 자리를 찾았다.
+
+### 찾은 것
+- 세 갈래이고, 모두 Vulkan 장치 손실(`VK_ERROR_DEVICE_LOST`)이다.
+  - 6개: `on_vkAcquireImageANDROID`(VkAndroidNativeBuffer.cpp 658)의 `VK_CHECK(vkQueueSubmit)` → `on_DeviceLost` → `GFXSTREAM_ABORT`.
+  - 3개: `on_vkCreateFence` → `ExternalFencePool::pop`의 `VK_CHECK(vkGetFenceStatus)` → `on_DeviceLost` → abort.
+  - 1개(01:31, Chromium 창이 닫힐 때): 프로세스 정리 스레드의 `vkDestroyInstanceImpl` → `~ExternalFencePool`(VkDecoderInternalStructs.h 57). 장치가 손실되어 `vkDeviceWaitIdle`이 실패하자 `destroyDeviceObjects`가 객체를 남기고 돌아갔고, 풀이 펜스를 쥔 채 소멸자에서 abort했다.
+- 생성된 디코더는 게스트 호출이 `VK_ERROR_DEVICE_LOST`를 돌려받을 때마다 `on_DeviceLost`를 부르고, 그것이 abort했다. 그래서 장치 하나를 잃으면 창 관리자와 모든 창이 끝났다.
+- 앞의 9개는 정확히 분이 바뀌는 순간(`hh:mm:00`)에 끝났다. 게스트에서 처음 죽은 것은 매번 에이전트의 `RenderThread`(`vkAcquireImageANDROID`)였다. 에이전트의 위젯 렌더러가 시계 위젯을 분마다 GPU로 다시 그린다(`AndroidWidgets.kt`의 `scheduleTick`). 이때 호스트 GPU가 리셋되었다. 시스템 로그에는 TDR 이벤트(4101)가 없었다(드라이버의 엔진 단위 리셋으로 보인다). 리셋 자체의 원인은 덤프로는 알 수 없다.
+- gfxstream의 로그(`ERR`, abort 메시지)는 표준 오류로만 나가서, 콘솔이 없는 dsa-wm에서는 사라졌다.
+
+### 결정
+- 렌더러 패치 0015와 aemu 패치 0002: 게스트를 섬기는 스레드의 치명적 오류는 그 게스트의 스트림만 끝낸다. 장치 손실은 게스트에 `VK_ERROR_DEVICE_LOST`로 돌려주고, 렌더러 자신의 장치는 다음 작업 전에 새로 만들며 ColorBuffer를 같은 핸들로 다시 만든다. 정리 스레드는 손실된 장치의 객체도 지우고, 펜스 풀 소멸자는 끝내지 않는다.
+- 렌더러의 경고와 오류, 치명적 오류, Rust 패닉을 `dsa-wm.log`에 남긴다.
+
+### 확인하지 못한 것
+- 실제 GPU 리셋에서의 복구는 실제 PC에서 확인해야 한다(NFR-5의 수동 기준). CI는 lavapipe에서 가짜 장치 손실로만 확인한다.
+- 시계 위젯의 분 단위 그리기가 왜 Intel 드라이버의 리셋을 부르는지는 확인하지 못했다.
+
+## R19. GPU 장치를 잃었을 때 SurfaceFlinger와 HWUI가 다시 그리기 (NFR-5, D24)
 
 질문: 호스트 GPU가 리셋되어 렌더러가 게스트에 장치 손실(`VK_ERROR_DEVICE_LOST`, `EGL_CONTEXT_LOST`)을 돌려줄 때, DSA 이미지의 SurfaceFlinger와 HWUI는 지금 어떻게 반응하는가. 다시 시작하지 않고 복구하려면 무엇을 고쳐야 하는가. 게스트의 GLES와 Vulkan 드라이버도 고쳐야 하는가. 2026-11-08에 확인했다.
 
@@ -1323,12 +1379,13 @@ target_files에서는 `SYSTEM/build.prop`, `SYSTEM/etc/build_flags.json`, `SYSTE
 
 - ANGLE(`libEGL_angle.so`, `libGLESv2_angle.so`)은 위처럼 손실을 표준 오류로 전하고, 다시 초기화하면 새 장치를 만든다. 고칠 것이 없다.
 - gfxstream 게스트 Vulkan 드라이버는 호스트의 결과를 그대로 돌려준다. 비동기 제출(`vkQueueSubmitAsyncGOOGLE`)은 `VK_SUCCESS`를 돌려주고, 손실은 펜스와 대기(`vkWaitForFences`, `vkGetFenceStatus`, `vkGetFenceFdKHR`의 `VK_ERROR_DEVICE_LOST`)에서 드러난다. 표준이 허용하는 동작이다. 드라이버가 스스로 끝내는 곳은 연결에서 응답을 읽지 못할 때(`VulkanStreamGuest::read`의 `abort()`)뿐이다.
-- 그래서 게스트 드라이버는 고치지 않는다. 대신 호스트 렌더러가 지켜야 할 것이 있다. 이것은 렌더러를 고치는 작업에 넘긴다.
+- 그래서 장치 손실에서는 게스트 드라이버를 고치지 않는다. 대신 호스트 렌더러가 지켜야 할 것이 있다. R18의 렌더러 패치 0015는 장치 손실을 게스트에 `VK_ERROR_DEVICE_LOST`로 돌려주고 ColorBuffer를 같은 핸들로 다시 만든다. 아래 가운데 나머지는 PC에서 확인한다.
   - 장치를 잃어도 게스트 프로세스마다의 연결을 끊지 않고, 모든 호출에 답한다.
   - 잃은 객체에 대한 호출, 특히 `vkQueueWaitIdle`, `vkWaitForFences`, `vkGetFenceStatus`, `vkAcquireImageANDROID`에는 곧바로 `VK_ERROR_DEVICE_LOST`를 돌려준다. 잃은 작업의 sync fd와 펜스는 신호한다. ANGLE이 손실을 처리하며 이것들을 기다린다.
   - 잃은 객체의 `vkDestroy*`와 `vkFree*`를 받아들인다.
   - 새 장치가 준비되기 전의 `vkCreateInstance`, `vkCreateDevice`에는 오류를 돌려주고, 준비된 뒤에는 새 장치를 준다.
   - gralloc 버퍼(color buffer)의 핸들은 새 장치에서도 다시 가져올 수 있어야 한다. 내용은 잃어도 된다. 게스트가 다시 그린다.
+- 스트림이 끝나는 경우는 다르다. 렌더러가 게스트의 치명적 오류로 그 스트림을 끝내거나(R18의 패치 0015), 렌더러 프로세스가 끝나 다시 뜰 때(D25) 게스트 드라이버는 `VulkanStreamGuest::read`에서 프로세스를 끝낸다. 그 프로세스가 SurfaceFlinger면 프레임워크가 다시 시작한다. 생성된 인코더가 응답을 그 자리에서 읽으므로, 끊긴 연결을 장치 손실로 바꾸려면 연결이 끊긴 뒤의 읽기를 0으로 채우고 `VkResult`를 `VK_ERROR_DEVICE_LOST`로 바꾸며, 다음 `vkCreateInstance`에서 스레드마다 연결을 새로 맺어야 한다. 위의 SurfaceFlinger와 HWUI 복구는 그 뒤에 그대로 쓰인다. 이 일은 D25의 렌더러 재시작과 함께 한다.
 
 ### 결정
 

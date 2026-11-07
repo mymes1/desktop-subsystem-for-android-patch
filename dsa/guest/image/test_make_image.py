@@ -3045,6 +3045,41 @@ class TouchLatencyTests(unittest.TestCase):
             self.assertIn("vendor/overlay/DsaSettingsOverlay.apk 0 0 644 capabilities=0x0", fs_config)
             self.assertEqual(fs_config.count("vendor/overlay 0 0 755"), 1)
 
+    def test_fr22_settings_lists_keep_room_below_their_last_row_without_a_navigation_bar(self):
+        # The window reports no bottom inset, and Settings' list keeps no space of its own:
+        # androidx.preference's preference_recyclerview has paddingBottom 0dp.
+        ns = "{http://schemas.android.com/apk/res/android}"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.settings_overlay_sources(root / "src")
+            manifest = ET.fromstring((root / "src/AndroidManifest.xml").read_text())
+            overlay = manifest.find("overlay")
+            self.assertEqual(overlay.get(ns + "targetPackage"), "com.android.settings")
+            resources_map = overlay.get(ns + "resourcesMap")
+            self.assertTrue(resources_map.startswith("@xml/"))
+
+            listing = ET.fromstring((root / "src/res/layout/preference_recyclerview.xml").read_text())
+            self.assertEqual(listing.tag, "androidx.recyclerview.widget.RecyclerView")
+            self.assertGreaterEqual(int(listing.get(ns + "paddingBottom").removesuffix("dp")), 24)
+            self.assertEqual(listing.get(ns + "paddingTop"), "0dp")
+            # The rows scroll into the space, so only the end of the list stops short.
+            self.assertEqual(listing.get(ns + "clipToPadding"), "false")
+            self.assertEqual(listing.get(ns + "layout_height"), "match_parent")
+            # Settings' own id and list style, as in the layout this replaces.
+            self.assertEqual(listing.get(ns + "id"), "@+id/recycler_view")
+            self.assertEqual(listing.get("style"), "?attr/preferenceFragmentListStyle")
+
+            values = ET.fromstring((root / "src/res/values/dsa.xml").read_text())
+            self.assertIn("preferenceFragmentListStyle", [a.get("name") for a in values.findall("attr")])
+
+            # Only a resource map makes the framework rewrite the overlay's references to its id
+            # and attribute into Settings' ids; matching by name does not.
+            mapping = ET.fromstring((root / "src/res/xml" / (resources_map.removeprefix("@xml/") + ".xml")).read_text())
+            items = {item.get("target"): item.get("value") for item in mapping.findall("item")}
+            for target in ["layout/preference_recyclerview", "id/recycler_view",
+                           "attr/preferenceFragmentListStyle", "drawable/settingslib_expressive_icon_back"]:
+                self.assertEqual(items.get(target), "@" + target)
+
     def test_fr5_the_settings_overlay_is_built_against_the_images_own_framework(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(make_image, "run") as run:
             root = Path(tmp)

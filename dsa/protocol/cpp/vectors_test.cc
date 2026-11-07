@@ -227,6 +227,18 @@ std::map<std::string, v1::Envelope> Cases() {
     event->set_buttons(32);
   }
   {
+    v1::PointerEvent* event = cases["pointer_event_pen_tilt"].mutable_pointer_event();
+    event->set_task_id(42);
+    event->set_action(v1::POINTER_ACTION_DOWN);
+    event->set_tool(v1::POINTER_TOOL_PEN);
+    event->set_pointer_id(1);
+    event->set_x(100.0f);
+    event->set_y(200.0f);
+    event->set_pressure(0.5f);
+    event->set_tilt_x(30.0f);
+    event->set_tilt_y(-45.0f);
+  }
+  {
     v1::KeyEvent* event = cases["key_event_ctrl_a_down"].mutable_key_event();
     event->set_task_id(42);
     event->set_action(v1::KEY_ACTION_DOWN);

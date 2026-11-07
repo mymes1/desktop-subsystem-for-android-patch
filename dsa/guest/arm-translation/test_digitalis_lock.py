@@ -67,6 +67,12 @@ class LockTests(unittest.TestCase):
                 self.assertIn("!Android.bp", patterns)
                 self.assertTrue(all(p.startswith(("/", "!")) for p in patterns))
 
+    def test_fr25_bionic_s_runtime_apex_is_left_out(self):
+        # com.android.runtime needs system/sepolicy's file_contexts and APEX keys, and nothing
+        # the package holds comes from it; its Android.bp stopped the sixth run's analysis.
+        for version in self.lock["versions"]:
+            self.assertIn("apex/Android.bp", digitalis_lock.project(version, "bionic").get("exclude", []))
+
     def test_fr25_a_lock_that_does_not_pin_or_escapes_the_tree_is_refused(self):
         version = self.lock["versions"][0]
         broken = []
@@ -79,6 +85,7 @@ class LockTests(unittest.TestCase):
             lambda v: v["projects"][0].update(linkfiles=[{"src": "a", "dest": "/etc/x"}]),
             lambda v: v.update(android_major=v["android_major"] + 1),
             lambda v: v["manifest"].update(commit=""),
+            lambda v: v["projects"][0].update(exclude=["../outside/Android.bp"]),
             lambda v: v.update(projects=[p for p in v["projects"]
                                          if p["path"] != digitalis_lock.TRANSLATOR_PATH]),
         ]:
@@ -87,7 +94,7 @@ class LockTests(unittest.TestCase):
             with self.assertRaises(digitalis_lock.LockError):
                 digitalis_lock.check(lock)
             broken.append(lock)
-        self.assertEqual(len(broken), 9)
+        self.assertEqual(len(broken), 10)
 
     def test_fr25_clang_entries_take_the_release_configuration_s_clang(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -147,12 +154,26 @@ class LockTests(unittest.TestCase):
         for name in names:
             self.assertIn(f'srcs: ["x86_64/{name}.so"]', text)
 
+    def test_fr25_the_build_sets_no_environment_soong_ui_refuses(self):
+        # soong_ui stops at once on these (TEMPORARY_DISABLE_PATH_RESTRICTIONS did in the third
+        # run), before Soong reads a single Android.bp.
+        build = (REPO / ".github/scripts/translator/build.sh").read_text()
+        for name in ("TEMPORARY_DISABLE_PATH_RESTRICTIONS", "EXPERIMENTAL_USE_OPENJDK11_TOOLCHAIN",
+                     "EXPERIMENTAL_USE_OPENJDK17_TOOLCHAIN", "EXPERIMENTAL_USE_OPENJDK21_TOOLCHAIN"):
+            self.assertNotRegex(build, rf"export\s+{name}=")
+        self.assertRegex(build, r"export BUILD_USERNAME=")
+        # A bundled build makes a device and its images from the product, which this tree
+        # cannot (the fifth run stopped there).
+        self.assertRegex(build, r"export TARGET_BUILD_UNBUNDLED=true")
+
     def test_fr25_the_build_product_is_x86_64_only_with_an_arm64_bridge(self):
         board = (DEVICE / "BoardConfig.mk").read_text()
         self.assertIn("TARGET_ARCH := x86_64", board)
         self.assertNotIn("TARGET_2ND_ARCH", board)
         self.assertIn("TARGET_NATIVE_BRIDGE_ARCH := arm64", board)
         self.assertIn("TARGET_NATIVE_BRIDGE_ABI := arm64-v8a", board)
+        # Without ART in the tree, boot image dexpreopt stops Soong's analysis.
+        self.assertIn("WITH_DEXPREOPT := false", board)
         product = (DEVICE / "dsa_translator.mk").read_text()
         self.assertIn("soong_config_set,berberis,translation_arch,arm64_to_x86_64", product)
 

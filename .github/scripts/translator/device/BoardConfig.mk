@@ -10,4 +10,9 @@ TARGET_NATIVE_BRIDGE_CPU_VARIANT := generic
 TARGET_NATIVE_BRIDGE_ABI := arm64-v8a
 
 TARGET_NO_KERNEL := true
+
+# Nothing here is Java, and the tree has no ART to compile with: with dexpreopt on, Soong's
+# boot image step looks for dex2oat and stops the whole analysis without it (the fourth run
+# did, in dex_bootjars). Off, Soong never asks for dex2oat.
+WITH_DEXPREOPT := false
 TARGET_NO_BOOTLOADER := true

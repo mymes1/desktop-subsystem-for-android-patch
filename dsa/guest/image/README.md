@@ -107,6 +107,14 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   framework draws the button's hover layer and ripple around the button's centre, and they
   showed 8 dp left of the circle at every density. The replacement keeps the 56 dp and puts
   8 dp on each side of the circle. aapt2 builds it the same way as the framework overlay.
+  The same overlay replaces the list every Settings preference screen shows its rows in
+  (androidx.preference's `preference_recyclerview`) with one that keeps 24 dp below the last
+  row. Settings takes the space under a list only from the navigation bar's inset
+  (SettingsLib's `EdgeToEdgeUtils` pads the content view by it), and a DSA window has no
+  navigation bar, so the last row sat on the window's bottom edge. The space is inside the
+  list, so rows still scroll to the edge. The overlay names what it replaces in a resource
+  map (`android:resourcesMap`), which makes the framework rewrite the layout's id and style
+  attribute to Settings' own.
 - With the input trace on (`androidboot.hardware.dsa_input_trace=1`), `dsa-trace.rc` makes every
   app's main thread log each message it takes 16 ms or more to handle, or starts 16 ms or more
   late.

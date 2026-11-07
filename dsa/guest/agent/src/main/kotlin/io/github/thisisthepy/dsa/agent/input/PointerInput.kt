@@ -16,7 +16,26 @@ data class InjectedPointer(
     val x: Float,
     val y: Float,
     val pressure: Float,
+    /** AXIS_TILT: radians from upright, from 0 to pi/2. 0 for anything but a pen. */
+    val tilt: Float = 0f,
+    /** AXIS_ORIENTATION of a pen: the way its tip points, in radians from up, clockwise. */
+    val orientation: Float = 0f,
 )
+
+/**
+ * A pen's tilt from the host, in degrees from upright toward the right and toward the user,
+ * as the framework reads a tablet's two tilt axes: the angle from upright and the way the
+ * tip points (the input reader's own conversion of a tilt X and a tilt Y).
+ */
+fn penTilt(tiltXDegrees: Float, tiltYDegrees: Float): Pair<Float, Float> {
+    if (!tiltXDegrees.isFinite() || !tiltYDegrees.isFinite()) return 0f to 0f
+    val x = Math.toRadians(tiltXDegrees.coerceIn(-90f, 90f).toDouble())
+    val y = Math.toRadians(tiltYDegrees.coerceIn(-90f, 90f).toDouble())
+    if (x == 0.0 && y == 0.0) return 0f to 0f
+    val tilt = Math.acos(Math.cos(x) * Math.cos(y))
+    val orientation = Math.atan2(-Math.sin(x), Math.sin(y))
+    return tilt.toFloat() to orientation.toFloat()
+}
 
 /** A motion event for the framework to dispatch, as MotionEvent.obtain takes it. */
 data class InjectedMotion(
@@ -75,6 +94,7 @@ interface InputInjector {
  *   MotionEvent does; fingers beyond that are left out.
  * - Scrolling and flinging with a finger are moves of a touch, never ACTION_SCROLL, so an
  *   app sees the drag and its speed as it would from a touchscreen.
+ * - A pen's tilt is AXIS_TILT and AXIS_ORIENTATION, as the framework reads a tablet's.
  *
  * Positions are relative to the task, and the task's place is where the agent last told
  * the host it is, which is where the host draws it. An event for a task the host was not
@@ -275,6 +295,9 @@ class PointerInput(
         val pressure = event.pressure.coerceIn(0f, 1f)
         val buttons = event.buttons and STYLUS_BUTTONS
         val gesture = touch
+        val (tilt, orientation) =
+            if (source == InputDevice.SOURCE_STYLUS) penTilt(event.tiltX, event.tiltY) else 0f to 0f
+        fun pointer(id: Int, pressure: Float) = InjectedPointer(id, toolType, x, y, pressure, tilt, orientation)
         fun hover(action: Int) {
             inject(
                 InjectedMotion(
@@ -284,7 +307,7 @@ class PointerInput(
                     downTime = injector.now(),
                     buttonState = buttons,
                     actionButton = 0,
-                    pointers = listOf(InjectedPointer(0, toolType, x, y, 0f)),
+                    pointers = listOf(pointer(0, 0f)),
                 ),
             )
         }
@@ -292,7 +315,7 @@ class PointerInput(
         // null when the pointer is not down.
         val held = gesture?.takeIf { it.source == source }?.let { current ->
             current.pointers[event.pointerId]?.let { contact ->
-                current to Contact(contact.taskId, InjectedPointer(contact.pointer.id, toolType, x, y, pressure))
+                current to Contact(contact.taskId, pointer(contact.pointer.id, pressure))
             }
         }
         when (event.action) {
@@ -300,7 +323,7 @@ class PointerInput(
                 if (gesture == null) {
                     if (penHovering.remove(taskId) == true) hover(MotionEvent.ACTION_HOVER_EXIT)
                     val started = Touch(source, deviceId, injector.now())
-                    started.pointers[event.pointerId] = Contact(taskId, InjectedPointer(0, toolType, x, y, pressure))
+                    started.pointers[event.pointerId] = Contact(taskId, pointer(0, pressure))
                     touch = started
                     sendTouch(started, MotionEvent.ACTION_DOWN, buttons)
                 } else {
@@ -308,7 +331,7 @@ class PointerInput(
                     if (gesture.source != source || event.pointerId in gesture.pointers) return
                     if (gesture.pointers.size >= MAX_POINTERS) return
                     gesture.pointers[event.pointerId] =
-                        Contact(taskId, InjectedPointer(gesture.freeId(), toolType, x, y, pressure))
+                        Contact(taskId, pointer(gesture.freeId(), pressure))
                     sendTouch(gesture, pointerAction(MotionEvent.ACTION_POINTER_DOWN, gesture, event.pointerId), buttons)
                 }
             }
