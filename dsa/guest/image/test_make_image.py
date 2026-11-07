@@ -3606,7 +3606,13 @@ class ArmTranslationImageTests(unittest.TestCase):
                 f"lowerdir=/mnt/dsa-arm-translation/system/{directory}:/system/{directory}",
                 section,
             )
-        self.assertIn("/proc/sys/fs/binfmt_misc/register", section)
+        # Nothing else in Android mounts binfmt_misc, so the handlers are registered only once
+        # it is mounted here.
+        mount = section.index("mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid")
+        for rule in ["arm64_exe", "arm64_dyn"]:
+            register = section.index(f"copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/{rule} "
+                                     "/proc/sys/fs/binfmt_misc/register")
+            self.assertGreater(register, mount)
         # Every mount waits for the host's word.
         self.assertNotIn("mount ", before)
         self.assertNotIn("mount ", rest)
@@ -3614,6 +3620,8 @@ class ArmTranslationImageTests(unittest.TestCase):
             self.assertEqual(archive.read("SYSTEM/etc/init/dsa-arm-translation.rc").decode(), rc)
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
             self.assertIn("(allow init system_lib_file (dir (mounton)))", policy)
+            self.assertIn("(allow init proc (dir (mounton)))", policy)
+            self.assertIn("(allow init binfmt_miscfs (filesystem (mount)))", policy)
             self.assertIn("(allow init binfmt_miscfs (file (write open getattr)))", policy)
 
     def test_fr25_check_image_rejects_an_image_that_turns_a_bridge_on_by_itself(self):

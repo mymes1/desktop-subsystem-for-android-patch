@@ -14,7 +14,9 @@ on post-fs-data && property:ro.boot.dsa.arm_translation=on
     mount overlay overlay /system/lib64 ro nodev nosuid lowerdir=/mnt/dsa-arm-translation/system/lib64:/system/lib64
     mount overlay overlay /system/bin ro nodev nosuid lowerdir=/mnt/dsa-arm-translation/system/bin:/system/bin
     mount overlay overlay /system/etc ro nodev nosuid lowerdir=/mnt/dsa-arm-translation/system/etc:/system/etc
-    # ARM64 executables an app starts run through the package's translator.
+    # ARM64 programs an app starts run through the package's translator: init mounts
+    # binfmt_misc, which nothing else in Android mounts, and registers the package's handlers.
+    mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_exe /proc/sys/fs/binfmt_misc/register
     copy /mnt/dsa-arm-translation/system/etc/binfmt_misc/arm64_dyn /proc/sys/fs/binfmt_misc/register
 
