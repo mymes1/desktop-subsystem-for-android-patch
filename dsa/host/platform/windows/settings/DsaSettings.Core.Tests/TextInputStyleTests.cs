@@ -65,7 +65,7 @@ public class TextInputStyleTests
         Assert.Equal("{StaticResource " + libraryStyle + "}", (string?)style.Attribute("BasedOn"));
         Assert.Equal("{x:Null}", Setter(style, "FocusVisualStyle"));
         Assert.Equal("Center", Setter(style, "VerticalContentAlignment"));
-        Assert.Empty(style.Elements(Wpf + "Setter").Where(s => (string?)s.Attribute("Property") == "Template"));
+        Assert.DoesNotContain(style.Elements(Wpf + "Setter"), s => (string?)s.Attribute("Property") == "Template");
     }
 
     [Fact]

@@ -729,7 +729,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="$(gh release list -R "${{ github.repository }}" -L 50 --json tagName -q '[.[] | select(.tagName | startswith("android-17"))][0].tagName')"
+          tag="$(gh release list -R "${{ github.repository }}" -L 50 --json tagName -q '[.[] | select(.tagName | startswith("android-17") and (endswith("-arm64") | not))][0].tagName')"
+          test -n "$tag" || { echo "no published x86_64 Android 17 image release"; exit 1; }
           echo "kernel release: $tag"
           gh release download "$tag" -R "${{ github.repository }}" -p bzImage -D "$RUNNER_TEMP"
           echo "DSA_WIDGET_TEST_KERNEL=$RUNNER_TEMP/bzImage" >> "$GITHUB_ENV"
