@@ -188,6 +188,7 @@ jobs:
           path: |
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/error.log
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/soong.log
+            ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/missing-inputs.txt
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/verbose.log*
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/soong_ui.log*
             ${{ env.DSA_TRANSLATOR_WORK }}/aosp/out/soong/soong.variables
