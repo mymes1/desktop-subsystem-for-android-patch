@@ -358,9 +358,9 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
     });
     std::fs::write(&config, settings.to_string()).unwrap();
     let service = Service::start(&dir, &config);
-    // Android's renderer is in the window manager, which shows Android in the desktop
-    // session the job runs (a headless Wayland compositor): without it Android never finishes
-    // booting.
+    // Android's renderer (dsa-gfx) is started by the window manager, which shows Android in
+    // the desktop session the job runs (a headless Wayland compositor): without it Android
+    // never finishes booting.
     let compositor_log = std::fs::File::create(dir.join("compositor.log")).unwrap();
     let _compositor = Service {
         child: Command::new(env!("CARGO_BIN_EXE_dsa-compositor"))

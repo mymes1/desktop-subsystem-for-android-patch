@@ -157,6 +157,8 @@ public enum HostRole
 {
     Vm,
     WindowManager,
+    /// <summary>The graphics renderer (dsa-gfx.exe), which the window manager starts.</summary>
+    Renderer,
     AppWindow,
 }
 

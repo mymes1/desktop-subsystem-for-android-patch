@@ -3,9 +3,10 @@
 //!
 //! - The VM: Hyper-V gives each VM a `vmmem` process that holds the guest's memory. Its
 //!   account is `NT VIRTUAL MACHINE\<VM ID>`, which tells one user's VM from another's.
-//! - The window manager (`dsa-wm.exe`) and the app window hosts (`dsa-app-window.exe`, and
-//!   each app's own copy under `%LOCALAPPDATA%\DSA\apps\`) run in the user's session, under
-//!   the user's own account.
+//! - The window manager (`dsa-wm.exe`), the graphics renderer it starts (`dsa-gfx.exe`, which
+//!   holds the guest's GPU resources) and the app window hosts (`dsa-app-window.exe`, and each
+//!   app's own copy under `%LOCALAPPDATA%\DSA\apps\`) run in the user's session, under the
+//!   user's own account.
 //!
 //! The service runs as SYSTEM, which may open every one of them for a memory query. The
 //! rules that pick the processes are plain functions, tested on every platform; reading the
@@ -15,6 +16,8 @@ use dsa_host_core::memory::{HostProcessMemory, HostRole};
 
 /// The window manager's program file.
 pub const WINDOW_MANAGER_EXE: &str = "dsa-wm.exe";
+/// The graphics renderer's program file, which the window manager starts.
+pub const RENDERER_EXE: &str = "dsa-gfx.exe";
 /// The app window host as installed; each app runs a copy of it named after the app.
 pub const APP_WINDOW_EXE: &str = "dsa-app-window.exe";
 /// The account domain of every Hyper-V VM's processes.
@@ -59,6 +62,9 @@ pub fn role_of(process: &ProcessInfo, user_sid: &str, vm_id: Option<&str>) -> Op
     if name.eq_ignore_ascii_case(WINDOW_MANAGER_EXE) {
         return Some(HostRole::WindowManager);
     }
+    if name.eq_ignore_ascii_case(RENDERER_EXE) {
+        return Some(HostRole::Renderer);
+    }
     let in_apps_folder = process
         .image
         .to_ascii_lowercase()
@@ -69,7 +75,7 @@ pub fn role_of(process: &ProcessInfo, user_sid: &str, vm_id: Option<&str>) -> Op
 }
 
 /// The processes of the user's Android among `processes`: the VM first, then the window
-/// manager, then the app windows.
+/// manager, then the graphics renderer, then the app windows.
 pub fn select(
     processes: &[ProcessInfo],
     user_sid: &str,
@@ -86,12 +92,7 @@ pub fn select(
             })
         })
         .collect();
-    let rank = |role: HostRole| match role {
-        HostRole::Vm => 0,
-        HostRole::WindowManager => 1,
-        HostRole::AppWindow => 2,
-    };
-    found.sort_by_key(|p| (rank(p.role), p.pid));
+    found.sort_by_key(|p| (p.role.rank(), p.pid));
     found
 }
 

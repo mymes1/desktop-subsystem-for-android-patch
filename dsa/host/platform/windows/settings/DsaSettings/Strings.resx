@@ -193,6 +193,9 @@
   <data name="Role_WindowManager" xml:space="preserve">
     <value>Window manager</value>
   </data>
+  <data name="Role_Renderer" xml:space="preserve">
+    <value>Graphics renderer</value>
+  </data>
   <data name="Role_AppWindow" xml:space="preserve">
     <value>App window</value>
   </data>

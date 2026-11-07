@@ -9,10 +9,18 @@
 //!
 //! [`paths`] says where a Unix host keeps its files, and [`device_socket`] is where the service
 //! hands the guest's device connections to the user's device lender.
+//!
+//! [`fd_frames`] is the connection between the window manager and its graphics renderer
+//! process, whose frames can carry file descriptors, and [`renderer_launch`] starts that
+//! process.
 
 #[cfg(unix)]
 pub mod device_socket;
+#[cfg(unix)]
+pub mod fd_frames;
 pub mod paths;
+#[cfg(unix)]
+pub mod renderer_launch;
 #[cfg(unix)]
 pub mod socket;
 pub mod vhdx;

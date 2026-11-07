@@ -7045,6 +7045,23 @@
         }
       }
     },
+    "Role_Renderer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Graphics renderer"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그래픽 렌더러"
+          }
+        }
+      }
+    },
     "Role_Vm": {
       "extractionState": "manual",
       "localizations": {

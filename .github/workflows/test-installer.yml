@@ -1165,6 +1165,7 @@ jobs:
           $expected = [ordered]@{
             'dsa-hostd.exe' = 'Desktop Subsystem for Android Service'
             'dsa-wm.exe' = 'DSA Window Manager'
+            'dsa-gfx.exe' = 'Graphics renderer for Android'
             'dsa.exe' = 'Desktop Subsystem for Android command line'
             'dsa-app-window.exe' = 'DSA app window'
           }
@@ -1186,6 +1187,10 @@ jobs:
           }
           if (-not (Test-Path "$env:PROGRAM_DIR\dsa-wm.exe")) {
             throw "dsa-wm.exe is not installed in $env:PROGRAM_DIR"
+          }
+          # The graphics renderer the window manager starts, beside it with gfxstream.
+          if (-not (Test-Path "$env:PROGRAM_DIR\dsa-gfx.exe")) {
+            throw "dsa-gfx.exe is not installed in $env:PROGRAM_DIR"
           }
           $runVal = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run').DsaWindowManager
           Write-Host "Run value: $runVal"
@@ -1600,6 +1605,9 @@ jobs:
           if (Test-Path "$env:PROGRAM_DIR\dsa-wm.exe") {
             throw "dsa-wm.exe is still present after uninstall"
           }
+          if (Test-Path "$env:PROGRAM_DIR\dsa-gfx.exe") {
+            throw "dsa-gfx.exe is still present after uninstall"
+          }
           $runVal = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue).DsaWindowManager
           if ($runVal) {
             throw "DsaWindowManager Run value is still present after uninstall: $runVal"
@@ -1634,7 +1642,7 @@ jobs:
           # hand, all dated after they were made.
           $program = $env:REPLACE_PROGRAM_DIR
           New-Item -ItemType Directory -Force "$program\settings", "$program\licenses", "$program\vm" | Out-Null
-          foreach ($name in 'dsa-hostd.exe', 'dsa-wm.exe', 'dsa-app-window.exe', 'dsa.exe') {
+          foreach ($name in 'dsa-hostd.exe', 'dsa-wm.exe', 'dsa-gfx.exe', 'dsa-app-window.exe', 'dsa.exe') {
             Copy-Item "dsa\target\$env:RUST_TARGET\release\$name" "$program\$name"
           }
           Copy-Item dsa\target\installer\settings-app\DsaSettings.exe "$program\settings\DsaSettings.exe"

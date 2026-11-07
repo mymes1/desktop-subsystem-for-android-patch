@@ -79,6 +79,8 @@ pub enum HostRole {
     /// The VM's memory: on Windows, its vmmem process.
     Vm,
     WindowManager,
+    /// The graphics renderer process (`dsa-gfx`), which holds the guest's GPU resources.
+    Renderer,
     AppWindow,
 }
 
@@ -87,14 +89,31 @@ impl HostRole {
         match self {
             HostRole::Vm => "vm",
             HostRole::WindowManager => "window manager",
+            HostRole::Renderer => "graphics renderer",
             HostRole::AppWindow => "app window",
         }
     }
 
     fn from_name(name: &str) -> Option<HostRole> {
-        [HostRole::Vm, HostRole::WindowManager, HostRole::AppWindow]
-            .into_iter()
-            .find(|role| role.name() == name)
+        [
+            HostRole::Vm,
+            HostRole::WindowManager,
+            HostRole::Renderer,
+            HostRole::AppWindow,
+        ]
+        .into_iter()
+        .find(|role| role.name() == name)
+    }
+
+    /// Where the role's processes go in a list: the VM, the window manager, the renderer,
+    /// then the app windows.
+    pub fn rank(self) -> u8 {
+        match self {
+            HostRole::Vm => 0,
+            HostRole::WindowManager => 1,
+            HostRole::Renderer => 2,
+            HostRole::AppWindow => 3,
+        }
     }
 }
 
@@ -113,7 +132,7 @@ pub struct HostProcessMemory {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MemorySnapshot {
     pub guest: Option<GuestMemoryReport>,
-    /// In the order: the VM, the window manager, the app windows.
+    /// In the order: the VM, the window manager, the graphics renderer, the app windows.
     pub host: Vec<HostProcessMemory>,
 }
 
@@ -235,12 +254,15 @@ impl MemorySnapshot {
     pub fn summary_line(&self) -> String {
         let (vm, _) = self.role_total_kb(HostRole::Vm);
         let (wm, _) = self.role_total_kb(HostRole::WindowManager);
+        let (renderer, _) = self.role_total_kb(HostRole::Renderer);
         let (apps, app_count) = self.role_total_kb(HostRole::AppWindow);
         let mut line = format!(
-            "memory: host {} MiB (vm {}, window manager {}, {app_count} app windows {})",
+            "memory: host {} MiB (vm {}, window manager {}, graphics renderer {}, {app_count} \
+             app windows {})",
             mib(self.host_total_kb()),
             mib(vm),
             mib(wm),
+            mib(renderer),
             mib(apps)
         );
         match &self.guest {
@@ -266,7 +288,7 @@ impl MemorySnapshot {
 }
 
 /// KiB to whole MiB, rounded to nearest.
-fn mib(kb: u64) -> u64 {
+pub(crate) fn mib(kb: u64) -> u64 {
     (kb + 512) / 1024
 }
 
@@ -281,7 +303,7 @@ impl fmt::Display for MemorySnapshot {
         for p in &self.host {
             writeln!(
                 f,
-                "  {:<15} pid {:<6} {:>6} MiB resident, {:>6} MiB private",
+                "  {:<17} pid {:<6} {:>6} MiB resident, {:>6} MiB private",
                 p.role.name(),
                 p.pid,
                 mib(p.working_set_kb),
@@ -752,16 +774,13 @@ pub struct CommittedMemory {
     pub other_heaps: u32,
     /// Of those: write-combined or uncached pages, which only GPU drivers map.
     pub gpu_mapped_kb: u64,
-    /// Of those: the rest, allocated straight from the system (drivers, the renderer, thread
-    /// stacks).
+    /// Of those: the rest, allocated straight from the system (drivers, thread stacks).
     pub direct_kb: u64,
     /// The largest private allocations of any owner (heap segments included), largest first:
-    /// a renderer's or a driver's pool shows up here by its size.
+    /// a driver's pool shows up here by its size.
     pub largest_private_kb: Vec<u64>,
     /// What the process's own allocator has handed out and not freed.
     pub own_live_kb: Option<u64>,
-    /// The renderer's own count, when it can give one.
-    pub renderer: Option<RendererMemory>,
     pub gpu_local_kb: Option<u64>,
     pub gpu_non_local_kb: Option<u64>,
 }
@@ -792,21 +811,6 @@ pub fn committed_line(c: &CommittedMemory) -> String {
             largest.join(", ")
         },
     );
-    match &c.renderer {
-        Some(r) => line.push_str(&format!(
-            "; renderer: GPU-only {} MiB in {}, CPU-mapped {} MiB in {}, imported {} MiB in {}, \
-             largest {} MiB, {} guest processes connected",
-            mib(r.device_local_kb),
-            r.device_local_count,
-            mib(r.host_visible_kb),
-            r.host_visible_count,
-            mib(r.imported_kb),
-            r.imported_count,
-            mib(r.largest_kb),
-            r.guest_processes,
-        )),
-        None => line.push_str("; renderer: no count"),
-    }
     line.push_str(&format!(
         "; GPU memory {} MiB, GPU-mapped system memory {} MiB",
         show(c.gpu_local_kb),

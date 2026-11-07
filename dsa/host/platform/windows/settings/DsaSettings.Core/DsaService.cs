@@ -292,6 +292,7 @@ public sealed partial class DsaService
     {
         "vm" => HostRole.Vm,
         "window manager" => HostRole.WindowManager,
+        "graphics renderer" => HostRole.Renderer,
         "app window" => HostRole.AppWindow,
         _ => null,
     };

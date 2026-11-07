@@ -2,8 +2,8 @@
 //!
 //! The desktop names a program by its version information (`FileDescription`) and shows the
 //! first icon group in it. Task Manager and the taskbar take both from the executable, so
-//! every DSA program carries them: the service, the window manager, the `dsa` command and
-//! the app window host. Each app's own window host carries the app's name and icon instead
+//! every DSA program carries them: the service, the window manager, the graphics renderer,
+//! the `dsa` command and the app window host. Each app's own window host carries the app's name and icon instead
 //! (see `dsa_host_windows::app_exe`).
 //!
 //! The bytes are built here in plain Rust, so the build scripts need no resource compiler:
@@ -25,6 +25,10 @@ pub mod names {
     pub const WINDOW_MANAGER: &str = "DSA Window Manager";
     /// The window manager's name on a Korean desktop.
     pub const WINDOW_MANAGER_KO: &str = "Android용 창 관리자";
+    /// The graphics renderer (`dsa-gfx.exe`), which the window manager starts.
+    pub const RENDERER: &str = "Graphics renderer for Android";
+    /// The graphics renderer's name on a Korean desktop.
+    pub const RENDERER_KO: &str = "Android용 그래픽 렌더러";
     /// The command line tool (`dsa.exe`).
     pub const CLI: &str = "Desktop Subsystem for Android command line";
     /// The app window host as installed (`dsa-app-window.exe`). Each app's copy carries the
@@ -665,6 +669,41 @@ mod tests {
         assert!(contains(&korean, &utf16("Android용 창 관리자")));
         assert!(contains(&korean, &utf16("041204B0")));
         assert!(contains(&korean, &[0x12, 0x04, 0xB0, 0x04]));
+    }
+
+    #[test]
+    fn nfr5_the_renderer_process_names_itself_in_english_and_korean() {
+        // Task Manager lists dsa-gfx.exe by these, beside the window manager.
+        assert_eq!(names::RENDERER, "Graphics renderer for Android");
+        assert_eq!(names::RENDERER_KO, "Android용 그래픽 렌더러");
+        let renderer = VersionStrings {
+            description: names::RENDERER.into(),
+            internal_name: "dsa-gfx".into(),
+            ..strings()
+        };
+        let resources = program_resources(
+            &renderer,
+            Some(names::RENDERER_KO),
+            &parse_ico(include_bytes!("../../installer/setup-ui/assets/logo.ico")).unwrap(),
+        );
+        let english = resources
+            .iter()
+            .find(|r| r.kind == RT_VERSION && r.language == LANG_EN_US)
+            .expect("an English version block");
+        assert!(contains(
+            &english.data,
+            &utf16("Graphics renderer for Android")
+        ));
+        assert!(contains(
+            &english.data,
+            &utf16("Desktop Subsystem for Android")
+        ));
+        let korean = resources
+            .iter()
+            .find(|r| r.kind == RT_VERSION && r.language == LANG_KO_KR)
+            .expect("a Korean version block");
+        assert!(contains(&korean.data, &utf16("Android용 그래픽 렌더러")));
+        assert!(resources.iter().any(|r| r.kind == RT_GROUP_ICON));
     }
 
     #[test]

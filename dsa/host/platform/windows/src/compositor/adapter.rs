@@ -3,7 +3,8 @@
 //! The gfxstream host renderer (`gfxstream_backend.dll`) remotes guest Vulkan and
 //! OpenGL ES calls onto the host Vulkan driver. This adapter implements [`GraphicsRenderer`]
 //! and serves as the integration point between accepted Hyper-V socket streams and the native
-//! graphics backend.
+//! graphics backend. It is loaded only in the renderer process, `dsa-gfx.exe` (see
+//! `crate::renderer`), so a crash in it leaves the window manager and the app windows running.
 //!
 //! It also hands each display's frames to a [`DisplaySink`]: the renderer asks the sink for
 //! a Direct3D 11 texture to copy a display's newest frame into, copies it on the GPU, and
@@ -19,6 +20,7 @@ use std::time::Duration;
 
 use dsa_host_core::compositor::{GraphicsRenderer, GraphicsStreamKind};
 use dsa_host_core::memory::RendererMemory;
+use dsa_host_core::renderer::RendererProcessMemory;
 use dsa_transport::{Connection, FrameSender};
 
 use crate::render_gpu::{GpuRequest, Luid, RendererGpu};
@@ -151,9 +153,16 @@ pub trait DisplayPresenter: Send + Sync {
         let _ = display_id;
     }
 
-    /// What the renderer holds in memory, as it counts it; `None` when it cannot say.
-    fn memory(&self) -> Option<RendererMemory> {
+    /// What the renderer's process holds in memory, with the renderer's own count; `None`
+    /// when it cannot say.
+    fn memory(&self) -> Option<RendererProcessMemory> {
         None
+    }
+
+    /// No task window is shown: the renderer gives back the memory it is not using, and says
+    /// what it holds after.
+    fn give_back(&self) -> Option<RendererProcessMemory> {
+        self.memory()
     }
 }
 
@@ -780,6 +789,11 @@ impl GfxstreamAdapter {
             .map_or(0, |backend| backend.device_generation())
     }
 
+    /// What the renderer holds in memory, as it counts it; `None` when it cannot say.
+    pub fn counted_memory(&self) -> Option<RendererMemory> {
+        self.backend.as_ref().and_then(|backend| backend.memory())
+    }
+
     /// Whether the graphics backend is available and ready to serve streams.
     pub fn is_available(&self) -> bool {
         self.backend.is_some()
@@ -842,8 +856,12 @@ impl DisplayPresenter for GfxstreamAdapter {
         }
     }
 
-    fn memory(&self) -> Option<RendererMemory> {
-        self.backend.as_ref().and_then(|backend| backend.memory())
+    fn memory(&self) -> Option<RendererProcessMemory> {
+        Some(RendererProcessMemory {
+            process_id: std::process::id(),
+            held: Default::default(),
+            counted: self.counted_memory(),
+        })
     }
 }
 

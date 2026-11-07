@@ -124,6 +124,7 @@ pub fn host_rows(memory: &Memory) -> Vec<MemoryRow> {
             let label = tr(match p.role {
                 HostRole::Vm => "Virtual machine (crosvm)",
                 HostRole::WindowManager => "Window manager",
+                HostRole::Renderer => "Graphics renderer",
                 HostRole::AppWindow => "App window",
             });
             let detail = trf(

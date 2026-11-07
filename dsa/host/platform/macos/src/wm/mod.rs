@@ -1,8 +1,9 @@
 //! The window manager on macOS, `dsa-wm`: the user's compositor.
 //!
 //! It runs as the user, started by its launchd agent (or by `dsa-hostd`), and owns no window.
-//! It serves the guest's graphics streams through gfxstream's renderer on MoltenVK, follows
-//! the guest's tasks through the service's local API, starts one window host
+//! It starts the graphics renderer (`dsa-gfx`, gfxstream on MoltenVK, in a process of its own:
+//! see `crate::gfx`), which serves the guest's graphics streams, and starts it again whenever
+//! it ends. It follows the guest's tasks through the service's local API, starts one window host
 //! (`dsa-app-window`, in the app's own bundle) per app, and hands each task's frames to its
 //! window host in shared `IOSurface`s, paced so that the guest never waits for a window.
 //!
