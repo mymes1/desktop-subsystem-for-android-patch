@@ -81,6 +81,51 @@ function Wait-ProcessWindow([int]$ProcessId, [int]$Seconds = 60) {
     $null
 }
 
+# The label DSA Settings shows for $Page (general, memory, apps, ...) in $Lang (en-US when
+# empty), read from the app's own string tables so the test and the app cannot disagree.
+$script:SettingsPageKeys = @{
+    general = 'NavGeneral'; memory = 'NavMemory'; apps = 'NavApps'; background = 'NavBackground'
+    widgets = 'NavWidgets'; display = 'NavDisplay'; android = 'NavAndroid'; updates = 'NavUpdates'
+    device = 'NavIdentity'; network = 'NavNetwork'; advanced = 'NavAdvanced'; logs = 'NavLogs'; about = 'NavAbout'
+}
+function Get-SettingsPageLabel([string]$Page, [string]$Lang = '') {
+    $key = $SettingsPageKeys[$Page]
+    if (-not $key) { throw "DSA Settings has no page called '$Page'" }
+    $dir = Join-Path $PSScriptRoot '..\..\..\dsa\host\platform\windows\settings\DsaSettings'
+    $file = if ($Lang -like 'ko*') { 'Strings.ko.resx' } else { 'Strings.resx' }
+    [xml]$table = Get-Content -Raw -Encoding utf8 (Join-Path $dir $file)
+    $value = ($table.root.data | Where-Object { $_.name -eq "$key.Content" } | Select-Object -First 1).value
+    if (-not $value) { throw "$file has no label for the $Page page" }
+    $value
+}
+
+# The navigation pane's item labelled $Label: a list item whose UI Automation name is its label
+# and that supports selection.
+function Find-SettingsPaneItem($Window, [string]$Label) {
+    $condition = New-Object System.Windows.Automation.AndCondition(
+        (New-Object System.Windows.Automation.PropertyCondition($Auto::NameProperty, $Label)),
+        (New-Object System.Windows.Automation.PropertyCondition($Auto::ControlTypeProperty, [System.Windows.Automation.ControlType]::ListItem)),
+        (New-Object System.Windows.Automation.PropertyCondition($Auto::IsSelectionItemPatternAvailableProperty, $true)))
+    $Window.FindFirst($Scope::Descendants, $condition)
+}
+
+# Opens $Page in the DSA Settings $Window the way a screen reader does: it finds the pane item
+# by its name and selects it through UI Automation, then waits until the item says it is selected.
+function Open-SettingsPage($Window, [string]$Page, [string]$Lang = '', [int]$Seconds = 60) {
+    $label = Get-SettingsPageLabel $Page $Lang
+    $deadline = (Get-Date).AddSeconds($Seconds)
+    $item = $null
+    while (-not $item -and (Get-Date) -lt $deadline) {
+        $item = Find-SettingsPaneItem $Window $label
+        if (-not $item) { Start-Sleep -Milliseconds 500 }
+    }
+    if (-not $item) { throw "the navigation pane has no selectable item named '$label' within $Seconds seconds" }
+    $selection = $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
+    $selection.Select()
+    while (-not $selection.Current.IsSelected -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 250 }
+    if (-not $selection.Current.IsSelected) { throw "selecting '$label' through UI Automation did not open its page" }
+}
+
 # Saves a picture of $Window and 32 px around it.
 function Save-WindowScreen($Window, [string]$Path) {
     Start-Sleep -Milliseconds 600   # let the window finish drawing

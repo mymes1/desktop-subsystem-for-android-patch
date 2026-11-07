@@ -214,33 +214,33 @@
             IsBackButtonVisible="Collapsed"
             IsPaneToggleVisible="True">
             <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem Content="{l:Text NavGeneral.Content}" TargetPageType="{x:Type pages:GeneralPage}"
+                <l:PaneItem Content="{l:Text NavGeneral.Content}" TargetPageType="{x:Type pages:GeneralPage}"
                                        Icon="{ui:SymbolIcon Home24}" />
-                <ui:NavigationViewItem Content="{l:Text NavMemory.Content}" TargetPageType="{x:Type pages:MemoryPage}"
+                <l:PaneItem Content="{l:Text NavMemory.Content}" TargetPageType="{x:Type pages:MemoryPage}"
                                        Icon="{ui:SymbolIcon DataUsage24}" />
-                <ui:NavigationViewItem Content="{l:Text NavApps.Content}" TargetPageType="{x:Type pages:AppsPage}"
+                <l:PaneItem Content="{l:Text NavApps.Content}" TargetPageType="{x:Type pages:AppsPage}"
                                        Icon="{ui:SymbolIcon AppsList24}" />
-                <ui:NavigationViewItem Content="{l:Text NavBackground.Content}" TargetPageType="{x:Type pages:BackgroundPage}"
+                <l:PaneItem Content="{l:Text NavBackground.Content}" TargetPageType="{x:Type pages:BackgroundPage}"
                                        Icon="{ui:SymbolIcon Play24}" />
-                <ui:NavigationViewItem Content="{l:Text NavWidgets.Content}" TargetPageType="{x:Type pages:WidgetsPage}"
+                <l:PaneItem Content="{l:Text NavWidgets.Content}" TargetPageType="{x:Type pages:WidgetsPage}"
                                        Icon="{ui:SymbolIcon Apps24}" />
-                <ui:NavigationViewItem Content="{l:Text NavDisplay.Content}" TargetPageType="{x:Type pages:DisplayPage}"
+                <l:PaneItem Content="{l:Text NavDisplay.Content}" TargetPageType="{x:Type pages:DisplayPage}"
                                        Icon="{ui:SymbolIcon Desktop24}" />
-                <ui:NavigationViewItem Content="{l:Text NavAndroid.Content}" TargetPageType="{x:Type pages:AndroidPage}"
+                <l:PaneItem Content="{l:Text NavAndroid.Content}" TargetPageType="{x:Type pages:AndroidPage}"
                                        Icon="{ui:SymbolIcon Phone24}" />
-                <ui:NavigationViewItem Content="{l:Text NavUpdates.Content}" TargetPageType="{x:Type pages:UpdatesPage}"
+                <l:PaneItem Content="{l:Text NavUpdates.Content}" TargetPageType="{x:Type pages:UpdatesPage}"
                                        Icon="{ui:SymbolIcon ArrowSync24}" />
-                <ui:NavigationViewItem Content="{l:Text NavIdentity.Content}" TargetPageType="{x:Type pages:DeviceIdentityPage}"
+                <l:PaneItem Content="{l:Text NavIdentity.Content}" TargetPageType="{x:Type pages:DeviceIdentityPage}"
                                        Icon="{ui:SymbolIcon Phone24}" />
-                <ui:NavigationViewItem Content="{l:Text NavNetwork.Content}" TargetPageType="{x:Type pages:NetworkPage}"
+                <l:PaneItem Content="{l:Text NavNetwork.Content}" TargetPageType="{x:Type pages:NetworkPage}"
                                        Icon="{ui:SymbolIcon Globe24}" />
-                <ui:NavigationViewItem Content="{l:Text NavAdvanced.Content}" TargetPageType="{x:Type pages:AdvancedPage}"
+                <l:PaneItem Content="{l:Text NavAdvanced.Content}" TargetPageType="{x:Type pages:AdvancedPage}"
                                        Icon="{ui:SymbolIcon Settings24}" />
-                <ui:NavigationViewItem Content="{l:Text NavLogs.Content}" TargetPageType="{x:Type pages:LogsPage}"
+                <l:PaneItem Content="{l:Text NavLogs.Content}" TargetPageType="{x:Type pages:LogsPage}"
                                        Icon="{ui:SymbolIcon DocumentText24}" />
             </ui:NavigationView.MenuItems>
             <ui:NavigationView.FooterMenuItems>
-                <ui:NavigationViewItem Content="{l:Text NavAbout.Content}" TargetPageType="{x:Type pages:AboutPage}"
+                <l:PaneItem Content="{l:Text NavAbout.Content}" TargetPageType="{x:Type pages:AboutPage}"
                                        Icon="{ui:SymbolIcon Info24}" />
             </ui:NavigationView.FooterMenuItems>
         </ui:NavigationView>
