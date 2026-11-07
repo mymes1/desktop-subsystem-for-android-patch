@@ -1570,4 +1570,61 @@
   <data name="ApkWindow_SignatureTitle" xml:space="preserve">
     <value>Signed with another key</value>
   </data>
+  <data name="AppsRunAsArm.Content" xml:space="preserve">
+    <value>Run as ARM</value>
+  </data>
+  <data name="Apps_RunAsArm_system-app" xml:space="preserve">
+    <value>Apps that are part of Android run as Android installed them.</value>
+  </data>
+  <data name="Apps_RunAsArm_no-arm-libraries" xml:space="preserve">
+    <value>No APK of this app on the device holds its ARM code.</value>
+  </data>
+  <data name="Apps_RunAsArm_translation-off" xml:space="preserve">
+    <value>ARM translation is not on. Turn it on under ARM apps and restart Android.</value>
+  </data>
+  <data name="Apps_RunAsArm_arm-only" xml:space="preserve">
+    <value>This app has only ARM code, so it always runs as ARM.</value>
+  </data>
+  <data name="Apps_RunAsArm_unknown" xml:space="preserve">
+    <value>This version of DSA cannot say whether the app can run as ARM.</value>
+  </data>
+  <data name="AppsRunAsArmEraseTitle" xml:space="preserve">
+    <value>Erase {0}'s data?</value>
+  </data>
+  <data name="AppsRunAsArmEraseBody" xml:space="preserve">
+    <value>Android cannot change how {0} runs and keep its data. Installing it again erases its data: sign-ins, settings and files it keeps for itself.</value>
+  </data>
+  <data name="AppsRunAsArmEraseButton" xml:space="preserve">
+    <value>Erase and install again</value>
+  </data>
+  <data name="Apps_RunAsArmKept" xml:space="preserve">
+    <value>{0} was left as it was, with its data.</value>
+  </data>
+  <data name="Apps_RunAsArmOn" xml:space="preserve">
+    <value>{0} runs as ARM now.</value>
+  </data>
+  <data name="Apps_RunAsArmOff" xml:space="preserve">
+    <value>{0} runs its x86_64 code now.</value>
+  </data>
+  <data name="Apps_RunAsArmNotChanged" xml:space="preserve">
+    <value>{0} was not installed again: {1} ({2})</value>
+  </data>
+  <data name="Apps_RunAsArmRefused_not-installed" xml:space="preserve">
+    <value>it is no longer installed</value>
+  </data>
+  <data name="Apps_RunAsArmRefused_system-app" xml:space="preserve">
+    <value>it is part of Android</value>
+  </data>
+  <data name="Apps_RunAsArmRefused_no-libraries" xml:space="preserve">
+    <value>its APKs on the device hold no code for that</value>
+  </data>
+  <data name="Apps_RunAsArmRefused_translation-off" xml:space="preserve">
+    <value>ARM translation is not on</value>
+  </data>
+  <data name="Apps_RunAsArmRefused_data-would-be-erased" xml:space="preserve">
+    <value>its data would be erased</value>
+  </data>
+  <data name="Apps_RunAsArmRefused_other" xml:space="preserve">
+    <value>Android refused</value>
+  </data>
 </root>
