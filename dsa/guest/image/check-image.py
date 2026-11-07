@@ -331,6 +331,45 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if "on post-fs-data && property:ro.boot.dsa.arm_translation=on" not in rc:
             problems.append("dsa-arm-translation.rc mounts the ARM translation package without waiting "
                             "for the host to say one is installed")
+    # The ABIs translation adds come after the guest's own, so the Play Store hands out the
+    # x86_64 builds of Google Play services and the other system apps, not their ARM builds.
+    if "SYSTEM/etc/dsa/arm-translation-on.prop" in names:
+        for line in z.read("SYSTEM/etc/dsa/arm-translation-on.prop").decode(errors="replace").splitlines():
+            key, _, value = line.partition("=")
+            if ".cpu.abilist" in key and "x86_64" in value.split(",") and not value.startswith("x86_64"):
+                problems.append(f"arm-translation-on.prop sets {line}, so x86_64 is not the ABI apps "
+                                "are installed for first and the Play Store hands out ARM builds")
+
+    # Google Play: the image the user installed is laid over the system, and the boot made an
+    # upgrade, only when the host says one is installed.
+    for needed in ["SYSTEM/etc/init/dsa-gapps.rc", "SYSTEM/etc/dsa/gapps-on.prop",
+                   "SYSTEM/etc/dsa/gapps-off.prop"]:
+        if needed not in names:
+            problems.append(f"{needed} is missing, so the Google apps a user installs are never used")
+    if "PRODUCT/etc/build.prop" in names:
+        product_lines = [line.strip() for line in
+                         z.read("PRODUCT/etc/build.prop").decode(errors="replace").splitlines()]
+        if "import /system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop" not in product_lines:
+            problems.append("PRODUCT/etc/build.prop does not import the Google Play properties, so "
+                            "the Google apps a user installs never get their default permissions")
+    if "SYSTEM/etc/init/dsa-gapps.rc" in names:
+        rc = z.read("SYSTEM/etc/init/dsa-gapps.rc").decode(errors="replace")
+        sections = rc.split("\non ")
+        for section in sections:
+            first = section.split("\n", 1)[0]
+            trigger = first[3:] if first.startswith("on ") else first
+            if "mount " in section and trigger != "post-fs-data && property:ro.boot.dsa.gapps=on":
+                problems.append("dsa-gapps.rc lays the Google apps over the system without waiting "
+                                "for the host to say they are installed")
+        if "on post-fs-data && property:ro.boot.dsa.gapps=on" not in rc:
+            problems.append("dsa-gapps.rc never lays the Google apps over the system")
+    if "SYSTEM/etc/dsa/gapps-off.prop" in names:
+        off = [line for line in z.read("SYSTEM/etc/dsa/gapps-off.prop").decode(errors="replace").splitlines()
+               if line.strip() and not line.startswith("#")]
+        if off:
+            problems.append("gapps-off.prop sets properties, so a boot without Google Play is not the "
+                            "image as made")
+
     for name in sorted(n for n in names if n.endswith("build.prop") or n.endswith("prop.default")):
         for line in z.read(name).decode(errors="replace").splitlines():
             if line.startswith("ro.dalvik.vm.native.bridge=") and line not in (

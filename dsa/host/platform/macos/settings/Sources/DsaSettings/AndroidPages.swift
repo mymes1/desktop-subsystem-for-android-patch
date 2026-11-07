@@ -393,6 +393,20 @@ struct AdvancedPage: View {
                           action: T("ArmRemoveButton.Content"), enabled: vm.canRemoveArmTranslation) {
                     Task { await vm.removeArmTranslation() }
                 }
+                if vm.showsGoogleArm {
+                    ButtonRow(title: T("ArmGoogleCard.Header"),
+                              detail: vm.isFetchingGoogleArm ? T("ArmGoogleFetching.Text") : T("ArmGoogleCard.Description"),
+                              action: T("ArmGoogleButton.Content"), enabled: vm.canFetchGoogleArm, busy: vm.isFetchingGoogleArm) {
+                        guard Shell.confirm(T("ArmGoogleConfirm.Title"), vm.googleArmNotice, T("ArmGoogleConfirm.Action"),
+                                            destructive: false) else {
+                            return
+                        }
+                        Task { await vm.fetchGoogleArmTranslator() }
+                    }
+                    if let terms = URL(string: vm.googleArmTermsUrl) {
+                        Link(T("ArmGoogleTermsLink.Content"), destination: terms).font(.callout)
+                    }
+                }
             }
             GappsSection(vm: gapps)
             Section(T("DeveloperHeader.Text")) {

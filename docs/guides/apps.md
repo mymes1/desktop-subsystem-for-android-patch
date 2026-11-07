@@ -76,10 +76,13 @@ windows, stays when you show the desktop, and is not in the taskbar or Alt+Tab.
 1. Open the **Widgets** page of DSA Settings.
 2. Under **Widgets your apps offer**, select **Add to desktop** next to a widget. If the app
    asks you to set the widget up, its setup opens in a window.
-3. Drag the band along the widget's top to move it. Drag its edges to resize it. DSA
-   remembers where you put it.
-4. Right-click the widget for **Resize**, to pick one of the sizes it allows, and
-   **Remove**.
+3. To move a widget, drag the round **More** button that appears at its top right corner
+   when you point at it. You can also press anywhere on the widget, hold still for half a
+   second, and then drag. A quick drag stays the widget's own, so its lists still scroll.
+   Drag its edges to resize it. DSA remembers where you put it.
+4. Select the **More** button, or right-click the widget, for **Resize**, to pick one of
+   the sizes it allows, and **Remove**. The arrow keys, Enter and Esc work in this menu
+   too, and a letter picks an item: R for **Resize** and M for **Remove**.
 
 From the command line: `dsa widgets list`, `dsa widgets add <provider>` and
 `dsa widgets remove <id>`.
@@ -97,10 +100,19 @@ From the command line: `dsa widgets list`, `dsa widgets add <provider>` and
 ## Apps built only for ARM
 
 On an x64 PC, an app with code only for ARM processors needs an ARM translation package.
-DSA does not include one.
+DSA does not include one. You choose one of these:
 
-1. Install a package from its folder: `dsa arm-translation install <folder>`.
-2. Restart Android: stop it on the **General** page of DSA Settings, then open an app.
+- **Google's ARM translator.** On the **Advanced** page, select **Get** beside **Google's ARM
+  translator**, or run `dsa arm-translation fetch google`. DSA first shows where it comes
+  from and Google's terms (the
+  [Android SDK License](https://developer.android.com/studio/terms)), and downloads nothing
+  until you accept. Your PC then downloads the Android emulator image Google offers for your
+  Android version (about 2 GB), keeps only the translator and deletes the rest. DSA does not
+  ship or pass on Google's translator.
+- **A package you build or get elsewhere**, such as one made from the open source translator
+  Digitalis: `dsa arm-translation install <folder>`.
+
+Then restart Android: stop it on the **General** page of DSA Settings, then open an app.
 
 `dsa arm-translation status` says what is installed. The **Run apps built only for ARM**
 switch on the **Advanced** page turns the package on or off without removing it. Only

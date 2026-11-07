@@ -26,6 +26,8 @@
 //!                             the user's window settings for each app
 //! <dir>/users/<user>.arm-translation.json
 //!                             the ARM translation package the user installed, if any
+//! <dir>/users/<user>.gapps.json
+//!                             the build of Google's apps the user installed, if any
 //! ```
 //!
 //! A missing file means the defaults. A user who has never saved settings starts from what
@@ -40,6 +42,7 @@ use serde::{Deserialize, Serialize};
 use crate::app_windows::AppWindowSettings;
 use crate::arm_translation::Package;
 use crate::file_share;
+use crate::gapps::GappsPackage;
 
 /// The longest render GPU value accepted, in characters.
 const MAX_RENDER_GPU: usize = 128;
@@ -306,6 +309,16 @@ pub trait SettingsStore: Send + Sync {
         let _ = (user, apps);
         Err("this service keeps no window settings for apps".into())
     }
+    /// The build of Google's apps `user` has installed, if any.
+    fn gapps(&self, user: &str) -> Result<Option<GappsPackage>, String> {
+        let _ = user;
+        Ok(None)
+    }
+    /// Records the build of Google's apps `user` has installed, or that there is none.
+    fn set_gapps(&self, user: &str, package: Option<&GappsPackage>) -> Result<(), String> {
+        let _ = (user, package);
+        Err("this service keeps no Google apps".into())
+    }
 }
 
 /// Finds the render GPU a user chose before they first saved settings, if any.
@@ -356,6 +369,13 @@ impl FileSettings {
             .dir
             .join("users")
             .join(format!("{}.arm-translation.json", user_file_stem(user)?)))
+    }
+
+    fn gapps_file(&self, user: &str) -> Result<PathBuf, String> {
+        Ok(self
+            .dir
+            .join("users")
+            .join(format!("{}.gapps.json", user_file_stem(user)?)))
     }
 
     fn read_machine(&self) -> Result<MachineSettings, String> {
@@ -503,6 +523,25 @@ impl SettingsStore for FileSettings {
         let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         write_json(&file, &apps)
     }
+
+    fn gapps(&self, user: &str) -> Result<Option<GappsPackage>, String> {
+        let file = self.gapps_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        read_json(&file)
+    }
+
+    fn set_gapps(&self, user: &str, package: Option<&GappsPackage>) -> Result<(), String> {
+        let file = self.gapps_file(user)?;
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        match package {
+            Some(package) => write_json(&file, package),
+            None => match std::fs::remove_file(&file) {
+                Ok(()) => Ok(()),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(format!("removing {}: {e}", file.display())),
+            },
+        }
+    }
 }
 
 /// Settings kept in memory, for tests and for a service that keeps no folder.
@@ -512,6 +551,7 @@ pub struct MemorySettings {
     machine: Mutex<MachineSettings>,
     arm_translation: Mutex<std::collections::HashMap<String, Package>>,
     app_windows: Mutex<std::collections::HashMap<String, Vec<AppWindowSettings>>>,
+    gapps: Mutex<std::collections::HashMap<String, GappsPackage>>,
 }
 
 impl SettingsStore for MemorySettings {
@@ -587,6 +627,24 @@ impl SettingsStore for MemorySettings {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(user.to_string(), apps.to_vec());
+        Ok(())
+    }
+
+    fn gapps(&self, user: &str) -> Result<Option<GappsPackage>, String> {
+        Ok(self
+            .gapps
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(user)
+            .cloned())
+    }
+
+    fn set_gapps(&self, user: &str, package: Option<&GappsPackage>) -> Result<(), String> {
+        let mut packages = self.gapps.lock().unwrap_or_else(|e| e.into_inner());
+        match package {
+            Some(package) => packages.insert(user.to_string(), package.clone()),
+            None => packages.remove(user),
+        };
         Ok(())
     }
 }
@@ -968,6 +1026,32 @@ mod tests {
                 .unwrap()
                 .arm_translation
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr32_the_google_apps_a_user_installed_are_kept_per_user() {
+        let dir = scratch("gapps");
+        let store = FileSettings::new(&dir);
+        assert_eq!(store.gapps("uid:1000").unwrap(), None);
+        let package = GappsPackage {
+            variant: "core".into(),
+            version: "20261001".into(),
+            android_version: "16.0".into(),
+            sdk: 36,
+            arch: "x86_64".into(),
+            file: "LiteGapps-core-x86_64-16.0-20261001-official.zip".into(),
+            source: "https://example.com/build.zip".into(),
+            md5: "ea9945a6d63849fa9e51782edfe613a4".into(),
+        };
+        store.set_gapps("uid:1000", Some(&package)).unwrap();
+        let again = FileSettings::new(&dir);
+        assert_eq!(again.gapps("uid:1000").unwrap(), Some(package));
+        assert_eq!(again.gapps("uid:1001").unwrap(), None);
+        again.set_gapps("uid:1000", None).unwrap();
+        assert_eq!(again.gapps("uid:1000").unwrap(), None);
+        // Removing what is not there is not an error.
+        again.set_gapps("uid:1000", None).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
 

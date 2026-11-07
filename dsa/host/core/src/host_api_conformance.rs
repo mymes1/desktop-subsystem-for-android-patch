@@ -28,6 +28,7 @@ use crate::background::{
     MediaCommand, MediaSession, Playback,
 };
 use crate::files::{FileAction, FileTransfer, MAX_FILE_BYTES};
+use crate::gapps::{self, GuestGapps};
 use crate::host_api::{
     running_of, stop_every, ClientError, HostApiClient, HostApiService, InstallError,
     ProgramUpdate, ServiceFacts, UpdateProgram, UserAndroid, UserAndroids,
@@ -131,6 +132,8 @@ pub struct FakeAndroid {
     pub accessibility_actions: Mutex<Vec<(i32, ActionRequest)>>,
     /// The ARM translation image on its disk, if any.
     pub arm_image: Mutex<Option<Vec<u8>>>,
+    /// The Google apps' image on its disk, if any.
+    pub gapps_image: Mutex<Option<Vec<u8>>>,
     /// Each app whose settings it was asked to open, in order; `None` for the list of apps.
     pub app_settings: Mutex<Vec<Option<String>>>,
     /// How many times it was asked to read its apps again.
@@ -235,6 +238,7 @@ impl FakeAndroid {
             accessibility_watchers: Mutex::new(Vec::new()),
             accessibility_actions: Mutex::new(Vec::new()),
             arm_image: Mutex::new(None),
+            gapps_image: Mutex::new(None),
             app_settings: Mutex::new(Vec::new()),
             app_refreshes: Mutex::new(0),
         }
@@ -630,6 +634,40 @@ impl UserAndroid for FakeAndroid {
     fn remove_arm_translation(&self) -> Result<GuestArmTranslation, InstallError> {
         *self.arm_image.lock().unwrap() = None;
         Ok(self.arm_translation().unwrap_or_default())
+    }
+    fn install_gapps(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn std::io::Read,
+    ) -> Result<GuestGapps, InstallError> {
+        if self.state() != SessionState::Active {
+            return Err(InstallError::NotRunning("Android is not running".into()));
+        }
+        let mut image = vec![0u8; size as usize];
+        content
+            .read_exact(&mut image)
+            .map_err(|e| InstallError::Refused(format!("the image did not arrive whole: {e}")))?;
+        use sha2::Digest;
+        if sha2::Sha256::digest(&image).as_slice() != sha256 {
+            return Err(InstallError::Refused("its SHA-256 differs".into()));
+        }
+        *self.gapps_image.lock().unwrap() = Some(image);
+        Ok(self.gapps().unwrap_or_default())
+    }
+    fn remove_gapps(&self) -> Result<GuestGapps, InstallError> {
+        *self.gapps_image.lock().unwrap() = None;
+        Ok(self.gapps().unwrap_or_default())
+    }
+    fn gapps(&self) -> Option<GuestGapps> {
+        (self.state() == SessionState::Active).then(|| GuestGapps {
+            installed: self.gapps_image.lock().unwrap().is_some(),
+            active: false,
+            sdk: 36,
+            abi: "x86_64".into(),
+            abilist: "x86_64,arm64-v8a".into(),
+            device_id: String::new(),
+        })
     }
     fn arm_translation(&self) -> Option<GuestArmTranslation> {
         (self.state() == SessionState::Active).then(|| GuestArmTranslation {
@@ -1100,6 +1138,14 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr25_an_unusable_arm_translation_package_is_refused() {
             $crate::host_api_conformance::unusable_arm_translation_is_refused(&mut || $make);
+        }
+        #[test]
+        fn fr32_google_play_is_installed_reported_and_removed() {
+            $crate::host_api_conformance::gapps_reach_the_caller(&mut || $make);
+        }
+        #[test]
+        fn fr32_a_build_that_is_refused_leaves_the_settings_as_they_were() {
+            $crate::host_api_conformance::refused_gapps_leave_nothing(&mut || $make);
         }
         #[test]
         fn fr20_a_developer_mode_port_that_cannot_open_is_reported() {
@@ -2572,6 +2618,143 @@ pub fn arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
     assert!(!removed.restart_needed);
     assert!(android.arm_image.lock().unwrap().is_none());
     assert_eq!(store.arm_translation(&user).unwrap(), None);
+}
+
+/// Serves LiteGapps' file host from memory: the feed of x86_64 builds for API level 36, and
+/// `zip` as its one build.
+struct FakeLiteGapps(HashMap<String, Vec<u8>>);
+
+const FAKE_PROJECT: &str = "https://litegapps.test/projects/litegapps";
+
+impl FakeLiteGapps {
+    fn new(zip: &[u8], md5: &str) -> FakeLiteGapps {
+        let path =
+            "/litegapps/x86_64/36/core/2026-10-01/LiteGapps-core-x86_64-16.0-20261001-official.zip";
+        let feed = gapps::listing::fixture::feed(&[gapps::listing::fixture::item(
+            path,
+            zip.len() as u64,
+            md5,
+        )]);
+        FakeLiteGapps(HashMap::from([
+            (
+                format!("{FAKE_PROJECT}/rss?path=/litegapps/x86_64/36/core"),
+                feed.into_bytes(),
+            ),
+            (format!("{FAKE_PROJECT}/files{path}/download"), zip.to_vec()),
+        ]))
+    }
+}
+
+impl crate::update::store::Fetch for FakeLiteGapps {
+    fn fetch(&self, url: &str, out: &mut dyn std::io::Write) -> Result<u64, String> {
+        let body = self.0.get(url).ok_or_else(|| format!("404 for {url}"))?;
+        out.write_all(body).map_err(|e| e.to_string())?;
+        Ok(body.len() as u64)
+    }
+}
+
+fn md5_of(data: &[u8]) -> String {
+    let mut md5 = gapps::md5::Md5::new();
+    md5.update(data);
+    gapps::md5::hex(&md5.finish())
+}
+
+/// A service with settings in memory and Google Play served from `lite`.
+fn gapps_service(
+    androids: Arc<FakeAndroids>,
+    store: Arc<MemorySettings>,
+    lite: FakeLiteGapps,
+    name: &str,
+) -> HostApiService {
+    let work = std::env::temp_dir().join(format!(
+        "dsa-conformance-gapps-{name}-{}",
+        std::process::id()
+    ));
+    let source = gapps::Source::new(Arc::new(lite), work).with_project(FAKE_PROJECT);
+    HostApiService::new(androids, "test service")
+        .with_settings(store, facts())
+        .with_gapps(source)
+}
+
+pub fn gapps_reach_the_caller(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let zip = gapps::package::fixture::sample();
+    let lite = FakeLiteGapps::new(&zip, &md5_of(&zip));
+    let service = gapps_service(androids.clone(), store.clone(), lite, "reach");
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    let none = client.gapps().expect("asking where Google Play stands");
+    assert_eq!(none.package, None);
+    assert!(none.guest.is_none(), "Android is not running");
+    assert!(!none.restart_needed);
+
+    client.start().unwrap();
+    let mut stages = Vec::new();
+    let installed = connect(&mut *connector)
+        .install_gapps(&mut |news| stages.push(news.stage))
+        .expect("installing Google Play");
+    for stage in [
+        gapps::Stage::Listing,
+        gapps::Stage::Downloading,
+        gapps::Stage::Building,
+    ] {
+        assert!(stages.contains(&stage), "{stage:?} in {stages:?}");
+    }
+    let package = installed.package.clone().expect("the build is recorded");
+    assert_eq!(package.version, "20261001");
+    assert_eq!(package.android_version, "16.0");
+    assert_eq!((package.arch.as_str(), package.sdk), ("x86_64", 36));
+    assert_eq!(package.md5, md5_of(&zip));
+    let guest = installed.guest.clone().expect("the running Android answered");
+    assert!(guest.installed);
+    assert!(!guest.active, "the Google apps are used from the next start");
+    assert!(installed.restart_needed);
+    assert_eq!(store.gapps(&user).unwrap(), Some(package));
+    let android = androids.of(&user).unwrap();
+    let image = android.gapps_image.lock().unwrap().clone().unwrap();
+    let files = crate::erofs::read::files(&image);
+    assert!(files.contains_key("product/priv-app/GmsCore/GmsCore.apk"));
+    assert!(files.keys().all(|path| path.starts_with("product/")
+        || path.starts_with("system_ext/")));
+
+    let status = client.gapps().unwrap();
+    assert!(status.package.is_some());
+    assert!(status.restart_needed);
+
+    let removed = client.remove_gapps().expect("removing Google Play");
+    assert_eq!(removed.package, None);
+    assert!(!removed.restart_needed, "this boot never had them");
+    assert!(android.gapps_image.lock().unwrap().is_none());
+    assert_eq!(store.gapps(&user).unwrap(), None);
+}
+
+pub fn refused_gapps_leave_nothing(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let zip = gapps::package::fixture::sample();
+    // The file host publishes another digest than the download has.
+    let lite = FakeLiteGapps::new(&zip, "00000000000000000000000000000000");
+    let service = gapps_service(androids.clone(), store.clone(), lite, "refused");
+    let _service = RunningService::start_service(listener, service);
+    connect(&mut *connector).start().unwrap();
+    match connect(&mut *connector).install_gapps(&mut |_| {}) {
+        Err(ClientError::Service { code, detail }) => {
+            assert_eq!(code, ErrorCode::InstallRefused);
+            assert!(detail.contains("MD5"), "{detail}");
+        }
+        other => panic!("expected the build to be refused, got {other:?}"),
+    }
+    assert_eq!(store.gapps(&user).unwrap(), None);
+    assert!(androids
+        .of(&user)
+        .unwrap()
+        .gapps_image
+        .lock()
+        .unwrap()
+        .is_none());
 }
 
 pub fn unusable_arm_translation_is_refused(make: MakeLocal<'_>) {

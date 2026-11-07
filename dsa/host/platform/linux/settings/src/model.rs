@@ -585,6 +585,9 @@ pub struct ArmTranslation {
     /// The ABIs the running Android installs apps for, when it runs.
     pub abilist: Option<String>,
     pub restart_needed: bool,
+    /// Whether Google's ARM translator can be fetched here: not on an ARM64 computer, whose
+    /// Android runs ARM apps itself.
+    pub google_fetch_available: bool,
 }
 
 impl ArmTranslation {
@@ -602,9 +605,16 @@ impl ArmTranslation {
                 .filter(|a| a.is_object())
                 .map(|a| text(a, "abilist")),
             restart_needed: flag(json, "restart_needed", false),
+            google_fetch_available: flag(json, "google_fetch_available", false),
         }
     }
 }
+
+/// Google's terms for what its SDK repository gives, the Android SDK License, which cover
+/// Google's ARM translator.
+pub const GOOGLE_ARM_TERMS_URL: &str = "https://developer.android.com/studio/terms";
+/// Where the emulator image Google's ARM translator comes from is downloaded.
+pub const GOOGLE_ARM_SOURCE: &str = "https://dl.google.com/android/repository/sys-img/google_apis/";
 
 /// Google's terms, which its apps follow, when the service does not name the page.
 pub const GAPPS_TERMS_URL: &str = "https://policies.google.com/terms";
@@ -1017,6 +1027,14 @@ impl Client {
         Ok(ArmTranslation::read(
             &self.json(&["arm-translation", "remove"])?,
         ))
+    }
+
+    /// Downloads Google's emulator image for this Android from Google, takes its ARM
+    /// translator out and installs it, starting Android first when it is not running. The user
+    /// agreed to Google's terms in the app first, so dsa does not ask again. It takes minutes.
+    pub fn fetch_google_arm_translator(&self) -> Result<ArmTranslation, Failure> {
+        let args = ["arm-translation", "fetch", "google", "--yes"];
+        Ok(ArmTranslation::read(&self.json(&args)?))
     }
 
     /// Where Google Play stands.

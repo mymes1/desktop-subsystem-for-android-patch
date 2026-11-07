@@ -495,6 +495,20 @@ impl UserAndroid for UpdatingAndroid {
     fn arm_translation(&self) -> Option<crate::arm_translation::GuestArmTranslation> {
         UserAndroid::arm_translation(&*self.session)
     }
+    fn install_gapps(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn std::io::Read,
+    ) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
+        UserAndroid::install_gapps(&*self.session, size, sha256, content)
+    }
+    fn remove_gapps(&self) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
+        UserAndroid::remove_gapps(&*self.session)
+    }
+    fn gapps(&self) -> Option<crate::gapps::GuestGapps> {
+        UserAndroid::gapps(&*self.session)
+    }
     fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
         UserAndroid::developer_mode(&*self.session, on, port)
     }

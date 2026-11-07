@@ -24,7 +24,8 @@
 //! dsa app-window [<package> [--fixed-size on|off] [--start-size <width>x<height>|auto] | <package> reset]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
 //! dsa logs collect -o <file.zip>
-//! dsa arm-translation [status | install <folder> | remove]
+//! dsa arm-translation [status | install <folder> | fetch google [--yes] | remove]
+//! dsa gapps [status | install [--progress] | remove]
 //! dsa reset-data --yes
 //! ```
 //!
@@ -182,7 +183,33 @@
 //! `package` (`name`, `version`, `library`, `abis`, `license`, or null), `enabled`,
 //! `supported` (a package is installed and on), `android` (`installed`, `active` and `abilist`,
 //! or null while Android is not running) and `restart_needed`. `dsa settings set
-//! arm-translation off` keeps the package but boots Android without it.
+//! arm-translation off` keeps the package but boots Android without it. The JSON also says
+//! `google_fetch_available`: whether `fetch google` is offered here.
+//!
+//! `dsa arm-translation fetch google` gets Google's own ARM translator, which DSA does not ship:
+//! it reads Google's list of emulator system images, downloads the Google APIs x86_64 image of
+//! the Android version this computer's Android runs, checks it against the list's SHA-1 and
+//! size, takes out only the translator's files, and installs them as a translation package. The
+//! downloaded image is deleted afterwards. It first says where the download comes from and that
+//! Google's Android SDK License (https://developer.android.com/studio/terms) covers it, and asks
+//! before downloading; `--yes` agrees without asking, as the settings app does after its own
+//! confirmation. A package from another translator, such as Digitalis, does the same job through
+//! `dsa arm-translation install`. On an ARM64 computer Android runs ARM apps itself, so there is
+//! nothing to fetch. The `DSA_GOOGLE_REPOSITORY` environment variable points at a mirror of
+//! Google's repository (a URL or a folder) instead.
+//!
+//! `dsa gapps status` (or `dsa gapps`) says whether Google Play is installed: which LiteGapps
+//! build, for which Android, where it came from, whether the running Android has it, and the
+//! Android ID Google's page for uncertified devices asks for. DSA ships no Google app.
+//! `dsa gapps install` has the service download the newest LiteGapps Core build for the Android
+//! version and processor the running Android reports, check it, make a system image of its
+//! apps and permission files, and send it to Android; with `--progress` it prints a `stage`
+//! line as each step starts and as bytes arrive. `dsa gapps remove` removes it. Android is
+//! started first when it is not running, and both apply from its next start, and say so.
+//! Google's apps follow Google's terms. With `--json` each prints `package` (`variant`,
+//! `version`, `android_version`, `sdk`, `arch`, `file`, `source`, `md5`, or null),
+//! `installed`, `android` (`installed`, `active`, `sdk`, `abi`, `abilist` and `device_id`, or
+//! null while Android is not running), `restart_needed`, `terms_url` and `registration_url`.
 //!
 //! `dsa settings device` shows the device identity Android reports to its apps: what the user
 //! chose, and each value as Android reports it from its next start.
@@ -224,18 +251,20 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use dsa_host_core::apk::{ApkFile, InstallKind, InstallOutcome, InstalledPackage};
-use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer};
+use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer, Vector};
 use dsa_host_core::app_windows::AppWindowSettings;
-use dsa_host_core::arm_translation;
+use dsa_host_core::arm_translation::{self, google};
 use dsa_host_core::background::{BackgroundApp, BackgroundCommand, MediaSession, Playback};
 use dsa_host_core::files::{FileAction, FileTransfer};
+use dsa_host_core::gapps;
 use dsa_host_core::host_api::{
-    ArmTranslationStatus, ClientError, HostApiClient, NetworkStatus, SettingsReport, Status,
-    TaskList,
+    ArmTranslationStatus, ClientError, GappsStatus, HostApiClient, NetworkStatus,
+    SettingsReport, Status, TaskList,
 };
 use dsa_host_core::memory::MemorySnapshot;
 use dsa_host_core::session::SessionState;
 use dsa_host_core::tasks::{AppInfo, Task};
+use dsa_host_core::update::store::Fetch;
 use dsa_host_core::update::versions::{Channel, VersionReport};
 use dsa_host_core::widgets::{Widget, WidgetEvent, WidgetProvider};
 use dsa_transport::Connector;
@@ -251,8 +280,8 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      background [list | open <package> | stop <package>] | \
      app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
-     arm-translation [status | install <folder> | remove] | files [open]> \
-     arm-translation [status | install <folder> | remove] | reset-data --yes | \
+     arm-translation [status | install <folder> | fetch google [--yes] | remove] | \
+     files [open] | gapps [status | install [--progress] | remove] | reset-data --yes | \
      android [version | use <major>|latest [--erase-data]]> \
      [--wait] [--timeout <seconds>] [--json] [--pipe <name> | --socket <path>]";
 
@@ -306,6 +335,14 @@ pub enum Command {
     ArmTranslationInstall,
     /// Remove the ARM translation package.
     ArmTranslationRemove,
+    /// Make a translation package from Google's ARM translator, and install it.
+    ArmTranslationFetchGoogle,
+    /// Say whether Google Play is installed, and which build.
+    GappsStatus,
+    /// Download Google Play and install it.
+    GappsInstall,
+    /// Remove Google Play.
+    GappsRemove,
     /// List, describe or uninstall the installed apps, or open their settings in Android
     /// ([`Invocation::apps`]).
     Apps,
@@ -635,7 +672,8 @@ pub struct Invocation {
     pub wait_first_frame: bool,
     /// Where `dsa tap` presses, in Android display pixels from the task's top left corner.
     pub point: Option<(u32, u32)>,
-    /// `dsa reset-data --yes`: the user confirmed that their Android data goes.
+    /// `dsa reset-data --yes`: the user confirmed that their Android data goes. `dsa
+    /// arm-translation fetch google --yes`: the user agreed to download from Google.
     pub yes: bool,
     /// `dsa android use <major>`: the version to follow.
     pub android: Option<Channel>,
@@ -651,6 +689,14 @@ fn is_package_name(name: &str) -> bool {
         && name.split('.').all(|part| {
             !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
         })
+}
+
+/// Whether `command` takes `--yes`: the commands that ask before they act.
+fn takes_yes(command: Option<Command>) -> bool {
+    matches!(
+        command,
+        Some(Command::ResetData | Command::ArmTranslationFetchGoogle)
+    )
 }
 
 /// Parses the arguments after the program name.
@@ -787,10 +833,36 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                         Command::ArmTranslationInstall
                     }
                     Some("remove") => Command::ArmTranslationRemove,
+                    Some("fetch") => match args.next().map(String::as_str) {
+                        Some("google") => Command::ArmTranslationFetchGoogle,
+                        _ => {
+                            return Err(format!(
+                                "dsa arm-translation fetch takes google, the translator Google's \
+                                 emulator images carry\n{USAGE}"
+                            ))
+                        }
+                    },
                     Some(other) => {
                         return Err(format!(
-                            "dsa arm-translation takes status, install <folder> or remove, not \
-                             {other:?}\n{USAGE}"
+                            "dsa arm-translation takes status, install <folder>, fetch google or \
+                             remove, not {other:?}\n{USAGE}"
+                        ))
+                    }
+                });
+            }
+            "gapps" if command.is_none() => {
+                // A bare option such as --json belongs to the default action, status.
+                let action = match args.peek() {
+                    Some(next) if next.starts_with("--") => None,
+                    _ => args.next().map(String::as_str),
+                };
+                command = Some(match action {
+                    None | Some("status") => Command::GappsStatus,
+                    Some("install") => Command::GappsInstall,
+                    Some("remove") => Command::GappsRemove,
+                    Some(other) => {
+                        return Err(format!(
+                            "dsa gapps takes status, install or remove, not {other:?}\n{USAGE}"
                         ))
                     }
                 });
@@ -910,7 +982,7 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                 });
             }
             "--json" => json = true,
-            "--yes" if command == Some(Command::ResetData) => yes = true,
+            "--yes" if takes_yes(command) => yes = true,
             "android" if command.is_none() => {
                 let action = match args.peek() {
                     Some(next) if next.starts_with("--") => None,
@@ -940,7 +1012,9 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             }
             "--erase-data" if command == Some(Command::AndroidUse) => erase_data = true,
             "reset-data" if command.is_none() => command = Some(Command::ResetData),
-            "--progress" if command == Some(Command::Install) => progress = true,
+            "--progress" if matches!(command, Some(Command::Install | Command::GappsInstall)) => {
+                progress = true
+            }
             "--wait-first-frame" if command == Some(Command::Launch) => wait_first_frame = true,
             number
                 if command == Some(Command::Tap)
@@ -2495,13 +2569,23 @@ fn install(
 /// when it is not running, and sends the package's image.
 fn install_arm_translation(
     invocation: &Invocation,
-    mut client: HostApiClient,
+    client: HostApiClient,
     connector: &mut dyn Connector,
 ) -> Result<String, String> {
     let folder = invocation
         .file
         .as_deref()
         .unwrap_or(std::path::Path::new(""));
+    install_package(invocation, client, connector, folder)
+}
+
+/// Installs the translation package in `folder`, starting Android when it is not running.
+fn install_package(
+    invocation: &Invocation,
+    mut client: HostApiClient,
+    connector: &mut dyn Connector,
+    folder: &std::path::Path,
+) -> Result<String, String> {
     let opened = arm_translation::open_package(folder)?;
     let sha256 = arm_translation::file_sha256(&opened.image)?;
     #[cfg(windows)]
@@ -2524,9 +2608,175 @@ fn install_arm_translation(
     Ok(show_arm_translation(invocation, &status, Some(&done)))
 }
 
+/// Whether Google's ARM translator can be fetched here: not on an ARM64 computer, whose
+/// Android runs ARM apps without a translator.
+pub const GOOGLE_FETCH_AVAILABLE: bool = cfg!(not(target_arch = "aarch64"));
+
+/// What `dsa arm-translation fetch google` says before it downloads, and asks to agree to.
+pub fn google_notice(image: &google::SdkImage) -> String {
+    format!(
+        "DSA downloads Google's ARM translator from Google's SDK repository:\n  {} ({} MiB, \
+         {})\nIt is Google's software, offered under the Android SDK License: {}\nDSA takes \
+         only the translator's files from it, installs them as a translation package, and \
+         deletes the rest. DSA does not ship or pass on Google's translator.\nA package made \
+         from another translator, such as Digitalis, works the same way: dsa arm-translation \
+         install <folder>.",
+        image.url,
+        image.size >> 20,
+        image.path,
+        google::TERMS
+    )
+}
+
+/// Starts Android when it is not running, as both `dsa gapps install` and `remove` need it.
+fn start_for_gapps(invocation: &Invocation, client: &mut HostApiClient) -> Result<(), String> {
+    #[cfg(windows)]
+    if invocation.endpoint.is_none() {
+        ensure_window_manager()?;
+    }
+    client
+        .ensure_running(invocation.timeout, Duration::from_millis(250), |_| {})
+        .map_err(|e| format!("Android did not start: {e}"))
+}
+
+/// `dsa gapps install`: starts Android when it is not running, then has the service download,
+/// check and send Google Play, printing each step with `--progress`.
+fn install_gapps(
+    invocation: &Invocation,
+    mut client: HostApiClient,
+    connector: &mut dyn Connector,
+) -> Result<String, String> {
+    start_for_gapps(invocation, &mut client)?;
+    drop(client);
+    let mut shown: Option<(gapps::Stage, u64)> = None;
+    let mut step = |news: gapps::Progress| {
+        if !invocation.progress {
+            return;
+        }
+        // One line per step, and one per tenth of the bytes of a step that counts them.
+        let tenth = (news.total / 10).max(1);
+        let new_step = shown.is_none_or(|(stage, _)| stage != news.stage);
+        let new_tenth = shown.is_some_and(|(_, done)| news.done / tenth > done / tenth);
+        if !new_step && !new_tenth {
+            return;
+        }
+        shown = Some((news.stage, news.done));
+        let name = match news.stage {
+            gapps::Stage::Listing => "listing",
+            gapps::Stage::Downloading => "downloading",
+            gapps::Stage::Building => "building",
+            gapps::Stage::Sending => "sending",
+        };
+        use std::io::Write as _;
+        let mut out = std::io::stdout().lock();
+        let _ = if news.total > 0 {
+            writeln!(out, "stage {name} {} {}", news.done, news.total)
+        } else {
+            writeln!(out, "stage {name}")
+        };
+        let _ = out.flush();
+    };
+    let status = connect(connector, None, false, Duration::from_secs(10))?
+        .install_gapps(&mut step)
+        .map_err(|e| format!("Google Play was not installed: {e}"))?;
+    let done = match &status.package {
+        Some(package) => format!(
+            "Installed LiteGapps {} {} for Android {} ({})",
+            package.variant, package.version, package.android_version, package.arch
+        ),
+        None => "Installed Google Play".to_string(),
+    };
+    Ok(show_gapps(invocation, &status, Some(&done)))
+}
+
+/// `dsa gapps remove`: starts Android when it is not running, so the image leaves its disk too.
+fn remove_gapps(invocation: &Invocation, mut client: HostApiClient) -> Result<String, String> {
+    start_for_gapps(invocation, &mut client)?;
+    let status = client.remove_gapps().map_err(|e| e.to_string())?;
+    Ok(show_gapps(invocation, &status, Some("Removed Google Play")))
+}
+
+/// Where Google Play stands as one JSON object.
+pub fn gapps_json(status: &GappsStatus) -> Value {
+    json!({
+        "package": status.package.as_ref().map(|package| json!({
+            "variant": package.variant,
+            "version": package.version,
+            "android_version": package.android_version,
+            "sdk": package.sdk,
+            "arch": package.arch,
+            "file": package.file,
+            "source": package.source,
+            "md5": package.md5,
+        })),
+        "installed": status.package.is_some(),
+        "android": status.guest.as_ref().map(|guest| json!({
+            "installed": guest.installed,
+            "active": guest.active,
+            "sdk": guest.sdk,
+            "abi": guest.abi,
+            "abilist": guest.abilist,
+            "device_id": guest.device_id,
+        })),
+        "restart_needed": status.restart_needed,
+        "terms_url": gapps::TERMS_URL,
+        "registration_url": gapps::REGISTRATION_URL,
+    })
+}
+
+/// Where Google Play stands, one fact per line, after `done` when an action was taken.
+pub fn describe_gapps(status: &GappsStatus, done: Option<&str>) -> String {
+    let mut lines: Vec<String> = done.map(str::to_string).into_iter().collect();
+    lines.push(match &status.package {
+        None => "Google Play: not installed (dsa gapps install downloads it)".to_string(),
+        Some(package) => format!(
+            "Google Play: LiteGapps {} {} for Android {} ({}), from {}",
+            package.variant, package.version, package.android_version, package.arch,
+            package.source
+        ),
+    });
+    match &status.guest {
+        Some(guest) => {
+            lines.push(format!(
+                "Android: {}",
+                if guest.active {
+                    "runs with Google's apps in this boot"
+                } else {
+                    "runs without Google's apps in this boot"
+                }
+            ));
+            if !guest.device_id.is_empty() {
+                lines.push(format!("Android ID for Google: {}", guest.device_id));
+            }
+        }
+        None => lines.push("Android is not running".to_string()),
+    }
+    if status.restart_needed {
+        lines.push("Restart Android to apply this (dsa stop --wait, then dsa start)".to_string());
+    }
+    if status.package.is_some() {
+        lines.push(format!(
+            "Google's apps follow Google's terms ({}); DSA does not distribute them. Google lets \
+             an uncertified device sign in once it is registered at {}",
+            gapps::TERMS_URL,
+            gapps::REGISTRATION_URL
+        ));
+    }
+    lines.join("\n")
+}
+
+fn show_gapps(invocation: &Invocation, status: &GappsStatus, done: Option<&str>) -> String {
+    if invocation.json {
+        gapps_json(status).to_string()
+    } else {
+        describe_gapps(status, done)
+    }
+}
+
 /// Where ARM translation stands as one JSON object.
 pub fn arm_translation_json(status: &ArmTranslationStatus) -> Value {
     json!({
+        "google_fetch_available": GOOGLE_FETCH_AVAILABLE,
         "package": status.package.as_ref().map(|package| json!({
             "name": package.name,
             "version": package.version,
@@ -2588,6 +2838,151 @@ pub fn describe_arm_translation(status: &ArmTranslationStatus, done: Option<&str
     lines.join("\n")
 }
 
+/// The Android major version this computer's Android runs: what the service says of its image,
+/// or the newest this build supports when it does not say.
+fn android_major(client: &mut HostApiClient) -> u32 {
+    if let Ok(report) = client.android_versions() {
+        if report.android_major > 0 {
+            return report.android_major;
+        }
+    }
+    let settings = client.settings().ok();
+    let named = settings.and_then(|report| report.facts.android_version);
+    named
+        .as_deref()
+        .and_then(dsa_host_core::update::versions::major_of_version)
+        .unwrap_or_else(dsa_host_core::update::versions::newest_major)
+}
+
+/// Downloads through curl, which every Linux distribution has, so the command line needs no
+/// TLS library of its own. A path or `file:` URL is read directly, for a mirror on disk.
+#[cfg(all(unix, not(target_os = "macos")))]
+struct CurlFetch;
+
+#[cfg(all(unix, not(target_os = "macos")))]
+impl Fetch for CurlFetch {
+    fn fetch(&self, url: &str, out: &mut dyn std::io::Write) -> Result<u64, String> {
+        use std::io::Read;
+        use std::process::Stdio;
+        if !url.starts_with("https://") {
+            return dsa_host_core::update::store::FileFetch.fetch(url, out);
+        }
+        let mut child = std::process::Command::new("curl")
+            .args(["--fail", "--silent", "--show-error", "--location"])
+            .args(["--proto", "=https", "--proto-redir", "=https"])
+            .args(["--retry", "3", "--connect-timeout", "30", "--", url])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("curl, which downloads here, cannot run: {e}"))?;
+        let mut body = child.stdout.take().ok_or("curl gave no output")?;
+        let copied = std::io::copy(&mut body, out);
+        let mut error = String::new();
+        if let Some(mut stderr) = child.stderr.take() {
+            let _ = stderr.read_to_string(&mut error);
+        }
+        let status = child.wait();
+        let status = status.map_err(|e| format!("curl did not finish: {e}"))?;
+        if !status.success() {
+            return Err(format!("downloading {url}: {}", error.trim()));
+        }
+        copied.map_err(|e| format!("downloading {url}: {e}"))
+    }
+}
+
+/// What downloads from the web here: the platform's own HTTPS.
+fn web_fetch() -> Box<dyn Fetch> {
+    #[cfg(windows)]
+    {
+        Box::new(dsa_host_windows::https::UrlFetch::default())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Box::new(dsa_host_macos::fetch::CurlFetch)
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Box::new(CurlFetch)
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        Box::new(dsa_host_core::update::store::FileFetch)
+    }
+}
+
+/// Asks on the terminal whether to download, after `notice`. No answer is no.
+fn agree(notice: &str) -> bool {
+    eprintln!("{notice}");
+    eprint!("Download it and accept Google's terms? [y/N] ");
+    let mut answer = String::new();
+    if std::io::stdin().read_line(&mut answer).is_err() {
+        return false;
+    }
+    matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+}
+
+/// `dsa arm-translation fetch google`: finds the image for this computer's Android in Google's
+/// list, asks (unless `--yes`), makes the package in a folder of its own and installs it. The
+/// folder, with the download, is removed whatever happens.
+fn fetch_google(
+    invocation: &Invocation,
+    mut client: HostApiClient,
+    connector: &mut dyn Connector,
+) -> Result<String, String> {
+    if !GOOGLE_FETCH_AVAILABLE {
+        return Err(
+            "Android on this computer is ARM64 and runs ARM apps without a translator, so \
+             there is no translator to fetch"
+                .into(),
+        );
+    }
+    let major = android_major(&mut client);
+    let fetch = web_fetch();
+    let repository = std::env::var("DSA_GOOGLE_REPOSITORY");
+    let repository = repository.unwrap_or_else(|_| google::REPOSITORY.to_string());
+    let image = google::find_image(&*fetch, &repository, major)?;
+    if !invocation.yes && !agree(&google_notice(&image)) {
+        return Err(
+            "Google's ARM translator was not downloaded, and nothing was changed. dsa \
+             arm-translation fetch google --yes agrees to Google's terms without asking"
+                .into(),
+        );
+    }
+    let id = std::process::id();
+    let base = std::env::temp_dir().join(format!("dsa-google-arm-translator-{id}"));
+    let _ = std::fs::remove_dir_all(&base);
+    let package = base.join("package");
+    let quiet = invocation.json;
+    let mut shown = None;
+    let mut progress = |step: google::Progress| {
+        if quiet {
+            return;
+        }
+        match step {
+            google::Progress::Downloading { done, total } => {
+                let percent = (done * 100).checked_div(total).unwrap_or(100);
+                if shown != Some(percent / 5) {
+                    shown = Some(percent / 5);
+                    eprint!("\rDownloading: {} of {} MiB", done >> 20, total >> 20);
+                }
+            }
+            google::Progress::Extracting => eprintln!("\nTaking out the system partition"),
+            google::Progress::Building => eprintln!("Taking out the translator's files"),
+        }
+    };
+    // The download takes minutes; the connection is opened again for the install.
+    drop(client);
+    let work = base.join("download");
+    let made = google::make_package(&*fetch, &image, &work, &package, &mut progress);
+    let installed = made.and_then(|_| {
+        let client = connect(connector, None, false, Duration::from_secs(10))?;
+        install_package(invocation, client, connector, &package)
+    });
+    let _ = std::fs::remove_dir_all(&base);
+    installed
+}
+
 fn show_arm_translation(
     invocation: &Invocation,
     status: &ArmTranslationStatus,
@@ -2635,13 +3030,32 @@ pub fn apk_info_json(
     installed: Option<&InstalledPackage>,
     kind: Option<InstallKind>,
 ) -> Value {
+    let colour = |argb: Option<u32>| argb.map(|argb| format!("#{argb:08X}"));
+    let vector = |vector: &Vector| {
+        json!({
+            "kind": "vector",
+            "width": vector.width,
+            "height": vector.height,
+            "inset": vector.inset,
+            "paths": vector.paths.iter().map(|path| json!({
+                "data": path.data,
+                "fill": colour(path.fill),
+                "stroke": colour(path.stroke),
+                "stroke_width": path.stroke_width,
+                "even_odd": path.even_odd,
+                "transform": path.transform,
+            })).collect::<Vec<_>>(),
+        })
+    };
     let layer = |layer: &Layer| match layer {
         Layer::Image(png) => json!({ "kind": "image", "png": base64(png) }),
         Layer::Color(argb) => json!({ "kind": "color", "color": format!("#{argb:08X}") }),
+        Layer::Vector(v) => vector(v),
         Layer::Unknown => json!({ "kind": "unknown" }),
     };
     let icon = match &info.icon {
         Some(Icon::Image(png)) => json!({ "kind": "image", "png": base64(png) }),
+        Some(Icon::Vector(v)) => vector(v),
         Some(Icon::Adaptive {
             background,
             foreground,
@@ -3135,11 +3549,20 @@ pub fn run_with_starter(
         Command::ArmTranslationInstall => {
             return install_arm_translation(invocation, client, connector);
         }
+        Command::ArmTranslationFetchGoogle => {
+            return fetch_google(invocation, client, connector);
+        }
         Command::ArmTranslationRemove => {
             let status = client.remove_arm_translation().map_err(|e| e.to_string())?;
             let done = "Removed the ARM translation package";
             return Ok(show_arm_translation(invocation, &status, Some(done)));
         }
+        Command::GappsStatus => {
+            let status = client.gapps().map_err(|e| e.to_string())?;
+            return Ok(show_gapps(invocation, &status, None));
+        }
+        Command::GappsInstall => return install_gapps(invocation, client, connector),
+        Command::GappsRemove => return remove_gapps(invocation, client),
         Command::Widgets => return widgets(invocation, client, connector),
         Command::Apps => return apps(invocation, client, connector),
         Command::Background => return background(invocation, client),

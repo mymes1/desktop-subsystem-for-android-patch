@@ -100,8 +100,11 @@ public class ApkInstallerStyleTests
         var header = Named(doc, "Header");
         var left = header.Elements(Wpf + "StackPanel").Single();
         Assert.Equal("0", (string?)left.Attribute("Grid.Column"));
-        var lines = left.Elements(Wpf + "TextBlock").Select(t => (string?)t.Attribute(X + "Name")).ToList();
-        Assert.Equal(new[] { "HeroTitle", "HeroPackage", "PublisherText", "VersionChip", "SourceText" }, lines);
+        Assert.Equal("HeroTitle", (string?)left.Elements(Wpf + "TextBlock").Single().Attribute(X + "Name"));
+        var rows = left.Elements(Wpf + "Grid").Single();
+        var lines = rows.Elements(Wpf + "TextBlock").Select(t => (string?)t.Attribute(X + "Name")).ToList();
+        Assert.Equal(new[] { "PackageLabel", "HeroPackage", "PublisherLabel", "PublisherText", "VersionLabel", "VersionChip",
+            "SourceLabel", "SourceText" }, lines);
         Assert.Equal("{StaticResource AppNameText}", (string?)Named(doc, "HeroTitle").Attribute("Style"));
         Assert.Equal("{StaticResource DetailLine}", (string?)Named(doc, "PublisherText").Attribute("Style"));
         Assert.Equal("{StaticResource DetailLine}", (string?)Named(doc, "VersionChip").Attribute("Style"));
@@ -165,14 +168,60 @@ public class ApkInstallerStyleTests
     public void Fr11_more_expands_in_a_scrolling_area_inside_the_window()
     {
         var doc = Window();
-        var expanded = Named(doc, "ExpandedPanel");
-        Assert.Equal(Wpf + "ScrollViewer", expanded.Name);
-        Assert.Equal("Auto", (string?)expanded.Attribute("VerticalScrollBarVisibility"));
-        var inside = expanded.Descendants().Select(e => (string?)e.Attribute(X + "Name")).ToList();
+        var scroller = Named(doc, "DetailsScroller");
+        Assert.Equal(Wpf + "ScrollViewer", scroller.Name);
+        Assert.Equal("Auto", (string?)scroller.Attribute("VerticalScrollBarVisibility"));
+        var inside = scroller.Descendants().Select(e => (string?)e.Attribute(X + "Name")).ToList();
         Assert.Contains("PermissionList", inside);
         Assert.Contains("SensitiveChip", inside);
         Assert.Contains("FactList", inside);
         Assert.Equal("OnMore", (string?)Named(doc, "MoreLink").Attribute("Click"));
+    }
+
+    [Fact]
+    public void Fr11_more_and_less_is_one_link_that_stays_under_the_list_in_both_states()
+    {
+        // The link sat inside the folded list's panel, which hid with the list it opened, so
+        // nothing could fold the list again.
+        var doc = Window();
+        var link = Named(doc, "MoreLink");
+        Assert.Equal(XNamespace.Get("clr-namespace:Dsa.ApkInstaller") + "ExpandLink", link.Name);
+        Assert.Single(doc.Descendants().Where(e => (string?)e.Attribute(X + "Name") == "MoreLink"));
+        foreach (var hidden in new[] { "PermissionPreview", "PermissionList", "ExpandedPanel" })
+        {
+            Assert.DoesNotContain(link, Named(doc, hidden).Descendants());
+        }
+        var names = Named(doc, "DetailsScroller").Descendants().Select(e => (string?)e.Attribute(X + "Name"))
+            .Where(n => n is not null).ToList();
+        Assert.True(names.IndexOf("PermissionList") < names.IndexOf("MoreLink"));
+        Assert.True(names.IndexOf("MoreLink") < names.IndexOf("ExpandedPanel"));
+    }
+
+    [Fact]
+    public void Fr11_the_lines_under_the_title_sit_tight_with_their_values_in_one_column()
+    {
+        // Each line was a 20 px line with 4 px added above it, and its height could grow with
+        // the font's own line box, so the rows stood far apart.
+        var line = KeyedStyle("DetailLine");
+        Assert.Equal("20", Setter(line, "LineHeight"));
+        Assert.Equal("BlockLineHeight", Setter(line, "LineStackingStrategy"));
+        Assert.Equal("0", Setter(line, "Margin"));
+        Assert.Null(Setter(line, "MinHeight"));
+        var label = KeyedStyle("DetailLabel");
+        Assert.Equal("{StaticResource DetailLine}", (string?)label.Attribute("BasedOn"));
+        Assert.Equal("0,0,8,0", Setter(label, "Margin"));
+        var rows = Named(Window(), "DetailRows");
+        Assert.Equal(new[] { "Auto", "*" },
+            rows.Descendants(Wpf + "ColumnDefinition").Select(c => (string?)c.Attribute("Width")));
+        Assert.All(rows.Descendants(Wpf + "RowDefinition"), r => Assert.Equal("Auto", (string?)r.Attribute("Height")));
+        foreach (var text in rows.Elements(Wpf + "TextBlock"))
+        {
+            Assert.Null(text.Attribute("Margin"));
+            var name = (string?)text.Attribute(X + "Name");
+            Assert.Equal(name!.EndsWith("Label") ? "{StaticResource DetailLabel}" : "{StaticResource DetailLine}",
+                (string?)text.Attribute("Style"));
+            Assert.Equal(name.EndsWith("Label") ? null : "1", (string?)text.Attribute("Grid.Column"));
+        }
     }
 
     [Fact]

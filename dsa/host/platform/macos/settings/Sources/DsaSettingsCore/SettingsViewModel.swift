@@ -29,6 +29,8 @@ public final class SettingsViewModel: ObservableObject {
     @Published public private(set) var error: String?
     @Published public private(set) var isBusy = false
     @Published public private(set) var isResetting = false
+    /// Whether Google's ARM translator is being downloaded and installed now.
+    @Published public private(set) var isFetchingGoogleArm = false
     /// Whether the last reset finished, so the page can say the data is gone.
     @Published public private(set) var resetDone = false
     /// The network as last read from `dsa network`; nil until a refresh, then the settings'.
@@ -89,6 +91,18 @@ public final class SettingsViewModel: ObservableObject {
             return text.get("Arm_NotRunning")
         }
         return text.format("Arm_Abis", android.abilist.isEmpty ? "?" : android.abilist)
+    }
+
+    /// Whether the section offers Google's ARM translator. On an ARM64 Mac Android runs ARM
+    /// apps itself, so dsa says it is not offered, and a service that cannot say offers nothing.
+    public var showsGoogleArm: Bool { arm?.googleFetchAvailable ?? false }
+    public var canFetchGoogleArm: Bool { canChange && showsGoogleArm }
+    public var googleArmTermsUrl: String { DsaService.googleArmTermsUrl }
+
+    /// What the confirmation says before anything is downloaded: where it comes from, and the
+    /// terms the user accepts.
+    public var googleArmNotice: String {
+        text.format("ArmGoogle_Notice", DsaService.googleArmSource, DsaService.googleArmTermsUrl)
     }
 
     // MARK: Updates
@@ -332,6 +346,22 @@ public final class SettingsViewModel: ObservableObject {
         } catch {
             self.error = Format.problem(text, error)
         }
+        isBusy = false
+    }
+
+    /// Fetches and installs Google's ARM translator, once the user has agreed to Google's terms.
+    /// A refusal (a download whose hash differs, no image for this Android) leaves the section
+    /// as the service last reported it, with the reason shown.
+    public func fetchGoogleArmTranslator() async {
+        isBusy = true
+        isFetchingGoogleArm = true
+        error = nil
+        do {
+            arm = try await service.fetchGoogleArmTranslator()
+        } catch {
+            self.error = Format.problem(text, error)
+        }
+        isFetchingGoogleArm = false
         isBusy = false
     }
 

@@ -967,7 +967,127 @@ Digitalis의 배포 묶음(`docker/build-digitalis.sh`)은 번역기(`libberberi
 - `androidboot.boot_devices=vmbus`는 VMBus 아래 모든 디스크의 파티션에 `by-name` 링크를 만든다. 다른 디스크가 `misc`, `super`, `userdata` 같은 같은 이름의 GPT 파티션을 가지면 링크가 충돌한다. pstore 디스크는 파티션 표가 없는 원시 디스크여야 한다.
 - 하드웨어 확인(예정): pstore 디스크를 SCSI 0번, 1번, 2번에 각각 붙여 부팅하고, 콘솔 로그의 파티션 줄(`sdX: (vbmeta_a)(...)(super)`)이 시스템 디스크에 붙는지, `ls -l /dev/block/by-name/`이 같은 디스크를 가리키는지, `/data`가 마운트되는지 본다. 결과는 이 절에 기록한다.
 
-## R12. 표준 GitHub 러너에서 Digitalis 빌드하기 (FR-25, FR-27)
+## R14. Google의 ARM 번역기: SDK 저장소 목록과 에뮬레이터 이미지의 구조 (FR-25)
+
+**기준.** 2026-11-07. Google SDK 저장소의 시스템 이미지 목록 `https://dl.google.com/android/repository/sys-img/google_apis/sys-img2-1.xml`부터 `sys-img2-5.xml`까지를 받아 읽었다(`sys-img2-6.xml`은 없다). Google APIs x86_64 이미지 두 개, `x86_64-36_r07.zip`(API 36, 1,895,447,397바이트, SHA-1 `c6bf44bdcd885bb902b4ba752d111a073ad7a817`)과 `x86_64-37.0_r08.zip`(API 37.0, 2,143,899,425바이트, SHA-1 `a266cfbcf4d6c769b166c0af4d68eff0e4f4a5e3`)을 `.scratch/google-ndk/`에 받아 목록의 해시와 맞는지 확인하고, 그 안의 `system.img`를 Python 스크립트(`.scratch/ndk-probe-*.py`)로 GPT, liblp 메타데이터, ext4 순서로 읽었다. 받은 파일은 저장소에 넣지 않았다. 게스트에 넣어 부팅해 보지는 않았다.
+
+### 저장소 목록
+
+- 목록은 스키마 버전마다 따로 있다(`sys-img2-1`부터 `-5`). API 36은 1부터, API 36.1과 37.0은 3부터 나온다. 같은 이미지를 가리키므로 가장 새 스키마부터 읽는다.
+- 이미지 하나는 `<remotePackage path="system-images;android-36;google_apis;x86_64">`이다. `<type-details>` 안에 `<api-level>`(`36`, `36.1`, `37.0`, 확장판은 `36x`), `<extension-level>`, `<base-extension>`(확장판은 `false`), `<tag><id>`(`google_apis`, `google_apis_playstore`, `google_apis_ps16k` 등), `<abi>`와 `<abis>`, `<translatedAbis>arm64-v8a</translatedAbis>`가 있다. 그 밖에 `<revision><major>`, `<uses-license ref="android-sdk-license"/>`, `<channelRef ref="channel-0"/>`(0이 안정판, 나머지는 베타와 카나리), `<archives><archive><complete>`의 `<size>`, `<checksum type="sha1">`, `<url>`(목록과 같은 폴더의 파일 이름)이 있다.
+- 해시는 SHA-1뿐이다. 크기와 함께 맞춰 본다. 목록은 HTTPS로 Google에서 받는다.
+- x86_64 Google APIs 이미지의 약관은 `android-sdk-license`(Android SDK License Agreement)다. arm64 이미지는 `android-sdk-arm-dbt-license`라는 다른 약관을 쓴다. DSA는 x86_64 이미지만 받는다.
+- 2026-11-07의 안정판은 API 36 r7, 36.1 r4, 37.0 r8이다. 36-ext18과 36-ext19는 확장판이다.
+
+### 이미지의 구조
+
+- zip 안에 `x86_64/system.img`(API 36은 4,415,553,536바이트, 37.0은 5,498,732,544바이트, deflate로 압축)가 있다. 4 GiB를 넘으므로 zip64다. `source.properties`의 `Pkg.Revision`은 목록의 리비전과 다를 수 있다(37.0 r8의 파일은 7이라고 쓴다). 그래서 버전은 목록에서 정한다.
+- `system.img`는 디스크 전체다. GPT에 `vbmeta`(1 MiB부터)와 `super`(2 MiB부터) 두 파티션이 있다.
+- `super`는 liblp 메타데이터(4096바이트 뒤의 기하 정보, 그 뒤 8192바이트에서 시작하는 메타데이터, 버전 10.0, 헤더 128바이트, 표의 SHA-256 확인)로 `system`, `system_dlkm`, `system_ext`, `product`, `vendor`를 담는다. `system`은 `super`의 1 MiB부터 선형 구간 하나이고, API 36은 1,049,964,544바이트, 37.0은 1,254,883,328바이트다.
+- `system`은 ext4(블록 4 KiB, 64비트 기능 없음, 익스텐트, 공유 블록)다. 루트 아래 `system/` 폴더가 있는 system-as-root 구조다.
+- 번역기 속성은 `system/build.prop`에 있다: `ro.dalvik.vm.native.bridge=libndk_translation.so`, `ro.dalvik.vm.isa.arm64=x86_64`, `ro.enable.native.bridge.exec=1`, `ro.system.product.cpu.abilist=x86_64,arm64-v8a`. 번역기 버전을 따로 적은 속성은 없다. 그래서 묶음 버전은 `ro.system.build.id`(36은 `BE2A.250530.026.F3`, 37.0은 `CE2A.260420.051.A3`), API 수준, 리비전으로 만든다.
+
+### 번역기 파일
+
+| 경로(`system/` 아래) | API 36 | API 37.0 |
+|---|---|---|
+| `lib64/libndk_translation.so` | 5,403,704바이트 | 8,743,696바이트 |
+| `lib64/libndk_translation_proxy_*.so` | 21개(libEGL, libGLESv1_CM, libGLESv2, libGLESv3, libOpenMAXAL, libOpenSLES, libaaudio, libamidi, libandroid, libandroid_runtime, libbinder_ndk, libc, libcamera2ndk, libjnigraphics, libmediandk, libnativehelper, libnativewindow, libneuralnetworks, libvulkan, libwebviewchromium_plat_support) | 없음(번역기 안에 들었다) |
+| `lib64/arm64/` | arm64 라이브러리 56개(bionic, libc++, libEGL과 GLES, libvulkan, ICU, libandroid, libmediandk, RenderScript 등) | 같은 56개 |
+| `bin/arm64/` | `app_process64`, `linker64` | 같음 |
+| `bin/ndk_translation_program_runner_binfmt_misc_arm64` | 있음 | 있음 |
+| `etc/binfmt_misc/arm64_exe`, `arm64_dyn` | 있음 | 있음 |
+| `etc/ld.config.arm64.txt` | 있음 | 있음 |
+| `etc/cpuinfo.arm64.txt` | 있음 | 없음 |
+| `etc/berberis/cpuinfo.arm64.txt` | 없음 | 있음 |
+
+- 두 binfmt_misc 규칙은 `/system/bin/ndk_translation_program_runner_binfmt_misc_arm64`를 실행한다. DSA의 init 스크립트가 묶음의 규칙을 등록하므로 이미지의 `etc/init/ndk_translation.rc`는 필요 없다. 그 스크립트는 `/system/etc`를 덮기 전에 읽히므로 넣어도 쓰이지 않는다.
+- 32비트 파일(`etc/binfmt_misc/arm_exe`, `arm_dyn`, `ld.config.arm.txt`, `cpuinfo.arm.txt`)도 있지만 32비트 라이브러리(`lib/arm`)는 없다. DSA 게스트에 32비트 zygote가 없으므로 넣지 않는다.
+- `libndk_translation.so`가 링크하는 x86_64 라이브러리(`liblog`, `libandroid`(36만), `libdl_android`, `libc++`, `libc`, `libm`, `libdl`)와 프록시가 링크하는 것(`libEGL`, `libGLESv2`, `libvulkan`, `libmediandk` 등)은 모두 AOSP 시스템 라이브러리다. arm64 라이브러리가 서로 링크하는 것도 `lib64/arm64/` 안에 있다.
+- 꺼내는 파일은 API 36이 84개 30,536,301바이트, 37.0이 64개 32,242,207바이트다. 묶음 이미지는 압축하지 않은 erofs라 그보다 조금 크다(블록 단위로 놓인다).
+
+### 결정
+
+1. 호스트(명령줄)가 목록을 읽고 게스트와 같은 API 수준(Android 16은 36, 17은 37.0)의 안정판, 기본판(`base-extension`이 `false`가 아님), `google_apis` x86_64, `translatedAbis`에 `arm64-v8a`가 있는 이미지를 고른다. 여럿이면 부 버전이 가장 낮은 것(36보다 36.1을 뒤로), 그다음 리비전이 가장 높은 것이다. 목록의 `<url>`은 같은 폴더의 파일 이름이거나 `https://dl.google.com/` 주소일 때만 받는다.
+2. 받은 zip은 크기와 SHA-1을 목록과 맞춘다. 다르면 거부하고 아무것도 바꾸지 않는다.
+3. zip을 풀지 않고 `system.img`를 스트리밍으로 inflate하면서 GPT와 liblp를 읽고, `system` 구간만 임시 파일로 쓴다(디스크 전체를 쓰지 않는다). 그 ext4에서 위 표의 파일만 꺼낸다. 이 일은 Rust로 직접 한다(inflate, SHA-1, GPT, liblp, ext4 읽기, erofs 쓰기). 세 호스트 모두 같은 코드이고, `mkfs.erofs`나 다른 도구를 새로 쓰지 않는다. 다운로드는 각 호스트가 이미 쓰는 것(Windows는 WinHTTP, macOS와 Linux는 curl)으로 한다.
+4. 꺼낸 파일은 FR-25 묶음 형식 그대로다(`arm-translation.json`의 이름 `Google ARM translator`, 브리지 `libndk_translation.so`, ABI `arm64-v8a`, 라이선스 `Android SDK License`). 그래서 설치, 검사, 부팅 값, 오버레이는 사용자 묶음과 같은 길을 지난다. 받은 이미지와 임시 파일은 성공해도 실패해도 지운다.
+
+### 대가
+
+- 한 번에 약 2 GB를 받고, 그동안 zip(약 2 GB)과 `system` 구간(약 1 GB)을 임시 폴더에 둔다.
+- Google이 목록 형식이나 이미지 구조(예: `system`을 erofs로 바꾸기)를 바꾸면 읽지 못하고 거부한다. 그때는 이 절을 다시 조사한다.
+
+### 확인하지 못한 것
+
+- 이 번역기를 DSA 게스트(AOSP Cuttlefish 빌드)에 얹었을 때 `arm64-v8a` 전용 앱이 도는지. 에뮬레이터 빌드와 Cuttlefish 빌드의 시스템 라이브러리가 같은 AOSP 가지에서 나와도 빌드가 다르다. 실제 PC에서 확인한다(FR-25 수동 기준).
+- 36.1 이미지가 36 게스트에 더 맞는지. 지금은 기본판(36)을 고른다.
+
+## R15. Google Play 설치 도구: LiteGapps Core의 구조와, 다시 빌드하지 않고 얹을 때 권한이 서는 조건 (FR-32)
+
+**기준.** 2026-11-07. SourceForge의 LiteGapps 폴더 네 곳(`litegapps/x86_64/36/core`, `x86_64/37/core`, `arm64/36/core`, `arm64/37/core`)의 RSS 목록을 받아 읽었다. `LiteGapps-core-x86_64-16.0-20261001-official.zip`(122,196,440바이트, MD5 `ea9945a6d63849fa9e51782edfe613a4`)과 `LiteGapps-core-arm64-17.0-20261001-official.zip`(MD5 `52d7a470ad47be3dce1504e03a149f8e`)을 `.scratch/`에 받아 `unzip`, `xz -lvv`, `tar -t`로 풀어 보았다. 받은 파일의 MD5는 목록 값과 같았다. AOSP `android16-release`의 `core/java/android/content/pm/PackagePartitions.java`, `core/java/android/os/Build.java`, `services/core/java/com/android/server/pm/Settings.java`, `services/core/java/com/android/server/pm/permission/PermissionManagerServiceImpl.java`, `services/core/java/com/android/server/SystemConfig.java`를 읽었다. 게스트에서 설치해 보지는 않았다.
+
+### 배포처와 목록
+
+- 빌드 하나는 `litegapps/<arch>/<api>/core/<yyyy-mm-dd>/LiteGapps-core-<arch>-<android>-<yyyymmdd>-official.zip`에 있다. `arch`는 `x86_64`, `arm64`(그 밖에 `arm`, `x86`)이고, API 36과 37이 모두 있다. x86_64에는 `core`와 `lite`만 있고, arm64에는 `basic`, `go`, `micro`, `nano`, `pixel`, `user` 등도 있다.
+- `https://sourceforge.net/projects/litegapps/rss?path=/litegapps/<arch>/<api>/core`가 그 폴더의 파일을 최신 순으로 준다. 항목마다 경로(`<title>`), 크기(`filesize`), MD5(`<media:hash algo="md5">`)가 있다. 공개된 체크섬은 MD5뿐이다.
+- 받는 주소는 `https://sourceforge.net/projects/litegapps/files/litegapps/<arch>/<api>/core/<날짜>/<파일>/download`이고, HTTPS 미러로 넘어간다. curl `-L`과 WinHTTP가 그대로 따라간다.
+- 2026-11-07의 최신은 네 곳 모두 20261001이다. 크기는 x86_64/36 122 MB, x86_64/37 149 MB, arm64/36 215 MB, arm64/37 257 MB이다.
+
+### zip의 구조
+
+| 경로 | 내용 |
+|---|---|
+| `module.prop` | `litegapps_variant=core`, `litegapps_arch=x86_64`, `litegapps_sdk=36` |
+| `files/files.tar.xz` | 앱과 설정 파일. arm64판에는 같은 파일이 최상위 `files.tar.xz`로도 있다. zip 안에서는 deflate로 싸였지만 줄지 않는다(stored 블록) |
+| `modules/core/<이름>/<이름>-LiteGapps-Addon-<arch>-<android>.zip` | 덧붙이는 묶음. `module.prop`(`android_arch`, `android_sdk`), `system/` 아래 파일, 지울 앱 목록(`list-rm`) |
+| `META-INF/`, `customize.sh`, `bin/<arch>/{xz,tar,toybox}`, `*.sh` | 폰의 리커버리나 Magisk가 설치할 때 쓰는 것 |
+
+- `files.tar.xz`는 xz(LZMA2 필터만, 사전 64 MiB, 블록 2개, 블록마다 크기 기록, CRC64)이고, 풀면 267 MiB(x86_64/36)이다. tar 안에는 `<arch>/<api>/system/` 아래 `product/`와 `system_ext/`만 있다. 링크와 장치 파일은 없다.
+  - `product/priv-app/GmsCore`(183 MB), `product/priv-app/Phonesky`(90 MB)
+  - `product/app/GoogleCalendarSyncAdapter`, `GoogleContactsSyncAdapter`
+  - `product/framework/com.google.android.dialer.support.jar`
+  - `product/etc/permissions/`(`privapp-permissions-google*.xml`, `com.google.android.gms.xml`, `com.android.vending.xml` 등), `etc/default-permissions/`, `etc/sysconfig/`(`google*.xml`, `pixel_experience_*.xml`, `preinstalled-packages-*.xml`), `etc/preferred-apps/`
+  - `system_ext/priv-app/GoogleServicesFramework`, `system_ext/etc/permissions/privapp-permissions-google-se.xml`, `com.google.android.gsf.xml`
+- x86_64/36의 덧붙이는 묶음은 Common(권한과 sysconfig 파일의 새 판), GoogleExtShared, GoogleFeedback, GooglePartnerSetup, GoogleRestore, SetupWizard, PixelSetupWizard이다. arm64/37에는 GoogleFeedback이 없다.
+- `customize.sh`는 tar의 `<arch>/<api>/system/*`을 시스템으로 복사하고(API 29 이상이면 `product` 아래로), 덧붙이는 묶음을 차례로 깐다. 묶음마다 `android_sdk`와 `android_arch`가 기기와 다르면 거부한다.
+
+### 다시 빌드하지 않고 얹을 때 권한이 서는 조건 (AOSP android16-release)
+
+1. **특권 권한 허용 목록은 앱과 같은 파티션의 것만 본다.** SystemConfig는 `privapp-permissions` 항목을 그 파일의 경로가 `Environment.getProductDirectory()`(`/product/`), `getSystemExtDirectory()`(`/system_ext/`), `getVendorDirectory()`로 시작하는지로 나누어 따로 모은다. `PermissionManagerServiceImpl.checkPrivilegedPermissionAllowlist`는 앱이 있는 파티션의 목록만 본다. `ro.control_privapp_permissions=enforce`이면 목록에 없는 특권 권한은 부팅 때 위반으로 모인다. 그래서 `/product/priv-app`의 GmsCore와 `/product/etc/permissions`의 목록, `/system_ext/priv-app`의 GoogleServicesFramework와 `/system_ext/etc/permissions`의 목록이 각각 같은 경로로 보여야 한다. SystemConfig는 `/product/etc/sysconfig`, `/product/etc/permissions`, `/system_ext/etc/...`를 디렉터리째 읽고, PackagePartitions는 `/product/priv-app`과 `/system_ext/priv-app`을 특권 앱 폴더로 본다. 오버레이를 파티션 자리(`/product`, `/system_ext`)에 그대로 얹으면 어느 경로도 바뀌지 않는다.
+2. **기본 권한(`etc/default-permissions`)은 첫 부팅이나 업그레이드 때만 준다.** `Settings.RuntimePermissionPersistence.isPermissionUpgradeNeeded`는 사용자별로 저장해 둔 지문이 `PackagePartitions.FINGERPRINT + "?pc_version=" + 권한 컨트롤러 버전`과 다를 때만 참이고, 그때만 기본 권한 정책이 돈다. `PackagePartitions.FINGERPRINT`는 `ro.build.fingerprint`와 시스템 파티션(system, vendor, odm, oem, product, system_ext)마다의 `ro.<파티션>.build.fingerprint`를 `SystemProperties.digestOf`로 합친 값이다. 그래서 이미 쓰던 사용자 디스크에 Google 앱을 얹기만 하면 지문이 같아, GmsCore와 동기화 앱이 위치, 연락처, 캘린더 같은 기본 권한을 받지 못한다. 새로 나타난 시스템 앱을 사용자 종류별 허용 목록대로 사용자마다 설치하는 일도 업그레이드 경로에서 일어난다.
+3. **oem 파티션의 지문은 앱이 보지 않는다.** `Build.getFingerprintedPartitions()`는 bootimage, odm, product, system_ext, system, vendor만 나열한다. `Build.isBuildConsistent()`는 system과 vendor만 비교한다. DSA 이미지에는 oem 파티션이 없으므로 `ro.oem.build.fingerprint`를 정하는 쪽은 DSA뿐이다.
+
+### 결정
+
+1. 받는 것은 Core 빌드다. 목록에서 이름이 `LiteGapps-core-<arch>-<android>-<yyyymmdd>-official.zip`이고 폴더가 날짜 모양인 것 가운데 날짜가 가장 늦은 것을 고른다. 받은 파일의 크기와 MD5가 목록과 같아야 쓴다. `arch`와 API는 실행 중인 게스트가 알리는 `ro.product.cpu.abi`(x86_64는 `x86_64`, arm64-v8a는 `arm64`)와 `ro.build.version.sdk`로 정한다.
+2. 이미지에는 tar와 덧붙이는 묶음의 `product/`, `system_ext/` 아래 `app`, `priv-app`, `etc`, `framework`만 넣는다. 파티션 구조를 그대로 두므로 허용 목록이 앱과 같은 파티션에 남는다. 나머지(`vendor`, `lib64`, 설치 스크립트와 도구)는 넣지 않는다. zip, tar, 덧붙이는 묶음 어디에든 `..`나 절대 경로, 드라이브 이름이 있으면 빌드 전체를 거부한다. `module.prop`의 arch나 API가 게스트와 다르거나, 그 arch와 API 아래에 GmsCore와 Phonesky가 없거나, 덧붙이는 묶음의 arch나 API가 다르면 거부한다. 거부하면 저장된 상태는 그대로다.
+3. 덧붙이는 묶음 가운데 SetupWizard, PixelSetupWizard, GoogleRestore는 넣지 않는다. 설정 마법사는 HOME 활동으로 DSA 에이전트의 HOME을 밀어내는데, DSA에서는 호스트가 셸이다(D6). GoogleRestore는 마법사가 부르는 복원 단계다. 계정 추가와 Play 로그인은 GmsCore의 자체 화면으로 된다. 나머지(Common, GoogleExtShared, GoogleFeedback, GooglePartnerSetup)는 넣는다.
+4. 게스트는 bootconfig에 `androidboot.dsa.gapps=on`이 있을 때만(`dsa-gapps.rc`, `on post-fs-data && property:ro.boot.dsa.gapps=on`) 이미지를 loop 장치로 올린다. 레이블은 `context=u:object_r:system_file:s0`으로, 원래 `/product`와 `/system_ext`의 앱과 설정 파일과 같다. 그 위에 overlayfs로 `lowerdir=/mnt/dsa-gapps/product:/product`를 `/product`에, `system_ext`도 같은 방식으로 얹는다. zygote와 system_server가 시작하기 전이다.
+5. 같은 조건에서 product `build.prop`이 `/system/etc/dsa/gapps-on.prop`을 가져와 `ro.oem.build.fingerprint`를 정한다(조건이 없으면 아무것도 정하지 않는 `gapps-off.prop`). 그러면 `PackagePartitions.FINGERPRINT`가 바뀌어 그 부팅이 업그레이드가 된다. 패키지 관리자는 시스템 앱을 다시 훑고, 새 앱을 사용자마다 설치하고, 기본 권한을 준다. 앱이 읽는 지문은 바뀌지 않는다. 제거하면 값이 사라져 다시 업그레이드가 되고, 사라진 앱이 정리된다. 가져오는 줄은 ARM 번역의 가져오는 줄 바로 앞에 둔다(ARM 쪽이 끝줄이어야 한다).
+6. ABI 순서: `arm-translation-on.prop`의 목록은 `x86_64,arm64-v8a`이다. 패키지 관리자와 Play는 목록의 앞쪽 ABI를 고르므로, 번역기를 켜도 Play 서비스와 시스템 앱의 갱신은 x86_64판으로 온다. 이미지 검사가 x86_64이 맨 앞인지 확인한다.
+7. erofs 이미지는 호스트가 직접 쓴다(`dsa/host/core/src/erofs.rs`). 압축하지 않는 평면 배치, 32바이트 inode, 디렉터리와 일반 파일만 쓰고, 파일 데이터는 도착하는 대로 쓰고 inode와 디렉터리는 마지막에 데이터 뒤에 쓴다. zip은 APK를 읽던 코드(`apk_info::zip`, `inflate`)로, `files.tar.xz`는 새로 쓴 xz/LZMA2 해독기(`gapps/xz.rs`, xz-embedded의 해독 방식)와 흘려 읽는 tar 해석기로 읽는다. MD5도 직접 계산한다. Windows, Linux, macOS가 같은 코드를 쓰고, mkfs.erofs나 xz, Python 같은 도구가 필요 없다. 받기는 이미지 업데이트가 쓰는 `Fetch`(Windows는 WinHTTP, Linux와 macOS는 curl)를 그대로 쓴다. Google의 ARM 번역기로 묶음을 만들 때(R14) 쓰는 `Builder`는 트리 전체를 메모리에 두므로, 수백 MiB인 Google 앱에는 파일을 받는 대로 쓰는 `Stream`을 같은 모듈에 두고 폴더 배치와 inode, 슈퍼블록 부호화를 함께 쓴다.
+8. 인증되지 않은 기기: DSA의 안드로이드는 Google이 인증한 기기가 아니므로 Google 로그인이 막힐 수 있다. 사용자는 `https://www.google.com/android/uncertified/`에 Google Services Framework Android ID를 등록한다. 에이전트가 GSF의 `content://com.google.android.gsf.gservices`에서 `android_id`(10진수)를 읽어 호스트에 알리고, `dsa gapps status`와 설정 앱이 보여 준다.
+
+### 검증
+
+- 해독기의 논리는 같은 코드를 줄 단위로 옮긴 Python 시험판(`.scratch/`)으로, `xz` 5.x가 만든 시험 파일 여섯 개(기본, 블록 4 KiB, `-9e`와 SHA-256 검사, `lc=1,lp=2,pb=1`, `preset=0`과 검사 없음, 청크 둘 이상)를 풀어 원본과 같음을 확인했다. 같은 파일들이 `gapps/testdata/`에서 Rust 테스트로 돈다.
+- erofs 이미지는 테스트 안의 읽기 코드로 되읽고, Linux CI에서는 erofs-utils의 `fsck.erofs --extract`로 풀어 내용을 비교한다(`fr32_erofs_utils_read_the_image_back_when_they_are_installed`).
+
+### 대가
+
+- 설치하거나 제거한 뒤의 첫 부팅은 업그레이드라 오래 걸린다(모든 패키지를 다시 훑고 컴파일 상태를 맞춘다).
+- 서비스는 만드는 동안 압축된 `files.tar.xz`(약 100 MB)와 해독 사전(64 MiB)을 메모리에 둔다. 받은 zip과 만든 이미지는 서비스 폴더에 잠시 있고, 끝나면 지운다. 이미지(270 MB 안팎)는 사용자 디스크에 한 벌 남는다.
+- MD5만 공개되므로, 무결성은 받은 파일이 목록과 같다는 데까지다. 목록과 파일이 같은 곳(SourceForge)에서 오므로 배포처 자체가 바뀐 것은 막지 못한다.
+
+### 확인하지 못한 것 (수동 확인)
+
+- 실제 게스트에서 overlay 위의 GmsCore, Phonesky, GoogleServicesFramework가 특권 권한과 기본 권한을 받는지(`dumpsys package com.google.android.gms`의 granted 목록), Play 로그인과 캘린더, 주소록 동기화가 되는지.
+- overlayfs가 init의 자격으로 아래 파일을 읽을 때 SELinux 거부가 없는지(`dmesg | grep avc`).
+- 에이전트가 `READ_GSERVICES` 권한 없이 gservices에서 `android_id`를 읽을 수 있는지. 못 읽으면 ID는 비어 있고 설정 앱은 안내만 보인다.
+- ARM 번역기를 켠 채 Play가 Play 서비스를 x86_64판으로 갱신하는지.
+
+## R16. 표준 GitHub 러너에서 Digitalis 빌드하기 (FR-25, FR-27)
 
 R9는 Digitalis를 기본 번역기로 넣지 못한 이유로 빌드 비용을 들었다. 트리 전체가 `out/`까지 약 300 GB이기 때문이다. 이 절은 GitHub의 표준 러너(ubuntu-24.04, 4 vCPU, 16 GB RAM, 작업당 6시간, 기본 여유 디스크 약 14 GB)만으로 Android 16과 17의 번역기를 빌드하는 방법을 조사한 기록이다. 2026-11-07에 확인했다.
 
@@ -1056,5 +1176,5 @@ DSA에 필요한 것은 안드로이드의 네이티브 브리지다. 곧 `libbe
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
 - 헤더만 받는 프로젝트를 가리키는 `export_include_dirs`(`../../../../frameworks/...`)를 Soong이 받아들이는지 확인해야 한다. 안 되면 헤더를 제품 폴더로 복사한다.
 - Soong만 쓰는 빌드에서 설치 경로를 빌드 대상으로 줄 수 있는지 확인해야 한다. 안 되면 모듈 이름으로 바꾼다.
-- 호스트가 기본 묶음을 스스로 설치하거나 부팅에 쓰는 동작은 아직 없다. 지금은 사용자가 배포물의 zip을 풀어 `dsa arm-translation install`로 넣는다. 사용자 묶음과 Google 번역기로 바꾸는 길은 그대로다. 기본 묶음을 언제 어떻게 쓰는지(이미지 안에 넣을지, 처음 시작할 때 설치할지, 지우면 기본으로 돌아갈지, 설정 앱에 어떻게 보일지)는 FR-25의 수용 기준이 정하지 않아 소유자의 결정을 기다린다.
+- FR-25는 기본 묶음이 있는 x86_64 이미지가 처음부터 그 묶음으로 번역하고, 사용자가 다른 묶음으로 바꾼 뒤에도 기본 묶음으로 되돌릴 수 있다고 정한다. 그 호스트와 게스트 쪽 동작은 아직 없다(진행 중이 아니다). 지금은 배포물의 zip을 풀어 `dsa arm-translation install`로 넣어야 한다. 제안하는 방법: x86_64 이미지의 시스템 파티션에 기본 묶음의 `system.img`를 넣고(`/system/etc/dsa/arm-translation/default.img`), 호스트는 사용자 묶음이 없고 설정이 켜져 있으면 `androidboot.dsa.arm_translation=default`를 넣으며, 게스트는 그 값에서 기본 이미지를 얹는다. 사용자 묶음을 지우면 기본으로 돌아간다. 상태 보고(`restart_needed`, 설정 앱의 이름과 버전)도 기본 묶음을 알아야 한다.
 - 기본 묶음이 DSA 게스트에서 ARM64 전용 앱을 실제로 돌리는지는 PC에서 확인한다(FR-25의 수동 확인).

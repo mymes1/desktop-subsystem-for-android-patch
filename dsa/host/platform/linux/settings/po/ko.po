@@ -1065,6 +1065,33 @@ msgstr "Android 디스크에서 Google 앱을 지웁니다. 다음에 Android를
 msgid "Google's terms"
 msgstr "Google 약관"
 
+msgid "Google's ARM translator"
+msgstr "Google의 ARM 번역기"
+
+msgid "Gets the ARM translator from the Android emulator image Google offers for this Android version and installs it as a translation package. DSA does not include or pass on Google's translator: your computer downloads the image from Google, under Google's Android SDK License, keeps only the translator and deletes the rest (about 2 GB). Nothing is downloaded until you agree. A package built from another translator, such as Digitalis, does the same job."
+msgstr "Google이 이 Android 버전용으로 제공하는 Android 에뮬레이터 이미지에서 ARM 번역기를 꺼내 번역 묶음으로 설치합니다. DSA는 Google의 번역기를 담거나 다시 배포하지 않습니다. 이 컴퓨터가 Google의 Android SDK 라이선스에 따라 Google에서 이미지를 직접 받고, 번역기만 남긴 뒤 나머지(약 2GB)는 지웁니다. 동의하기 전에는 아무것도 받지 않습니다. Digitalis 같은 다른 번역기로 만든 묶음으로도 같은 일을 할 수 있습니다."
+
+msgid "Get"
+msgstr "받기"
+
+msgid "Android SDK License"
+msgstr "Android SDK 라이선스"
+
+msgid "Google's terms for the emulator image the translator comes from."
+msgstr "번역기를 꺼내는 에뮬레이터 이미지에 적용되는 Google의 약관입니다."
+
+msgid "Get Google's ARM translator?"
+msgstr "Google의 ARM 번역기를 받을까요?"
+
+msgid "Accept and download"
+msgstr "동의하고 받기"
+
+msgid "DSA downloads the Android emulator image for this Android version from Google's SDK repository ({0}) and takes out only its ARM translator. The translator is Google's software, offered under the Android SDK License ({1}); by downloading it you accept those terms. DSA does not ship or pass it on. The image is about 2 GB and is deleted afterwards. The translator works from the next start of Android."
+msgstr "DSA가 Google의 SDK 저장소({0})에서 이 Android 버전용 Android 에뮬레이터 이미지를 받고, 그 안의 ARM 번역기만 꺼냅니다. 번역기는 Google의 소프트웨어이며 Android SDK 라이선스({1})에 따라 제공됩니다. 받으면 그 약관에 동의하는 것입니다. DSA는 번역기를 싣거나 다시 배포하지 않습니다. 이미지는 약 2GB이며 다 쓰면 지웁니다. 번역기는 Android를 다음에 시작할 때부터 동작합니다."
+
+msgid "Downloading about 2 GB from Google and taking out the translator. It takes minutes."
+msgstr "Google에서 약 2GB를 받아 번역기를 꺼내고 있습니다. 몇 분 걸립니다."
+
 msgid "Google's apps belong to Google and follow Google's terms. DSA does not distribute them: it downloads the public LiteGapps package when you ask."
 msgstr "Google 앱은 Google의 것이며 Google의 약관을 따릅니다. DSA는 이 앱을 배포하지 않으며, 요청할 때 공개된 LiteGapps 패키지를 받을 뿐입니다."
 

@@ -184,11 +184,13 @@ jobs:
         run: rustc -vV
 
       # The Linux settings app is a member of the workspace and links GTK 4 and libadwaita.
-      - name: Install GTK 4 and libadwaita
+      # erofs-utils reads back the erofs images the host writes (the Google apps' image), the
+      # way the guest's kernel will.
+      - name: Install GTK 4, libadwaita and erofs-utils
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev erofs-utils
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -221,6 +223,21 @@ jobs:
         with:
           name: caption-pictures
           path: .scratch/caption-pictures
+
+      # Pictures of a widget's menu (the menu and its Resize submenu) and of its More button
+      # at rest, hovered and pressed, in both themes at 100% and 150%, kept with the run.
+      - name: Draw the widget menu pictures
+        if: runner.os == 'Windows'
+        env:
+          DSA_WIDGET_MENU_PICTURES: ${{ github.workspace }}/.scratch/widget-menu-pictures
+        run: cargo test -p dsa-host-windows --lib fr12_pictures_of_the_widget_menu_and_its_more_button
+
+      - name: Keep the widget menu pictures
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: widget-menu-pictures-${{ matrix.os }}
+          path: .scratch/widget-menu-pictures
 
       # Registers dsa-hostd as a real Windows service, reaches it through its named pipe and
       # stops it. The runner's account is an administrator, which this needs.

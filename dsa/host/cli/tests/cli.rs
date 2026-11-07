@@ -989,6 +989,15 @@ fn fr25_dsa_arm_translation_commands_are_parsed() {
     );
     assert!(parse(&args("arm-translation install")).is_err());
     assert!(parse(&args("arm-translation enable")).is_err());
+    let fetch = parse(&args("arm-translation fetch google")).unwrap();
+    assert_eq!(fetch.command, Cmd::ArmTranslationFetchGoogle);
+    assert!(!fetch.yes, "it asks first");
+    let agreed = parse(&args("arm-translation fetch google --yes --json")).unwrap();
+    assert_eq!(agreed.command, Cmd::ArmTranslationFetchGoogle);
+    assert!(agreed.yes && agreed.json);
+    assert!(parse(&args("arm-translation fetch")).is_err());
+    assert!(parse(&args("arm-translation fetch houdini")).is_err());
+    assert!(parse(&args("arm-translation status --yes")).is_err());
     assert_eq!(
         parse(&args("settings set arm-translation off"))
             .unwrap()
@@ -1048,6 +1057,88 @@ fn fr25_dsa_installs_reports_and_removes_an_arm_translation_package() {
     assert!(!refused.status.success());
     assert!(stderr(&refused).contains("erofs"), "{}", stderr(&refused));
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// `dsa` with Google's repository replaced by the one in `repository`.
+fn dsa_with_repository(endpoint: &str, line: &str, repository: &std::path::Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_dsa"))
+        .args(args(line))
+        .args([endpoint_flag(), endpoint])
+        .env("DSA_GOOGLE_REPOSITORY", repository)
+        .output()
+        .expect("running dsa")
+}
+
+#[test]
+fn fr25_dsa_fetches_googles_translator_and_installs_it_only_when_agreed() {
+    use dsa_host_core::arm_translation::google::fixture;
+    let id = std::process::id();
+    let repository = std::env::temp_dir().join(format!("dsa-cli-google-{id}"));
+    let _ = std::fs::remove_dir_all(&repository);
+    let zip = fixture::image_archive(true);
+    fixture::write_repository(&repository, &zip, None, &["36", "37.0"]).unwrap();
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let status = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert_eq!(
+        status["google_fetch_available"],
+        dsa_cli::GOOGLE_FETCH_AVAILABLE
+    );
+    let agreed = "arm-translation fetch google --yes --json";
+    if !dsa_cli::GOOGLE_FETCH_AVAILABLE {
+        // An ARM64 computer runs ARM apps itself.
+        let refused = dsa_with_repository(&endpoint, agreed, &repository);
+        assert!(!refused.status.success());
+        assert!(stderr(&refused).contains("ARM64"), "{}", stderr(&refused));
+        let _ = std::fs::remove_dir_all(&repository);
+        return;
+    }
+
+    // Asked with nobody to answer, it says where the download comes from and its terms, and
+    // downloads nothing.
+    let asked = dsa_with_repository(&endpoint, "arm-translation fetch google", &repository);
+    assert!(!asked.status.success());
+    let said = stderr(&asked);
+    assert!(said.contains("Android SDK License"), "{said}");
+    assert!(
+        said.contains("https://developer.android.com/studio/terms"),
+        "{said}"
+    );
+    assert!(said.contains("nothing was changed"), "{said}");
+    let none = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert!(none["package"].is_null(), "{none}");
+
+    let fetched = json_of(&dsa_with_repository(&endpoint, agreed, &repository));
+    assert_eq!(fetched["package"]["name"], "Google ARM translator");
+    assert_eq!(fetched["package"]["library"], "libndk_translation.so");
+    assert_eq!(fetched["package"]["license"], "Android SDK License");
+    assert_eq!(fetched["package"]["abis"][0], "arm64-v8a");
+    assert_eq!(fetched["android"]["installed"], true);
+    assert_eq!(fetched["restart_needed"], true);
+    let _ = std::fs::remove_dir_all(&repository);
+}
+
+#[test]
+fn fr25_dsa_refuses_googles_image_when_its_hash_differs() {
+    use dsa_host_core::arm_translation::google::fixture;
+    if !dsa_cli::GOOGLE_FETCH_AVAILABLE {
+        return;
+    }
+    let id = std::process::id();
+    let repository = std::env::temp_dir().join(format!("dsa-cli-google-hash-{id}"));
+    let _ = std::fs::remove_dir_all(&repository);
+    let zip = fixture::image_archive(true);
+    let wrong = Some("0123456789012345678901234567890123456789");
+    fixture::write_repository(&repository, &zip, wrong, &["36", "37.0"]).unwrap();
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let line = "arm-translation fetch google --yes";
+    let refused = dsa_with_repository(&endpoint, line, &repository);
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains("SHA-1"), "{}", stderr(&refused));
+    let none = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert!(none["package"].is_null(), "the stored state is unchanged");
+    let _ = std::fs::remove_dir_all(&repository);
 }
 
 #[test]
@@ -2416,4 +2507,101 @@ fn fr14_dsa_android_shows_the_version_and_moves_down_only_with_erase_data() {
     assert_eq!(parsed.android, Some(Channel::Latest));
     assert!(parse(&args("android use seventeen")).is_err());
     assert!(parse(&args("android use")).is_err());
+}
+
+#[test]
+fn fr32_dsa_gapps_commands_are_parsed() {
+    assert_eq!(parse(&args("gapps")).unwrap().command, Cmd::GappsStatus);
+    assert_eq!(
+        parse(&args("gapps --json")).unwrap().command,
+        Cmd::GappsStatus
+    );
+    assert_eq!(
+        parse(&args("gapps status")).unwrap().command,
+        Cmd::GappsStatus
+    );
+    let install = parse(&args("gapps install --progress")).unwrap();
+    assert_eq!(install.command, Cmd::GappsInstall);
+    assert!(install.progress);
+    assert_eq!(
+        parse(&args("gapps remove")).unwrap().command,
+        Cmd::GappsRemove
+    );
+    assert!(parse(&args("gapps enable")).is_err());
+}
+
+/// LiteGapps' file host, from memory: one x86_64 build for API level 36.
+struct FakeLiteGapps(std::collections::HashMap<String, Vec<u8>>);
+
+impl dsa_host_core::update::store::Fetch for FakeLiteGapps {
+    fn fetch(&self, url: &str, out: &mut dyn std::io::Write) -> Result<u64, String> {
+        let body = self.0.get(url).ok_or_else(|| format!("404 for {url}"))?;
+        out.write_all(body).map_err(|e| e.to_string())?;
+        Ok(body.len() as u64)
+    }
+}
+
+fn gapps_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> RunningService {
+    use dsa_host_core::gapps::{listing, md5, package, Source};
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::MemorySettings;
+    let project = "https://litegapps.test/projects/litegapps";
+    let path =
+        "/litegapps/x86_64/36/core/2026-10-01/LiteGapps-core-x86_64-16.0-20261001-official.zip";
+    let zip = package::fixture::sample();
+    let mut digest = md5::Md5::new();
+    digest.update(&zip);
+    let feed = listing::fixture::feed(&[listing::fixture::item(
+        path,
+        zip.len() as u64,
+        &md5::hex(&digest.finish()),
+    )]);
+    let host = FakeLiteGapps(std::collections::HashMap::from([
+        (
+            format!("{project}/rss?path=/litegapps/x86_64/36/core"),
+            feed.into_bytes(),
+        ),
+        (format!("{project}/files{path}/download"), zip),
+    ]));
+    let work = std::env::temp_dir().join(format!("dsa-cli-gapps-{}", std::process::id()));
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
+        .with_gapps(Source::new(Arc::new(host), work).with_project(project));
+    RunningService::start_service(listener, service)
+}
+
+#[test]
+fn fr32_dsa_installs_reports_and_removes_google_play() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = gapps_service(listener);
+    let none = json_of(&dsa(&endpoint, "gapps --json"));
+    assert!(none["package"].is_null());
+    assert_eq!(none["installed"], false);
+    assert!(none["android"].is_null(), "Android is not running yet");
+    assert_eq!(
+        none["registration_url"],
+        "https://www.google.com/android/uncertified/"
+    );
+
+    let installed = json_of(&dsa(&endpoint, "gapps install --json"));
+    assert_eq!(installed["package"]["variant"], "core");
+    assert_eq!(installed["package"]["version"], "20261001");
+    assert_eq!(installed["package"]["android_version"], "16.0");
+    assert_eq!(installed["package"]["arch"], "x86_64");
+    assert_eq!(installed["installed"], true);
+    assert_eq!(installed["android"]["installed"], true);
+    assert_eq!(installed["android"]["active"], false);
+    assert_eq!(installed["restart_needed"], true);
+    let text = stdout(&dsa(&endpoint, "gapps status"));
+    assert!(
+        text.contains("Google Play: LiteGapps core 20261001 for Android 16.0 (x86_64)"),
+        "{text}"
+    );
+    assert!(text.contains("Restart Android"), "{text}");
+    assert!(text.contains("google.com/android/uncertified"), "{text}");
+
+    let removed = json_of(&dsa(&endpoint, "gapps remove --json"));
+    assert!(removed["package"].is_null());
+    assert_eq!(removed["android"]["installed"], false);
+    assert_eq!(removed["restart_needed"], false);
 }

@@ -439,6 +439,33 @@
   <data name="Arm_NotRunning" xml:space="preserve">
     <value>Android가 실행 중이 아니어서 지금 지원하는 것을 알 수 없습니다.</value>
   </data>
+  <data name="ArmGoogleCard.Header" xml:space="preserve">
+    <value>Google의 ARM 번역기</value>
+  </data>
+  <data name="ArmGoogleCard.Description" xml:space="preserve">
+    <value>Google이 이 Android 버전용으로 제공하는 Android 에뮬레이터 이미지에서 ARM 번역기를 꺼내 번역 묶음으로 설치합니다. DSA는 Google의 번역기를 담거나 다시 배포하지 않습니다. 이 PC가 Google의 Android SDK 라이선스에 따라 Google에서 이미지를 직접 받고, 번역기만 남긴 뒤 나머지(약 2GB)는 지웁니다. 동의하기 전에는 아무것도 받지 않습니다. Digitalis 같은 다른 번역기로 만든 묶음으로도 같은 일을 할 수 있습니다.</value>
+  </data>
+  <data name="ArmGoogleButton.Content" xml:space="preserve">
+    <value>받기</value>
+  </data>
+  <data name="ArmGoogleTermsLink.Content" xml:space="preserve">
+    <value>Android SDK 라이선스</value>
+  </data>
+  <data name="ArmGoogleConfirm.Title" xml:space="preserve">
+    <value>Google의 ARM 번역기를 받을까요?</value>
+  </data>
+  <data name="ArmGoogleConfirm.Action" xml:space="preserve">
+    <value>동의하고 받기</value>
+  </data>
+  <data name="ArmGoogle_Notice" xml:space="preserve">
+    <value>DSA가 Google의 SDK 저장소({0})에서 이 Android 버전용 Android 에뮬레이터 이미지를 받고, 그 안의 ARM 번역기만 꺼냅니다. 번역기는 Google의 소프트웨어이며 Android SDK 라이선스({1})에 따라 제공됩니다. 받으면 그 약관에 동의하는 것입니다. DSA는 번역기를 싣거나 다시 배포하지 않습니다. 이미지는 약 2GB이며 다 쓰면 지웁니다. 번역기는 Android를 다음에 시작할 때부터 동작합니다.</value>
+  </data>
+  <data name="ArmGoogleFetchingBar.Title" xml:space="preserve">
+    <value>Google의 ARM 번역기를 받는 중</value>
+  </data>
+  <data name="ArmGoogleFetchingBar.Message" xml:space="preserve">
+    <value>Google에서 약 2GB를 받아 번역기를 꺼내고 있습니다. 몇 분 걸립니다.</value>
+  </data>
   <data name="GappsHeader.Text" xml:space="preserve">
     <value>Google Play</value>
   </data>
@@ -921,9 +948,6 @@
   </data>
   <data name="ApkWindow_NotApkTitle" xml:space="preserve">
     <value>이 파일은 설치할 수 없습니다</value>
-  </data>
-  <data name="ApkWindow_NotApkText" xml:space="preserve">
-    <value>{0}은(는) Android가 설치할 수 있는 APK가 아닙니다: {1}.</value>
   </data>
   <data name="ApkWindow_StartFailed" xml:space="preserve">
     <value>Android가 시작되지 않아 앱을 설치하지 못했습니다. {0}</value>

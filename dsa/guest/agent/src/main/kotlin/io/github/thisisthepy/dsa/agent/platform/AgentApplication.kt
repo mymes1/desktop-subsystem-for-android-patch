@@ -78,6 +78,7 @@ class AgentApplication : Application() {
             packageInstaller = AndroidPackageInstaller(this, log),
             packageUninstaller = AndroidPackageUninstaller(this, log),
             packages = AndroidPackageInfo(this),
+            googleDeviceId = AndroidGoogleDeviceId(this),
             widgets = AndroidWidgets(this, log),
             appProcesses = AndroidAppProcesses(this),
             widgetStore = AndroidWidgetStore(this),

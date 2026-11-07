@@ -78,11 +78,28 @@ public sealed class ApkInstallViewModel : ObservableObject
     public string HeroTitle => _apk is not null && Page is ApkInstallPage.Details or ApkInstallPage.Progress
         ? $"Install {Title}?"
         : Title;
-    public string PackageLine { get; private set; } = "";
-    public string VersionLine { get; private set; } = "";
+    /// <summary>The labels of the lines under the title, in the label column. English in
+    /// every language, as the title is.</summary>
+    public const string PackageLabel = "Package Name:";
+    public const string PublisherLabel = "Publisher:";
+    public const string VersionLabel = "Version:";
+    public const string SourceLabel = "Source:";
+    /// <summary>The values of those lines, in the value column.</summary>
+    public string PackageValue { get; private set; } = "";
+    /// <summary>Who signed the app, where App Installer names the publisher: an APK carries no
+    /// publisher name, only the certificate that signed it.</summary>
+    public string PublisherValue { get; private set; } = "";
+    public string VersionValue { get; private set; } = "";
     /// <summary>Where the APK came from: the host it was downloaded from, or its folder.</summary>
-    public string SourceLine { get; private set; } = "";
-    public string MoreLabel => "More";
+    public string SourceValue { get; private set; } = "";
+    /// <summary>Each line whole, label and value, as a screen reader or a tooltip says it.</summary>
+    public string PackageLine => PackageValue.Length > 0 ? $"{PackageLabel} {PackageValue}" : "";
+    public string VersionLine => VersionValue.Length > 0 ? $"{VersionLabel} {VersionValue}" : "";
+    public string SourceLine => SourceValue.Length > 0 ? $"{SourceLabel} {SourceValue}" : "";
+    public string PublisherLine => PublisherValue.Length > 0 ? $"{PublisherLabel} {PublisherValue}" : "";
+    /// <summary>The link under the permissions: More while they are folded, Less once they
+    /// are not.</summary>
+    public string MoreLabel => IsExpanded ? "Less" : "More";
     /// <summary>How many permissions show before More is pressed.</summary>
     public const int PreviewCount = 3;
     /// <summary>Whether More was pressed, so the permissions and the rest of what the file says
@@ -92,9 +109,6 @@ public sealed class ApkInstallViewModel : ObservableObject
     public IReadOnlyList<ApkPermissionRow> PermissionPreview => Permissions.Take(PreviewCount).ToList();
     public string SizeChip { get; private set; } = "";
     public string AndroidChip { get; private set; } = "";
-    /// <summary>Who signed the app, where App Installer names the publisher: an APK carries no
-    /// publisher name, only the certificate that signed it.</summary>
-    public string PublisherLine { get; private set; } = "";
     /// <summary>Why the app may not run on this PC, or empty: it has native code, and none of
     /// it is for this PC's processor.</summary>
     public string CompatibilityWarning { get; private set; } = "";
@@ -164,31 +178,45 @@ public sealed class ApkInstallViewModel : ObservableObject
             var result = await Run(new[] { "apk-info", Path, "--json" }).ConfigureAwait(true);
             if (result.ExitCode != 0)
             {
-                Fail(_text.Get("ApkWindow_NotApkTitle"), F("ApkWindow_NotApkText", FileName, Detail(result)));
+                // dsa's reason is for developers; the user is told what the file is instead.
+                FailUnsupported();
                 return;
             }
             Show(ApkDetails.Parse(result.Output));
         }
-        catch (Exception e) when (e is DsaException or JsonException)
+        catch (JsonException)
         {
-            Fail(_text.Get("ApkWindow_NotApkTitle"), F("ApkWindow_NotApkText", FileName,
-                e is DsaException ? Format.Problem(_text, e) : e.Message));
+            FailUnsupported();
+        }
+        catch (DsaException e)
+        {
+            // dsa did not run, so nothing is known yet of the file.
+            Fail(_text.Get("ApkWindow_FailedTitle"), Format.Problem(_text, e));
         }
     }
 
+    private void FailUnsupported() =>
+        Fail(_text.Get("ApkWindow_NotApkTitle"), UnsupportedFile.Message(UnsupportedFile.Classify(Path), FileName));
+
+    /// <summary>The file read again keeps the icon read before when this reading has none, so
+    /// a second look never takes the app's icon away.</summary>
+    private ApkDetails KeepIcon(ApkDetails apk) =>
+        apk.Icon is null && _apk?.Icon is { } shown ? apk with { Icon = shown } : apk;
+
     private void Show(ApkDetails apk)
     {
-        _apk = apk;
+        _apk = KeepIcon(apk);
+        apk = _apk;
         Title = string.IsNullOrWhiteSpace(apk.Label) ? apk.Package : apk.Label!;
         Subtitle = apk.Package;
-        PackageLine = $"Package Name: {apk.Package}";
-        VersionLine = $"Version: {apk.VersionName ?? apk.VersionCode.ToString(CultureInfo.InvariantCulture)}";
-        SourceLine = $"Source: {ApkSource.Of(Path)}";
+        PackageValue = apk.Package;
+        VersionValue = apk.VersionName ?? apk.VersionCode.ToString(CultureInfo.InvariantCulture);
+        SourceValue = ApkSource.Of(Path);
         SizeChip = Size(apk.Size);
         AndroidChip = F("ApkWindow_AndroidChip", apk.MinAndroid ?? apk.MinSdk.ToString(CultureInfo.CurrentCulture));
-        PublisherLine = "Publisher: " + (apk.SignerSha256 is { } signer
+        PublisherValue = apk.SignerSha256 is { } signer
             ? F("ApkWindow_Signer", apk.SignerScheme ?? "", signer)
-            : _text.Get("ApkWindow_Unsigned"));
+            : _text.Get("ApkWindow_Unsigned");
         CompatibilityWarning = apk.Abis.Count > 0 && !apk.Abis.Any(abi => _hostAbis.Contains(abi))
             ? F("ApkWindow_AbiWarning", string.Join(", ", apk.Abis))
             : "";
@@ -243,13 +271,23 @@ public sealed class ApkInstallViewModel : ObservableObject
     }
 
     /// <summary>More: shows every permission and the rest of what the file says.</summary>
-    public void Expand()
+    public void Expand() => SetExpanded(true);
+
+    /// <summary>Less: goes back to the first permissions.</summary>
+    public void Collapse() => SetExpanded(false);
+
+    /// <summary>The link under the permissions: More when they are folded, Less when they
+    /// are not, as App Installer's link is.</summary>
+    public void ToggleExpanded() => SetExpanded(!IsExpanded);
+
+    private void SetExpanded(bool expanded)
     {
-        if (!IsExpanded)
+        if (IsExpanded != expanded)
         {
-            IsExpanded = true;
+            IsExpanded = expanded;
             ChangedAll();
         }
+    }
     }
 
     private string VersionText(string? name, long code) =>
@@ -328,8 +366,8 @@ public sealed class ApkInstallViewModel : ObservableObject
                     Show(now);
                     return;
                 }
-                apk = now;
-                _apk = now;
+                apk = KeepIcon(now);
+                _apk = apk;
             }
             await SendAsync(apk).ConfigureAwait(true);
         }

@@ -40,6 +40,7 @@ mod daemon {
 
     use dsa_guest_channeld::arm_translation::{self, ArmTranslation, BootFacts};
     use dsa_guest_channeld::gamepad::{uinput::Uinput, GamepadDevices};
+    use dsa_guest_channeld::gapps::{self, Gapps, GuestFacts};
     use dsa_guest_channeld::logbridge::{
         files_in, DiagnosticFiles, LogBridge, LogPackets, LogSource, PortConnector,
     };
@@ -543,6 +544,7 @@ mod daemon {
                     arm_translation::DIR,
                     BootFacts::of_system(|| read_property("ro.product.cpu.abilist")),
                 )))
+                .on_gapps(Arc::new(Gapps::new(gapps::DIR, GuestFacts::of_system(read_property))))
                 .on_gamepads(gamepads),
         );
         let (to_guest, from_host) = mpsc::channel::<Vec<u8>>();
