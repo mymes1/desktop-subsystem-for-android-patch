@@ -20,6 +20,7 @@ sys.path.insert(0, str(HERE))
 import framework_lock  # noqa: E402
 
 REPO = HERE.parents[2]
+STAND_INS = REPO / ".github/scripts/framework/stand-ins"
 
 
 def load_module(name, path):
@@ -96,15 +97,12 @@ class LockTests(unittest.TestCase):
             sdk = next(p for p in version["projects"] if p["path"] == "prebuilts/sdk")
             self.assertEqual(sdk.get("patterns"), ["/NOTICE", "/*/finalized-flags.txt"], version["android"])
             self.assertNotIn("cone", sdk)
-        stand_in = (REPO / ".github/scripts/framework/prebuilts-sdk/Android.bp").read_text()
+        stand_in = (STAND_INS / "common/prebuilts/sdk/Android.bp").read_text()
         code = re.sub(r"//[^\n]*", "", stand_in)
         self.assertNotIn("prebuilt_apis", code)
         self.assertRegex(code, r'filegroup \{\s*name: "finalized-api-flags",\s*srcs: \[\s*"\*/finalized-flags.txt"')
         self.assertRegex(code, r'genrule \{\s*name: "latest-finalized-flags"')
         self.assertRegex(code, r'license \{\s*name: "prebuilts_sdk_license"')
-        build = (REPO / ".github/scripts/framework/build.sh").read_text()
-        self.assertIn('cp "$here/prebuilts-sdk/Android.bp" "$sdk/Android.bp"', build)
-        self.assertIn('sdk="$top/prebuilts/sdk"', build)
 
     def test_nfr5_python_tools_find_the_host_libsqlite_soong_adds_to_them(self):
         # Every python_binary_host depends on libsqlite, which no project in the tree defines;
@@ -119,29 +117,60 @@ class LockTests(unittest.TestCase):
         self.assertIn('cp -r "$here/device/hosttools" "$device/"', build)
 
     def test_nfr5_modules_soong_analyses_find_their_sources_and_licenses(self):
-        # The second Framework build run's analysis stopped on errors that missing dependencies
-        # do not excuse: an aidl_interface whose srcs glob matches nothing ("No sources
-        # provided"), and a package whose default license is in a folder the cone left out.
-        # The run named only android.security.rkp_aidl; the other aidl_interface globs that
-        # matched nothing (in frameworks/base/media) are fetched too, their folders being small.
-        wanted = {
-            "android16": {
-                "frameworks/base": ["core/java/android/security/rkp",
-                                    "media/aidl/android/media/soundtrigger_middleware"],
-                "external/libultrahdr": ["adobe-hdr-gain-map-license"],
-            },
-            "android17": {
-                "frameworks/base": ["core/java/android/security/rkp",
-                                    "media/aidl/android/media/audio",
-                                    "media/aidl/android/media/soundtrigger_middleware"],
-                "external/libultrahdr": ["adobe-hdr-gain-map-license"],
-            },
-        }
+        # Errors that missing dependencies do not excuse stopped the second and third Framework
+        # build runs: a package whose default license is in a folder the cone left out, and an
+        # aidl_interface whose frozen version (aidl_api/<name>/<version>) was not fetched.
         for version in self.lock["versions"]:
             projects = {p["path"]: p for p in version["projects"]}
-            for path, folders in wanted[version["android"]].items():
-                for folder in folders:
-                    self.assertIn(folder, projects[path]["cone"], f"{version['android']} {path}")
+            self.assertIn("adobe-hdr-gain-map-license", projects["external/libultrahdr"]["cone"])
+            self.assertIn("services/mediaresourcemanager/aidl_api", projects["frameworks/av"]["cone"])
+
+    def test_nfr5_framework_build_files_over_sources_the_tree_lacks_are_stood_in(self):
+        # frameworks/base's build files declare the framework's Java, AIDL and proto modules
+        # over folders the tree does not fetch; the second and third runs stopped on an
+        # aidl_interface whose srcs matched nothing and on a gensrcs with no input (a panic).
+        # The lock leaves those files out and build.sh puts DSA's cut of each in its place.
+        for version in self.lock["versions"]:
+            base = next(p for p in version["projects"] if p["path"] == "frameworks/base")
+            self.assertEqual(base.get("exclude"), [
+                "Android.bp", "api/Android.bp", "core/java/Android.bp", "libs/hwui/Android.bp",
+                "media/Android.bp", "services/Android.bp", "services/core/Android.bp"],
+                version["android"])
+        root = (STAND_INS / "common/frameworks/base/Android.bp").read_text()
+        self.assertRegex(root, r'license \{\s*name: "frameworks_base_license"')
+        self.assertRegex(root, r'build = \[\s*"AconfigFlags.bp",\s*\]')
+        self.assertNotIn('"ProtoLibraries.bp"', root)
+        for android in ("android16", "android17"):
+            core = (STAND_INS / android / "frameworks/base/core/java/Android.bp").read_text()
+            types = set(re.findall(r"^([a-z_]+) \{", core, re.M))
+            self.assertFalse({t for t in types if t.startswith("java_")}, android)
+            self.assertNotIn("gensrcs", types)
+            for name in ("libpowermanager_aidl", "android.os.hintmanager_aidl", "HardwareBuffer_aidl"):
+                self.assertIn(f'name: "{name}"', core, android)
+            self.assertNotIn('name: "android.security.rkp_aidl"', core)
+            hwui = (STAND_INS / android / "frameworks/base/libs/hwui/Android.bp").read_text()
+            self.assertRegex(hwui, r'cc_library \{\s*name: "libhwui"')
+            self.assertNotIn("java_sdk_library", hwui)
+
+    def test_nfr5_every_stand_in_replaces_a_file_the_lock_leaves_out(self):
+        # build.sh stops when the checkout brings the file a stand-in replaces, so each stand-in
+        # must name a file its version's lock excludes or does not fetch.
+        for version in self.lock["versions"]:
+            projects = sorted(version["projects"], key=lambda p: -len(p["path"]))
+            for root in (STAND_INS / "common", STAND_INS / version["android"]):
+                for file in root.rglob("*"):
+                    if not file.is_file():
+                        continue
+                    rel = file.relative_to(root).as_posix()
+                    self.assertTrue(file.read_text().startswith("// Stands in for " + rel), rel)
+                    project = next(p for p in projects if rel.startswith(p["path"] + "/"))
+                    inside = rel[len(project["path"]) + 1:]
+                    left_out = inside in project.get("exclude", []) or (
+                        "patterns" in project and "/" + inside not in project["patterns"])
+                    self.assertTrue(left_out, f"{version['android']} {rel}")
+        build = (REPO / ".github/scripts/framework/build.sh").read_text()
+        self.assertIn('for stand_ins in "$here/stand-ins/common" "$here/stand-ins/$android"; do', build)
+        self.assertIn("the lock must leave it out for its stand-in", build)
 
     def test_nfr5_a_lock_for_another_build_than_the_image_is_refused(self):
         lock = copy.deepcopy(self.lock)

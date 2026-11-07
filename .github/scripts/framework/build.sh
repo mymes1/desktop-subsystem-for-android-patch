@@ -37,16 +37,25 @@ cp "$here/device/AndroidProducts.mk" "$here/device/dsa_framework.mk" "$device/"
 cp "$here/device/$arch/BoardConfig.mk" "$device/"
 cp -r "$here/device/hosttools" "$device/"
 
-# The lock takes only the SDK's finalized flag lists from prebuilts/sdk, so its Android.bp is
-# DSA's stand-in (see prebuilts-sdk/Android.bp): the real one declares the prebuilt SDKs,
-# whose API files the tree does not have, and Soong's analysis stops on that.
-sdk="$top/prebuilts/sdk"
-[[ -d "$sdk" ]] || { echo "the tree has no prebuilts/sdk" >&2; exit 1; }
-if [[ -e "$sdk/Android.bp" ]] && ! cmp -s "$here/prebuilts-sdk/Android.bp" "$sdk/Android.bp"; then
-  echo "prebuilts/sdk/Android.bp came with the checkout; the lock must not fetch it" >&2
-  exit 1
-fi
-cp "$here/prebuilts-sdk/Android.bp" "$sdk/Android.bp"
+# Build files the tree takes in DSA's cut (stand-ins/common for every version, then
+# stand-ins/<android>): each upstream file declares modules over sources the sparse checkout
+# leaves out, and Soong's analysis stops on them (prebuilt SDKs without API files, AIDL and
+# gensrcs modules whose sources match nothing). The lock leaves the upstream file out (by
+# not fetching it or by its exclude list), so finding one here means the lock and the
+# stand-ins disagree.
+for stand_ins in "$here/stand-ins/common" "$here/stand-ins/$android"; do
+  [[ -d "$stand_ins" ]] || continue
+  while IFS= read -r -d '' file; do
+    rel="${file#"$stand_ins"/}"
+    dest="$top/$rel"
+    [[ -d "$(dirname "$dest")" ]] || { echo "the tree has no $(dirname "$rel") for the stand-in $rel" >&2; exit 1; }
+    if [[ -e "$dest" ]] && ! cmp -s "$file" "$dest"; then
+      echo "$rel came with the checkout; the lock must leave it out for its stand-in" >&2
+      exit 1
+    fi
+    cp "$file" "$dest"
+  done < <(find "$stand_ins" -type f -print0)
+done
 
 targets=()
 for installed in $(uv run "$repo/dsa/guest/framework/framework_lock.py" outputs); do

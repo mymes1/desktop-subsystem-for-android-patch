@@ -1,0 +1,175 @@
+// Stands in for frameworks/base/core/java/Android.bp, which the lock leaves out and build.sh
+// puts in its place. The tree takes only the folders of core/java that SurfaceFlinger, libhwui
+// and libEGL need, and the real file declares the framework's Java, AIDL and test modules
+// over all of core/java: Soong's analysis stops on those whose sources are not in the tree
+// (an aidl_interface whose srcs match nothing, a gensrcs with no input). This file keeps the
+// package, the modules those three libraries reach, the modules other build files in the
+// tree name (other than Java ones), and the modules those name in turn, each exactly as
+// upstream writes it.
+
+package {
+    // See: http://go/android-license-faq
+    // A large-scale-change added 'default_applicable_licenses' to import
+    // all of the 'license_kinds' from "frameworks_base_license"
+    // to get the below license kinds:
+    //   SPDX-license-identifier-Apache-2.0
+    //   SPDX-license-identifier-BSD
+    //   legacy_unencumbered
+    default_applicable_licenses: ["frameworks_base_license"],
+}
+
+aidl_library {
+    name: "HardwareBuffer_aidl",
+    hdrs: ["android/hardware/HardwareBuffer.aidl"],
+}
+
+filegroup {
+    name: "pcc_sandbox_manager_native_aidl",
+    srcs: ["android/app/privatecompute/IPccSandboxManagerNative.aidl"],
+    visibility: [
+        "//frameworks/native/libs/binder",
+        "//cts/tests/privatecompute/native",
+    ],
+}
+
+aidl_interface {
+    name: "process_info_service_aidl",
+    srcs: [
+        "android/os/IProcessInfoService.aidl",
+    ],
+    unstable: true,
+    host_supported: true,
+}
+
+filegroup {
+    name: "libpowermanager_aidl",
+    srcs: [
+        "android/os/CoolingDevice.aidl",
+        "android/os/IPowerManager.aidl",
+        "android/os/IScreenTimeoutPolicyListener.aidl",
+        "android/os/IThermalEventListener.aidl",
+        "android/os/IThermalHeadroomListener.aidl",
+        "android/os/IThermalService.aidl",
+        "android/os/IThermalStatusListener.aidl",
+        "android/os/IWakeLockCallback.aidl",
+        "android/os/Temperature.aidl",
+    ],
+}
+
+aidl_interface {
+    name: "android.os.hintmanager_aidl",
+    host_supported: true,
+    defaults: [
+        "android.hardware.power-aidl",
+    ],
+    srcs: [
+        "android/os/CpuHeadroomParamsInternal.aidl",
+        "android/os/GpuHeadroomParamsInternal.aidl",
+        "android/os/IHintManager.aidl",
+        "android/os/IHintSession.aidl",
+        "android/os/SessionCreationConfig.aidl",
+    ],
+    unstable: true,
+    backend: {
+        java: {
+            sdk_version: "module_current",
+            enabled: true,
+        },
+        cpp: {
+            enabled: false,
+        },
+        ndk: {
+            enabled: true,
+        },
+    },
+}
+
+aidl_library {
+    name: "ILogcatManagerService_aidl",
+    srcs: ["android/os/logcat/ILogcatManagerService.aidl"],
+}
+
+filegroup {
+    name: "incremental_aidl",
+    srcs: [
+        "android/os/incremental/IIncrementalServiceConnector.aidl",
+        "android/os/incremental/IncrementalFileSystemControlParcel.aidl",
+    ],
+}
+
+filegroup {
+    name: "activity_manager_procstate_aidl",
+    srcs: [
+        "android/app/ProcessStateEnum.aidl",
+    ],
+}
+
+filegroup {
+    name: "activity_manager_iprocessobserver_aidl",
+    srcs: [
+        "android/app/IProcessObserver.aidl",
+    ],
+}
+
+filegroup {
+    name: "activity_manager_runningappprocessinfo_aidl",
+    srcs: [
+        "android/app/RunningAppProcessInfo.aidl",
+    ],
+}
+
+cc_defaults {
+    name: "incremental_default",
+    cflags: [
+        "-DANDROID_BASE_UNIQUE_FD_DISABLE_IMPLICIT_CONVERSION",
+        "-Wall",
+        "-Werror",
+        "-Wextra",
+        "-Wextra-semi",
+        "-Wzero-as-null-pointer-constant",
+    ],
+    shared_libs: [
+        "libbinder",
+        "libutils",
+    ],
+    aidl: {
+        include_dirs: [
+            "frameworks/native/aidl/binder",
+        ],
+        export_aidl_headers: true,
+    },
+}
+
+cc_library {
+    name: "libincremental_aidl-cpp",
+    srcs: [
+        ":incremental_aidl",
+    ],
+    defaults: ["incremental_default"],
+}
+
+aidl_interface {
+    name: "android.os.statsbootstrap_aidl",
+    unstable: true,
+    srcs: [
+        "android/os/IStatsBootstrapAtomService.aidl",
+        "android/os/StatsBootstrapAtom.aidl",
+        "android/os/StatsBootstrapAtomValue.aidl",
+    ],
+    backend: {
+        cpp: {
+            enabled: true,
+        },
+    },
+}
+
+filegroup {
+    name: "android-os-binderstatsconsumer-aidl",
+    srcs: [
+        "android/os/binder/IBinderStatsConsumerService.aidl",
+        "android/os/binder/BinderCallsStats.aidl",
+        "android/os/binder/BinderSpamStats.aidl",
+        "android/os/binder/SingleSecondBinderStats.aidl",
+    ],
+    visibility: ["//frameworks/native/libs/binder"],
+}
