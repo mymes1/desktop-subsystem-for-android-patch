@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -26,7 +27,7 @@ public partial class InstallerWindow : FluentWindow
         InitializeComponent();
         Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/apk-installer.ico"));
         Resources["SensitiveText"] = App.Text.Get("ApkWindow_Sensitive");
-        Title = App.Text.Get("ApkWindow_Caption");
+        Title = ApkInstallerTitle.For(CultureInfo.CurrentUICulture);
         TitleBar.Title = Title;
         TrademarkText.Text = App.Text.Get("AboutTrademark.Text");
         ReadingText.Text = App.Text.Get("ApkWindow_Reading");
