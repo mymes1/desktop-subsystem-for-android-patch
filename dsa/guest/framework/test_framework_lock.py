@@ -149,7 +149,9 @@ class LockTests(unittest.TestCase):
             base = next(p for p in version["projects"] if p["path"] == "frameworks/base")
             self.assertEqual(base.get("exclude"), [
                 "Android.bp", "api/Android.bp", "core/java/Android.bp", "libs/hwui/Android.bp",
-                "media/Android.bp", "services/Android.bp", "services/core/Android.bp"],
+                "media/Android.bp", "media/jni/Android.bp", "media/jni/audioeffect/Android.bp",
+                "media/jni/soundpool/Android.bp", "media/jni/soundpool/tests/Android.bp",
+                "services/Android.bp", "services/core/Android.bp"],
                 version["android"])
         root = (STAND_INS / "common/frameworks/base/Android.bp").read_text()
         self.assertRegex(root, r'license \{\s*name: "frameworks_base_license"')
@@ -356,6 +358,17 @@ class NinjaInputsTests(unittest.TestCase):
             leaves = check_ninja_inputs.leaves(GRAPH.splitlines())
             self.assertEqual(check_ninja_inputs.missing(top, leaves), ["src/missing.h"])
 
+    @unittest.skipIf(os.name == "nt", "links need privileges on Windows")
+    def test_nfr5_a_link_to_a_folder_the_tree_leaves_out_is_missing(self):
+        # The sixth run's android17 builds stopped on a link in frameworks/base/core/jni whose
+        # target, in media/jni, the cone did not take.
+        with tempfile.TemporaryDirectory() as top:
+            Path(top, "src").mkdir()
+            Path(top, "src/a.c").write_text("")
+            os.symlink("../gone/missing.h", Path(top, "src/missing.h"))
+            leaves = check_ninja_inputs.leaves(GRAPH.splitlines())
+            self.assertEqual(check_ninja_inputs.missing(top, leaves), ["src/missing.h"])
+
     def test_nfr5_both_builds_check_the_inputs_before_building(self):
         for build in (".github/scripts/framework/build.sh", ".github/scripts/translator/build.sh"):
             text = (REPO / build).read_text()
@@ -365,6 +378,35 @@ class NinjaInputsTests(unittest.TestCase):
             self.assertLess(analysis, check, build)
             self.assertLess(check, real, build)
             self.assertIn('--file "$top/out/combined-$product.ninja"', text, build)
+
+    def test_nfr5_the_headers_the_compiled_libraries_include_are_fetched(self):
+        # The sixth run compiled for the first time and stopped on headers the cones left
+        # out: Soong's global include folders (system/core/include and
+        # hardware/libhardware/include, both links into folders the tree has), links in
+        # frameworks/av/include/media and frameworks/base/core/jni into folders it did not
+        # have, and headers beside the sources of pdfium, XMP, llvm-libc, zlib, cxx,
+        # arm-optimized-routines and crabbyavif. stats-log-api-gen, which SurfaceFlinger's
+        # and libhwui's statslog sources are generated with, is frameworks/proto_logging's.
+        lock = framework_lock.load()
+        wanted = {
+            "system/core": ["include"],
+            "hardware/libhardware": ["include"],
+            "frameworks/av": ["media/libaudioprocessing/include", "media/libeffects/factory/include",
+                              "media/libmediaplayerservice/include"],
+            "frameworks/base": ["media/jni"],
+            "external/pdfium": ["build", "core"],
+            "external/llvm-libc": ["hdr", "include", "src"],
+            "external/XMP-Toolkit-SDK": ["XMPCommon", "build", "third-party"],
+        }
+        for version in lock["versions"]:
+            projects = {p["path"]: p for p in version["projects"]}
+            for path, folders in wanted.items():
+                for folder in folders:
+                    self.assertIn(folder, projects[path]["cone"], f"{version['android']} {path}")
+            for whole in ("external/zlib", "external/rust/cxx", "external/arm-optimized-routines",
+                          "external/rust/crabbyavif", "frameworks/proto_logging"):
+                self.assertNotIn("cone", projects[whole], whole)
+                self.assertNotIn("patterns", projects[whole], whole)
 
     def test_nfr5_boringssls_go_build_tools_are_fetched(self):
         # bssl_inject_hash and the Go packages it uses, which the fifth run stopped on.

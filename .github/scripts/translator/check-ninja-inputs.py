@@ -42,7 +42,9 @@ def leaves(lines):
 
 
 def missing(top, paths):
-    return [p for p in paths if not os.path.lexists(p if os.path.isabs(p) else os.path.join(top, p))]
+    # exists() follows links: a link into a folder the tree leaves out is as missing to ninja
+    # as no file at all (the sixth run's frameworks/base/core/jni/android_media_MediaMetricsJNI.h).
+    return [p for p in paths if not os.path.exists(p if os.path.isabs(p) else os.path.join(top, p))]
 
 
 def main(argv):
