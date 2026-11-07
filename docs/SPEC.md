@@ -246,12 +246,21 @@ INTENT D23을 따른다. 모든 운영체제가 같은 DSA 상징(모양과 색)
 - 수용 기준: 실제 기기에서 각 운영체제의 쓰는 곳(Windows의 시작 메뉴, 작업 표시줄, 알림 영역, 설치 화면과 설치된 앱 목록, macOS의 Dock, 메뉴 막대, pkg와 dmg, Linux의 앱 그리드, 패널, 소프트웨어 센터)에 아이콘이 보이고, 밝은 테마와 어두운 테마에서 알아볼 수 있다. (수동 확인)
 
 #### 기기 정체성
-이미지는 Cuttlefish의 이름(제조사 Google, 모델 `Cuttlefish x86_64 phone 64-bit only`, 기기 `vsoc_x86_64_only`)을 그대로 두지 않고 DSA의 이름을 쓴다. 앱과 사용자가 보는 기기 이름이 실제로 쓰는 제품과 맞아야 하기 때문이다. 사용자는 그 값을 설정에서 바꿀 수 있다. 옛 기기 이름을 확인하는 앱과 호환하기 위해서다.
-- 기본값: 제조사 `thisisthepy`, 브랜드 `DSA`, 모델 `Desktop Subsystem for Android`, 기기와 제품 이름 `dsa_x86_64`, `ro.build.characteristics`는 `tablet`이다. 지문은 `DSA/dsa_x86_64/dsa_x86_64:<릴리스>/<빌드 ID>/<증분>:user/release-keys`다. 이미지는 user 빌드이므로 지문의 빌드 유형도 `user`다. 증분에는 이미지마다 붙이는 내용 태그가 그대로 남는다.
+이미지는 Cuttlefish의 이름(제조사 Google, 모델 `Cuttlefish x86_64 phone 64-bit only`, 기기 `vsoc_x86_64_only`)을 그대로 두지 않는다. 기본값은 안드로이드가 실제로 도는 컴퓨터의 정보다. Windows 설정의 "정보"가 보여 주는 것과 같은 제조사, 모델, 이름을 안드로이드의 앱과 사용자도 보게 하기 위해서다. 사용자는 그 값을 설정에서 바꿀 수 있다. 옛 기기 이름을 확인하는 앱과 호환하기 위해서다.
+- 기본값은 호스트가 안드로이드를 시작할 때마다 컴퓨터의 펌웨어 정보(SMBIOS; Windows는 WMI와 `HKLM\HARDWARE\DESCRIPTION\System\BIOS`, Linux는 `/sys/class/dmi/id/`, macOS는 IOKit의 기기 모델)와 운영체제에서 읽는다. 그래서 컴퓨터 이름을 바꾸면 다음 시작부터 따라간다.
+  - 제조사와 브랜드: 시스템 제조사. 법인 접미사(`CO., LTD.`, `Inc.`, `Corporation` 같은 것)를 떼고 대소문자를 다듬는다(예: `SAMSUNG ELECTRONICS CO., LTD.`는 `Samsung`).
+  - 모델(`Build.MODEL`): 판매 모델 번호. 메인보드 제품명이 시스템 제품명과 같은 계열이면(예: `960XGL`과 `NT960XGP-G72AG`) 메인보드 제품명을, 아니면 시스템 제품명을 쓴다. 제조사마다 판매 모델 번호를 넣는 칸이 달라서다.
+  - 모델 이름: 시스템 제품군(예: `Galaxy Book4 Ultra`). 제품군이 비면 시스템 버전이나 제품명을 쓴다.
+  - 기기 이름(`Settings.Global.DEVICE_NAME`, 블루투스와 공유 대상에 보이는 이름): 컴퓨터 이름.
+  - 칩 제조사와 칩 모델(`Build.SOC_MANUFACTURER`, `Build.SOC_MODEL`): CPU의 제조사와 모델(예: `Intel`, `Core Ultra 7 155H`).
+  - 기기와 제품 이름은 `dsa_x86_64`(ARM64 이미지는 `dsa_arm64`), `ro.build.characteristics`는 `tablet`이다. 지문은 `<브랜드>/dsa_x86_64/dsa_x86_64:<릴리스>/<빌드 ID>/<증분>:user/release-keys`다. 기기와 제품 이름을 실제 휴대전화의 것으로 두지 않는 것은, 앱과 Google 서비스가 이 값으로 기기를 판별하기 때문이다. 이미지는 user 빌드이므로 지문의 빌드 유형도 `user`다. 증분에는 이미지마다 붙이는 내용 태그가 그대로 남는다.
+  - 값을 읽을 수 없거나 자리 표시 문자열(`To be filled by O.E.M.`, `Default string`, `System Product Name` 같은 것)이면 그 항목은 DSA의 값을 쓴다: 제조사 `thisisthepy`, 브랜드 `DSA`, 모델 `Desktop Subsystem for Android`.
 - `tablet`은 AOSP의 태블릿 구성이 쓰는 값이다. 앱의 화면 배치는 이 값이 아니라 창 크기(가장 짧은 너비)로 정해지므로, 큰 화면 배치를 고르게 하면서 휴대전화 전용 앱을 막지 않는다. `phone` 같은 다른 값도 고를 수 있다.
 - 이 값은 모든 파티션(system, system_ext, vendor, product, odm, vendor_dlkm과 이미지에 있는 나머지)의 `ro.product.<파티션>.{brand,manufacturer,model,device,name}`, 그것에서 나오는 `ro.product.{brand,manufacturer,model,device,name}`, 파티션마다의 지문, `ro.build.fingerprint`, `ro.build.product`, `ro.build.flavor`, `ro.build.description`에 똑같이 들어간다. `ro.build.display.id`는 user 빌드처럼 빌드 ID만 담는다. 앱이 읽는 `Build.MANUFACTURER`, `Build.BRAND`, `Build.MODEL`, `Build.DEVICE`, `Build.PRODUCT`, `Build.FINGERPRINT`가 이 값이다. 이미지 검사(`check-image.py`)가 이것을 확인한다.
 - 설정 앱의 "기기 정보" 페이지와 `dsa settings set device.<항목> <값>`으로 바꾸는 항목: 제조사(`manufacturer`), 브랜드(`brand`), 모델(`model`), 기기(`device`), 제품 이름(`name`), 형태(`characteristics`), 지문. 지문은 구성 요소(`fingerprint.release`, `fingerprint.id`, `fingerprint.incremental`, `fingerprint.type`, `fingerprint.tags`)를 하나씩 바꾸거나, 지문 문자열 전체(`fingerprint`)를 적는다. 전체 문자열을 적으면 그것이 구성 요소보다 앞선다. 적지 않은 구성 요소는 이미지의 값을 쓰고, 브랜드, 제품 이름, 기기는 위의 항목을 따른다.
-- "기본값으로 되돌리기" 단추와 `dsa settings reset device`가 모든 항목을, `dsa settings reset device.<항목>`이 한 항목을 기본값으로 되돌린다.
+- "기본값으로 되돌리기" 단추와 `dsa settings reset device`가 모든 항목을, `dsa settings reset device.<항목>`이 한 항목을 기본값으로 되돌린다. 기본값은 위의 컴퓨터 정보다. 페이지는 각 항목의 기본값이 어디서 왔는지(컴퓨터 정보, DSA 값) 보여 준다.
+- 수용 기준: 가짜 펌웨어 정보(이 PC처럼 메인보드 제품명에 판매 모델 번호가 있는 경우, 시스템 제품명에만 있는 경우, 자리 표시 문자열, 빈 값)에서 제조사, 브랜드, 모델, 모델 이름, 기기 이름, 칩 정보가 위 규칙대로 나오고, 사용자가 바꾼 값이 그보다 앞선다.
+- 수용 기준: 실제 PC에서 안드로이드 설정의 기기 정보와 기기 정보 앱이 Windows 설정의 "정보"와 같은 제조사, 모델, 컴퓨터 이름을 보이고, 컴퓨터 이름을 바꾸고 다시 시작하면 따라간다. (수동 확인)
 - 값은 사용자별이고, 동반 서비스가 `settings\users\<SID>.device.json`에 둔다(FR-19). 설정 앱은 이 파일을 직접 쓰지 않는다.
 - 바꾼 값은 다음 안드로이드 시작부터 적용된다. `ro.*` 속성은 부팅 중 한 번 정해지면 바꿀 수 없기 때문이다. 페이지는 이것을 알리고, 안드로이드가 실행 중이면 "지금 안드로이드 다시 시작" 단추를 보여 준다.
 - 전달 방법: 기본값과 다른 값이 있으면 호스트가 부팅마다 만드는 initrd 복사본에 속성 파일 하나(`/system/etc/ramdisk/build.prop`)를 덧붙인다. 첫 단계 init이 그 파일을 둘째 단계로 넘기고, 이미지의 product `build.prop`이 맨 끝에서 그 파일의 정체성 속성만 가져온다. 속성 서비스가 `ro.*`를 잠그기 전에 init 자신이 읽으므로 SELinux 정책을 넓히지 않는다. 모두 기본값이면 파일을 덧붙이지 않고, 이미지의 값이 그대로 쓰인다.
