@@ -1265,3 +1265,31 @@ android.googlesource.com의 웹 보기로 소스를 읽었다. 기기에서는 �
 
 - Android 17 이미지에서 `SessionParams`에 `abiOverride` 필드가 있는지. 없으면 에이전트 로그에 "this Android's package installer takes no ABI override"가 남고 설치가 거부된다.
 - 실제 PC(수동 확인): x86_64와 arm64를 모두 가진 앱을 설치해 `dumpsys package <package>`의 `primaryCpuAbi`가 `x86_64`인지, "ARM으로 실행"을 켜면 `arm64-v8a`로 바뀌고 앱 데이터(로그인, 설정)가 남는지, 끄면 `x86_64`로 돌아오는지 본다. 공유 사용자 ID를 쓰는 앱에서 교체가 거절되는지도 본다. 결과는 이 절에 기록한다.
+
+## R18. 창 관리자(dsa-wm)가 되풀이해 끝난 원인: 렌더러의 장치 손실 abort (NFR-5, INTENT D24)
+
+### 확인한 자료
+- 소유자 PC(Intel Arc, Windows 11 26100, DSA 0.1.9)의 `dsa-wm.exe` 크래시 덤프 10개(2026-11-07 10:48 ~ 11-08 01:31 KST). 모두 `0xc0000409`(`FAST_FAIL_FATAL_APP_EXIT`), `ucrtbase!abort`.
+- 앞의 6개는 2026-11-06 13:10 UTC에 빌드한 `gfxstream_backend.dll`이고, Graphics test 42222816694의 PDB와 DLL이 맞는다. 뒤의 4개는 cfe0b545의 Graphics test 42336149590의 것이 맞는다(PDB GUID `A1BCDDEF…`).
+- `dsa-wm.log`, 같은 시각의 게스트 logcat(`.scratch/guest-crash-1108/all.txt`), 응용 프로그램 이벤트 로그의 `Application Error` 기록.
+
+### 방법
+- `cdb -z <덤프> -i <DLL 폴더> -y <PDB 폴더> -lines -c ".ecxr; kn"`로 스택을 풀었다. 덤프에 DLL 이미지가 없어서 앞의 6개는 그 빌드의 DLL을 `-i`로 주어야 풀린다.
+- `AbortMessage`의 문자열은 덤프의 힙에 없어서 읽지 못했다. 대신 줄 번호로 소스의 abort 자리를 찾았다.
+
+### 찾은 것
+- 세 갈래이고, 모두 Vulkan 장치 손실(`VK_ERROR_DEVICE_LOST`)이다.
+  - 6개: `on_vkAcquireImageANDROID`(VkAndroidNativeBuffer.cpp 658)의 `VK_CHECK(vkQueueSubmit)` → `on_DeviceLost` → `GFXSTREAM_ABORT`.
+  - 3개: `on_vkCreateFence` → `ExternalFencePool::pop`의 `VK_CHECK(vkGetFenceStatus)` → `on_DeviceLost` → abort.
+  - 1개(01:31, Chromium 창이 닫힐 때): 프로세스 정리 스레드의 `vkDestroyInstanceImpl` → `~ExternalFencePool`(VkDecoderInternalStructs.h 57). 장치가 손실되어 `vkDeviceWaitIdle`이 실패하자 `destroyDeviceObjects`가 객체를 남기고 돌아갔고, 풀이 펜스를 쥔 채 소멸자에서 abort했다.
+- 생성된 디코더는 게스트 호출이 `VK_ERROR_DEVICE_LOST`를 돌려받을 때마다 `on_DeviceLost`를 부르고, 그것이 abort했다. 그래서 장치 하나를 잃으면 창 관리자와 모든 창이 끝났다.
+- 앞의 9개는 정확히 분이 바뀌는 순간(`hh:mm:00`)에 끝났다. 게스트에서 처음 죽은 것은 매번 에이전트의 `RenderThread`(`vkAcquireImageANDROID`)였다. 에이전트의 위젯 렌더러가 시계 위젯을 분마다 GPU로 다시 그린다(`AndroidWidgets.kt`의 `scheduleTick`). 이때 호스트 GPU가 리셋되었다. 시스템 로그에는 TDR 이벤트(4101)가 없었다(드라이버의 엔진 단위 리셋으로 보인다). 리셋 자체의 원인은 덤프로는 알 수 없다.
+- gfxstream의 로그(`ERR`, abort 메시지)는 표준 오류로만 나가서, 콘솔이 없는 dsa-wm에서는 사라졌다.
+
+### 결정
+- 렌더러 패치 0015와 aemu 패치 0002: 게스트를 섬기는 스레드의 치명적 오류는 그 게스트의 스트림만 끝낸다. 장치 손실은 게스트에 `VK_ERROR_DEVICE_LOST`로 돌려주고, 렌더러 자신의 장치는 다음 작업 전에 새로 만들며 ColorBuffer를 같은 핸들로 다시 만든다. 정리 스레드는 손실된 장치의 객체도 지우고, 펜스 풀 소멸자는 끝내지 않는다.
+- 렌더러의 경고와 오류, 치명적 오류, Rust 패닉을 `dsa-wm.log`에 남긴다.
+
+### 확인하지 못한 것
+- 실제 GPU 리셋에서의 복구는 실제 PC에서 확인해야 한다(NFR-5의 수동 기준). CI는 lavapipe에서 가짜 장치 손실로만 확인한다.
+- 시계 위젯의 분 단위 그리기가 왜 Intel 드라이버의 리셋을 부르는지는 확인하지 못했다.
