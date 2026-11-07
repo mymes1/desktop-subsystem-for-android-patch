@@ -925,6 +925,23 @@ impl UserAndroid for WithProgramStatus {
     ) -> Result<InstallOutcome, InstallError> {
         UserAndroid::install_apk(&*self.android, name, size, content)
     }
+    fn install_apk_for(
+        &self,
+        name: &str,
+        size: u64,
+        abi: Option<&str>,
+        content: &mut dyn std::io::Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        UserAndroid::install_apk_for(&*self.android, name, size, abi, content)
+    }
+    fn set_run_as_arm(
+        &self,
+        package: &str,
+        on: bool,
+        erase_data: bool,
+    ) -> Result<crate::native_abi::RunAsArmOutcome, TaskRequestError> {
+        UserAndroid::set_run_as_arm(&*self.android, package, on, erase_data)
+    }
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
         UserAndroid::package_state(&*self.android, package)
     }

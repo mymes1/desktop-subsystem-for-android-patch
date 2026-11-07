@@ -13,11 +13,13 @@
 
 use std::fmt;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 use dsa_protocol::control;
 use dsa_protocol::host_api::types;
+
+use crate::native_abi::NativeLibraries;
 
 /// The largest APK that is taken, in bytes: 2 GiB.
 ///
@@ -354,6 +356,10 @@ pub struct ApkFile {
     pub name: String,
     pub size: u64,
     pub file: File,
+    /// The native libraries the APK holds, by ABI, which the service chooses the ABI it is
+    /// installed for from. Empty when it has none, or when the file cannot be read as an APK,
+    /// which Android then says.
+    pub native_libraries: NativeLibraries,
 }
 
 impl ApkFile {
@@ -365,7 +371,8 @@ impl ApkFile {
             .and_then(|name| name.to_str())
             .ok_or_else(|| format!("{} names no file", path.display()))?;
         check_name(name)?;
-        let file = File::open(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+        let mut file =
+            File::open(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
         let metadata = file
             .metadata()
             .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
@@ -373,10 +380,14 @@ impl ApkFile {
             return Err(format!("{} is not a file", path.display()));
         }
         check_size(metadata.len())?;
+        let native_libraries = NativeLibraries::read(&mut file).unwrap_or_default();
+        file.seek(SeekFrom::Start(0))
+            .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
         Ok(ApkFile {
             name: name.to_string(),
             size: metadata.len(),
             file,
+            native_libraries,
         })
     }
 
