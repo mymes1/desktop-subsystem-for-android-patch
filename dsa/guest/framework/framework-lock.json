@@ -100,13 +100,14 @@
           "url": "https://android.googlesource.com/platform/external/XMP-Toolkit-SDK",
           "commit": "83f7b87cad246ed89c6c7cc66bfcfeeccec6cc99",
           "cone": [
-            "XMPCore/source",
-            "XMPFiles/source",
-            "XMPFilesPlugins/PluginTemplate/source",
-            "XMPFilesPlugins/api/source",
-            "public/include",
+            "XMPCommon",
+            "XMPCore",
+            "XMPFiles",
+            "XMPFilesPlugins",
+            "build",
+            "public",
             "source",
-            "third-party/zuid/interfaces"
+            "third-party"
           ]
         },
         {
@@ -139,11 +140,7 @@
         {
           "path": "external/arm-optimized-routines",
           "url": "https://android.googlesource.com/platform/external/arm-optimized-routines",
-          "commit": "1a2b3aeae89d8d89155305e22cec96fc1028081c",
-          "cone": [
-            "math",
-            "string/aarch64"
-          ]
+          "commit": "1a2b3aeae89d8d89155305e22cec96fc1028081c"
         },
         {
           "path": "external/boringssl",
@@ -394,12 +391,10 @@
           "url": "https://android.googlesource.com/platform/external/llvm-libc",
           "commit": "24af38d6527d0ee6d61cea5052c83a01725ac98f",
           "cone": [
-            "src/__support/CPP",
-            "src/inttypes",
-            "src/search",
-            "src/stdlib",
-            "src/string",
-            "src/wchar"
+            "hdr",
+            "include",
+            "libc",
+            "src"
           ]
         },
         {
@@ -432,19 +427,9 @@
           "url": "https://android.googlesource.com/platform/external/pdfium",
           "commit": "3500261c5072bb421ddd45ae00f78d1601a11450",
           "cone": [
+            "build",
             "constants",
-            "core/fdrm",
-            "core/fpdfapi/cmaps",
-            "core/fpdfapi/edit",
-            "core/fpdfapi/font",
-            "core/fpdfapi/page",
-            "core/fpdfapi/parser",
-            "core/fpdfapi/render",
-            "core/fpdfdoc",
-            "core/fpdftext",
-            "core/fxcodec",
-            "core/fxcrt",
-            "core/fxge",
+            "core",
             "fpdfsdk",
             "fxjs",
             "public",
@@ -606,22 +591,12 @@
         {
           "path": "external/rust/crabbyavif",
           "url": "https://android.googlesource.com/platform/external/rust/crabbyavif",
-          "commit": "ab91f114c3de954c622648f8acefe620c3dfe4ed",
-          "cone": [
-            "src",
-            "sys/libyuv-sys",
-            "sys/ndk-sys"
-          ]
+          "commit": "ab91f114c3de954c622648f8acefe620c3dfe4ed"
         },
         {
           "path": "external/rust/cxx",
           "url": "https://android.googlesource.com/platform/external/rust/cxx",
-          "commit": "aa5556da131ac8f41aef2a57c2c887a21cf47ac1",
-          "cone": [
-            "gen/cmd",
-            "macro",
-            "src"
-          ]
+          "commit": "aa5556da131ac8f41aef2a57c2c887a21cf47ac1"
         },
         {
           "path": "external/scudo",
@@ -742,11 +717,7 @@
         {
           "path": "external/zlib",
           "url": "https://android.googlesource.com/platform/external/zlib",
-          "commit": "a6f47e8bd7c1ba412c4b5a3539aa77fe628d0172",
-          "patterns": [
-            "/*",
-            "!/*/"
-          ]
+          "commit": "a6f47e8bd7c1ba412c4b5a3539aa77fe628d0172"
         },
         {
           "path": "external/zstd",
@@ -779,11 +750,14 @@
             "media/codec2/vndk",
             "media/libaudioclient",
             "media/libaudiofoundation",
+            "media/libaudioprocessing/include",
             "media/libdatasource",
+            "media/libeffects/factory/include",
             "media/liberror",
             "media/libmedia",
             "media/libmediahelper",
             "media/libmediametrics",
+            "media/libmediaplayerservice/include",
             "media/libnbaio/include_mono",
             "media/libnblog",
             "media/libshmem",
@@ -825,6 +799,7 @@
             "media/java/android/media/flags",
             "media/java/android/media/quality",
             "media/java/android/media/tv/flags",
+            "media/jni",
             "native/android",
             "services/backup",
             "services/core/java/com/android/server/display/feature"
@@ -835,6 +810,10 @@
             "core/java/Android.bp",
             "libs/hwui/Android.bp",
             "media/Android.bp",
+            "media/jni/Android.bp",
+            "media/jni/audioeffect/Android.bp",
+            "media/jni/soundpool/Android.bp",
+            "media/jni/soundpool/tests/Android.bp",
             "services/Android.bp",
             "services/core/Android.bp"
           ]
@@ -894,6 +873,11 @@
           ]
         },
         {
+          "path": "frameworks/proto_logging",
+          "url": "https://android.googlesource.com/platform/frameworks/proto_logging",
+          "commit": "cef5253cee341d943c2972775e047ca368e9b1ee"
+        },
+        {
           "path": "hardware/interfaces",
           "url": "https://android.googlesource.com/platform/hardware/interfaces",
           "commit": "aa229558cbf04bc997ed27465c5e7ad497123d1b",
@@ -941,6 +925,7 @@
           "url": "https://android.googlesource.com/platform/hardware/libhardware",
           "commit": "67b44bb0f7d1df962e737cfe9baf716bab45792e",
           "cone": [
+            "include",
             "include_all",
             "include_vendor"
           ]
@@ -1051,6 +1036,7 @@
           "commit": "e9d1fa3705d7fbd0ac1c942bc4c276161bfbfed1",
           "cone": [
             "debuggerd/include",
+            "include",
             "libcutils",
             "libgrallocusage",
             "libpackagelistparser",
@@ -1327,13 +1313,14 @@
           "url": "https://android.googlesource.com/platform/external/XMP-Toolkit-SDK",
           "commit": "45acb237cd13c19708f963247c732250cd43a4a5",
           "cone": [
-            "XMPCore/source",
-            "XMPFiles/source",
-            "XMPFilesPlugins/PluginTemplate/source",
-            "XMPFilesPlugins/api/source",
-            "public/include",
+            "XMPCommon",
+            "XMPCore",
+            "XMPFiles",
+            "XMPFilesPlugins",
+            "build",
+            "public",
             "source",
-            "third-party/zuid/interfaces"
+            "third-party"
           ]
         },
         {
@@ -1366,11 +1353,7 @@
         {
           "path": "external/arm-optimized-routines",
           "url": "https://android.googlesource.com/platform/external/arm-optimized-routines",
-          "commit": "498b3de1a06e8cd87b2f9d49d1d8a23ebba5cc5a",
-          "cone": [
-            "math",
-            "string/aarch64"
-          ]
+          "commit": "498b3de1a06e8cd87b2f9d49d1d8a23ebba5cc5a"
         },
         {
           "path": "external/boringssl",
@@ -1622,10 +1605,10 @@
           "url": "https://android.googlesource.com/platform/external/llvm-libc",
           "commit": "95e08d1d4ccefa41921bc00a369008f7618b7101",
           "cone": [
-            "src/__support/CPP",
-            "src/search",
-            "src/stdlib",
-            "src/wchar"
+            "hdr",
+            "include",
+            "libc",
+            "src"
           ]
         },
         {
@@ -1658,19 +1641,9 @@
           "url": "https://android.googlesource.com/platform/external/pdfium",
           "commit": "aac15c2e18a72f66df14f08b93492fd0c493aa77",
           "cone": [
+            "build",
             "constants",
-            "core/fdrm",
-            "core/fpdfapi/cmaps",
-            "core/fpdfapi/edit",
-            "core/fpdfapi/font",
-            "core/fpdfapi/page",
-            "core/fpdfapi/parser",
-            "core/fpdfapi/render",
-            "core/fpdfdoc",
-            "core/fpdftext",
-            "core/fxcodec",
-            "core/fxcrt",
-            "core/fxge",
+            "core",
             "fpdfsdk",
             "fxjs",
             "public",
@@ -1843,22 +1816,12 @@
         {
           "path": "external/rust/crabbyavif",
           "url": "https://android.googlesource.com/platform/external/rust/crabbyavif",
-          "commit": "c718caf5bc658d3f806a442666800781c66a5274",
-          "cone": [
-            "src",
-            "sys/libyuv-sys",
-            "sys/ndk-sys"
-          ]
+          "commit": "c718caf5bc658d3f806a442666800781c66a5274"
         },
         {
           "path": "external/rust/cxx",
           "url": "https://android.googlesource.com/platform/external/rust/cxx",
-          "commit": "41972f6ebbe9c21eeed3fdf5c1b0805f2c8b824c",
-          "cone": [
-            "gen/cmd",
-            "macro",
-            "src"
-          ]
+          "commit": "41972f6ebbe9c21eeed3fdf5c1b0805f2c8b824c"
         },
         {
           "path": "external/scudo",
@@ -1979,11 +1942,7 @@
         {
           "path": "external/zlib",
           "url": "https://android.googlesource.com/platform/external/zlib",
-          "commit": "8731e6760935ad5289fd64c37d28155a0fa289e3",
-          "patterns": [
-            "/*",
-            "!/*/"
-          ]
+          "commit": "8731e6760935ad5289fd64c37d28155a0fa289e3"
         },
         {
           "path": "external/zstd",
@@ -2018,11 +1977,14 @@
             "media/libaaudio",
             "media/libaudioclient",
             "media/libaudiofoundation",
+            "media/libaudioprocessing/include",
             "media/libdatasource",
+            "media/libeffects/factory/include",
             "media/liberror",
             "media/libmedia",
             "media/libmediahelper",
             "media/libmediametrics",
+            "media/libmediaplayerservice/include",
             "media/libnbaio/include_mono",
             "media/libshmem",
             "media/libstagefright",
@@ -2065,6 +2027,7 @@
             "media/java/android/media/flags",
             "media/java/android/media/quality",
             "media/java/android/media/tv/flags",
+            "media/jni",
             "native/android",
             "services/backup",
             "services/core/java/com/android/server/display/feature"
@@ -2075,6 +2038,10 @@
             "core/java/Android.bp",
             "libs/hwui/Android.bp",
             "media/Android.bp",
+            "media/jni/Android.bp",
+            "media/jni/audioeffect/Android.bp",
+            "media/jni/soundpool/Android.bp",
+            "media/jni/soundpool/tests/Android.bp",
             "services/Android.bp",
             "services/core/Android.bp"
           ]
@@ -2126,6 +2093,11 @@
           ]
         },
         {
+          "path": "frameworks/proto_logging",
+          "url": "https://android.googlesource.com/platform/frameworks/proto_logging",
+          "commit": "a07b791ea1e2a4dae1c535c8423235fdc22aaf02"
+        },
+        {
           "path": "hardware/interfaces",
           "url": "https://android.googlesource.com/platform/hardware/interfaces",
           "commit": "0162af698935100a590b7359581ac8b1b80693e5",
@@ -2170,6 +2142,7 @@
           "url": "https://android.googlesource.com/platform/hardware/libhardware",
           "commit": "97ee3e33ec5ba48c0eca8341ed377ac4497a0678",
           "cone": [
+            "include",
             "include_all",
             "include_vendor"
           ]
@@ -2279,6 +2252,7 @@
           "commit": "545d2487e38192a2ce25040897ced877cf6b4f53",
           "cone": [
             "debuggerd/include",
+            "include",
             "libcutils",
             "libgrallocusage",
             "libpackagelistparser",
