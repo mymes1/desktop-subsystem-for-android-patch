@@ -63,7 +63,7 @@ pub struct Rect {
 /// Guest to host, from the agent: an app task the host shows as one window appeared, or
 /// something the window shows about it changed. Every field is sent each time, so the host
 /// keeps only the latest.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TaskUpdated {
     /// The guest's task ID, unique while the task lives.
     #[prost(int32, tag = "1")]
@@ -118,6 +118,26 @@ pub struct TaskUpdated {
     /// small window that stays above the others.
     #[prost(bool, tag = "22")]
     pub picture_in_picture: bool,
+    /// Whether the task's app asked to draw its own title bar: it set a transparent caption bar
+    /// background (WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND), as
+    /// an app does on Android's own desktop windows to put its controls, such as a browser's
+    /// tabs, in the title bar. The host then draws only its caption buttons and the app's icon
+    /// over the app, not the app's name, and leaves the rest of the band to the app.
+    #[prost(bool, tag = "23")]
+    pub transparent_caption: bool,
+    /// While `transparent_caption` is set: the parts of the title bar band where the app has
+    /// controls, which take the pointer, relative to the task's top left corner in guest
+    /// display pixels. They are what the app asked the system to keep its gestures out of
+    /// (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+    /// The rest of the band drags the window.
+    #[prost(message, repeated, tag = "24")]
+    pub caption_interactive: ::prost::alloc::vec::Vec<Rect>,
+    /// Whether the task has somewhere to go back to: its top activity is not the first one of
+    /// the task (it holds more than one activity). The host's window then shows a back button
+    /// in the place of the app's icon, and Esc or Backspace an app leaves become Back; on the
+    /// task's first screen they never do, so a key never closes the window.
+    #[prost(bool, tag = "25")]
+    pub can_go_back: bool,
 }
 /// Guest to host, from the agent: the task ended; the host closes its window.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -146,6 +166,11 @@ pub struct CloseTask {
 pub struct LaunchApp {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
+    /// Start another task of the app even when it has one, in a window of its own, as the
+    /// system menu's New window does. Only for an app that supports several windows
+    /// (AppInfo.multiple_windows); otherwise the app's task comes to the front.
+    #[prost(bool, tag = "2")]
+    pub new_window: bool,
 }
 /// Host to guest: the user's Stop. The agent ends every process of the app, even one a
 /// placed widget or a foreground service keeps running, and the guest gives the memory back.
@@ -193,12 +218,22 @@ pub struct SetTaskDensity {
 /// toolbar below the caption buttons and draws its status bar background behind them. The
 /// host sends it when the window opens and whenever the height changes, as on a move to a
 /// monitor of another scale. 0 removes the inset.
+///
+/// `start_width` and `end_width` are how far the parts the host draws over the band reach in
+/// from its left end (the app's icon) and from its right end (the caption buttons), in guest
+/// display pixels. An app that draws its own title bar (TaskUpdated.transparent_caption)
+/// receives them as the bounding rectangles of its caption bar inset
+/// (WindowInsets.getBoundingRects), so it keeps its controls out of them.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct SetTaskCaption {
     #[prost(int32, tag = "1")]
     pub task_id: i32,
     #[prost(uint32, tag = "2")]
     pub height: u32,
+    #[prost(uint32, tag = "3")]
+    pub start_width: u32,
+    #[prost(uint32, tag = "4")]
+    pub end_width: u32,
 }
 /// Guest to host, from the agent: the name and launcher icon of an app the host shows a task
 /// of. The host's window for the app carries them, in the taskbar and the task list. The
@@ -216,6 +251,16 @@ pub struct AppInfo {
     /// when the app has no icon the agent could draw.
     #[prost(bytes = "vec", tag = "3")]
     pub icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// The icon a window's title bar shows: an adaptive icon's foreground layer alone, without
+    /// its background plate, as a square PNG image of the same size as `icon_png`. Empty for an
+    /// app whose icon is not adaptive, which shows `icon_png` there too.
+    #[prost(bytes = "vec", tag = "4")]
+    pub caption_icon_png: ::prost::alloc::vec::Vec<u8>,
+    /// Whether the app supports several windows at once (its launcher activity or the app
+    /// declares android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), so the window's
+    /// system menu offers New window.
+    #[prost(bool, tag = "5")]
+    pub multiple_windows: bool,
 }
 /// Guest to host, from the agent: an app a launcher lists is installed in the guest, or
 /// something about it changed: its name, icon, version or size. The host shows it in its own
@@ -339,6 +384,9 @@ pub struct RefreshApps {}
 pub struct OpenAppSettings {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
+    /// Which of Android's pages for the app. Ignored without a package.
+    #[prost(enumeration = "AppSettingsPage", tag = "2")]
+    pub page: i32,
 }
 /// Host to guest: uninstall a user app. The agent does it through the package installer and
 /// answers with UninstallResult of the same `request_id`.
@@ -2872,6 +2920,41 @@ impl ReinstallStatus {
             "REINSTALL_STATUS_SYSTEM_APP" => Some(Self::SystemApp),
             "REINSTALL_STATUS_NO_LIBRARIES" => Some(Self::NoLibraries),
             "REINSTALL_STATUS_OTHER" => Some(Self::Other),
+            _ => None,
+        }
+    }
+}
+/// One of Android's settings pages for an app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum AppSettingsPage {
+    /// The app's info: its permissions, storage and notifications.
+    Details = 0,
+    /// The app's aspect ratio, which the user may override
+    /// (Settings.ACTION_MANAGE_USER_ASPECT_RATIO_SETTINGS).
+    AspectRatio = 1,
+    /// Whether the links the app supports open in the app or in the browser
+    /// (Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS).
+    OpenByDefault = 2,
+}
+impl AppSettingsPage {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Details => "APP_SETTINGS_PAGE_DETAILS",
+            Self::AspectRatio => "APP_SETTINGS_PAGE_ASPECT_RATIO",
+            Self::OpenByDefault => "APP_SETTINGS_PAGE_OPEN_BY_DEFAULT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "APP_SETTINGS_PAGE_DETAILS" => Some(Self::Details),
+            "APP_SETTINGS_PAGE_ASPECT_RATIO" => Some(Self::AspectRatio),
+            "APP_SETTINGS_PAGE_OPEN_BY_DEFAULT" => Some(Self::OpenByDefault),
             _ => None,
         }
     }
