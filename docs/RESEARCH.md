@@ -1527,6 +1527,26 @@ x86_64 작업이 9 ~ 10분 만에 끝난 것도 같은 오류다. 작업 사이�
 
 이 훑기가 보지 못하는 것: 빌드 동작을 만드는 단계(`GenerateBuildActions`)는 어느 실행에서도 끝까지 돈 적이 없다. 그 단계의 다른 모듈 형식의 검사나 패닉은 다음 실행이 처음으로 보인다.
 
+### 네 번째 실행(run 42410302598, 네 작업)과 고친 것
+
+Soong 분석이 네 작업 모두 끝까지 돌았다(`GenerateBuildActions` 포함). 그다음 ninja가 컴파일을 하나도 시작하기 전에 멈추었다.
+
+```
+ninja: 'out/host/linux-x86/bin/protoc-gen-rust', needed by 'out/soong/.intermediates/build/make/tools/aconfig/aconfig_protos/libaconfig_rust_proto/linux_glibc_x86_64_source/aconfig.rs', missing and no known rule to make it
+```
+
+17의 두 작업은 같은 자리에서 `protoc-gen-rs`다. aconfig의 Rust protobuf 코드를 만드는 플러그인이다. Soong은 이 플러그인을 의존이 아니라 설치 경로로 부른다(`build/soong/rust/protobuf.go`의 `HostToolPath(ctx, "protoc-gen-rs")`). 그래서 트리에 그 모듈이 없어도 의존 누락이 되지 않고, ninja에서 만들 규칙이 없는 파일이 된다. ninja는 이런 파일 하나에서 멈추므로 같은 종류의 다른 파일은 로그에 없다. 그래서 같은 종류를 모두 정적으로 찾았다.
+
+1. 경로로 부르는 호스트 도구: 체크아웃 안의 Go 코드에서 `HostToolPath`, `HostBinToolVariable`, `HostJavaToolPath` 등이 부르는 도구 이름을 모두 모아, 트리에 그 이름의 모듈이 없는 것을 골랐다. Java, APEX, 파일 시스템, dexpreopt에만 쓰이는 것(`d8`, `r8`, `metalava`, `apexer`, `avbtool` 등)을 빼면 16은 `protoc-gen-rust`, `grpc_rust_plugin`, `llvm-rs-cc`, `stg`, `stgdiff`, `xmllint`, `assemble_vintf`, `sqlite3_noicu`, 17은 `protoc-gen-rs`, `grpc_rust_plugin`, `llvm-rs-cc`, `stg`, `stgdiff`, `sqlite3_noicu`가 남는다. 이 빌드가 쓰는 것은 protobuf 플러그인뿐이다. `grpc_rust_plugin`은 gRPC proto에만, `llvm-rs-cc`는 RenderScript에만, `stg`와 `stgdiff`는 NDK ABI 검사에만, `sqlite3_noicu`는 compliance 데이터베이스에만 쓰인다. 묶음 안에 `prebuilt_etc_xml`도 `vintf_fragment`도 없으므로 `xmllint`와 `assemble_vintf`도 쓰이지 않는다. ninja는 요청한 대상에 이르는 동작의 입력만 확인하므로 쓰이지 않는 도구는 문제가 되지 않는다.
+2. 경로로 부르는 소스 파일: 같은 Go 코드에서 `prebuilts/...` 같은 소스 경로 문자열을 모두 모아, 체크아웃에 없는 것을 골랐다. 이 빌드가 쓰는 것은 `prebuilts/misc/linux-x86/yasm/yasm` 하나다. cc는 `.asm` 소스를 yasm으로 어셈블하고(`build/soong/cc/builder.go`의 `yasmCmd`, `CommandDeps`), `libjpeg-turbo`가 x86_64에서 `.asm` SIMD 소스를 쓴다. 나머지(`prebuilts/clang-tools`의 ABI 도구, `prebuilts/abi-dumps`, `toolchain/pgo-profiles/orderfiles` 등)는 `SKIP_ABI_CHECKS`나 이 묶음이 쓰지 않는 기능에만 걸린다.
+3. Soong이 이름으로 붙이는 의존(`AddHostToolDependencies`, `AddFarVariationDependencies` 등의 문자열): cc, Rust, Python, genrule, aconfig, aidl, hidl, sysprop에서 트리에 없는 이름은 변형 이름(`link`, `static`, `rlib`)뿐이었다.
+
+플러그인이 닿는 모듈을 Android.bp에서 따라가(41개), 트리에 없는 것의 폴더를 골랐다. `external/rust/android-crates-io`의 `protobuf-codegen`, `protobuf-parse`, `tempfile`, `fastrand`, `rustix`, `errno`, `which`(17은 `getrandom`도)다.
+
+고친 것: 잠금이 그 상자 폴더들과 `prebuilts/misc`(cone `linux-x86/yasm`, 커밋은 두 빌드의 매니페스트에서)를 받는다. 바꾼 잠금으로 세 번째 실행 뒤의 훑기와 위의 확인을 다시 돌려 걸리는 것이 없음을 보았다. `prebuilts/misc`의 루트 `Android.bp`는 라이선스와 `dirgroup` 하나뿐이다.
+
+남은 것: 의존으로 붙는 모듈이 트리에 없으면 ninja가 아니라 그 동작이 실행될 때 "missing dependencies"로 실패한다. 그런 것은 다음 실행의 `m -k` 요약에 모두 나온다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 추정이다. 첫 실행의 `m -k` 요약이 빠진 프로젝트를 보이고, `update-lock.py --add`로 더한다. kati가 `bp4a`, `cp2a`와 이 제품을 받아들이는지, Soong만 쓰는 빌드에서 설치 경로를 대상으로 줄 수 있는지는 번역기 빌드와 같이 실행에서 확인한다.
