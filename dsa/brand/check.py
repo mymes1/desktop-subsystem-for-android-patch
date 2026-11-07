@@ -164,6 +164,20 @@ def fr11_the_apk_installer_icon_is_its_own_drawing(out):
             fail(f"{path.name}.ico and {path.name}.png are not the same drawing")
 
 
+def fr29_the_explorer_entry_icon_has_no_badge(out):
+    """Android's entry in Explorer's navigation pane is the plain DSA symbol, like the
+    plain penguin of WSL's "Linux" beside it, with no folder badge in the corner."""
+    files = icons.WINDOWS / "resources" / "icons" / "files"
+    logo = icons.WINDOWS / "installer" / "setup-ui" / "assets" / "logo"
+    badge = next(b for p, b in icons.WINDOWS_ICONS if p == files)
+    if badge is not None:
+        fail(f"files.ico is drawn with the {badge} badge")
+    for suffix in (".ico", ".png"):
+        ours, plain = read(out, files.with_suffix(suffix)), read(out, logo.with_suffix(suffix))
+        if ours is not None and plain is not None and ours != plain:
+            fail(f"files{suffix} is not the plain DSA symbol of logo{suffix}")
+
+
 def inner_paths(svg):
     import re
 
@@ -178,6 +192,7 @@ def main(argv):
         fr17_the_macos_icon_holds_every_size_and_its_layers,
         fr17_the_readme_logo_is_there,
         fr11_the_apk_installer_icon_is_its_own_drawing,
+        fr29_the_explorer_entry_icon_has_no_badge,
     ]
     for check in checks:
         before = len(failures)

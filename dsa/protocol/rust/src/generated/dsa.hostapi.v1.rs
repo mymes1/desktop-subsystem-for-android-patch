@@ -1751,7 +1751,8 @@ pub struct SetDeviceIdentity {
     #[prost(message, optional, tag = "1")]
     pub identity: ::core::option::Option<DeviceIdentity>,
 }
-/// The names and build fingerprint Android reports to apps. An empty value is the image's own.
+/// The names and build fingerprint Android reports to apps. An empty value is the default: the
+/// computer's manufacturer, brand and model, and DSA's own for the rest.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct DeviceIdentity {
     #[prost(string, tag = "1")]
@@ -1782,6 +1783,20 @@ pub struct DeviceIdentity {
     pub fingerprint_type: ::prost::alloc::string::String,
     #[prost(string, tag = "12")]
     pub fingerprint_tags: ::prost::alloc::string::String,
+    /// The values below follow the computer and are not chosen: a report carries them, and
+    /// SetDeviceIdentity ignores them. The name the product is sold under, such as
+    /// "Galaxy Book4 Ultra".
+    #[prost(string, tag = "13")]
+    pub model_name: ::prost::alloc::string::String,
+    /// Android's device name: the computer's name.
+    #[prost(string, tag = "14")]
+    pub device_name: ::prost::alloc::string::String,
+    /// The chip's maker and model, such as "Intel" and "Core Ultra 7 155H"; empty when the
+    /// computer does not say.
+    #[prost(string, tag = "15")]
+    pub soc_manufacturer: ::prost::alloc::string::String,
+    #[prost(string, tag = "16")]
+    pub soc_model: ::prost::alloc::string::String,
 }
 /// The answer to GetDeviceIdentity and SetDeviceIdentity.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1793,6 +1808,14 @@ pub struct DeviceIdentityReport {
     /// and incremental version are empty when the image does not say them.
     #[prost(message, optional, tag = "2")]
     pub effective: ::core::option::Option<DeviceIdentity>,
+    /// Every value as Android reports it when the user chooses nothing.
+    #[prost(message, optional, tag = "3")]
+    pub defaults: ::core::option::Option<DeviceIdentity>,
+    /// The fields whose default is the computer's, named as `dsa settings set device.<name>`
+    /// names them (and model_name, device_name, soc_manufacturer, soc_model). Every other
+    /// default is DSA's own.
+    #[prost(string, repeated, tag = "4")]
+    pub from_computer: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Turns the connection into the accessibility tree of one of the caller's task windows, for a
 /// host accessibility client (a screen reader, an inspection tool) that reads that window.

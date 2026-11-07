@@ -41,7 +41,9 @@ WINDOWS_ICONS = [
     (WINDOWS / "installer" / "setup-ui" / "assets" / "logo", None),
     (WINDOWS / "settings" / "DsaSettings" / "Assets" / "logo", "settings"),
     (WINDOWS / "settings" / "DsaApkInstaller" / "Assets" / "apk-installer", "apk"),
-    (WINDOWS / "resources" / "icons" / "files", "files"),
+    # Android's entry in Explorer's navigation pane is the plain symbol, like WSL's "Linux"
+    # beside it is the plain penguin: a badge in the corner is too small to read at 16 px.
+    (WINDOWS / "resources" / "icons" / "files", None),
 ]
 # The notification area: one colour, for a light and for a dark taskbar.
 WINDOWS_TRAY = {
