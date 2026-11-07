@@ -1569,5 +1569,38 @@ public interface EnvelopeOrBuilder extends
    */
   io.github.thisisthepy.dsa.control.v1.DragEnd getDragEnd();
 
+  /**
+   * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+   * @return Whether the reinstallApp field is set.
+   */
+  boolean hasReinstallApp();
+  /**
+   * <code>.dsa.control.v1.ReinstallApp reinstall_app = 380;</code>
+   * @return The reinstallApp.
+   */
+  io.github.thisisthepy.dsa.control.v1.ReinstallApp getReinstallApp();
+
+  /**
+   * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+   * @return Whether the reinstallResult field is set.
+   */
+  boolean hasReinstallResult();
+  /**
+   * <code>.dsa.control.v1.ReinstallResult reinstall_result = 381;</code>
+   * @return The reinstallResult.
+   */
+  io.github.thisisthepy.dsa.control.v1.ReinstallResult getReinstallResult();
+
+  /**
+   * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+   * @return Whether the nativeLibraryCrash field is set.
+   */
+  boolean hasNativeLibraryCrash();
+  /**
+   * <code>.dsa.control.v1.NativeLibraryCrash native_library_crash = 382;</code>
+   * @return The nativeLibraryCrash.
+   */
+  io.github.thisisthepy.dsa.control.v1.NativeLibraryCrash getNativeLibraryCrash();
+
   public io.github.thisisthepy.dsa.control.v1.Envelope.BodyCase getBodyCase();
 }

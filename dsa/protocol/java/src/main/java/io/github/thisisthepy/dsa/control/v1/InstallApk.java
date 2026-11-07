@@ -20,6 +20,7 @@ public  final class InstallApk extends
     InstallApkOrBuilder {
   private InstallApk() {
     name_ = "";
+    abi_ = "";
   }
   public static final int TRANSFER_ID_FIELD_NUMBER = 1;
   private int transferId_;
@@ -162,6 +163,93 @@ public  final class InstallApk extends
   private void clearSize() {
     
     size_ = 0L;
+  }
+
+  public static final int ABI_FIELD_NUMBER = 4;
+  private java.lang.String abi_;
+  /**
+   * <pre>
+   * The ABI to install the app's native code for, which the agent gives the package
+   * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+   * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+   * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+   * ones.
+   * </pre>
+   *
+   * <code>string abi = 4;</code>
+   * @return The abi.
+   */
+  @java.lang.Override
+  public java.lang.String getAbi() {
+    return abi_;
+  }
+  /**
+   * <pre>
+   * The ABI to install the app's native code for, which the agent gives the package
+   * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+   * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+   * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+   * ones.
+   * </pre>
+   *
+   * <code>string abi = 4;</code>
+   * @return The bytes for abi.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getAbiBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(abi_);
+  }
+  /**
+   * <pre>
+   * The ABI to install the app's native code for, which the agent gives the package
+   * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+   * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+   * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+   * ones.
+   * </pre>
+   *
+   * <code>string abi = 4;</code>
+   * @param value The abi to set.
+   */
+  private void setAbi(
+      java.lang.String value) {
+    java.lang.Class<?> valueClass = value.getClass();
+  
+    abi_ = value;
+  }
+  /**
+   * <pre>
+   * The ABI to install the app's native code for, which the agent gives the package
+   * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+   * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+   * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+   * ones.
+   * </pre>
+   *
+   * <code>string abi = 4;</code>
+   */
+  private void clearAbi() {
+    
+    abi_ = getDefaultInstance().getAbi();
+  }
+  /**
+   * <pre>
+   * The ABI to install the app's native code for, which the agent gives the package
+   * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+   * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+   * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+   * ones.
+   * </pre>
+   *
+   * <code>string abi = 4;</code>
+   * @param value The bytes for abi to set.
+   */
+  private void setAbiBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    abi_ = value.toStringUtf8();
+    
   }
 
   public static io.github.thisisthepy.dsa.control.v1.InstallApk parseFrom(
@@ -415,6 +503,95 @@ public  final class InstallApk extends
       return this;
     }
 
+    /**
+     * <pre>
+     * The ABI to install the app's native code for, which the agent gives the package
+     * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+     * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+     * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+     * ones.
+     * </pre>
+     *
+     * <code>string abi = 4;</code>
+     * @return The abi.
+     */
+    @java.lang.Override
+    public java.lang.String getAbi() {
+      return instance.getAbi();
+    }
+    /**
+     * <pre>
+     * The ABI to install the app's native code for, which the agent gives the package
+     * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+     * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+     * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+     * ones.
+     * </pre>
+     *
+     * <code>string abi = 4;</code>
+     * @return The bytes for abi.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getAbiBytes() {
+      return instance.getAbiBytes();
+    }
+    /**
+     * <pre>
+     * The ABI to install the app's native code for, which the agent gives the package
+     * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+     * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+     * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+     * ones.
+     * </pre>
+     *
+     * <code>string abi = 4;</code>
+     * @param value The abi to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAbi(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setAbi(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The ABI to install the app's native code for, which the agent gives the package
+     * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+     * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+     * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+     * ones.
+     * </pre>
+     *
+     * <code>string abi = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAbi() {
+      copyOnWrite();
+      instance.clearAbi();
+      return this;
+    }
+    /**
+     * <pre>
+     * The ABI to install the app's native code for, which the agent gives the package
+     * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+     * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+     * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+     * ones.
+     * </pre>
+     *
+     * <code>string abi = 4;</code>
+     * @param value The bytes for abi to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAbiBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setAbiBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.InstallApk)
   }
   @java.lang.Override
@@ -434,10 +611,11 @@ public  final class InstallApk extends
             "transferId_",
             "name_",
             "size_",
+            "abi_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0000\u0000\u0001\u000b\u0002\u0208" +
-              "\u0003\u0003";
+              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u000b\u0002\u0208" +
+              "\u0003\u0003\u0004\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

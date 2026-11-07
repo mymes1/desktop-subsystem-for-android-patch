@@ -46,4 +46,32 @@ public interface InstallApkOrBuilder extends
    * @return The size.
    */
   long getSize();
+
+  /**
+   * <pre>
+   * The ABI to install the app's native code for, which the agent gives the package
+   * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+   * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+   * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+   * ones.
+   * </pre>
+   *
+   * <code>string abi = 4;</code>
+   * @return The abi.
+   */
+  java.lang.String getAbi();
+  /**
+   * <pre>
+   * The ABI to install the app's native code for, which the agent gives the package
+   * installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+   * take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+   * only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+   * ones.
+   * </pre>
+   *
+   * <code>string abi = 4;</code>
+   * @return The bytes for abi.
+   */
+  com.google.protobuf.ByteString
+      getAbiBytes();
 }
