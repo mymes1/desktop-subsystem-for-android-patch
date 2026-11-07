@@ -79,7 +79,7 @@ public class NavigationPaneWidthTests
 
         var longest = Labels().Max(Width);
         var needed = Math.Ceiling((IconColumn + LabelGap + longest + TrailingGap) / 4) * 4;
-        Assert.Equal(Math.Max(200, needed), OpenPaneLength);
+        Assert.Equal(OpenPaneLength, Math.Max(200, needed));
     }
 
     [Fact]
