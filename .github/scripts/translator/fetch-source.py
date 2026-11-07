@@ -1,7 +1,9 @@
 """Fetches the reduced AOSP tree one Digitalis version is built from, as
-dsa/guest/arm-translation/digitalis-lock.json pins it.
+dsa/guest/arm-translation/digitalis-lock.json pins it, or the tree the patched framework is
+built from, as dsa/guest/framework/framework-lock.json pins it (--lock).
 
     fetch-source.py --android android17 --top <tree> [--jobs 8]
+    fetch-source.py --lock dsa/guest/framework/framework-lock.json --android android17 --top <tree>
 
 Instead of repo, each project is fetched at its pinned commit alone: one commit deep, and for
 a project the lock fetches in part, with blobs left on the server until git's sparse checkout
@@ -22,7 +24,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "dsa/guest/arm-translation"))
+sys.path.insert(0, str(REPO / "dsa/guest/framework"))
 import digitalis_lock  # noqa: E402
+import framework_lock  # noqa: E402
 
 # What the {clang} and {rust} entries need: the build's own word on its toolchains.
 FIRST = ["build/soong", "build/release"]
@@ -83,6 +87,23 @@ def link_files(top, project):
             shutil.copy(source, top / entry["dest"])
 
 
+def load_version(path, android):
+    """The lock's entry for `android`, checked by the reader of the lock's kind."""
+    path = Path(path)
+    if json.loads(path.read_text()).get("kind") == framework_lock.KIND:
+        return framework_lock.version_entry(framework_lock.load(path), android)
+    return digitalis_lock.version_entry(digitalis_lock.load(path), android)
+
+
+def toolchains(version, top):
+    """The Clang and Rust versions the build uses: the ones the lock names (a framework lock
+    names the published build's own), or else what the build system says."""
+    clang = [version["clang"]] if version.get("clang") else digitalis_lock.clang_versions(
+        top, version.get("release", "trunk_staging"))
+    rust = [version["rust"]] if version.get("rust") else digitalis_lock.rust_versions(top)
+    return clang, rust
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--android", required=True)
@@ -90,7 +111,7 @@ def main():
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--lock", type=Path, default=digitalis_lock.LOCK)
     args = parser.parse_args()
-    version = digitalis_lock.version_entry(digitalis_lock.load(args.lock), args.android)
+    version = load_version(args.lock, args.android)
     top = args.top.resolve()
     top.mkdir(parents=True, exist_ok=True)
     projects = version["projects"]
@@ -98,8 +119,7 @@ def main():
     first = [p for p in projects if p["path"] in FIRST]
     for project in first:
         fetch(top, project, (), ())
-    clang = digitalis_lock.clang_versions(top)
-    rust = digitalis_lock.rust_versions(top)
+    clang, rust = toolchains(version, top)
     print(f"the build uses {', '.join(clang)} and Rust {', '.join(rust) or '(none named)'}", flush=True)
     rest = [p for p in projects if p["path"] not in FIRST]
     # The large prebuilts first, so they do not finish last on their own.
@@ -111,8 +131,7 @@ def main():
         link_files(top, project)
     sources = {
         "android": version["android"],
-        "manifest": version["manifest"],
-        "superproject": version["superproject"],
+        **{key: version[key] for key in ("build_id", "release", "manifest", "superproject") if key in version},
         "clang": clang,
         "rust": rust,
         "projects": {p["path"]: {"url": p["url"], "commit": p["commit"]} for p in projects},
