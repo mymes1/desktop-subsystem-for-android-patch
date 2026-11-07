@@ -57,8 +57,21 @@ public class CardStyleTests
         Assert.Equal("8", Resource("CardCornerRadius"));
     }
 
+    // A Semibold family name in the list also turns Korean into Bold, so both apps must replace
+    // the strong fonts with the regular ones when they run in Korean.
+    [Theory]
+    [InlineData("DsaSettings")]
+    [InlineData("DsaApkInstaller")]
+    public void Fr17_korean_replaces_the_strong_fonts_with_the_regular_ones(string app)
+    {
+        var code = File.ReadAllText(XamlPath(app, "App.xaml.cs"));
+        Assert.Contains("TwoLetterISOLanguageName == \"ko\"", code);
+        Assert.Contains("Resources[\"StrongTextFont\"] = Resources[\"TextFont\"]", code);
+        Assert.Contains("Resources[\"StrongDisplayFont\"] = Resources[\"DisplayFont\"]", code);
+    }
+
     // Malgun Gothic has Regular, Semilight and Bold. A weight of Medium or more on a style turns
-    // Korean text into Bold, so a strong style names a Semibold face for Latin text instead.
+    // Korean text into Bold.
     [Theory]
     [InlineData("DsaSettings", "PageTitle")]
     [InlineData("DsaSettings", "SubtitleText")]
