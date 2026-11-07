@@ -421,6 +421,9 @@
   <data name="AdbCard.Description" xml:space="preserve">
     <value>While developer mode is on and Android is running, run this command:</value>
   </data>
+  <data name="CopyButton.ToolTip" xml:space="preserve">
+    <value>Copy</value>
+  </data>
   <data name="AdbPortLabel.Text" xml:space="preserve">
     <value>Port</value>
   </data>

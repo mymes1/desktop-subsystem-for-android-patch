@@ -64,8 +64,7 @@
                     <ui:CardControl.Header>
                         <StackPanel>
                             <TextBlock Text="{l:Text IdentityPreview.Text}" Style="{StaticResource CardTitle}" />
-                            <ui:TextBox IsTextSelectionEnabled="True" MinHeight="0" Text="{Binding FingerprintPreview, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas"
-                                     BorderThickness="0" Background="Transparent" TextWrapping="Wrap"
+                            <TextBox Style="{StaticResource SelectableCode}" Margin="0,4,0,0" Text="{Binding FingerprintPreview, Mode=OneWay}"
                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </StackPanel>
                     </ui:CardControl.Header>

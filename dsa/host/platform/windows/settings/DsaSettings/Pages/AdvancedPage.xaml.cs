@@ -44,6 +44,23 @@ public partial class AdvancedPage : Page
     private async void OnDeveloperModeToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetDeveloperModeAsync(DeveloperModeSwitch.IsChecked == true);
 
+    /// <summary>Copies the adb command, and shows a check mark on the button for a moment. The
+    /// clipboard can be held by another program, and then the button stays as it was.</summary>
+    private async void OnCopyAdbCommand(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Windows.Clipboard.SetDataObject(AdbCommand.Text, copy: true);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            return;
+        }
+        AdbCopyButton.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Checkmark24 };
+        await System.Threading.Tasks.Task.Delay(1500);
+        AdbCopyButton.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Copy24 };
+    }
+
     private async void OnAdbPortChanged(object sender, RoutedEventArgs e) =>
         await ViewModel.SetAdbPortAsync(AdbPortBox.Text);
 
