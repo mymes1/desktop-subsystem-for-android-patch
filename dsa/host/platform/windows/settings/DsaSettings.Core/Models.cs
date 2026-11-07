@@ -104,16 +104,34 @@ public sealed record ArmPackageInfo(string Name, string Version, string Library,
 /// <summary>What the running Android says of ARM translation.</summary>
 public sealed record ArmGuestInfo(bool Installed, bool Active, string Abilist);
 
+/// <summary>Where an ARM translator comes from.</summary>
+public enum ArmSource
+{
+    /// <summary>The default translator the image of this Android carries.</summary>
+    Default,
+    /// <summary>A package the user installed.</summary>
+    User,
+    /// <summary>Google's translator, which the user fetched.</summary>
+    Google,
+}
+
+/// <summary>The ARM translator Android uses: where it comes from, its name, version and
+/// licence.</summary>
+public sealed record ArmTranslatorInfo(ArmSource Source, string Name, string Version, string License);
+
 /// <summary>Whether apps built only for 64-bit ARM can run: the package the user installed,
-/// the setting, what the running Android booted with, whether a restart is due, and whether
-/// Google's translator can be fetched here.</summary>
+/// the setting, what the running Android booted with, whether a restart is due, whether
+/// Google's translator can be fetched here, the default package the image carries (only an
+/// x86_64 image has one), and the translator Android uses from its next start.</summary>
 public sealed record ArmTranslationInfo(
     ArmPackageInfo? Package,
     bool Enabled,
     bool Supported,
     ArmGuestInfo? Android,
     bool RestartNeeded,
-    bool GoogleFetchAvailable = false);
+    bool GoogleFetchAvailable = false,
+    ArmPackageInfo? Default = null,
+    ArmTranslatorInfo? Translator = null);
 
 /// <summary>What a host process does for the user's Android.</summary>
 public enum HostRole
