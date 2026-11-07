@@ -1,0 +1,16 @@
+// A host module every Python build tool depends on in Soong, which the tree does not carry.
+// Soong makes each python_binary_host depend on libsqlite for its launcher. The launcher the
+// build uses is the prebuilt one in prebuilts/build-tools, which does not link it (its only
+// needs are glibc's), and building the real one would take external/sqlite with host ICU.
+// The other module Soong adds, the protobuf compiler aprotoc, is the real one: the tree has
+// external/protobuf, which SurfaceFlinger's and perfetto's .proto sources need anyway.
+
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
+cc_library_host_shared {
+    name: "libsqlite",
+    srcs: ["empty.c"],
+    stl: "none",
+}
