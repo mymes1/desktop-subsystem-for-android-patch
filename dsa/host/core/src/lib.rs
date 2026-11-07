@@ -54,6 +54,8 @@
 //! - [`window_manager`]: keeping a user's window manager running while their Android runs.
 //! - [`compositor`]: platform-neutral graphics stream bookkeeping, renderer interfaces, and
 //!   which window each task and each frame goes to.
+//! - [`renderer`]: the graphics renderer in a process of its own (`dsa-gfx`), which the
+//!   window manager starts, supervises and starts again when it ends.
 
 pub mod accessibility;
 pub mod adb_bridge;
@@ -103,6 +105,7 @@ pub mod notifications;
 pub mod power;
 pub mod power_hints;
 pub mod print;
+pub mod renderer;
 pub mod resize_trace;
 pub mod sensors;
 pub mod session;

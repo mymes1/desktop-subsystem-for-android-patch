@@ -29,10 +29,7 @@ fn connected() -> (Box<dyn Connection>, Box<dyn Connection>) {
 /// Runs the window manager's side of the handshake on a thread, the renderer's on this one.
 fn handshake(
     renderer_hello: Hello,
-) -> (
-    Result<Hello, HandshakeError>,
-    Result<Hello, HandshakeError>,
-) {
+) -> (Result<Hello, HandshakeError>, Result<Hello, HandshakeError>) {
     let (mut window_manager, mut renderer) = connected();
     let window_manager = thread::spawn(move || {
         window_manager_accept(
