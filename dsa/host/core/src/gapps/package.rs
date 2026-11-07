@@ -20,7 +20,7 @@
 //! Android version.
 
 use std::fs::File;
-use std::io::{BufWriter, Cursor, Read, Seek};
+use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use super::tar::{Tar, TarSink};
@@ -229,6 +229,49 @@ fn add_addon<W: std::io::Write + Seek>(
     Ok(())
 }
 
+/// The content of the large entry `entry` of the archive in the file `zip`, inflated as it is
+/// read, so the compressed bytes are never held beside it.
+fn read_large(
+    archive: &mut Archive<File>,
+    entry: &crate::apk_info::zip::Entry,
+    zip: &Path,
+) -> Result<Vec<u8>, String> {
+    let unreadable = |e: std::io::Error| format!("{} cannot be read: {e}", zip.display());
+    if entry.size() > MAX_ARCHIVE as u64 {
+        return Err(format!(
+            "the build's {} is larger than any LiteGapps build holds",
+            entry.name
+        ));
+    }
+    let (method, offset, length) = archive.data_span(entry)?;
+    let mut file = File::open(zip).map_err(unreadable)?;
+    file.seek(SeekFrom::Start(offset)).map_err(unreadable)?;
+    let mut input = file.take(length);
+    let mut data = Vec::with_capacity(entry.size() as usize);
+    match method {
+        0 => {
+            input.read_to_end(&mut data).map_err(unreadable)?;
+        }
+        8 => {
+            crate::arm_translation::google::inflate::inflate(input, &mut |piece: &[u8]| {
+                if data.len() + piece.len() > MAX_ARCHIVE {
+                    return Err("the build's files.tar.xz is larger than it says".to_string());
+                }
+                data.extend_from_slice(piece);
+                Ok(true)
+            })
+            .map_err(|why| format!("the build's {} is damaged: {why}", entry.name))?;
+        }
+        other => {
+            return Err(format!(
+                "the build's {} is compressed in a way zip archives seldom use (method {other})",
+                entry.name
+            ))
+        }
+    }
+    Ok(data)
+}
+
 /// Makes the image at `image` from the LiteGapps build `zip`, which must be a Core build for
 /// `target`. On any failure the image is removed.
 pub fn build_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, String> {
@@ -259,7 +302,7 @@ fn write_image(zip: &Path, target: &Target, image: &Path) -> Result<Built, Strin
         .or_else(|| archive.entry("files.tar.xz"))
         .cloned()
         .ok_or("the build has no files/files.tar.xz, where LiteGapps keeps its apps")?;
-    let packed = archive.read(&tar_entry, MAX_ARCHIVE)?;
+    let packed = read_large(&mut archive, &tar_entry, zip)?;
     let mut sink = IntoImage {
         builder: &mut builder,
         prefix: format!("{}/{}/system/", target.arch, target.sdk),
