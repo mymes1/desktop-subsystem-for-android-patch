@@ -94,6 +94,13 @@ UNNEEDED_APPS = [
     # Cuttlefish's monitoring service (com.android.google.gce.gceservice) reports boot and
     # network state to the Cuttlefish launcher on its host, which DSA does not have.
     "CuttlefishService",
+    # Old AOSP user apps whose upstream maintenance has effectively stopped. The user installs
+    # the calendar, gallery and music player they want. The providers and services beside
+    # them (CalendarProvider, MediaProvider, DownloadProvider, MusicFX) stay, so other apps
+    # that read calendars, media or downloads keep working.
+    "Calendar",
+    "Gallery2",
+    "Music",
     # Developer and demo apps.
     "Traceur",
     "EasterEgg",
