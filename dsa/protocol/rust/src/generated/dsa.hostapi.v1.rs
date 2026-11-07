@@ -1596,7 +1596,8 @@ pub struct RemoveArmTranslation {}
 /// Where ARM translation stands for the caller.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ArmTranslation {
-    /// The installed package; absent when there is none.
+    /// The package the caller installed (their own, or Google's translator); absent when there
+    /// is none. It is used in place of the default package.
     #[prost(message, optional, tag = "1")]
     pub package: ::core::option::Option<ArmTranslationPackage>,
     /// The arm_translation setting.
@@ -1619,6 +1620,15 @@ pub struct ArmTranslation {
     /// it applies once Android starts again.
     #[prost(bool, tag = "7")]
     pub restart_needed: bool,
+    /// The default package of the image the caller's Android starts from, which it uses while
+    /// the caller has installed none. Only an x86_64 image has one; absent otherwise.
+    #[prost(message, optional, tag = "8")]
+    pub default_package: ::core::option::Option<ArmTranslationPackage>,
+    /// The translator the caller's Android uses with these settings, from its next start: "default"
+    /// (default_package), "user" (package, the caller's own), "google" (package, Google's
+    /// translator), or empty for none.
+    #[prost(string, tag = "9")]
+    pub translator: ::prost::alloc::string::String,
 }
 /// The Google apps package a user installed: LiteGapps' Core build for their Android, which the
 /// service downloaded from LiteGapps' file host.
