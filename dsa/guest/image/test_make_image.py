@@ -95,6 +95,9 @@ class ImageLayoutTests(unittest.TestCase):
         "/data/vendor/dsa/arm-translation": ["system_data_root_file", "vendor_data_file"],
         "/data/vendor/dsa/gapps": ["system_data_root_file", "vendor_data_file"],
     }
+    # Paths the daemon names but never opens, so no folder on their way needs a rule. The
+    # Google apps mount point is only compared with the mount points /proc/self/mounts lists.
+    CHANNELD_NAMED_NOT_OPENED = {"/mnt/dsa-gapps"}
 
     # What each file system call in the file sharing jobs asks of the storage's label
     # (media_rw_data_file), as {class: permissions}. A call not listed here fails the test, so
@@ -164,6 +167,8 @@ class ImageLayoutTests(unittest.TestCase):
             policy = (here / "sepolicy" / policy_file).read_text()
             for number, line in self._production_lines(source):
                 for path in literal.findall(line):
+                    if path in self.CHANNELD_NAMED_NOT_OPENED:
+                        continue
                     where = f"{source.name}:{number} uses {path}"
                     known = [p for p in self.CHANNELD_DATA_PATHS if path.startswith(p)]
                     self.assertTrue(
