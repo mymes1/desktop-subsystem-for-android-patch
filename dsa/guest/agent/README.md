@@ -107,7 +107,11 @@ nothing. Its one activity is the guest's home, which draws nothing (see "The hom
   invalid APK, insufficient storage, downgrade, blocked, other) and the installer's own
   message. `INSTALL_PACKAGES` lets the session commit without asking the user; a
   `CancelInstall`, a broken transfer or a new connection abandons the session. An installed
-  app reaches the host's Start menu through the launcher apps report.
+  app reaches the host's Start menu through the launcher apps report. When `InstallApk` names
+  an ABI (`x86_64` or `arm64-v8a`), the session takes it as its ABI override
+  (`SessionParams.abiOverride`, a field the SDK hides that the platform-signed agent may set):
+  the host asks for `arm64-v8a` only when the APK's x86_64 libraries leave out some of its ARM
+  ones and a translator is in place.
 - **Dragging out of a window.** A one-pixel window of the agent's, above every app and
   taking no input, hears of every drag an app starts with `DRAG_FLAG_GLOBAL` (the window
   manager's private flag for intercepting global drags). When the pointer leaves a task's
@@ -256,6 +260,24 @@ other through `PackageInstaller`; `DELETE_PACKAGES` lets it go ahead without ask
 the guest. It answers with `UninstallResult`. `OpenAppSettings` opens Settings' page of an app
 (`ACTION_APPLICATION_DETAILS_SETTINGS`), or its list of apps when no package is named, as a
 task in its own window.
+
+Each app in the report also carries the ABI its native code runs as (the package manager's
+primary CPU ABI) and the library names under `lib/<abi>/` of its base APK and splits
+together, read from their central directories. The host's "Run as ARM" switch asks for an app
+to be installed again with the other ABI (`ReinstallApp`): the agent writes the app's APKs on
+the device into a new session with the ABI override, which replaces the app as an update does
+and keeps its data. When Android refuses that replace in a way only an uninstall gets past
+(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`, `INSTALL_FAILED_SHARED_USER_INCOMPATIBLE`), nothing
+changes and the answer says the data would be erased; with `erase_data` the agent copies the
+APKs to its cache, uninstalls the app and installs the copies. It answers with
+`ReinstallResult`, carrying the ABI Android chose.
+
+The agent also follows the system's crash records (`ACTION_DROPBOX_ENTRY_ADDED`, with
+`READ_LOGS` and `PACKAGE_USAGE_STATS`). When a user app ends because a native library did not
+load (`data_app_crash` or `data_app_native_crash` naming `UnsatisfiedLinkError` or
+`dlopen failed`), it sends `NativeLibraryCrash` with the package, the line that names the
+library, and whether the guest's ABI list holds `arm64-v8a`; the host may then offer to run
+the app as ARM. One app is reported at most once every five minutes.
 
 ## Pointer input
 
