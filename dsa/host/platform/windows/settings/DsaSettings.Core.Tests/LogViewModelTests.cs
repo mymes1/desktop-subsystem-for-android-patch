@@ -52,6 +52,21 @@ public class LogViewModelTests
     }
 
     [Fact]
+    public void Fr21_copying_selected_lines_gives_each_whole_line_in_page_order()
+    {
+        var (model, _, _) = Make();
+        model.AddMany(new[] { Record("A", "one"), Record("B", "two"), Record("C", "three"), "{\"dropped\":3}" });
+        var selected = new[] { model.Lines[3], model.Lines[0], model.Lines[2] };
+        Assert.Equal(
+            string.Join(Environment.NewLine,
+                "2026-11-04 10:00:00.000    12    13 I A: one",
+                "2026-11-04 10:00:00.000    12    13 I C: three",
+                "--------- 3 records dropped"),
+            model.CopyText(selected));
+        Assert.Equal("", model.CopyText(Array.Empty<LogLine>()));
+    }
+
+    [Fact]
     public async Task Fr21_the_viewer_reads_the_log_at_the_chosen_priority_and_shows_each_line()
     {
         var (model, stream, _) = Make();
