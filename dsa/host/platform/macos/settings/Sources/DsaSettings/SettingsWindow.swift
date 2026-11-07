@@ -100,7 +100,9 @@ struct SettingsWindow: View {
                 }
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 300)
+            // As wide as the longest label needs: the list's and the row's insets, the 20 pt tile,
+            // the label spacing and "Running in the background" at 13 pt, rounded up to 4.
+            .navigationSplitViewColumnWidth(min: 224, ideal: 224, max: 300)
         } detail: {
             VStack(spacing: 0) {
                 InstallBar(install: model.install)

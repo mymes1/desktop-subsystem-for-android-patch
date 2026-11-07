@@ -78,8 +78,11 @@ fn build(app: &adw::Application, start: &Start) {
         .build();
     let toasts = adw::ToastOverlay::new();
     let split = adw::NavigationSplitView::new();
-    split.set_min_sidebar_width(240.0);
-    split.set_max_sidebar_width(320.0);
+    // As wide as the longest label needs and no wider, as the Windows app sizes its pane:
+    // the row's 6 px margins and 10 px padding on each side, the 16 px icon, 12 px spacing,
+    // and "Running in the background" at Cantarell 11 pt (about 183 px), rounded up to 4.
+    split.set_min_sidebar_width(244.0);
+    split.set_max_sidebar_width(244.0);
     toasts.set_child(Some(&split));
     window.set_content(Some(&toasts));
 

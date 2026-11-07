@@ -23,7 +23,9 @@
          window title's too, starts 48 px from it. Rows are 40 px apart, each with a 36 px
          highlight. The library's own template (WPF UI, MIT licence, Leszek Pomianowski and WPF
          UI contributors) puts its icons 1.5 px apart and has a back button; the app has no
-         sub-pages to go back from. -->
+         sub-pages to go back from. The open pane is as wide as its longest label needs:
+         the 40 px icon column (the selection bar sits in it), 4 px, the label at 14 px, and a
+         12 px gap on the right, rounded up to 4. NavigationPaneWidthTests holds the arithmetic. -->
     <ui:FluentWindow.Resources>
         <ControlTemplate x:Key="PaneItemTemplate" TargetType="{x:Type ui:NavigationViewItem}">
             <Border x:Name="MainBorder" Height="36" Background="Transparent"
@@ -208,7 +210,7 @@
             x:Name="Navigation"
             Grid.Row="2"
             PaneDisplayMode="Left"
-            OpenPaneLength="320"
+            OpenPaneLength="236"
             Template="{StaticResource PaneTemplate}"
             ItemTemplate="{StaticResource PaneItemTemplate}"
             IsBackButtonVisible="Collapsed"
