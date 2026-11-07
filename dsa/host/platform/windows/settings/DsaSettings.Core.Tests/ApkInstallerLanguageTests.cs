@@ -114,16 +114,19 @@ public class ApkInstallerLanguageTests
     }
 
     [Fact]
-    public void Fr11_installer_icon_is_dsas_parcel_drawing()
+    public void Fr11_installer_icon_is_dsas_open_box_drawing()
     {
         var project = Project();
         Assert.Equal(@"Assets\apk-installer.ico", (string?)project.Descendants("ApplicationIcon").Single());
         var ico = File.ReadAllBytes(Find("DsaApkInstaller", "Assets", "apk-installer.ico"));
         var png = File.ReadAllBytes(Find("DsaApkInstaller", "Assets", "apk-installer.png"));
-        Assert.True(Contains(ico, png), "the .ico does not hold the 256 px parcel image");
-        // The drawing it is rendered from: the parcel master, not DSA's symbol with a badge.
+        Assert.True(Contains(ico, png), "the .ico does not hold the 256 px open box image");
+        // The drawing it is rendered from: the open cardboard box, not DSA's symbol with a badge
+        // and not the earlier parcel with an arrow.
         var master = File.ReadAllText(Find("..", "..", "..", "..", "brand", "apk-installer.svg"));
-        Assert.Contains("parcel", master);
+        Assert.Contains("open cardboard box", master);
+        Assert.DoesNotContain("arrow", master);
+        Assert.DoesNotContain("<filter", master);
         var window = File.ReadAllText(Find("DsaApkInstaller", "InstallerWindow.xaml.cs"));
         Assert.DoesNotContain("WindowsApps", window);
         Assert.DoesNotContain("AppInstaller", window);

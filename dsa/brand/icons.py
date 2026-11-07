@@ -27,7 +27,7 @@ ICNS_IMAGES = [
 BADGES = ["settings", "files"]
 
 # Companion apps drawn from their own master instead of the symbol with a badge: the APK
-# Installer is a parcel with an arrow, with no DSA mark on it. Each also has a
+# Installer is an open cardboard box, with no DSA mark on it. Each also has a
 # `<master>-symbolic.svg` for Linux.
 OWN_MASTERS = {"apk": "apk-installer"}
 
