@@ -20,6 +20,11 @@
 //! ABI properties and mounts the image before its zygote starts. Without it the guest is
 //! exactly the image as made, so an x86_64 app sees no difference. The ABIs Android installs
 //! apps for are fixed at boot, so every change applies from the next start of Android.
+//!
+//! [`google`] makes such a package, on the user's request, from Google's own ARM translator:
+//! the user's computer downloads it from Google, and DSA never ships it.
+
+pub mod google;
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
