@@ -273,17 +273,18 @@ jobs:
           . .github/scripts/installer/setup-ui.ps1
           New-Item -ItemType Directory -Force screens | Out-Null
           $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
-          # The app opens on the page --page names, so each picture is of one fresh start.
+          # Each picture is of one fresh start, on the page its pane item opens through UI Automation.
           foreach ($theme in 'light', 'dark') {
             Set-AppTheme -Dark:($theme -eq 'dark')
             foreach ($page in 'general', 'memory', 'display', 'updates', 'advanced', 'device', 'about', 'logs') {
-              $app = Start-Process $exe -ArgumentList '--page', $page -PassThru
+              $app = Start-Process $exe -PassThru
               $window = Wait-ProcessWindow $app.Id 90
               if (-not $window) {
                 Show-Desktop "settings-$theme-$page-timeout"
                 $exited = if ($app.HasExited) { "it exited with code $($app.ExitCode)" } else { "it is still running" }
                 throw "DSA Settings showed no window within 90 seconds; $exited"
               }
+              Open-SettingsPage $window $page
               Start-Sleep -Seconds 5
               Save-WindowScreen $window "$PWD\screens\settings-$theme-$page.png"
               if ($app.HasExited) { throw "DSA Settings exited while showing $page (code $($app.ExitCode))" }
@@ -302,7 +303,7 @@ jobs:
           $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
           foreach ($theme in 'light', 'dark') {
             Set-AppTheme -Dark:($theme -eq 'dark')
-            $app = Start-Process $exe -ArgumentList '--page', 'general' -PassThru
+            $app = Start-Process $exe -PassThru
             $window = Wait-ProcessWindow $app.Id 90
             if (-not $window) { throw "DSA Settings showed no window within 90 seconds" }
             Start-Sleep -Seconds 5
@@ -335,12 +336,13 @@ jobs:
             foreach ($lang in 'en-US', 'ko-KR') {
               foreach ($theme in 'light', 'dark') {
                 Set-AppTheme -Dark:($theme -eq 'dark')
-                $app = Start-Process $exe -ArgumentList '--page', 'widgets', '--lang', $lang -PassThru
+                $app = Start-Process $exe -ArgumentList '--lang', $lang -PassThru
                 $window = Wait-ProcessWindow $app.Id 90
                 if (-not $window) {
                   Show-Desktop "settings-$theme-widgets-$lang-timeout"
                   throw "DSA Settings showed no window for the Widgets page within 90 seconds"
                 }
+                Open-SettingsPage $window 'widgets' $lang
                 Start-Sleep -Seconds 5
                 Assert-RowsShown $window 'Clock', 'Sticky note', 'Forecast'
                 Save-WindowScreen $window "$PWD\screens\settings-$theme-widgets-$lang.png"
@@ -371,12 +373,13 @@ jobs:
               foreach ($theme in 'light', 'dark') {
                 Set-AppTheme -Dark:($theme -eq 'dark')
                 foreach ($page in 'memory', 'general', 'advanced') {
-                  $app = Start-Process $exe -ArgumentList '--page', $page, '--lang', $lang -PassThru
+                  $app = Start-Process $exe -ArgumentList '--lang', $lang -PassThru
                   $window = Wait-ProcessWindow $app.Id 90
                   if (-not $window) {
                     Show-Desktop "settings-$theme-$page-$lang-timeout"
                     throw "DSA Settings showed no window for the $page page within 90 seconds"
                   }
+                  Open-SettingsPage $window $page $lang
                   Start-Sleep -Seconds 5
                   Save-WindowScreen $window "$PWD\screens\settings-$theme-$page-$lang.png"
                   if ($app.HasExited) { throw "DSA Settings exited while showing the $page page (code $($app.ExitCode))" }
@@ -402,9 +405,10 @@ jobs:
             foreach ($lang in 'en-US', 'ko-KR') {
               foreach ($theme in 'light', 'dark') {
                 Set-AppTheme -Dark:($theme -eq 'dark')
-                $app = Start-Process $exe -ArgumentList '--page', 'advanced', '--lang', $lang -PassThru
+                $app = Start-Process $exe -ArgumentList '--lang', $lang -PassThru
                 $window = Wait-ProcessWindow $app.Id 90
                 if (-not $window) { throw "DSA Settings showed no window for the Advanced page within 90 seconds" }
+                Open-SettingsPage $window 'advanced' $lang
                 Start-Sleep -Seconds 5
                 $box = $window.FindFirst($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($Auto::AutomationIdProperty, 'AdbPortBox')))
                 if (-not $box) { throw "the Advanced page has no adb port box" }
@@ -437,9 +441,10 @@ jobs:
             }
             foreach ($theme in 'light', 'dark') {
               Set-AppTheme -Dark:($theme -eq 'dark')
-              $app = Start-Process $exe -ArgumentList '--page', 'network', '--lang', 'en-US' -PassThru
+              $app = Start-Process $exe -ArgumentList '--lang', 'en-US' -PassThru
               $window = Wait-ProcessWindow $app.Id 90
               if (-not $window) { throw "DSA Settings showed no window for the Network page within 90 seconds" }
+              Open-SettingsPage $window 'network' 'en-US'
               Start-Sleep -Seconds 5
               # An unknown page name opens General, so this card's title proves the page opened.
               Assert-RowsShown $window "Android's network"
@@ -449,6 +454,58 @@ jobs:
             }
           } finally {
             Set-AppTheme
+          }
+
+      # Every item of the navigation pane, the footer's About too, is a list item named by its
+      # label that UI Automation can select, as Narrator does, and selecting it opens its page:
+      # the item reports itself selected and the page's title shows beside the pane. Invoking
+      # an item opens its page as well.
+      - name: fr17_every_settings_page_opens_from_its_pane_item_through_ui_automation
+        run: |
+          . .github/scripts/installer/setup-ui.ps1
+          New-Item -ItemType Directory -Force screens | Out-Null
+          $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
+          $pages = 'memory', 'apps', 'background', 'widgets', 'display', 'android', 'updates', 'device', 'network', 'advanced', 'logs', 'about', 'general'
+          foreach ($lang in 'en-US', 'ko-KR') {
+            $app = Start-Process $exe -ArgumentList '--lang', $lang -PassThru
+            $window = Wait-ProcessWindow $app.Id 90
+            if (-not $window) { throw "DSA Settings showed no window within 90 seconds" }
+            try {
+              foreach ($page in $pages) {
+                $label = Get-SettingsPageLabel $page $lang
+                Open-SettingsPage $window $page $lang
+                $others = @($pages | Where-Object { $_ -ne $page } | ForEach-Object {
+                  $other = Find-SettingsPaneItem $window (Get-SettingsPageLabel $_ $lang)
+                  if (-not $other) { throw "the navigation pane has no selectable item named '$(Get-SettingsPageLabel $_ $lang)'" }
+                  if ($other.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) { $_ }
+                })
+                if ($others) { throw "with '$label' open, these items also say they are selected: $($others -join ', ')" }
+                $paneEdge = $window.Current.BoundingRectangle.X + 320
+                $deadline = (Get-Date).AddSeconds(15)
+                $title = $null
+                while (-not $title -and (Get-Date) -lt $deadline) {
+                  $title = $window.FindAll($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($Auto::NameProperty, $label))) |
+                    Where-Object { $_.Current.BoundingRectangle.X -gt $paneEdge -and $_.Current.BoundingRectangle.Width -gt 0 } | Select-Object -First 1
+                  if (-not $title) { Start-Sleep -Milliseconds 500 }
+                }
+                if (-not $title) {
+                  Save-WindowScreen $window "$PWD\screens\settings-uia-$page-$lang.png"
+                  throw "selecting '$label' did not show a page titled '$label'"
+                }
+                Write-Host "'$label' opened its page ($lang)"
+              }
+              # Invoke opens a page too.
+              $item = Find-SettingsPaneItem $window (Get-SettingsPageLabel 'about' $lang)
+              $item.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+              Start-Sleep -Seconds 2
+              if (-not $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) {
+                throw "invoking the About item through UI Automation did not open its page"
+              }
+              if ($app.HasExited) { throw "DSA Settings exited (code $($app.ExitCode))" }
+            } finally {
+              Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+              $app.WaitForExit(10000) | Out-Null
+            }
           }
 
       # The "Running in the background" page with apps on it: this runner's Android does not
@@ -464,12 +521,13 @@ jobs:
           if ($listed.apps.Count -ne 2) { throw "the stand-in dsa lists $($listed.apps.Count) apps, not 2" }
           foreach ($theme in 'light', 'dark') {
             Set-AppTheme -Dark:($theme -eq 'dark')
-            $app = Start-Process $exe -ArgumentList '--page', 'background' -PassThru
+            $app = Start-Process $exe -PassThru
             $window = Wait-ProcessWindow $app.Id 90
             if (-not $window) {
               Show-Desktop "settings-$theme-background-timeout"
               throw "DSA Settings showed no window within 90 seconds"
             }
+            Open-SettingsPage $window 'background'
             Start-Sleep -Seconds 8
             Assert-RowsShown $window 'Music', 'Files' -MinVisible 2
             Save-WindowScreen $window "$PWD\screens\settings-$theme-background.png"
@@ -605,9 +663,10 @@ jobs:
           }
           function Start-Short([string]$Page) {
             Close-PrivacyExperience
-            $app = Start-Process $exe -ArgumentList '--page', $Page -PassThru
+            $app = Start-Process $exe -PassThru
             $window = Wait-ProcessWindow $app.Id 90
             if (-not $window) { throw "DSA Settings showed no window within 90 seconds" }
+            Open-SettingsPage $window $Page
             Start-Sleep -Seconds 4
             $transform = $window.GetCurrentPattern([System.Windows.Automation.TransformPattern]::Pattern)
             $transform.Move(40, 40)
@@ -876,12 +935,13 @@ jobs:
             foreach ($lang in 'en-US', 'ko-KR') {
               foreach ($theme in 'light', 'dark') {
                 Set-AppTheme -Dark:($theme -eq 'dark')
-                $app = Start-Process $exe -ArgumentList '--page', 'apps', '--lang', $lang -PassThru
+                $app = Start-Process $exe -ArgumentList '--lang', $lang -PassThru
                 $window = Wait-ProcessWindow $app.Id 90
                 if (-not $window) {
                   Show-Desktop "settings-$theme-apps-$lang-timeout"
                   throw "DSA Settings showed no window for the Apps page within 90 seconds"
                 }
+                Open-SettingsPage $window 'apps' $lang
                 Start-Sleep -Seconds 5
                 Assert-RowsShown $window $AppsFixtureLabels
                 Save-WindowScreen $window "$PWD\screens\settings-$theme-apps-$lang.png"
@@ -951,9 +1011,10 @@ jobs:
           }
           try {
             Set-AppTheme
-            $app = Start-Process $exe -ArgumentList '--page', 'apps', '--lang', 'en-US' -PassThru
+            $app = Start-Process $exe -ArgumentList '--lang', 'en-US' -PassThru
             $window = Wait-ProcessWindow $app.Id 90
             if (-not $window) { throw "DSA Settings showed no window for the Apps page within 90 seconds" }
+            Open-SettingsPage $window 'apps' 'en-US'
             Assert-RowsShown $window $AppsFixtureLabels
             $texts = Find-Typed $window $types::Text
             $sizes = @($texts | Where-Object { $_.Current.Name -match '^[\d.,]+ (KB|MB|GB)$' -and $_.Current.BoundingRectangle.Width -gt 0 })
@@ -1024,9 +1085,10 @@ jobs:
             $app.WaitForExit(10000) | Out-Null
 
             # The Android log's list shows its lines.
-            $app = Start-Process $exe -ArgumentList '--page', 'logs', '--lang', 'en-US' -PassThru
+            $app = Start-Process $exe -ArgumentList '--lang', 'en-US' -PassThru
             $window = Wait-ProcessWindow $app.Id 90
             if (-not $window) { throw "DSA Settings showed no window for the log page within 90 seconds" }
+            Open-SettingsPage $window 'logs' 'en-US'
             $deadline = (Get-Date).AddSeconds(30)
             $lines = @()
             while ($lines.Count -eq 0 -and (Get-Date) -lt $deadline) {
