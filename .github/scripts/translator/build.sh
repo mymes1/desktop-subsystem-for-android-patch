@@ -24,6 +24,17 @@ mkdir -p "$device"
 cp -r "$here/device/." "$device/"
 mkdir -p "$device/prebuilts/x86_64"
 cp "$framework_libs"/*.so "$device/prebuilts/x86_64/"
+# The header modules export copies of these include folders: Soong does not let a module
+# export a folder outside its own.
+while read -r dir; do
+  case "$dir" in ""|"#"*) continue ;; esac
+  if [[ ! -d "$top/$dir" ]]; then
+    echo "the tree has no $dir, which the header modules export" >&2
+    exit 1
+  fi
+  mkdir -p "$device/headers/$dir"
+  cp -r "$top/$dir/." "$device/headers/$dir/"
+done < "$here/device/headers/include-dirs.txt"
 
 cd "$top"
 uv run "$repo/dsa/guest/arm-translation/assemble-digitalis.py" targets \
