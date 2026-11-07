@@ -87,7 +87,7 @@ def fake_target_files(root, machine):
         link.external_attr = (stat.S_IFLNK | 0o777) << 16
         z.writestr(link, "/apex/com.android.conscrypt/lib64/libcrypto.so")
         for apex, compressed in [("com.android.i18n", True), ("com.android.conscrypt", False),
-                                 ("com.android.neuralnetworks", False)]:
+                                 ("com.android.neuralnetworks", False), ("com.android.art", True)]:
             payload = f"payload of {apex}".encode()
             payloads[payload] = apex
             suffix = ".capex" if compressed else ".apex"

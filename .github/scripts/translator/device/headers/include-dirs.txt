@@ -1,0 +1,22 @@
+# Include folders build.sh copies from the tree into device/dsa/dsa_translator/headers/, at
+# the same relative paths, for the header modules in Android.bp. A module's
+# export_include_dirs may not leave its own folder: Soong turned "../../../../<path>" into
+# the module folder itself, so none of these reached a compile (the eighth run).
+art/openjdkjvmti/include
+frameworks/av/camera/ndk/include
+frameworks/av/media/libaaudio/include
+frameworks/av/media/ndk/include
+frameworks/base/core/jni/include
+frameworks/base/media/native/midi/include
+frameworks/native/include
+frameworks/native/libs/arect/include
+frameworks/native/libs/binder/ndk/include_cpp
+frameworks/native/libs/binder/ndk/include_ndk
+frameworks/native/libs/binder/ndk/include_platform
+frameworks/native/libs/nativebase/include
+frameworks/native/libs/nativewindow/include
+frameworks/native/opengl/include
+frameworks/native/vulkan/include
+frameworks/wilhelm/include
+libnativehelper/include
+libnativehelper/include_platform
