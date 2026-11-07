@@ -38248,7 +38248,7 @@ inline const std::string& InstallPart::name() const {
 template <typename ArgT0, typename... ArgT>
 inline PROTOBUF_ALWAYS_INLINE
 void InstallPart::set_name(ArgT0&& arg0, ArgT... args) {
-
+ 
  _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
   // @@protoc_insertion_point(field_set:dsa.control.v1.InstallPart.name)
 }
@@ -38261,11 +38261,11 @@ inline const std::string& InstallPart::_internal_name() const {
   return _impl_.name_.Get();
 }
 inline void InstallPart::_internal_set_name(const std::string& value) {
-
+  
   _impl_.name_.Set(value, GetArenaForAllocation());
 }
 inline std::string* InstallPart::_internal_mutable_name() {
-
+  
   return _impl_.name_.Mutable(GetArenaForAllocation());
 }
 inline std::string* InstallPart::release_name() {
@@ -38274,9 +38274,9 @@ inline std::string* InstallPart::release_name() {
 }
 inline void InstallPart::set_allocated_name(std::string* name) {
   if (name != nullptr) {
-
+    
   } else {
-
+    
   }
   _impl_.name_.SetAllocated(name, GetArenaForAllocation());
 #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
@@ -38299,7 +38299,7 @@ inline uint64_t InstallPart::size() const {
   return _internal_size();
 }
 inline void InstallPart::_internal_set_size(uint64_t value) {
-
+  
   _impl_.size_ = value;
 }
 inline void InstallPart::set_size(uint64_t value) {
@@ -38319,7 +38319,7 @@ inline bool InstallPart::obb() const {
   return _internal_obb();
 }
 inline void InstallPart::_internal_set_obb(bool value) {
-
+  
   _impl_.obb_ = value;
 }
 inline void InstallPart::set_obb(bool value) {
@@ -58466,6 +58466,8 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

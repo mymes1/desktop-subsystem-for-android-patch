@@ -24,7 +24,7 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "dsa/guest/arm-translation"))
 import digitalis_lock  # noqa: E402
 
-# What the {clang} entry needs: the build's own word on its Clang.
+# What the {clang} and {rust} entries need: the build's own word on its toolchains.
 FIRST = ["build/soong", "build/release"]
 
 
@@ -32,12 +32,12 @@ def git(*args, cwd):
     subprocess.run(["git", "-c", "advice.detachedHead=false", *args], cwd=cwd, check=True)
 
 
-def fetch(top, project, clang):
+def fetch(top, project, clang, rust):
     path = top / project["path"]
     if path.exists():
         shutil.rmtree(path)
     path.mkdir(parents=True)
-    mode, entries = digitalis_lock.sparse_entries(project, clang)
+    mode, entries = digitalis_lock.sparse_entries(project, clang, rust)
     for attempt in range(4):
         try:
             if (path / ".git").exists():
@@ -97,14 +97,15 @@ def main():
 
     first = [p for p in projects if p["path"] in FIRST]
     for project in first:
-        fetch(top, project, ())
+        fetch(top, project, (), ())
     clang = digitalis_lock.clang_versions(top)
-    print(f"the build uses {', '.join(clang)}", flush=True)
+    rust = digitalis_lock.rust_versions(top)
+    print(f"the build uses {', '.join(clang)} and Rust {', '.join(rust) or '(none named)'}", flush=True)
     rest = [p for p in projects if p["path"] not in FIRST]
     # The large prebuilts first, so they do not finish last on their own.
     rest.sort(key=lambda p: not p["path"].startswith("prebuilts/"))
     with ThreadPoolExecutor(args.jobs) as pool:
-        for future in [pool.submit(fetch, top, p, clang) for p in rest]:
+        for future in [pool.submit(fetch, top, p, clang, rust) for p in rest]:
             future.result()
     for project in projects:
         link_files(top, project)
@@ -113,6 +114,7 @@ def main():
         "manifest": version["manifest"],
         "superproject": version["superproject"],
         "clang": clang,
+        "rust": rust,
         "projects": {p["path"]: {"url": p["url"], "commit": p["commit"]} for p in projects},
     }
     (top / ".dsa-sources.json").write_text(json.dumps(sources, indent=2) + "\n")

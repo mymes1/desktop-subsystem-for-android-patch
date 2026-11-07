@@ -84,11 +84,13 @@ def read_manifest(commit):
     return remotes, projects, superproject, default
 
 
-def superproject_commits(url, branch):
-    """The superproject's head commit on `branch` and {path: commit} of its gitlinks."""
+def superproject_commits(url, ref):
+    """The superproject commit at `ref` (a branch, or a commit already pinned) and
+    {path: commit} of its gitlinks."""
     with tempfile.TemporaryDirectory() as tmp:
         git("init", "-q", tmp)
-        git("fetch", "-q", "--depth=1", "--filter=blob:none", url, f"refs/heads/{branch}", cwd=tmp)
+        wanted = ref if len(ref) == 40 and all(c in "0123456789abcdef" for c in ref) else f"refs/heads/{ref}"
+        git("fetch", "-q", "--depth=1", "--filter=blob:none", url, wanted, cwd=tmp)
         head = git("rev-parse", "FETCH_HEAD", cwd=tmp).strip()
         links = {}
         for line in git("ls-tree", "-r", "FETCH_HEAD", cwd=tmp).splitlines():
@@ -112,7 +114,9 @@ def update_version(version, missing_only):
         head, links = superproject_commits(aosp + superproject["name"], sp_branch)
         pin.update({"url": aosp + superproject["name"], "branch": sp_branch, "commit": head})
     else:
-        _, links = superproject_commits(aosp + superproject["name"], sp_branch)
+        # Projects added to a pinned lock take their commits from the same superproject
+        # commit as the others, so the tree stays one AOSP state.
+        _, links = superproject_commits(aosp + superproject["name"], pin["commit"])
     version["aosp_branch"] = sp_branch
     for entry in version["projects"]:
         if missing_only and entry.get("commit"):
