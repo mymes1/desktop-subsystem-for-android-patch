@@ -1,0 +1,52 @@
+// Stands in for prebuilts/sdk/Android.bp, which build.sh puts in its place. The tree takes
+// only the SDK's finalized flag lists from that project, which aconfig is built with
+// (build/make/tools/aconfig/convert_finalized_flags names //prebuilts/sdk:finalized-api-flags).
+// The real file also declares the prebuilt SDKs (prebuilt_apis), which stops Soong's
+// analysis when their API files are not in the tree ("no api file found"), and the SDK's API
+// files and jars are several GB that nothing here builds with. The modules below are the
+// real file's, unchanged.
+
+package {
+    default_applicable_licenses: ["prebuilts_sdk_license"],
+}
+
+license {
+    name: "prebuilts_sdk_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-Apache-2.0",
+        "SPDX-license-identifier-BSD",
+        "SPDX-license-identifier-CC0-1.0",
+        "SPDX-license-identifier-CPL-1.0",
+        "SPDX-license-identifier-MIT",
+        "SPDX-license-identifier-NCSA",
+        "SPDX-license-identifier-OFL", // by exception only
+        "SPDX-license-identifier-Unicode-DFS",
+        "SPDX-license-identifier-W3C",
+        "legacy_unencumbered",
+    ],
+    license_text: [
+        "NOTICE",
+    ],
+}
+
+// Allow aconfig to use finalized flag files to automatically include SDK level
+// checks for finalized API flags.
+filegroup {
+    name: "finalized-api-flags",
+    srcs: [
+        "*/finalized-flags.txt",
+    ],
+    visibility: [
+        "//build/make/tools/aconfig:__subpackages__",
+    ],
+}
+
+genrule {
+    name: "latest-finalized-flags",
+    srcs: [
+        "*/finalized-flags.txt",
+    ],
+    out: ["latest-finalized-flags.txt"],
+    cmd: "cp `echo \"$(in)\" | tr ' ' '\n' | grep -v -e current | sort -V | tail -n1` $(out)",
+}

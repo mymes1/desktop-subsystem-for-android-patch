@@ -87,6 +87,37 @@ class LockTests(unittest.TestCase):
             for path, files in wanted.items():
                 self.assertEqual(projects[path].get("exclude"), files, f"{version['android']} {path}")
 
+    def test_nfr5_the_sdk_project_gives_only_its_flag_lists_under_a_stand_in_build_file(self):
+        # The real prebuilts/sdk/Android.bp declares the prebuilt SDKs, whose API files the tree
+        # does not have: the first Framework build run's analysis stopped on all four builds
+        # with 'module "sdk": no api file found under "prebuilts/sdk"'. aconfig still needs
+        # //prebuilts/sdk:finalized-api-flags, so build.sh puts a stand-in in its place.
+        for version in self.lock["versions"]:
+            sdk = next(p for p in version["projects"] if p["path"] == "prebuilts/sdk")
+            self.assertEqual(sdk.get("patterns"), ["/NOTICE", "/*/finalized-flags.txt"], version["android"])
+            self.assertNotIn("cone", sdk)
+        stand_in = (REPO / ".github/scripts/framework/prebuilts-sdk/Android.bp").read_text()
+        code = re.sub(r"//[^\n]*", "", stand_in)
+        self.assertNotIn("prebuilt_apis", code)
+        self.assertRegex(code, r'filegroup \{\s*name: "finalized-api-flags",\s*srcs: \[\s*"\*/finalized-flags.txt"')
+        self.assertRegex(code, r'genrule \{\s*name: "latest-finalized-flags"')
+        self.assertRegex(code, r'license \{\s*name: "prebuilts_sdk_license"')
+        build = (REPO / ".github/scripts/framework/build.sh").read_text()
+        self.assertIn('cp "$here/prebuilts-sdk/Android.bp" "$sdk/Android.bp"', build)
+        self.assertIn('sdk="$top/prebuilts/sdk"', build)
+
+    def test_nfr5_python_tools_find_the_host_libsqlite_soong_adds_to_them(self):
+        # Every python_binary_host depends on libsqlite, which no project in the tree defines;
+        # the translator build's seventh run failed on it. aprotoc, the other module Soong adds,
+        # is external/protobuf's own, so a stand-in for it would clash with the real one.
+        hosttools = (REPO / ".github/scripts/framework/device/hosttools/Android.bp").read_text()
+        self.assertRegex(hosttools, r'cc_library_host_shared \{\s*name: "libsqlite"')
+        self.assertNotIn('name: "aprotoc"', hosttools)
+        for version in self.lock["versions"]:
+            self.assertIn("external/protobuf", [p["path"] for p in version["projects"]])
+        build = (REPO / ".github/scripts/framework/build.sh").read_text()
+        self.assertIn('cp -r "$here/device/hosttools" "$device/"', build)
+
     def test_nfr5_a_lock_for_another_build_than_the_image_is_refused(self):
         lock = copy.deepcopy(self.lock)
         lock["versions"][0]["build_id"] = "1"

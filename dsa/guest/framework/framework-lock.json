@@ -1000,7 +1000,7 @@
           "url": "https://android.googlesource.com/platform/prebuilts/sdk",
           "commit": "8c36435476cbaea0a4170a327e55dd4775cd60b9",
           "patterns": [
-            "/Android.bp",
+            "/NOTICE",
             "/*/finalized-flags.txt"
           ]
         },
@@ -2198,7 +2198,7 @@
           "url": "https://android.googlesource.com/platform/prebuilts/sdk",
           "commit": "0f07e8d60ab0aba46129e427101f96ba459a95c1",
           "patterns": [
-            "/Android.bp",
+            "/NOTICE",
             "/*/finalized-flags.txt"
           ]
         },

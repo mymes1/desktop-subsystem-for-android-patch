@@ -1448,6 +1448,30 @@ R16의 번역기 빌드와 같은 방법이다. 받기 스크립트(`fetch-sourc
 
 최대 사용량은 약 30 ~ 45 GB다. 처음 실행이 시간을 넘어도 ccache가 남아 다음 실행이 이어 간다.
 
+### 첫 실행(run 42402220551, 네 작업)과 고친 것
+
+네 작업(16과 17, x86_64와 arm64)이 모두 같은 곳에서 멈추었다. 러너 정리, 소스 받기, 패치 적용, 제품 설정, `soong_build` 빌드는 통과했고, Soong이 Android.bp 파일을 읽는 단계가 1초 만에 끝났다. 네 작업의 `error.log`, `soong.log`, `verbose.log.gz`에 있는 오류는 하나다.
+
+```
+error: prebuilts/sdk/Android.bp:105:1: module "sdk": no api file found under "prebuilts/sdk"
+```
+
+x86_64 작업이 9 ~ 10분 만에 끝난 것도 같은 오류다. 작업 사이의 시간 차이는 소스 받기 시간이다.
+
+- 원인: 잠금이 `prebuilts/sdk`에서 `Android.bp`와 판마다의 `finalized-flags.txt`만 받았다. 그 `Android.bp`의 `sdk`(`prebuilt_apis`)는 파일을 읽는 순간(load hook) 판마다의 API 파일(`<판>/<범위>/api/*.txt`)을 찾고, 하나도 없으면 오류를 낸다(`build/soong/java/prebuilt_apis.go`의 `prebuiltApiFiles`). `ALLOW_MISSING_DEPENDENCIES`는 이것을 덮지 않는다. 이 오류는 파일을 읽는 단계에서 나므로, 그 뒤 단계(의존 해석, 빌드 동작 만들기)의 오류는 이번 로그에 없다.
+- 이 프로젝트에서 빌드가 쓰는 것은 확정된 플래그 목록뿐이다. aconfig는 `finalized_flags_record.json`을 소스로 넣고(`build/make/tools/aconfig/aconfig`), 그 genrule이 `//prebuilts/sdk:finalized-api-flags`를 읽는다. `build/soong/aconfig`의 `all_aconfig_declarations`는 `:latest-finalized-flags`를 읽는다. API 파일과 jar는 이 빌드가 쓰지 않는다.
+- 고친 것: API 파일을 받는 대신 `Android.bp`를 받지 않고, `build.sh`가 그 자리에 대역(`.github/scripts/framework/prebuilts-sdk/Android.bp`)을 둔다. 대역에는 원래 파일의 라이선스와 `finalized-api-flags`, `latest-finalized-flags`가 그대로 있고 `prebuilt_apis`는 없다. 잠금은 `/NOTICE`와 `/*/finalized-flags.txt`를 받는다. 체크아웃에 진짜 `Android.bp`가 있으면 `build.sh`가 멈춘다.
+- 이것으로 분석이 멈추지 않는다고 보는 근거: 번역기 트리에는 `prebuilts/sdk`가 아예 없었는데 분석이 통과했다(R16의 여섯 번째 실행). Java 모듈의 SDK 의존은 SDK jar가 없으면 `ALLOW_MISSING_DEPENDENCIES`에서 누락으로 처리된다(`build/soong/java/sdk.go`의 `toPrebuilt`).
+- 앞을 내다보고 고친 것: R16의 일곱 번째 실행처럼 Soong은 모든 `python_binary_host`에 `libsqlite`와 `aprotoc`를 붙인다. 이 빌드도 `gensyscalls` 같은 Python 도구로 `libc`의 소스를 만든다. 트리에 `libsqlite`가 없으므로(`toolchain/pgo-profiles`의 같은 이름은 자기 namespace 안의 `fdo_profile`이다) 제품 폴더에 빈 호스트 `libsqlite`를 둔다(`device/hosttools`). `aprotoc`는 대역을 두지 않는다. 트리에 `external/protobuf`가 있어 진짜가 정의되어 있고, 대역은 이름이 겹친다. SurfaceFlinger와 perfetto의 `.proto` 소스가 어차피 진짜를 쓴다.
+
+번역기 트리에 없던 모듈 형식도 살폈다. 잠금과 같은 부분 체크아웃 규칙으로 빌드 파일만 받은 사본에서, 트리의 Android.bp(16은 2,264개, 17은 2,684개)가 쓰는 모듈 형식을 번역기 트리의 것과 비교했다. 새로 있는 위험한 형식은 `frameworks/base`의 Java와 API 모듈이다(`combined_apis`, `java_sdk_library`, `system_java_library`, `non_updatable_exportable_droidstubs`, `java_genrule_combiner`, `platform_compat_config`, `*_mock_init`). 이번 실행에서 파일을 읽는 단계는 이것들 모두 통과했다. 그 뒤 단계는 아직 돌지 않았다.
+
+- `libs/hwui`와 `core/java`의 Android.bp는 빌드에 필요한 모듈(`libhwui`, `libpowermanager_aidl` 등)을 함께 가지므로 뺄 수 없다.
+- `services`, `services/core`, `api`의 Android.bp는 빌드에 필요한 모듈이 없다. 하지만 빌드에 필요한 파일(`services/backup`, `display/feature`의 aconfig 선언)과 `frameworks/base/Android.bp`가 그 모듈 이름을 쓰고, `api`에는 Soong 플러그인(`soong-api`)이 있다. 지우면 누락이 더 늘 뿐이라 두었다.
+- 빌드가 쓰지 않는 Java 전용 시험 파일(`frameworks/native/opengl/tests`의 앱 7개, `libnativehelper/tests_mts`, `system/tools/hidl/test`의 Java 시험 3개)은 번역기 트리에도 있던 형식(`android_app`, `android_test`, `java_library`)뿐이라 두었다.
+
+다음 실행에서 분석의 뒤 단계가 처음으로 돈다. 그 단계의 오류(패닉이나 의존 누락이 아닌 검사)는 그 로그에서 고친다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 추정이다. 첫 실행의 `m -k` 요약이 빠진 프로젝트를 보이고, `update-lock.py --add`로 더한다. kati가 `bp4a`, `cp2a`와 이 제품을 받아들이는지, Soong만 쓰는 빌드에서 설치 경로를 대상으로 줄 수 있는지는 번역기 빌드와 같이 실행에서 확인한다.
