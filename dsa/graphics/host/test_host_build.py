@@ -217,6 +217,22 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn("+    if (!fb->m_emulationVk && !fb->m_emulationGl) {", patch)
         self.assertIn("+        return false;", patch)
 
+    def test_nfr5_renderer_survives_a_lost_device_and_a_bad_guest_command(self):
+        # A GPU reset made every guest call end the window manager through on_DeviceLost, and
+        # one guest's bad command did through the decoders' aborts.
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0015", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0015-survive-a-lost-device-and-a-fatal-guest-error.patch").read_text(encoding="utf-8")
+        self.assertIn("-        GFXSTREAM_ABORT(FatalError(VK_ERROR_DEVICE_LOST));", patch)
+        self.assertIn("+    } catch (const emugl::GuestFatalError& error) {", patch)
+        self.assertIn("+bool VkEmulation::remakeDeviceLocked() {", patch)
+        self.assertNotIn("+            VK_CHECK(", patch)
+        aemu = (HERE.parent / "patches" / "aemu" /
+                "0002-end-a-guest-stream-rather-than-the-host-on-a-fatal-error.patch").read_text(encoding="utf-8")
+        self.assertIn("+        throw GuestFatalError(mOss.str());", aemu)
+        self.assertIn('+    OutputLog(stderr, \'F\', mFile, mLine, 0, "%s", mOss.str().c_str());', aemu)
+
     def test_pr3_gpu_preference_names_clear_x11_macros(self):
         # X11/X.h, which EGL pulls in on Linux, defines None as a macro.
         patch = (HERE.parent / "patches" /
