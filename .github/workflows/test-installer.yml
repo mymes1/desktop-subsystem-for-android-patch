@@ -127,6 +127,18 @@ jobs:
           -ListUrl "$env:MIRROR\images.json" -TrustedKey $env:TEST_PUBLIC_KEY
           -ProgramListUrl "$env:MIRROR\program.json"
 
+      # Fingers and a pen put into this machine's input with Windows' synthetic pointer
+      # devices, on a task window opened over a fake Android: ten fingers and a pinch reach
+      # the task as ten touch pointers, a pen with its pressure, barrel button and eraser, and
+      # a finger on the title bar's minimize button minimizes the window. They move the real
+      # input, so they are ignored on a developer's machine and run here, where nobody uses
+      # the desktop. The release build above already holds most of what they need.
+      - name: fr5_real_fingers_and_a_pen_reach_a_task_window_as_touch_and_a_pen
+        working-directory: dsa
+        run: |
+          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input
+          if ($LASTEXITCODE -ne 0) { throw "touch or pen input on a task window did not reach its task" }
+
       # Nothing is installed yet, so setup.exe opens on its first screen. Pictures of it in
       # the light and the dark theme, of Change, and of the command line help.
       - name: Take pictures of setup.exe's first screens
