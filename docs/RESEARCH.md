@@ -1142,7 +1142,7 @@ DSA에 필요한 것은 안드로이드의 네이티브 브리지다. 곧 `libbe
 
 ### 빌드 설계
 
-- 잠금 파일 `dsa/guest/arm-translation/digitalis-lock.json`: 버전마다 Digitalis 매니페스트 커밋, AOSP 슈퍼프로젝트 커밋, 받을 프로젝트 40개와 각 커밋. AOSP 프로젝트의 커밋은 슈퍼프로젝트의 gitlink에서, Digitalis 프로젝트의 커밋은 가지 끝에서 `update-lock.py`가 잡는다. 받기는 GitHub 원격을 https로 바꾼다. 러너에는 ssh 키가 없다.
+- 잠금 파일 `dsa/guest/arm-translation/digitalis-lock.json`: 버전마다 Digitalis 매니페스트 커밋, AOSP 슈퍼프로젝트 커밋, 받을 프로젝트(Android 17은 53개, 16은 51개)와 각 커밋. AOSP 프로젝트의 커밋은 슈퍼프로젝트의 gitlink에서, Digitalis 프로젝트의 커밋은 가지 끝에서 `update-lock.py`가 잡는다. 받기는 GitHub 원격을 https로 바꾼다. 러너에는 ssh 키가 없다.
 - 받기(`.github/scripts/translator/fetch-source.py`): `repo` 대신 프로젝트마다 고정 커밋 하나를 `--depth=1`로 받는다. 부분 체크아웃 프로젝트는 `--filter=blob:none`과 sparse checkout으로 필요한 파일의 블롭만 받는다. Clang은 `build/release`의 `RELEASE_BUILD_CLANG_VERSION`(16: `clang-r563880c`, 17: `clang-r584948b`)이 고른 한 판만 받는다. 매니페스트의 linkfile을 만들고 각 `.git`은 지운다.
 - 제품: goldfish 전화 제품 대신 AOSP가 모듈만 빌드할 때 쓰는 `module_common.mk`(Soong만 쓰는 빌드)와 `core_64_bit_only.mk`에서 시작한 `dsa_translator` 제품을 넣는다. 보드는 x86_64 단독에 `TARGET_NATIVE_BRIDGE_ARCH := arm64`(emu64xa와 같다)다. 제품 설정이 기기와 앱 makefile을 읽지 않는다.
 - 빌드(`build.sh`): `ALLOW_MISSING_DEPENDENCIES=true`, `SOONG_ONLY=true`, `SOONG_NINJA=ninja`(17은 기본이 siso다), `SKIP_ABI_CHECKS=true`, ccache(`CC_WRAPPER`, `ALLOW_NINJA_ENV`). 모듈 이름 대신 묶음에 들어갈 설치 경로 67개와 `berberis_arm64_host_tests`만 빌드 대상으로 준다. `-k`로 한 번에 오류를 모두 모으고, 실패하면 찾지 못한 모듈과 경로를 요약한다.
@@ -1157,7 +1157,7 @@ DSA에 필요한 것은 안드로이드의 네이티브 브리지다. 곧 `libbe
 |---|---|---|
 | 러너 정리(SDK, 툴체인, Docker 이미지 삭제) | 루트 여유 약 14 GB에서 약 45 GB 이상으로, `/mnt`가 더 크면 그쪽에 트리 | 2 ~ 4분 |
 | 고정 이미지 둘 받기와 라이브러리 꺼내기 | 잠시 약 6 GB(target_files, otatools, dexpreopt 두 벌), 끝나면 수십 MB | 3 ~ 6분 |
-| 소스 받기(프로젝트 40개) | 약 8 ~ 10 GB(Clang 한 판 약 3 GB, build-tools 약 1.5 GB, Go 약 0.5 GB, 나머지) | 10 ~ 20분 |
+| 소스 받기(프로젝트 51 ~ 53개) | 약 10 ~ 13 GB(Clang 한 판 약 3 GB, Rust 툴체인 한 판 약 1.5 ~ 2 GB, build-tools 약 1.5 GB, Go 약 0.5 GB, 나머지) | 10 ~ 25분 |
 | Soong 부트스트랩과 분석 | `out/` 1 ~ 2 GB, RAM 4 ~ 8 GB | 10 ~ 20분 |
 | 컴파일(번역기를 기기용과 호스트용으로 두 번, arm64와 x86_64 bionic, libc++ 등) | `out/` 15 ~ 25 GB, ccache 최대 3 GB | 처음 2 ~ 3.5시간, ccache가 차면 30 ~ 60분 |
 | 호스트 테스트(약 3,700개) | 작다 | 5 ~ 20분 |
@@ -1170,6 +1170,27 @@ DSA에 필요한 것은 안드로이드의 네이티브 브리지다. 곧 `libbe
 - Digitalis를 Soong 안에서, 잠금 파일로 고른 줄인 트리로, 표준 러너에서 빌드한다. CMake 재작성은 하지 않는다.
 - 고친 게스트 라이브러리와 번역기는 빌드하고, ICU, BoringSSL, SQLite는 arm64 이미지에서, 프록시가 링크하는 프레임워크 라이브러리는 x86_64 이미지에서 가져온다.
 - 묶음은 x86_64 이미지의 배포물에 기본 번역기로 함께 싣고, arm64 이미지에는 싣지 않는다.
+
+### 첫 실행(run 42385312685, android17)과 고친 것
+
+러너 정리, 이미지 라이브러리 꺼내기, 소스 받기는 통과했다. 빌드 단계는 7초 만에 끝났다. `soong_ui`를 만드는 microfactory가 `github.com/akrylysov/pogreb`를 `external/pogreb`에서 찾는데 그 프로젝트가 없었다(`build/soong/scripts/microfactory.bash`의 `-pkg-path`). 빌드가 그 앞에서 멈추었으므로 Soong 분석의 오류는 하나도 드러나지 않았다.
+
+그래서 한 번에 모두 찾도록 빌드 없이 트리를 흉내 냈다. 잠금의 프로젝트마다 빌드 파일(`*.bp`, `*.go`, `go.mod`, `*.mk`, `*.bash`)만 같은 부분 체크아웃 규칙으로 받아(버전마다 약 230 MB), 다음 셋을 확인했다.
+
+1. `soong_ui`의 Go 패키지(microfactory의 `-pkg-path` 대응)와 `soong_build`에 들어가는 `bootstrap_go_package`(플러그인 포함)의 의존이 모두 트리에 있는가.
+2. `.bp` 파일이 쓰는 모듈 형식이 모두 트리의 Go 코드에 등록되어 있고, `soong_config_module_type_import`의 `from` 파일과 `build = [...]`가 모두 있는가.
+3. 묶음의 대상 모듈에서 시작해 의존(`*_libs`, `defaults`, `rustlibs`, `required`, `srcs`의 `:모듈`, `//경로:모듈` 등)을 따라갔을 때 정의가 없는 모듈은 무엇인가.
+
+찾은 것과 더한 것:
+
+- `external/pogreb`: `soong_ui`와 blueprint(`pogreb`, `pogreb-fs`). 16과 17 모두.
+- Rust: 17의 bionic `libc`는 `libicu4x_bionic`(Rust, ICU4X 상자 29개), `libbionic_panic_abort`, `liblibc_alloc_rust`(`system/librustutils/no_std`)를 정적으로 넣고, 게스트 링커(`linker_bin_template`)도 뒤의 둘을 넣는다. 16도 `libicu4x_bionic`을 쓴다. 그래서 Soong이 정한 Rust 툴체인 한 판(17은 `prebuilts/rust-toolchain/linux-x86/1.93.1`, 16은 `prebuilts/rust/linux-x86/1.88.0`과 그 Soong 플러그인)과 `external/rust/android-crates-io`의 상자 29개만 받는다. 잠금의 `{rust}`는 `build/soong/rust/config/global.go`의 `RustDefaultVersion`으로 바뀐다.
+- `external/google-highway`(17): x86_64 `libc`의 SIMD 문자열 함수가 `hwy_headers_only`를 쓴다.
+- `system/timezone/output_data`: 게스트 `libc`와 x86_64 `libc`가 `required`로 `tzdata_prebuilt`, `tz_version_prebuilt`를 찾는다. 빠지면 그 모듈의 빌드가 실패한다.
+- `system/media/audio`: `libhardware_headers`가 `libaudio_system_headers`를 내보낸다. 이것이 없으면 Vulkan 프록시와 번역기 본체가 쓰는 헤더 모듈이 깨진다.
+- `packages/modules/common/sdk`와 `system/apex`의 루트 `Android.bp`: `libutils`의 기본값 `apex-lowest-min-sdk-version`이 거기 있고, 그 모듈 형식은 `system/apex/Android.bp`에서 가져온다.
+
+남은 미정의 모듈은 모두 이 빌드가 만들지 않는 변형이다. 진짜 bionic 링커와 debuggerd(`linux_bionic` 호스트용), musl 호스트, Windows 호스트(`-lws2_32`), NDK 변형의 crt 개체, 호스트 `libnativehelper`의 `libdexfile_all_headers`다. `ALLOW_MISSING_DEPENDENCIES`로는 빌드하는 것만 실패하므로 두었다. 이 확인은 정적이라 Soong이 실제로 고르는 변형과 다를 수 있다. 다음 실행의 `m -k` 요약이 나머지를 보인다.
 
 ### 남은 위험과 확인할 것
 
