@@ -447,10 +447,42 @@ struct AdvancedPage: View {
     }
 }
 
+/// One log line as columns: time, PID, TID, priority and the body. The app's font is
+/// proportional, so the fields have fixed widths to line up; the body takes the rest.
+struct LogRow: View {
+    let line: LogLine
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(line.timeColumn).frame(width: 164, alignment: .leading)
+            Text(line.pidColumn).frame(width: 56, alignment: .trailing)
+            Text(line.tidColumn).frame(width: 56, alignment: .trailing)
+            Text(line.priorityColumn).frame(width: 32, alignment: .center)
+            Text(line.bodyColumn).padding(.leading, 6)
+        }
+    }
+}
+
 /// Android log: Android's log as it comes, filtered by priority and text, which can be paused,
 /// and saving the diagnostics.
 struct LogsPage: View {
     @ObservedObject var vm: LogViewModel
+    @State private var selection = Set<LogLine.ID>()
+
+    /// Puts the lines on the general pasteboard, each as the log prints it.
+    private func copy(_ ids: Set<LogLine.ID>) {
+        let text = vm.copyText(ids)
+        if text.isEmpty {
+            return
+        }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func copyProviders(_ ids: Set<LogLine.ID>) -> [NSItemProvider] {
+        let text = vm.copyText(ids)
+        return text.isEmpty ? [] : [NSItemProvider(object: text as NSString)]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -473,17 +505,24 @@ struct LogsPage: View {
                 Toggle(T("LogsPause.Content"), isOn: $vm.paused).toggleStyle(.button)
             }
             ScrollViewReader { reader in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(vm.lines) { line in
-                            Text(line.text)
-                                .foregroundStyle(color(line.priority))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .id(line.id)
-                        }
+                // Lines select as rows of any Mac list (click, Shift and Command clicks,
+                // Command-A) and copy with Command-C, Edit > Copy or the context menu, as the
+                // whole lines of the log.
+                List(selection: $selection) {
+                    ForEach(vm.lines) { line in
+                        LogRow(line: line)
+                            .foregroundStyle(color(line.priority))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
+                            .id(line.id)
                     }
-                    .padding(8)
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .onCopyCommand { copyProviders(selection) }
+                .contextMenu(forSelectionType: LogLine.ID.self) { ids in
+                    Button(T("LogsCopy.Content")) { copy(ids) }
+                        .disabled(ids.isEmpty)
                 }
                 .background(Color(nsColor: .textBackgroundColor))
                 .clipShape(RoundedRectangle(cornerRadius: 6))

@@ -14,6 +14,7 @@ use gtk::{gio, glib};
 use super::common::*;
 use crate::api::{self, Failure};
 use crate::i18n::{tr, trf};
+use crate::model::LogLine;
 use crate::view::{self, LogView};
 
 struct Reading {
@@ -72,13 +73,9 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
     status.add_css_class("dim-label");
     body.append(&status);
 
-    let text = gtk::TextView::builder()
-        .editable(false)
-        .cursor_visible(false)
-        .wrap_mode(gtk::WrapMode::WordChar)
-        .build();
+    let list = gtk::ListBox::new();
     let scroll = gtk::ScrolledWindow::builder()
-        .child(&text)
+        .child(&list)
         .vexpand(true)
         .build();
     scroll.add_css_class("card");
@@ -87,11 +84,19 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
     let model = Rc::new(RefCell::new(LogView::default()));
     let reading: Rc<RefCell<Option<Reading>>> = Rc::default();
 
+    // The lines the list shows, in its order: row n is line n.
+    let shown: Rc<RefCell<Vec<LogLine>>> = Rc::default();
+    copy_lines(&list, &shown);
+
     let redraw = {
-        let (model, text) = (model.clone(), text.clone());
+        let (model, list, shown) = (model.clone(), list.clone(), shown.clone());
         Rc::new(move || {
-            let shown = model.borrow().shown().join("\n");
-            text.buffer().set_text(&shown);
+            list.remove_all();
+            let lines: Vec<LogLine> = model.borrow().shown().into_iter().cloned().collect();
+            for line in &lines {
+                list.append(&log_row(line));
+            }
+            *shown.borrow_mut() = lines;
         })
     };
     let stop = {
@@ -136,10 +141,11 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
     // Takes what has come since the last look, a batch at a time, so a busy log does not
     // redraw for every line.
     {
-        let (reading, model, text, banner, status) = (
+        let (reading, model, list, shown, banner, status) = (
             reading.clone(),
             model.clone(),
-            text.clone(),
+            list.clone(),
+            shown.clone(),
             banner.clone(),
             status.clone(),
         );
@@ -157,7 +163,7 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
                             if model.add(&line) {
                                 if let Some(last) = model.last() {
                                     if model.matches(last) {
-                                        appended.push(last.to_string());
+                                        appended.push(last.clone());
                                     }
                                 }
                             }
@@ -175,10 +181,18 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
                 status.set_label(&model.paused_text());
             }
             if !appended.is_empty() {
-                let buffer = text.buffer();
-                let mut end = buffer.end_iter();
-                let lead = if buffer.char_count() > 0 { "\n" } else { "" };
-                buffer.insert(&mut end, &format!("{lead}{}", appended.join("\n")));
+                let mut shown = shown.borrow_mut();
+                for line in appended {
+                    list.append(&log_row(&line));
+                    shown.push(line);
+                }
+                // The page keeps as many lines as the model does; the oldest rows go first.
+                while shown.len() > LogView::LIMIT {
+                    if let Some(first) = list.row_at_index(0) {
+                        list.remove(&first);
+                    }
+                    shown.remove(0);
+                }
                 let adjustment = scroll.vadjustment();
                 adjustment.set_value(adjustment.upper());
             }
@@ -250,4 +264,98 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
         });
     }
     root.upcast()
+}
+
+/// Lets the user select lines (click, Shift and Ctrl clicks, Ctrl+A) and copy them with
+/// Ctrl+C or the context menu's Copy, as the whole lines of the log.
+fn copy_lines(list: &gtk::ListBox, shown: &Rc<RefCell<Vec<LogLine>>>) {
+    list.set_selection_mode(gtk::SelectionMode::Multiple);
+
+    let copy = gio::SimpleAction::new("copy", None);
+    {
+        let (list_weak, shown) = (list.downgrade(), shown.clone());
+        copy.connect_activate(move |_, _| {
+            let Some(list) = list_weak.upgrade() else {
+                return;
+            };
+            let selected: Vec<usize> = list
+                .selected_rows()
+                .iter()
+                .filter_map(|row| usize::try_from(row.index()).ok())
+                .collect();
+            let text = view::log_copy_text(&shown.borrow(), &selected);
+            if !text.is_empty() {
+                list.clipboard().set_text(&text);
+            }
+        });
+    }
+    let actions = gio::SimpleActionGroup::new();
+    actions.add_action(&copy);
+    list.insert_action_group("log", Some(&actions));
+
+    let keys = gtk::ShortcutController::new();
+    keys.add_shortcut(gtk::Shortcut::new(
+        gtk::ShortcutTrigger::parse_string("<Control>c"),
+        Some(gtk::NamedAction::new("log.copy")),
+    ));
+    list.add_controller(keys);
+
+    let menu = gio::Menu::new();
+    menu.append(Some(tr("Copy").as_str()), Some("log.copy"));
+    let popover = gtk::PopoverMenu::from_model(Some(&menu));
+    popover.set_parent(list);
+    popover.set_has_arrow(false);
+    popover.set_halign(gtk::Align::Start);
+
+    // A right click on a line that is not selected selects it first, as file managers do.
+    let click = gtk::GestureClick::builder()
+        .button(gtk::gdk::BUTTON_SECONDARY)
+        .build();
+    {
+        let list_weak = list.downgrade();
+        click.connect_pressed(move |gesture, _, x, y| {
+            let Some(list) = list_weak.upgrade() else {
+                return;
+            };
+            if let Some(row) = list.row_at_y(y as i32) {
+                if !row.is_selected() {
+                    list.unselect_all();
+                    list.select_row(Some(&row));
+                }
+            }
+            popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+            popover.popup();
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+        });
+    }
+    list.add_controller(click);
+}
+
+/// One log line as a row of columns: time, PID, TID, priority and the body. The app's font is
+/// proportional, so the fields have fixed widths to line up; the body has none and runs into
+/// the list's horizontal scroll bar.
+fn log_row(line: &LogLine) -> gtk::Widget {
+    let columns = line.columns();
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    row.set_margin_start(6);
+    row.set_margin_end(6);
+    let cell = |text: &str, width: i32, xalign: f32| {
+        let label = gtk::Label::builder()
+            .label(text)
+            .xalign(xalign)
+            .use_markup(false)
+            .single_line_mode(true)
+            .build();
+        if width > 0 {
+            label.set_size_request(width, -1);
+        }
+        row.append(&label);
+        label
+    };
+    cell(&columns.time, 164, 0.0);
+    cell(&columns.pid, 56, 1.0);
+    cell(&columns.tid, 56, 1.0);
+    cell(&columns.priority, 32, 0.5);
+    cell(&columns.body, 0, 0.0).set_margin_start(6);
+    row.upcast()
 }

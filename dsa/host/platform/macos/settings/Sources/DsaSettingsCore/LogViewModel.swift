@@ -25,6 +25,14 @@ public struct LogLine: Equatable, Identifiable, Sendable {
             : "\(time) \(LogLine.pad(pid)) \(LogLine.pad(tid)) \(priority) \(tag): \(message)"
     }
 
+    // The page's columns, split as the Windows settings app splits them: time, PID, TID,
+    // priority and the body. A record that stands for dropped records has only its body.
+    public var timeColumn: String { dropped > 0 ? "" : time }
+    public var pidColumn: String { dropped > 0 ? "" : String(pid) }
+    public var tidColumn: String { dropped > 0 ? "" : String(tid) }
+    public var priorityColumn: String { dropped > 0 ? "" : priority }
+    public var bodyColumn: String { dropped > 0 ? text : "\(tag): \(message)" }
+
     /// Reads one line of `dsa logcat --json`; nil for a line that is not a record.
     public static func parse(_ line: String) -> LogLine? {
         guard let json = try? Json.parse(line), json.isObject else {
@@ -116,6 +124,12 @@ public final class LogViewModel: ObservableObject {
     }
 
     private func rebuild() { lines = all.filter(passes) }
+
+    /// What copying the selected lines puts on the pasteboard: each whole line as the log
+    /// prints it, one per line, in the order the page shows them.
+    public func copyText(_ selected: Set<LogLine.ID>) -> String {
+        lines.filter { selected.contains($0.id) }.map(\.text).joined(separator: "\n")
+    }
 
     /// Takes one line of dsa's output.
     public func add(_ output: String) { addMany([output]) }
