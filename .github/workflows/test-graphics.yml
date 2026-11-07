@@ -276,6 +276,26 @@ jobs:
         run: |
           cargo test -p dsa-host-windows --test window_manager -- nfr5_unknown_vulkan_image_is_rejected_without_reaching_the_driver --nocapture
 
+      - name: Check a guest command the renderer cannot carry out ends only that guest's stream
+        shell: pwsh
+        working-directory: dsa
+        env:
+          VK_ICD_FILENAMES: ${{ env.LVP_ICD }}
+          VK_DRIVER_FILES: ${{ env.LVP_ICD }}
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}\.scratch\build-host\dist\bin\gfxstream_backend.dll
+        run: |
+          cargo test -p dsa-host-windows --test window_manager -- nfr5_a_guest_command_the_renderer_cannot_carry_out_ends_only_its_stream --nocapture
+
+      - name: Check the renderer survives a lost GPU device and makes it again
+        shell: pwsh
+        working-directory: dsa
+        env:
+          VK_ICD_FILENAMES: ${{ env.LVP_ICD }}
+          VK_DRIVER_FILES: ${{ env.LVP_ICD }}
+          GFXSTREAM_BACKEND_PATH: ${{ github.workspace }}\.scratch\build-host\dist\bin\gfxstream_backend.dll
+        run: |
+          cargo test -p dsa-host-windows --test window_manager -- nfr5_a_lost_device_is_reported_to_the_guest_and_made_again --nocapture
+
       - name: Keep the host renderer library and headers
         uses: actions/upload-artifact@v4
         with:

@@ -40,6 +40,7 @@ fn main() -> std::process::ExitCode {
         note(logger.as_deref(), &why);
     }
     dsa_host_windows::compositor::log::input_trace_to(logger.clone());
+    dsa_host_windows::compositor::log::log_panics_to(logger.clone());
     let args: Vec<String> = std::env::args().skip(1).collect();
     let program = std::env::current_exe().unwrap_or_default();
     // Opened on an .apk file or a split-APK bundle in Explorer: the app is installed in
