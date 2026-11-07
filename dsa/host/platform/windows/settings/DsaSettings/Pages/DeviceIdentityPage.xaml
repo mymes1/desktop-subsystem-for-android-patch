@@ -42,9 +42,9 @@
                 <ui:InfoBar Title="{l:Text IdentityWarning.Title}" Message="{l:Text IdentityWarning.Message}"
                             Severity="Warning" IsClosable="False" IsOpen="True" Margin="0,8,0,0" />
                 <ui:InfoBar Title="{l:Text SettingsErrorBar.Title}" Severity="Error" IsClosable="False"
-                            IsOpen="{Binding HasError, Mode=OneWay}" Message="{Binding Error, Mode=OneWay}" />
+                            IsOpen="{Binding HasError, Mode=OneWay}" Message="{Binding Error, Mode=OneWay}" Margin="0,0,0,4" />
                 <ui:InfoBar Title="{l:Text IdentityDoneBar.Title}" Severity="Success" IsClosable="False"
-                            IsOpen="{Binding HasMessage, Mode=OneWay}" Message="{Binding Message, Mode=OneWay}" />
+                            IsOpen="{Binding HasMessage, Mode=OneWay}" Message="{Binding Message, Mode=OneWay}" Margin="0,0,0,4" />
 
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <ui:Button Content="{l:Text IdentitySaveButton.Content}" Appearance="Primary" Icon="{ui:SymbolIcon Save24}"
