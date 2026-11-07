@@ -62,7 +62,7 @@ one. They are marked "(admin)" below.
 
 - `render-gpu`: `display` (the GPU of the primary monitor, the default), `integrated`,
   `discrete`, or part of a GPU's name as `dsa gpus` lists it.
-- `memory-limit`: `auto` (the default, up to 3 GB and never more than the PC has), or a
+- `memory-limit`: `auto` (the default: no fixed limit, up to the PC's memory less what Windows keeps), or a
   size such as `4g` or `3072` (MiB).
 - `shared-folders`: `all`, `none`, or names separated by commas, such as
   `Documents,Pictures`.
