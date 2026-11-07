@@ -1385,7 +1385,12 @@ target_files에서는 `SYSTEM/build.prop`, `SYSTEM/etc/build_flags.json`, `SYSTE
   - 잃은 객체의 `vkDestroy*`와 `vkFree*`를 받아들인다.
   - 새 장치가 준비되기 전의 `vkCreateInstance`, `vkCreateDevice`에는 오류를 돌려주고, 준비된 뒤에는 새 장치를 준다.
   - gralloc 버퍼(color buffer)의 핸들은 새 장치에서도 다시 가져올 수 있어야 한다. 내용은 잃어도 된다. 게스트가 다시 그린다.
-- 스트림이 끝나는 경우는 다르다. 렌더러가 게스트의 치명적 오류로 그 스트림을 끝내거나(R18의 패치 0015), 렌더러 프로세스가 끝나 다시 뜰 때(D25) 게스트 드라이버는 `VulkanStreamGuest::read`에서 프로세스를 끝낸다. 그 프로세스가 SurfaceFlinger면 프레임워크가 다시 시작한다. 생성된 인코더가 응답을 그 자리에서 읽으므로, 끊긴 연결을 장치 손실로 바꾸려면 연결이 끊긴 뒤의 읽기를 0으로 채우고 `VkResult`를 `VK_ERROR_DEVICE_LOST`로 바꾸며, 다음 `vkCreateInstance`에서 스레드마다 연결을 새로 맺어야 한다. 위의 SurfaceFlinger와 HWUI 복구는 그 뒤에 그대로 쓰인다. 이 일은 D25의 렌더러 재시작과 함께 한다.
+- 스트림이 끝나는 경우는 다르다. 렌더러가 게스트의 치명적 오류로 그 스트림을 끝내거나(R18의 패치 0015), 렌더러 프로세스가 끝나 다시 뜰 때(D25) 게스트 드라이버는 `VulkanStreamGuest::read`에서 프로세스를 끝냈다. 그 프로세스가 SurfaceFlinger면 프레임워크가 다시 시작한다. 그래서 DSA가 빌드하는 게스트 Vulkan 드라이버(`vulkan.ranchu.so`, `dsa/graphics/patches/guest/`)를 고쳤다.
+  - 끊긴 스트림은 잃은 것으로 친다(`dsa/graphics/include/dsa_lost_stream.h`). 그 뒤로는 아무것도 보내지 않고, 읽기는 0을 준다(핸들도 개수도 없다). 생성된 인코더는 `VkResult`를 돌려주는 106개 호출 모두에서 결과를 `VK_ERROR_DEVICE_LOST`로 바꾼다. 잃은 스트림은 렌더러가 기다릴 순번(seqno)을 받지 않는다. 쓰기 버퍼를 얻지 못해도 널 포인터로 쓰지 않는다.
+  - ANGLE은 이것을 장치 손실로 받아 디스플레이를 잃은 것으로 표시하고, SurfaceFlinger와 HWUI는 위의 패치대로 컨텍스트를 놓고 `eglInitialize`로 새로 만든다. ANGLE은 고치지 않는다.
+  - 새로 만들 때의 인스턴스 수준 호출(`vkCreateInstance`와 그 앞의 열거)이 처음으로 오면 프로세스가 새 세대를 시작한다. 다시 뜬 렌더러는 이 프로세스를 모르므로 프로세스를 다시 등록하고(process pipe와 puid, gfxstream의 `renderControlResetProcess`), 순번을 0부터 다시 센다. 스트림을 잃은 스레드는 옛 세대이면 다시 연결한다. 렌더러가 아직 답하지 않으면 잃은 연결을 그대로 두고(호출은 계속 장치 손실) 250 ms마다 다시 시도하며, 인스턴스 만들기는 `VK_ERROR_INITIALIZATION_FAILED`로 실패해 HWUI와 SurfaceFlinger가 나중에 다시 시도한다.
+  - GLES 쪽은 ANGLE이 Vulkan 위에서 하므로 gfxstream의 GLES 에뮬레이션 라이브러리(`libEGL_emulation`, `libOpenglSystemCommon.so`의 `HostConnection`)는 이 경로에 없다. 공개 빌드에서 오는 게스트 그래픽 라이브러리는 바꾸지 않으므로 Framework build에 더할 것도 없다.
+  - 확인하지 못한 것: 실제로 렌더러를 끝냈다가 다시 띄웠을 때의 동작. 다시 뜬 렌더러가 옛 프로세스의 ColorBuffer를 모르므로 앱 버퍼를 다시 가져오는 일은 렌더러 쪽(D25)이 버퍼를 다시 만들 수 있어야 된다.
 
 ### 결정
 
