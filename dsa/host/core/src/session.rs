@@ -1700,6 +1700,7 @@ impl Session {
                 name: name.to_string(),
                 size,
                 abi: abi.unwrap_or_default().to_string(),
+                parts: Vec::new(),
             })),
         }))?;
         let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;

@@ -1068,11 +1068,27 @@ pub struct GuestBoot {
     #[prost(bool, tag = "2")]
     pub agent_connected: bool,
 }
+/// One file of an install made of several: an APK of an app that comes as a base APK and
+/// split APKs, or an expansion (OBB) file of that app.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct InstallPart {
+    /// The file's name, without any folder, such as "base.apk", "split_config.x86_64.apk" or
+    /// "main.42.com.example.game.obb". No two parts of an install have the same name.
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    /// The file's length in bytes.
+    #[prost(uint64, tag = "2")]
+    pub size: u64,
+    /// True for an expansion file. The agent copies it into the app's folder under Android/obb/
+    /// once the app is installed, rather than writing it into the install session.
+    #[prost(bool, tag = "3")]
+    pub obb: bool,
+}
 /// Host to guest: install an APK, whose content follows in ApkChunk messages of the same
 /// `transfer_id`, in order. The agent writes them into an install session as they come and
 /// commits it once it has all `size` bytes. The host sends at most a few chunks ahead of the
 /// agent's InstallProgress, and one install at a time.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InstallApk {
     /// Unique among the installs of one connection.
     #[prost(uint32, tag = "1")]
@@ -1090,6 +1106,11 @@ pub struct InstallApk {
     /// ones.
     #[prost(string, tag = "4")]
     pub abi: ::prost::alloc::string::String,
+    /// Empty for one APK. Otherwise the files of the install, in the order their bytes follow one
+    /// another in the chunks: the APKs first, which the agent writes into one install session,
+    /// then any expansion files. `size` is then the sum of their sizes.
+    #[prost(message, repeated, tag = "5")]
+    pub parts: ::prost::alloc::vec::Vec<InstallPart>,
 }
 /// Host to guest: part of the APK an InstallApk announced.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

@@ -5496,6 +5496,7 @@ impl HostApiClient {
                 name: name.to_string(),
                 size,
                 native_libraries: libraries.to_wire(),
+                parts: Vec::new(),
             }),
             self.timeout,
         )? {

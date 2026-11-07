@@ -2297,6 +2297,7 @@ pub fn malformed_install_is_refused(make: MakeLocal<'_>) {
             name: "notes.apk".into(),
             size: 1000,
             native_libraries: Vec::new(),
+            parts: Vec::new(),
         })),
     };
     send(&mut *connection, envelope::Body::Request(request)).unwrap();

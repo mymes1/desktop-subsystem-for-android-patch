@@ -294,6 +294,9 @@ extern ImeDeleteSurroundingDefaultTypeInternal _ImeDeleteSurrounding_default_ins
 class InstallApk;
 struct InstallApkDefaultTypeInternal;
 extern InstallApkDefaultTypeInternal _InstallApk_default_instance_;
+class InstallPart;
+struct InstallPartDefaultTypeInternal;
+extern InstallPartDefaultTypeInternal _InstallPart_default_instance_;
 class InstallProgress;
 struct InstallProgressDefaultTypeInternal;
 extern InstallProgressDefaultTypeInternal _InstallProgress_default_instance_;
@@ -609,6 +612,7 @@ template<> ::dsa::control::v1::ImeComposition* Arena::CreateMaybeMessage<::dsa::
 template<> ::dsa::control::v1::ImeCursor* Arena::CreateMaybeMessage<::dsa::control::v1::ImeCursor>(Arena*);
 template<> ::dsa::control::v1::ImeDeleteSurrounding* Arena::CreateMaybeMessage<::dsa::control::v1::ImeDeleteSurrounding>(Arena*);
 template<> ::dsa::control::v1::InstallApk* Arena::CreateMaybeMessage<::dsa::control::v1::InstallApk>(Arena*);
+template<> ::dsa::control::v1::InstallPart* Arena::CreateMaybeMessage<::dsa::control::v1::InstallPart>(Arena*);
 template<> ::dsa::control::v1::InstallProgress* Arena::CreateMaybeMessage<::dsa::control::v1::InstallProgress>(Arena*);
 template<> ::dsa::control::v1::InstallResult* Arena::CreateMaybeMessage<::dsa::control::v1::InstallResult>(Arena*);
 template<> ::dsa::control::v1::InstalledApp* Arena::CreateMaybeMessage<::dsa::control::v1::InstalledApp>(Arena*);
@@ -13043,6 +13047,163 @@ class GuestBoot final :
 };
 // -------------------------------------------------------------------
 
+class InstallPart final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.InstallPart) */ {
+ public:
+  inline InstallPart() : InstallPart(nullptr) {}
+  ~InstallPart() override;
+  explicit PROTOBUF_CONSTEXPR InstallPart(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  InstallPart(const InstallPart& from);
+  InstallPart(InstallPart&& from) noexcept
+    : InstallPart() {
+    *this = ::std::move(from);
+  }
+
+  inline InstallPart& operator=(const InstallPart& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline InstallPart& operator=(InstallPart&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const InstallPart& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const InstallPart* internal_default_instance() {
+    return reinterpret_cast<const InstallPart*>(
+               &_InstallPart_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    73;
+
+  friend void swap(InstallPart& a, InstallPart& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(InstallPart* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(InstallPart* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  InstallPart* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<InstallPart>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const InstallPart& from);
+  void MergeFrom(const InstallPart& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(InstallPart* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.InstallPart";
+  }
+  protected:
+  explicit InstallPart(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kNameFieldNumber = 1,
+    kSizeFieldNumber = 2,
+    kObbFieldNumber = 3,
+  };
+  // string name = 1;
+  void clear_name();
+  const std::string& name() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_name(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_name();
+  PROTOBUF_NODISCARD std::string* release_name();
+  void set_allocated_name(std::string* name);
+  private:
+  const std::string& _internal_name() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_name(const std::string& value);
+  std::string* _internal_mutable_name();
+  public:
+
+  // uint64 size = 2;
+  void clear_size();
+  uint64_t size() const;
+  void set_size(uint64_t value);
+  private:
+  uint64_t _internal_size() const;
+  void _internal_set_size(uint64_t value);
+  public:
+
+  // bool obb = 3;
+  void clear_obb();
+  bool obb() const;
+  void set_obb(bool value);
+  private:
+  bool _internal_obb() const;
+  void _internal_set_obb(bool value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.InstallPart)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
+    uint64_t size_;
+    bool obb_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class InstallApk final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.InstallApk) */ {
  public:
@@ -13082,7 +13243,7 @@ class InstallApk final :
                &_InstallApk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    74;
 
   friend void swap(InstallApk& a, InstallApk& b) {
     a.Swap(&b);
@@ -13146,11 +13307,30 @@ class InstallApk final :
   // accessors -------------------------------------------------------
 
   enum : int {
+    kPartsFieldNumber = 5,
     kNameFieldNumber = 2,
     kAbiFieldNumber = 4,
     kSizeFieldNumber = 3,
     kTransferIdFieldNumber = 1,
   };
+  // repeated .dsa.control.v1.InstallPart parts = 5;
+  int parts_size() const;
+  private:
+  int _internal_parts_size() const;
+  public:
+  void clear_parts();
+  ::dsa::control::v1::InstallPart* mutable_parts(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::InstallPart >*
+      mutable_parts();
+  private:
+  const ::dsa::control::v1::InstallPart& _internal_parts(int index) const;
+  ::dsa::control::v1::InstallPart* _internal_add_parts();
+  public:
+  const ::dsa::control::v1::InstallPart& parts(int index) const;
+  ::dsa::control::v1::InstallPart* add_parts();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::InstallPart >&
+      parts() const;
+
   // string name = 2;
   void clear_name();
   const std::string& name() const;
@@ -13205,6 +13385,7 @@ class InstallApk final :
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
   struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::InstallPart > parts_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr name_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr abi_;
     uint64_t size_;
@@ -13255,7 +13436,7 @@ class ApkChunk final :
                &_ApkChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    75;
 
   friend void swap(ApkChunk& a, ApkChunk& b) {
     a.Swap(&b);
@@ -13412,7 +13593,7 @@ class QueryPackage final :
                &_QueryPackage_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    76;
 
   friend void swap(QueryPackage& a, QueryPackage& b) {
     a.Swap(&b);
@@ -13558,7 +13739,7 @@ class PackageState final :
                &_PackageState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    77;
 
   friend void swap(PackageState& a, PackageState& b) {
     a.Swap(&b);
@@ -13752,7 +13933,7 @@ class OpenLink final :
                &_OpenLink_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    78;
 
   friend void swap(OpenLink& a, OpenLink& b) {
     a.Swap(&b);
@@ -13887,7 +14068,7 @@ class LinkHandling final :
                &_LinkHandling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    79;
 
   friend void swap(LinkHandling& a, LinkHandling& b) {
     a.Swap(&b);
@@ -14017,7 +14198,7 @@ class OpenFile final :
                &_OpenFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    80;
 
   friend void swap(OpenFile& a, OpenFile& b) {
     a.Swap(&b);
@@ -14201,7 +14382,7 @@ class FileChunk final :
                &_FileChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    81;
 
   friend void swap(FileChunk& a, FileChunk& b) {
     a.Swap(&b);
@@ -14358,7 +14539,7 @@ class CancelInstall final :
                &_CancelInstall_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    82;
 
   friend void swap(CancelInstall& a, CancelInstall& b) {
     a.Swap(&b);
@@ -14488,7 +14669,7 @@ class InstallProgress final :
                &_InstallProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    83;
 
   friend void swap(InstallProgress& a, InstallProgress& b) {
     a.Swap(&b);
@@ -14629,7 +14810,7 @@ class InstallResult final :
                &_InstallResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    84;
 
   friend void swap(InstallResult& a, InstallResult& b) {
     a.Swap(&b);
@@ -14802,7 +14983,7 @@ class FileProgress final :
                &_FileProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    85;
 
   friend void swap(FileProgress& a, FileProgress& b) {
     a.Swap(&b);
@@ -14959,7 +15140,7 @@ class FileSharing final :
                &_FileSharing_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    86;
 
   friend void swap(FileSharing& a, FileSharing& b) {
     a.Swap(&b);
@@ -15142,7 +15323,7 @@ class AndroidFiles final :
                &_AndroidFiles_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    87;
 
   friend void swap(AndroidFiles& a, AndroidFiles& b) {
     a.Swap(&b);
@@ -15288,7 +15469,7 @@ class DragItem final :
                &_DragItem_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    88;
 
   friend void swap(DragItem& a, DragItem& b) {
     a.Swap(&b);
@@ -15488,7 +15669,7 @@ class DragOut final :
                &_DragOut_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    89;
 
   friend void swap(DragOut& a, DragOut& b) {
     a.Swap(&b);
@@ -15673,7 +15854,7 @@ class DragOffer final :
                &_DragOffer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    89;
+    90;
 
   friend void swap(DragOffer& a, DragOffer& b) {
     a.Swap(&b);
@@ -15850,7 +16031,7 @@ class DragRead final :
                &_DragRead_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    90;
+    91;
 
   friend void swap(DragRead& a, DragRead& b) {
     a.Swap(&b);
@@ -16024,7 +16205,7 @@ class DragData final :
                &_DragData_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    91;
+    92;
 
   friend void swap(DragData& a, DragData& b) {
     a.Swap(&b);
@@ -16197,7 +16378,7 @@ class DragEnd final :
                &_DragEnd_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    92;
+    93;
 
   friend void swap(DragEnd& a, DragEnd& b) {
     a.Swap(&b);
@@ -16338,7 +16519,7 @@ class ClockProbe final :
                &_ClockProbe_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    93;
+    94;
 
   friend void swap(ClockProbe& a, ClockProbe& b) {
     a.Swap(&b);
@@ -16468,7 +16649,7 @@ class VideoCodecSupport final :
                &_VideoCodecSupport_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    94;
+    95;
 
   friend void swap(VideoCodecSupport& a, VideoCodecSupport& b) {
     a.Swap(&b);
@@ -16620,7 +16801,7 @@ class VideoCapabilities final :
                &_VideoCapabilities_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    95;
+    96;
 
   friend void swap(VideoCapabilities& a, VideoCapabilities& b) {
     a.Swap(&b);
@@ -16759,7 +16940,7 @@ class VideoDecoderOpen final :
                &_VideoDecoderOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    96;
+    97;
 
   friend void swap(VideoDecoderOpen& a, VideoDecoderOpen& b) {
     a.Swap(&b);
@@ -16911,7 +17092,7 @@ class VideoDecoderOpened final :
                &_VideoDecoderOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    97;
+    98;
 
   friend void swap(VideoDecoderOpened& a, VideoDecoderOpened& b) {
     a.Swap(&b);
@@ -17057,7 +17238,7 @@ class VideoPacket final :
                &_VideoPacket_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    98;
+    99;
 
   friend void swap(VideoPacket& a, VideoPacket& b) {
     a.Swap(&b);
@@ -17236,7 +17417,7 @@ class VideoFrame final :
                &_VideoFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    99;
+    100;
 
   friend void swap(VideoFrame& a, VideoFrame& b) {
     a.Swap(&b);
@@ -17437,7 +17618,7 @@ class VideoFlush final :
                &_VideoFlush_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    100;
+    101;
 
   friend void swap(VideoFlush& a, VideoFlush& b) {
     a.Swap(&b);
@@ -17554,7 +17735,7 @@ class VideoFlushed final :
                &_VideoFlushed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    101;
+    102;
 
   friend void swap(VideoFlushed& a, VideoFlushed& b) {
     a.Swap(&b);
@@ -17671,7 +17852,7 @@ class VideoError final :
                &_VideoError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    102;
+    103;
 
   friend void swap(VideoError& a, VideoError& b) {
     a.Swap(&b);
@@ -17806,7 +17987,7 @@ class SensorDescription final :
                &_SensorDescription_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    103;
+    104;
 
   friend void swap(SensorDescription& a, SensorDescription& b) {
     a.Swap(&b);
@@ -18001,7 +18182,7 @@ class SensorList final :
                &_SensorList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    104;
+    105;
 
   friend void swap(SensorList& a, SensorList& b) {
     a.Swap(&b);
@@ -18140,7 +18321,7 @@ class SensorActivate final :
                &_SensorActivate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    105;
+    106;
 
   friend void swap(SensorActivate& a, SensorActivate& b) {
     a.Swap(&b);
@@ -18292,7 +18473,7 @@ class SensorReading final :
                &_SensorReading_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    106;
+    107;
 
   friend void swap(SensorReading& a, SensorReading& b) {
     a.Swap(&b);
@@ -18457,7 +18638,7 @@ class SensorReadings final :
                &_SensorReadings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    107;
+    108;
 
   friend void swap(SensorReadings& a, SensorReadings& b) {
     a.Swap(&b);
@@ -18596,7 +18777,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    108;
+    109;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -18737,7 +18918,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    109;
+    110;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -18867,7 +19048,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    110;
+    111;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -19154,7 +19335,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    111;
+    112;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -19315,7 +19496,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    112;
+    113;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -19461,7 +19642,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    113;
+    114;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -19618,7 +19799,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    114;
+    115;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -19768,7 +19949,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    115;
+    116;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -19912,7 +20093,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    116;
+    117;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -20042,7 +20223,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    117;
+    118;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -20227,7 +20408,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    118;
+    119;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -20395,7 +20576,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    119;
+    120;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -20569,7 +20750,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    120;
+    121;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -20710,7 +20891,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    121;
+    122;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -20862,7 +21043,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    122;
+    123;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -21305,7 +21486,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    123;
+    124;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -21538,7 +21719,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    124;
+    125;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -21728,7 +21909,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    125;
+    126;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -21896,7 +22077,7 @@ class AudioOutputOpen final :
                &_AudioOutputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    126;
+    127;
 
   friend void swap(AudioOutputOpen& a, AudioOutputOpen& b) {
     a.Swap(&b);
@@ -22075,7 +22256,7 @@ class AudioOutputReady final :
                &_AudioOutputReady_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    127;
+    128;
 
   friend void swap(AudioOutputReady& a, AudioOutputReady& b) {
     a.Swap(&b);
@@ -22216,7 +22397,7 @@ class AudioPcm final :
                &_AudioPcm_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    128;
+    129;
 
   friend void swap(AudioPcm& a, AudioPcm& b) {
     a.Swap(&b);
@@ -22362,7 +22543,7 @@ class AudioInputOpen final :
                &_AudioInputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    129;
+    130;
 
   friend void swap(AudioInputOpen& a, AudioInputOpen& b) {
     a.Swap(&b);
@@ -22541,7 +22722,7 @@ class AudioInputOpened final :
                &_AudioInputOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    130;
+    131;
 
   friend void swap(AudioInputOpened& a, AudioInputOpened& b) {
     a.Swap(&b);
@@ -22687,7 +22868,7 @@ class AudioOutputControl final :
                &_AudioOutputControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    131;
+    132;
 
   friend void swap(AudioOutputControl& a, AudioOutputControl& b) {
     a.Swap(&b);
@@ -22817,7 +22998,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    132;
+    133;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -22980,7 +23161,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    133;
+    134;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -23132,7 +23313,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    134;
+    135;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -23360,7 +23541,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    135;
+    136;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -23537,7 +23718,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    136;
+    137;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -23667,7 +23848,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    137;
+    138;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -23840,7 +24021,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    138;
+    139;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -23986,7 +24167,7 @@ class PrintJob final :
                &_PrintJob_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    139;
+    140;
 
   friend void swap(PrintJob& a, PrintJob& b) {
     a.Swap(&b);
@@ -24252,7 +24433,7 @@ class PrintJobChunk final :
                &_PrintJobChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    140;
+    141;
 
   friend void swap(PrintJobChunk& a, PrintJobChunk& b) {
     a.Swap(&b);
@@ -24409,7 +24590,7 @@ class PrintJobCancel final :
                &_PrintJobCancel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    141;
+    142;
 
   friend void swap(PrintJobCancel& a, PrintJobCancel& b) {
     a.Swap(&b);
@@ -24539,7 +24720,7 @@ class PrintJobResult final :
                &_PrintJobResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    142;
+    143;
 
   friend void swap(PrintJobResult& a, PrintJobResult& b) {
     a.Swap(&b);
@@ -24696,7 +24877,7 @@ class CameraMode final :
                &_CameraMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    143;
+    144;
 
   friend void swap(CameraMode& a, CameraMode& b) {
     a.Swap(&b);
@@ -24859,7 +25040,7 @@ class CameraDevice final :
                &_CameraDevice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    144;
+    145;
 
   friend void swap(CameraDevice& a, CameraDevice& b) {
     a.Swap(&b);
@@ -25052,7 +25233,7 @@ class CameraList final :
                &_CameraList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    145;
+    146;
 
   friend void swap(CameraList& a, CameraList& b) {
     a.Swap(&b);
@@ -25191,7 +25372,7 @@ class CameraOpen final :
                &_CameraOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    146;
+    147;
 
   friend void swap(CameraOpen& a, CameraOpen& b) {
     a.Swap(&b);
@@ -25359,7 +25540,7 @@ class CameraOpened final :
                &_CameraOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    147;
+    148;
 
   friend void swap(CameraOpened& a, CameraOpened& b) {
     a.Swap(&b);
@@ -25538,7 +25719,7 @@ class CameraFrame final :
                &_CameraFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    148;
+    149;
 
   friend void swap(CameraFrame& a, CameraFrame& b) {
     a.Swap(&b);
@@ -25728,7 +25909,7 @@ class CameraStop final :
                &_CameraStop_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    149;
+    150;
 
   friend void swap(CameraStop& a, CameraStop& b) {
     a.Swap(&b);
@@ -25845,7 +26026,7 @@ class CameraStill final :
                &_CameraStill_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    150;
+    151;
 
   friend void swap(CameraStill& a, CameraStill& b) {
     a.Swap(&b);
@@ -26008,7 +26189,7 @@ class CameraStillTaken final :
                &_CameraStillTaken_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    151;
+    152;
 
   friend void swap(CameraStillTaken& a, CameraStillTaken& b) {
     a.Swap(&b);
@@ -26170,7 +26351,7 @@ class CameraError final :
                &_CameraError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    152;
+    153;
 
   friend void swap(CameraError& a, CameraError& b) {
     a.Swap(&b);
@@ -26305,7 +26486,7 @@ class SystemSettings final :
                &_SystemSettings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    153;
+    154;
 
   friend void swap(SystemSettings& a, SystemSettings& b) {
     a.Swap(&b);
@@ -26526,7 +26707,7 @@ class GamepadConnected final :
                &_GamepadConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    154;
+    155;
 
   friend void swap(GamepadConnected& a, GamepadConnected& b) {
     a.Swap(&b);
@@ -26705,7 +26886,7 @@ class GamepadDisconnected final :
                &_GamepadDisconnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    155;
+    156;
 
   friend void swap(GamepadDisconnected& a, GamepadDisconnected& b) {
     a.Swap(&b);
@@ -26835,7 +27016,7 @@ class GamepadState final :
                &_GamepadState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    156;
+    157;
 
   friend void swap(GamepadState& a, GamepadState& b) {
     a.Swap(&b);
@@ -27042,7 +27223,7 @@ class GamepadRumble final :
                &_GamepadRumble_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    157;
+    158;
 
   friend void swap(GamepadRumble& a, GamepadRumble& b) {
     a.Swap(&b);
@@ -27354,7 +27535,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    158;
+    159;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -38054,6 +38235,100 @@ inline void GuestBoot::set_agent_connected(bool value) {
 
 // -------------------------------------------------------------------
 
+// InstallPart
+
+// string name = 1;
+inline void InstallPart::clear_name() {
+  _impl_.name_.ClearToEmpty();
+}
+inline const std::string& InstallPart::name() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.InstallPart.name)
+  return _internal_name();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void InstallPart::set_name(ArgT0&& arg0, ArgT... args) {
+
+ _impl_.name_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.InstallPart.name)
+}
+inline std::string* InstallPart::mutable_name() {
+  std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.InstallPart.name)
+  return _s;
+}
+inline const std::string& InstallPart::_internal_name() const {
+  return _impl_.name_.Get();
+}
+inline void InstallPart::_internal_set_name(const std::string& value) {
+
+  _impl_.name_.Set(value, GetArenaForAllocation());
+}
+inline std::string* InstallPart::_internal_mutable_name() {
+
+  return _impl_.name_.Mutable(GetArenaForAllocation());
+}
+inline std::string* InstallPart::release_name() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.InstallPart.name)
+  return _impl_.name_.Release();
+}
+inline void InstallPart::set_allocated_name(std::string* name) {
+  if (name != nullptr) {
+
+  } else {
+
+  }
+  _impl_.name_.SetAllocated(name, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.InstallPart.name)
+}
+
+// uint64 size = 2;
+inline void InstallPart::clear_size() {
+  _impl_.size_ = uint64_t{0u};
+}
+inline uint64_t InstallPart::_internal_size() const {
+  return _impl_.size_;
+}
+inline uint64_t InstallPart::size() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.InstallPart.size)
+  return _internal_size();
+}
+inline void InstallPart::_internal_set_size(uint64_t value) {
+
+  _impl_.size_ = value;
+}
+inline void InstallPart::set_size(uint64_t value) {
+  _internal_set_size(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.InstallPart.size)
+}
+
+// bool obb = 3;
+inline void InstallPart::clear_obb() {
+  _impl_.obb_ = false;
+}
+inline bool InstallPart::_internal_obb() const {
+  return _impl_.obb_;
+}
+inline bool InstallPart::obb() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.InstallPart.obb)
+  return _internal_obb();
+}
+inline void InstallPart::_internal_set_obb(bool value) {
+
+  _impl_.obb_ = value;
+}
+inline void InstallPart::set_obb(bool value) {
+  _internal_set_obb(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.InstallPart.obb)
+}
+
+// -------------------------------------------------------------------
+
 // InstallApk
 
 // uint32 transfer_id = 1;
@@ -38194,6 +38469,46 @@ inline void InstallApk::set_allocated_abi(std::string* abi) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.InstallApk.abi)
+}
+
+// repeated .dsa.control.v1.InstallPart parts = 5;
+inline int InstallApk::_internal_parts_size() const {
+  return _impl_.parts_.size();
+}
+inline int InstallApk::parts_size() const {
+  return _internal_parts_size();
+}
+inline void InstallApk::clear_parts() {
+  _impl_.parts_.Clear();
+}
+inline ::dsa::control::v1::InstallPart* InstallApk::mutable_parts(int index) {
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.InstallApk.parts)
+  return _impl_.parts_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::InstallPart >*
+InstallApk::mutable_parts() {
+  // @@protoc_insertion_point(field_mutable_list:dsa.control.v1.InstallApk.parts)
+  return &_impl_.parts_;
+}
+inline const ::dsa::control::v1::InstallPart& InstallApk::_internal_parts(int index) const {
+  return _impl_.parts_.Get(index);
+}
+inline const ::dsa::control::v1::InstallPart& InstallApk::parts(int index) const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.InstallApk.parts)
+  return _internal_parts(index);
+}
+inline ::dsa::control::v1::InstallPart* InstallApk::_internal_add_parts() {
+  return _impl_.parts_.Add();
+}
+inline ::dsa::control::v1::InstallPart* InstallApk::add_parts() {
+  ::dsa::control::v1::InstallPart* _add = _internal_add_parts();
+  // @@protoc_insertion_point(field_add:dsa.control.v1.InstallApk.parts)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::dsa::control::v1::InstallPart >&
+InstallApk::parts() const {
+  // @@protoc_insertion_point(field_list:dsa.control.v1.InstallApk.parts)
+  return _impl_.parts_;
 }
 
 // -------------------------------------------------------------------

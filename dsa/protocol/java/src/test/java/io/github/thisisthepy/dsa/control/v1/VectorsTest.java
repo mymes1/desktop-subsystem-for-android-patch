@@ -363,6 +363,11 @@ public final class VectorsTest {
         cases.put("install_apk", Envelope.newBuilder()
                 .setInstallApk(InstallApk.newBuilder().setTransferId(3).setName("notes.apk").setSize(1000))
                 .build());
+        cases.put("install_apk_split", Envelope.newBuilder()
+                .setInstallApk(InstallApk.newBuilder().setTransferId(4).setName("notes.xapk").setSize(13)
+                        .addParts(InstallPart.newBuilder().setName("base.apk").setSize(10))
+                        .addParts(InstallPart.newBuilder().setName("main.1.com.example.notes.obb").setSize(3).setObb(true)))
+                .build());
         cases.put("apk_chunk", Envelope.newBuilder()
                 .setApkChunk(ApkChunk.newBuilder().setTransferId(3).setOffset(131072)
                         .setData(com.google.protobuf.ByteString.copyFrom(new byte[] {1, 2, 3})))
