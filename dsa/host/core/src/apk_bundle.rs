@@ -273,8 +273,9 @@ impl Device {
     }
 
     /// What a host's Android takes: the ABIs as [`abis_for`](Self::abis_for) says them from
-    /// what the service says of ARM translation (`None` when it cannot be asked), the density
-    /// apps draw at on the host's main screen, and the host's display languages.
+    /// what the service says of ARM translation (`None` when it cannot be asked), that is what
+    /// the running Android lists, else whether a translator is in use; the density apps draw
+    /// at on the host's main screen; and the host's display languages.
     pub fn of_host(
         translation: Option<&ArmTranslationStatus>,
         arm64_host: bool,
@@ -285,8 +286,9 @@ impl Device {
             .and_then(|status| status.guest.as_ref())
             .map(|guest| guest.abilist.as_str())
             .filter(|abilist| !abilist.is_empty());
-        let translating =
-            translation.is_some_and(|status| status.enabled && status.package.is_some());
+        // A translator is in use while the setting is on and the user installed one or the
+        // image has its own.
+        let translating = translation.is_some_and(|status| status.translator.is_some());
         Device {
             abis: Device::abis_for(abilist, arm64_host, translating),
             density_dpi,
