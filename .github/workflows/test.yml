@@ -17,11 +17,12 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Every push to develop is checked to the end in a group of its own: a newer merge
-  # used to cancel the run in progress, and with merges minutes apart the long runs
-  # never finished. A newer push to one pull request still replaces its older run.
-  group: test-${{ github.event_name == 'push' && github.sha || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # On develop a run in progress finishes and only the newest waiting run stays: GitHub
+  # keeps one pending run per group, so a newer merge replaces the one still waiting.
+  # The newest run tests everything the dropped ones held. Anywhere else, such as a pull
+  # request, a newer run still replaces the older one.
+  group: test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' }}
 
 permissions:
   contents: read
@@ -64,9 +65,9 @@ jobs:
       - name: Compare with the base
         id: find
         run: |
-          # A newer push cancels an older one, so the push before this one may never have
-          # been tested: a push is compared with the newest develop commit whose run passed,
-          # not with the commit before it.
+          # A newer push replaces a run still waiting, so the push before this one may never
+          # have been tested: a push is compared with the newest develop commit whose run
+          # passed, not with the commit before it.
           before=""
           if [[ "${{ github.event_name }}" == "push" ]]; then
             before="$(gh run list --repo "${{ github.repository }}" --workflow test.yml               --branch develop --event push --status success --limit 1               --json headSha --jq '.[0].headSha // ""' || true)"

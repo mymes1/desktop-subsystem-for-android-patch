@@ -157,8 +157,8 @@ These bind the agent and whoever dispatches it equally.
    test` or `cargo clippy`, no Gradle, no `test.sh`, and never the Android image, the guest
    kernel or gfxstream. Builds and test runs take most of the machine's cores and memory, and
    several agents running them at once stall the owner's own work, down to mouse clicks. A
-   background agent pushes its branch and lets CI build and test the pull request, and reads
-   the CI logs to fix what fails. Do not write a build or test command into a task prompt.
+   background agent merges its branch and leaves building and testing to CI on `develop` (4).
+   Do not write a build or test command into a task prompt.
    Running the code on this machine (installing a build, booting it, checking it by hand)
    is done from `develop`, by the session that dispatches the agents, after the pull request
    is merged.
@@ -181,6 +181,15 @@ These bind the agent and whoever dispatches it equally.
    built without writing the missing piece themselves.
 3. **Whoever reads the report is bound by the same rule.** An "out of scope" in a report is
    not an answer to be relayed onward; it is a thing to send back.
+4. **A background agent never waits on, watches, starts or re-runs CI, and never merges just
+   to get a CI run.** It finishes when its change is merged and reports what was not verified.
+   The dispatching session checks CI and screenshots on the newest `develop` commit, and sends
+   failures back.
+5. **A background agent never touches the owner's desktop.** It never launches, focuses,
+   closes, resizes or captures an app or window on this machine, including DSA and Windows' own
+   apps, because the owner is working at that desktop. It verifies from CI artifacts. The
+   dispatching session says so first before it installs or launches anything on the PC.
+6. **`cargo fmt` is not allowed unless the owner approves.** Do not add it.
 
 ## Writing
 
