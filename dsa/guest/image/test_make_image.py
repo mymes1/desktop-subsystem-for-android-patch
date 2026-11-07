@@ -3737,5 +3737,79 @@ class ArmTranslationImageTests(unittest.TestCase):
         self.assertNotIn("x86_64 is not the ABI apps are installed for first", good)
 
 
+class DefaultArmTranslationTests(unittest.TestCase):
+    """The default translator an x86_64 image's release carries (the Translator build's
+    Digitalis package), and that an arm64 image never carries one."""
+
+    def _package(self, root, **changes):
+        package = Path(root) / "package"
+        package.mkdir()
+        description = {"name": "Digitalis", "version": "17-abefbe2b1600", "library": "libberberis_arm64.so",
+                       "abis": ["arm64-v8a"], "license": "Apache-2.0", **changes}
+        (package / "arm-translation.json").write_text(json.dumps(description))
+        image = bytearray(4096)
+        image[1024:1028] = (0xE0F5E1E2).to_bytes(4, "little")
+        (package / "system.img").write_bytes(bytes(image))
+        return package
+
+    def test_fr25_the_x86_64_release_carries_the_default_package_that_image_json_describes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "image"
+            out.mkdir()
+            entry = make_image.default_arm_translation(self._package(tmp), "x86_64", out)
+            self.assertEqual(entry["file"], "arm-translation.zip")
+            self.assertEqual((entry["name"], entry["version"], entry["abis"], entry["license"]),
+                             ("Digitalis", "17-abefbe2b1600", ["arm64-v8a"], "Apache-2.0"))
+            with zipfile.ZipFile(out / "arm-translation.zip") as z:
+                self.assertEqual(sorted(z.namelist()), ["arm-translation.json", "system.img"])
+            manifest = {"arch": "x86_64", "files": {}, "arm_translation": entry}
+            self.assertEqual(make_image.check_default_arm_translation(manifest, out), [])
+            # The zip is what install takes, so a changed one is caught before it is published.
+            with zipfile.ZipFile(out / "arm-translation.zip", "a") as z:
+                z.writestr("extra", "x")
+            self.assertTrue(make_image.check_default_arm_translation(manifest, out))
+
+    def test_fr25_an_arm64_image_never_takes_or_carries_a_translator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "image"
+            out.mkdir()
+            with self.assertRaises(SystemExit):
+                make_image.default_arm_translation(self._package(tmp), "arm64", out)
+            self.assertFalse((out / "arm-translation.zip").exists())
+            self.assertEqual(make_image.check_default_arm_translation({"arch": "arm64", "files": {}}, out), [])
+            entry = {"file": "arm-translation.zip", "name": "Digitalis"}
+            self.assertTrue(make_image.check_default_arm_translation(
+                {"arch": "arm64", "files": {}, "arm_translation": entry}, out))
+            (out / "arm-translation.zip").write_bytes(b"PK")
+            self.assertTrue(make_image.check_default_arm_translation({"arch": "arm64", "files": {}}, out))
+
+    def test_fr25_make_image_refuses_a_translator_for_an_arm64_image_before_making_it(self):
+        script = Path(__file__).with_name("make-image.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [sys.executable, str(script), "--major", "17", "--arch", "arm64", "--keys", tmp,
+                 "--inputs", tmp, "--out", tmp, "--arm-translation", str(self._package(tmp))],
+                capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("takes no ARM translation package", result.stderr)
+            self.assertFalse(any(Path(tmp).glob("17.*")), "nothing is made for the arm64 image")
+
+    def test_fr25_a_default_package_the_host_would_refuse_is_not_released(self):
+        for changes in [{"abis": ["arm64-v8a", "armeabi-v7a"]}, {"library": "../libx.so"}, {"name": ""},
+                        {"version": " 17"}]:
+            with tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / "image"
+                out.mkdir()
+                with self.assertRaises(SystemExit, msg=str(changes)):
+                    make_image.default_arm_translation(self._package(tmp, **changes), "x86_64", out)
+        with tempfile.TemporaryDirectory() as tmp:
+            package = self._package(tmp)
+            (package / "system.img").write_bytes(bytes(4096))
+            out = Path(tmp) / "image"
+            out.mkdir()
+            with self.assertRaises(SystemExit):
+                make_image.default_arm_translation(package, "x86_64", out)
+
+
 if __name__ == "__main__":
     unittest.main()

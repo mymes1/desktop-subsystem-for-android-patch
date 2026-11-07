@@ -8,7 +8,8 @@ app is not signed with one of the keys in the key folder, when the framework ove
 trace script is missing, when the agent is missing or not signed with the platform key, when
 Settings still has the preferences or code that crash it without Bluetooth, when a system
 app users open is not compiled for the guest's boot image and its own dex, when the files
-do not match image.json, when the kernel or a DSA guest binary is built for another
+do not match image.json, when an arm64 image carries an ARM translation package or an x86_64
+image's default one does not match image.json or would be refused by the host, when the kernel or a DSA guest binary is built for another
 architecture than the image's, when the ramdisk lacks the directories and links Android's
 first stage init needs, when the network adapter is not shown to Android as Wi-Fi with its
 address and DNS servers from DHCP, or when the kernel command line, a mount table or an init script
@@ -68,6 +69,9 @@ if kernel in manifest["files"]:
         found = make_image.kernel_format(f.read(0x1000))
     if found != arch:
         problems.append(f"{kernel} is not a kernel for {arch} (its header says {found or 'neither'})")
+
+# An x86_64 image's release may carry the default ARM translation package; an arm64 one never.
+problems += make_image.check_default_arm_translation(manifest, image)
 
 for name, expected in manifest["files"].items():
     h = hashlib.sha256()

@@ -27,7 +27,9 @@ The results go to dsa/target/image/<version>/:
 - data.vhdx: the template of a user's data disk: empty misc, metadata and userdata
   partitions, which Android writes and formats on first boot;
 - initrd.img: the vendor and generic ramdisks, which the VM boots with DSA's kernel;
-- image.json: the version, the kernel command line the VM needs, and the files' SHA-256.
+- image.json: the version, the kernel command line the VM needs, and the files' SHA-256;
+- arm-translation.zip, with --arm-translation (x86_64 only): the default ARM translation
+  package released beside the image, which image.json describes under "arm_translation".
 """
 
 import argparse
@@ -1516,6 +1518,97 @@ ARM_TRANSLATION_FS_CONFIG = [
     "system/etc/dsa/arm-translation-on.prop 0 0 644 capabilities=0x0",
     "system/etc/dsa/arm-translation-off.prop 0 0 644 capabilities=0x0",
 ]
+
+
+# The default ARM translation package of an x86_64 image's release (Digitalis, built by the
+# "Translator build" workflow): the package folder `dsa arm-translation install` takes,
+# zipped beside the image and described in image.json under "arm_translation". It is not
+# one of the image's own files: the host boots the image without it. An arm64 image runs ARM
+# apps itself, so it never has one.
+ARM_TRANSLATION_ZIP = "arm-translation.zip"
+ARM_TRANSLATION_MANIFEST = "arm-translation.json"
+ARM_TRANSLATION_IMAGE = "system.img"
+ARM_TRANSLATION_ABIS = ["arm64-v8a"]
+ARM_TRANSLATION_LIBRARY = re.compile(r"^[A-Za-z0-9._-]+\.so$")
+EROFS_MAGIC = 0xE0F5E1E2
+
+
+def arm_translation_problems(description, image_head):
+    """What the host would refuse in a translation package: its description (the parsed
+    arm-translation.json) and the first bytes of its system.img."""
+    problems = []
+    for key, longest in (("name", 64), ("version", 64)):
+        value = description.get(key)
+        if not isinstance(value, str) or not value or len(value) > longest or value.strip() != value:
+            problems.append(f"the translation package's {key} must have from 1 to {longest} characters")
+    library = description.get("library")
+    if not isinstance(library, str) or len(library) > 128 or not ARM_TRANSLATION_LIBRARY.match(library):
+        problems.append(f"the translation package's bridge library {library!r} is not a library file name")
+    if description.get("abis") != ARM_TRANSLATION_ABIS:
+        problems.append(f"the translation package translates {description.get('abis')}, not only arm64-v8a")
+    license_id = description.get("license", "")
+    if not isinstance(license_id, str) or len(license_id) > 128:
+        problems.append("the translation package's licence is not a short SPDX expression")
+    if len(image_head) < 1028 or int.from_bytes(image_head[1024:1028], "little") != EROFS_MAGIC:
+        problems.append(f"the translation package's {ARM_TRANSLATION_IMAGE} is not an erofs image")
+    return problems
+
+
+def default_arm_translation(package, arch, out):
+    """Zips the translation package folder `package` into `out` as the image's default
+    translator, and returns what image.json says of it."""
+    if arch != "x86_64":
+        raise SystemExit(f"an {arch} image runs ARM apps without a translator, so it takes no "
+                         "ARM translation package")
+    package = Path(package)
+    description = json.loads((package / ARM_TRANSLATION_MANIFEST).read_text())
+    with open(package / ARM_TRANSLATION_IMAGE, "rb") as f:
+        head = f.read(1028)
+    problems = arm_translation_problems(description, head)
+    if problems:
+        raise SystemExit("; ".join(problems))
+    target = Path(out) / ARM_TRANSLATION_ZIP
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_STORED) as z:
+        z.write(package / ARM_TRANSLATION_MANIFEST, ARM_TRANSLATION_MANIFEST)
+        z.write(package / ARM_TRANSLATION_IMAGE, ARM_TRANSLATION_IMAGE)
+    return {
+        "file": ARM_TRANSLATION_ZIP,
+        "size": target.stat().st_size,
+        "sha256": sha256(target),
+        **{key: description[key] for key in ("name", "version", "library", "abis")},
+        "license": description.get("license", ""),
+    }
+
+
+def check_default_arm_translation(manifest, image_dir):
+    """The problems with an image's default translator: an arm64 image has none, and an
+    x86_64 one's zip matches image.json and holds a package the host takes."""
+    image_dir = Path(image_dir)
+    entry = manifest.get("arm_translation")
+    arch = manifest.get("arch") or DEFAULT_ARCH
+    if arch != "x86_64":
+        if entry is not None or (image_dir / ARM_TRANSLATION_ZIP).exists():
+            return [f"the {arch} image carries an ARM translation package, which it never uses"]
+        return []
+    if entry is None:
+        return []
+    path = image_dir / entry.get("file", "")
+    if entry.get("file") != ARM_TRANSLATION_ZIP or not path.is_file():
+        return [f"image.json names the ARM translation package {entry.get('file')!r}, which is not beside it"]
+    problems = []
+    if path.stat().st_size != entry.get("size") or sha256(path) != entry.get("sha256"):
+        problems.append(f"{ARM_TRANSLATION_ZIP} does not match image.json")
+    with zipfile.ZipFile(path) as z:
+        if sorted(z.namelist()) != sorted([ARM_TRANSLATION_MANIFEST, ARM_TRANSLATION_IMAGE]):
+            return problems + [f"{ARM_TRANSLATION_ZIP} holds {z.namelist()}, not a package's two files"]
+        description = json.loads(z.read(ARM_TRANSLATION_MANIFEST))
+        with z.open(ARM_TRANSLATION_IMAGE) as f:
+            head = f.read(1028)
+    problems += arm_translation_problems(description, head)
+    for key in ("name", "version", "library", "abis", "license"):
+        if description.get(key, "") != entry.get(key):
+            problems.append(f"image.json's ARM translation {key} is not the package's")
+    return problems
 
 
 def add_arm_translation_import(text):
@@ -3020,7 +3113,13 @@ def main():
                              "found under ANDROID_HOME when not given, and without it the image has no overlay")
     parser.add_argument("--graphics-dir", type=Path,
                         help="a directory containing guest graphics libraries (vulkan.ranchu.so, libOpenglSystemCommon.so)")
+    parser.add_argument("--arm-translation", type=Path,
+                        help="an ARM translation package folder (arm-translation.json and system.img) to "
+                             "release beside an x86_64 image as its default translator")
     args = parser.parse_args()
+    if args.arm_translation and args.arch != "x86_64":
+        raise SystemExit(f"an {args.arch} image runs ARM apps without a translator, so it takes no "
+                         "ARM translation package")
 
     spec = image_spec(json.loads((HERE / "inputs.json").read_text())["images"], args.major, args.arch)
     use_arch(args.arch)
@@ -3139,6 +3238,9 @@ def main():
         "identity": image_identity(zipfile.ZipFile(signed).read("SYSTEM/build.prop").decode()),
         "files": {name: {"size": (out / name).stat().st_size, "sha256": sha256(out / name)} for name in files},
     }
+    (out / ARM_TRANSLATION_ZIP).unlink(missing_ok=True)
+    if args.arm_translation:
+        manifest["arm_translation"] = default_arm_translation(args.arm_translation, args.arch, out)
     (out / "image.json").write_text(json.dumps(manifest, indent=2) + "\n")
     shutil.copy(signed, out / "signed-target_files.zip")
     shutil.rmtree(work)
