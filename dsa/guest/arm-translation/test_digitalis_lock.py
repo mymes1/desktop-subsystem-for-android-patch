@@ -132,6 +132,14 @@ class LockTests(unittest.TestCase):
             for path in ("external/golang-protobuf", "external/starlark-go", "external/pogreb"):
                 self.assertIn(path, paths, f"{version['android']} lacks {path}")
 
+    def test_fr25_the_makefiles_product_configuration_includes_are_fetched(self):
+        # build/make/core/soong_config.mk includes toolchain/pgo-profiles/sampling/afdo_profiles.mk
+        # without a dash, so product configuration stops without it (the second run did).
+        for version in self.lock["versions"]:
+            profiles = digitalis_lock.project(version, "toolchain/pgo-profiles")
+            self.assertIn("sampling", profiles["cone"])
+            self.assertEqual(profiles["url"], "https://android.googlesource.com/toolchain/pgo-profiles")
+
     def test_fr25_the_prebuilt_framework_libraries_are_the_ones_taken_from_the_image(self):
         text = (DEVICE / "prebuilts/Android.bp").read_text()
         names = re.findall(r'cc_prebuilt_library_shared \{\s*name: "([^"]+)"', text)
