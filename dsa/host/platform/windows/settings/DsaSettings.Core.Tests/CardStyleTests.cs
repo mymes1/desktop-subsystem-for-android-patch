@@ -205,8 +205,8 @@ public class CardStyleTests
     [Fact]
     public void Fr17_a_button_keeps_the_library_template()
     {
-        Assert.Empty(TypedStyle("ui:Button").Elements(Wpf + "Setter")
-            .Where(s => (string?)s.Attribute("Property") == "Template"));
+        Assert.DoesNotContain(TypedStyle("ui:Button").Elements(Wpf + "Setter"),
+            s => (string?)s.Attribute("Property") == "Template");
     }
 
     [Fact]
@@ -345,11 +345,11 @@ public class CardStyleTests
         const double titleBarPadding = 16;
         const double titleBarIconGap = 12; // the library's, after the icon
         var icon = window.Descendants(Ui + "ImageIcon").Single();
-        var iconWidth = double.Parse((string?)icon.Attribute("Width")!);
+        var iconWidth = double.Parse(((string?)icon.Attribute("Width"))!);
         var iconRight = Thickness((string?)icon.Attribute("Margin"))[2];
 
         var paneLeft = Thickness((string?)Named(window, "PaneGrid").Attribute("Margin"))[0];
-        var iconColumn = double.Parse((string?)PaneItemTemplate(window).Descendants(Wpf + "ColumnDefinition").First().Attribute("Width")!);
+        var iconColumn = double.Parse(((string?)PaneItemTemplate(window).Descendants(Wpf + "ColumnDefinition").First().Attribute("Width"))!);
         var labelMargin = Thickness((string?)Named(window, "ElementContentPresenter").Attribute("Margin"))[0];
         var toggle = Named(window, "PART_ToggleButton");
 
@@ -357,7 +357,7 @@ public class CardStyleTests
         // where it is when the pane closes to the icon column's width.
         Assert.Equal(24, titleBarPadding + iconWidth / 2);
         Assert.Equal(24, paneLeft + iconColumn / 2);
-        Assert.Equal(24, paneLeft + double.Parse((string?)toggle.Attribute("Width")!) / 2);
+        Assert.Equal(24, paneLeft + double.Parse(((string?)toggle.Attribute("Width"))!) / 2);
         Assert.Contains("To=\"40\"", PaneTemplate(window).ToString());
 
         // The label column: the title starts where the labels do, twice the icon's width from

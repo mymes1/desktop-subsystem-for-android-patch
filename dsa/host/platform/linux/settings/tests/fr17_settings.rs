@@ -80,7 +80,10 @@ fn fr17_the_app_has_every_page_the_windows_settings_app_has() {
         repo().join("dsa/host/platform/windows/settings/DsaSettings/MainWindow.xaml"),
     )
     .unwrap();
-    let windows_pages = main_window.matches("<ui:NavigationViewItem ").count();
+    // Each page is a pane item: the app's own `PaneItem` (a NavigationViewItem
+    // that names itself to UI Automation) or a plain NavigationViewItem.
+    let windows_pages = main_window.matches("<l:PaneItem ").count()
+        + main_window.matches("<ui:NavigationViewItem ").count();
     assert_eq!(
         Page::ALL.len(),
         windows_pages,
@@ -411,7 +414,6 @@ fn fr21_the_log_page_uses_the_app_font() {
     );
 }
 
-
 #[test]
 fn fr21_a_log_line_splits_into_the_page_columns_and_a_dropped_record_has_only_its_body() {
     let record = json!({ "time": "2026-11-04 10:00:00.000", "priority": "I",
@@ -425,7 +427,10 @@ fn fr21_a_log_line_splits_into_the_page_columns_and_a_dropped_record_has_only_it
 
     let record = json!({ "time": "2026-11-04 10:00:00.000", "priority": "W", "dropped": 3 });
     let dropped = LogLine::parse(&record.to_string()).unwrap().columns();
-    assert_eq!(dropped.time.clone() + &dropped.pid + &dropped.tid + &dropped.priority, "");
+    assert_eq!(
+        dropped.time.clone() + &dropped.pid + &dropped.tid + &dropped.priority,
+        ""
+    );
     assert_eq!(dropped.body, "--------- 3 records dropped");
 }
 
