@@ -1754,15 +1754,55 @@ impl Session {
         content: &mut dyn Read,
         events: &Receiver<control::ArmTranslationState>,
     ) -> Result<GuestArmTranslation, SessionError> {
-        self.send(dsa_protocol::encode(&control::Envelope {
-            body: Some(Body::ArmTranslationInstall(
-                control::ArmTranslationInstall {
+        let begin = Body::ArmTranslationInstall(control::ArmTranslationInstall {
+            transfer_id,
+            size,
+            sha256: sha256.to_vec(),
+        });
+        let state = self.send_image(
+            "the ARM translation image",
+            transfer_id,
+            size,
+            content,
+            begin,
+            &|offset, data| {
+                Body::ArmTranslationChunk(control::ArmTranslationChunk {
                     transfer_id,
-                    size,
-                    sha256: sha256.to_vec(),
-                },
-            )),
-        }))?;
+                    offset,
+                    data,
+                })
+            },
+            events,
+            &|state: &control::ArmTranslationState| {
+                (
+                    state.transfer_id,
+                    state.received,
+                    state.done,
+                    state.error.clone(),
+                )
+            },
+        )?;
+        Ok(guest_arm_translation(state))
+    }
+
+    /// Sends an image the control daemon keeps on the user's disk: `begin`, then `size` bytes
+    /// of `content` as the chunks `chunk` makes, in pieces of [`apk::CHUNK_BYTES`] and never
+    /// more than [`apk::CHUNKS_IN_FLIGHT`] ahead of what the daemon says it has written.
+    /// `answer` reads the daemon's answers as (transfer, bytes written, done, error). Returns
+    /// the answer that says the image is in place.
+    #[allow(clippy::too_many_arguments)]
+    fn send_image<S>(
+        &self,
+        what: &str,
+        transfer_id: u32,
+        size: u64,
+        content: &mut dyn Read,
+        begin: Body,
+        chunk: &dyn Fn(u64, Vec<u8>) -> Body,
+        events: &Receiver<S>,
+        answer: &dyn Fn(&S) -> (u32, u64, bool, String),
+    ) -> Result<S, SessionError> {
+        self.send(dsa_protocol::encode(&control::Envelope { body: Some(begin) }))?;
         let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;
         let mut sent = 0u64;
         let mut written = 0u64;
@@ -1773,30 +1813,29 @@ impl Session {
                 let mut data = vec![0u8; length];
                 if let Err(error) = content.read_exact(&mut data) {
                     return Err(SessionError::InstallRefused(format!(
-                        "the ARM translation image did not arrive whole: {error}"
+                        "{what} did not arrive whole: {error}"
                     )));
                 }
                 self.send(dsa_protocol::encode(&control::Envelope {
-                    body: Some(Body::ArmTranslationChunk(control::ArmTranslationChunk {
-                        transfer_id,
-                        offset: sent,
-                        data,
-                    })),
+                    body: Some(chunk(sent, data)),
                 }))?;
                 sent += length as u64;
             }
             match events.recv_timeout(INSTALL_POLL) {
-                Ok(state) if state.transfer_id == transfer_id => {
-                    if !state.error.is_empty() {
-                        return Err(SessionError::InstallRefused(state.error));
+                Ok(state) => {
+                    let (id, received, done, error) = answer(&state);
+                    if id != transfer_id {
+                        continue;
                     }
-                    if state.done {
-                        return Ok(guest_arm_translation(state));
+                    if !error.is_empty() {
+                        return Err(SessionError::InstallRefused(error));
                     }
-                    written = written.max(state.received);
+                    if done {
+                        return Ok(state);
+                    }
+                    written = written.max(received);
                     waited = Duration::ZERO;
                 }
-                Ok(_) => {}
                 Err(RecvTimeoutError::Timeout) => {
                     let state = self.state();
                     if !matches!(
@@ -1808,8 +1847,8 @@ impl Session {
                     waited += INSTALL_POLL;
                     if waited >= CHUNK_TIMEOUT {
                         return Err(SessionError::InstallRefused(format!(
-                            "Android has not answered about the ARM translation image for {} s; \
-                             it may be busy, try again",
+                            "Android has not answered about {what} for {} s; it may be busy, \
+                             try again",
                             CHUNK_TIMEOUT.as_secs()
                         )));
                     }
