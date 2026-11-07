@@ -50,8 +50,58 @@ public class CardStyleTests
         Assert.Equal("{TemplateBinding Background}", (string?)border.Attribute("Background"));
         Assert.Equal("{TemplateBinding BorderBrush}", (string?)border.Attribute("BorderBrush"));
         Assert.Equal("{TemplateBinding BorderThickness}", (string?)border.Attribute("BorderThickness"));
-        Assert.Equal("4", (string?)border.Attribute("CornerRadius"));
+        Assert.Equal("{StaticResource CardCornerRadius}", (string?)border.Attribute("CornerRadius"));
+        Assert.Equal("8", Resource("CardCornerRadius"));
     }
+
+    // Malgun Gothic has Regular, Semilight and Bold. A weight of Medium or more on a style turns
+    // Korean text into Bold, so a strong style names a Semibold face for Latin text instead.
+    [Theory]
+    [InlineData("DsaSettings", "PageTitle")]
+    [InlineData("DsaSettings", "SubtitleText")]
+    [InlineData("DsaSettings", "SectionHeader")]
+    [InlineData("DsaSettings", "CardTitle")]
+    [InlineData("DsaApkInstaller", "AppNameText")]
+    [InlineData("DsaApkInstaller", "SectionHeader")]
+    public void Fr17_a_title_style_never_uses_a_weight_korean_text_renders_bold(string app, string key)
+    {
+        var doc = AppXamlOf(app);
+        var style = doc.Descendants(Wpf + "Style").Single(s => (string?)s.Attribute(X + "Key") == key);
+        var weight = Setter(style, "FontWeight");
+        Assert.True(weight == "Normal",
+            $"{app} style {key} has FontWeight {weight}; Malgun Gothic would draw Korean text in Bold");
+    }
+
+    [Fact]
+    public void Fr17_no_settings_xaml_sets_a_weight_korean_text_renders_bold()
+    {
+        var root = Path.GetDirectoryName(Path.GetDirectoryName(XamlPath("DsaSettings", "App.xaml")))!;
+        string[] heavy = { "\"Medium\"", "\"SemiBold\"", "\"DemiBold\"", "\"Bold\"", "\"ExtraBold\"", "\"Black\"" };
+        foreach (var file in Directory.GetFiles(Path.Combine(root, "DsaSettings"), "*.xaml", SearchOption.AllDirectories)
+            .Concat(Directory.GetFiles(Path.Combine(root, "DsaApkInstaller"), "*.xaml", SearchOption.AllDirectories)))
+        {
+            var text = File.ReadAllText(file);
+            Assert.False(heavy.Any(h => text.Contains("FontWeight=" + h) || text.Contains("Property=\"FontWeight\" Value=" + h)),
+                file + " sets a heavy FontWeight; Malgun Gothic would draw Korean text in Bold");
+            Assert.False(text.Contains("{StaticResource BodyStrong}"),
+                file + " uses the library's BodyStrong style, which is SemiBold; use SectionHeader");
+        }
+    }
+
+    private static string XamlPath(string app, string file)
+    {
+        string[] relative = { Path.Combine(app, file),
+            Path.Combine("host", "platform", "windows", "settings", app, file) };
+        string? found = null;
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null && found is null; dir = dir.Parent)
+        {
+            found = relative.Select(r => Path.Combine(dir.FullName, r)).FirstOrDefault(File.Exists);
+        }
+        Assert.True(found is not null, file + " was not found above " + AppContext.BaseDirectory);
+        return found!;
+    }
+
+    private static XDocument AppXamlOf(string app) => XDocument.Load(XamlPath(app, "App.xaml"));
 
     private static XElement KeyedStyle(string key) => AppXaml().Descendants(Wpf + "Style")
         .Single(s => (string?)s.Attribute(X + "Key") == key);
@@ -66,10 +116,11 @@ public class CardStyleTests
         .FirstOrDefault(e => (string?)e.Attribute(X + "Key") == key && !e.HasElements)?.Value;
 
     [Theory]
-    // The WinUI type ramp: Title, Subtitle, Body Strong, Body, Caption.
-    [InlineData("PageTitle", "28", "36", "SemiBold")]
-    [InlineData("SubtitleText", "20", "28", "SemiBold")]
-    [InlineData("SectionHeader", "14", "20", "SemiBold")]
+    // The WinUI type ramp: Title, Subtitle, Body Strong, Body, Caption. The strong ones get
+    // their Latin weight from a Semibold face, not from FontWeight.
+    [InlineData("PageTitle", "28", "36", "Normal")]
+    [InlineData("SubtitleText", "20", "28", "Normal")]
+    [InlineData("SectionHeader", "14", "20", "Normal")]
     [InlineData("CardTitle", "14", "20", "Normal")]
     [InlineData("CardDescription", "12", "16", "Normal")]
     public void Fr17_text_follows_the_windows_type_ramp(string key, string size, string line, string weight)

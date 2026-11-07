@@ -15,12 +15,16 @@
             <!-- The Windows type ramp, as App Installer uses it: Segoe UI Variable (Display for
                  the app's name, Text for the rest), Segoe UI where Windows 10 lacks it, and
                  Malgun Gothic for Korean.
-                   Title       28 px Semibold, 36 px line   the app's name
-                   Body Strong 14 px Semibold, 20 px line   section headers
-                   Body        14 px Regular,  20 px line   publisher, version, capabilities
-                   Caption     12 px Regular,  16 px line   permission names, the notice -->
+                   Title       28 px, 36 px line   the app's name
+                   Body Strong 14 px, 20 px line   section headers
+                   Body        14 px, 20 px line   publisher, version, capabilities
+                   Caption     12 px, 16 px line   permission names, the notice
+                 Strong text names a Semibold face and keeps FontWeight Normal: Malgun Gothic has
+                 no Semibold, so FontWeight SemiBold would pick its Bold for Korean. -->
             <FontFamily x:Key="TextFont">Segoe UI Variable Text, Segoe UI, Malgun Gothic</FontFamily>
             <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI, Malgun Gothic</FontFamily>
+            <FontFamily x:Key="StrongTextFont">Segoe UI Variable Text Semibold, Segoe UI Semibold, Malgun Gothic</FontFamily>
+            <FontFamily x:Key="StrongDisplayFont">Segoe UI Variable Display Semibold, Segoe UI Semibold, Malgun Gothic</FontFamily>
 
             <!-- App Installer's spacing: 32 px from the window's sides, the icon tile 88 px at
                  the top right, sections 20 px apart, and the footer on its own layer under the
@@ -31,8 +35,8 @@
             <sys:Double x:Key="PrimaryButtonMinWidth">120</sys:Double>
 
             <Style x:Key="AppNameText" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
-                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontFamily" Value="{StaticResource StrongDisplayFont}" />
+                <Setter Property="FontWeight" Value="Normal" />
                 <Setter Property="FontSize" Value="28" />
                 <Setter Property="LineHeight" Value="36" />
                 <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -48,8 +52,8 @@
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
             </Style>
             <Style x:Key="SectionHeader" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
-                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontFamily" Value="{StaticResource StrongTextFont}" />
+                <Setter Property="FontWeight" Value="Normal" />
                 <Setter Property="FontSize" Value="14" />
                 <Setter Property="LineHeight" Value="20" />
                 <Setter Property="Margin" Value="0,20,0,8" />
