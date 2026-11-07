@@ -9,6 +9,7 @@ final class AppModel: ObservableObject {
     let service: DsaService
     let general: GeneralViewModel
     let settings: SettingsViewModel
+    let gapps: GappsViewModel
     let memory: MemoryViewModel
     let install: InstallViewModel
     let apps: AppsViewModel
@@ -24,6 +25,7 @@ final class AppModel: ObservableObject {
         general = GeneralViewModel(service: service, text: appText)
         settings = SettingsViewModel(service: service, text: appText)
         settings.isAdministrator = Shell.isAdministrator
+        gapps = GappsViewModel(service: service, text: appText)
         memory = MemoryViewModel(service: service, text: appText)
         install = InstallViewModel(service: service, text: appText)
         apps = AppsViewModel(service: AppsService(cli: cli), text: appText)
