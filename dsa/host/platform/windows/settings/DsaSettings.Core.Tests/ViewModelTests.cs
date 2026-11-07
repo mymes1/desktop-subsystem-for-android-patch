@@ -92,7 +92,8 @@ public class ViewModelTests
         Assert.Equal(SessionState.Stopped, vm.State);
         Assert.Equal("State_Stopped", vm.StateText);
         Assert.True(vm.HasLastReason);
-        Assert.Equal("the VM exited", vm.LastReason);
+        Assert.Equal("LastReason_General", vm.LastReason);
+        Assert.Equal("the VM exited", vm.LastReasonDetail);
         Assert.True(vm.CanStart);
         Assert.False(vm.CanStop);
 

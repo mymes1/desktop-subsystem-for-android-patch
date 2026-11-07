@@ -283,6 +283,48 @@ fn fr2_dsa_shows_the_guest_console_of_a_failed_start_below_the_status_line() {
 }
 
 #[test]
+fn fr17_dsa_status_says_an_error_code_in_a_sentence_and_keeps_the_raw_line() {
+    use dsa_host_core::host_api::Status;
+    let raw =
+        "the guest did not start: HcsStartComputeSystem failed (HRESULT 0x80070057): {\"Error\":1}";
+    let line = dsa_cli::describe(&Status {
+        state: SessionState::Stopped,
+        last_reason: Some(raw.into()),
+        update_notice: None,
+        problem: None,
+    });
+    assert_eq!(
+        line,
+        format!(
+            "Android: Stopped (last stopped: the host refused the settings for Android's virtual \
+             machine; update or reinstall DSA)\ndetails: {raw}"
+        )
+    );
+}
+
+#[test]
+fn fr17_dsa_status_gives_each_mapped_code_its_sentence() {
+    use dsa_host_core::host_api::Status;
+    for (code, sentence) in [
+        ("0x80370102", "virtualization is off"),
+        ("0xC0351000", "virtualization is off"),
+        ("0x8007000e", "not enough memory"),
+        ("0x80070070", "a disk problem"),
+        ("0x80004005", "Android could not start"),
+    ] {
+        let line = dsa_cli::describe(&Status {
+            state: SessionState::Stopped,
+            last_reason: Some(format!("HcsStartComputeSystem failed (HRESULT {code})")),
+            update_notice: None,
+            problem: None,
+        });
+        let first = line.lines().next().unwrap();
+        assert!(first.contains(sentence), "{code}: {line}");
+        assert!(!first.contains(code), "{code}: {line}");
+    }
+}
+
+#[test]
 fn fr2_dsa_says_what_keeps_a_stalled_android_from_being_ready() {
     use dsa_host_core::host_api::Status;
     let status = Status {
