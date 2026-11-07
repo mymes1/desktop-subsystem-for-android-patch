@@ -131,8 +131,26 @@ public struct ArmGuestInfo: Equatable, Sendable {
     public var abilist: String
 }
 
-/// Whether apps built only for 64-bit ARM can run, and whether Google's translator can be
-/// fetched here (not on an ARM64 Mac, whose Android runs ARM apps itself).
+/// Where an ARM translator comes from.
+public enum ArmSource: String, Equatable, Sendable {
+    /// The default translator the image of this Android carries.
+    case builtIn = "default"
+    /// A package the user installed.
+    case user
+    /// Google's translator, which the user fetched.
+    case google
+}
+
+/// The ARM translator Android uses: where it comes from, its name, version and licence.
+public struct ArmTranslatorInfo: Equatable, Sendable {
+    public var source: ArmSource
+    public var name, version, license: String
+}
+
+/// Whether apps built only for 64-bit ARM can run, whether Google's translator can be
+/// fetched here (not on an ARM64 Mac, whose Android runs ARM apps itself), the default package
+/// the image carries (only an x86_64 image has one), and the translator Android uses from its
+/// next start.
 public struct ArmTranslationInfo: Equatable, Sendable {
     public var package: ArmPackageInfo?
     public var enabled: Bool
@@ -140,6 +158,8 @@ public struct ArmTranslationInfo: Equatable, Sendable {
     public var android: ArmGuestInfo?
     public var restartNeeded: Bool
     public var googleFetchAvailable = false
+    public var defaultPackage: ArmPackageInfo? = nil
+    public var translator: ArmTranslatorInfo? = nil
 }
 
 /// What a host process does for the user's Android.

@@ -141,27 +141,52 @@ public final class DsaService {
 
     // MARK: ARM translation
 
+    private static func readArmPackage(_ p: Json) -> ArmPackageInfo? {
+        p.isObject
+            ? ArmPackageInfo(name: p.string("name"), version: p.string("version"), library: p.string("library"), license: p.string("license"))
+            : nil
+    }
+
     static func readArmTranslation(_ json: Json) -> ArmTranslationInfo {
-        let p = json["package"]
+        let package = readArmPackage(json["package"])
+        let enabled = json.bool("enabled", missing: true)
         let a = json["android"]
+        var translator: ArmTranslatorInfo?
+        if json.has("translator") {
+            let t = json["translator"]
+            if t.isObject, let source = ArmSource(rawValue: t.string("source")) {
+                translator = ArmTranslatorInfo(source: source, name: t.string("name"), version: t.string("version"),
+                                               license: t.string("license"))
+            }
+        } else if let package, enabled {
+            // A dsa from before the default translator: the installed package, while on.
+            translator = ArmTranslatorInfo(source: .user, name: package.name, version: package.version, license: package.license)
+        }
         return ArmTranslationInfo(
-            package: p.isObject
-                ? ArmPackageInfo(name: p.string("name"), version: p.string("version"), library: p.string("library"), license: p.string("license"))
-                : nil,
-            enabled: json.bool("enabled", missing: true),
+            package: package,
+            enabled: enabled,
             supported: json.bool("supported"),
             android: a.isObject ? ArmGuestInfo(installed: a.bool("installed"), active: a.bool("active"), abilist: a.string("abilist")) : nil,
             restartNeeded: json.bool("restart_needed"),
-            googleFetchAvailable: json.bool("google_fetch_available"))
+            googleFetchAvailable: json.bool("google_fetch_available"),
+            defaultPackage: readArmPackage(json["default"]),
+            translator: translator)
     }
 
     public func armTranslation() async throws -> ArmTranslationInfo {
         DsaService.readArmTranslation(try await runJson(["arm-translation", "status"]))
     }
 
-    /// Removes the ARM translation package; Android goes without it from its next start.
+    /// Removes the ARM translation package; Android goes without it from its next start, back
+    /// to the default translator where the image has one.
     public func removeArmTranslation() async throws -> ArmTranslationInfo {
         DsaService.readArmTranslation(try await runJson(["arm-translation", "remove"]))
+    }
+
+    /// Goes back to the default translator the image carries, removing the package installed
+    /// in its place. It applies from the next start of Android.
+    public func useDefaultArmTranslator() async throws -> ArmTranslationInfo {
+        DsaService.readArmTranslation(try await runJson(["arm-translation", "use-default"]))
     }
 
     /// Google's terms for what its SDK repository gives, the Android SDK License, which cover
