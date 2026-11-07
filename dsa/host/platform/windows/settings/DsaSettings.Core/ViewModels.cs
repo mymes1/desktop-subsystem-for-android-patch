@@ -188,6 +188,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     public int AdbPort => _settings?.AdbPort ?? SettingsInfo.DefaultAdbPort;
     /// <summary>The command that connects adb, shown while developer mode is on.</summary>
     public string AdbConnect => _settings?.AdbConnect ?? $"adb connect 127.0.0.1:{SettingsInfo.DefaultAdbPort}";
+    /// <summary>Whether developer mode's port is attached to this PC's adb server by itself, so
+    /// adb and Android Studio list Android without adb connect.</summary>
+    public bool AdbAutoConnect => _settings?.AdbAutoConnect ?? true;
+    /// <summary>Where auto-connect stands, as the service last reported it.</summary>
+    public AdbAutoConnectState AdbAutoConnectState => _settings?.AdbAutoConnectState ?? AdbAutoConnectState.Off;
+    /// <summary>Where auto-connect stands, in the user's language.</summary>
+    public string AdbAutoConnectStateText => _text.Get($"AdbAutoConnect_{AdbAutoConnectState}");
     /// <summary>Whether Android uses an installed ARM translation package from its next
     /// start.</summary>
     public bool ArmTranslation => _settings?.ArmTranslation ?? true;
@@ -479,6 +486,34 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public Task SetDeveloperModeAsync(bool on) =>
         on == DeveloperMode && Loaded ? Task.CompletedTask : ChangeAsync(() => _service.SetDeveloperModeAsync(on));
+
+    public Task SetAdbAutoConnectAsync(bool on) =>
+        on == AdbAutoConnect && Loaded ? Task.CompletedTask : ChangeAsync(() => _service.SetAdbAutoConnectAsync(on));
+
+    /// <summary>Reads where auto-connect stands again, as a timer does while the page is shown
+    /// and developer mode is on. Only the state is taken, so a value being typed is kept.</summary>
+    public async Task PollAdbAutoConnectAsync()
+    {
+        if (_busy || _settings is not { DeveloperMode: true })
+        {
+            return;
+        }
+        try
+        {
+            var now = await _service.SettingsAsync().ConfigureAwait(true);
+            if (_busy || _settings is null || now.AdbAutoConnectState == _settings.AdbAutoConnectState)
+            {
+                return;
+            }
+            _settings = _settings with { AdbAutoConnectState = now.AdbAutoConnectState };
+            Changed(nameof(AdbAutoConnectState));
+            Changed(nameof(AdbAutoConnectStateText));
+        }
+        catch (Exception)
+        {
+            // The state stays as last read; the next tick asks again.
+        }
+    }
 
     /// <summary>Picks the loopback port adb connects to. Text that is not a port from 1 to
     /// 65535 changes nothing.</summary>
