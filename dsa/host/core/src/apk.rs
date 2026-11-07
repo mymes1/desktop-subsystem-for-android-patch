@@ -500,6 +500,12 @@ impl ApkFile {
             .file_name()
             .and_then(|name| name.to_str())
             .ok_or_else(|| format!("{} names no file", path.display()))?;
+        ApkFile::open_as(path, name)
+    }
+
+    /// Opens the APK at `path` as [`open`](Self::open) does, under the name `name`, for a
+    /// file whose content says it is an APK while its own name does not end in `.apk`.
+    pub fn open_as(path: &Path, name: &str) -> Result<ApkFile, String> {
         check_name(name)?;
         let mut file =
             File::open(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;

@@ -35,7 +35,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::thread;
 
-use crate::apk::{self, InstallPart};
+use crate::apk::{self, ApkFile, InstallPart};
 use crate::apk_info::zip::{Archive, Entry};
 use crate::apk_info::{attr, axml, signing, ApkInfo};
 use crate::arm_translation::google::inflate;
@@ -104,8 +104,10 @@ pub enum Refusal {
     Encrypted,
     /// A split is signed with another certificate than the base APK.
     SignatureMismatch { split: String },
-    /// Anything else, as a sentence.
+    /// The bundle is not one app, or it is damaged, as a sentence.
     Invalid(String),
+    /// The file is no APK or bundle that can be read at all, as a sentence.
+    NotAnApp(String),
 }
 
 impl Refusal {
@@ -117,6 +119,7 @@ impl Refusal {
             Refusal::Encrypted => "encrypted-bundle",
             Refusal::SignatureMismatch { .. } => "split-signature-mismatch",
             Refusal::Invalid(_) => "invalid-bundle",
+            Refusal::NotAnApp(_) => "not-an-apk",
         }
     }
 }
@@ -140,7 +143,7 @@ impl fmt::Display for Refusal {
                 "{split} is signed with another certificate than the base APK, so the bundle \
                  was changed after it was made; Android would refuse it"
             ),
-            Refusal::Invalid(why) => f.write_str(why),
+            Refusal::Invalid(why) | Refusal::NotAnApp(why) => f.write_str(why),
         }
     }
 }
@@ -548,9 +551,7 @@ pub fn kind_of(entries: &[Entry]) -> Result<FileKind, String> {
     } else if apks {
         Format::Apks
     } else {
-        return Err(
-            "the file is neither an APK nor a bundle of APKs (.xapk, .apks or .apkm)".into(),
-        );
+        return Err(NOT_AN_APP.into());
     };
     if entries.iter().any(Entry::encrypted) {
         return Ok(FileKind::EncryptedBundle);
@@ -566,12 +567,15 @@ pub fn kind_of(entries: &[Entry]) -> Result<FileKind, String> {
     Ok(FileKind::Bundle(format))
 }
 
+/// Why a file is not installed whose content is none of the files taken.
+const NOT_AN_APP: &str = "the file is not an APK file or a bundle of APKs (.xapk, .apks or .apkm)";
+
 /// What the file at `path` is, from its content.
 pub fn detect(path: &Path) -> Result<FileKind, String> {
     let file = File::open(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
     let archive = Archive::open(BufReader::new(file)).map_err(|why| {
         if why.contains("not a ZIP archive") {
-            "the file is neither an APK nor a bundle of APKs (.xapk, .apks or .apkm)".to_string()
+            NOT_AN_APP.to_string()
         } else {
             why
         }
@@ -955,6 +959,45 @@ impl Bundle {
             sources,
             next: 0,
             current: None,
+        }
+    }
+}
+
+/// A file to install: one APK, or a bundle of them.
+pub enum InstallFile {
+    Apk(ApkFile),
+    Bundle(Bundle),
+}
+
+impl InstallFile {
+    /// Opens the file at `path` as what it is. A file named `.apk` is an APK, which Android
+    /// judges as before; any other is what its content says, so a bundle with another
+    /// extension, or an APK named as a bundle, installs too. An App Bundle, an encrypted
+    /// bundle and a bundle whose splits disagree are refused with their reasons, and a file
+    /// that is none of these with [`Refusal::NotAnApp`], before Android is started for it.
+    pub fn open(path: &Path) -> Result<InstallFile, Refusal> {
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| Refusal::NotAnApp(format!("{} names no file", path.display())))?;
+        if apk::check_name(name).is_ok() {
+            return ApkFile::open(path)
+                .map(InstallFile::Apk)
+                .map_err(Refusal::NotAnApp);
+        }
+        match detect(path).map_err(Refusal::NotAnApp)? {
+            FileKind::Apk => {
+                let stem = Path::new(name)
+                    .file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .unwrap_or("app");
+                ApkFile::open_as(path, &format!("{stem}.apk"))
+                    .map(InstallFile::Apk)
+                    .map_err(Refusal::NotAnApp)
+            }
+            FileKind::Bundle(_) => Bundle::open(path).map(InstallFile::Bundle),
+            FileKind::AppBundle => Err(Refusal::AppBundle),
+            FileKind::EncryptedBundle => Err(Refusal::Encrypted),
         }
     }
 }
@@ -1454,6 +1497,29 @@ mod tests {
         let none = bundle_of(&[stored("split.apk", &en)]);
         let refusal = Bundle::open(&file("bases", "none.apks", &none)).unwrap_err();
         assert!(refusal.to_string().contains("no base APK"), "{refusal}");
+    }
+
+    #[test]
+    fn fr11_a_file_is_installed_as_what_its_content_says() {
+        let test = "install-file";
+        let bundle = file(test, "notes.bin", &xapk(false));
+        assert!(matches!(InstallFile::open(&bundle), Ok(InstallFile::Bundle(_))));
+        match InstallFile::open(&file(test, "notes.xapk", &notes_apk())) {
+            Ok(InstallFile::Apk(apk)) => assert_eq!(apk.name, "notes.apk"),
+            Ok(InstallFile::Bundle(_)) => panic!("an APK was read as a bundle"),
+            Err(refusal) => panic!("an APK named as a bundle was refused: {refusal}"),
+        }
+        // A file named .apk goes to Android as before, which judges what is in it.
+        let named = file(test, "broken.apk", b"PK\x03\x04 not really");
+        assert!(matches!(InstallFile::open(&named), Ok(InstallFile::Apk(_))));
+        let aab = bundle_of(&[stored("BundleConfig.pb", b"")]);
+        let aab = InstallFile::open(&file(test, "notes.aab", &aab));
+        assert_eq!(aab.err(), Some(Refusal::AppBundle));
+        match InstallFile::open(&file(test, "notes.zip", b"PK")) {
+            Err(Refusal::NotAnApp(why)) => assert!(why.contains("not an APK file"), "{why}"),
+            Err(other) => panic!("expected the file to be no APK, got {other}"),
+            Ok(_) => panic!("a file that is no APK was taken"),
+        }
     }
 
     #[test]
