@@ -45,7 +45,9 @@ public enum ApkInstallKind
 }
 
 /// <summary>What <c>dsa apk-info</c> says of an APK: the file's own information, and when
-/// Android runs, what it has of the app.</summary>
+/// Android runs, what it has of the app. Of a split-APK bundle, the information is its base
+/// APK's, and <see cref="Apks"/>, <see cref="Obbs"/> and <see cref="TotalSize"/> say what
+/// installing it sends.</summary>
 public sealed record ApkDetails(
     string Package,
     string? Label,
@@ -63,8 +65,20 @@ public sealed record ApkDetails(
     IReadOnlyList<string> Abis,
     bool AndroidRunning,
     InstalledApp? Installed,
-    ApkInstallKind Kind)
+    ApkInstallKind Kind,
+    string Format = "apk",
+    IReadOnlyList<string>? Apks = null,
+    int SplitCount = 0,
+    IReadOnlyList<string>? Obbs = null,
+    long TotalSize = 0)
 {
+    /// <summary>Whether the file is a split-APK bundle rather than one APK.</summary>
+    public bool IsBundle => Format != "apk";
+
+    /// <summary>The size of everything installing the file sends: the APK, or the bundle's
+    /// chosen APKs and its expansion files together.</summary>
+    public long InstallSize => TotalSize > 0 ? TotalSize : Size;
+
     /// <summary>Reads the JSON <c>dsa apk-info --json</c> prints.</summary>
     public static ApkDetails Parse(string json)
     {
@@ -95,6 +109,10 @@ public sealed record ApkDetails(
             scheme = Text(signer, "scheme");
             sha256 = Text(signer, "sha256");
         }
+        static List<string> Names(JsonElement root, string name) =>
+            root.TryGetProperty(name, out var list) && list.ValueKind == JsonValueKind.Array
+                ? list.EnumerateArray().Where(n => n.ValueKind == JsonValueKind.String).Select(n => n.GetString()!).ToList()
+                : new List<string>();
         var kind = Text(root, "install") switch
         {
             "new" => ApkInstallKind.New,
@@ -121,7 +139,12 @@ public sealed record ApkDetails(
             abis,
             Text(root, "android") == "running",
             installed,
-            kind);
+            kind,
+            Text(root, "format") ?? "apk",
+            Names(root, "apks"),
+            (int)Long(root, "split_count"),
+            Names(root, "obbs"),
+            Long(root, "total_size"));
     }
 
     private static ApkIcon? ReadIcon(JsonElement icon)

@@ -552,12 +552,27 @@ An APK file installs in Android three ways, which all end in the same local API 
   closing, when "Launch when ready" is on, or with Launch and Close, or with the reason it
   failed. `DsaSettings.exe --install-apk` and `dsa-app-window.exe --install-apk`, which
   earlier releases associated, hand the APK to the APK Installer.
-- `dsa install <file.apk>`, which prints the result and exits with code 1 when Android refused
+- `dsa install <file>`, which prints the result and exits with code 1 when Android refused
   the APK. Its line then starts with `not installed (<reason>):`. With `--progress` it prints
   each step first (`stage starting`, `stage sending`, `progress <percent>`,
   `stage installing`), which the install window shows.
 - Dropping APK files on the settings app's window, or on the APK Installer's window. Each APK
   opens in its own APK Installer window.
+
+Split-APK bundles (`.xapk` from APKPure, `.apks` from bundletool and SAI, `.apkm` from
+APKMirror) install the same three ways. The installer gives them a type of their own,
+`Dsa.ApkBundle` ("Split APK bundle"), which opens in the APK Installer; `.aab` is only under
+Open with, so the tools that build App Bundles keep opening them. What a file is comes from
+what is in it (`dsa/host/core/src/apk_bundle.rs`), so a renamed bundle installs too. The window
+shows the app as its base APK describes it, with the number of APKs that go (the base and the
+splits) and their size together. Of a bundle's splits, the install takes those this PC's
+Android needs: one ABI (x86_64 first, `arm64-v8a` only when the x86_64 libraries are missing or
+leave some out and ARM translation is on), the density split nearest the main screen's
+density, the splits of the display languages and English, and every feature split. They go to
+Android as one install, the APKs in one `PackageInstaller` session, and the bundle's expansion
+(OBB) files go to `Android/obb/<package>/` once the app is installed. A bundle whose splits are
+signed with other keys, an encrypted bundle (some older `.apkm` files) and an App Bundle are
+refused with their reasons before Android starts.
 
 `dsa apk-info <file.apk>` reads an APK without Android: the binary manifest, the resource table
 (for the name in the default language and the icon in the highest density, or an adaptive

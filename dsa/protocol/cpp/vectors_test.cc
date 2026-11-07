@@ -342,6 +342,19 @@ std::map<std::string, v1::Envelope> Cases() {
     install->set_size(1000);
   }
   {
+    v1::InstallApk* install = cases["install_apk_split"].mutable_install_apk();
+    install->set_transfer_id(4);
+    install->set_name("notes.xapk");
+    install->set_size(13);
+    v1::InstallPart* base = install->add_parts();
+    base->set_name("base.apk");
+    base->set_size(10);
+    v1::InstallPart* obb = install->add_parts();
+    obb->set_name("main.1.com.example.notes.obb");
+    obb->set_size(3);
+    obb->set_obb(true);
+  }
+  {
     v1::ApkChunk* chunk = cases["apk_chunk"].mutable_apk_chunk();
     chunk->set_transfer_id(3);
     chunk->set_offset(131072);

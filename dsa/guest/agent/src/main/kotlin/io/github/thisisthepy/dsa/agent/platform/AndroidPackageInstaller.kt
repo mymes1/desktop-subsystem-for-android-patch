@@ -26,6 +26,20 @@ class AndroidPackageInstaller(private val context: Context, private val log: Log
     private val installer = context.packageManager.packageInstaller
 
     override fun open(name: String, size: Long, abi: String): InstallSession {
+        val session = Session(create(size, abi), name)
+        try {
+            session.startApk(SPLIT_NAME, size)
+        } catch (e: Exception) {
+            session.abandon()
+            throw e
+        }
+        return session
+    }
+
+    /** A session of several APKs: the base and the splits of one app, each begun by name. */
+    override fun openApks(name: String, size: Long, abi: String): InstallSession = Session(create(size, abi), name)
+
+    private fun create(size: Long, abi: String): PackageInstaller.Session {
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setSize(size)
             setInstallReason(android.content.pm.PackageManager.INSTALL_REASON_USER)
@@ -33,31 +47,36 @@ class AndroidPackageInstaller(private val context: Context, private val log: Log
         }
         if (abi.isNotEmpty()) setAbiOverride(params, abi)
         val id = installer.createSession(params)
-        val session = installer.openSession(id)
-        val stream = try {
-            session.openWrite(SPLIT_NAME, 0, size)
-        } catch (e: Exception) {
-            session.abandon()
-            throw e
-        }
-        return Session(session, stream, name)
+        return installer.openSession(id)
     }
 
     private inner class Session(
         private val session: PackageInstaller.Session,
-        private val stream: OutputStream,
         private val name: String,
     ) : InstallSession {
-        private var closed = false
+        /** The APK being written, while one is. */
+        private var stream: OutputStream? = null
+
+        override fun startApk(name: String, size: Long) {
+            finishApk()
+            stream = session.openWrite(name, 0, size)
+        }
+
+        /** Makes the APK written so far whole on disk, and closes it. */
+        private fun finishApk() {
+            val written = stream ?: return
+            stream = null
+            session.fsync(written)
+            written.close()
+        }
 
         override fun write(data: ByteArray) {
-            stream.write(data)
+            val written = stream ?: throw IllegalStateException("no APK of the install session is begun")
+            written.write(data)
         }
 
         override fun commit(onResult: (InstallerResult) -> Unit) {
-            session.fsync(stream)
-            stream.close()
-            closed = true
+            finishApk()
             val action = "${context.packageName}.INSTALL_RESULT.${NEXT.incrementAndGet()}"
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context, intent: Intent) {
@@ -106,13 +125,14 @@ class AndroidPackageInstaller(private val context: Context, private val log: Log
         }
 
         override fun abandon() {
-            if (!closed) {
+            stream?.let {
                 try {
-                    stream.close()
+                    it.close()
                 } catch (e: Exception) {
                     log.warn("could not close the install session's stream", e)
                 }
             }
+            stream = null
             session.abandon()
         }
     }
@@ -207,7 +227,7 @@ class AndroidPackageInstaller(private val context: Context, private val log: Log
     }
 
     private companion object {
-        /** The name of the one APK in each session. */
+        /** The name of the one APK in a session of one. */
         const val SPLIT_NAME = "base.apk"
 
         /** PackageInstaller.EXTRA_LEGACY_STATUS, which the SDK hides: the INSTALL_FAILED_ code. */

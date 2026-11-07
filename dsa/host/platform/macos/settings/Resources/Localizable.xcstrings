@@ -4359,13 +4359,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only APK files can be installed: {0}"
+            "value": "Only APK files and split APK bundles can be installed: {0}"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "APK 파일만 설치할 수 있습니다: {0}"
+            "value": "APK 파일과 분할 APK 묶음만 설치할 수 있습니다: {0}"
           }
         }
       }
@@ -4502,6 +4502,74 @@
           "stringUnit": {
             "state": "translated",
             "value": "Android가 앱을 설치하지 않았습니다."
+          }
+        }
+      }
+    },
+    "Install_Reason_app-bundle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "it is an Android App Bundle, made to be uploaded to an app store. Get the app as an APK, or as an .xapk, .apks or .apkm bundle."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 스토어에 올리는 Android App Bundle입니다. 앱을 APK나 .xapk, .apks, .apkm 묶음으로 받으세요."
+          }
+        }
+      }
+    },
+    "Install_Reason_encrypted-bundle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the bundle is encrypted, so its APKs cannot be read. Get the app as an APK, or as a newer bundle."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "암호화된 묶음이라 APK를 읽을 수 없습니다. 앱을 APK나 새 묶음으로 받으세요."
+          }
+        }
+      }
+    },
+    "Install_Reason_split-signature-mismatch": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a split APK of the bundle is signed with another key than its base APK, so Android would refuse it."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "묶음의 분할 APK가 기본 APK와 다른 키로 서명되어 있어 Android가 설치하지 않습니다."
+          }
+        }
+      }
+    },
+    "Install_Reason_invalid-bundle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the bundle is not one app that Android can install."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android가 설치할 수 있는 하나의 앱으로 된 묶음이 아닙니다."
           }
         }
       }

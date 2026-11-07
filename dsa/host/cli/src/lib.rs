@@ -62,7 +62,14 @@
 //! is not running, and says how it went: the app's package once it is installed, or the reason
 //! Android gave for refusing it, with exit code 1. The installed app then appears in the Start
 //! menu like any other. APKs up to 2 GiB can be installed, one at a time; a second install waits
-//! for the first. With `--json` it prints `installed`, `status` (`installed`, or the reason:
+//! for the first. It also installs an app that comes as a split-APK bundle (`.xapk`, `.apks`,
+//! `.apkm`, told apart by what is in them): the base APK and the splits this computer's Android
+//! needs (its ABI, x86_64 first; the density nearest the screen's; its languages and English;
+//! every feature) go in one install, and the bundle's expansion files go to
+//! `Android/obb/<package>/`. An Android App Bundle (`.aab`), an encrypted bundle and a bundle
+//! whose splits are signed with other keys are refused before Android is started, with
+//! `not installed (app-bundle):`, `(encrypted-bundle):`, `(split-signature-mismatch):` or
+//! `(invalid-bundle):` and the reason. With `--json` it prints `installed`, `status` (`installed`, or the reason:
 //! `incompatible`, `conflicting-signature`, `invalid-apk`, `insufficient-storage`, `downgrade`,
 //! `blocked` or `other`), `package` and `message`. A refusal's line on standard error starts
 //! with `not installed (<reason>):`. With `--progress` it first prints a line for each step,
@@ -72,7 +79,8 @@
 //!
 //! `dsa apk-info` reads an APK on this computer and says what it is: its package, its name and
 //! icon, its version, the Android versions it is made for, the permissions it asks for and the
-//! certificate it is signed with. When Android is running it also says what Android has of the
+//! certificate it is signed with. Of a split-APK bundle it says the same from the base APK, and
+//! which of its files would be installed. When Android is running it also says what Android has of the
 //! package, and whether installing the APK would be a new install, an update, the same version
 //! again, a downgrade or an APK signed with another key; Android refuses the last two. It never
 //! starts Android. With `--json` it prints `package`, `label`, `version_code`, `version_name`,
@@ -82,7 +90,11 @@
 //! `#AARRGGBB` or `unknown`), `signer` (`scheme` and `sha256`), `abis`, `android` (`running`,
 //! `stopped` or `unreachable`), `installed` (`version_code`, `version_name` and `signers`, or
 //! null) and `install` (`new`, `update`, `reinstall`, `downgrade`, `signature-mismatch`, or
-//! null while Android is not running).
+//! null while Android is not running), and of what installing the file sends: `format` (`apk`,
+//! `xapk`, `apks` or `apkm`), `apks` (the names of the APKs that would be installed, the base
+//! first), `split_count` (how many of them are splits), `obbs` (the expansion files),
+//! `total_size` (all of them, in bytes) and `install_abi` (the ABI chosen from the splits, or
+//! null). A file it cannot read fails as `dsa install` does.
 //!
 //! `dsa open` sends a file from this computer to Android, which asks which app opens it; that
 //! app shows in a window of its own. `dsa share` does the same for sharing the file with an
@@ -272,7 +284,8 @@ use std::fmt::Write as _;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use dsa_host_core::apk::{ApkFile, InstallKind, InstallOutcome, InstalledPackage};
+use dsa_host_core::apk::{InstallKind, InstallOutcome, InstalledPackage};
+use dsa_host_core::apk_bundle::{Bundle, Device, InstallFile, Refusal, Selection};
 use dsa_host_core::apk_info::{signing, ApkInfo, Icon, Layer, Vector};
 use dsa_host_core::app_windows::AppWindowSettings;
 use dsa_host_core::arm_translation::{self, google};
@@ -2631,6 +2644,67 @@ pub fn describe_refusal(name: &str, outcome: &InstallOutcome) -> String {
     )
 }
 
+/// The line `dsa install` and `dsa apk-info` print for a file refused before Android sees it:
+/// a bundle's reason after its stable code, as for a refusal by Android, and a file that is no
+/// APK or bundle with its reason alone.
+pub fn describe_file_refusal(path: &std::path::Path, refusal: &Refusal) -> String {
+    match refusal {
+        Refusal::NotAnApp(why) => why.clone(),
+        _ => {
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            format!("not installed ({}): {name}: {refusal}", refusal.code())
+        }
+    }
+}
+
+/// What this computer's Android takes from a split-APK bundle: the ABIs the running Android
+/// lists, or without it those of this computer, with arm64-v8a after x86_64 while ARM
+/// translation is installed and on; the density apps draw at on the main screen; and the
+/// display languages of this computer, which Android follows.
+fn bundle_device(client: Option<&mut HostApiClient>) -> Device {
+    let translation = client.and_then(|client| client.arm_translation().ok());
+    Device::of_host(
+        translation.as_ref(),
+        cfg!(target_arch = "aarch64"),
+        host_density(),
+        &host_locales(),
+    )
+}
+
+#[cfg(windows)]
+fn host_density() -> u32 {
+    dsa_host_windows::monitors::system_density()
+}
+
+/// Apps draw at the guest display's density where the screen's is not known here.
+#[cfg(not(windows))]
+fn host_density() -> u32 {
+    dsa_host_core::compositor::window_sizing::BASE_DENSITY
+}
+
+#[cfg(windows)]
+fn host_locales() -> Vec<String> {
+    dsa_host_windows::compositor::system_settings::read().locales
+}
+
+/// The languages of the environment: `LANGUAGE`'s list, then `LC_ALL`, `LC_MESSAGES` and
+/// `LANG`.
+#[cfg(not(windows))]
+fn host_locales() -> Vec<String> {
+    let mut locales: Vec<String> = Vec::new();
+    if let Ok(list) = std::env::var("LANGUAGE") {
+        locales.extend(list.split(':').filter(|l| !l.is_empty()).map(String::from));
+    }
+    for name in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        if let Ok(value) = std::env::var(name) {
+            if !value.is_empty() {
+                locales.push(value);
+            }
+        }
+    }
+    locales
+}
+
 /// `dsa install`: opens the APK, makes sure Android runs (and, on Windows, the window manager
 /// that shows the app once it is opened), then streams the APK to the service.
 fn install(
@@ -2643,7 +2717,7 @@ fn install(
         .as_deref()
         .unwrap_or(std::path::Path::new(""));
     // A file that cannot be installed is refused before Android is started for it.
-    let mut apk = ApkFile::open(path)?;
+    let file = InstallFile::open(path).map_err(|refusal| describe_file_refusal(path, &refusal))?;
     let step = |line: &str| {
         if invocation.progress {
             use std::io::Write as _;
@@ -2667,21 +2741,48 @@ fn install(
     client
         .ensure_running(invocation.timeout, Duration::from_millis(250), |_| {})
         .map_err(|e| format!("Android did not start: {e}"))?;
-    drop(client);
-    let name = apk.name.clone();
-    let size = apk.size;
-    let libraries = apk.native_libraries.clone();
-    step("stage sending");
-    let mut sending = Progress {
-        inner: apk.reader(),
-        sent: 0,
-        size,
-        shown: None,
-        step: &step,
+    let (name, outcome) = match file {
+        InstallFile::Apk(mut apk) => {
+            drop(client);
+            let name = apk.name.clone();
+            let size = apk.size;
+            let libraries = apk.native_libraries.clone();
+            step("stage sending");
+            let mut sending = Progress {
+                inner: apk.reader(),
+                sent: 0,
+                size,
+                shown: None,
+                step: &step,
+            };
+            let outcome = connect(connector, None, false, Duration::from_secs(10))?
+                .install_apk_with_libraries(&name, size, &libraries, &mut sending)
+                .map_err(|e| format!("{name} was not installed: {e}"))?;
+            (name, outcome)
+        }
+        InstallFile::Bundle(bundle) => {
+            // Android runs now, so what it says of its ABIs decides the splits.
+            let device = bundle_device(Some(&mut client));
+            drop(client);
+            let selection = bundle.select(&device);
+            let parts = bundle.parts(&selection);
+            let libraries = bundle.libraries(&selection);
+            let name = bundle.name.clone();
+            step("stage sending");
+            let mut content = bundle.content(&selection);
+            let mut sending = Progress {
+                inner: &mut content,
+                sent: 0,
+                size: bundle.total_size(&selection),
+                shown: None,
+                step: &step,
+            };
+            let outcome = connect(connector, None, false, Duration::from_secs(10))?
+                .install_parts(&name, &parts, &libraries, &mut sending)
+                .map_err(|e| format!("{name} was not installed: {e}"))?;
+            (name, outcome)
+        }
     };
-    let outcome = connect(connector, None, false, Duration::from_secs(10))?
-        .install_apk_with_libraries(&name, size, &libraries, &mut sending)
-        .map_err(|e| format!("{name} was not installed: {e}"))?;
     if !outcome.installed() {
         return Err(describe_refusal(&name, &outcome));
     }
@@ -3372,11 +3473,15 @@ fn apk_info(invocation: &Invocation, connector: &mut dyn Connector) -> Result<St
         .file
         .as_deref()
         .unwrap_or(std::path::Path::new(""));
-    let info = ApkInfo::read(path)?;
+    let (info, bundle) = read_install_file(path)?;
     let mut android = "unreachable";
     let mut installed = None;
     let mut kind = None;
+    let mut device = None;
     if let Ok(mut client) = connect(connector, None, false, Duration::from_secs(5)) {
+        if bundle.is_some() {
+            device = Some(bundle_device(Some(&mut client)));
+        }
         android = "stopped";
         if client
             .status()
@@ -3393,11 +3498,99 @@ fn apk_info(invocation: &Invocation, connector: &mut dyn Connector) -> Result<St
             }
         }
     }
+    let chosen = bundle.as_ref().map(|bundle| {
+        let device = device.unwrap_or_else(|| bundle_device(None));
+        (bundle, bundle.select(&device))
+    });
+    let chosen = chosen.as_ref().map(|(bundle, selection)| (*bundle, selection));
     Ok(if invocation.json {
-        apk_info_json(&info, android, installed.as_ref(), kind).to_string()
+        let mut json = apk_info_json(&info, android, installed.as_ref(), kind);
+        add_install_files(&mut json, &info, chosen);
+        json.to_string()
     } else {
-        describe_apk(&info, installed.as_ref(), kind)
+        let mut text = describe_apk(&info, installed.as_ref(), kind);
+        if let Some((bundle, selection)) = chosen {
+            let _ = write!(text, "\n{}", describe_bundle(bundle, selection));
+        }
+        text
     })
+}
+
+/// What `dsa apk-info` reads of the file at `path`: what the APK, or a bundle's base APK, says
+/// of the app, and the bundle. A file named `.apk` is read as an APK; any other as what its
+/// content says.
+fn read_install_file(path: &std::path::Path) -> Result<(ApkInfo, Option<Bundle>), String> {
+    let named_apk = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| dsa_host_core::apk::check_name(name).is_ok());
+    if named_apk {
+        return Ok((ApkInfo::read(path)?, None));
+    }
+    match InstallFile::open(path).map_err(|refusal| describe_file_refusal(path, &refusal))? {
+        InstallFile::Apk(_) => Ok((ApkInfo::read(path)?, None)),
+        InstallFile::Bundle(bundle) => Ok((bundle.base.clone(), Some(bundle))),
+    }
+}
+
+/// Adds to `dsa apk-info`'s JSON what installing the file sends: the APKs, the expansion files
+/// and their size, of the bundle and the files `selection` takes, or of the one APK.
+pub fn add_install_files(json: &mut Value, info: &ApkInfo, chosen: Option<(&Bundle, &Selection)>) {
+    let fields = match chosen {
+        None => json!({
+            "format": "apk",
+            "apks": ["base.apk"],
+            "split_count": 0,
+            "obbs": [],
+            "total_size": info.size,
+            "install_abi": Value::Null,
+        }),
+        Some((bundle, selection)) => {
+            let parts = bundle.parts(selection);
+            let apks: Vec<&str> = parts
+                .iter()
+                .filter(|part| !part.obb)
+                .map(|part| part.name.as_str())
+                .collect();
+            let obbs: Vec<&str> = parts
+                .iter()
+                .filter(|part| part.obb)
+                .map(|part| part.name.as_str())
+                .collect();
+            json!({
+                "format": bundle.format.code(),
+                "split_count": apks.len().saturating_sub(1),
+                "apks": apks,
+                "obbs": obbs,
+                "total_size": bundle.total_size(selection),
+                "install_abi": selection.abi,
+            })
+        }
+    };
+    if let (Value::Object(json), Value::Object(fields)) = (json, fields) {
+        json.extend(fields);
+    }
+}
+
+/// What `dsa apk-info` says for a person of the files of a bundle an install sends.
+pub fn describe_bundle(bundle: &Bundle, selection: &Selection) -> String {
+    let parts = bundle.parts(selection);
+    let apks = parts.iter().filter(|part| !part.obb).count();
+    let obbs = parts.len() - apks;
+    let mut text = format!(
+        "a split-APK bundle (.{}): installs {apks} of its {} APKs (the base and {} splits)",
+        bundle.format.code(),
+        bundle.apks.len(),
+        apks.saturating_sub(1)
+    );
+    if obbs > 0 {
+        let _ = write!(text, " and {obbs} expansion files");
+    }
+    let _ = write!(text, ", {} bytes in all", bundle.total_size(selection));
+    if let Some(abi) = &selection.abi {
+        let _ = write!(text, ", for {abi}");
+    }
+    text
 }
 
 /// How long `dsa open` and `dsa share` wait for Android to start when it is not running:

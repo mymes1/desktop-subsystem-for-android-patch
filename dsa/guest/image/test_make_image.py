@@ -1219,6 +1219,33 @@ class ImageLayoutTests(unittest.TestCase):
                     fs_config,
                 )
 
+    def test_fr11_the_agent_holds_the_storage_permissions_that_open_android_obb_to_it(self):
+        # The agent puts the expansion files of an app the host installs in the app's folder
+        # under Android/obb/, which Android opens to an installer only while it holds the
+        # storage permissions. They are runtime permissions, so the image grants them.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = self._target_files_with_system_ext(root)
+            agent = root / "agent.apk"
+            agent.write_bytes(b"PK agent")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, agent=agent)
+            with zipfile.ZipFile(modified) as archive:
+                granted = archive.read(
+                    "SYSTEM_EXT/etc/default-permissions/default-permissions-dsa-agent.xml"
+                ).decode()
+                fs_config = archive.read("META/system_ext_filesystem_config.txt").decode().splitlines()
+        self.assertIn('<exception package="io.github.thisisthepy.dsa.agent">', granted)
+        for permission in ["READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"]:
+            self.assertIn(f'<permission name="android.permission.{permission}"', granted)
+        self.assertIn("system_ext/etc/default-permissions 0 0 755 capabilities=0x0", fs_config)
+        self.assertIn(
+            "system_ext/etc/default-permissions/default-permissions-dsa-agent.xml 0 0 644 capabilities=0x0",
+            fs_config,
+        )
+        manifest = (make_image.REPO / "dsa/guest/agent/src/main/AndroidManifest.xml").read_text()
+        self.assertIn('android.permission.WRITE_EXTERNAL_STORAGE', manifest)
+
     def test_fr10_the_agent_may_put_the_guest_into_doze_and_set_its_battery(self):
         # The agent calls the deviceidle and battery shell commands over binder, handing
         # system_server the descriptors the commands write to.
@@ -1288,8 +1315,12 @@ class ImageLayoutTests(unittest.TestCase):
         listed = (agent / "privapp-permissions-dsa-agent.xml").read_text()
         requested = set(re.findall(r'<uses-permission android:name="([^"]+)"', manifest))
         granted = set(re.findall(r'<permission name="([^"]+)"', listed))
+        # Runtime permissions are not privileged: the image grants them by default instead.
+        defaults = (agent / "default-permissions-dsa-agent.xml").read_text()
+        runtime = set(re.findall(r'<permission name="([^"]+)"', defaults))
         self.assertTrue(requested)
-        self.assertEqual(requested, granted)
+        self.assertEqual(requested - runtime, granted)
+        self.assertFalse(runtime & granted)
         self.assertEqual(make_image.AGENT_PERMISSIONS_SOURCE.read_text(), listed)
 
     def test_fr3_an_agent_needs_a_system_ext_partition(self):

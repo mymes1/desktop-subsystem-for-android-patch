@@ -42,8 +42,8 @@ fn main() -> std::process::ExitCode {
     dsa_host_windows::compositor::log::input_trace_to(logger.clone());
     let args: Vec<String> = std::env::args().skip(1).collect();
     let program = std::env::current_exe().unwrap_or_default();
-    // Opened on an .apk file in Explorer: the APK is installed in Android, and the user is told
-    // how that went.
+    // Opened on an .apk file or a split-APK bundle in Explorer: the app is installed in
+    // Android, and the user is told how that went.
     if let Some(path) = dsa_host_windows::app_window::apk_install::install_request(&args) {
         use dsa_host_windows::app_window::apk_install;
         use dsa_host_windows::app_window::launch::tell_user_done;

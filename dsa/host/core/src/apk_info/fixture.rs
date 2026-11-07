@@ -526,3 +526,24 @@ pub fn adaptive_vector_apk() -> Vec<u8> {
         b"",
     )
 }
+
+/// A split APK of [`notes_apk`]'s app (com.example.notes, version 42), signed with the same
+/// certificate: the split `split`, holding the native libraries `libraries` (such as
+/// `lib/x86_64/libnotes.so`).
+pub fn notes_split(split: &str, libraries: &[&str]) -> Vec<u8> {
+    let manifest = document(&[El(
+        "manifest",
+        vec![
+            Attr::Typed("versionCode", attr::VERSION_CODE, TYPE_INT_DEC, 42),
+            Attr::Str("package", 0, "com.example.notes"),
+            Attr::Str("split", 0, split),
+        ],
+        false,
+    )]);
+    let mut entries: Vec<(&str, &[u8])> = vec![("AndroidManifest.xml", &manifest[..])];
+    for library in libraries {
+        entries.push((*library, &b"\x7fELF"[..]));
+    }
+    let block = signing_block(&[(0x7109_871a, &v2_value(b"\x30\x03\x02\x01\x07")[..])]);
+    archive(&entries, &block)
+}

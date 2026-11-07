@@ -7,4 +7,5 @@
     <String Id="ArpComments" Value="Desktop Subsystem for Android is an independent open source project, not affiliated with, endorsed by or sponsored by Microsoft or Google. Android is a trademark of Google LLC." />
     <String Id="SettingsShortcutDescription" Value="Settings and state of Desktop Subsystem for Android" />
     <String Id="ApkFileType" Value="APK app package" />
+    <String Id="ApkBundleType" Value="Split APK bundle" />
 </WixLocalization>

@@ -1061,6 +1061,19 @@ enum InstallStatus {
   INSTALL_STATUS_OTHER = 8;
 }
 
+// One file of an install made of several: an APK of an app that comes as a base APK and
+// split APKs, or an expansion (OBB) file of that app.
+message InstallPart {
+  // The file's name, without any folder, such as "base.apk", "split_config.x86_64.apk" or
+  // "main.42.com.example.game.obb". No two parts of an install have the same name.
+  string name = 1;
+  // The file's length in bytes.
+  uint64 size = 2;
+  // True for an expansion file. The agent copies it into the app's folder under Android/obb/
+  // once the app is installed, rather than writing it into the install session.
+  bool obb = 3;
+}
+
 // Host to guest: install an APK, whose content follows in ApkChunk messages of the same
 // `transfer_id`, in order. The agent writes them into an install session as they come and
 // commits it once it has all `size` bytes. The host sends at most a few chunks ahead of the
@@ -1078,6 +1091,10 @@ message InstallApk {
   // only while translation is on and the APK's x86_64 libraries leave out some of its arm64
   // ones.
   string abi = 4;
+  // Empty for one APK. Otherwise the files of the install, in the order their bytes follow one
+  // another in the chunks: the APKs first, which the agent writes into one install session,
+  // then any expansion files. `size` is then the sum of their sizes.
+  repeated InstallPart parts = 5;
 }
 
 // Host to guest: part of the APK an InstallApk announced.

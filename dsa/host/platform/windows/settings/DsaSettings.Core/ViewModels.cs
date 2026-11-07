@@ -508,8 +508,8 @@ public enum InstallSeverity
     Error,
 }
 
-/// <summary>APK files dropped on the window: each is installed in Android in turn, and the bar
-/// at the top of the window says how it went.</summary>
+/// <summary>APK files and split-APK bundles dropped on the window: each is installed in Android
+/// in turn, and the bar at the top of the window says how it went.</summary>
 public sealed class InstallViewModel : ObservableObject
 {
     private readonly DsaService _service;
@@ -541,9 +541,13 @@ public sealed class InstallViewModel : ObservableObject
     public string Title => _title;
     public string Message => _message;
 
-    /// <summary>Whether <paramref name="path"/> names an APK file.</summary>
+    /// <summary>The extensions of what goes to the APK Installer: APKs, the split-APK bundles
+    /// it installs, and App Bundles, for which it says why it does not.</summary>
+    public static readonly string[] InstallExtensions = { ".apk", ".xapk", ".apks", ".apkm", ".aab" };
+
+    /// <summary>Whether <paramref name="path"/> names an APK file or a bundle of APKs.</summary>
     public static bool IsApk(string path) =>
-        path.EndsWith(".apk", StringComparison.OrdinalIgnoreCase);
+        InstallExtensions.Any(extension => path.EndsWith(extension, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Whether a drop of <paramref name="paths"/> would install anything, so the
     /// window shows a drop is welcome.</summary>

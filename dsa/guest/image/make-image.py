@@ -1758,6 +1758,11 @@ CHANNEL_SERVICE_CONTEXT = f"{CHANNEL_INSTANCE} u:object_r:dsa_channel_service:s0
 AGENT_APK = "SYSTEM_EXT/priv-app/DsaAgent/DsaAgent.apk"
 AGENT_PERMISSIONS = "SYSTEM_EXT/etc/permissions/privapp-permissions-dsa-agent.xml"
 AGENT_PERMISSIONS_SOURCE = REPO / "dsa/guest/agent/privapp-permissions-dsa-agent.xml"
+# The runtime permissions the framework grants the agent from the first boot: the storage
+# ones, without which Android does not let an installer write an app's folder under
+# Android/obb/, where the agent puts the expansion files of the apps the host installs.
+AGENT_DEFAULT_PERMISSIONS = "SYSTEM_EXT/etc/default-permissions/default-permissions-dsa-agent.xml"
+AGENT_DEFAULT_PERMISSIONS_SOURCE = REPO / "dsa/guest/agent/default-permissions-dsa-agent.xml"
 AGENT_APKCERTS = (
     'name="DsaAgent.apk" certificate="build/make/target/product/security/platform.x509.pem" '
     'private_key="build/make/target/product/security/platform.pk8" partition="system_ext"'
@@ -1814,6 +1819,8 @@ AGENT_FS_CONFIG = [
     "system_ext/priv-app/DsaAgent 0 0 755 capabilities=0x0",
     "system_ext/priv-app/DsaAgent/DsaAgent.apk 0 0 644 capabilities=0x0",
     "system_ext/etc/permissions/privapp-permissions-dsa-agent.xml 0 0 644 capabilities=0x0",
+    "system_ext/etc/default-permissions 0 0 755 capabilities=0x0",
+    "system_ext/etc/default-permissions/default-permissions-dsa-agent.xml 0 0 644 capabilities=0x0",
 ]
 
 
@@ -2497,6 +2504,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         if agent_payload is not None:
             zout.writestr(AGENT_APK, agent_payload)
             zout.writestr(AGENT_PERMISSIONS, AGENT_PERMISSIONS_SOURCE.read_bytes())
+            zout.writestr(AGENT_DEFAULT_PERMISSIONS, AGENT_DEFAULT_PERMISSIONS_SOURCE.read_bytes())
         if vulkan_payload is not None and not replaced_vulkan_payload:
             zout.writestr(VULKAN_RANCHU_LIBRARY, vulkan_payload)
             replaced_vulkan_payload = True

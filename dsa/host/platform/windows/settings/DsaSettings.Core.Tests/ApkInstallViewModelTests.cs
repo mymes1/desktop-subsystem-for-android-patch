@@ -55,6 +55,9 @@ internal sealed class ArgsText : ITextSource
         ["ApkWindow_SummaryUpdate"] = 3,
         ["ApkWindow_SummaryDowngrade"] = 3,
         ["ApkWindow_SummaryReinstall"] = 2,
+        ["ApkWindow_BundleSummary"] = 3,
+        ["ApkWindow_BundleSummaryObb"] = 3,
+        ["ApkWindow_ApksValue"] = 2,
         ["ApkWindow_Signer"] = 2,
         ["ApkWindow_AndroidRange"] = 2,
         ["ApkWindow_VersionText"] = 2,
@@ -123,6 +126,52 @@ public class ApkInstallViewModelTests
         Assert.StartsWith("ApkWindow_Install ", vm.InstallButton);
         // Reading the file never starts Android.
         Assert.Equal(new[] { $"apk-info {Path} --json" }, dsa.Calls);
+    }
+
+    /// <summary>What dsa apk-info prints of an APKPure bundle of the notes app: its base
+    /// APK's information, and the three of its APKs and the expansion file installing it sends.</summary>
+    private static string BundleInfo(string android = "stopped", string install = "null") =>
+        Info(android, install).TrimEnd('}') + ",\"format\":\"xapk\"," +
+        "\"apks\":[\"base.apk\",\"split_config.x86_64.apk\",\"split_config.en.apk\"],\"split_count\":2," +
+        "\"obbs\":[\"main.42.com.example.notes.obb\"],\"total_size\":10485760,\"install_abi\":\"x86_64\"}";
+
+    [Fact]
+    public async Task Fr11_a_bundle_shows_its_base_app_with_how_many_files_it_installs_and_their_size()
+    {
+        const string bundle = @"C:\Users\me\Downloads\notes.xapk";
+        var dsa = new FakeRunner().Answer($"apk-info {bundle} --json", BundleInfo());
+        var vm = new ApkInstallViewModel(dsa, new ArgsText(), bundle, X64);
+        await vm.LoadAsync();
+        Assert.Equal(ApkInstallPage.Details, vm.Page);
+        // The app is what the base APK says it is.
+        Assert.Equal("Notes", vm.Title);
+        Assert.Equal("com.example.notes", vm.PackageValue);
+        Assert.Equal("Version: 4.2", vm.VersionLine);
+        // What goes to Android: the size of everything together, and how many APKs.
+        Assert.Equal("10 MB", vm.SizeChip);
+        Assert.Contains(vm.Facts, f => f.Name.StartsWith("ApkWindow_FactSize") && f.Value == "10 MB");
+        Assert.Contains(vm.Facts, f => f.Name.StartsWith("ApkWindow_FactApks") && f.Value == "ApkWindow_ApksValue 3|2");
+        Assert.Contains(vm.Facts, f => f.Name.StartsWith("ApkWindow_FactObbs") && f.Value == "main.42.com.example.notes.obb");
+        Assert.StartsWith("ApkWindow_BundleTitle", vm.SummaryTitle);
+        Assert.Equal("ApkWindow_BundleSummaryObb Notes|3|10 MB", vm.Summary);
+        Assert.True(vm.CanInstall);
+    }
+
+    [Theory]
+    [InlineData("nowhere/app.aab", "dsa: not installed (app-bundle): app.aab: this is an Android App Bundle", "app.aab is an Android App Bundle.")]
+    [InlineData("nowhere/app.apkm", "dsa: not installed (encrypted-bundle): app.apkm: the bundle is encrypted", "app.apkm is an encrypted bundle")]
+    [InlineData("nowhere/app.xapk", "dsa: not installed (split-signature-mismatch): app.xapk: config.ko.apk is signed with another certificate", "app.xapk holds a split APK signed with another certificate")]
+    [InlineData("nowhere/app.apks", "dsa: not installed (invalid-bundle): app.apks: the bundle holds two base APKs, a.apk and b.apk", "app.apks is a split APK bundle that cannot be installed: the bundle holds two base APKs")]
+    public async Task Fr11_a_bundle_dsa_refuses_says_its_reason(string path, string error, string start)
+    {
+        var dsa = new FakeRunner().Fail($"apk-info {path} --json", error);
+        var vm = new ApkInstallViewModel(dsa, new ArgsText(), path, X64);
+        await vm.LoadAsync();
+        Assert.Equal(ApkInstallPage.Failed, vm.Page);
+        Assert.StartsWith("ApkWindow_NotApkTitle", vm.ResultTitle);
+        Assert.StartsWith(start, vm.ResultText);
+        Assert.DoesNotContain("not supported", vm.ResultText);
+        Assert.False(vm.CanInstall);
     }
 
     [Fact]
