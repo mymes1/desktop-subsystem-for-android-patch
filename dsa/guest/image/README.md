@@ -21,7 +21,7 @@ default is x86_64. The arm64 guest runs no 32-bit ARM code, because the target h
 | `dsa-memory.rc` | Turns on the zram swap and tunes the kernel for it |
 | `dsa-channel-manifest.xml` | The vendor manifest entry declaring the daemon's binder service |
 | `dsa-trace.rc` | Turns on main thread timing in every app when the input trace is on |
-| `dsa-arm-translation.rc`, `arm-translation-on.prop`, `arm-translation-off.prop` | Use an ARM translation package the user installed, only on a boot the host marks (`../arm-translation/README.md`) |
+| `dsa-arm-translation.rc`, `arm-translation-on.prop`, `arm-translation-off.prop` | Use an ARM translation package (the one the user installed, or the image's default one), only on a boot the host marks (`../arm-translation/README.md`) |
 | `dsa-gapps.rc`, `gapps-on.prop`, `gapps-off.prop` | Lay the Google apps the user installed (`dsa gapps install`) over `/product` and `/system_ext`, only on a boot the host marks |
 | `sepolicy/` | Policy added to the image: vsock for graphics, the control daemon's domain and binder service, the memory controls (`memory.cil`), the audio module's socket to the host (`audio.cil`), and what the agent needs to force Doze and set the battery (`agent.cil`) |
 
@@ -110,15 +110,19 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
 - With the input trace on (`androidboot.hardware.dsa_input_trace=1`), `dsa-trace.rc` makes every
   app's main thread log each message it takes 16 ms or more to handle, or starts 16 ms or more
   late.
-- ARM app translation stays off unless the user installs a translation package
-  (`dsa arm-translation install`). The product `build.prop` ends with an import of
+- ARM app translation stays off unless the host turns it on. The product `build.prop` ends
+  with an import of
   `/system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop`: the "off" file
-  sets nothing, and the "on" file, which the host selects through the bootconfig only while a
-  package is installed and on, names the native bridge and adds `arm64-v8a` to the ABIs. Then
-  `dsa-arm-translation.rc` mounts the package's erofs image from
-  `/data/vendor/dsa/arm-translation/system.img` over `/system`'s `lib64`, `bin` and `etc` before
-  the zygote starts, and registers its binfmt_misc handlers. `sepolicy/arm-translation.cil`
-  lets init do so; dsa-channeld writes and removes the image.
+  sets nothing; the "on" file, which the host selects while the user has a translation package
+  installed (`dsa arm-translation install`) and on, and the "default" file (the same lines),
+  which it selects while they have none and the image has a default package, name the native
+  bridge and add `arm64-v8a` after `x86_64` to the ABIs. Then `dsa-arm-translation.rc` mounts
+  the package's erofs image (the user's from `/data/vendor/dsa/arm-translation/system.img`, or
+  the default one from `/system/etc/dsa/arm-translation/default.img`) over `/system`'s `lib64`,
+  `bin` and `etc` before the zygote starts, mounts binfmt_misc and registers the package's
+  handlers. `sepolicy/arm-translation.cil` lets init do so; dsa-channeld writes and removes the
+  user's image. Only an x86_64 image made with `--arm-translation` has the default package and
+  its "default" file, so a boot told to use one on any other image stays x86_64 only.
 - Google Play stays out of the image. A user who wants it runs `dsa gapps install` (or the
   settings app's Google Play item): the host downloads LiteGapps' Core build for this Android
   and sends an erofs image of its apps, permission lists, system configuration and framework

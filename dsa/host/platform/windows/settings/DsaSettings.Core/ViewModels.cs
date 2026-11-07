@@ -195,6 +195,20 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool ArmSupported => _arm?.Supported ?? false;
     public bool HasArmPackage => _arm?.Package is not null;
     public bool CanRemoveArmTranslation => CanChange && HasArmPackage;
+    /// <summary>Whether the image carries a default translator. Only an x86_64 image does; an
+    /// arm64 one runs ARM apps itself.</summary>
+    public bool HasArmDefault => _arm?.Default is not null;
+    /// <summary>The remove card shows only where there is no default translator: where there
+    /// is one, removing the package is going back to it, which its own card does.</summary>
+    public bool ShowsArmRemove => !HasArmDefault;
+    /// <summary>Whether the default translator can be chosen again: a package is installed in
+    /// its place.</summary>
+    public bool CanUseDefaultArmTranslator => CanChange && HasArmDefault && HasArmPackage;
+    /// <summary>What the default translator is, and what going back to it does.</summary>
+    public string ArmDefaultDescription => _arm?.Default is { } d
+        ? string.Format(System.Globalization.CultureInfo.CurrentCulture, _text.Get("Arm_DefaultDescription"),
+            d.Name, d.Version, d.License.Length > 0 ? d.License : _text.Get("Arm_NoLicense"))
+        : "";
     public bool ArmRestartNeeded => _arm?.RestartNeeded ?? false;
     /// <summary>One line on whether ARM apps run, and with what.</summary>
     public string ArmStatus
@@ -202,16 +216,23 @@ public sealed partial class SettingsViewModel : ObservableObject
         get
         {
             var culture = System.Globalization.CultureInfo.CurrentCulture;
-            if (_arm?.Package is not { } package)
+            if (_arm?.Translator is { } translator)
             {
-                return _text.Get("Arm_NotSupported");
+                var license = translator.License.Length > 0 ? translator.License : _text.Get("Arm_NoLicense");
+                var template = translator.Source == ArmSource.Default
+                    ? _text.Get("Arm_SupportedDefault")
+                    : _text.Get("Arm_Supported");
+                return string.Format(culture, template, translator.Name, translator.Version, license);
             }
-            if (!_arm.Enabled)
+            if (_arm is { Enabled: false, Package: { } package })
             {
                 return string.Format(culture, _text.Get("Arm_TurnedOff"), package.Name, package.Version);
             }
-            var license = package.License.Length > 0 ? package.License : _text.Get("Arm_NoLicense");
-            return string.Format(culture, _text.Get("Arm_Supported"), package.Name, package.Version, license);
+            if (_arm is { Enabled: false, Default: { } builtIn })
+            {
+                return string.Format(culture, _text.Get("Arm_DefaultTurnedOff"), builtIn.Name, builtIn.Version);
+            }
+            return _text.Get("Arm_NotSupported");
         }
     }
     /// <summary>The ABIs the running Android installs apps for, or that it is not running.</summary>
@@ -342,6 +363,28 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
         await ChangeAsync(() => _service.SetArmTranslationAsync(on)).ConfigureAwait(true);
         await LoadArmTranslationAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>Goes back to the image's default translator: the package installed in its
+    /// place is removed, from the next start of Android.</summary>
+    public async Task UseDefaultArmTranslatorAsync()
+    {
+        _busy = true;
+        _error = null;
+        ChangedAll();
+        try
+        {
+            _arm = await _service.UseDefaultArmTranslatorAsync().ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            _error = Format.Problem(_text, e);
+        }
+        finally
+        {
+            _busy = false;
+            ChangedAll();
+        }
     }
 
     public async Task RemoveArmTranslationAsync()

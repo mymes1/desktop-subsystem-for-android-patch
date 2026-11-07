@@ -987,6 +987,12 @@ fn fr25_dsa_arm_translation_commands_are_parsed() {
         parse(&args("arm-translation remove")).unwrap().command,
         Cmd::ArmTranslationRemove
     );
+    assert_eq!(
+        parse(&args("arm-translation use-default --json"))
+            .unwrap()
+            .command,
+        Cmd::ArmTranslationUseDefault
+    );
     assert!(parse(&args("arm-translation install")).is_err());
     assert!(parse(&args("arm-translation enable")).is_err());
     let fetch = parse(&args("arm-translation fetch google")).unwrap();
@@ -1057,6 +1063,103 @@ fn fr25_dsa_installs_reports_and_removes_an_arm_translation_package() {
     assert!(!refused.status.success());
     assert!(stderr(&refused).contains("erofs"), "{}", stderr(&refused));
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn fr25_dsa_uses_the_images_default_translator_until_a_package_replaces_it() {
+    use dsa_host_core::arm_translation::Package;
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::settings::MemorySettings;
+    let folder = std::env::temp_dir().join(format!("dsa-cli-arm-default-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("arm-translation.json"),
+        r#"{"name": "Translator", "version": "1.0", "library": "libtranslator.so",
+            "abis": ["arm64-v8a"], "license": "Apache-2.0"}"#,
+    )
+    .unwrap();
+    let mut image = vec![0u8; 8192];
+    image[1024..1028].copy_from_slice(&0xE0F5_E1E2u32.to_le_bytes());
+    std::fs::write(folder.join("system.img"), &image).unwrap();
+    let digitalis = Package {
+        name: "Digitalis".into(),
+        version: "17-abefbe2b1600".into(),
+        library: "libberberis_arm64.so".into(),
+        abis: vec!["arm64-v8a".into()],
+        license: "Apache-2.0".into(),
+    };
+    let ((listener, _, _), endpoint) = local_pair();
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_settings(Arc::new(MemorySettings::default()), ServiceFacts::default())
+        .with_default_arm_translation(Arc::new(move |_: &str| Some(digitalis.clone())));
+    let _service = RunningService::start_service(listener, service);
+
+    // From the first start, with nothing installed.
+    let first = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert!(first["package"].is_null(), "{first}");
+    assert_eq!(first["default"]["name"], "Digitalis");
+    assert_eq!(first["translator"]["source"], "default");
+    assert_eq!(first["translator"]["name"], "Digitalis");
+    assert_eq!(first["translator"]["version"], "17-abefbe2b1600");
+    assert_eq!(first["translator"]["license"], "Apache-2.0");
+    assert_eq!(first["supported"], true);
+    assert_eq!(first["restart_needed"], false);
+    let text = stdout(&dsa(&endpoint, "arm-translation"));
+    assert!(
+        text.contains(
+            "ARM apps: supported by Digitalis 17-abefbe2b1600 (Apache-2.0), this Android's              default translator"
+        ),
+        "{text}"
+    );
+    let already = stdout(&dsa(&endpoint, "arm-translation use-default"));
+    assert!(
+        already.contains("already uses its default translator"),
+        "{already}"
+    );
+
+    // A package the user installs replaces it, and use-default goes back.
+    let installed = json_of(&dsa(
+        &endpoint,
+        &format!("arm-translation install {} --json", folder.display()),
+    ));
+    assert_eq!(installed["translator"]["source"], "user");
+    assert_eq!(installed["translator"]["name"], "Translator");
+    assert_eq!(installed["default"]["name"], "Digitalis");
+    assert_eq!(installed["restart_needed"], true);
+    let text = stdout(&dsa(&endpoint, "arm-translation status"));
+    assert!(text.contains("the package you installed"), "{text}");
+    assert!(text.contains("dsa arm-translation use-default"), "{text}");
+    let back = json_of(&dsa(&endpoint, "arm-translation use-default --json"));
+    assert!(back["package"].is_null(), "{back}");
+    assert_eq!(back["translator"]["source"], "default");
+    assert_eq!(back["android"]["installed"], false);
+
+    // Turned off, nothing translates, and the default is still offered.
+    let off = dsa(&endpoint, "settings set arm-translation off");
+    assert!(off.status.success(), "{}", stderr(&off));
+    let off = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert!(off["translator"].is_null(), "{off}");
+    assert_eq!(off["supported"], false);
+    assert_eq!(off["default"]["name"], "Digitalis");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn fr25_dsa_offers_no_default_translator_where_the_image_has_none() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let none = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert!(none["default"].is_null(), "{none}");
+    assert!(none["translator"].is_null(), "{none}");
+    let refused = dsa(&endpoint, "arm-translation use-default");
+    assert!(!refused.status.success());
+    assert!(
+        stderr(&refused).contains("no default translator")
+            || stderr(&refused).contains("no default ARM translator"),
+        "{}",
+        stderr(&refused)
+    );
 }
 
 /// `dsa` with Google's repository replaced by the one in `repository`.

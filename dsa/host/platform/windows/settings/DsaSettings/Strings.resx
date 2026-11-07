@@ -404,13 +404,28 @@
     <value>Run apps built only for ARM</value>
   </data>
   <data name="ArmCard.Description" xml:space="preserve">
-    <value>Many Android apps contain code only for ARM processors. They install and run here only with an ARM translation package, which you install with dsa arm-translation install. DSA does not include one yet. This switch decides whether Android uses the installed package; it applies from the next start of Android. Only 64-bit ARM apps (arm64-v8a) can run.</value>
+    <value>Many Android apps contain code only for ARM processors. They install and run here only through an ARM translator. Android uses the open source translator that comes with it, unless you install another ARM translation package (dsa arm-translation install) or Google's translator. This switch decides whether Android uses a translator at all; it applies from the next start of Android. Only 64-bit ARM apps (arm64-v8a) can run.</value>
   </data>
   <data name="ArmRestartBar.Title" xml:space="preserve">
     <value>Restart Android to apply</value>
   </data>
   <data name="ArmRestartBar.Message" xml:space="preserve">
     <value>Android started before this change. Stop and start Android for ARM apps to follow it.</value>
+  </data>
+  <data name="ArmDefaultCard.Header" xml:space="preserve">
+    <value>Use the default translator</value>
+  </data>
+  <data name="ArmDefaultButton.Content" xml:space="preserve">
+    <value>Use</value>
+  </data>
+  <data name="Arm_DefaultDescription" xml:space="preserve">
+    <value>{0} {1} ({2}) comes with this Android and is used unless you install another translator. Going back to it removes the package installed in its place, from the next start of Android.</value>
+  </data>
+  <data name="Arm_SupportedDefault" xml:space="preserve">
+    <value>Supported by {0} {1} ({2}), the translator that comes with this Android.</value>
+  </data>
+  <data name="Arm_DefaultTurnedOff" xml:space="preserve">
+    <value>Not supported: {0} {1} is turned off.</value>
   </data>
   <data name="ArmRemoveCard.Header" xml:space="preserve">
     <value>Remove the ARM translation package</value>

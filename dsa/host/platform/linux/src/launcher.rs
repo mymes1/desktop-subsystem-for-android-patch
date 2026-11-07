@@ -53,8 +53,9 @@ pub struct BootPlan {
 
 /// Supplies the plan of each boot.
 pub type PlanSource = Box<dyn FnMut() -> Result<BootPlan, String> + Send>;
-/// Supplies more bootconfig lines (`key = "value"`) for each boot, beside the secret.
-pub type BootconfigSource = Box<dyn FnMut() -> String + Send>;
+/// Supplies more bootconfig lines (`key = "value"`) for each boot of the image whose files it
+/// is given, beside the secret.
+pub type BootconfigSource = Box<dyn FnMut(&ImageFiles) -> String + Send>;
 /// Supplies the properties each boot hands Android in its initrd, if any.
 pub type BootProperties = Box<dyn FnMut(&ImageFiles) -> Option<String> + Send>;
 /// Says what the VM cannot run without and is missing, and tries to provide it.
@@ -270,7 +271,11 @@ impl LinuxVmLauncher {
         if let Some(properties) = self.boot_properties.as_mut().and_then(|p| p(files)) {
             image = append_overlay(&image, &ramdisk_overlay(&properties));
         }
-        let more = self.bootconfig.as_mut().map(|b| b()).unwrap_or_default();
+        let more = self
+            .bootconfig
+            .as_mut()
+            .map(|b| b(files))
+            .unwrap_or_default();
         let text = format!("{}{more}", bootconfig_entry(secret));
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)

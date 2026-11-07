@@ -152,7 +152,19 @@
                 <ui:InfoBar Title="{l:Text ArmGoogleFetchingBar.Title}" Message="{l:Text ArmGoogleFetchingBar.Message}"
                             Severity="Informational" IsClosable="False"
                             IsOpen="{Binding IsFetchingGoogleArm, Mode=OneWay}" Margin="0,0,0,4" />
-                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Delete24}">
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowReset24}"
+                                Visibility="{Binding HasArmDefault, Converter={StaticResource Visible}}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text ArmDefaultCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{Binding ArmDefaultDescription, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:Button Content="{l:Text ArmDefaultButton.Content}" Click="OnUseDefaultArmTranslator"
+                               IsEnabled="{Binding CanUseDefaultArmTranslator, Mode=OneWay}" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Delete24}"
+                                Visibility="{Binding ShowsArmRemove, Converter={StaticResource Visible}}">
                     <ui:CardControl.Header>
                         <StackPanel>
                             <TextBlock Text="{l:Text ArmRemoveCard.Header}" Style="{StaticResource CardTitle}" />

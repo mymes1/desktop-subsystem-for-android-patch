@@ -198,21 +198,47 @@ public sealed partial class DsaService
         return String(json, "path");
     }
 
+    private static ArmPackageInfo? ReadArmPackage(JsonElement json, string name) =>
+        json.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Object
+            ? new ArmPackageInfo(String(p, "name"), String(p, "version"), String(p, "library"), String(p, "license"))
+            : null;
+
     private static ArmTranslationInfo ReadArmTranslation(JsonElement json)
     {
-        ArmPackageInfo? package = null;
-        if (json.TryGetProperty("package", out var p) && p.ValueKind == JsonValueKind.Object)
-        {
-            package = new ArmPackageInfo(String(p, "name"), String(p, "version"), String(p, "library"),
-                String(p, "license"));
-        }
+        var package = ReadArmPackage(json, "package");
+        var enabled = Bool(json, "enabled", missing: true);
         ArmGuestInfo? android = null;
         if (json.TryGetProperty("android", out var a) && a.ValueKind == JsonValueKind.Object)
         {
             android = new ArmGuestInfo(Bool(a, "installed"), Bool(a, "active"), String(a, "abilist"));
         }
-        return new ArmTranslationInfo(package, Bool(json, "enabled", missing: true), Bool(json, "supported"),
-            android, Bool(json, "restart_needed"), Bool(json, "google_fetch_available"));
+        ArmTranslatorInfo? translator = null;
+        if (json.TryGetProperty("translator", out var t))
+        {
+            if (t.ValueKind == JsonValueKind.Object)
+            {
+                ArmSource? source = String(t, "source") switch
+                {
+                    "default" => ArmSource.Default,
+                    "user" => ArmSource.User,
+                    "google" => ArmSource.Google,
+                    _ => (ArmSource?)null,
+                };
+                if (source is { } known)
+                {
+                    translator = new ArmTranslatorInfo(known, String(t, "name"), String(t, "version"),
+                        String(t, "license"));
+                }
+            }
+        }
+        else if (package is not null && enabled)
+        {
+            // A dsa from before the default translator: the installed package, while on.
+            translator = new ArmTranslatorInfo(ArmSource.User, package.Name, package.Version, package.License);
+        }
+        return new ArmTranslationInfo(package, enabled, Bool(json, "supported"),
+            android, Bool(json, "restart_needed"), Bool(json, "google_fetch_available"),
+            ReadArmPackage(json, "default"), translator);
     }
 
     /// <summary>Whether ARM apps can run, and with which translation package.</summary>
@@ -220,9 +246,14 @@ public sealed partial class DsaService
         ReadArmTranslation(await RunJsonAsync("arm-translation", "status").ConfigureAwait(true));
 
     /// <summary>Removes the ARM translation package; Android goes without it from its next
-    /// start.</summary>
+    /// start, back to the default translator where the image has one.</summary>
     public async Task<ArmTranslationInfo> RemoveArmTranslationAsync() =>
         ReadArmTranslation(await RunJsonAsync("arm-translation", "remove").ConfigureAwait(true));
+
+    /// <summary>Goes back to the default translator the image carries, removing the package
+    /// installed in its place. It applies from the next start of Android.</summary>
+    public async Task<ArmTranslationInfo> UseDefaultArmTranslatorAsync() =>
+        ReadArmTranslation(await RunJsonAsync("arm-translation", "use-default").ConfigureAwait(true));
 
     public Task<SettingsInfo> SetProgramUpdatesAsync(bool on) => SetAsync("program-updates", on ? "on" : "off");
 

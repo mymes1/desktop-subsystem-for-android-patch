@@ -475,7 +475,7 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     let arm = user_switch(
         "arm-translation",
         tr("Run apps built only for ARM"),
-        tr("Many Android apps contain code only for ARM processors. They install and run here only with an ARM translation package, which you install with dsa arm-translation install. DSA does not include one yet. This switch decides whether Android uses the installed package; it applies from the next start of Android. Only 64-bit ARM apps (arm64-v8a) can run."),
+        tr("Many Android apps contain code only for ARM processors. They install and run here only through an ARM translator. Android uses the open source translator that comes with it, unless you install another ARM translation package (dsa arm-translation install) or Google's translator. This switch decides whether Android uses a translator at all; it applies from the next start of Android. Only 64-bit ARM apps (arm64-v8a) can run."),
     );
     arm_group.add(&arm.row);
     let (arm_status_row, arm_status) = value_row(&tr("Status"), "");
@@ -495,11 +495,21 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     );
     arm_remove.add_css_class("destructive-action");
     arm_group.add(&arm_remove_row);
+    // Where the image has a default translator, removing the package goes back to it, so this
+    // row takes the remove row's place.
+    let (arm_default_row, arm_default) =
+        button_row(&tr("Use the default translator"), "", &tr("Use"));
+    arm_default_row.set_visible(false);
+    arm_group.add(&arm_default_row);
     let google = google_arm_rows(&arm_group);
     page.add(&arm_group);
     let show_arm: Rc<dyn Fn(Result<crate::model::ArmTranslation, crate::api::Failure>)> = {
-        let (page, arm_restart, arm_remove_row) =
-            (page.clone(), arm_restart.clone(), arm_remove_row.clone());
+        let (page, arm_restart, arm_remove_row, arm_default_row) = (
+            page.clone(),
+            arm_restart.clone(),
+            arm_remove_row.clone(),
+            arm_default_row.clone(),
+        );
         let google = google.clone();
         Rc::new(
             move |r: Result<crate::model::ArmTranslation, crate::api::Failure>| {
@@ -508,7 +518,12 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
                 arm_status.set_label(&view::arm_status(&status));
                 arm_status_row.set_subtitle(&view::arm_abis(&status));
                 arm_restart.set_visible(status.restart_needed);
+                let default = view::arm_default_text(&status);
+                arm_remove_row.set_visible(default.is_none());
                 arm_remove_row.set_sensitive(status.package.is_some());
+                arm_default_row.set_visible(default.is_some());
+                arm_default_row.set_subtitle(default.as_deref().unwrap_or_default());
+                arm_default_row.set_sensitive(view::arm_can_use_default(&status));
                 google.offer(status.google_fetch_available);
             },
         )
@@ -519,6 +534,17 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         arm_remove.connect_clicked(move |_| {
             let show_arm = show_arm.clone();
             request(&ctx, |c| c.remove_arm_translation(), move |r| show_arm(r));
+        });
+    }
+    {
+        let (ctx, show_arm) = (ctx.clone(), show_arm.clone());
+        arm_default.connect_clicked(move |_| {
+            let show_arm = show_arm.clone();
+            request(
+                &ctx,
+                |c| c.use_default_arm_translator(),
+                move |r| show_arm(r),
+            );
         });
     }
     {

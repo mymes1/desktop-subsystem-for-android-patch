@@ -207,6 +207,21 @@ msgstr "지원하지 않음: 설치된 ARM 번역 묶음이 없습니다."
 msgid "Not supported: {0} {1} is installed but turned off."
 msgstr "지원하지 않음: {0} {1}이(가) 설치되어 있지만 꺼져 있습니다."
 
+msgid "Not supported: {0} {1} is turned off."
+msgstr "지원하지 않음: {0} {1}이(가) 꺼져 있습니다."
+
+msgid "Supported by {0} {1} ({2}), the translator that comes with this Android."
+msgstr "{0} {1}({2})로 지원합니다. 이 Android에 함께 들어 있는 번역기입니다."
+
+msgid "{0} {1} ({2}) comes with this Android and is used unless you install another translator. Going back to it removes the package installed in its place, from the next start of Android."
+msgstr "{0} {1}({2})은(는) 이 Android에 함께 들어 있으며, 다른 번역기를 설치하지 않으면 이것을 씁니다. 이것으로 되돌리면 대신 설치한 묶음을 지우고, 다음에 Android를 시작할 때부터 적용됩니다."
+
+msgid "Use the default translator"
+msgstr "기본 번역기 사용"
+
+msgid "Use"
+msgstr "사용"
+
 msgid "licence not given"
 msgstr "라이선스 정보 없음"
 
@@ -885,8 +900,8 @@ msgstr "ARM 앱"
 msgid "Run apps built only for ARM"
 msgstr "ARM 전용 앱 실행"
 
-msgid "Many Android apps contain code only for ARM processors. They install and run here only with an ARM translation package, which you install with dsa arm-translation install. DSA does not include one yet. This switch decides whether Android uses the installed package; it applies from the next start of Android. Only 64-bit ARM apps (arm64-v8a) can run."
-msgstr "많은 Android 앱은 ARM 프로세서용 코드만 담고 있습니다. 이런 앱은 ARM 번역 묶음이 있어야 여기서 설치되고 실행됩니다. 묶음은 dsa arm-translation install로 설치합니다. DSA에는 아직 기본 묶음이 없습니다. 이 스위치는 설치된 묶음을 Android가 쓸지 정하며, 다음에 Android를 시작할 때부터 적용됩니다. 64비트 ARM 앱(arm64-v8a)만 실행할 수 있습니다."
+msgid "Many Android apps contain code only for ARM processors. They install and run here only through an ARM translator. Android uses the open source translator that comes with it, unless you install another ARM translation package (dsa arm-translation install) or Google's translator. This switch decides whether Android uses a translator at all; it applies from the next start of Android. Only 64-bit ARM apps (arm64-v8a) can run."
+msgstr "많은 Android 앱은 ARM 프로세서용 코드만 담고 있습니다. 이런 앱은 ARM 번역기를 거쳐야 여기서 설치되고 실행됩니다. Android는 함께 들어 있는 오픈 소스 번역기를 씁니다. 다른 ARM 번역 묶음(dsa arm-translation install)이나 Google의 번역기를 설치하면 그것을 씁니다. 이 스위치는 Android가 번역기를 쓸지 정하며, 다음에 Android를 시작할 때부터 적용됩니다. 64비트 ARM 앱(arm64-v8a)만 실행할 수 있습니다."
 
 msgid "Status"
 msgstr "상태"

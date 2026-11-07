@@ -41,6 +41,9 @@ public partial class AdvancedPage : Page
     private async void OnRemoveArmTranslation(object sender, RoutedEventArgs e) =>
         await ViewModel.RemoveArmTranslationAsync();
 
+    private async void OnUseDefaultArmTranslator(object sender, RoutedEventArgs e) =>
+        await ViewModel.UseDefaultArmTranslatorAsync();
+
     /// <summary>Says where Google's translator comes from and under which terms, and fetches it
     /// only when the user accepts.</summary>
     private async void OnFetchGoogleArm(object sender, RoutedEventArgs e)
