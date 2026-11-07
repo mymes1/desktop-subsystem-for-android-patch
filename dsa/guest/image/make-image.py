@@ -15,7 +15,9 @@ It takes the pinned target_files, otatools and dexpreopt_tools (fetch.sh downloa
 4. re-signs every APK, APEX and verified boot image with the keys in --keys, because the
    published build is signed with AOSP's test keys, whose private halves are public;
 5. compiles the system apps users open (COMPILED_APPS) with the build's own dex2oat
-   (dexpreopt_tools.zip), against the guest's boot image, so they do not run interpreted;
+   (dexpreopt_tools.zip), against the guest's boot image, so they do not run interpreted, and
+   compiles again, with its own filter, any app the published build shipped compiled whose
+   dex no longer matches its odex (PREBUILT_OAT_RECORD);
 6. builds the images, and lays them out on the template of a user's Android disk.
 
 The results go to dsa/target/image/<version>/:
@@ -32,6 +34,10 @@ The results go to dsa/target/image/<version>/:
   package released beside the image, which image.json describes under "arm_translation". The
   system partition carries the same package's system image, which Android uses from its first
   start while the user has installed no package of their own.
+
+With --framework, the system partition carries the patched SurfaceFlinger, libhwui and libEGL
+that recover from a GPU device loss, in place of the build's own (FRAMEWORK_FILES), and
+image.json describes them under "framework".
 """
 
 import argparse
@@ -202,6 +208,145 @@ SETTINGS_CODE_WITHOUT_BLUETOOTH = {
     "Lcom/android/settings/accessibility/AccessibilityHearingAidsFragment;->onAttach": [
         ("skip call", "Lcom/android/settings/accessibility/AvailableHearingDevicePreferenceController;->init"),
     ],
+}
+
+# Room below the last row of the lists in Settings, the permission screens and Files, about
+# what a phone's navigation bar leaves there. A DSA window has no navigation bar, and the
+# guest reports no bottom inset, which is the only space these lists keep below their last
+# row, so it sat on the window's bottom edge. The space is the list's own padding with
+# clipToPadding off, so rows still scroll to the edge and only the end of the list stops
+# short of it; nothing tells apps there is a navigation bar.
+LIST_BOTTOM_MARGIN_DP = 24
+ANDROID_PADDING_BOTTOM = 0x010100D9  # android:paddingBottom
+
+# Settings code that sets the list padding itself, over the layout's (the Settings overlay
+# gives its preference lists the room above), edited in Settings.apk's dex files:
+#
+# - Android 16's home page (TopLevelSettings.onCreateRecyclerView) calls
+#   setPadding(mPaddingHorizontal, 0, mPaddingHorizontal, 0) on its list. That build never
+#   sets mPaddingHorizontal (its two pane padding is compiled out), so the call only drops
+#   the layout's bottom padding: the list's style pads it 0 on each side and the layout 0 on
+#   top. The call is skipped, and the list keeps the layout's room below its last row.
+# - Android 17's home page pads its list's bottom by dashboard_padding_bottom only when
+#   isRunningInFreeformWindow, which asks whether the window shows a caption bar. A DSA
+#   window is a freeform window whose caption the host draws, outside the guest, so the
+#   method says so, and Android's own padding applies; the Settings overlay sets it to
+#   LIST_BOTTOM_MARGIN_DP like the other lists. Android 17 reads nothing else from that dimen.
+SETTINGS_CODE_LIST_MARGIN = {
+    "Lcom/android/settings/homepage/TopLevelSettings;->onCreateRecyclerView": [
+        ("skip call", "Landroid/view/ViewGroup;->setPadding"),
+    ],
+    "Lcom/android/settings/homepage/TopLevelSettings;->isRunningInFreeformWindow": ("return true", None),
+}
+SETTINGS_HOME_PADDING_DIMEN = "dashboard_padding_bottom"
+# Settings' All apps list sets no padding in code, and its layout none: the list gets room
+# below its last row in the compiled layout itself. An overlay could not reach it without
+# copying the whole ConstraintLayout and naming each of its ids and attributes.
+SETTINGS_LIST_DIMENSIONS = {
+    "res/layout/manage_applications_apps.xml": [
+        ("androidx.recyclerview.widget.RecyclerView", ANDROID_PADDING_BOTTOM, LIST_BOTTOM_MARGIN_DP),
+    ],
+}
+
+# PermissionController lists its rows in androidx.preference's preference_recyclerview with
+# paddingBottom 0dp, as Settings did. It declares <overlayable>, so idmap2 lets no overlay
+# replace that layout; the compiled layout in the APK is edited instead. The app lives in the
+# permission APEX, which is unpacked, edited and packed again before signing (see
+# edit_permission_apex).
+PERMISSION_CONTROLLER_APK = "PermissionController.apk"
+PERMISSION_CONTROLLER_DIMENSIONS = {
+    "res/layout/preference_recyclerview.xml": [
+        ("androidx.recyclerview.widget.RecyclerView", ANDROID_PADDING_BOTTOM, LIST_BOTTOM_MARGIN_DP),
+    ],
+}
+PERMISSION_APEXES = ["SYSTEM/apex/com.android.permission.apex", "SYSTEM/apex/com.android.permission.capex"]
+
+
+def float_bits(value):
+    """The 32 bits of a float, as const/high16 loads them."""
+    return struct.unpack("<I", struct.pack("<f", value))[0]
+
+
+# Files (DocumentsUI) sets its list's padding in code: on Android 16 the bottom is the height
+# of the bar below the list (getSaveLayoutHeight: the save bar, or with Material 3 the
+# breadcrumb and save bar), and 0 where the window has none, as in wide windows. That method
+# now returns at least LIST_BOTTOM_MARGIN_DP in pixels for the display's density, rounded as
+# getDimensionPixelSize rounds. Android 17's list keeps 48 dp of its own
+# (list_container_padding_bottom) and has no such method.
+DOCUMENTSUI_APK = "/priv-app/DocumentsUI/DocumentsUI.apk"
+_DOCS = "Lcom/android/documentsui"
+
+
+def _documentsui_bar_height(bar, label):
+    """Android 16's lookup of the bar below the list, in getSaveLayoutHeight: its height, or
+    0 (v1) when the window has no such bar."""
+    return [
+        f"invoke-virtual {{v2}}, {_DOCS}/dirlist/DirectoryFragment;->getBaseActivity",
+        "move-result-object v2",
+        f"sget v0, {_DOCS}/R$id;->{bar}",
+        f"invoke-static {{v0}}, {_DOCS}/util/Material3Config;->getRes",
+        "move-result v0",
+        "invoke-virtual {v2, v0}, Landroidx/appcompat/app/AppCompatActivity;->findViewById",
+        "move-result-object v2",
+        f"if-nez v2, :{label}",
+        "return v1",
+        f":{label}",
+        "invoke-virtual {v2}, Landroid/view/View;->getHeight",
+        "move-result v2",
+        "return v2",
+    ]
+
+
+DOCUMENTSUI_CODE = {
+    f"{_DOCS}/dirlist/DirectoryFragment;->getSaveLayoutHeight": ("replace code", {
+        # Android 16 (BP4A.251205.006), as d8 compiled it: this is v2.
+        "old": [
+            f"invoke-static {{}}, {_DOCS}/util/FlagUtils;->isUseMaterial3FlagEnabled",
+            "move-result v0",
+            "const/4 v1, 0",
+            "if-eqz v0, :legacy",
+            *_documentsui_bar_height("bottom_container", "bottom"),
+            ":legacy",
+            *_documentsui_bar_height("container_save", "save"),
+        ],
+        # The same bar, then the larger of its height and the margin: this is v3.
+        "registers": 4,
+        "new": [
+            f"invoke-static {{}}, {_DOCS}/util/FlagUtils;->isUseMaterial3FlagEnabled",
+            "move-result v0",
+            "if-eqz v0, :legacy",
+            f"sget v0, {_DOCS}/R$id;->bottom_container",
+            "goto :find",
+            ":legacy",
+            f"sget v0, {_DOCS}/R$id;->container_save",
+            ":find",
+            f"invoke-static {{v0}}, {_DOCS}/util/Material3Config;->getRes",
+            "move-result v0",
+            f"invoke-virtual {{v3}}, {_DOCS}/dirlist/DirectoryFragment;->getBaseActivity",
+            "move-result-object v1",
+            "invoke-virtual {v1, v0}, Landroidx/appcompat/app/AppCompatActivity;->findViewById",
+            "move-result-object v1",
+            "const/4 v2, 0",
+            "if-eqz v1, :margin",
+            "invoke-virtual {v1}, Landroid/view/View;->getHeight",
+            "move-result v2",
+            ":margin",
+            "invoke-virtual {v3}, Landroidx/fragment/app/Fragment;->getResources",
+            "move-result-object v0",
+            "invoke-virtual {v0}, Landroid/content/res/Resources;->getDisplayMetrics",
+            "move-result-object v0",
+            "iget v0, v0, Landroid/util/DisplayMetrics;->density",
+            f"const/high16 v1, {float_bits(LIST_BOTTOM_MARGIN_DP):#x}",
+            "mul-float/2addr v0, v1",
+            f"const/high16 v1, {float_bits(0.5):#x}",
+            "add-float/2addr v0, v1",
+            "float-to-int v0, v0",
+            "if-ge v2, v0, :bar",
+            "return v0",
+            ":bar",
+            "return v2",
+        ],
+    }),
 }
 
 # Cuttlefish's logger writes to a virtio console Hyper-V does not have, so it exits as soon as
@@ -760,9 +905,11 @@ def build_framework_overlay(aapt2, framework_res, work):
     return apk
 
 
-def settings_overlay_sources(dest):
+def settings_overlay_sources(dest, home_padding=False):
     """Writes the Settings overlay's manifest, its resource map, its back button drawables and
-    its preference list layout into `dest`."""
+    its preference list layout into `dest`, and with `home_padding` the home list's bottom
+    padding (SETTINGS_HOME_PADDING_DIMEN), for a Settings that has it."""
+    overlaid = SETTINGS_OVERLAID + ([f"dimen/{SETTINGS_HOME_PADDING_DIMEN}"] if home_padding else [])
     (dest / "res").mkdir(parents=True, exist_ok=True)
     (dest / "AndroidManifest.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -783,9 +930,11 @@ def settings_overlay_sources(dest):
     (dest / "res/values/dsa.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n'
         f'    <attr name="{SETTINGS_LIST_STYLE_ATTR}" format="reference" />\n'
-        '</resources>\n')
+        + (f'    <dimen name="{SETTINGS_HOME_PADDING_DIMEN}">{SETTINGS_LIST_BOTTOM_MARGIN_DP}dp</dimen>\n'
+           if home_padding else '')
+        + '</resources>\n')
     (dest / "res/xml").mkdir(exist_ok=True)
-    items = "".join(f'    <item target="{name}" value="@{name}" />\n' for name in SETTINGS_OVERLAID)
+    items = "".join(f'    <item target="{name}" value="@{name}" />\n' for name in overlaid)
     (dest / "res/xml" / f"{SETTINGS_OVERLAY_MAP}.xml").write_text(
         f'<?xml version="1.0" encoding="utf-8"?>\n<overlay>\n{items}</overlay>\n')
 
@@ -844,16 +993,28 @@ def settings_back_icon(theme):
     )
 
 
-def build_settings_overlay(aapt2, framework_res, work):
+def build_settings_overlay(aapt2, framework_res, work, home_padding=False):
     """Builds the Settings overlay APK (unsigned; signing gives it the platform key)."""
     sources = work / "settings-overlay"
     shutil.rmtree(sources, ignore_errors=True)
-    settings_overlay_sources(sources)
+    settings_overlay_sources(sources, home_padding)
     compiled = sources / "compiled.zip"
     apk = sources / "DsaSettingsOverlay.apk"
     run(aapt2, "compile", "--dir", sources / "res", "-o", compiled)
     run(aapt2, "link", "-o", apk, "--manifest", sources / "AndroidManifest.xml", "-I", framework_res, compiled)
     return apk
+
+
+def settings_has_home_padding(apk):
+    """Whether a Settings.apk pads its home list by SETTINGS_HOME_PADDING_DIMEN (Android 17's
+    does; Android 16's has no such dimen, and an overlay of it would only log a warning)."""
+    field = f"Lcom/android/settings/R$dimen;->{SETTINGS_HOME_PADDING_DIMEN}"
+    with zipfile.ZipFile(io.BytesIO(apk)) as z:
+        for dex in (n for n in z.namelist() if re.fullmatch(r"classes\d*\.dex", n)):
+            content = z.read(dex)
+            if content[:4] == b"dex\n" and field in dex_ids(content)[2]:
+                return True
+    return False
 
 
 def find_aapt2():
@@ -949,6 +1110,80 @@ def remove_xml_elements(axml, attribute, values):
     return result[:4] + struct.pack("<I", len(result)) + result[8:], removed_values
 
 
+XML_RESOURCE_MAP = 0x0180
+XML_TYPE_DIMENSION = 0x05
+XML_COMPLEX_UNIT_DIP = 0x01
+ANDROID_NS = "http://schemas.android.com/apk/res/android"
+
+
+def xml_dimension_dp(dp):
+    """A whole number of dp as compiled XML stores a dimension: the value, then its unit."""
+    return dp << 8 | XML_COMPLEX_UNIT_DIP
+
+
+def set_xml_dimensions(axml, edits):
+    """Compiled XML with, for each (element, attribute, dp) in `edits`, that framework
+    attribute (by resource id, such as android:paddingBottom) of every `element` set to `dp`
+    dp, added in its place where the element lacks it. An added attribute's name must already
+    be in the file, as aapt2 keeps one name per attribute any element uses. Returns the new
+    file and the number of attributes it changed or added."""
+    file_type, file_header, _ = struct.unpack_from("<HHI", axml, 0)
+    if file_type != XML_FILE:
+        raise ValueError("not a compiled Android XML file")
+    strings, resource_ids = [], []
+    out = [axml[:file_header]]
+    changed = 0
+    offset = file_header
+    while offset < len(axml):
+        chunk_type, header_size, size = struct.unpack_from("<HHI", axml, offset)
+        chunk = bytearray(axml[offset:offset + size])
+        if chunk_type == XML_STRING_POOL:
+            strings = xml_strings(axml, offset)
+        elif chunk_type == XML_RESOURCE_MAP:
+            entries = (size - header_size) // 4
+            resource_ids = list(struct.unpack_from(f"<{entries}I", axml, offset + header_size))
+        elif chunk_type == XML_START_ELEMENT:
+            _, name, attribute_start, attribute_size, count = struct.unpack_from("<IIHHH", chunk, header_size)
+            for element, attribute, dp in edits:
+                if strings[name] != element:
+                    continue
+                value = xml_dimension_dp(dp)
+                first = header_size + attribute_start
+                ids = []
+                for i in range(count):
+                    _, attribute_name = struct.unpack_from("<II", chunk, first + i * attribute_size)
+                    ids.append(resource_ids[attribute_name] if attribute_name < len(resource_ids) else None)
+                if attribute in ids:
+                    at = first + ids.index(attribute) * attribute_size
+                    if struct.unpack_from("<BI", chunk, at + 15) == (XML_TYPE_DIMENSION, value):
+                        continue
+                    struct.pack_into("<IHBBI", chunk, at + 8, XML_NO_INDEX, 8, 0, XML_TYPE_DIMENSION, value)
+                    changed += 1
+                    continue
+                if attribute not in resource_ids or ANDROID_NS not in strings:
+                    raise ValueError(f"the compiled XML names no attribute {attribute:#x} to add to {element}")
+                # aapt2 orders an element's attributes by resource id, and the framework reads
+                # them in step with the attributes a view asks for, which are in that order too.
+                position = sum(1 for i in ids if i is not None and i < attribute)
+                entry = struct.pack("<IIIHBBI", strings.index(ANDROID_NS), resource_ids.index(attribute),
+                                    XML_NO_INDEX, 8, 0, XML_TYPE_DIMENSION, value)
+                at = first + position * attribute_size
+                chunk[at:at] = entry + bytes(attribute_size - len(entry))
+                count += 1
+                struct.pack_into("<H", chunk, header_size + 12, count)
+                # The id, class and style attributes are named by their position, from 1.
+                for field in (14, 16, 18):
+                    (index,) = struct.unpack_from("<H", chunk, header_size + field)
+                    if index > position:
+                        struct.pack_into("<H", chunk, header_size + field, index + 1)
+                struct.pack_into("<I", chunk, 4, len(chunk))
+                changed += 1
+        out.append(bytes(chunk))
+        offset += size
+    result = b"".join(out)
+    return result[:4] + struct.pack("<I", len(result)) + result[8:], changed
+
+
 def _uleb128(data, at):
     value = shift = 0
     while True:
@@ -977,13 +1212,13 @@ DEX_INVOKES = set(range(0x6E, 0x73)) | set(range(0x74, 0x79))
 DEX_MOVE_RESULTS = {0x0A, 0x0B, 0x0C}
 
 
-def dex_methods(dex):
-    """{"Lclass;->name": [(code_off, shorty)]} for each method a dex file defines with code,
-    and the "Lclass;->name" of each method it refers to, by method index."""
+def dex_ids(dex):
+    """The "Lclass;->name" of each method a dex file refers to and its shorty, by method
+    index, and the "Lclass;->name" of each field it refers to, by field index."""
     if dex[:4] != b"dex\n":
         raise ValueError("not a dex file")
-    (string_count, string_off, type_count, type_off, proto_count, proto_off, _, _,
-     method_count, method_off, class_count, class_off) = struct.unpack_from("<12I", dex, 56)
+    (_, string_off, type_count, type_off, proto_count, proto_off, field_count, field_off,
+     method_count, method_off) = struct.unpack_from("<10I", dex, 56)
 
     def string(index):
         _, at = _uleb128(dex, struct.unpack_from("<I", dex, string_off + 4 * index)[0])
@@ -991,11 +1226,22 @@ def dex_methods(dex):
 
     types = [string(struct.unpack_from("<I", dex, type_off + 4 * i)[0]) for i in range(type_count)]
     shorties = [string(struct.unpack_from("<I", dex, proto_off + 12 * i)[0]) for i in range(proto_count)]
-    refs, method_shorty = [], []
+    refs, method_shorty, fields = [], [], []
     for i in range(method_count):
         class_index, proto_index, name_index = struct.unpack_from("<HHI", dex, method_off + 8 * i)
         refs.append(f"{types[class_index]}->{string(name_index)}")
         method_shorty.append(shorties[proto_index])
+    for i in range(field_count):
+        class_index, _, name_index = struct.unpack_from("<HHI", dex, field_off + 8 * i)
+        fields.append(f"{types[class_index]}->{string(name_index)}")
+    return refs, method_shorty, fields
+
+
+def dex_methods(dex):
+    """{"Lclass;->name": [(code_off, shorty)]} for each method a dex file defines with code,
+    and the "Lclass;->name" of each method it refers to, by method index."""
+    refs, method_shorty, _ = dex_ids(dex)
+    class_count, class_off = struct.unpack_from("<2I", dex, 96)
     defined = {}
     for i in range(class_count):
         data_off = struct.unpack_from("<I", dex, class_off + 32 * i + 24)[0]
@@ -1040,12 +1286,114 @@ def dex_instructions(dex, code_off):
             unit += DEX_INSTRUCTION_UNITS[first & 0xFF]
 
 
+# The Dalvik instructions the code replacements below are written in, by mnemonic: the
+# opcode and the instruction format, named as the Dalvik executable format names them.
+DEX_ASSEMBLY = {
+    "nop": (0x00, "10x"), "move": (0x01, "12x"), "move-result": (0x0A, "11x"),
+    "move-result-object": (0x0C, "11x"), "return-void": (0x0E, "10x"), "return": (0x0F, "11x"),
+    "return-object": (0x11, "11x"), "const/4": (0x12, "11n"), "const/high16": (0x15, "21h"),
+    "goto": (0x28, "10t"), "if-ge": (0x35, "22t"), "if-eqz": (0x38, "21t"),
+    "if-nez": (0x39, "21t"),
+    "iget": (0x52, "22c"), "iget-object": (0x54, "22c"), "sget": (0x60, "21c"),
+    "invoke-virtual": (0x6E, "35c"), "invoke-super": (0x6F, "35c"), "invoke-direct": (0x70, "35c"),
+    "invoke-static": (0x71, "35c"), "float-to-int": (0x87, "12x"),
+    "add-float/2addr": (0xC6, "12x"), "mul-float/2addr": (0xC8, "12x"),
+}
+DEX_FORMAT_UNITS = {"10x": 1, "11x": 1, "12x": 1, "11n": 1, "10t": 1, "21t": 2, "22t": 2, "21h": 2,
+                    "21c": 2, "22c": 2, "35c": 3}
+
+
+def assemble_dex(lines, dex):
+    """The code of `lines` in Dalvik assembly, one instruction or ":label" each, written as
+    smali writes them ("invoke-virtual {v1, v0}, Lclass;->method", "if-eqz v0, :label"). Each
+    method and field is named "Lclass;->name" and must be one `dex` refers to exactly once.
+    Returns the code and the most registers a call in it passes."""
+    refs, _, fields = dex_ids(dex)
+
+    def index(table, name):
+        found = [i for i, ref in enumerate(table) if ref == name]
+        if len(found) != 1:
+            raise ValueError(f"the dex file refers to {name} {len(found)} times, not once")
+        return found[0]
+
+    def register(text, limit):
+        if not re.fullmatch(r"v\d+", text) or int(text[1:]) > limit:
+            raise ValueError(f"{text} is not a register this instruction can name")
+        return int(text[1:])
+
+    parsed, labels, unit = [], {}, 0
+    for line in lines:
+        if line.startswith(":"):
+            labels[line[1:]] = unit
+            continue
+        mnemonic, _, rest = line.partition(" ")
+        opcode, form = DEX_ASSEMBLY[mnemonic]
+        registers = []
+        if rest.startswith("{"):
+            inside, _, rest = rest[1:].partition("}")
+            registers = [r.strip() for r in inside.split(",") if r.strip()]
+        operands = registers + [a.strip() for a in rest.split(",") if a.strip()]
+        parsed.append((unit, line, opcode, form, operands, len(registers)))
+        unit += DEX_FORMAT_UNITS[form]
+
+    code, outs = [], 0
+    for at, line, opcode, form, operands, count in parsed:
+        def target(text):
+            offset = labels[text.lstrip(":")] - at
+            if offset == 0:
+                raise ValueError(f"{line} branches to itself")
+            return offset
+
+        if form == "10x":
+            code += [opcode]
+        elif form == "11x":
+            code += [opcode | register(operands[0], 255) << 8]
+        elif form == "12x":
+            code += [opcode | register(operands[0], 15) << 8 | register(operands[1], 15) << 12]
+        elif form == "11n":
+            value = int(operands[1], 0)
+            if not -8 <= value <= 7:
+                raise ValueError(f"{line}: const/4 holds -8 to 7")
+            code += [opcode | register(operands[0], 15) << 8 | (value & 0xF) << 12]
+        elif form == "10t":
+            offset = target(operands[0])
+            if not -128 <= offset <= 127:
+                raise ValueError(f"{line}: goto reaches 127 code units")
+            code += [opcode | (offset & 0xFF) << 8]
+        elif form == "21t":
+            code += [opcode | register(operands[0], 255) << 8, target(operands[1]) & 0xFFFF]
+        elif form == "22t":
+            code += [opcode | register(operands[0], 15) << 8 | register(operands[1], 15) << 12,
+                     target(operands[2]) & 0xFFFF]
+        elif form == "21h":
+            value = int(operands[1], 0)
+            if value & 0xFFFF:
+                raise ValueError(f"{line}: const/high16 holds only the high 16 bits")
+            code += [opcode | register(operands[0], 255) << 8, value >> 16]
+        elif form == "21c":
+            code += [opcode | register(operands[0], 255) << 8, index(fields, operands[1])]
+        elif form == "22c":
+            code += [opcode | register(operands[0], 15) << 8 | register(operands[1], 15) << 12,
+                     index(fields, operands[2])]
+        elif form == "35c":
+            if count > 5:
+                raise ValueError(f"{line}: a call passes at most five registers")
+            args = [register(r, 15) for r in operands[:count]] + [0] * (5 - count)
+            outs = max(outs, count)
+            code += [opcode | args[4] << 8 | count << 12, index(refs, operands[count]),
+                     args[0] | args[1] << 4 | args[2] << 8 | args[3] << 12]
+    return struct.pack(f"<{len(code)}H", *code), outs
+
+
 def edit_dex(dex, edits):
     """Applies {"Lclass;->method": edit, or a list of edits} to a dex file. An edit is
-    ("return false", None), which makes a method that returns a boolean return false at once,
-    or ("skip call", "Lclass;->method"), which turns each call to that method, whose result is
-    not used, into no-ops. Returns the new file and the methods it changed; a method already
-    edited, or not in this file, is not changed."""
+    ("return false", None) or ("return true", None), which makes a method that returns a
+    boolean return that at once; ("skip call", "Lclass;->method"), which turns each call to
+    that method, whose result is not used, into no-ops; or ("replace code", {"registers": n,
+    "old": [...], "new": [...]}), which replaces a method whose code is exactly `old` with
+    `new` (Dalvik assembly, see assemble_dex) in n registers, padded with no-ops to the same
+    size. Returns the new file and the methods it changed. A method already edited, or not in
+    this file, is not changed; one whose code is neither `old` nor `new` is refused."""
     defined, refs = dex_methods(dex)
     out = bytearray(dex)
     changed = []
@@ -1054,14 +1402,16 @@ def edit_dex(dex, edits):
             for method, edit in edits.items()
             for kind, target in (edit if isinstance(edit, list) else [edit])):
         for code_off, shorty in defined.get(method, []):
-            registers, = struct.unpack_from("<H", dex, code_off)
+            registers, ins, outs, tries = struct.unpack_from("<4H", dex, code_off)
             insns = code_off + 16
-            if kind == "return false":
+            if kind in ("return false", "return true"):
                 if shorty[0] != "Z" or registers < 1:
                     raise ValueError(f"{method} does not return a boolean")
-                # const/4 v0, 0; return v0, over whole instructions, the rest of which become
-                # no-ops so the verifier still reads valid code. What follows is never reached.
-                if bytes(out[insns:insns + 4]) == b"\x12\x00\x0f\x00":
+                # const/4 v0, 0 (or 1); return v0, over whole instructions, the rest of which
+                # become no-ops so the verifier still reads valid code. What follows is never
+                # reached.
+                returned = b"\x12\x00\x0f\x00" if kind == "return false" else b"\x12\x10\x0f\x00"
+                if bytes(out[insns:insns + 4]) == returned:
                     continue
                 end = insns
                 # A move-result left behind without its call would not verify, so it goes too.
@@ -1070,8 +1420,8 @@ def edit_dex(dex, edits):
                         break
                     end = at + 2 * DEX_INSTRUCTION_UNITS[op]
                 if end - insns < 4:
-                    raise ValueError(f"{method} is too short to return false")
-                out[insns:end] = b"\x12\x00\x0f\x00" + bytes(end - insns - 4)
+                    raise ValueError(f"{method} is too short to {kind}")
+                out[insns:end] = returned + bytes(end - insns - 4)
                 changed.append(method)
             elif kind == "skip call":
                 instructions = list(dex_instructions(dex, code_off))
@@ -1082,6 +1432,25 @@ def edit_dex(dex, edits):
                         raise ValueError(f"{method} uses the result of {target}")
                     out[at:at + 2 * DEX_INSTRUCTION_UNITS[op]] = bytes(2 * DEX_INSTRUCTION_UNITS[op])
                     changed.append(method)
+            elif kind == "replace code":
+                (count,) = struct.unpack_from("<I", dex, code_off + 12)
+                current = bytes(out[insns:insns + 2 * count])
+                new, new_outs = assemble_dex(target["new"], dex)
+                if len(new) > 2 * count:
+                    raise ValueError(f"the code that replaces {method} is longer than the method")
+                new += bytes(2 * count - len(new))
+                if current == new and registers == target["registers"]:
+                    continue
+                old, _ = assemble_dex(target["old"], dex)
+                # A try block names instructions by their address, which new code moves.
+                if tries or current != old:
+                    raise ValueError(f"{method} is not the code this edit replaces: the app was "
+                                     "built from other sources, and the edit must be written for them")
+                if target["registers"] < ins:
+                    raise ValueError(f"{method} takes {ins} registers of arguments")
+                struct.pack_into("<HHH", out, code_off, target["registers"], ins, max(outs, new_outs))
+                out[insns:insns + 2 * count] = new
+                changed.append(method)
             else:
                 raise ValueError(f"unknown dex edit {kind}")
     if changed:
@@ -1090,27 +1459,39 @@ def edit_dex(dex, edits):
     return bytes(out), changed
 
 
-def edit_settings_apk(data, name):
-    """Settings.apk without the preferences, and the code, that need the Bluetooth service."""
+def edit_apk(data, name, code=None, controllers=None, dimensions=None):
+    """An APK with `code` edited in its dex files (see edit_dex), the preference elements
+    whose controller `controllers` names removed from its compiled XML ({xml: [controller]}),
+    and the dimensions `dimensions` names set in its compiled XML ({xml: [(element,
+    attribute, dp)]}, see set_xml_dimensions). Prints each change; returns the APK as it was
+    when nothing changed."""
     replacements = {}
     with zipfile.ZipFile(io.BytesIO(data)) as apk:
         files = set(apk.namelist())
-        for dex in sorted(f for f in files if re.fullmatch(r"classes\d*\.dex", f)):
+        for dex in (sorted(f for f in files if re.fullmatch(r"classes\d*\.dex", f)) if code else []):
             content = apk.read(dex)
             if content[:4] != b"dex\n":
                 continue
-            edited, changed = edit_dex(content, SETTINGS_CODE_WITHOUT_BLUETOOTH)
+            edited, changed = edit_dex(content, code)
             for method in changed:
                 print(f"editing {method} in {name}:{dex}", flush=True)
             if changed:
                 replacements[dex] = edited
-        for xml, controllers in SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH.items():
+        for xml, removed in (controllers or {}).items():
             if xml not in files:
                 continue
-            edited, removed_controllers = remove_xml_elements(apk.read(xml), "controller", set(controllers))
+            edited, removed_controllers = remove_xml_elements(apk.read(xml), "controller", set(removed))
             for controller in removed_controllers:
                 print(f"removing {controller} from {name}:{xml}", flush=True)
             if removed_controllers:
+                replacements[xml] = edited
+        for xml, edits in (dimensions or {}).items():
+            if xml not in files:
+                continue
+            edited, changed = set_xml_dimensions(replacements.get(xml) or apk.read(xml), edits)
+            if changed:
+                for element, attribute, dp in edits:
+                    print(f"setting {element} attribute {attribute:#x} to {dp} dp in {name}:{xml}", flush=True)
                 replacements[xml] = edited
         if not replacements:
             return data
@@ -1121,6 +1502,24 @@ def edit_settings_apk(data, name):
             for info in apk.infolist():
                 edited_apk.writestr(info, replacements.get(info.filename) or apk.read(info))
     return out.getvalue()
+
+
+def edit_settings_apk(data, name):
+    """Settings.apk without the preferences, and the code, that need the Bluetooth service,
+    and with room below the last row of the lists that set their own padding."""
+    return edit_apk(data, name, code={**SETTINGS_CODE_WITHOUT_BLUETOOTH, **SETTINGS_CODE_LIST_MARGIN},
+                    controllers=SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH, dimensions=SETTINGS_LIST_DIMENSIONS)
+
+
+def edit_documentsui_apk(data, name):
+    """DocumentsUI.apk (Files) with room below its list's last row in windows that have no bar
+    below the list."""
+    return edit_apk(data, name, code=DOCUMENTSUI_CODE)
+
+
+def edit_permission_controller_apk(data, name):
+    """PermissionController.apk with room below the last row of its preference lists."""
+    return edit_apk(data, name, dimensions=PERMISSION_CONTROLLER_DIMENSIONS)
 
 
 # Properties the vendor and odm build.prop files may not set. init reads those two files as
@@ -1756,6 +2155,117 @@ def add_arm_translation_import(text):
     return "\n".join(lines + [ARM_TRANSLATION_IMPORT]) + "\n"
 
 
+# The patched framework: SurfaceFlinger, libhwui and libEGL with DSA's recovery from a GPU
+# device loss, which the "Framework build" workflow builds from the exact source of the
+# published build (dsa/guest/framework). They take the place of the build's own files, beside
+# that build's libraries, so an image takes them only from a build of the same build number and
+# for the same architecture. image.json describes them under "framework", and check-image.py
+# finds the same files in the image. SurfaceFlinger then tells the apps about a reset through a
+# debug property, which GPU_RESET_POLICY lets it set.
+sys.path.insert(0, str(REPO / "dsa/guest/framework"))
+import framework_lock  # noqa: E402
+
+FRAMEWORK_MANIFEST = "framework.json"
+FRAMEWORK_FILES = list(framework_lock.OUTPUTS)
+GPU_RESET_PROPERTY = "debug.dsa.gpu.resets"
+GPU_RESET_RULE = "(allow surfaceflinger debug_prop (property_service (set)))"
+
+
+def framework_problems(description, build_id, android_major, arch, read):
+    """What makes a framework build's files wrong for an image: its framework.json (parsed),
+    the image's build number, Android version and architecture, and a function that returns a
+    file's bytes by its target_files name, or None."""
+    problems = []
+    if description.get("android_major") != android_major:
+        problems.append(f"the framework is built for Android {description.get('android_major')}, "
+                        f"not {android_major}")
+    if description.get("build_id") != build_id:
+        problems.append(f"the framework is built from build {description.get('build_id')}, but the "
+                        f"image is made from build {build_id}, whose libraries it would run beside")
+    if description.get("arch") != arch:
+        problems.append(f"the framework is built for {description.get('arch')}, not {arch}")
+    files = description.get("files") or {}
+    if sorted(files) != sorted(FRAMEWORK_FILES):
+        problems.append(f"the framework has {sorted(files)}, not {sorted(FRAMEWORK_FILES)}")
+    machine = ARCHES.get(arch, {}).get("elf_machine")
+    for name in FRAMEWORK_FILES:
+        entry = files.get(name) or {}
+        data = read(name)
+        if data is None:
+            problems.append(f"the framework's {name} is missing")
+            continue
+        if len(data) != entry.get("size") or hashlib.sha256(data).hexdigest() != entry.get("sha256"):
+            problems.append(f"the framework's {name} is not the file framework.json describes")
+        if elf_machine(data[:64]) != machine:
+            problems.append(f"the framework's {name} is built for ELF machine {elf_machine(data[:64])}, "
+                            f"not {arch} ({machine})")
+    return problems
+
+
+def checked_framework(folder, build_id, android_major, arch):
+    """The framework build's files in `folder`, by their target_files names, and its
+    description, once they are the files of the image's own build and architecture."""
+    folder = Path(folder)
+    description = json.loads((folder / FRAMEWORK_MANIFEST).read_text())
+
+    def read(name):
+        path = folder / name
+        return path.read_bytes() if path.is_file() else None
+
+    problems = framework_problems(description, build_id, android_major, arch, read)
+    if problems:
+        raise SystemExit("; ".join(problems))
+    return {name: read(name) for name in FRAMEWORK_FILES}, description
+
+
+def framework_entry(description):
+    """What image.json says of the framework an image carries."""
+    return {
+        "version": description.get("version", ""),
+        "build_id": description["build_id"],
+        "release": description.get("release", ""),
+        "arch": description["arch"],
+        "files": {name: description["files"][name]["sha256"] for name in FRAMEWORK_FILES},
+    }
+
+
+def check_framework(manifest, names, read):
+    """The problems with the patched framework in an image, given image.json, the names in its
+    target files and a function that reads one: each file image.json names is in the image with
+    that SHA-256, built from the image's own build for its architecture, and SurfaceFlinger may
+    tell the apps about a reset."""
+    entry = manifest.get("framework")
+    if entry is None:
+        return []
+    problems = []
+    source = manifest.get("source", {})
+    arch = manifest.get("arch") or DEFAULT_ARCH
+    if entry.get("build_id") != source.get("build_id"):
+        problems.append(f"the framework is built from build {entry.get('build_id')}, but the image is "
+                        f"made from build {source.get('build_id')}")
+    if entry.get("arch") != arch:
+        problems.append(f"the framework is built for {entry.get('arch')}, not {arch}")
+    files = entry.get("files") or {}
+    if sorted(files) != sorted(FRAMEWORK_FILES):
+        problems.append(f"image.json's framework names {sorted(files)}, not {sorted(FRAMEWORK_FILES)}")
+    machine = ARCHES.get(arch, {}).get("elf_machine")
+    for name in FRAMEWORK_FILES:
+        if name not in names:
+            problems.append(f"{name} is missing from the image")
+            continue
+        data = read(name)
+        if hashlib.sha256(data).hexdigest() != files.get(name):
+            problems.append(f"{name} is not the framework build's file that image.json names, so the "
+                            "image does not recover from a GPU device loss")
+        if elf_machine(data[:64]) != machine:
+            problems.append(f"{name} is built for ELF machine {elf_machine(data[:64])}, not {arch}")
+    policy = "SYSTEM/etc/selinux/plat_sepolicy.cil"
+    if policy in names and GPU_RESET_RULE not in read(policy).decode(errors="replace"):
+        problems.append(f"SurfaceFlinger may not set {GPU_RESET_PROPERTY}, so the apps never hear of a "
+                        "GPU reset")
+    return problems
+
+
 # Google Play, for a user who installs it (`dsa gapps install`). The host puts
 # androidboot.dsa.gapps=on in the boot's bootconfig only while the user has a Google apps image
 # installed. The init script then lays the image over /product and /system_ext before the
@@ -1874,11 +2384,12 @@ SETTINGS_BACK_INSET_DP = 8
 # reports no bottom inset, and that inset is the only space Settings keeps under a list, so
 # the last row sat on the window's bottom edge. The space is the list's own, like an app's
 # content margin; nothing tells apps there is a navigation bar. The home page
-# (TopLevelSettings) sets its list's padding in code, which replaces this layout's; Android 17
-# adds 16 dp there itself when the window has a caption bar.
+# (TopLevelSettings) sets its list's padding in code, which replaces this layout's: on Android
+# 16 that call is skipped, and Android 17 takes the padding it gives a freeform window from
+# dashboard_padding_bottom, which this overlay sets too (SETTINGS_CODE_LIST_MARGIN).
 SETTINGS_LIST_LAYOUT = "preference_recyclerview"
 SETTINGS_LIST_STYLE_ATTR = "preferenceFragmentListStyle"
-SETTINGS_LIST_BOTTOM_MARGIN_DP = 24
+SETTINGS_LIST_BOTTOM_MARGIN_DP = LIST_BOTTOM_MARGIN_DP
 # The overlay names what it replaces in a resource map (android:resourcesMap) instead of by
 # matching names. Only then does the framework rewrite the overlay layout's references to
 # its own id and attribute into Settings' ids, which the code and the theme look up. The
@@ -2103,6 +2614,7 @@ ADB_POLICY = HERE / "sepolicy/adb.cil"
 KERNEL_POLICY = HERE / "sepolicy/kernel.cil"
 ARM_TRANSLATION_POLICY = HERE / "sepolicy/arm-translation.cil"
 GAPPS_POLICY = HERE / "sepolicy/gapps.cil"
+GPU_RESET_POLICY = HERE / "sepolicy/gpu-reset.cil"
 
 
 def narrow_vsock_neverallows(text):
@@ -2253,7 +2765,7 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, settings_overlay=None, power_hal=None,
            codec2=None, audio=None, gnss_hal=None,
-           sensors=None, camera=None, arm_translation=None):
+           sensors=None, camera=None, arm_translation=None, framework=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -2266,7 +2778,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     when `gnss_hal` names it, and DSA's sensors HAL in place of Cuttlefish's when `sensors`
     names it, and DSA's camera HAL, which lends the host's cameras, in place of Cuttlefish's
     emulated cameras when `camera` names it, and the default ARM translation package's system
-    image when `arm_translation` names the package's folder."""
+    image when `arm_translation` names the package's folder, and the patched framework's files
+    in place of the build's own when `framework` maps their target_files names to their bytes."""
     fstab = (HERE / "fstab.dsa").read_bytes()
     default_translator = (Path(arm_translation) / ARM_TRANSLATION_IMAGE).read_bytes() if arm_translation else None
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
@@ -2323,8 +2836,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         graphics_payload, vulkan_payload, channeld_payload, agent_payload, hwcomposer_payload,
         overlay_payload, settings_overlay_payload, *(power_payloads or {}).values(), *(codec2_payloads or {}).values(),
         audio_payload, *(gnss_payloads or {}).values(), *(sensors_payloads or {}).values(),
-        *(camera_payloads or {}).values(),
+        *(camera_payloads or {}).values(), *(framework or {}).values(),
     ])
+    replaced_framework = set()
     replaced_graphics_payload = False
     replaced_vulkan_payload = False
     kept_modules = re.compile(r"^(VENDOR_BOOT/RAMDISK|VENDOR_DLKM|SYSTEM_DLKM)/lib/modules/.*\.ko$")
@@ -2360,6 +2874,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             plat_patched += "\n" + ARM_TRANSLATION_POLICY.read_text()
             # init laying a user's Google apps over /product and /system_ext.
             plat_patched += "\n" + GAPPS_POLICY.read_text()
+            if framework is not None:
+                # SurfaceFlinger telling the apps about a GPU reset.
+                plat_patched += "\n" + GPU_RESET_POLICY.read_text()
             if channeld_payload is not None:
                 # Its rules name the domain they declare, so they go in whole.
                 plat_patched += "\n" + CHANNELD_POLICY.read_text()
@@ -2465,6 +2982,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             elif name == VULKAN_RANCHU_LIBRARY and vulkan_payload is not None:
                 data = vulkan_payload
                 replaced_vulkan_payload = True
+            elif framework is not None and name in framework:
+                data = framework[name]
+                replaced_framework.add(name)
             else:
                 data = zin.read(name)
                 if name in PROP_FILES:
@@ -2483,6 +3003,10 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = edit_wifi_rc(data.decode()).encode()
                 elif name.endswith(SETTINGS_APK):
                     data = edit_settings_apk(data, name)
+                elif name.endswith(DOCUMENTSUI_APK):
+                    data = edit_documentsui_apk(data, name)
+                elif name in PERMISSION_APEXES:
+                    data = edit_permission_apex(data, name, otatools, Path(dest).parent)
                 elif name.endswith("lib/modules/modules.load") or name.endswith("lib/modules/modules.dep"):
                     data = b""
                 elif name == "META/apexkeys.txt":
@@ -2546,6 +3070,12 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = update_vendor_property_contexts(data.decode()).encode()
             info.compress_type = zipfile.ZIP_STORED
             zout.writestr(info, data)
+        # What the published build compiled, for the apps the image keeps: compile_apps
+        # compiles an app again once its dex no longer matches, and the checks hold the image
+        # to it.
+        prebuilt = {apk: entry for apk, entry in prebuilt_oat(names, zin.read).items()
+                    if not removed(apk, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)}
+        zout.writestr(PREBUILT_OAT_RECORD, json.dumps(prebuilt, indent=2, sort_keys=True) + "\n")
         for directory in FSTAB_DIRS:
             zout.writestr(directory + "fstab.dsa", fstab)
         zout.writestr(MEMORY_RC, (HERE / "dsa-memory.rc").read_bytes())
@@ -2613,6 +3143,11 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     if graphics_payload is not None and not replaced_graphics_payload:
         dest.unlink(missing_ok=True)
         raise ValueError(f"target_files does not contain {GFXSTREAM_LIBRARY}")
+    if framework is not None and replaced_framework != set(framework):
+        dest.unlink(missing_ok=True)
+        raise ValueError("target_files does not contain "
+                         + ", ".join(sorted(set(framework) - replaced_framework))
+                         + ", which the patched framework replaces")
 
 
 def key_arguments(target_files, keys):
@@ -2696,6 +3231,11 @@ COMPILED_APPS = [
     "PRODUCT/app/webview/webview.apk",
     AGENT_APK,
 ]
+# The apps whose dex make-image.py edits (edit_settings_apk, edit_documentsui_apk), compiled
+# after the edits with the rest. dex2oat verifies every method as it compiles, and refuses an
+# edited app with a method the verifier rejects outright: ART would throw a VerifyError
+# instead of running it, and the app would close the moment that class loads.
+EDITED_APPS = [SETTINGS_APP, "SYSTEM/priv-app/DocumentsUI/DocumentsUI.apk"]
 # What differs between the guest architectures DSA makes images for: the kernel's file
 # format and name, ART's instruction set and its variant, and the ELF machine number of a
 # binary built for the guest. arm64 is 64-bit only: the guest runs no 32-bit ARM code.
@@ -2900,9 +3440,9 @@ def apex_jar_sources(bootclasspath, names):
 
 
 def dex2oat_command(dex2oat, apk, dex_location, odex, root, bootclasspath, boot_images, contexts,
-                    filter, profile=None, extra=()):
+                    filter, profile=None, extra=(), app_image=None):
     """The dex2oat command line the build itself uses to compile a system app, aimed at the
-    guest's boot image (COMPILED_ISA)."""
+    guest's boot image (COMPILED_ISA), with an app image (.art) at `app_image` when given."""
     host_context, stored_context = contexts
     jars = bootclasspath.split(":")
     cmd = [
@@ -2926,6 +3466,8 @@ def dex2oat_command(dex2oat, apk, dex_location, odex, root, bootclasspath, boot_
     ]
     if profile is not None:
         cmd += [f"--profile-file={profile}", "--resolve-startup-const-strings=true"]
+    if app_image is not None:
+        cmd += [f"--app-image-file={app_image}", "--image-format=lz4"]
     return cmd
 
 
@@ -2966,6 +3508,257 @@ def compiled_app_problems(z):
         if keys.get("classpath") != expected:
             problems.append(f"{odex} was compiled for shared libraries {keys.get('classpath')}, but "
                             f"the app loads {expected}")
+    return problems
+
+
+# The apps the published build compiled in their own partition (not in system_other): each
+# APK's odex, vdex and app image (.art) beside it, the filter and the shared libraries it was
+# compiled with. make-image.py records them from the published target_files, before any
+# edit, in the target_files it makes, so the image can be checked against them: signing
+# leaves an APK's dex as it is, so their odex files stay valid, but an APK whose dex DSA
+# edits is compiled again, with the same filter, against the same boot image.
+PREBUILT_OAT_RECORD = "META/dsa_prebuilt_oat.json"
+PREBUILT_OAT_PARTITIONS = "|".join(PARTITION_DIRS)
+
+
+def prebuilt_oat(names, read):
+    """{apk: {"files": [odex, vdex, art...], "filter": f, "classpath": c}} for each APK in a
+    target_files whose member names are `names` that has its odex in its own partition, for
+    the guest's instruction set. `read` reads a member."""
+    names = set(names)
+    found = {}
+    for odex in sorted(names):
+        m = re.fullmatch(rf"((?:{PREBUILT_OAT_PARTITIONS})/.+)/oat/{COMPILED_ISA}/([^/]+)\.odex", odex)
+        if not m or f"{m.group(1)}/{m.group(2)}.apk" not in names:
+            continue
+        keys = oat_key_values(read(odex))
+        found[f"{m.group(1)}/{m.group(2)}.apk"] = {
+            "files": [odex] + [odex[:-len(".odex")] + ext for ext in (".vdex", ".art")
+                               if odex[:-len(".odex")] + ext in names],
+            "filter": keys.get("compiler-filter"),
+            "classpath": keys.get("classpath", DEFAULT_CLASS_LOADER_CONTEXT),
+        }
+    return found
+
+
+def prebuilt_oat_problems(z):
+    """What is wrong with the apps the published build compiled (PREBUILT_OAT_RECORD) in a
+    target_files: an APK or one of its compiled files gone, a vdex made for another dex than
+    the APK's, an odex compiled with another filter than the published build's, or against
+    another boot image than the framework's."""
+    names = set(z.namelist())
+    if PREBUILT_OAT_RECORD not in names:
+        return [f"{PREBUILT_OAT_RECORD} is missing, so nothing says which apps the published build "
+                "shipped compiled"]
+    framework = oat_key_values(z.read(FRAMEWORK_ODEX)) if FRAMEWORK_ODEX in names else {}
+    problems = []
+    for apk, entry in sorted(json.loads(z.read(PREBUILT_OAT_RECORD)).items()):
+        if apk not in names:
+            problems.append(f"{apk} is gone, though the published build ships it compiled")
+            continue
+        missing = [member for member in entry["files"] if member not in names]
+        if missing:
+            problems.append(f"{apk} lost {', '.join(missing)}, which the published build ships, so it "
+                            "runs interpreted until Android compiles it again")
+            continue
+        odex = entry["files"][0]
+        vdex = odex[:-len(".odex")] + ".vdex"
+        made_for, dex = vdex_checksums(z.read(vdex)), apk_dex_checksums(z.read(apk))
+        if made_for != dex:
+            problems.append(f"{vdex} was made for dex checksums {made_for}, but the APK's are {dex}, "
+                            "so ART throws the odex away")
+        keys = oat_key_values(z.read(odex))
+        # An app compiled with speed-profile that carries no profile of its own is compiled
+        # again with speed, which compiles all of what speed-profile compiles.
+        if keys.get("compiler-filter") not in {entry["filter"]} | (
+                {"speed"} if entry["filter"] == "speed-profile" else set()):
+            problems.append(f"{odex} is compiled with {keys.get('compiler-filter')}, but the published "
+                            f"build compiled it with {entry['filter']}")
+        if framework and keys.get("bootclasspath-checksums") != framework.get("bootclasspath-checksums"):
+            problems.append(f"{odex} was compiled against boot image {keys.get('bootclasspath-checksums')}, "
+                            f"but the guest's is {framework.get('bootclasspath-checksums')}")
+    return problems
+
+
+def compile_jobs(names, read):
+    """What compile_apps compiles in a signed target_files: [(apk, filter, class loader
+    context, whether it has an app image)]. COMPILED_APPS come first, their filter None (speed,
+    or speed-profile when the APK carries a profile, see compiler_filter). Then each app the
+    published build compiled (PREBUILT_OAT_RECORD) whose odex no longer matches its APK's dex,
+    with the filter, the shared libraries and the app image it was compiled with."""
+    names = set(names)
+    jobs = []
+    for apk in COMPILED_APPS:
+        if apk not in names:
+            continue
+        published = factory_odex(apk)
+        context = (oat_key_values(read(published)).get("classpath", DEFAULT_CLASS_LOADER_CONTEXT)
+                   if published in names else DEFAULT_CLASS_LOADER_CONTEXT)
+        jobs.append((apk, None, context, False))
+    record = json.loads(read(PREBUILT_OAT_RECORD)) if PREBUILT_OAT_RECORD in names else {}
+    for apk, entry in sorted(record.items()):
+        if apk in COMPILED_APPS or apk not in names:
+            continue
+        vdex = entry["files"][0][:-len(".odex")] + ".vdex"
+        if vdex in names and vdex_checksums(read(vdex)) == apk_dex_checksums(read(apk)):
+            continue
+        app_image = any(member.endswith(".art") for member in entry["files"])
+        jobs.append((apk, entry["filter"], entry["classpath"], app_image))
+    return jobs
+
+
+# The key apexer signs a repacked APEX payload with. Signing gives every APEX the image's
+# payload key and container key afterwards, and packs the payload once more as it signs the
+# apps inside, so this key never reaches the image.
+APEX_REPACK_KEY = "external/avb/test/data/testkey_rsa4096.pem"
+APEX_REPACK_META = ["apex_manifest.pb", "apex_build_info.pb", "apex_manifest.json"]
+
+
+def apex_tool_path(otatools):
+    """The folders apexer and apex_compression_tool look for the tools they run in."""
+    return f"{Path(otatools).resolve() / 'bin'}:{os.environ.get('PATH', '')}"
+
+
+def apex_repack_command(otatools, meta, payload, image):
+    """apexer's command line that packs the folder `payload` into an APEX payload image with
+    the manifest and the build information (file contexts, filesystem, ownership) the APEX
+    in `meta` was built with: the command sign_target_files_apks runs when it packs an APEX
+    again after signing the apps in it."""
+    otatools = Path(otatools)
+    cmd = [otatools / "bin/apexer", "--force", "--payload_only", "--do_not_check_keyname",
+           "--apexer_tool_path", apex_tool_path(otatools),
+           "--manifest", meta / "apex_manifest.pb", "--build_info", meta / "apex_build_info.pb",
+           "--key", otatools / APEX_REPACK_KEY]
+    if (meta / "apex_manifest.json").exists():
+        cmd += ["--manifest_json", meta / "apex_manifest.json"]
+    return cmd + [payload, image]
+
+
+def apex_payload(data, name, otatools, folder, env):
+    """Unpacks an APEX, or a compressed APEX (`name` ends .capex), into `folder`: the APEX
+    itself (folder/original.apex) and its payload's files (folder/payload)."""
+    otatools = Path(otatools)
+    shutil.rmtree(folder, ignore_errors=True)
+    folder.mkdir(parents=True)
+    apex = folder / "original.apex"
+    if name.endswith(".capex"):
+        with zipfile.ZipFile(io.BytesIO(data)) as capex:
+            apex.write_bytes(capex.read(CAPEX_ORIGINAL))
+    else:
+        apex.write_bytes(data)
+    run(otatools / "bin/deapexer", "--debugfs_path", otatools / "bin/debugfs_static",
+        "--fsckerofs_path", otatools / "bin/fsck.erofs", "extract", apex, folder / "payload", env=env)
+    return apex, folder / "payload"
+
+
+def edit_apex_apks(data, name, edit, otatools, work):
+    """An APEX (or a compressed APEX), `data`, with each APK in its payload replaced by
+    edit(apk, its name), packed again as sign_target_files_apks packs one: the payload image
+    by apexer with the APEX's own manifest and build information, put back in the APEX, and
+    compressed again when it was. Signing then signs the apps in it, the payload and the
+    container with the image's keys, as for every APEX. Returns `data` when no APK changed."""
+    otatools = Path(otatools).resolve()
+    env = dict(os.environ, PATH=apex_tool_path(otatools))
+    folder = Path(work).resolve() / f"apex-{Path(name).stem}"
+    apex, payload = apex_payload(data, name, otatools, folder, env)
+    changed = False
+    for apk in sorted(payload.rglob("*.apk")):
+        before = apk.read_bytes()
+        after = edit(before, f"{name}:{apk.relative_to(payload).as_posix()}")
+        if after != before:
+            apk.write_bytes(after)
+            changed = True
+    if not changed:
+        shutil.rmtree(folder, ignore_errors=True)
+        return data
+    meta = folder / "meta"
+    meta.mkdir()
+    with zipfile.ZipFile(apex) as z:
+        for member in APEX_REPACK_META:
+            if member in z.namelist():
+                (meta / member).write_bytes(z.read(member))
+    # apexer writes the manifest into the payload itself, as signing's repack does.
+    for leftover in ("apex_manifest.pb", "apex_manifest.json"):
+        (payload / leftover).unlink(missing_ok=True)
+    shutil.rmtree(payload / "lost+found", ignore_errors=True)
+    image = folder / "apex_payload.img"
+    run(*apex_repack_command(otatools, meta, payload, image), env=env)
+    repacked = folder / "repacked.apex"
+    with zipfile.ZipFile(apex) as zin, zipfile.ZipFile(repacked, "w") as zout:
+        for info in zin.infolist():
+            if info.filename != "apex_payload.img":
+                zout.writestr(info, zin.read(info))
+        zout.write(image, "apex_payload.img", compress_type=zipfile.ZIP_STORED)
+    if name.endswith(".capex"):
+        compressed = folder / "repacked.capex"
+        run(otatools / "bin/apex_compression_tool", "compress", "--apex_compression_tool_path",
+            apex_tool_path(otatools), "--input", repacked, "--output", compressed, env=env)
+        repacked = compressed
+    result = repacked.read_bytes()
+    shutil.rmtree(folder, ignore_errors=True)
+    return result
+
+
+def edit_permission_apex(data, name, otatools, work):
+    """The permission APEX with PermissionController's lists edited (see
+    PERMISSION_CONTROLLER_DIMENSIONS). Without otatools nothing can pack it again, and it is
+    left as it is."""
+    if otatools is None:
+        print(f"not editing {name}: there is no otatools to pack it again", flush=True)
+        return data
+
+    def edit(apk, apk_name):
+        if not apk_name.endswith("/" + PERMISSION_CONTROLLER_APK):
+            return apk
+        return edit_permission_controller_apk(apk, apk_name)
+
+    return edit_apex_apks(data, name, edit, otatools, work)
+
+
+def apk_edits_left(apk, code=None, controllers=None, dimensions=None):
+    """What an APK still has of what edit_apk takes out or changes, given the same edits: the
+    methods, controllers and compiled XML files edit_apk would change. An empty list means
+    the APK has every edit (or nothing they apply to)."""
+    left = []
+    with zipfile.ZipFile(io.BytesIO(apk)) as z:
+        files = set(z.namelist())
+        for dex in (sorted(f for f in files if re.fullmatch(r"classes\d*\.dex", f)) if code else []):
+            content = z.read(dex)
+            if content[:4] != b"dex\n":
+                continue
+            try:
+                left += [f"{dex}: {method}" for method in sorted(set(edit_dex(content, code)[1]))]
+            except ValueError as error:
+                left.append(f"{dex}: {error}")
+        for xml, removed in (controllers or {}).items():
+            if xml in files:
+                _, found = remove_xml_elements(z.read(xml), "controller", set(removed))
+                left += [f"{xml}: {controller}" for controller in found]
+        for xml, edits in (dimensions or {}).items():
+            if xml in files and set_xml_dimensions(z.read(xml), edits)[1]:
+                left.append(f"{xml}: " + ", ".join(f"{element} {attribute:#x} not {dp} dp"
+                                                   for element, attribute, dp in edits))
+    return left
+
+
+def permission_controller_problems(signed, otatools, work, env):
+    """What is wrong with PermissionController in a signed target_files: its lists without
+    the room below their last row, looked for in the permission APEX the image ships."""
+    with zipfile.ZipFile(signed) as z:
+        found = [n for n in PERMISSION_APEXES if n in z.namelist()]
+        if not found:
+            return []
+        data = z.read(found[0])
+    folder = Path(work).resolve() / "apex-check"
+    _, payload = apex_payload(data, found[0], otatools, folder, env)
+    apks = sorted(payload.rglob(PERMISSION_CONTROLLER_APK))
+    problems = [] if apks else [f"{found[0]} has no {PERMISSION_CONTROLLER_APK}"]
+    for apk in apks:
+        left = apk_edits_left(apk.read_bytes(), dimensions=PERMISSION_CONTROLLER_DIMENSIONS)
+        if left:
+            problems.append(f"{found[0]}:{apk.relative_to(payload).as_posix()} still has {'; '.join(left)}, "
+                            "so the last row of its lists sits on the window's edge")
+    shutil.rmtree(folder, ignore_errors=True)
     return problems
 
 
@@ -3013,18 +3806,15 @@ def compile_apps(signed, tools_zip, otatools, work, env):
         for apk in COMPILED_APPS:
             if apk not in names:
                 print(f"not compiling {apk}: the image does not have it", flush=True)
-                continue
+        for apk, filter, context, app_image in compile_jobs(names, z.read):
             data = z.read(apk)
             host_apk = out / apk
             host_apk.parent.mkdir(parents=True, exist_ok=True)
             host_apk.write_bytes(data)
             location = device_path(apk)
-            published = factory_odex(apk)
-            context = (oat_key_values(z.read(published)).get("classpath", DEFAULT_CLASS_LOADER_CONTEXT)
-                       if published in names else DEFAULT_CLASS_LOADER_CONTEXT)
             profile = None
             with zipfile.ZipFile(io.BytesIO(data)) as a:
-                if EMBEDDED_PROFILE in a.namelist():
+                if filter in (None, "speed-profile") and EMBEDDED_PROFILE in a.namelist():
                     embedded = host_apk.with_suffix(".baseline.prof")
                     embedded.write_bytes(a.read(EMBEDDED_PROFILE))
                     profile = host_apk.with_suffix(".prof")
@@ -3036,20 +3826,32 @@ def compile_apps(signed, tools_zip, otatools, work, env):
                         print(f"{apk}: profman could not read its profile, so it is compiled with speed",
                               flush=True)
                         profile = None
-            filter = compiler_filter(apk, profile is not None)
+            if filter is None:
+                filter = compiler_filter(apk, profile is not None)
+            elif filter == "speed-profile" and profile is None:
+                print(f"{apk}: the published build compiled it with speed-profile and the APK carries no "
+                      "profile, so it is compiled with speed", flush=True)
+                filter = "speed"
             odex_member, vdex_member = oat_files(apk)
+            art_member = odex_member[:-len(".odex")] + ".art"
             odex = out / odex_member
             odex.parent.mkdir(parents=True, exist_ok=True)
+            edited = apk in EDITED_APPS or apk not in COMPILED_APPS
             run(*dex2oat_command(dex2oat, host_apk, location, odex, root, bootclasspath, boot_images,
                                  class_loader_contexts(context, root), filter,
-                                 profile=profile if filter == "speed-profile" else None, extra=extra),
+                                 profile=profile if filter == "speed-profile" else None,
+                                 extra=extra + (["--abort-on-hard-verifier-error"] if edited else []),
+                                 app_image=odex.with_suffix(".art") if app_image else None),
                 env=dict(env, ANDROID_LOG_TAGS="*:e"))
-            vdex = odex.with_suffix(".vdex")
-            compiled[odex_member] = odex.read_bytes()
-            compiled[vdex_member] = vdex.read_bytes()
-            sizes[apk] = len(compiled[odex_member]) + len(compiled[vdex_member])
-            print(f"compiled {apk} with {filter}: {sizes[apk] >> 10} KiB of odex and vdex", flush=True)
+            members = [odex_member, vdex_member] + ([art_member] if app_image else [])
+            for member in members:
+                compiled[member] = (out / member).read_bytes()
+            sizes[apk] = sum(len(compiled[member]) for member in members)
+            kinds = ", ".join(Path(member).suffix[1:] for member in members)
+            print(f"compiled {apk} with {filter}: {sizes[apk] >> 10} KiB of {kinds}", flush=True)
             config, app_rules = oat_filesystem_config(apk)
+            if app_image:
+                app_rules.append(f"{device_path(art_member).lstrip('/')} 0 0 644 capabilities=0x0")
             rules.setdefault(config, []).extend(app_rules)
 
         updated = signed.with_name(signed.stem + "-compiled.zip")
@@ -3067,7 +3869,7 @@ def compile_apps(signed, tools_zip, otatools, work, env):
                 zout.writestr(info, data)
     updated.replace(signed)
     with zipfile.ZipFile(signed) as z:
-        problems = compiled_app_problems(z)
+        problems = compiled_app_problems(z) + prebuilt_oat_problems(z)
     if problems:
         raise ValueError("; ".join(problems))
     print(f"compiled system apps: {sum(sizes.values()) >> 20} MiB in all", flush=True)
@@ -3298,12 +4100,20 @@ def main():
     parser.add_argument("--arm-translation", type=Path,
                         help="an ARM translation package folder (arm-translation.json and system.img) that "
                              "an x86_64 image carries as its default translator, and releases beside it")
+    parser.add_argument("--framework", type=Path,
+                        help="a folder from the Framework build (framework.json and the files it names): "
+                             "SurfaceFlinger, libhwui and libEGL that recover from a GPU device loss, built "
+                             "from the image's own build for its architecture")
     args = parser.parse_args()
     if args.arm_translation:
         checked_arm_translation(args.arm_translation, args.arch)
 
     spec = image_spec(json.loads((HERE / "inputs.json").read_text())["images"], args.major, args.arch)
     use_arch(args.arch)
+    framework_payloads = framework_description = None
+    if args.framework:
+        framework_payloads, framework_description = checked_framework(
+            args.framework, spec["build_id"], spec["android_major"], args.arch)
     inputs = args.inputs / f"{spec['build_id']}-{args.arch}"
     target_files = inputs / spec["files"]["target_files"]["name"]
     keys = args.keys.resolve()
@@ -3342,8 +4152,9 @@ def main():
         framework_res = work / "framework-res.apk"
         with zipfile.ZipFile(target_files) as z:
             framework_res.write_bytes(z.read("SYSTEM/framework/framework-res.apk"))
+            home_padding = SETTINGS_APP in z.namelist() and settings_has_home_padding(z.read(SETTINGS_APP))
         framework_overlay = build_framework_overlay(aapt2, framework_res, work)
-        settings_overlay = build_settings_overlay(aapt2, framework_res, work)
+        settings_overlay = build_settings_overlay(aapt2, framework_res, work, home_padding)
     else:
         print("no aapt2, so the image has neither the framework overlay nor the Settings overlay", flush=True)
 
@@ -3352,7 +4163,8 @@ def main():
            otatools=otatools, channeld=args.channeld, agent=args.agent, hwcomposer=args.hwcomposer,
            framework_overlay=framework_overlay, settings_overlay=settings_overlay, power_hal=args.power_hal,
            codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
-           sensors=args.sensors, camera=args.camera, arm_translation=args.arm_translation)
+           sensors=args.sensors, camera=args.camera, arm_translation=args.arm_translation,
+           framework=framework_payloads)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path
@@ -3362,6 +4174,11 @@ def main():
         *key_arguments(modified, str(Path(keys).resolve())), modified.resolve(), signed.resolve(),
         env=env, cwd=aosp_root)
     modified.unlink()
+    # Signing packs the permission APEX once more as it signs the apps in it; what it packed
+    # must still carry the edit.
+    problems = permission_controller_problems(signed, otatools, work, env)
+    if problems:
+        raise ValueError("; ".join(problems))
     compile_apps(signed, inputs / spec["files"]["dexpreopt_tools"]["name"], otatools, work, env)
     run(otatools / "bin/add_img_to_target_files", "-p", otatools, "-a", signed, env=env)
 
@@ -3422,6 +4239,8 @@ def main():
     (out / ARM_TRANSLATION_ZIP).unlink(missing_ok=True)
     if args.arm_translation:
         manifest["arm_translation"] = default_arm_translation(args.arm_translation, args.arch, out)
+    if framework_description is not None:
+        manifest["framework"] = framework_entry(framework_description)
     (out / "image.json").write_text(json.dumps(manifest, indent=2) + "\n")
     shutil.copy(signed, out / "signed-target_files.zip")
     shutil.rmtree(work)

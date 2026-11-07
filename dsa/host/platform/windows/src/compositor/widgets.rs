@@ -2445,6 +2445,31 @@ pub(crate) mod png {
         factory: IWICImagingFactory,
     }
 
+    /// Runs `f` with COM entered on this thread, as the imaging component needs, and leaves
+    /// it as it was. A thread already in COM, in either apartment, stays in it.
+    pub(crate) fn with_com<T>(f: impl FnOnce() -> T) -> T {
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+        // SAFETY: enters COM for this thread; undone below only when this call entered it.
+        let entered = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
+        let result = f();
+        if entered {
+            // SAFETY: balances the successful CoInitializeEx above.
+            unsafe { CoUninitialize() };
+        }
+        result
+    }
+
+    /// The width and height a PNG says it has, from its header chunk.
+    pub(crate) fn size(png: &[u8]) -> Option<(u32, u32)> {
+        const SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+        if png.len() < 24 || &png[..8] != SIGNATURE || &png[12..16] != b"IHDR" {
+            return None;
+        }
+        let width = u32::from_be_bytes(png[16..20].try_into().ok()?);
+        let height = u32::from_be_bytes(png[20..24].try_into().ok()?);
+        (width > 0 && height > 0).then_some((width, height))
+    }
+
     impl Decoder {
         pub(crate) fn new() -> Result<Decoder, String> {
             // SAFETY: COM is entered on this thread.

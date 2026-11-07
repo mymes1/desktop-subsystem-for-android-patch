@@ -3,31 +3,62 @@ package io.github.thisisthepy.dsa.agent.splash
 /** A starting window on screen. */
 interface StartingWindow {
     fun remove()
+
+    /**
+     * Draws the window's content again at [densityDpi], in place: its icon at the pixel size
+     * it has at that density, loaded from bitmaps fine enough for it.
+     */
+    fun redraw(densityDpi: Int) {}
 }
 
 /**
  * The starting window of each task. A task has at most one: a new one replaces the old. The
  * window manager asks for a removal by task, also for a task the agent drew nothing for.
+ *
+ * Each window is drawn at its task's density. A task takes the density of its host window's
+ * monitor only once that window is open, which is often after the starting window was drawn,
+ * and again whenever the window moves to a monitor of another scale. A starting window drawn
+ * at the old density would show its icon scaled, so it is drawn again at the new one.
  */
 class StartingWindows {
-    private val windows = mutableMapOf<Int, StartingWindow>()
+    private class Entry(val window: StartingWindow, var densityDpi: Int)
+
+    private val windows = mutableMapOf<Int, Entry>()
 
     fun tasks(): Set<Int> = windows.keys.toSet()
 
+    /** The density the task's window was last drawn at, if it has one. */
+    fun densityOf(taskId: Int): Int? = windows[taskId]?.densityDpi
+
     /**
-     * Shows the window [create] makes for [taskId], after removing the task's old one. A
-     * null window (it could not be added) is not kept. Returns what failed to be removed.
+     * Shows the window [create] makes for [taskId], drawn at [densityDpi], after removing the
+     * task's old one. A null window (it could not be added) is not kept. Returns what failed
+     * to be removed.
      */
-    fun add(taskId: Int, create: () -> StartingWindow?): List<Throwable> {
+    fun add(taskId: Int, densityDpi: Int, create: () -> StartingWindow?): List<Throwable> {
         val errors = remove(taskId)
-        create()?.let { windows[taskId] = it }
+        create()?.let { windows[taskId] = Entry(it, densityDpi) }
         return errors
+    }
+
+    /**
+     * The task now draws at [densityDpi]. Its window, if it has one drawn at another density,
+     * is drawn again at this one. Returns the error drawing it threw, if any; the window then
+     * stays as it was, and is tried again on the next change.
+     */
+    fun densityChanged(taskId: Int, densityDpi: Int): List<Throwable> {
+        if (densityDpi <= 0) return emptyList()
+        val entry = windows[taskId] ?: return emptyList()
+        if (entry.densityDpi == densityDpi) return emptyList()
+        val error = runCatching { entry.window.redraw(densityDpi) }.exceptionOrNull()
+        if (error == null) entry.densityDpi = densityDpi
+        return listOfNotNull(error)
     }
 
     /** Removes the task's window, if it has one. Returns the error removing it threw, if any. */
     fun remove(taskId: Int): List<Throwable> {
-        val window = windows.remove(taskId) ?: return emptyList()
-        return listOfNotNull(runCatching { window.remove() }.exceptionOrNull())
+        val entry = windows.remove(taskId) ?: return emptyList()
+        return listOfNotNull(runCatching { entry.window.remove() }.exceptionOrNull())
     }
 
     /** Removes every window; one that fails does not keep the others. */

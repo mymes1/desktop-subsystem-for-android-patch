@@ -2795,10 +2795,10 @@ def uleb128(value):
             return out + bytes([byte])
 
 
-def dex_file(methods, code):
-    """A dex file with the methods [(class, name, shorty)] it refers to, and the code
-    {method index: (registers, instructions)} of those it defines, laid out as d8 lays it out:
-    the header, the id tables, then the data."""
+def dex_file(methods, code, fields=()):
+    """A dex file with the methods [(class, name, shorty)] and fields [(class, name, type)] it
+    refers to, and the code {method index: (registers, instructions)} of those it defines,
+    laid out as d8 lays it out: the header, the id tables, then the data."""
     strings, types, protos = [], [], []
 
     def string(text):
@@ -2820,6 +2820,7 @@ def dex_file(methods, code):
         return protos.index(shorty)
 
     method_ids = [(type_(cls), proto(shorty), string(name)) for cls, name, shorty in methods]
+    field_ids = [(type_(cls), type_(kind), string(name)) for cls, name, kind in fields]
     classes = {}
     for index in sorted(code):
         classes.setdefault(method_ids[index][0], []).append(index)
@@ -2827,7 +2828,8 @@ def dex_file(methods, code):
     string_off = 0x70
     type_off = string_off + 4 * len(strings)
     proto_off = type_off + 4 * len(types)
-    method_off = proto_off + 12 * len(protos)
+    field_off = proto_off + 12 * len(protos)
+    method_off = field_off + 8 * len(field_ids)
     class_off = method_off + 8 * len(method_ids)
     data_off = class_off + 32 * len(classes)
 
@@ -2854,13 +2856,14 @@ def dex_file(methods, code):
     tables = b"".join(struct.pack("<I", offset) for offset in string_data)
     tables += b"".join(struct.pack("<I", strings.index(t)) for t in types)
     tables += b"".join(struct.pack("<III", strings.index(s), types.index(s[0]), 0) for s in protos)
+    tables += b"".join(struct.pack("<HHI", *ids) for ids in field_ids)
     tables += b"".join(struct.pack("<HHI", *ids) for ids in method_ids)
     tables += b"".join(struct.pack("<8I", cls, 1, 0xFFFFFFFF, 0, 0xFFFFFFFF, 0, class_data[cls], 0)
                        for cls in classes)
     size = data_off + len(data)
     header = struct.pack("<8sI20s20I", b"dex\n035\0", 0, bytes(20), size, 0x70, 0x12345678, 0, 0, 0,
                          len(strings), string_off, len(types), type_off, len(protos), proto_off,
-                         0, 0, len(method_ids), method_off, len(classes), class_off,
+                         len(field_ids), field_off, len(method_ids), method_off, len(classes), class_off,
                          len(data), data_off)
     dex = bytearray(header + tables + data)
     dex[12:32] = hashlib.sha1(bytes(dex[32:])).digest()
@@ -3577,6 +3580,655 @@ class CompiledSystemAppTests(unittest.TestCase):
         self.assertIn(".files | keys[]", fetch)
 
 
+ANDROID_ID = 0x010100D0
+ANDROID_PADDING_TOP = 0x010100D7
+ANDROID_PADDING_BOTTOM = 0x010100D9
+ANDROID_VISIBILITY = 0x010100DC
+ANDROID_CLIP_TO_PADDING = 0x010100EB
+RECYCLER_VIEW = "androidx.recyclerview.widget.RecyclerView"
+TYPE_REFERENCE, TYPE_DIMENSION, TYPE_INT_DEC, TYPE_BOOLEAN = 0x01, 0x05, 0x10, 0x12
+
+
+def compiled_layout(root):
+    """Compiles a layout, (tag, [(name, resource id, type, data)], [children]), the way aapt2
+    lays one out: the framework attribute names first in the string pool, with their
+    resource ids in the resource map, and each element's attributes in resource id order."""
+    attributes = {}
+
+    def collect(node):
+        tag, attrs, children = node
+        for name, resource_id, _, _ in attrs:
+            attributes[resource_id] = name
+        for child in children:
+            collect(child)
+
+    collect(root)
+    strings = [attributes[i] for i in sorted(attributes)]
+
+    def index(text):
+        if text not in strings:
+            strings.append(text)
+        return strings.index(text)
+
+    index("android")
+    index(ANDROID_NS)
+    data, offsets = b"", []
+
+    def element(node):
+        tag, attrs, children = node
+        body = struct.pack("<IIHHHHHH", 0xFFFFFFFF, index(tag), 20, 20, len(attrs),
+                           1 + [a[1] for a in sorted(attrs, key=lambda a: a[1])].index(ANDROID_ID)
+                           if any(a[1] == ANDROID_ID for a in attrs) else 0, 0, 0)
+        for name, resource_id, kind, value in sorted(attrs, key=lambda a: a[1]):
+            body += struct.pack("<IIIHBBI", index(ANDROID_NS), index(name), 0xFFFFFFFF, 8, 0, kind, value)
+        start = struct.pack("<HHIII", 0x0102, 16, 16 + len(body), 1, 0xFFFFFFFF) + body
+        end_body = struct.pack("<II", 0xFFFFFFFF, index(tag))
+        end = struct.pack("<HHIII", 0x0103, 16, 16 + len(end_body), 1, 0xFFFFFFFF) + end_body
+        return start + b"".join(element(child) for child in children) + end
+
+    elements_data = element(root)
+    for text in strings:
+        offsets.append(len(data))
+        encoded = text.encode("utf-8")
+        data += bytes([len(text), len(encoded)]) + encoded + b"\0"
+    data += b"\0" * (-len(data) % 4)
+    strings_start = 28 + 4 * len(strings)
+    pool = struct.pack("<HHIIIIII", 0x0001, 28, strings_start + len(data), len(strings), 0, 0x100,
+                       strings_start, 0)
+    pool += b"".join(struct.pack("<I", offset) for offset in offsets) + data
+    ids = [i for i in sorted(attributes)]
+    resource_map = struct.pack("<HHI", 0x0180, 8, 8 + 4 * len(ids)) + struct.pack(f"<{len(ids)}I", *ids)
+    namespace = struct.pack("<II", index("android"), index(ANDROID_NS))
+    ns_start = struct.pack("<HHIII", 0x0100, 16, 24, 1, 0xFFFFFFFF) + namespace
+    ns_end = struct.pack("<HHIII", 0x0101, 16, 24, 1, 0xFFFFFFFF) + namespace
+    tree = pool + resource_map + ns_start + elements_data + ns_end
+    return struct.pack("<HHI", 0x0003, 8, 8 + len(tree)) + tree
+
+
+def layout_attributes(axml):
+    """[(tag, id index, [(name, type, data)])] of each element in a compiled layout, in order."""
+    strings = make_image.xml_strings(axml, 8)
+    found = []
+    offset = 8
+    while offset < len(axml):
+        chunk_type, header_size, size = struct.unpack_from("<HHI", axml, offset)
+        if chunk_type == 0x0102:
+            _, name, start, attribute_size, count, id_index = struct.unpack_from("<IIHHHH", axml, offset + header_size)
+            attrs = []
+            for i in range(count):
+                _, attribute, _, _, _, kind, value = struct.unpack_from(
+                    "<IIIHBBI", axml, offset + header_size + start + i * attribute_size)
+                attrs.append((strings[attribute], kind, value))
+            found.append((strings[name], id_index, attrs))
+        offset += size
+    return found
+
+
+def dp(value):
+    return value << 8 | 0x01
+
+
+ALL_APPS_LAYOUT = ("androidx.constraintlayout.widget.ConstraintLayout", [], [
+    (RECYCLER_VIEW, [("id", ANDROID_ID, TYPE_REFERENCE, 0x7F0A00DA),
+                     ("visibility", ANDROID_VISIBILITY, TYPE_INT_DEC, 1),
+                     ("clipToPadding", ANDROID_CLIP_TO_PADDING, TYPE_BOOLEAN, 0)], []),
+    ("LinearLayout", [("id", ANDROID_ID, TYPE_REFERENCE, 0x7F0A07E9),
+                      ("paddingTop", ANDROID_PADDING_TOP, TYPE_DIMENSION, dp(12)),
+                      ("paddingBottom", ANDROID_PADDING_BOTTOM, TYPE_DIMENSION, dp(12))], []),
+])
+PREFERENCE_LIST_LAYOUT = (RECYCLER_VIEW, [("id", ANDROID_ID, TYPE_REFERENCE, 0x7F0A03AB),
+                                          ("paddingTop", ANDROID_PADDING_TOP, TYPE_DIMENSION, dp(0)),
+                                          ("paddingBottom", ANDROID_PADDING_BOTTOM, TYPE_DIMENSION, dp(0)),
+                                          ("clipToPadding", ANDROID_CLIP_TO_PADDING, TYPE_BOOLEAN, 0)], [])
+
+TOP_LEVEL_SETTINGS = "Lcom/android/settings/homepage/TopLevelSettings;"
+DOCUMENTS = "Lcom/android/documentsui"
+SAVE_LAYOUT_HEIGHT = f"{DOCUMENTS}/dirlist/DirectoryFragment;->getSaveLayoutHeight"
+
+
+def top_level_settings_dex():
+    """Android 16's and Android 17's TopLevelSettings methods that set the home list's padding,
+    as d8 compiled them in Settings.apk, cut down to the instructions that matter."""
+    methods = [
+        (TOP_LEVEL_SETTINGS, "onCreateRecyclerView", "LLLL"),
+        ("Landroidx/preference/PreferenceFragmentCompat;", "onCreateRecyclerView", "LLLL"),
+        ("Landroid/view/ViewGroup;", "setVerticalScrollBarEnabled", "VZ"),
+        ("Landroid/view/ViewGroup;", "setPadding", "VIIII"),
+        (TOP_LEVEL_SETTINGS, "isRunningInFreeformWindow", "ZL"),
+        ("Landroid/view/View;", "getRootWindowInsets", "L"),
+        ("Landroid/view/WindowInsets$Type;", "captionBar", "I"),
+        ("Landroid/view/WindowInsets;", "isVisible", "ZI"),
+    ]
+    on_create_recycler_view = bytes.fromhex(
+        "6f400100 1032"  # invoke-super {v0, v1, v2, v3}, PreferenceFragmentCompat.onCreateRecyclerView
+        "0c01"  # move-result-object v1
+        "1202"  # const/4 v2, 0
+        "6e200200 2100"  # invoke-virtual {v1, v2}, setVerticalScrollBarEnabled
+        "6e520300 0102"  # invoke-virtual {v1, v0, v2, v0, v2}, setPadding (0, 0, 0, 0 on Android 16)
+        "1101"  # return-object v1
+    )
+    is_running_in_freeform_window = bytes.fromhex(
+        "6e100500 0100"  # invoke-virtual {v1}, getRootWindowInsets
+        "0c00"  # move-result-object v0
+        "38000b00"  # if-eqz v0, :none
+        "71000600 0000"  # invoke-static {}, captionBar
+        "0a01"  # move-result v1
+        "6e200700 1000"  # invoke-virtual {v0, v1}, isVisible
+        "0a00"  # move-result v0
+        "0f00"  # return v0
+        "1200"  # :none const/4 v0, 0
+        "0f00"  # return v0
+    )
+    return dex_file(methods, {0: (4, on_create_recycler_view), 4: (2, is_running_in_freeform_window)})
+
+
+DOCUMENTS_METHODS = [
+    (f"{DOCUMENTS}/dirlist/DirectoryFragment;", "getSaveLayoutHeight", "I"),
+    (f"{DOCUMENTS}/util/FlagUtils;", "isUseMaterial3FlagEnabled", "Z"),
+    (f"{DOCUMENTS}/dirlist/DirectoryFragment;", "getBaseActivity", "L"),
+    (f"{DOCUMENTS}/util/Material3Config;", "getRes", "II"),
+    ("Landroidx/appcompat/app/AppCompatActivity;", "findViewById", "LI"),
+    ("Landroid/view/View;", "getHeight", "I"),
+    ("Landroidx/fragment/app/Fragment;", "getResources", "L"),
+    ("Landroid/content/res/Resources;", "getDisplayMetrics", "L"),
+]
+DOCUMENTS_FIELDS = [
+    (f"{DOCUMENTS}/R$id;", "bottom_container", "I"),
+    (f"{DOCUMENTS}/R$id;", "container_save", "I"),
+    ("Landroid/util/DisplayMetrics;", "density", "F"),
+]
+
+
+def documentsui_dex(code=None):
+    """DirectoryFragment.getSaveLayoutHeight in Android 16's DocumentsUI.apk, as d8 compiled it:
+    the height of the bar below the list (the Material 3 bottom bar, or the save bar), or 0
+    without one."""
+    def bar(field):
+        return (
+            "6e100200 0200"  # invoke-virtual {v2}, getBaseActivity
+            "0c02"  # move-result-object v2
+            f"6000{field:02x}00"  # sget v0, the bar's id
+            "71100300 0000"  # invoke-static {v0}, Material3Config.getRes
+            "0a00"  # move-result v0
+            "6e200400 0200"  # invoke-virtual {v2, v0}, findViewById
+            "0c02"  # move-result-object v2
+            "39020300"  # if-nez v2, :bar
+            "0f01"  # return v1 (0)
+            "6e100500 0200"  # :bar invoke-virtual {v2}, getHeight
+            "0a02"  # move-result v2
+            "0f02"  # return v2
+        )
+    original = bytes.fromhex(
+        "71000100 0000"  # invoke-static {}, isUseMaterial3FlagEnabled
+        "0a00"  # move-result v0
+        "1201"  # const/4 v1, 0
+        "38001800"  # if-eqz v0, :legacy
+        + bar(0) + bar(1))
+    return dex_file(DOCUMENTS_METHODS, {0: (3, code or original)}, DOCUMENTS_FIELDS)
+
+
+def run_dalvik(dex, method, args, calls, statics):
+    """Runs a method of a dex file with the few instructions these edits use: `args` are its
+    arguments, `calls` gives what each method it calls returns ({"Lclass;->name": function}),
+    and `statics` each static field's value. Objects are dicts of their fields."""
+    defined, refs = make_image.dex_methods(dex)
+    _, _, fields = make_image.dex_ids(dex)
+    (code_off, _), = defined[method]
+    registers, ins = struct.unpack_from("<HH", dex, code_off)
+    (count,) = struct.unpack_from("<I", dex, code_off + 12)
+    code = struct.unpack_from(f"<{count}H", dex, code_off + 16)
+    v = [None] * (registers - ins) + list(args)
+    result, pc = None, 0
+
+    def f32(x):
+        return struct.unpack("<f", struct.pack("<f", x))[0]
+
+    def s16(x):
+        return x - 0x10000 if x & 0x8000 else x
+
+    while True:
+        unit = code[pc]
+        op, a, b, aa = unit & 0xFF, unit >> 8 & 0xF, unit >> 12, unit >> 8
+        if op == 0x00:
+            pc += 1
+        elif op in (0x0A, 0x0C):
+            v[aa], pc = result, pc + 1
+        elif op == 0x0F:
+            return v[aa]
+        elif op == 0x12:
+            v[a], pc = (b ^ 8) - 8, pc + 1
+        elif op == 0x15:
+            v[aa], pc = struct.unpack("<f", struct.pack("<I", code[pc + 1] << 16))[0], pc + 2
+        elif op == 0x28:
+            pc += aa - 0x100 if aa & 0x80 else aa
+        elif op == 0x35:
+            pc += s16(code[pc + 1]) if v[a] >= v[b] else 2
+        elif op in (0x38, 0x39):
+            zero = v[aa] in (0, None, False)
+            pc += s16(code[pc + 1]) if zero == (op == 0x38) else 2
+        elif op == 0x52:
+            v[a], pc = v[b][fields[code[pc + 1]].split("->")[1]], pc + 2
+        elif op == 0x60:
+            v[aa], pc = statics[fields[code[pc + 1]]], pc + 2
+        elif op in (0x6E, 0x71):
+            passed = [code[pc + 2] >> (4 * i) & 0xF for i in range(4)] + [a]
+            result = calls[refs[code[pc + 1]]](*[v[r] for r in passed[:b]])
+            pc += 3
+        elif op == 0x87:
+            v[a], pc = int(v[b]), pc + 1
+        elif op == 0xC6:
+            v[a], pc = f32(v[a] + v[b]), pc + 1
+        elif op == 0xC8:
+            v[a], pc = f32(v[a] * v[b]), pc + 1
+        else:
+            raise AssertionError(f"opcode {op:#x} is not one the edits use")
+
+
+def save_layout_height(dex, material3, bars, density):
+    """What getSaveLayoutHeight returns in a window whose bars ({id field: height}) are there,
+    on a display of `density`."""
+    ids = {f"{DOCUMENTS}/R$id;->bottom_container": 1, f"{DOCUMENTS}/R$id;->container_save": 2}
+    names = {1: "bottom_container", 2: "container_save"}
+    activity = {"bars": bars}
+    calls = {
+        f"{DOCUMENTS}/util/FlagUtils;->isUseMaterial3FlagEnabled": lambda: material3,
+        f"{DOCUMENTS}/dirlist/DirectoryFragment;->getBaseActivity": lambda this: activity,
+        f"{DOCUMENTS}/util/Material3Config;->getRes": lambda res: res,
+        "Landroidx/appcompat/app/AppCompatActivity;->findViewById": (
+            lambda act, res: {"height": act["bars"][names[res]]} if names[res] in act["bars"] else None),
+        "Landroid/view/View;->getHeight": lambda view: view["height"],
+        "Landroidx/fragment/app/Fragment;->getResources": lambda this: {"density": density},
+        "Landroid/content/res/Resources;->getDisplayMetrics": lambda res: {"density": res["density"]},
+    }
+    return run_dalvik(dex, SAVE_LAYOUT_HEIGHT, [{"fragment": True}], calls, ids)
+
+
+class ListBottomMarginTests(unittest.TestCase):
+    """The lists that set their own padding, or that no overlay may reach, keep room below
+    their last row in a window without a navigation bar."""
+
+    @staticmethod
+    def apk(files):
+        return SettingsWithoutBluetoothTests.apk(files)
+
+    def modified(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                for name, data in files.items():
+                    archive.writestr(name, data)
+            modified = root / "modified.zip"
+            make_image.modify(source, modified)
+            with zipfile.ZipFile(modified) as archive:
+                return {name: archive.read(name) for name in archive.namelist()}
+
+    def test_fr22_settings_home_list_on_android_16_keeps_the_room_its_layout_gives(self):
+        # TopLevelSettings.onCreateRecyclerView set the list's padding to (0, 0, 0, 0) over the
+        # layout's, which the Settings overlay gives 24 dp at the bottom.
+        self.assertIn(("skip call", "Landroid/view/ViewGroup;->setPadding"), make_image.SETTINGS_CODE_LIST_MARGIN[
+            f"{TOP_LEVEL_SETTINGS}->onCreateRecyclerView"])
+        dex = top_level_settings_dex()
+        settings = self.modified({make_image.SETTINGS_APP: self.apk({"classes2.dex": dex})})[make_image.SETTINGS_APP]
+        with zipfile.ZipFile(io.BytesIO(settings)) as archive:
+            edited = archive.read("classes2.dex")
+        original = dex_code(dex, f"{TOP_LEVEL_SETTINGS}->onCreateRecyclerView")
+        code = dex_code(edited, f"{TOP_LEVEL_SETTINGS}->onCreateRecyclerView")
+        # Only the setPadding call (three code units, from unit 8) is gone; the scroll bar stays off.
+        self.assertEqual(code[:16], original[:16])
+        self.assertEqual(code[16:22], bytes(6))
+        self.assertEqual(code[22:], original[22:])
+        SettingsWithoutBluetoothTests.assert_dex_is_sealed(self, edited)
+        self.assertEqual(make_image.apk_edits_left(settings, code=make_image.SETTINGS_CODE_LIST_MARGIN), [])
+        self.assertNotEqual(make_image.apk_edits_left(self.apk({"classes2.dex": dex}),
+                                                      code=make_image.SETTINGS_CODE_LIST_MARGIN), [])
+
+    def test_fr22_settings_home_list_on_android_17_takes_its_freeform_padding_at_24_dp(self):
+        # Android 17 pads the home list's bottom by dashboard_padding_bottom (16 dp) only when
+        # the window shows a caption bar, which a DSA window's host draws outside the guest.
+        dex = top_level_settings_dex()
+        edited, changed = make_image.edit_dex(dex, make_image.SETTINGS_CODE_LIST_MARGIN)
+        self.assertIn(f"{TOP_LEVEL_SETTINGS}->isRunningInFreeformWindow", changed)
+        code = dex_code(edited, f"{TOP_LEVEL_SETTINGS}->isRunningInFreeformWindow")
+        self.assertEqual(code[:4], bytes.fromhex("12100f00"))  # const/4 v0, 1; return v0
+        self.assertEqual(make_image.edit_dex(edited, make_image.SETTINGS_CODE_LIST_MARGIN)[1], [])
+        ns = "{http://schemas.android.com/apk/res/android}"
+        for home_padding in (True, False):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                make_image.settings_overlay_sources(root / "src", home_padding=home_padding)
+                values = ET.fromstring((root / "src/res/values/dsa.xml").read_text())
+                dimens = {d.get("name"): d.text for d in values.findall("dimen")}
+                manifest = ET.fromstring((root / "src/AndroidManifest.xml").read_text())
+                resources_map = manifest.find("overlay").get(ns + "resourcesMap").removeprefix("@xml/")
+                mapping = ET.fromstring((root / "src/res/xml" / (resources_map + ".xml")).read_text())
+                targets = [item.get("target") for item in mapping.findall("item")]
+            if home_padding:
+                self.assertEqual(dimens, {"dashboard_padding_bottom": "24dp"})
+                self.assertIn("dimen/dashboard_padding_bottom", targets)
+            else:
+                # Android 16's Settings has no such dimen, and idmap2 would warn on every boot.
+                self.assertEqual(dimens, {})
+                self.assertNotIn("dimen/dashboard_padding_bottom", targets)
+
+    def test_fr22_the_overlay_pads_the_home_list_only_for_a_settings_that_reads_the_dimen(self):
+        methods = [(TOP_LEVEL_SETTINGS, "setPaddingHorizontal", "VI")]
+        with_dimen = dex_file(methods, {0: (1, bytes.fromhex("0e00"))},
+                              [("Lcom/android/settings/R$dimen;", "dashboard_padding_bottom", "I")])
+        without = dex_file(methods, {0: (1, bytes.fromhex("0e00"))})
+        self.assertTrue(make_image.settings_has_home_padding(self.apk({"classes2.dex": with_dimen})))
+        self.assertFalse(make_image.settings_has_home_padding(self.apk({"classes2.dex": without})))
+
+    def test_fr22_settings_all_apps_list_keeps_room_below_its_last_row(self):
+        # manage_applications_apps' RecyclerView has no padding, and nothing sets it in code.
+        layout = compiled_layout(ALL_APPS_LAYOUT)
+        settings = self.modified({make_image.SETTINGS_APP: self.apk({
+            "res/layout/manage_applications_apps.xml": layout})})[make_image.SETTINGS_APP]
+        with zipfile.ZipFile(io.BytesIO(settings)) as archive:
+            edited = archive.read("res/layout/manage_applications_apps.xml")
+        found = layout_attributes(edited)
+        self.assertEqual(found[1], (RECYCLER_VIEW, 1, [
+            ("id", TYPE_REFERENCE, 0x7F0A00DA),
+            ("paddingBottom", TYPE_DIMENSION, dp(24)),
+            ("visibility", TYPE_INT_DEC, 1),
+            ("clipToPadding", TYPE_BOOLEAN, 0),
+        ]))
+        # The other elements are as they were.
+        self.assertEqual(found[2], layout_attributes(layout)[2])
+        self.assertEqual(struct.unpack_from("<I", edited, 4)[0], len(edited))
+        self.assertEqual(make_image.set_xml_dimensions(edited, make_image.SETTINGS_LIST_DIMENSIONS[
+            "res/layout/manage_applications_apps.xml"])[1], 0)
+        self.assertEqual(make_image.apk_edits_left(settings, dimensions=make_image.SETTINGS_LIST_DIMENSIONS), [])
+
+    def test_fr22_an_attribute_the_layout_never_names_is_refused(self):
+        layout = compiled_layout((RECYCLER_VIEW, [("id", ANDROID_ID, TYPE_REFERENCE, 1)], []))
+        with self.assertRaises(ValueError):
+            make_image.set_xml_dimensions(layout, [(RECYCLER_VIEW, ANDROID_PADDING_BOTTOM, 24)])
+
+    def test_fr22_permission_controller_lists_keep_room_below_their_last_row(self):
+        # PermissionController's preference_recyclerview has paddingBottom 0dp, and the app's
+        # <overlayable> keeps any overlay from replacing it.
+        apk = self.apk({"res/layout/preference_recyclerview.xml": compiled_layout(PREFERENCE_LIST_LAYOUT)})
+        edited = make_image.edit_permission_controller_apk(apk, "PermissionController.apk")
+        with zipfile.ZipFile(io.BytesIO(edited)) as archive:
+            (tag, _, attrs), = layout_attributes(archive.read("res/layout/preference_recyclerview.xml"))
+        self.assertEqual(tag, RECYCLER_VIEW)
+        self.assertIn(("paddingBottom", TYPE_DIMENSION, dp(24)), attrs)
+        self.assertIn(("paddingTop", TYPE_DIMENSION, dp(0)), attrs)
+        self.assertIn(("clipToPadding", TYPE_BOOLEAN, 0), attrs)
+        self.assertEqual(make_image.apk_edits_left(edited, dimensions=make_image.PERMISSION_CONTROLLER_DIMENSIONS), [])
+        self.assertNotEqual(make_image.apk_edits_left(apk, dimensions=make_image.PERMISSION_CONTROLLER_DIMENSIONS), [])
+
+    @staticmethod
+    def fake_apex_tools(calls):
+        """deapexer, apexer and apex_compression_tool for an APEX whose payload image is a zip
+        of its files. Each command is added to `calls`."""
+        def run(*cmd, **kw):
+            calls.append([str(c) for c in cmd])
+            tool = Path(str(cmd[0])).name
+            if tool == "deapexer":
+                apex, out = Path(cmd[-2]), Path(cmd[-1])
+                with zipfile.ZipFile(apex) as outer, zipfile.ZipFile(io.BytesIO(outer.read("apex_payload.img"))) as payload:
+                    payload.extractall(out)
+            elif tool == "apexer":
+                folder, image = Path(cmd[-2]), Path(cmd[-1])
+                with zipfile.ZipFile(image, "w") as payload:
+                    for f in sorted(folder.rglob("*")):
+                        if f.is_file():
+                            payload.write(f, f.relative_to(folder).as_posix())
+            elif tool == "apex_compression_tool":
+                source, out = Path(cmd[cmd.index("--input") + 1]), Path(cmd[cmd.index("--output") + 1])
+                with zipfile.ZipFile(out, "w") as capex:
+                    capex.writestr("original_apex", source.read_bytes())
+            else:
+                raise AssertionError(f"unexpected tool {tool}")
+        return run
+
+    @staticmethod
+    def permission_capex(controller):
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as image:
+            image.writestr("apex_manifest.pb", b"manifest")
+            image.writestr("priv-app/PermissionController@BP4A/PermissionController.apk", controller)
+            image.writestr("priv-app/SafetyCenterResources@BP4A/SafetyCenterResources.apk", b"resources")
+        apex = io.BytesIO()
+        with zipfile.ZipFile(apex, "w") as outer:
+            outer.writestr("apex_manifest.pb", b"manifest")
+            outer.writestr("apex_build_info.pb", b"build info")
+            outer.writestr("apex_payload.img", payload.getvalue())
+        capex = io.BytesIO()
+        with zipfile.ZipFile(capex, "w") as outer:
+            outer.writestr("original_apex", apex.getvalue())
+        return capex.getvalue()
+
+    @staticmethod
+    def capex_payload(capex):
+        with zipfile.ZipFile(io.BytesIO(capex)) as outer, zipfile.ZipFile(io.BytesIO(outer.read("original_apex"))) as apex:
+            with zipfile.ZipFile(io.BytesIO(apex.read("apex_payload.img"))) as payload:
+                return {n: payload.read(n) for n in payload.namelist()}, apex.read("apex_build_info.pb")
+
+    def test_fr22_the_permission_apex_is_packed_again_with_the_edited_controller(self):
+        controller = self.apk({"res/layout/preference_recyclerview.xml": compiled_layout(PREFERENCE_LIST_LAYOUT)})
+        capex = self.permission_capex(controller)
+        name = "SYSTEM/apex/com.android.permission.capex"
+        self.assertIn(name, make_image.PERMISSION_APEXES)
+        calls = []
+        with tempfile.TemporaryDirectory() as tmp, patch.object(make_image, "run", self.fake_apex_tools(calls)):
+            edited = make_image.edit_permission_apex(capex, name, Path(tmp) / "otatools", Path(tmp))
+            files, build_info = self.capex_payload(edited)
+            apexer, = [c for c in calls if Path(c[0]).name == "apexer"]
+            self.assertIn("--payload_only", apexer)
+            # The APEX's own manifest and build information (file contexts, filesystem,
+            # ownership), as signing packs it.
+            self.assertEqual(Path(apexer[apexer.index("--build_info") + 1]).name, "apex_build_info.pb")
+            self.assertEqual(Path(apexer[apexer.index("--manifest") + 1]).name, "apex_manifest.pb")
+            self.assertTrue(apexer[apexer.index("--key") + 1].endswith("testkey_rsa4096.pem"))
+            self.assertTrue(any(Path(c[0]).name == "apex_compression_tool" for c in calls))
+            # Signing finds the problems that remain in what it packed.
+            signed = Path(tmp) / "signed.zip"
+            for apex, found in [(edited, False), (capex, True)]:
+                with zipfile.ZipFile(signed, "w") as z:
+                    z.writestr(name, apex)
+                problems = make_image.permission_controller_problems(signed, Path(tmp) / "otatools", Path(tmp), {})
+                self.assertEqual(bool(problems), found, problems)
+        self.assertEqual(build_info, b"build info")
+        # apexer writes the manifest into the payload itself.
+        self.assertNotIn("apex_manifest.pb", files)
+        self.assertEqual(files["priv-app/SafetyCenterResources@BP4A/SafetyCenterResources.apk"], b"resources")
+        with zipfile.ZipFile(io.BytesIO(files["priv-app/PermissionController@BP4A/PermissionController.apk"])) as apk:
+            (_, _, attrs), = layout_attributes(apk.read("res/layout/preference_recyclerview.xml"))
+        self.assertIn(("paddingBottom", TYPE_DIMENSION, dp(24)), attrs)
+
+    def test_fr22_without_otatools_the_permission_apex_is_left_as_it_is(self):
+        capex = self.permission_capex(b"controller")
+        with patch.object(make_image, "run") as run:
+            self.assertEqual(make_image.edit_permission_apex(
+                capex, "SYSTEM/apex/com.android.permission.capex", None, Path(".")), capex)
+        run.assert_not_called()
+
+    def test_fr22_files_on_android_16_keeps_room_below_its_list_without_a_bar_below_it(self):
+        # DirectoryFragment pads its list's bottom by getSaveLayoutHeight: the bar below the
+        # list, or 0 in a wide window that has none.
+        dex = documentsui_dex()
+        self.assertEqual(save_layout_height(dex, True, {}, 1.5), 0)
+        docs = "SYSTEM/priv-app/DocumentsUI/DocumentsUI.apk"
+        apk = self.modified({docs: self.apk({"classes.dex": dex})})[docs]
+        with zipfile.ZipFile(io.BytesIO(apk)) as archive:
+            edited = archive.read("classes.dex")
+        SettingsWithoutBluetoothTests.assert_dex_is_sealed(self, edited)
+        self.assertEqual(len(dex_code(edited, SAVE_LAYOUT_HEIGHT)), len(dex_code(dex, SAVE_LAYOUT_HEIGHT)))
+        for material3 in (True, False):
+            bar = "bottom_container" if material3 else "container_save"
+            with self.subTest(material3=material3):
+                # 24 dp, rounded as getDimensionPixelSize rounds.
+                self.assertEqual(save_layout_height(edited, material3, {}, 1.0), 24)
+                self.assertEqual(save_layout_height(edited, material3, {}, 1.5), 36)
+                self.assertEqual(save_layout_height(edited, material3, {}, 2.625), 63)
+                # A bar taller than the margin keeps the list above it.
+                self.assertEqual(save_layout_height(edited, material3, {bar: 120}, 1.5), 120)
+                self.assertEqual(save_layout_height(edited, material3, {bar: 0}, 1.5), 36)
+        self.assertEqual(make_image.edit_dex(edited, make_image.DOCUMENTSUI_CODE)[1], [])
+        self.assertEqual(make_image.apk_edits_left(apk, code=make_image.DOCUMENTSUI_CODE), [])
+
+    def test_fr22_a_files_app_built_from_other_sources_is_refused(self):
+        dex = documentsui_dex(code=bytes.fromhex("1200" "0f00" + "0000" * 49))
+        with self.assertRaises(ValueError):
+            make_image.edit_dex(dex, make_image.DOCUMENTSUI_CODE)
+        self.assertNotEqual(make_image.apk_edits_left(self.apk({"classes.dex": dex}),
+                                                      code=make_image.DOCUMENTSUI_CODE), [])
+
+    def test_fr22_dalvik_assembly_matches_what_d8_writes(self):
+        dex = documentsui_dex()
+        code, outs = make_image.assemble_dex([
+            "invoke-static {}, Lcom/android/documentsui/util/FlagUtils;->isUseMaterial3FlagEnabled",
+            "move-result v0",
+            "const/4 v1, 0",
+            "if-eqz v0, :next",
+            "sget v0, Lcom/android/documentsui/R$id;->container_save",
+            "invoke-virtual {v2, v0}, Landroidx/appcompat/app/AppCompatActivity;->findViewById",
+            ":next",
+            "const/high16 v1, 0x41c00000",
+            "if-ge v2, v0, :next",
+            "goto :next",
+        ], dex)
+        self.assertEqual(code, bytes.fromhex(
+            "71000100 0000" "0a00" "1201" "38000700" "60000100" "6e200400 0200"
+            "1501c041" "3502feff" "28fc"))
+        self.assertEqual(outs, 2)
+        with self.assertRaises(ValueError):
+            make_image.assemble_dex(["sget v0, Lcom/android/documentsui/R$id;->missing"], dex)
+
+    def test_fr22_check_image_rejects_lists_without_their_room(self):
+        check_script = Path(__file__).with_name("check-image.py")
+        settings = self.apk({"classes2.dex": top_level_settings_dex(),
+                             "res/layout/manage_applications_apps.xml": compiled_layout(ALL_APPS_LAYOUT)})
+        docs = self.apk({"classes.dex": documentsui_dex()})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            img_dir = root / "image"
+            img_dir.mkdir()
+            keys_dir = root / "keys"
+            keys_dir.mkdir()
+            (img_dir / "image.json").write_text(json.dumps({"files": {}, "kernel_cmdline": ""}))
+            (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            outputs = []
+            for settings_apk, docs_apk in [(settings, docs), (make_image.edit_settings_apk(settings, "Settings.apk"),
+                                                              make_image.edit_documentsui_apk(docs, "DocumentsUI.apk"))]:
+                with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
+                    archive.writestr("SYSTEM/build.prop", "ro.debuggable=0\n")
+                    archive.writestr("META/apkcerts.txt", "")
+                    archive.writestr(make_image.SETTINGS_APP, settings_apk)
+                    archive.writestr("SYSTEM/priv-app/DocumentsUI/DocumentsUI.apk", docs_apk)
+                outputs.append(subprocess.run([sys.executable, str(check_script), str(img_dir), str(keys_dir)],
+                                              capture_output=True, text=True).stdout)
+        self.assertIn("TopLevelSettings;->onCreateRecyclerView", outputs[0])
+        self.assertIn("manage_applications_apps.xml", outputs[0])
+        self.assertIn("getSaveLayoutHeight", outputs[0])
+        self.assertNotIn("sits on the window's bottom edge", outputs[1])
+
+
+PUBLISHED_KEYCHAIN = "SYSTEM/app/KeyChain/KeyChain.apk"
+
+
+class PublishedOdexTests(unittest.TestCase):
+    """The apps the published build shipped compiled keep a valid odex in the image."""
+
+    def published(self, apk, filter="speed", checksums="i;2/cb8fc4a6:i;2/f8c5165e", art=False, vdex_for=None):
+        files = {
+            apk: fake_apk(b"dex\n035\0keychain"),
+            make_image.FRAMEWORK_ODEX: fake_odex(**{"bootclasspath": BOOTCLASSPATH,
+                                                     "bootclasspath-checksums": "i;2/cb8fc4a6:i;2/f8c5165e"}),
+        }
+        odex, vdex = make_image.oat_files(apk)
+        files[odex] = fake_odex(**{"bootclasspath": BOOTCLASSPATH, "bootclasspath-checksums": checksums,
+                                    "classpath": "PCL[]", "compiler-filter": filter})
+        files[vdex] = fake_vdex(make_image.apk_dex_checksums(vdex_for or files[apk]))
+        if art:
+            files[odex[:-len(".odex")] + ".art"] = b"art"
+        return files
+
+    @staticmethod
+    def archive(files):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as z:
+            for name, data in files.items():
+                z.writestr(name, data)
+        return zipfile.ZipFile(io.BytesIO(buffer.getvalue()))
+
+    def test_fr5_the_published_builds_own_odex_files_are_recorded(self):
+        files = self.published(PUBLISHED_KEYCHAIN, art=True)
+        # system_other is not on the guest's disk, and a removed app is not in the image.
+        files["SYSTEM_OTHER/system/app/Stk/oat/x86_64/Stk.odex"] = fake_odex(**{"compiler-filter": "verify"})
+        files["SYSTEM/app/Stk/Stk.apk"] = fake_apk(b"dex\n035\0stk")
+        removed = "VENDOR/priv-app/CuttlefishService/CuttlefishService.apk"
+        files[removed] = fake_apk(b"dex\n035\0cf")
+        files["VENDOR/priv-app/CuttlefishService/oat/x86_64/CuttlefishService.odex"] = fake_odex(
+            **{"compiler-filter": "verify"})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                for name, data in files.items():
+                    archive.writestr(name, data)
+            make_image.modify(source, root / "modified.zip")
+            with zipfile.ZipFile(root / "modified.zip") as archive:
+                record = json.loads(archive.read(make_image.PREBUILT_OAT_RECORD))
+                self.assertEqual(make_image.prebuilt_oat_problems(archive), [])
+        self.assertEqual(record, {PUBLISHED_KEYCHAIN: {
+            "files": ["SYSTEM/app/KeyChain/oat/x86_64/KeyChain.odex", "SYSTEM/app/KeyChain/oat/x86_64/KeyChain.vdex",
+                      "SYSTEM/app/KeyChain/oat/x86_64/KeyChain.art"],
+            "filter": "speed", "classpath": "PCL[]"}})
+
+    def record(self, files, art=False):
+        record = make_image.prebuilt_oat(files, lambda n: files[n])
+        files[make_image.PREBUILT_OAT_RECORD] = json.dumps(record).encode()
+        return files
+
+    def test_fr5_an_app_whose_dex_changed_is_compiled_again_as_the_published_build_compiled_it(self):
+        unchanged = self.record(self.published(PUBLISHED_KEYCHAIN))
+        self.assertEqual(make_image.compile_jobs(unchanged, lambda n: unchanged[n]), [])
+        edited = self.record(self.published(PUBLISHED_KEYCHAIN, art=True))
+        edited[PUBLISHED_KEYCHAIN] = fake_apk(b"dex\n035\0edited")
+        self.assertEqual(make_image.compile_jobs(edited, lambda n: edited[n]),
+                         [(PUBLISHED_KEYCHAIN, "speed", "PCL[]", True)])
+        cmd = make_image.dex2oat_command(
+            "dex2oatd64", "/o/KeyChain.apk", "/system/app/KeyChain/KeyChain.apk", "/o/KeyChain.odex", Path("/r"),
+            BOOTCLASSPATH, ["/system/framework/boot.art"], ("PCL[]", "PCL[]"), "speed", app_image="/o/KeyChain.art")
+        self.assertIn("--app-image-file=/o/KeyChain.art", cmd)
+        self.assertIn("--compiler-filter=speed", cmd)
+        # The apps users open come first, with their own filters.
+        settings = {make_image.SETTINGS_APP: fake_apk(b"dex\n035\0settings")}
+        self.assertEqual(make_image.compile_jobs(settings, lambda n: settings[n]),
+                         [(make_image.SETTINGS_APP, None, make_image.DEFAULT_CLASS_LOADER_CONTEXT, False)])
+
+    def test_fr5_the_apps_whose_dex_is_edited_are_compiled_after_the_edits(self):
+        # Their published odex, in system_other, was made for the unedited dex; dex2oat
+        # verifies the edited methods as it compiles them.
+        for apk in make_image.EDITED_APPS:
+            self.assertIn(apk, make_image.COMPILED_APPS)
+        self.assertIn("SYSTEM/priv-app/DocumentsUI/DocumentsUI.apk", make_image.EDITED_APPS)
+        self.assertIn(make_image.SETTINGS_APP, make_image.EDITED_APPS)
+
+    def test_fr5_check_rejects_a_published_odex_that_is_gone_or_no_longer_matches(self):
+        good = self.record(self.published(PUBLISHED_KEYCHAIN))
+        self.assertEqual(make_image.prebuilt_oat_problems(self.archive(good)), [])
+        odex, vdex = make_image.oat_files(PUBLISHED_KEYCHAIN)
+        for change, words in [
+            (lambda f: f.pop(odex), "lost"),
+            (lambda f: f.pop(PUBLISHED_KEYCHAIN), "is gone"),
+            (lambda f: f.update({vdex: fake_vdex([1])}), "dex checksums"),
+            (lambda f: f.update({odex: fake_odex(**{"compiler-filter": "verify", "bootclasspath-checksums":
+                                                    "i;2/cb8fc4a6:i;2/f8c5165e"})}), "published build compiled it"),
+            (lambda f: f.update({odex: fake_odex(**{"compiler-filter": "speed", "bootclasspath-checksums":
+                                                    "i;2/00000000:i;2/f8c5165e"})}), "boot image"),
+            (lambda f: f.pop(make_image.PREBUILT_OAT_RECORD), "is missing"),
+        ]:
+            files = dict(good)
+            change(files)
+            problems = make_image.prebuilt_oat_problems(self.archive(files))
+            self.assertTrue(any(words in p for p in problems), (words, problems))
+
+
 def fake_kernel(arch):
     """The first page of a kernel file: a bzImage's setup header or an arm64 Image's magic."""
     data = bytearray(0x1000)
@@ -4138,6 +4790,112 @@ class DefaultArmTranslationTests(unittest.TestCase):
             out.mkdir()
             with self.assertRaises(SystemExit):
                 make_image.default_arm_translation(package, "x86_64", out)
+
+
+class FrameworkImageTests(unittest.TestCase):
+    """The patched SurfaceFlinger, libhwui and libEGL from the Framework build, which recover
+    from a GPU device loss, in place of the published build's own."""
+
+    @staticmethod
+    def _elf(machine, body):
+        header = bytearray(64)
+        header[:4] = b"\x7fELF"
+        header[4] = 2
+        header[5] = 1
+        header[18:20] = machine.to_bytes(2, "little")
+        return bytes(header) + body
+
+    def _framework(self, root, build_id="16373615", arch="x86_64", machine=62):
+        folder = root / "framework"
+        files = {}
+        for name in make_image.FRAMEWORK_FILES:
+            data = self._elf(machine, b"patched " + name.encode())
+            (folder / name).parent.mkdir(parents=True, exist_ok=True)
+            (folder / name).write_bytes(data)
+            files[name] = {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        (folder / "framework.json").write_text(json.dumps({
+            "android": "android17", "android_major": 17, "build_id": build_id, "release": "cp2a",
+            "arch": arch, "version": "17-0123456789ab", "files": files}))
+        return folder
+
+    def _source(self, root, names=None):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type surfaceflinger)\n")
+            archive.writestr("SYSTEM/build.prop", "ro.debuggable=1\n")
+            for name in make_image.FRAMEWORK_FILES if names is None else names:
+                archive.writestr(name, self._elf(62, b"published " + name.encode()))
+        return source
+
+    def test_nfr5_the_framework_replaces_surfaceflinger_libhwui_and_libegl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payloads, description = make_image.checked_framework(self._framework(root), "16373615", 17, "x86_64")
+            self.assertEqual(sorted(payloads), sorted(["SYSTEM/bin/surfaceflinger", "SYSTEM/lib64/libhwui.so",
+                                                       "SYSTEM/lib64/libEGL.so"]))
+            modified = root / "modified.zip"
+            make_image.modify(self._source(root), modified, framework=payloads)
+            with zipfile.ZipFile(modified) as archive:
+                for name, data in payloads.items():
+                    self.assertEqual(archive.read(name), data)
+                policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertIn(make_image.GPU_RESET_RULE, policy)
+            entry = make_image.framework_entry(description)
+            self.assertEqual(entry["build_id"], "16373615")
+            self.assertEqual(entry["files"], {n: hashlib.sha256(d).hexdigest() for n, d in payloads.items()})
+
+    def test_nfr5_without_the_framework_the_image_keeps_the_builds_files_and_policy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            modified = root / "modified.zip"
+            make_image.modify(self._source(root), modified)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertIn(b"published", archive.read("SYSTEM/lib64/libhwui.so"))
+                policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+                self.assertNotIn(make_image.GPU_RESET_RULE, policy)
+
+    def test_nfr5_the_framework_must_replace_files_the_build_has(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payloads, _ = make_image.checked_framework(self._framework(root), "16373615", 17, "x86_64")
+            source = self._source(root, names=["SYSTEM/bin/surfaceflinger"])
+            with self.assertRaisesRegex(ValueError, "libEGL.so, SYSTEM/lib64/libhwui.so, which the patched"):
+                make_image.modify(source, root / "modified.zip", framework=payloads)
+
+    def test_nfr5_a_framework_built_for_another_build_or_architecture_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(SystemExit, "image is made from build 16373615"):
+                make_image.checked_framework(self._framework(root, build_id="1"), "16373615", 17, "x86_64")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(SystemExit, "built for arm64, not x86_64"):
+                make_image.checked_framework(self._framework(root, arch="arm64", machine=183),
+                                             "16373615", 17, "x86_64")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = self._framework(root)
+            (folder / "SYSTEM/lib64/libhwui.so").write_bytes(self._elf(62, b"something else"))
+            with self.assertRaisesRegex(SystemExit, "libhwui.so is not the file framework.json describes"):
+                make_image.checked_framework(folder, "16373615", 17, "x86_64")
+
+    def test_nfr5_check_image_finds_the_framework_build_files_in_the_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payloads, description = make_image.checked_framework(self._framework(root), "16373615", 17, "x86_64")
+            modified = root / "modified.zip"
+            make_image.modify(self._source(root), modified, framework=payloads)
+            manifest = {"arch": "x86_64", "source": {"build_id": "16373615"},
+                        "framework": make_image.framework_entry(description)}
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(make_image.check_framework(manifest, archive.namelist(), archive.read), [])
+            # The build's own files, or a policy without the rule, are found.
+            with zipfile.ZipFile(self._source(root)) as archive:
+                problems = make_image.check_framework(manifest, archive.namelist(), archive.read)
+            self.assertEqual(len([p for p in problems if "not the framework build's file" in p]), 3)
+            self.assertTrue(any("never hear of a GPU reset" in p for p in problems), problems)
+            # An image without a framework has nothing to check.
+            self.assertEqual(make_image.check_framework({"arch": "x86_64"}, [], None), [])
 
 
 if __name__ == "__main__":

@@ -118,6 +118,16 @@ pub const RT_GROUP_ICON: u16 = 14;
 pub const RT_STRING: u16 = 6;
 /// `RT_VERSION`: the version information.
 pub const RT_VERSION: u16 = 16;
+/// `RT_RCDATA`: raw data the program reads itself.
+pub const RT_RCDATA: u16 = 10;
+
+/// The `RT_RCDATA` ID of the app's icon as the guest drew it, a PNG larger than the 256 pixel
+/// icon image, in an app's window program. The window's splash is drawn from it, so the icon
+/// is scaled down to its size on a monitor of any scale up to 320% rather than up from 256.
+pub const SPLASH_ICON_ID: u16 = 1;
+
+/// The largest image an icon resource holds, in pixels on a side.
+pub const MAX_ICON_IMAGE_SIDE: u32 = 256;
 
 /// The ID of the icon group every DSA program shows, the first and only one.
 pub const ICON_GROUP_ID: u16 = 1;
@@ -316,6 +326,47 @@ pub fn png_icon(png: &[u8]) -> Option<IconImage> {
         height: side(height),
         bit_count: 32,
         data: png.to_vec(),
+    })
+}
+
+/// The side an icon image made from an app's `side` pixel PNG takes: the PNG's own when it
+/// fits an icon image, else the largest an icon image holds, to which it is scaled down.
+pub fn icon_image_side(side: u32) -> u32 {
+    side.min(MAX_ICON_IMAGE_SIDE)
+}
+
+/// An icon image of `side` pixels square from `pixels`, rows of straight-alpha BGRA pixels
+/// with the top row first: a bitmap without its file header, as `RT_ICON` holds one. The
+/// header gives twice the height, for the colour rows and the mask under them; the colour
+/// rows go bottom first, and the mask is all clear because the alpha channel says what shows.
+/// `None` when `pixels` does not hold `side` rows of `side` pixels.
+pub fn dib_icon(pixels: &[u8], side: u32) -> Option<IconImage> {
+    let side_usize = side as usize;
+    if side == 0 || side > MAX_ICON_IMAGE_SIDE || pixels.len() != side_usize * side_usize * 4 {
+        return None;
+    }
+    let row = side_usize * 4;
+    // Mask rows are padded to four bytes.
+    let mask_row = side_usize.div_ceil(32) * 4;
+    let mut data = Vec::with_capacity(40 + row * side_usize + mask_row * side_usize);
+    data.extend_from_slice(&40u32.to_le_bytes());
+    data.extend_from_slice(&(side as i32).to_le_bytes());
+    data.extend_from_slice(&(2 * side as i32).to_le_bytes());
+    data.extend_from_slice(&1u16.to_le_bytes()); // planes
+    data.extend_from_slice(&32u16.to_le_bytes()); // bits per pixel
+    data.extend_from_slice(&0u32.to_le_bytes()); // no compression
+    data.extend_from_slice(&((row + mask_row) as u32 * side).to_le_bytes());
+    data.extend_from_slice(&[0u8; 16]); // resolution and colours: unused
+    for y in (0..side_usize).rev() {
+        data.extend_from_slice(&pixels[y * row..(y + 1) * row]);
+    }
+    data.resize(data.len() + mask_row * side_usize, 0);
+    let byte = |side: u32| if side >= 256 { 0 } else { side as u8 };
+    Some(IconImage {
+        width: byte(side),
+        height: byte(side),
+        bit_count: 32,
+        data,
     })
 }
 
@@ -668,6 +719,44 @@ mod tests {
         assert_eq!(group.len(), 6 + 14);
         assert_eq!(&group[..6], &[0, 0, 1, 0, 1, 0]);
         assert_eq!(&group[18..20], &1u16.to_le_bytes());
+    }
+
+    #[test]
+    fn fr3_an_icon_larger_than_an_icon_image_is_scaled_down_to_256() {
+        assert_eq!(icon_image_side(512), 256);
+        assert_eq!(icon_image_side(256), 256);
+        assert_eq!(icon_image_side(192), 192);
+    }
+
+    #[test]
+    fn fr3_a_bitmap_icon_image_holds_its_rows_bottom_first_over_a_clear_mask() {
+        // Two by two: the top row red and green, the bottom blue and white.
+        let pixels = [
+            [0, 0, 0xFF, 0xFF],
+            [0, 0xFF, 0, 0xFF],
+            [0xFF, 0, 0, 0x80],
+            [0xFF, 0xFF, 0xFF, 0xFF],
+        ]
+        .concat();
+        let image = dib_icon(&pixels, 2).unwrap();
+        assert_eq!((image.width, image.height, image.bit_count), (2, 2, 32));
+        let data = &image.data;
+        assert_eq!(u32::from_le_bytes(data[0..4].try_into().unwrap()), 40);
+        assert_eq!(i32::from_le_bytes(data[4..8].try_into().unwrap()), 2);
+        // Twice the height: the colour rows, then the mask.
+        assert_eq!(i32::from_le_bytes(data[8..12].try_into().unwrap()), 4);
+        assert_eq!(u16::from_le_bytes(data[14..16].try_into().unwrap()), 32);
+        assert_eq!(&data[40..48], &pixels[8..16]);
+        assert_eq!(&data[48..56], &pixels[0..8]);
+        // One four-byte mask row per row, all clear.
+        assert_eq!(data.len(), 40 + 16 + 8);
+        assert!(data[56..].iter().all(|b| *b == 0));
+        // A 256 pixel image is the largest, and its size is written as 0.
+        let big = dib_icon(&vec![0; 256 * 256 * 4], 256).unwrap();
+        assert_eq!((big.width, big.height), (0, 0));
+        assert_eq!(big.data.len(), 40 + 256 * 256 * 4 + 32 * 256);
+        assert!(dib_icon(&vec![0; 512 * 512 * 4], 512).is_none());
+        assert!(dib_icon(&pixels[..12], 2).is_none());
     }
 
     #[test]
