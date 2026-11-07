@@ -21,6 +21,17 @@ public sealed record LogLine(
         ? $"--------- {Dropped} records dropped"
         : string.Format(CultureInfo.InvariantCulture, "{0} {1,5} {2,5} {3} {4}: {5}", Time, Pid, Tid, Priority, Tag, Message);
 
+    // The page's columns. A record that stands for dropped records has only its body.
+    public string TimeColumn => Dropped > 0 ? "" : Time;
+
+    public string PidColumn => Dropped > 0 ? "" : Pid.ToString(CultureInfo.InvariantCulture);
+
+    public string TidColumn => Dropped > 0 ? "" : Tid.ToString(CultureInfo.InvariantCulture);
+
+    public string PriorityColumn => Dropped > 0 ? "" : Priority;
+
+    public string BodyColumn => Dropped > 0 ? Text : $"{Tag}: {Message}";
+
     /// <summary>Reads one line of <c>dsa logcat --json</c>; null for a line that is not a record.</summary>
     public static LogLine? Parse(string json)
     {

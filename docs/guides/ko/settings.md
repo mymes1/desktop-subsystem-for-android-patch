@@ -59,7 +59,7 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
 
 - `render-gpu`: `display`(주 모니터의 GPU, 기본값), `integrated`, `discrete`, 또는 `dsa gpus`가 보여 주는
   GPU 이름의 일부
-- `memory-limit`: `auto`(기본값. 최대 3 GB까지 늘어나며 PC의 메모리를 넘지 않습니다), 또는 `4g`, `3072`(MiB)
+- `memory-limit`: `auto`(기본값. 고정된 한도가 없고, PC의 메모리에서 Windows 몫을 뺀 만큼까지 늘어납니다), 또는 `4g`, `3072`(MiB)
   같은 크기
 - `shared-folders`: `all`, `none`, 또는 쉼표로 구분한 폴더 이름(예: `Documents,Pictures`)
 - `adb-port`: 1부터 65535까지의 TCP 포트. 기본값은 58526입니다.

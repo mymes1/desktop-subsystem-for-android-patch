@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Dsa.Settings.Core.Tests;
@@ -107,7 +108,7 @@ public class ApkInstallViewModelTests
         Assert.Equal(ApkInstallPage.Details, vm.Page);
         Assert.Equal("Notes", vm.Title);
         Assert.Equal("com.example.notes", vm.Subtitle);
-        Assert.StartsWith("ApkWindow_VersionChip 4.2", vm.VersionChip);
+        Assert.Equal("Version: 4.2", vm.VersionLine);
         Assert.Equal("3 MB", vm.SizeChip);
         Assert.StartsWith("ApkWindow_AndroidChip 8.0", vm.AndroidChip);
         Assert.True(vm.Apk!.Icon!.IsAdaptive);
@@ -117,7 +118,8 @@ public class ApkInstallViewModelTests
         Assert.True(vm.Permissions[0].Sensitive);
         Assert.Contains(vm.Facts, f => f.Value.Contains("AB:CD"));
         Assert.Equal(ApkInstallKind.Unknown, vm.Kind);
-        Assert.StartsWith("ApkWindow_SummaryUnknown", vm.Summary);
+        // Android starting is shown when it happens; nothing needs saying before that.
+        Assert.Equal("", vm.Summary);
         Assert.True(vm.CanInstall);
         Assert.StartsWith("ApkWindow_Install ", vm.InstallButton);
         // Reading the file never starts Android.
@@ -249,8 +251,8 @@ public class ApkInstallViewModelTests
     {
         var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", Info()));
         Assert.Equal("Notes", vm.Title);
-        Assert.StartsWith("ApkWindow_Publisher ApkWindow_Signer v2|AB:CD", vm.PublisherLine);
-        Assert.StartsWith("ApkWindow_VersionChip 4.2", vm.VersionChip);
+        Assert.StartsWith("Publisher: ApkWindow_Signer v2|AB:CD", vm.PublisherLine);
+        Assert.Equal("Version: 4.2", vm.VersionLine);
         Assert.Equal("", vm.CompatibilityWarning);
     }
 
@@ -259,7 +261,7 @@ public class ApkInstallViewModelTests
     {
         var info = Info().Replace("\"signer\":{\"scheme\":\"v2\",\"sha256\":\"AB:CD\"},", "");
         var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", info));
-        Assert.StartsWith("ApkWindow_Publisher ApkWindow_Unsigned", vm.PublisherLine);
+        Assert.StartsWith("Publisher: ApkWindow_Unsigned", vm.PublisherLine);
     }
 
     [Fact]
@@ -268,6 +270,7 @@ public class ApkInstallViewModelTests
         var info = Info().Replace("\"abis\":[\"x86_64\"]", "\"abis\":[\"arm64-v8a\",\"armeabi-v7a\"]");
         var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", info));
         Assert.StartsWith("ApkWindow_AbiWarning arm64-v8a, armeabi-v7a", vm.CompatibilityWarning);
+        Assert.StartsWith("ApkWindow_AbiWarningTitle", vm.CompatibilityTitle);
         // Android decides with its translation package, so the install stays possible.
         Assert.True(vm.CanInstall);
 
@@ -334,6 +337,118 @@ public class ApkInstallViewModelTests
         // Once Android has the whole APK, the install cannot be stopped.
         Assert.Contains((ApkInstallPage.Progress, true, false), seen);
         Assert.False(vm.IsBusy);
+    }
+
+    [Fact]
+    public async Task Fr11_the_labels_are_english_whatever_the_language()
+    {
+        // The test's text source answers every table lookup with the key, so a label that came
+        // from a string table would not read as the English word.
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", Info()));
+        Assert.Equal("Install Notes?", vm.HeroTitle);
+        Assert.Equal("Package Name: com.example.notes", vm.PackageLine);
+        Assert.StartsWith("Publisher: ", vm.PublisherLine);
+        Assert.Equal("Version: 4.2", vm.VersionLine);
+        Assert.StartsWith("Source: ", vm.SourceLine);
+        Assert.Equal("Capabilities (2):", vm.PermissionsHeader);
+        Assert.Equal("More", vm.MoreLabel);
+    }
+
+    [Fact]
+    public async Task Fr11_a_plain_install_adds_no_sentence()
+    {
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", Info("running", "\"new\"")));
+        Assert.Equal("", vm.Summary);
+        Assert.Equal("", vm.SummaryTitle);
+    }
+
+    [Theory]
+    [InlineData("\"update\"", "ApkWindow_InstalledTitle")]
+    [InlineData("\"reinstall\"", "ApkWindow_InstalledTitle")]
+    [InlineData("\"downgrade\"", "ApkWindow_DowngradeTitle")]
+    [InlineData("\"signature-mismatch\"", "ApkWindow_SignatureTitle")]
+    public async Task Fr11_every_notice_has_a_short_title(string kind, string title)
+    {
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", Info("running", kind, Installed41)));
+        Assert.StartsWith(title, vm.SummaryTitle);
+        Assert.NotEqual("", vm.Summary);
+    }
+
+    [Fact]
+    public async Task Fr11_more_expands_from_the_first_three_permissions_to_all_of_them()
+    {
+        var permissions = string.Join(",", Enumerable.Range(1, 40).Select(i =>
+            $"{{\"name\":\"android.permission.P{i}\",\"description\":\"Permission {i}\",\"sensitive\":false}}"));
+        var info = Regex.Replace(Info(), "\"permissions\":\\[.*?\\],\"icon\"", $"\"permissions\":[{permissions}],\"icon\"");
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", info));
+        Assert.Equal("Capabilities (40):", vm.PermissionsHeader);
+        Assert.False(vm.IsExpanded);
+        Assert.Equal(new[] { "Permission 1", "Permission 2", "Permission 3" }, vm.PermissionPreview.Select(p => p.Description));
+
+        var changed = false;
+        vm.PropertyChanged += (_, _) => changed = true;
+        vm.Expand();
+        Assert.True(vm.IsExpanded);
+        Assert.True(changed);
+        Assert.Equal(40, vm.Permissions.Count);
+        // The raw names stay, for the expanded rows.
+        Assert.Equal("android.permission.P40", vm.Permissions[39].Name);
+    }
+
+    [Fact]
+    public async Task Fr11_the_title_asks_only_while_the_install_is_undecided_or_running()
+    {
+        var unread = new ApkInstallViewModel(new FakeRunner(), new ArgsText(), Path, X64);
+        Assert.Equal("notes.apk", unread.HeroTitle);
+        var dsa = new FakeRunner()
+            .Answer($"apk-info {Path} --json", Info("running", "\"new\""))
+            .Answer($"install {Path} --progress --json", "{\"installed\":true}");
+        var vm = await Loaded(dsa);
+        Assert.Equal("Install Notes?", vm.HeroTitle);
+        await vm.InstallAsync();
+        Assert.Equal(ApkInstallPage.Done, vm.Page);
+        Assert.Equal("Notes", vm.HeroTitle);
+    }
+
+    [Theory]
+    [InlineData("[ZoneTransfer]\r\nZoneId=3\r\nReferrerUrl=https://apkpure.net/page\r\nHostUrl=https://d.example.com/a.apk\r\n", "d.example.com")]
+    [InlineData("[ZoneTransfer]\r\nZoneId=3\r\nReferrerUrl=https://apkpure.net/page\r\n", "apkpure.net")]
+    // A browser's about:internet has no host, so the next value speaks.
+    [InlineData("[ZoneTransfer]\r\nHostUrl=about:internet\r\nReferrerUrl=https://apkpure.net/page\r\n", "apkpure.net")]
+    public void Fr11_source_is_the_host_the_file_came_from(string zone, string host)
+    {
+        Assert.Equal(host, ApkSource.Describe(Path, zone));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("[ZoneTransfer]\r\nZoneId=3\r\n")]
+    [InlineData("[ZoneTransfer]\r\nHostUrl=about:internet\r\n")]
+    public void Fr11_source_without_a_host_is_the_files_folder(string? zone)
+    {
+        Assert.Equal(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(Path)), ApkSource.Describe(Path, zone));
+    }
+
+    [Fact]
+    public void Fr11_source_reads_the_files_zone_identifier_stream()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+        var folder = Directory.CreateTempSubdirectory("dsa-apk-source").FullName;
+        try
+        {
+            var apk = System.IO.Path.Combine(folder, "app.apk");
+            File.WriteAllText(apk, "x");
+            Assert.Equal(folder, ApkSource.Of(apk));
+            File.WriteAllText(apk + ":Zone.Identifier", "[ZoneTransfer]\r\nHostUrl=https://d.example.com/app.apk\r\n");
+            Assert.Equal("d.example.com", ApkSource.Of(apk));
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
     }
 
     [Fact]

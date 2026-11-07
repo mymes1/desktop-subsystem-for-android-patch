@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Text;
+using System.Text.RegularExpressions;
 using Xunit;
 using System.Xml.Linq;
 
@@ -219,6 +222,69 @@ public class CardStyleTests
         var text = template.Descendants(Wpf + "ContentPresenter").Single(e => (string?)e.Attribute(X + "Name") == "ContentPresenter");
         Assert.Equal("0", (string?)text.Attribute("Grid.Column"));
         Assert.Equal("0,0,12,0", (string?)text.Attribute("Margin"));
+    }
+
+    [Fact]
+    public void Fr17_every_dynamic_resource_in_the_app_styles_exists()
+    {
+        // WPF says nothing about a key it cannot find: the property keeps its default, and a
+        // state that only that key paints never shows. The library's compiled XAML stores each
+        // key as a string with its length before it.
+        var path = typeof(CardStyleTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(a => a.Key == "WpfUiAssembly").Value!;
+        Assert.True(File.Exists(path), "WPF UI 3.0.5 was not found at " + path);
+        var library = Encoding.Latin1.GetString(File.ReadAllBytes(path));
+        bool InLibrary(string key) => library.Contains((char)key.Length + key, StringComparison.Ordinal);
+
+        Assert.True(InLibrary("ToggleSwitchFillOn"), "the search does not find a key the library has");
+        Assert.False(InLibrary("ToggleSwitchFill"), "the search matches part of a longer key");
+
+        var app = AppXaml();
+        var own = app.Descendants().Select(e => (string?)e.Attribute(X + "Key")).OfType<string>().ToHashSet();
+        var missing = app.Descendants().SelectMany(e => e.Attributes())
+            .SelectMany(a => Regex.Matches(a.Value, @"\{DynamicResource (\w+)\}").Select(m => m.Groups[1].Value))
+            .Distinct()
+            .Where(key => !own.Contains(key) && !InLibrary(key))
+            .ToList();
+        Assert.True(missing.Count == 0,
+            "App.xaml uses resource keys that neither it nor WPF UI 3.0.5 defines: " + string.Join(", ", missing));
+    }
+
+    [Fact]
+    public void Fr17_an_on_switch_takes_the_accent_fill_from_the_library_style()
+    {
+        // Based on anything else, Background is the system toggle button's #DDDDDD until the
+        // pointer-over trigger paints it, which is an on switch that is accent only under the mouse.
+        var style = TypedStyle("ui:ToggleSwitch");
+        Assert.Equal("{StaticResource DefaultUiToggleSwitchStyle}", (string?)style.Attribute("BasedOn"));
+        Assert.Null(Setter(style, "Background"));
+        var track = style.Descendants(Wpf + "Rectangle").Single(e => (string?)e.Attribute(X + "Name") == "ActiveToggleRectangle");
+        Assert.Equal("{TemplateBinding Background}", (string?)track.Attribute("Fill"));
+    }
+
+    [Theory]
+    [InlineData("ToggleEllipse", "False", "17", "3,0,0,0")]
+    [InlineData("ActiveToggleEllipse", "True", "17", "0,0,3,0")]
+    public void Fr17_a_toggle_knob_grows_as_in_windows_11(string knob, string isChecked, string pressedWidth, string pressedMargin)
+    {
+        var style = TypedStyle("ui:ToggleSwitch");
+        var rest = style.Descendants(Wpf + "Ellipse").Single(e => (string?)e.Attribute(X + "Name") == knob);
+        Assert.Equal("12", (string?)rest.Attribute("Width"));
+        Assert.Equal("12", (string?)rest.Attribute("Height"));
+        Assert.Equal("-10", (string?)rest.Descendants(Wpf + "TranslateTransform").Single().Attribute("X"));
+
+        string? When(string condition, string property) => style.Descendants(Wpf + "MultiTrigger")
+            .Where(t => t.Descendants(Wpf + "Condition").Any(c => (string?)c.Attribute("Property") == condition)
+                && t.Descendants(Wpf + "Condition").Any(c => (string?)c.Attribute("Property") == "IsChecked" && (string?)c.Attribute("Value") == isChecked))
+            .SelectMany(t => t.Elements(Wpf + "Setter"))
+            .FirstOrDefault(s => (string?)s.Attribute("TargetName") == knob && (string?)s.Attribute("Property") == property)
+            ?.Attribute("Value")?.Value;
+
+        Assert.Equal("14", When("IsMouseOver", "Width"));
+        Assert.Equal("14", When("IsMouseOver", "Height"));
+        Assert.Equal(pressedWidth, When("IsPressed", "Width"));
+        Assert.Equal("14", When("IsPressed", "Height"));
+        Assert.Equal(pressedMargin, When("IsPressed", "Margin"));
     }
 
     [Fact]

@@ -485,8 +485,8 @@ fn parse_shared_folders(value: &str) -> Result<Vec<String>, String> {
     })
 }
 
-/// A memory limit as `dsa settings set memory-limit` takes it: `auto` (the service's
-/// default size), or a size in MiB, with `G` or `GB` for GiB.
+/// A memory limit as `dsa settings set memory-limit` takes it: `auto` (no fixed
+/// limit), or a size in MiB, with `G` or `GB` for GiB.
 fn parse_memory_limit(value: &str) -> Result<u32, String> {
     let lower = value.trim().to_ascii_lowercase();
     if lower == "auto" || lower == "0" {

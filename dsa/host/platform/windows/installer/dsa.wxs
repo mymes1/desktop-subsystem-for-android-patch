@@ -233,7 +233,7 @@
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell\open"
                                Name="MUIVerb" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-105" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell\open"
-                               Name="FriendlyAppName" Type="string" Value="APK Installer" />
+                               Name="FriendlyAppName" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-110" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Dsa.ApkFile\shell\open\command"
                                Type="string" Value="&quot;[SETTINGSFOLDER]DsaApkInstaller.exe&quot; --install-apk &quot;%1&quot;" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\.apk"
@@ -245,7 +245,7 @@
                 <!-- The program's own entry, which Open with reads its name from, and the types
                      it opens. -->
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe"
-                               Name="FriendlyAppName" Type="string" Value="APK Installer" />
+                               Name="FriendlyAppName" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-110" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe\SupportedTypes"
                                Name=".apk" Type="string" Value="" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\Applications\DsaApkInstaller.exe\DefaultIcon"
@@ -255,7 +255,7 @@
                 <!-- The name Windows shows for the program's AppUserModelID, which it sets for
                      itself, so its windows are their own group in the taskbar. -->
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\AppUserModelId\Thisisthepy.DSA.ApkInstaller"
-                               Name="DisplayName" Type="string" Value="APK Installer" />
+                               Name="DisplayName" Type="string" Value="@[INSTALLFOLDER]dsa-app-window.exe,-110" />
             </Component>
             <!-- Every word Explorer, the Start menu and the Services console show for DSA is an
                  indirect string (@file,-id) into the string table of the installed

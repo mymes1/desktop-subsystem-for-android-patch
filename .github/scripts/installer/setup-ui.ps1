@@ -117,6 +117,77 @@ function Save-WindowScreen($Window, [string]$Path) {
     Write-Host "saved $Path"
 }
 
+# The text elements of $Window named exactly $Label.
+function Find-RowTexts($Window, [string]$Label) {
+    $condition = New-Object System.Windows.Automation.AndCondition(
+        (New-Object System.Windows.Automation.PropertyCondition($Auto::NameProperty, $Label)),
+        (New-Object System.Windows.Automation.PropertyCondition($Auto::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)))
+    @($Window.FindAll($Scope::Descendants, $condition))
+}
+
+# Whether a row's name has room: a row squeezed to no width wraps its name at every letter, so
+# the text is either empty or far taller than one line.
+function Test-RowText($Text) {
+    $r = $Text.Current.BoundingRectangle
+    -not $r.IsEmpty -and $r.Width -ge 20 -and $r.Height -gt 0 -and $r.Height -le 60
+}
+
+# Whether $Element lies inside $Window. UI Automation's IsOffscreen stays false for a row
+# scrolled out of a page's scroll viewer, so it cannot say this.
+function Test-InWindow($Window, $Element) {
+    $w = $Window.Current.BoundingRectangle
+    $r = $Element.Current.BoundingRectangle
+    -not $Element.Current.IsOffscreen -and $r.Top -ge $w.Top -and $r.Bottom -le $w.Bottom
+}
+
+# Fails unless every label is a laid out row of the list on the page in $Window, and at least
+# $MinVisible of them are in view. A count above the list says nothing about this: the blank
+# Apps page had the right count.
+function Assert-RowsShown($Window, [string[]]$Labels, [int]$MinVisible = 1, [int]$Seconds = 30) {
+    $deadline = (Get-Date).AddSeconds($Seconds)
+    do {
+        $missing = @($Labels | Where-Object { -not (Find-RowTexts $Window $_ | Where-Object { Test-RowText $_ }) })
+        $visible = @($Labels | Where-Object { Find-RowTexts $Window $_ | Where-Object { (Test-RowText $_) -and (Test-InWindow $Window $_) } })
+        if ($missing.Count -eq 0 -and $visible.Count -ge $MinVisible) {
+            Write-Host "rows laid out: $($Labels.Count), in view: $($visible.Count) ($($visible -join ', '))"
+            return
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+    $all = $Window.FindAll($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($Auto::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)))
+    Write-Host "text on the page: $(($all | ForEach-Object { $_.Current.Name }) -join ' | ')"
+    foreach ($label in $Labels) {
+        foreach ($text in (Find-RowTexts $Window $label)) {
+            Write-Host "'$label': $($text.Current.BoundingRectangle) offscreen=$($text.Current.IsOffscreen)"
+        }
+    }
+    throw "the list shows no usable row for: $($missing -join ', '); $($visible.Count) rows in view, wanted $MinVisible"
+}
+
+# Scrolls the page's list to its end.
+function Set-PageScrolledToEnd($Window) {
+    $condition = New-Object System.Windows.Automation.PropertyCondition($Auto::IsScrollPatternAvailableProperty, $true)
+    foreach ($candidate in $Window.FindAll($Scope::Descendants, $condition)) {
+        $scroll = $candidate.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern)
+        if ($scroll.Current.VerticallyScrollable -and $candidate.Current.BoundingRectangle.X -gt ($Window.Current.BoundingRectangle.X + 200)) {
+            $scroll.SetScrollPercent([System.Windows.Automation.ScrollPattern]::NoScroll, 100)
+            Start-Sleep -Milliseconds 500
+            return
+        }
+    }
+    throw "the page has nothing that scrolls"
+}
+
+# The control of the row named $Label with this control type and, if given, this name.
+function Find-RowControl($Window, [string]$Label, $ControlType, [string]$Name) {
+    $condition = New-Object System.Windows.Automation.AndCondition(
+        (New-Object System.Windows.Automation.PropertyCondition($Auto::HelpTextProperty, $Label)),
+        (New-Object System.Windows.Automation.PropertyCondition($Auto::ControlTypeProperty, $ControlType)))
+    $found = @($Window.FindAll($Scope::Descendants, $condition) | Where-Object { -not $Name -or $_.Current.Name -eq $Name })
+    if ($found.Count -eq 0) { throw "the row '$Label' has no $($ControlType.ProgrammaticName) '$Name'" }
+    $found[0]
+}
+
 # Apps use the light (1) or the dark (0) theme. setup.exe reads it when it starts.
 function Set-AppTheme([switch]$Dark) {
     $key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"

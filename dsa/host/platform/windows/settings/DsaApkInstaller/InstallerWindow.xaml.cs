@@ -30,7 +30,7 @@ public partial class InstallerWindow : FluentWindow
         TitleBar.Title = Title;
         TrademarkText.Text = App.Text.Get("AboutTrademark.Text");
         ReadingText.Text = App.Text.Get("ApkWindow_Reading");
-        DetailsHeader.Text = App.Text.Get("ApkWindow_DetailsHeader");
+        MoreLink.Content = _vm.MoreLabel;
         LaunchWhenReady.Content = App.Text.Get("ApkWindow_LaunchWhenReady");
         LaunchWhenReady.IsChecked = _vm.LaunchWhenReady;
         LaunchWhenReady.Checked += (_, _) => _vm.LaunchWhenReady = true;
@@ -109,22 +109,33 @@ public partial class InstallerWindow : FluentWindow
         }
         var page = _vm.Page;
         var read = _vm.Apk is not null;
-        HeroTitle.Text = _vm.Title;
-        HeroPackage.Text = _vm.Subtitle;
+        HeroTitle.Text = _vm.HeroTitle;
+        HeroPackage.Text = _vm.PackageLine;
         HeroPackage.Visibility = Visible(read);
         PublisherText.Text = _vm.PublisherLine;
+        PublisherText.ToolTip = _vm.PublisherLine;
         PublisherText.Visibility = Visible(read);
-        VersionChip.Text = _vm.VersionChip;
+        VersionChip.Text = _vm.VersionLine;
         VersionChip.Visibility = Visible(read);
+        SourceText.Text = _vm.SourceLine;
+        SourceText.ToolTip = _vm.SourceLine;
+        SourceText.Visibility = Visible(read);
         AppIcon.Source = IconImage(_vm.Apk?.Icon);
 
         var showDetails = page is ApkInstallPage.Details or ApkInstallPage.Progress;
         SummaryPanel.Visibility = Visible(showDetails);
+        SummaryBox.Visibility = Visible(_vm.Summary.Length > 0);
+        SummaryTitle.Text = _vm.SummaryTitle;
         SummaryText.Text = _vm.Summary;
-        SummaryBadge.Visibility = Visible(_vm.IsBlocked);
-        CompatibilityBar.Message = _vm.CompatibilityWarning;
-        CompatibilityBar.IsOpen = _vm.CompatibilityWarning.Length > 0;
-        CompatibilityBar.Visibility = Visible(_vm.CompatibilityWarning.Length > 0);
+        // Android refuses what is blocked; the rest is for the user to know.
+        SummaryBadge.Symbol = _vm.IsBlocked ? SymbolRegular.ErrorCircle24 : SymbolRegular.Info24;
+        SummaryBadge.SetResourceReference(IconElement.ForegroundProperty,
+            _vm.IsBlocked ? "SystemFillColorCriticalBrush" : "SystemFillColorAttentionBrush");
+        SummaryBox.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty,
+            _vm.IsBlocked ? "InfoBarErrorSeverityBackgroundBrush" : "InfoBarInformationalSeverityBackgroundBrush");
+        CompatibilityBox.Visibility = Visible(_vm.CompatibilityWarning.Length > 0);
+        CompatibilityTitle.Text = _vm.CompatibilityTitle;
+        CompatibilityText.Text = _vm.CompatibilityWarning;
 
         ReadingPanel.Visibility = Visible(page == ApkInstallPage.Reading);
         DetailsPanel.Visibility = Visible(showDetails);
@@ -132,7 +143,10 @@ public partial class InstallerWindow : FluentWindow
 
         FactList.ItemsSource = _vm.Facts;
         PermissionsHeader.Text = _vm.PermissionsHeader;
+        PermissionPreview.ItemsSource = _vm.PermissionPreview;
         PermissionList.ItemsSource = _vm.Permissions;
+        PreviewPanel.Visibility = Visible(!_vm.IsExpanded);
+        ExpandedPanel.Visibility = Visible(_vm.IsExpanded);
 
         LaunchWhenReady.Visibility = Visible(page is ApkInstallPage.Reading or ApkInstallPage.Details);
         LaunchWhenReady.IsEnabled = !_vm.IsBlocked;
@@ -209,16 +223,21 @@ public partial class InstallerWindow : FluentWindow
         return new BitmapImage(new Uri("pack://application:,,,/Assets/apk-installer.png"));
     }
 
-    private static BitmapImage Bitmap(byte[] data)
+    /// <summary>Decodes an icon keeping its alpha. An embedded colour profile is ignored,
+    /// because converting through it can flatten transparent corners to black, and the pixels
+    /// are premultiplied, the format that composes the same over any tile.</summary>
+    private static BitmapSource Bitmap(byte[] data)
     {
-        var image = new BitmapImage();
-        image.BeginInit();
-        image.CacheOption = BitmapCacheOption.OnLoad;
-        image.StreamSource = new MemoryStream(data);
-        image.EndInit();
+        using var stream = new MemoryStream(data);
+        var decoder = BitmapDecoder.Create(stream,
+            BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.PreservePixelFormat,
+            BitmapCacheOption.OnLoad);
+        var image = new FormatConvertedBitmap(decoder.Frames[0], PixelFormats.Pbgra32, null, 0);
         image.Freeze();
         return image;
     }
+
+    private void OnMore(object sender, RoutedEventArgs e) => _vm.Expand();
 
     private async void OnInstall(object sender, RoutedEventArgs e) => await _vm.InstallAsync();
 

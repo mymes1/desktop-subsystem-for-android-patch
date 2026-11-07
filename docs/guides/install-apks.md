@@ -9,9 +9,10 @@ with the APK Installer or the `dsa` command. This page describes DSA on Windows.
 2. Check what the APK is. The window shows it without starting Android:
    - the app's name, icon, package and version;
    - the publisher, taken from the signing certificate, because an APK names no publisher;
-   - under **Capabilities**, the permissions it asks for;
-   - under **Details**, the Android versions it is made for, its size, its processor types
-     and its certificate's SHA-256.
+   - the source: the host the file was downloaded from, or its folder;
+   - under **Capabilities**, the first permissions it asks for. **More** shows all of them, the
+     Android versions it is made for, its size, its processor types and its certificate's
+     SHA-256.
 
    When the APK has code only for another processor type, the window warns you.
 3. Select **Install**. When the app is installed already, the button reads **Update** or

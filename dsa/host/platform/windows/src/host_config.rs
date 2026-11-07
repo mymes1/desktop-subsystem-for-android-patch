@@ -11,9 +11,9 @@
 //! }
 //! ```
 //!
-//! Without `memory_mb`, which an installation leaves out, the VM may grow to 3 GiB, or to the
-//! limit the user set (`dsa settings set memory-limit <MiB>`), never past the computer's
-//! memory. It holds only what Android uses.
+//! Without `memory_mb`, which an installation leaves out, the VM starts at 3 GiB and grows to the
+//! limit the user set (`dsa settings set memory-limit <MiB>`), or with none to the computer's
+//! memory less what Windows keeps. It holds only what Android uses.
 //!
 //! The service runs one VM per user. Each user's VM is named after the user's SID and lets
 //! only that user (and SYSTEM) use its Hyper-V sockets. Its disk is in the user's own
