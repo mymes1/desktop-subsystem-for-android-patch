@@ -75,7 +75,9 @@ use crate::background::{
     MediaSession, Playback,
 };
 use crate::data_reset::{UserDataReset, RESET_STOP_WAIT};
-use crate::device_identity::{DeviceIdentity, DeviceIdentityStore, ImageBuild};
+use crate::device_identity::{
+    ComputerSource, DeviceIdentity, DeviceIdentityStore, IdentityReport, ImageBuild,
+};
 use crate::diagnostics::HostFile;
 use crate::drag::{self, DragChunk, DragItem, DragOffer, DragOut, DragRead};
 use crate::files::{self, FileAction, FileTransfer};
@@ -1590,6 +1592,9 @@ pub struct HostApiService {
     host_logs: Option<HostLogs>,
     /// Where each user's device identity is kept, and what the image's build says.
     identities: Option<(Arc<dyn DeviceIdentityStore>, ImageBuildSource)>,
+    /// Reads what the computer says it is, for the identity's defaults; without it they are
+    /// DSA's own.
+    computer: Option<ComputerSource>,
     /// What puts a fresh data disk in place of a user's, for a data reset.
     data_reset: Option<Arc<dyn UserDataReset>>,
     /// How long a data reset waits for the user's Android to stop.
@@ -1632,6 +1637,7 @@ impl HostApiService {
             placements: Arc::new(MemoryWidgetPlacements::default()),
             host_logs: None,
             identities: None,
+            computer: None,
             data_reset: None,
             data_reset_wait: RESET_STOP_WAIT,
             versions: None,
@@ -1686,6 +1692,13 @@ impl HostApiService {
         build: ImageBuildSource,
     ) -> HostApiService {
         self.identities = Some((store, build));
+        self
+    }
+
+    /// Takes the defaults of the device identity from what `computer` reads: the computer's
+    /// manufacturer, brand, model, model name, name and chip.
+    pub fn with_computer_identity(mut self, computer: ComputerSource) -> HostApiService {
+        self.computer = Some(computer);
         self
     }
 
@@ -4348,11 +4361,12 @@ impl HostApiService {
                 Err(why) => return error(ErrorCode::Unavailable, why),
             },
         };
-        let effective = chosen.effective(build(&peer.user).as_ref());
-        response::Body::DeviceIdentity(types::DeviceIdentityReport {
-            chosen: Some(crate::device_identity::to_wire(&chosen)),
-            effective: Some(crate::device_identity::to_wire(&effective)),
-        })
+        let computer = match &self.computer {
+            Some(read) => read().identity(),
+            None => crate::computer_identity::ComputerIdentity::dsa(),
+        };
+        let report = IdentityReport::new(&chosen, build(&peer.user).as_ref(), &computer);
+        response::Body::DeviceIdentity(crate::device_identity::report_to_wire(&report))
     }
 
     /// Answers with the caller's window settings for every app, after replacing one app's
@@ -4657,12 +4671,11 @@ fn on_off(value: bool) -> &'static str {
     }
 }
 
-fn identity_report(body: response::Body) -> Result<(DeviceIdentity, DeviceIdentity), ClientError> {
+fn identity_report(body: response::Body) -> Result<IdentityReport, ClientError> {
     match body {
-        response::Body::DeviceIdentity(report) => Ok((
-            crate::device_identity::from_wire(report.chosen.unwrap_or_default()),
-            crate::device_identity::from_wire(report.effective.unwrap_or_default()),
-        )),
+        response::Body::DeviceIdentity(report) => {
+            Ok(crate::device_identity::report_from_wire(report))
+        }
         _ => Err(ClientError::Malformed(
             "expected the device identity".into(),
         )),
@@ -5036,6 +5049,13 @@ impl HostApiClient {
     /// The device identity the caller chose, and every value as Android reports it from its
     /// next start.
     pub fn device_identity(&mut self) -> Result<(DeviceIdentity, DeviceIdentity), ClientError> {
+        let report = self.device_identity_report()?;
+        Ok((report.chosen, report.effective))
+    }
+
+    /// The caller's device identity in full: what they chose, what Android reports, the
+    /// defaults and where each came from.
+    pub fn device_identity_report(&mut self) -> Result<IdentityReport, ClientError> {
         let body = request::Body::GetDeviceIdentity(types::GetDeviceIdentity {});
         identity_report(self.exchange(body, self.timeout)?)
     }
@@ -5046,6 +5066,16 @@ impl HostApiClient {
         &mut self,
         identity: &DeviceIdentity,
     ) -> Result<(DeviceIdentity, DeviceIdentity), ClientError> {
+        let report = self.set_device_identity_report(identity)?;
+        Ok((report.chosen, report.effective))
+    }
+
+    /// Replaces the caller's device identity with `identity`, and returns it as
+    /// [`device_identity_report`](Self::device_identity_report) does.
+    pub fn set_device_identity_report(
+        &mut self,
+        identity: &DeviceIdentity,
+    ) -> Result<IdentityReport, ClientError> {
         let body = request::Body::SetDeviceIdentity(types::SetDeviceIdentity {
             identity: Some(crate::device_identity::to_wire(identity)),
         });

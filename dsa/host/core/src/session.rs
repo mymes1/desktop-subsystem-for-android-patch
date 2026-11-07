@@ -578,6 +578,9 @@ enum Command {
     HostWoke(SystemTime),
 }
 
+/// Says the device name a guest is given: the computer's name, as its last boot found it.
+pub type DeviceNameSource = Arc<dyn Fn() -> Option<String> + Send + Sync>;
+
 struct Shared {
     status: Mutex<(SessionState, Option<StopReason>)>,
     vm_id: Mutex<Option<String>>,
@@ -681,6 +684,8 @@ struct Shared {
     /// The token in the address of the guest's shared storage on the host, while the host
     /// serves it.
     android_files_token: Mutex<Option<String>>,
+    /// Says the device name the guest's agent is given each time it connects.
+    device_name: Mutex<Option<DeviceNameSource>>,
 }
 
 /// Opens a stream to the guest's adbd in the VM with the given runtime ID: the platform's
@@ -1193,6 +1198,7 @@ impl Session {
             file_sharing: Arc::new(Mutex::new(Sharing::default())),
             share_server: Mutex::new(None),
             android_files_token: Mutex::new(None),
+            device_name: Mutex::new(None),
         });
         let freeze_delay = config.freeze_after.unwrap_or(DEFAULT_FREEZE_AFTER);
         let (commands, command_rx) = mpsc::channel();
@@ -2347,6 +2353,16 @@ impl Session {
     pub fn set_system_settings(&self, settings: SystemSettings) {
         let input = SystemInput::Settings(settings.checked());
         let _ = self.commands.send(Command::System(input));
+    }
+
+    /// Gives the guest's agent the device name `source` says each time it connects, which the
+    /// agent makes the guest's.
+    pub fn set_device_name_source(&self, source: DeviceNameSource) {
+        *self
+            .shared
+            .device_name
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some(source);
     }
 
     /// Passes a change to the host's game controllers on. The session keeps the controllers
@@ -4932,6 +4948,16 @@ impl Worker {
             // The host's system settings become the guest's, and its controllers are there.
             self.replay_system_settings();
             self.replay_gamepads();
+            // The computer's name becomes the guest's device name.
+            let source = self
+                .shared
+                .device_name
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone();
+            if let Some(name) = source.and_then(|source| source()) {
+                self.send_body(Body::DeviceName(control::DeviceName { name }));
+            }
             if !self.screen_on {
                 self.send_body(Body::ScreenState(control::ScreenState { on: false }));
             }
@@ -5793,6 +5819,7 @@ impl Worker {
             | Some(Body::LocationStatus(_))
             | Some(Body::LocationFix(_))
             | Some(Body::SystemSettings(_))
+            | Some(Body::DeviceName(_))
             | Some(Body::GamepadConnected(_))
             | Some(Body::GamepadDisconnected(_))
             | Some(Body::GamepadState(_)) => {

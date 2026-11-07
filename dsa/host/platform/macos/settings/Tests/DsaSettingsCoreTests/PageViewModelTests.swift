@@ -176,6 +176,29 @@ final class PageViewModelTests: XCTestCase {
         XCTAssertTrue(identity.needsRestart)
     }
 
+    func test_fr17_device_identity_shows_the_macs_values_and_where_each_default_came_from() async {
+        let cli = FakeCli()
+        let report = #"{"chosen":{"model":""},"effective":{"manufacturer":"Apple","model":"Mac15,3","device":"dsa_arm64","model_name":"MacBook Pro (14-inch, M3, Nov 2023)","device_name":"BREW's MacBook Pro","soc_manufacturer":"Apple","soc_model":""},"sources":{"manufacturer":"computer","model":"computer","device":"dsa","model_name":"computer","device_name":"computer","soc_manufacturer":"computer","soc_model":"dsa"}}"#
+        cli.answer("settings device --json", report)
+        cli.answer("status --json", #"{"state":"Stopped"}"#)
+        cli.answer("settings reset device --json", report)
+        let identity = DeviceIdentityViewModel(service: DsaService(cli: cli), text: KeyText())
+        await identity.load()
+        XCTAssertEqual(identity.field("model").placeholder, "Mac15,3")
+        XCTAssertEqual(identity.field("model").origin, "computer")
+        XCTAssertEqual(identity.originText(identity.field("model").origin), "Identity_FromComputer")
+        XCTAssertEqual(identity.field("device").origin, "dsa")
+        XCTAssertEqual(identity.field("fingerprint.type").origin, "dsa")
+        XCTAssertEqual(identity.computerValues.map(\.key), ["model_name", "device_name", "soc_manufacturer", "soc_model"])
+        XCTAssertEqual(identity.computerValue("model_name").value, "MacBook Pro (14-inch, M3, Nov 2023)")
+        XCTAssertEqual(identity.computerValue("device_name").value, "BREW's MacBook Pro")
+        XCTAssertEqual(identity.shown(identity.computerValue("soc_model")), "Identity_NotSaid")
+        XCTAssertEqual(identity.computerValue("soc_model").origin, "dsa")
+        await identity.reset()
+        XCTAssertEqual(identity.field("model").value, "")
+        XCTAssertEqual(identity.field("model").placeholder, "Mac15,3")
+    }
+
     func test_fr17_moving_to_an_older_android_needs_the_data_erased() async {
         let cli = FakeCli()
         cli.answer("android version --json", #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16}"#)

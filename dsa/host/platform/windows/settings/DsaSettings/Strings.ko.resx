@@ -1115,7 +1115,7 @@
     <value>기기 정보를 되돌릴까요?</value>
   </data>
   <data name="IdentityResetConfirmBody" xml:space="preserve">
-    <value>모든 값이 DSA의 기본값으로 돌아갑니다. Android를 다음에 시작할 때부터 적용됩니다.</value>
+    <value>모든 값이 기본값으로 돌아갑니다. 기본값은 이 컴퓨터의 정보이고, 컴퓨터가 알려 주지 않는 값은 DSA의 값입니다. Android를 다음에 시작할 때부터 적용됩니다.</value>
   </data>
   <data name="IdentityNamesHeader.Text" xml:space="preserve">
     <value>기기</value>
@@ -1140,6 +1140,45 @@
   </data>
   <data name="Identity_Restarted" xml:space="preserve">
     <value>Android가 이 기기 정보로 다시 시작했습니다.</value>
+  </data>
+  <data name="Identity_FromComputer" xml:space="preserve">
+    <value>기본값: 이 컴퓨터의 정보</value>
+  </data>
+  <data name="Identity_FromDsa" xml:space="preserve">
+    <value>기본값: DSA의 값</value>
+  </data>
+  <data name="Identity_NotSaid" xml:space="preserve">
+    <value>이 컴퓨터가 알려 주지 않아 Android의 값을 그대로 씁니다.</value>
+  </data>
+  <data name="IdentityComputerHeader.Text" xml:space="preserve">
+    <value>이 컴퓨터의 정보</value>
+  </data>
+  <data name="IdentityComputerNote.Text" xml:space="preserve">
+    <value>이 값은 이 컴퓨터를 따르고 Android를 시작할 때마다 다시 읽으므로, 컴퓨터 이름을 바꾸면 다음 시작부터 따라갑니다. 기기 이름과 칩은 Android 설정에도 보입니다. 모델 이름은 Android 설정에 자리가 없어 여기에만 보입니다.</value>
+  </data>
+  <data name="Identity_model_name" xml:space="preserve">
+    <value>모델 이름</value>
+  </data>
+  <data name="Identity_model_name_Description" xml:space="preserve">
+    <value>컴퓨터가 판매되는 이름입니다(ro.product.marketname).</value>
+  </data>
+  <data name="Identity_device_name" xml:space="preserve">
+    <value>기기 이름</value>
+  </data>
+  <data name="Identity_device_name_Description" xml:space="preserve">
+    <value>컴퓨터 이름입니다. 설정, 블루투스, Wi-Fi Direct가 이 기기의 이름으로 보여 줍니다.</value>
+  </data>
+  <data name="Identity_soc_manufacturer" xml:space="preserve">
+    <value>칩 제조사</value>
+  </data>
+  <data name="Identity_soc_manufacturer_Description" xml:space="preserve">
+    <value>Build.SOC_MANUFACTURER, 컴퓨터 프로세서의 제조사입니다.</value>
+  </data>
+  <data name="Identity_soc_model" xml:space="preserve">
+    <value>칩 모델</value>
+  </data>
+  <data name="Identity_soc_model_Description" xml:space="preserve">
+    <value>Build.SOC_MODEL, 컴퓨터의 프로세서입니다.</value>
   </data>
   <data name="Identity_manufacturer" xml:space="preserve">
     <value>제조사</value>

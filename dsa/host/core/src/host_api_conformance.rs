@@ -1191,6 +1191,10 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::device_identity_is_the_callers_own(&mut || $make);
         }
         #[test]
+        fn fr17_the_device_identity_defaults_are_the_computers_and_say_where_they_came_from() {
+            $crate::host_api_conformance::device_identity_defaults_are_the_computers(&mut || $make);
+        }
+        #[test]
         fn fr13_turning_clipboard_sharing_off_and_on_reaches_the_callers_android() {
             $crate::host_api_conformance::clipboard_setting_reaches_the_caller(&mut || $make);
         }
@@ -2573,6 +2577,7 @@ pub fn device_identity_is_the_callers_own(make: MakeLocal<'_>) {
         id: "BP2A".into(),
         incremental: "1.dsaab".into(),
         tags: "release-keys".into(),
+        arch: "x86_64".into(),
     };
     let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
         .with_device_identities(store.clone(), Arc::new(move |_: &str| Some(build.clone())));
@@ -2617,6 +2622,73 @@ pub fn device_identity_is_the_callers_own(make: MakeLocal<'_>) {
         .set_device_identity(&DeviceIdentity::default())
         .unwrap();
     assert!(chosen.is_default());
+}
+
+pub fn device_identity_defaults_are_the_computers(make: MakeLocal<'_>) {
+    use crate::computer_identity::ComputerInfo;
+    use crate::device_identity::{DeviceIdentity, Field, ImageBuild, MemoryDeviceIdentities};
+    let (listener, mut connector, _user) = make();
+    let build = ImageBuild {
+        release: "16".into(),
+        id: "BP2A".into(),
+        incremental: "1.dsaab".into(),
+        tags: "release-keys".into(),
+        arch: "x86_64".into(),
+    };
+    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+        .with_device_identities(
+            Arc::new(MemoryDeviceIdentities::default()),
+            Arc::new(move |_: &str| Some(build.clone())),
+        )
+        .with_computer_identity(Arc::new(|| ComputerInfo {
+            system_manufacturer: "SAMSUNG ELECTRONICS CO., LTD.".into(),
+            system_product: "960XGL".into(),
+            system_family: "Galaxy Book4 Ultra".into(),
+            system_version: "P10ALX".into(),
+            baseboard_product: "NT960XGP-G72AG".into(),
+            computer_name: "BREW-BOOK".into(),
+            cpu_vendor: "GenuineIntel".into(),
+            cpu_name: "Intel(R) Core(TM) Ultra 7 155H".into(),
+        }));
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+
+    let report = client.device_identity_report().unwrap();
+    assert_eq!(report.effective.manufacturer, "Samsung");
+    assert_eq!(report.effective.brand, "Samsung");
+    assert_eq!(report.effective.model, "NT960XGP-G72AG");
+    assert_eq!(report.computer.model_name, "Galaxy Book4 Ultra");
+    assert_eq!(report.computer.device_name, "BREW-BOOK");
+    assert_eq!(report.computer.soc_manufacturer, "Intel");
+    assert_eq!(report.computer.soc_model, "Core Ultra 7 155H");
+    assert_eq!(
+        report.effective.fingerprint,
+        "Samsung/dsa_x86_64/dsa_x86_64:16/BP2A/1.dsaab:user/release-keys"
+    );
+    for key in [
+        "manufacturer",
+        "brand",
+        "model",
+        "model_name",
+        "device_name",
+    ] {
+        assert_eq!(report.origin(key), "computer", "{key}");
+    }
+    for key in ["device", "name", "characteristics", "fingerprint.type"] {
+        assert_eq!(report.origin(key), "dsa", "{key}");
+    }
+
+    // The user's choice wins, and the defaults stay what the computer says.
+    let mut wanted = DeviceIdentity::default();
+    wanted.set(Field::Model, "My tablet").unwrap();
+    let report = client.set_device_identity_report(&wanted).unwrap();
+    assert_eq!(report.effective.model, "My tablet");
+    assert_eq!(report.defaults.model, "NT960XGP-G72AG");
+    // Resetting gives the computer's value back.
+    let report = client
+        .set_device_identity_report(&DeviceIdentity::default())
+        .unwrap();
+    assert_eq!(report.effective.model, "NT960XGP-G72AG");
 }
 
 pub fn clipboard_setting_reaches_the_caller(make: MakeLocal<'_>) {

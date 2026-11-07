@@ -68,6 +68,7 @@ class AgentApplication : Application() {
             frameTrace = frameTrace,
             touchSounds = AndroidTouchSounds(this),
             systemSettings = AndroidSystemSettings(this),
+            deviceName = AndroidDeviceName(this),
             browserRole = AndroidBrowserRole(this, log),
             guestBrowser = AndroidGuestBrowser(this, log),
             fileStore = io.github.thisisthepy.dsa.agent.files.TransferStore(hostFilesDir(this)),

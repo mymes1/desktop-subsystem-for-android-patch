@@ -245,6 +245,51 @@ fn fr17_the_device_identity_is_set_and_reset_through_the_service() {
 }
 
 #[test]
+fn fr17_the_identity_page_shows_the_computers_values_and_where_defaults_came_from() {
+    let identity = dsa_settings_linux::model::Identity::read(&json!({
+        "chosen": { "model": "" },
+        "effective": {
+            "manufacturer": "Samsung", "model": "NT960XGP-G72AG", "device": "dsa_x86_64",
+            "model_name": "Galaxy Book4 Ultra", "device_name": "BREW-BOOK",
+            "soc_manufacturer": "Intel", "soc_model": ""
+        },
+        "sources": {
+            "manufacturer": "computer", "model": "computer", "device": "dsa",
+            "model_name": "computer", "device_name": "computer",
+            "soc_manufacturer": "computer", "soc_model": "dsa"
+        }
+    }));
+    assert_eq!(identity.effective("model"), "NT960XGP-G72AG");
+    assert_eq!(identity.origin("model"), "computer");
+    assert_eq!(identity.origin("device"), "dsa");
+    assert_eq!(
+        identity.origin("fingerprint.type"),
+        "dsa",
+        "not named: DSA's"
+    );
+    assert_eq!(identity.computer("model_name"), "Galaxy Book4 Ultra");
+    assert_eq!(identity.computer("device_name"), "BREW-BOOK");
+    assert_eq!(identity.origin("device_name"), "computer");
+    assert_eq!(
+        view::computer_value(identity.computer("soc_manufacturer")),
+        "Intel"
+    );
+    assert_ne!(view::computer_value(identity.computer("soc_model")), "");
+    assert_ne!(view::origin_label("computer"), view::origin_label("dsa"));
+    assert_ne!(
+        view::identity_label("device_name"),
+        view::identity_label("fingerprint")
+    );
+
+    // A service from before the computer's identity: every default is DSA's.
+    let old = dsa_settings_linux::model::Identity::read(&json!({
+        "chosen": {}, "effective": { "model": "Desktop Subsystem for Android" }
+    }));
+    assert_eq!(old.origin("model"), "dsa");
+    assert_eq!(old.computer("device_name"), "");
+}
+
+#[test]
 fn fr17_settings_are_read_as_the_service_reports_them() {
     let settings = Settings::read(&settings_json());
     assert!(settings.image_updates);
