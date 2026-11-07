@@ -305,7 +305,8 @@ public sealed record AppRow(
     int StartSizeIndex = 0,
     bool RunAsArm = false,
     bool CanRunAsArm = false,
-    string? RunAsArmTip = null)
+    string? RunAsArmTip = null,
+    bool IsHighlighted = false)
 {
     public bool NoIcon => Icon is null;
 
@@ -322,6 +323,7 @@ public sealed class AppsViewModel : ObservableObject
     private IReadOnlyList<InstalledAppInfo>? _apps;
     private IReadOnlyDictionary<string, AppWindowSetting> _windows = new Dictionary<string, AppWindowSetting>();
     private string _search = "";
+    private string? _highlighted;
     private string? _error;
     private string? _message;
     private bool _busy;
@@ -365,6 +367,34 @@ public sealed class AppsViewModel : ObservableObject
             Changed(nameof(Count));
         }
     }
+
+    /// <summary>The app whose row the page brings into view and marks, as when a task
+    /// window's App info opened the page; null for none.</summary>
+    public string? Highlighted => _highlighted;
+
+    /// <summary>Marks the row of <paramref name="package"/> for the page to bring into view. A
+    /// search that would hide it is cleared, so the row is there to be seen.</summary>
+    public void Highlight(string package)
+    {
+        _highlighted = package;
+        if (_search.Length > 0 && !Matches(package, _search.Trim()))
+        {
+            _search = "";
+            Changed(nameof(Search));
+        }
+        Changed(nameof(Highlighted));
+        Changed(nameof(Rows));
+        Changed(nameof(HasNoMatches));
+        Changed(nameof(Count));
+    }
+
+    /// <summary>Whether the app <paramref name="package"/> is among the apps the search
+    /// <paramref name="query"/> finds.</summary>
+    private bool Matches(string package, string query) =>
+        query.Length == 0
+        || package.Contains(query, StringComparison.OrdinalIgnoreCase)
+        || (_apps?.FirstOrDefault(a => a.Package == package) is { } app
+            && app.Label.Contains(query, StringComparison.CurrentCultureIgnoreCase));
 
     /// <summary>A date in milliseconds since the Unix epoch, in the user's short date format.</summary>
     public static string Date(ulong ms, CultureInfo? culture = null) =>
@@ -456,7 +486,8 @@ public sealed class AppsViewModel : ObservableObject
             StartSizeIndexOf(WindowOf(app.Package)),
             arm.On,
             arm.Available,
-            RunAsArmTipOf(arm));
+            RunAsArmTipOf(arm),
+            app.Package == _highlighted);
     }
 
     /// <summary>Why the "Run as ARM" switch cannot be changed, in the user's language; null

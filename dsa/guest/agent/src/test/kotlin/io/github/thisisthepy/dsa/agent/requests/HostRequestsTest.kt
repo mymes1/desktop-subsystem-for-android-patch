@@ -5,6 +5,7 @@ import io.github.thisisthepy.dsa.agent.FakeActions
 import io.github.thisisthepy.dsa.agent.appTask
 import io.github.thisisthepy.dsa.agent.tasks.Messages
 import io.github.thisisthepy.dsa.agent.windowing.Size
+import io.github.thisisthepy.dsa.control.v1.AppSettingsPage
 import io.github.thisisthepy.dsa.control.v1.CloseTask
 import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.LaunchApp
@@ -170,6 +171,71 @@ class HostRequestsTest {
     private fun settings(packageName: String) = Envelope.newBuilder()
         .setOpenAppSettings(OpenAppSettings.newBuilder().setPackageName(packageName))
         .build().toByteArray()
+
+    private fun settings(packageName: String, page: AppSettingsPage) = Envelope.newBuilder()
+        .setOpenAppSettings(OpenAppSettings.newBuilder().setPackageName(packageName).setPage(page))
+        .build().toByteArray()
+
+    private fun newWindow(packageName: String) = Envelope.newBuilder()
+        .setLaunchApp(LaunchApp.newBuilder().setPackageName(packageName).setNewWindow(true))
+        .build().toByteArray()
+
+    @Test
+    fun fr22_the_system_menu_carries_the_android_window_menu_new_window() {
+        actions.launchable = setOf("org.example.notes", "org.example.clock")
+        actions.multiWindow = setOf("org.example.notes")
+
+        // An app that supports several windows gets another task.
+        assertEquals(RequestResult.Launched("org.example.notes", newWindow = true), requests.handle(newWindow("org.example.notes")))
+        assertEquals(listOf("org.example.notes"), actions.newWindows)
+        // Any other app is launched as before: its task comes to the front.
+        assertEquals(RequestResult.Launched("org.example.clock"), requests.handle(newWindow("org.example.clock")))
+        assertEquals(listOf("org.example.notes"), actions.newWindows)
+        assertEquals(listOf("org.example.clock"), actions.launched)
+        // A plain launch never starts another task.
+        assertEquals(RequestResult.Launched("org.example.notes"), requests.handle(launch("org.example.notes")))
+        assertEquals(listOf("org.example.notes"), actions.newWindows)
+        // The agent never opens a window of its own.
+        assertTrue(requests.handle(newWindow(AGENT)) is RequestResult.LaunchFailed)
+    }
+
+    @Test
+    fun fr22_a_new_window_the_framework_refuses_is_a_failed_launch() {
+        actions.multiWindow = setOf("org.example.notes")
+
+        assertTrue(requests.handle(newWindow("org.example.notes")) is RequestResult.LaunchFailed)
+        assertTrue(actions.launched.isEmpty())
+    }
+
+    @Test
+    fun fr22_the_system_menu_carries_the_android_window_menu_settings_pages() {
+        val notes = "com.example.notes"
+        assertEquals(
+            RequestResult.SettingsOpened(notes, SettingsPage.ASPECT_RATIO),
+            requests.handle(settings(notes, AppSettingsPage.APP_SETTINGS_PAGE_ASPECT_RATIO)),
+        )
+        assertEquals(
+            RequestResult.SettingsOpened(notes, SettingsPage.OPEN_BY_DEFAULT),
+            requests.handle(settings(notes, AppSettingsPage.APP_SETTINGS_PAGE_OPEN_BY_DEFAULT)),
+        )
+        assertEquals(RequestResult.SettingsOpened(notes), requests.handle(settings(notes, AppSettingsPage.APP_SETTINGS_PAGE_DETAILS)))
+        // The list of every app has no pages of its own.
+        assertEquals(RequestResult.SettingsOpened(null), requests.handle(settings("", AppSettingsPage.APP_SETTINGS_PAGE_ASPECT_RATIO)))
+        assertEquals(
+            listOf(SettingsPage.ASPECT_RATIO, SettingsPage.OPEN_BY_DEFAULT, SettingsPage.DETAILS, SettingsPage.DETAILS),
+            actions.settingsPages,
+        )
+    }
+
+    @Test
+    fun fr22_a_settings_page_this_build_does_not_know_opens_the_apps_info() {
+        val unknown = Envelope.newBuilder()
+            .setOpenAppSettings(OpenAppSettings.newBuilder().setPackageName("com.example.notes").setPageValue(99))
+            .build().toByteArray()
+
+        assertEquals(RequestResult.SettingsOpened("com.example.notes"), requests.handle(unknown))
+        assertEquals(listOf(SettingsPage.DETAILS), actions.settingsPages)
+    }
 
     @Test
     fun fr23_app_info_opens_the_apps_settings_and_manage_apps_opens_the_list() {

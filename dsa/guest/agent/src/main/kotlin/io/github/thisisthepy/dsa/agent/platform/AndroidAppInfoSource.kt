@@ -77,32 +77,31 @@ class AndroidAppInfoSource(
         }
         return AppDetails(label, icon, captionIcon, supportsMultipleWindows(pm, packageName))
     }
-
-    /**
-     * Whether the app's launcher activity, or else the app, declares that it supports several
-     * windows (WindowManager.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), as Android's desktop
-     * windows ask before they offer New window. False when it declares nothing.
-     */
-    private fun supportsMultipleWindows(pm: PackageManager, packageName: String): Boolean {
-        fun read(get: () -> PackageManager.Property): Boolean? = try {
-            get().boolean
-        } catch (e: PackageManager.NameNotFoundException) {
-            null
-        } catch (e: RuntimeException) {
-            null
-        }
-        val launcher = pm.getLaunchIntentForPackage(packageName)?.component
-        if (launcher != null) {
-            read { pm.getProperty(PROPERTY_SUPPORTS_MULTI_INSTANCE, launcher) }?.let { return it }
-        }
-        return read { pm.getProperty(PROPERTY_SUPPORTS_MULTI_INSTANCE, packageName) } ?: false
-    }
-
-    private companion object {
-        // WindowManager.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI, which the SDK hides.
-        const val PROPERTY_SUPPORTS_MULTI_INSTANCE = "android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI"
-    }
 }
+
+/**
+ * Whether the app's launcher activity, or else the app, declares that it supports several
+ * windows (WindowManager.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI), as Android's desktop
+ * windows ask before they offer New window. False when it declares nothing. The host offers New
+ * window by it, and the agent checks it again before it starts another task.
+ */
+internal fun supportsMultipleWindows(pm: PackageManager, packageName: String): Boolean {
+    fun read(get: () -> PackageManager.Property): Boolean? = try {
+        get().boolean
+    } catch (e: PackageManager.NameNotFoundException) {
+        null
+    } catch (e: RuntimeException) {
+        null
+    }
+    val launcher = pm.getLaunchIntentForPackage(packageName)?.component
+    if (launcher != null) {
+        read { pm.getProperty(PROPERTY_SUPPORTS_MULTI_INSTANCE, launcher) }?.let { return it }
+    }
+    return read { pm.getProperty(PROPERTY_SUPPORTS_MULTI_INSTANCE, packageName) } ?: false
+}
+
+// WindowManager.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI, which the SDK hides.
+private const val PROPERTY_SUPPORTS_MULTI_INSTANCE = "android.window.PROPERTY_SUPPORTS_MULTI_INSTANCE_SYSTEM_UI"
 
 /** The largest size the host's taskbar, task list and start menu show an icon at. */
 private const val ICON_SIZE = 256
