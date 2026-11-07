@@ -789,7 +789,8 @@
             "media/module/libmediaformatshaper",
             "media/ndk",
             "media/utils",
-            "services/mediaresourcemanager/aidl"
+            "services/mediaresourcemanager/aidl",
+            "services/mediaresourcemanager/aidl_api"
           ]
         },
         {
@@ -802,7 +803,6 @@
             "core/java/android/content/res",
             "core/java/android/hardware/flags",
             "core/java/android/os",
-            "core/java/android/security/rkp",
             "core/java/android/text/flags",
             "core/java/android/view/accessibility/flags",
             "core/jni",
@@ -812,13 +812,21 @@
             "libs/hwui",
             "libs/nativehelper_jvm",
             "libs/protoutil",
-            "media/aidl/android/media/soundtrigger_middleware",
             "media/java/android/media/flags",
             "media/java/android/media/quality",
             "media/java/android/media/tv/flags",
             "native/android",
             "services/backup",
             "services/core/java/com/android/server/display/feature"
+          ],
+          "exclude": [
+            "Android.bp",
+            "api/Android.bp",
+            "core/java/Android.bp",
+            "libs/hwui/Android.bp",
+            "media/Android.bp",
+            "services/Android.bp",
+            "services/core/Android.bp"
           ]
         },
         {
@@ -2000,7 +2008,8 @@
             "media/module/libmediaformatshaper",
             "media/ndk",
             "media/utils",
-            "services/mediaresourcemanager/aidl"
+            "services/mediaresourcemanager/aidl",
+            "services/mediaresourcemanager/aidl_api"
           ]
         },
         {
@@ -2014,7 +2023,6 @@
             "core/java/android/content/res",
             "core/java/android/hardware/flags",
             "core/java/android/os",
-            "core/java/android/security/rkp",
             "core/java/android/text/flags",
             "core/java/android/view/accessibility/flags",
             "core/java/android/window/flags",
@@ -2025,14 +2033,21 @@
             "libs/hwui",
             "libs/nativehelper_jvm",
             "libs/protoutil",
-            "media/aidl/android/media/audio",
-            "media/aidl/android/media/soundtrigger_middleware",
             "media/java/android/media/flags",
             "media/java/android/media/quality",
             "media/java/android/media/tv/flags",
             "native/android",
             "services/backup",
             "services/core/java/com/android/server/display/feature"
+          ],
+          "exclude": [
+            "Android.bp",
+            "api/Android.bp",
+            "core/java/Android.bp",
+            "libs/hwui/Android.bp",
+            "media/Android.bp",
+            "services/Android.bp",
+            "services/core/Android.bp"
           ]
         },
         {

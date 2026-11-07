@@ -1,0 +1,46 @@
+// Stands in for frameworks/base/Android.bp, which the lock leaves out and build.sh puts in its
+// place. None of the real file's modules is one SurfaceFlinger, libhwui or libEGL reaches: it
+// declares the framework's Java libraries and, through build = [...], its proto and
+// Ravenwood libraries, whose sources the tree does not have (a gensrcs of them with no input
+// panics in Soong's analysis). This file keeps the package and its license, which build files
+// across frameworks/base name, and the aconfig flag declarations (AconfigFlags.bp), which
+// the three libraries read. The blocks are upstream's, unchanged.
+
+package {
+    default_applicable_licenses: ["frameworks_base_license"],
+}
+
+// Added automatically by a large-scale-change that took the approach of
+// 'apply every license found to every target'. While this makes sure we respect
+// every license restriction, it may not be entirely correct.
+//
+// e.g. GPL in an MIT project might only apply to the contrib/ directory.
+//
+// Please consider splitting the single license below into multiple licenses,
+// taking care not to lose any license_kind information, and overriding the
+// default license using the 'licenses: [...]' property on targets as needed.
+//
+// For unused files, consider creating a 'fileGroup' with "//visibility:private"
+// to attach the license to, and including a comment whether the files may be
+// used in the current project.
+// See: http://go/android-license-faq
+license {
+    name: "frameworks_base_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-Apache-2.0",
+        "SPDX-license-identifier-BSD",
+        "SPDX-license-identifier-CC-BY",
+        "SPDX-license-identifier-MIT",
+        "SPDX-license-identifier-Unicode-DFS",
+        "legacy_unencumbered",
+    ],
+    license_text: [
+        "NOTICE",
+    ],
+}
+
+// Upstream also lists ProtoLibraries.bp, TestProtoLibraries.bp and Ravenwood.bp here.
+build = [
+    "AconfigFlags.bp",
+]
