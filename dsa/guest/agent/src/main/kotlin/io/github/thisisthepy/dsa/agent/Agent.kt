@@ -479,9 +479,11 @@ class Agent(
             return
         }
         when (result) {
-            is RequestResult.Launched -> log.info("launched ${result.packageName}")
+            is RequestResult.Launched ->
+                log.info(if (result.newWindow) "opened a new window of ${result.packageName}" else "launched ${result.packageName}")
             is RequestResult.LaunchFailed -> log.warn("could not launch ${result.packageName}: ${result.reason}")
-            is RequestResult.SettingsOpened -> log.info("opened the settings of ${result.packageName ?: "every app"}")
+            is RequestResult.SettingsOpened ->
+                log.info("opened the ${result.page.name.lowercase()} settings of ${result.packageName ?: "every app"}")
             is RequestResult.SettingsFailed ->
                 log.warn("could not open the settings of ${result.packageName ?: "every app"}: ${result.reason}")
             is RequestResult.Closed -> log.info("ended task ${result.taskId}")

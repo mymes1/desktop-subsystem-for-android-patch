@@ -6,6 +6,7 @@ import io.github.thisisthepy.dsa.agent.requests.ResizeOutcome
 import io.github.thisisthepy.dsa.agent.input.InjectedKey
 import io.github.thisisthepy.dsa.agent.input.InjectedMotion
 import io.github.thisisthepy.dsa.agent.input.InputInjector
+import io.github.thisisthepy.dsa.agent.requests.SettingsPage
 import io.github.thisisthepy.dsa.agent.requests.TaskActions
 import io.github.thisisthepy.dsa.agent.tasks.ScreenDp
 import io.github.thisisthepy.dsa.agent.tasks.TaskBounds
@@ -186,12 +187,27 @@ class FakeActions : TaskActions {
         return packageName in launchable
     }
 
+    /** The apps that support several windows, and each app a new window was started for. */
+    var multiWindow = setOf<String>()
+    val newWindows = mutableListOf<String>()
+
+    override fun supportsMultipleWindows(packageName: String): Boolean = packageName in multiWindow
+
+    override fun launchNewWindow(packageName: String): Boolean {
+        newWindows += packageName
+        return packageName in launchable
+    }
+
     /** Each app whose settings were opened; null for the list of every app. */
     val settingsOpened = mutableListOf<String?>()
+
+    /** The page each of those opened at. */
+    val settingsPages = mutableListOf<SettingsPage>()
     var settingsOpen = true
 
-    override fun openAppSettings(packageName: String?): Boolean {
+    override fun openAppSettings(packageName: String?, page: SettingsPage): Boolean {
         settingsOpened += packageName
+        settingsPages += page
         return settingsOpen
     }
 
