@@ -132,6 +132,26 @@
                 <ui:InfoBar Title="{l:Text ArmRestartBar.Title}" Message="{l:Text ArmRestartBar.Message}"
                             Severity="Informational" IsClosable="False"
                             IsOpen="{Binding ArmRestartNeeded, Mode=OneWay}" Margin="0,0,0,4" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowDownload24}"
+                                Visibility="{Binding ShowsGoogleArm, Converter={StaticResource Visible}}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text ArmGoogleCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text ArmGoogleCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
+                                         Visibility="{Binding IsFetchingGoogleArm, Converter={StaticResource Visible}}" />
+                        <ui:HyperlinkButton Content="{l:Text ArmGoogleTermsLink.Content}" Click="OnOpenGoogleArmTerms"
+                                            Margin="0,0,8,0" />
+                        <ui:Button Content="{l:Text ArmGoogleButton.Content}" Click="OnFetchGoogleArm"
+                                   IsEnabled="{Binding CanFetchGoogleArm, Mode=OneWay}" />
+                    </StackPanel>
+                </ui:CardControl>
+                <ui:InfoBar Title="{l:Text ArmGoogleFetchingBar.Title}" Message="{l:Text ArmGoogleFetchingBar.Message}"
+                            Severity="Informational" IsClosable="False"
+                            IsOpen="{Binding IsFetchingGoogleArm, Mode=OneWay}" Margin="0,0,0,4" />
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Delete24}">
                     <ui:CardControl.Header>
                         <StackPanel>
