@@ -520,6 +520,8 @@
             "crates/either",
             "crates/env_filter",
             "crates/env_logger",
+            "crates/errno",
+            "crates/fastrand",
             "crates/foldhash",
             "crates/font-types",
             "crates/getrandom",
@@ -552,6 +554,8 @@
             "crates/potential_utf",
             "crates/proc-macro2",
             "crates/protobuf",
+            "crates/protobuf-codegen",
+            "crates/protobuf-parse",
             "crates/protobuf-support",
             "crates/quote",
             "crates/read-fonts",
@@ -561,6 +565,7 @@
             "crates/rustc-demangle",
             "crates/rustc-demangle-capi",
             "crates/rustc-hash",
+            "crates/rustix",
             "crates/rustversion",
             "crates/ryu",
             "crates/serde",
@@ -572,6 +577,7 @@
             "crates/strsim",
             "crates/syn",
             "crates/synstructure",
+            "crates/tempfile",
             "crates/termcolor",
             "crates/thiserror",
             "crates/thiserror-impl",
@@ -580,6 +586,7 @@
             "crates/unicode-bidi",
             "crates/unicode-ident",
             "crates/unicode-width",
+            "crates/which",
             "crates/writeable",
             "crates/yoke",
             "crates/yoke-derive",
@@ -995,6 +1002,14 @@
           "commit": "ef5bcc92586b839ae3dbacc154127092fa4002ec",
           "cone": [
             "linux-x86"
+          ]
+        },
+        {
+          "path": "prebuilts/misc",
+          "url": "https://android.googlesource.com/platform/prebuilts/misc",
+          "commit": "28b423bbc5d3aec93ba00f8ea05dcc2b3e5b4ad0",
+          "cone": [
+            "linux-x86/yasm"
           ]
         },
         {
@@ -1739,8 +1754,11 @@
             "crates/env_filter",
             "crates/env_logger",
             "crates/equivalent",
+            "crates/errno",
+            "crates/fastrand",
             "crates/foldhash",
             "crates/font-types",
+            "crates/getrandom",
             "crates/glob",
             "crates/hashbrown",
             "crates/heck",
@@ -1770,6 +1788,8 @@
             "crates/potential_utf",
             "crates/proc-macro2",
             "crates/protobuf",
+            "crates/protobuf-codegen",
+            "crates/protobuf-parse",
             "crates/protobuf-support",
             "crates/quote",
             "crates/read-fonts",
@@ -1779,6 +1799,7 @@
             "crates/rustc-demangle",
             "crates/rustc-demangle-capi",
             "crates/rustc-hash",
+            "crates/rustix",
             "crates/rustversion",
             "crates/ryu",
             "crates/same-file",
@@ -1792,6 +1813,7 @@
             "crates/strsim",
             "crates/syn",
             "crates/synstructure",
+            "crates/tempfile",
             "crates/termcolor",
             "crates/thiserror",
             "crates/thiserror-impl",
@@ -1801,6 +1823,7 @@
             "crates/unicode-ident",
             "crates/unicode-width",
             "crates/walkdir",
+            "crates/which",
             "crates/writeable",
             "crates/yoke",
             "crates/yoke-derive",
@@ -2205,6 +2228,14 @@
           "commit": "ef5bcc92586b839ae3dbacc154127092fa4002ec",
           "cone": [
             "linux-x86"
+          ]
+        },
+        {
+          "path": "prebuilts/misc",
+          "url": "https://android.googlesource.com/platform/prebuilts/misc",
+          "commit": "be7c3a630b5dc5eb3260035d77a81b2f322754f8",
+          "cone": [
+            "linux-x86/yasm"
           ]
         },
         {

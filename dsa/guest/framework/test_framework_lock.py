@@ -125,6 +125,21 @@ class LockTests(unittest.TestCase):
             self.assertIn("adobe-hdr-gain-map-license", projects["external/libultrahdr"]["cone"])
             self.assertIn("services/mediaresourcemanager/aidl_api", projects["frameworks/av"]["cone"])
 
+    def test_nfr5_host_tools_soong_runs_by_path_are_in_the_tree(self):
+        # Soong names some host tools by their install path instead of as a dependency, so a
+        # missing one is not a missing dependency but a file ninja cannot make: the fourth run
+        # stopped on out/host/linux-x86/bin/protoc-gen-rust (16) and protoc-gen-rs (17), the
+        # protobuf plugin aconfig's Rust protos are generated with. x86_64 assembly (.asm, in
+        # libjpeg-turbo) is assembled with prebuilts/misc's yasm in the same way.
+        plugin_crates = ["errno", "fastrand", "protobuf-codegen", "protobuf-parse", "rustix",
+                         "tempfile", "which"]
+        for version in self.lock["versions"]:
+            projects = {p["path"]: p for p in version["projects"]}
+            crates = projects["external/rust/android-crates-io"]["cone"]
+            for crate in plugin_crates + (["getrandom"] if version["android"] == "android17" else []):
+                self.assertIn("crates/" + crate, crates, version["android"])
+            self.assertEqual(projects["prebuilts/misc"]["cone"], ["linux-x86/yasm"], version["android"])
+
     def test_nfr5_framework_build_files_over_sources_the_tree_lacks_are_stood_in(self):
         # frameworks/base's build files declare the framework's Java, AIDL and proto modules
         # over folders the tree does not fetch; the second and third runs stopped on an
