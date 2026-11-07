@@ -61,7 +61,6 @@ internal sealed class ArgsText : ITextSource
         ["ApkWindow_AndroidVersion"] = 2,
         ["ApkWindow_ReasonWithWords"] = 2,
         ["ApkWindow_OpenFailed"] = 2,
-        ["ApkWindow_NotApkText"] = 2,
         ["ApkWindow_LaunchFailedAfterInstall"] = 2,
     };
 
@@ -216,7 +215,9 @@ public class ApkInstallViewModelTests
         var vm = await Loaded(dsa);
         Assert.Equal(ApkInstallPage.Failed, vm.Page);
         Assert.StartsWith("ApkWindow_NotApkTitle", vm.ResultTitle);
-        Assert.Contains("not a ZIP archive", vm.ResultText);
+        // What dsa says is for developers; the user reads what the file is, in plain words.
+        Assert.Equal("notes.apk is not a valid APK file.", vm.ResultText);
+        Assert.DoesNotContain("ZIP", vm.ResultText);
         Assert.False(vm.CanInstall);
     }
 
@@ -393,6 +394,76 @@ public class ApkInstallViewModelTests
         Assert.Equal(40, vm.Permissions.Count);
         // The raw names stay, for the expanded rows.
         Assert.Equal("android.permission.P40", vm.Permissions[39].Name);
+    }
+
+    [Fact]
+    public async Task Fr11_more_turns_into_less_and_less_folds_the_list_again()
+    {
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", Info()));
+        Assert.False(vm.IsExpanded);
+        Assert.Equal("More", vm.MoreLabel);
+
+        vm.ToggleExpanded();
+        Assert.True(vm.IsExpanded);
+        Assert.Equal("Less", vm.MoreLabel);
+
+        var changed = false;
+        vm.PropertyChanged += (_, _) => changed = true;
+        vm.ToggleExpanded();
+        Assert.True(changed);
+        Assert.False(vm.IsExpanded);
+        Assert.Equal("More", vm.MoreLabel);
+
+        vm.Expand();
+        vm.Collapse();
+        Assert.False(vm.IsExpanded);
+    }
+
+    [Fact]
+    public async Task Fr11_the_lines_under_the_title_have_their_labels_in_one_column_and_values_in_the_next()
+    {
+        var vm = await Loaded(new FakeRunner().Answer($"apk-info {Path} --json", Info()));
+        Assert.Equal("Package Name:", ApkInstallViewModel.PackageLabel);
+        Assert.Equal("Publisher:", ApkInstallViewModel.PublisherLabel);
+        Assert.Equal("Version:", ApkInstallViewModel.VersionLabel);
+        Assert.Equal("Source:", ApkInstallViewModel.SourceLabel);
+        Assert.Equal("com.example.notes", vm.PackageValue);
+        Assert.Equal("4.2", vm.VersionValue);
+        Assert.Equal("Package Name: com.example.notes", vm.PackageLine);
+    }
+
+    [Theory]
+    [InlineData("nowhere/app.xapk", "app.xapk is a split APK bundle")]
+    [InlineData("nowhere/app.apks", "app.apks is a split APK bundle")]
+    [InlineData("nowhere/app.apkm", "app.apkm is a split APK bundle")]
+    [InlineData("nowhere/app.aab", "app.aab is an Android App Bundle")]
+    [InlineData("nowhere/app.apk", "app.apk is not a valid APK file.")]
+    public async Task Fr11_a_file_that_cannot_be_installed_is_named_for_what_it_is(string path, string start)
+    {
+        var dsa = new FakeRunner().Fail($"apk-info {path} --json", "dsa: the file has no AndroidManifest.xml, so it is not an APK");
+        var vm = new ApkInstallViewModel(dsa, new ArgsText(), path, X64);
+        await vm.LoadAsync();
+        Assert.Equal(ApkInstallPage.Failed, vm.Page);
+        Assert.StartsWith("ApkWindow_NotApkTitle", vm.ResultTitle);
+        Assert.StartsWith(start, vm.ResultText);
+        Assert.DoesNotContain("AndroidManifest", vm.ResultText);
+    }
+
+    [Fact]
+    public async Task Fr11_reading_the_file_again_never_takes_its_icon_away()
+    {
+        var withoutIcon = Regex.Replace(Info("running", "\"update\"", Installed41), "\"icon\":\\{.*?\\}\\},\"signer\"", "\"icon\":null,\"signer\"");
+        Assert.Contains("\"icon\":null", withoutIcon);
+        var dsa = new FakeRunner()
+            .Answer($"apk-info {Path} --json", Info())
+            .Answer("start --wait --json", "{\"state\":\"Active\"}")
+            .Answer($"apk-info {Path} --json", withoutIcon);
+        var vm = await Loaded(dsa);
+        var icon = vm.Apk!.Icon;
+        Assert.NotNull(icon);
+        await vm.InstallAsync();
+        Assert.Equal(ApkInstallKind.Update, vm.Kind);
+        Assert.Same(icon, vm.Apk!.Icon);
     }
 
     [Fact]

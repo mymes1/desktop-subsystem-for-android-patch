@@ -19,6 +19,8 @@ public partial class InstallerWindow : FluentWindow
 {
     private readonly ApkInstallViewModel _vm;
     private bool _closed;
+    private ApkIcon? _drawnIcon;
+    private bool _iconShown;
 
     private InstallerWindow(string path)
     {
@@ -31,7 +33,10 @@ public partial class InstallerWindow : FluentWindow
         TitleBar.Title = Title;
         TrademarkText.Text = App.Text.Get("AboutTrademark.Text");
         ReadingText.Text = App.Text.Get("ApkWindow_Reading");
-        MoreLink.Content = _vm.MoreLabel;
+        PackageLabel.Text = ApkInstallViewModel.PackageLabel;
+        PublisherLabel.Text = ApkInstallViewModel.PublisherLabel;
+        VersionLabel.Text = ApkInstallViewModel.VersionLabel;
+        SourceLabel.Text = ApkInstallViewModel.SourceLabel;
         LaunchWhenReady.Content = App.Text.Get("ApkWindow_LaunchWhenReady");
         LaunchWhenReady.IsChecked = _vm.LaunchWhenReady;
         LaunchWhenReady.Checked += (_, _) => _vm.LaunchWhenReady = true;
@@ -111,17 +116,34 @@ public partial class InstallerWindow : FluentWindow
         var page = _vm.Page;
         var read = _vm.Apk is not null;
         HeroTitle.Text = _vm.HeroTitle;
-        HeroPackage.Text = _vm.PackageLine;
-        HeroPackage.Visibility = Visible(read);
-        PublisherText.Text = _vm.PublisherLine;
+        // The labels and the values in their two columns; the row goes with its value.
+        HeroPackage.Text = _vm.PackageValue;
+        PublisherText.Text = _vm.PublisherValue;
         PublisherText.ToolTip = _vm.PublisherLine;
-        PublisherText.Visibility = Visible(read);
-        VersionChip.Text = _vm.VersionLine;
-        VersionChip.Visibility = Visible(read);
-        SourceText.Text = _vm.SourceLine;
+        VersionChip.Text = _vm.VersionValue;
+        SourceText.Text = _vm.SourceValue;
         SourceText.ToolTip = _vm.SourceLine;
-        SourceText.Visibility = Visible(read);
-        AppIcon.Source = IconImage(_vm.Apk?.Icon);
+        DetailRows.Visibility = Visible(read);
+        // A screen reader says each line whole, its label with its value.
+        System.Windows.Automation.AutomationProperties.SetName(HeroPackage, _vm.PackageLine);
+        System.Windows.Automation.AutomationProperties.SetName(PublisherText, _vm.PublisherLine);
+        System.Windows.Automation.AutomationProperties.SetName(VersionChip, _vm.VersionLine);
+        System.Windows.Automation.AutomationProperties.SetName(SourceText, _vm.SourceLine);
+        // The icon is drawn once for each icon the file gives; one that cannot be drawn, or
+        // none, never takes the place of one already shown.
+        if (!ReferenceEquals(_vm.Apk?.Icon, _drawnIcon))
+        {
+            _drawnIcon = _vm.Apk?.Icon;
+            if (IconImage(_drawnIcon) is { } drawn)
+            {
+                _iconShown = true;
+                AppIcon.Source = drawn;
+            }
+        }
+        if (!_iconShown)
+        {
+            AppIcon.Source = InstallerIcon;
+        }
 
         var showDetails = page is ApkInstallPage.Details or ApkInstallPage.Progress;
         SummaryPanel.Visibility = Visible(showDetails);
@@ -146,8 +168,11 @@ public partial class InstallerWindow : FluentWindow
         PermissionsHeader.Text = _vm.PermissionsHeader;
         PermissionPreview.ItemsSource = _vm.PermissionPreview;
         PermissionList.ItemsSource = _vm.Permissions;
-        PreviewPanel.Visibility = Visible(!_vm.IsExpanded);
+        PermissionPreview.Visibility = Visible(!_vm.IsExpanded);
+        PermissionList.Visibility = Visible(_vm.IsExpanded);
         ExpandedPanel.Visibility = Visible(_vm.IsExpanded);
+        MoreLink.Content = _vm.MoreLabel;
+        MoreLink.IsExpanded = _vm.IsExpanded;
 
         LaunchWhenReady.Visibility = Visible(page is ApkInstallPage.Reading or ApkInstallPage.Details);
         LaunchWhenReady.IsEnabled = !_vm.IsBlocked;
@@ -181,9 +206,10 @@ public partial class InstallerWindow : FluentWindow
         CloseButton.IsCancel = !CancelButton.IsCancel;
     }
 
-    /// <summary>The app's icon at the tile's size: its image, or its adaptive icon's layers
-    /// masked to a rounded square as a launcher shows them. Without one, the installer's own.</summary>
-    private static ImageSource IconImage(ApkIcon? icon)
+    /// <summary>The app's icon at the tile's size: its image, its vector drawable, or its
+    /// adaptive icon's layers masked to a rounded square as a launcher shows them. Null when
+    /// the icon cannot be drawn.</summary>
+    private static ImageSource? IconImage(ApkIcon? icon)
     {
         try
         {
@@ -191,37 +217,99 @@ public partial class InstallerWindow : FluentWindow
             {
                 return Bitmap(png);
             }
+            if (icon?.Vector is { } whole)
+            {
+                // A clear square of the full size keeps the viewport, not the paths, as the image.
+                return VectorDrawing(whole, new Rect(0, 0, 108, 108)) is { } drawing
+                    ? Frozen(new DrawingGroup { Children = { new GeometryDrawing(Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, 108, 108))), drawing } })
+                    : null;
+            }
             if (icon is { IsAdaptive: true })
             {
                 // Each layer is 108 dp; the middle 72 dp show.
                 var full = new Rect(0, 0, 108, 108);
                 var group = new DrawingGroup { ClipGeometry = new RectangleGeometry(new Rect(18, 18, 72, 72), 16, 16) };
+                var drawn = false;
                 foreach (var layer in new[] { icon.Background, icon.Foreground })
                 {
                     if (layer?.Color is { } argb)
                     {
-                        var color = Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
-                        group.Children.Add(new GeometryDrawing(new SolidColorBrush(color), null, new RectangleGeometry(full)));
+                        group.Children.Add(new GeometryDrawing(new SolidColorBrush(Argb(argb)), null, new RectangleGeometry(full)));
+                        drawn = true;
                     }
                     else if (layer?.Png is { } image)
                     {
                         group.Children.Add(new ImageDrawing(Bitmap(image), full));
+                        drawn = true;
                     }
-                    else if (layer == icon.Background)
+                    else if (layer?.Vector is { } vector && VectorDrawing(vector, full) is { } drawing)
                     {
+                        group.Children.Add(drawing);
+                        drawn = true;
+                    }
+                    else if (ReferenceEquals(layer, icon.Background))
+                    {
+                        // A background the window cannot draw shows white, as a launcher's
+                        // default does; the foreground is still drawn on it.
                         group.Children.Add(new GeometryDrawing(Brushes.White, null, new RectangleGeometry(full)));
                     }
                 }
-                var drawn = new DrawingImage(group);
-                drawn.Freeze();
-                return drawn;
+                // A white square alone is not the app's icon.
+                return drawn ? Frozen(group) : null;
             }
         }
-        catch (Exception e) when (e is NotSupportedException or IOException or ArgumentException or FileFormatException)
+        catch (Exception e) when (e is NotSupportedException or IOException or ArgumentException or FileFormatException
+            or InvalidOperationException)
         {
-            // An image Windows cannot decode shows as the installer's own icon.
+            // An image Windows cannot decode is not drawn.
         }
-        return new BitmapImage(new Uri("pack://application:,,,/Assets/apk-installer.png"));
+        return null;
+    }
+
+    private static readonly ImageSource InstallerIcon =
+        new BitmapImage(new Uri("pack://application:,,,/Assets/apk-installer.png"));
+
+    private static Color Argb(uint argb) =>
+        Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
+
+    private static DrawingImage Frozen(Drawing drawing)
+    {
+        var image = new DrawingImage(drawing);
+        image.Freeze();
+        return image;
+    }
+
+    /// <summary>A vector drawable scaled from its viewport into <paramref name="bounds"/>, less
+    /// its inset. A path WPF cannot read is left out; null when none is drawn.</summary>
+    private static Drawing? VectorDrawing(ApkVector vector, Rect bounds)
+    {
+        var inner = new Rect(bounds.X + bounds.Width * vector.Inset, bounds.Y + bounds.Height * vector.Inset,
+            bounds.Width * (1 - 2 * vector.Inset), bounds.Height * (1 - 2 * vector.Inset));
+        var group = new DrawingGroup
+        {
+            Transform = new MatrixTransform(new Matrix(inner.Width / vector.Width, 0, 0, inner.Height / vector.Height,
+                inner.X, inner.Y)),
+        };
+        foreach (var path in vector.Paths)
+        {
+            try
+            {
+                var geometry = PathGeometry.CreateFromGeometry(Geometry.Parse(AndroidPathData.ToWpf(path.Data)));
+                geometry.FillRule = path.EvenOdd ? FillRule.EvenOdd : FillRule.Nonzero;
+                var t = path.Transform;
+                geometry.Transform = new MatrixTransform(new Matrix(t[0], t[1], t[2], t[3], t[4], t[5]));
+                Brush? fill = path.Fill is { } f ? new SolidColorBrush(Argb(f)) : null;
+                Pen? pen = path.Stroke is { } s && path.StrokeWidth > 0
+                    ? new Pen(new SolidColorBrush(Argb(s)), path.StrokeWidth)
+                    : null;
+                group.Children.Add(new GeometryDrawing(fill, pen, geometry));
+            }
+            catch (Exception e) when (e is FormatException or InvalidOperationException or ArgumentException)
+            {
+                // Path data WPF's parser does not take.
+            }
+        }
+        return group.Children.Count > 0 ? group : null;
     }
 
     /// <summary>Decodes an icon keeping its alpha. An embedded colour profile is ignored,
@@ -238,7 +326,16 @@ public partial class InstallerWindow : FluentWindow
         return image;
     }
 
-    private void OnMore(object sender, RoutedEventArgs e) => _vm.Expand();
+    /// <summary>More or Less: opens the full list, or folds it back to the first permissions
+    /// with the list scrolled back to its top. The link keeps the keyboard focus.</summary>
+    private void OnMore(object sender, RoutedEventArgs e)
+    {
+        _vm.ToggleExpanded();
+        if (!_vm.IsExpanded)
+        {
+            DetailsScroller.ScrollToTop();
+        }
+    }
 
     private async void OnInstall(object sender, RoutedEventArgs e) => await _vm.InstallAsync();
 

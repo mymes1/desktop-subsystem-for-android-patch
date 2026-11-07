@@ -949,9 +949,6 @@
   <data name="ApkWindow_NotApkTitle" xml:space="preserve">
     <value>This file cannot be installed</value>
   </data>
-  <data name="ApkWindow_NotApkText" xml:space="preserve">
-    <value>{0} is not an APK that Android can install: {1}.</value>
-  </data>
   <data name="ApkWindow_StartFailed" xml:space="preserve">
     <value>Android did not start, so the app was not installed. {0}</value>
   </data>

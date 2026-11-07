@@ -859,10 +859,25 @@ jobs:
               if ($title -cne $want) { throw "the window's title is '$title', not '$want'" }
               Wait-SetupControl CompatibilityTitle | Out-Null
               Save-SetupScreen "$PWD\screens\apk-$theme-many-$lang.png"
+              # More is a toggle, as App Installer's is: it opens the list and becomes Less,
+              # and Less folds it again. UI Automation sees its state.
+              function Expect-Expanded([string]$State) {
+                $link = Wait-SetupControl MoreLink
+                $state = $link.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern).Current.ExpandCollapseState
+                if ("$state" -ne $State) { Show-Desktop "apk-more-$State"; throw "More is $state, not $State" }
+              }
+              Expect-Expanded 'Collapsed'
               Invoke-SetupButton MoreLink
               Wait-SetupControl PermissionList | Out-Null
               Start-Sleep -Seconds 1
+              Expect-Text MoreLink 'Less'
+              Expect-Expanded 'Expanded'
               Save-SetupScreen "$PWD\screens\apk-$theme-many-expanded-$lang.png"
+              Invoke-SetupButton MoreLink
+              Start-Sleep -Seconds 1
+              Expect-Text MoreLink 'More'
+              Expect-Expanded 'Collapsed'
+              Save-SetupScreen "$PWD\screens\apk-$theme-many-collapsed-again-$lang.png"
               Close-Apk $app
             }
 
@@ -871,10 +886,37 @@ jobs:
             Expect-Text HeroTitle 'Install Adaptive[?]'
             Save-SetupScreen "$PWD\screens\apk-$theme-adaptive-icon.png"
             Close-Apk $app
+            # An adaptive icon whose foreground is a vector drawable, as Chrome's is: the tile
+            # shows the drawing on its background, not a plain square.
+            $app = Open-Apk vector.apk
+            Wait-SetupControl InstallButton -Enabled -Seconds 90 | Out-Null
+            Expect-Text HeroTitle 'Install Vector[?]'
+            Save-SetupScreen "$PWD\screens\apk-$theme-vector-icon.png"
+            Close-Apk $app
             $app = Open-Apk broken.apk
             Wait-SetupControl ResultTitle -Seconds 90 | Out-Null
+            Expect-Text ResultText 'broken.apk is not a valid APK file.'
             Save-SetupScreen "$PWD\screens\apk-$theme-not-an-apk.png"
             Close-Apk $app
+            # Bundles are named for what they are, from what is in them.
+            $bundle = "$apks\work-bundle"
+            New-Item -ItemType Directory -Force $bundle | Out-Null
+            Copy-Item "$apks\notes.apk" "$bundle\base.apk"
+            Set-Content -Path "$bundle\manifest.json" -Value '{"package_name":"com.example.notes"}'
+            Compress-Archive -Force -Path "$bundle\base.apk", "$bundle\manifest.json" -DestinationPath "$apks\split.zip"
+            Copy-Item -Force "$apks\split.zip" "$apks\split.xapk"
+            Set-Content -Path "$bundle\BundleConfig.pb" -Value 'config' -NoNewline
+            Compress-Archive -Force -Path "$bundle\BundleConfig.pb" -DestinationPath "$apks\store.zip"
+            Copy-Item -Force "$apks\store.zip" "$apks\store.aab"
+            foreach ($case in @(
+                @{ File = 'split.xapk'; Like = 'split.xapk is a split APK bundle*not supported yet*' },
+                @{ File = 'store.aab'; Like = "store.aab is an Android App Bundle*cannot be installed directly*publisher*" })) {
+              $app = Open-Apk $case.File
+              Wait-SetupControl ResultTitle -Seconds 90 | Out-Null
+              Expect-Text ResultText $case.Like
+              Save-SetupScreen "$PWD\screens\apk-$theme-$($case.File -replace '\.', '-').png"
+              Close-Apk $app
+            }
 
             $env:DSA_CLI = $fake
             # Installing starts Android, finds the app installed already, and shows both versions.
