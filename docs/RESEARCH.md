@@ -1567,6 +1567,48 @@ ninja: 'external/boringssl/src/util/fipstools/inject_hash/inject_hash.go', neede
 
 이번 오류도 고쳤다. 정적 훑기에 Go 모듈(`bootstrap_go_package`, `blueprint_go_binary`)의 `srcs`를 더해 보니, 트리에 없는 것은 boringssl의 셋(`bssl_inject_hash`, 그것이 쓰는 `bssl_ar`, `bssl_fipscommon`)이었다. boringssl의 cone에 `src/util/ar`, `src/util/fipstools/fipscommon`, `src/util/fipstools/inject_hash`를 더했다. `src/util`과 `src/util/fipstools` 바로 아래의 파일(Go 스크립트 등)은 조상 폴더라 함께 들어오고, 그 안에 Android.bp는 없다.
 
+### 여섯 번째 실행(run 42413908578, 네 작업)과 고친 것
+
+빌드 전 입력 확인은 네 작업 모두 통과했다(16은 약 9,700개, 17은 약 26,000개 입력, 빠진 것 0). 그 확인은 번역기 빌드(run 42413953470, 두 판)에서도 통과했다. 16의 두 작업은 처음으로 컴파일까지 갔다. 17의 두 작업은 ninja가 실행 중에 멈추었다.
+
+```
+ninja: 'frameworks/base/core/jni/android_media_MediaMetricsJNI.h', needed by '.../libandroid_text_flags_rust.rlib', missing and no known rule to make it
+```
+
+이 파일은 `media/jni`의 같은 이름을 가리키는 링크인데, cone이 `media/jni`를 받지 않았다. 입력 확인이 링크 자체가 있는지만 보아(`lexists`) 놓쳤다. 이제 링크를 따라가 대상이 있는지 본다(`exists`).
+
+16의 컴파일 오류는 `error.log`에서 모았다(두 작업이 같다).
+
+| 오류 | 개수(작업 하나) | 원인 |
+|---|---|---|
+| `'build/build_config.h' file not found` | 409 | pdfium의 `build` 폴더를 받지 않음 |
+| `'build/XMP_BuildInfo.h' file not found` | 31 | XMP의 `build` 폴더를 받지 않음 |
+| `'native_bridge_support/weak_for_native_bridge.h'` (`-include`) | 24 | arm-optimized-routines의 그 폴더를 받지 않음 |
+| `src/__support/macros/config.h`, `hdr/types/*.h`, `include/llvm-libc-types/*.h` | 50여 | llvm-libc의 `src` 일부, `hdr`, `include`만 받음 |
+| `utils/Errors.h`, `utils/FastStrcmp.h`, `utils/KeyedVector.h`, `utils/Log.h` | 20여 | Soong의 전역 include 폴더 `system/core/include`(`libutils/include`로 가는 링크)를 받지 않음 |
+| `contrib/optimizations/insert_string.h` | 2 | zlib의 루트 파일만 받음 |
+| `../include/cxx.h`, Rust `file not found for module syntax`와 그 뒤의 Rust 오류 | 50여 | cxx의 `include`, `syntax`, `gen/src`를 받지 않음(`gen/cmd/src/syntax` 등은 그 폴더로 가는 링크) |
+| `missing dependencies: module source path "external/rust/crabbyavif/include" does not exist` | 1 | crabbyavif의 `include` |
+| `missing dependencies: stats-log-api-gen` | 4 | SurfaceFlinger와 libhwui의 statslog 소스를 만드는 도구가 `frameworks/proto_logging`에 있는데 그 프로젝트가 없음 |
+
+statslog 생성 헤더를 기다리는 SurfaceFlinger와 libhwui의 소스는 컴파일되지 않았다. 그래서 그 다음 층은 이 로그에 없다.
+
+같은 종류를 한 번에 찾으려고 세 가지를 확인했다.
+
+1. 링크: 고정한 커밋마다 트리의 링크(모드 120000)와 그 대상을 모두 받아(4,503개), 체크아웃 안의 링크 중 대상이 체크아웃 밖인 것을 골랐다. 빌드에 걸리는 것은 `system/core/include`와 `hardware/libhardware/include`(전역 include 폴더, 폴더째 받지 않음), `frameworks/av/include/media`의 셋(`libaudioprocessing`, `libeffects/factory`, `libmediaplayerservice`의 `include`로), `frameworks/base/core/jni`의 둘(`media/jni`로), cxx의 셋이다. 나머지는 Linux arm64와 macOS 도구, 시험 자료, 문서다.
+2. include: 오류가 난 프로젝트들(pdfium, XMP, llvm-libc, zlib, cxx, arm-optimized-routines, crabbyavif)을 새 cone으로 실제로 받아(두 판 합쳐 약 330 MB, `.scratch`), 모든 C/C++ 파일의 `#include`가 같은 프로젝트의 파일을 가리키는데 그 파일이 체크아웃에 없는 경우를 찾았다. 남은 것은 pdfium의 시험(`testing/`)과 끈 XFA(`xfa/`, `fxbarcode/`)뿐이다.
+3. 도구: `stats-log-api-gen`이 닿는 모듈을 따라가니(16은 285개, 17은 293개) `frameworks/proto_logging` 말고는 모두 트리에 있었다.
+
+고친 것:
+
+- 통째로 받는다(작은 프로젝트): zlib, cxx, arm-optimized-routines, crabbyavif, 그리고 새로 더하는 `frameworks/proto_logging`(커밋은 두 빌드의 매니페스트에서).
+- cone에 더한다: pdfium `build`, `core`(전체), XMP `XMPCommon`, `XMPCore`, `XMPFiles`, `XMPFilesPlugins`, `build`, `third-party`(`docs`, `samples`, `tools`만 빼고), llvm-libc `hdr`, `include`, `libc`, `src`(전체), `system/core`의 `include`, `hardware/libhardware`의 `include`, `frameworks/av`의 세 `include` 폴더, `frameworks/base`의 `media/jni`.
+- `frameworks/base/media/jni`의 Android.bp 넷은 `exclude`로 지운다. 받는 이유는 링크 대상 두 파일뿐이고, 그 모듈은 빌드가 쓰지 않는다.
+
+바꾼 잠금으로 앞의 훑기(AIDL, gensrcs, 라이선스, Go 소스, 경로로 부르는 도구, 링크)를 다시 돌려 걸리는 것이 없음을 보았다. 남은 링크는 XMP의 macOS 플러그인 묶음(빌드하지 않음)과 위의 도구, 시험 자료뿐이다.
+
+남은 것: SurfaceFlinger, libhwui, libEGL과 그 아래 라이브러리(frameworks/native, frameworks/base, Skia 등)의 소스는 이번에 받아 보지 않았다. 컴파일이 처음으로 그 소스까지 가므로 그 헤더는 다음 실행이 보인다. `m -k`라 서로 기다리지 않는 소스는 모두 시도되므로, 그 층의 빠진 헤더는 한 실행에 함께 나온다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 추정이다. 첫 실행의 `m -k` 요약이 빠진 프로젝트를 보이고, `update-lock.py --add`로 더한다. kati가 `bp4a`, `cp2a`와 이 제품을 받아들이는지, Soong만 쓰는 빌드에서 설치 경로를 대상으로 줄 수 있는지는 번역기 빌드와 같이 실행에서 확인한다.
