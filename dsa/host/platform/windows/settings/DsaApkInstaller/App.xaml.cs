@@ -52,7 +52,7 @@ public partial class App : Application
             // Started without a file (by hand, or from Open with on nothing): ask for one.
             var picker = new Microsoft.Win32.OpenFileDialog
             {
-                Title = Text.Get("ApkWindow_Caption"),
+                Title = ApkInstallerTitle.For(CultureInfo.CurrentUICulture),
                 Filter = "APK (*.apk)|*.apk",
                 CheckFileExists = true,
             };

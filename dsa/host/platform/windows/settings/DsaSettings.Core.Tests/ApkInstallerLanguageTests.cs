@@ -1,10 +1,12 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 
 namespace Dsa.Settings.Core.Tests;
 
-/// <summary>The APK Installer's window is English in every language, so no language mixes
+/// <summary>The APK Installer's window is English in every language except its title, which
+/// is Korean when the Windows UI is Korean, so no other language mixes
 /// into it, and it carries DSA's own parcel icon.</summary>
 public class ApkInstallerLanguageTests
 {
@@ -66,6 +68,49 @@ public class ApkInstallerLanguageTests
             var value = (string?)data.Element("value") ?? "";
             Assert.False(Hangul.IsMatch(value), (string?)data.Attribute("name") + " has Korean text in English");
         }
+    }
+
+    [Theory]
+    [InlineData("ko-KR")]
+    [InlineData("ko")]
+    public void Fr11_installer_title_is_korean_when_the_ui_is_korean(string culture)
+    {
+        Assert.Equal("APK 설치 관리자", ApkInstallerTitle.For(new CultureInfo(culture)));
+    }
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("en-GB")]
+    [InlineData("ja-JP")]
+    [InlineData("fr-FR")]
+    [InlineData("")]
+    public void Fr11_installer_title_is_english_when_the_ui_is_not_korean(string culture)
+    {
+        Assert.Equal("APK Installer", ApkInstallerTitle.For(new CultureInfo(culture)));
+    }
+
+    [Fact]
+    public void Fr11_installer_window_takes_its_title_from_the_ui_language()
+    {
+        // Both places the title shows (the window and the file picker) use the lookup, and
+        // nothing in the installer reads the localised caption from the settings app's table.
+        foreach (var name in new[] { "InstallerWindow.xaml.cs", "App.xaml.cs" })
+        {
+            var source = File.ReadAllText(Find("DsaApkInstaller", name));
+            Assert.Contains("ApkInstallerTitle.For(CultureInfo.CurrentUICulture)", source);
+            Assert.DoesNotContain("ApkWindow_Caption", source);
+        }
+    }
+
+    [Fact]
+    public void Fr11_installer_title_is_the_only_korean_text_it_can_show()
+    {
+        // The title lookup holds exactly one Korean string, the title itself, so no other
+        // text can come out Korean through it.
+        var source = File.ReadAllText(Find("DsaSettings.Core", "ApkInstallerTitle.cs"));
+        var korean = Regex.Matches(source, "\"([^\"]*)\"")
+            .Select(m => m.Groups[1].Value).Where(s => Hangul.IsMatch(s)).ToList();
+        Assert.Equal(new[] { "APK 설치 관리자" }, korean);
     }
 
     [Fact]
