@@ -65,7 +65,7 @@ use dsa_transport::{Connection, Connector, TransportError};
 use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
-use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::apk::{self, InstallOutcome, InstallPart, InstalledPackage};
 use crate::app_windows::{self, AppWindowSettings};
 use crate::apps::{self, UninstallOutcome};
 use crate::arm_translation::{self, GuestArmTranslation, Package, Source, Translator};
@@ -366,6 +366,24 @@ pub trait UserAndroid: Send + Sync {
     ) -> Result<InstallOutcome, InstallError> {
         let _ = abi;
         self.install_apk(name, size, content)
+    }
+    /// Installs an app made of several files, `parts`, whose bytes are read from `content` one
+    /// after another, in this Android, with its native code for `abi` as in
+    /// [`install_apk_for`](UserAndroid::install_apk_for), and returns how the install ended:
+    /// the APKs go into one install session, and the expansion files into the app's folder
+    /// under `Android/obb/`. `name` is the bundle the parts come from. One install runs at a
+    /// time; a second waits.
+    fn install_parts(
+        &self,
+        name: &str,
+        parts: &[InstallPart],
+        abi: Option<&str>,
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        let _ = (name, parts, abi, content);
+        Err(InstallError::Refused(
+            "this Android does not install apps made of several APKs".into(),
+        ))
     }
     /// Installs the app `package` again from the APKs it has in this Android, with its native
     /// code for arm64-v8a (`on`) or x86_64, keeping its data; with `erase_data`, also when
@@ -711,13 +729,16 @@ impl UserAndroid for Session {
         abi: Option<&str>,
         content: &mut dyn Read,
     ) -> Result<InstallOutcome, InstallError> {
-        Session::install_apk_for(self, name, size, abi, content).map_err(|error| match error {
-            SessionError::NotActive(state) => InstallError::NotRunning(format!(
-                "Android is {state}; start it and install the APK again"
-            )),
-            SessionError::InstallRefused(why) => InstallError::Refused(why),
-            other => InstallError::Refused(format!("the APK did not reach Android: {other}")),
-        })
+        Session::install_apk_for(self, name, size, abi, content).map_err(install_error)
+    }
+    fn install_parts(
+        &self,
+        name: &str,
+        parts: &[InstallPart],
+        abi: Option<&str>,
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        Session::install_parts(self, name, parts, abi, content).map_err(install_error)
     }
     fn set_run_as_arm(
         &self,
@@ -796,6 +817,17 @@ fn widget_error(error: SessionError) -> WidgetError {
             TaskRequestError::NotRunning(why) => WidgetError::NotRunning(why),
             TaskRequestError::Failed(why) => WidgetError::Refused(why),
         },
+    }
+}
+
+/// What an install that did not end with Android's answer tells a client.
+fn install_error(error: SessionError) -> InstallError {
+    match error {
+        SessionError::NotActive(state) => InstallError::NotRunning(format!(
+            "Android is {state}; start it and install the app again"
+        )),
+        SessionError::InstallRefused(why) => InstallError::Refused(why),
+        other => InstallError::Refused(format!("the app did not reach Android: {other}")),
     }
 }
 
@@ -3490,7 +3522,26 @@ impl HostApiService {
                 }),
             );
         };
-        let checked = apk::check_name(&install.name).and_then(|()| apk::check_size(install.size));
+        let parts: Vec<InstallPart> = install
+            .parts
+            .iter()
+            .cloned()
+            .map(InstallPart::from_wire)
+            .collect();
+        let checked = if parts.is_empty() {
+            apk::check_name(&install.name).and_then(|()| apk::check_size(install.size))
+        } else {
+            apk::check_parts(&install.name, &parts).and_then(|total| {
+                if total == install.size {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "the files of {:?} add up to {total} bytes, not the {} announced",
+                        install.name, install.size
+                    ))
+                }
+            })
+        };
         let android = match (checked, self.androids.android(&peer.user)) {
             (Err(why), _) => {
                 eprintln!("install: refused an APK from {}: {why}", peer.user);
@@ -3543,7 +3594,12 @@ impl HostApiService {
             piece: Vec::new(),
             at: 0,
         };
-        let body = match android.install_apk_for(&install.name, install.size, abi, &mut content) {
+        let installed = if parts.is_empty() {
+            android.install_apk_for(&install.name, install.size, abi, &mut content)
+        } else {
+            android.install_parts(&install.name, &parts, abi, &mut content)
+        };
+        let body = match installed {
             Ok(outcome) => response::Body::InstallResult(outcome.to_wire()),
             Err(InstallError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
             Err(InstallError::Refused(why)) => error(ErrorCode::InstallRefused, why),
@@ -5484,10 +5540,36 @@ impl HostApiClient {
     /// libraries it holds ([`crate::apk::ApkFile::native_libraries`]), from which the service
     /// chooses the ABI it is installed for.
     pub fn install_apk_with_libraries(
+        self,
+        name: &str,
+        size: u64,
+        libraries: &NativeLibraries,
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, ClientError> {
+        self.install(name, size, libraries, &[], content)
+    }
+
+    /// Installs an app made of several files in the caller's Android: `parts` names them, and
+    /// their bytes are read from `content` one after another, in that order. `name` is the
+    /// bundle they come from, and `libraries` the native libraries of its APKs among the
+    /// parts, together. Otherwise as [`install_apk`](Self::install_apk).
+    pub fn install_parts(
+        self,
+        name: &str,
+        parts: &[InstallPart],
+        libraries: &NativeLibraries,
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, ClientError> {
+        let size = parts.iter().map(|part| part.size).sum();
+        self.install(name, size, libraries, parts, content)
+    }
+
+    fn install(
         mut self,
         name: &str,
         size: u64,
         libraries: &NativeLibraries,
+        parts: &[InstallPart],
         content: &mut dyn Read,
     ) -> Result<InstallOutcome, ClientError> {
         let id = self.next_id;
@@ -5496,7 +5578,7 @@ impl HostApiClient {
                 name: name.to_string(),
                 size,
                 native_libraries: libraries.to_wire(),
-                parts: Vec::new(),
+                parts: parts.iter().map(InstallPart::to_wire).collect(),
             }),
             self.timeout,
         )? {

@@ -16,7 +16,7 @@ use super::trial::{self, Boot, Outcome};
 use super::versions::{AndroidVersions, Channel, ChooseError, VersionReport};
 use super::UpdateError;
 use crate::accessibility::{AccessibilityWatch, ActionRequest};
-use crate::apk::{InstallOutcome, InstalledPackage};
+use crate::apk::{InstallOutcome, InstallPart, InstalledPackage};
 use crate::apps::UninstallOutcome;
 use crate::background::{BackgroundApp, BackgroundWatch, MediaSession};
 use crate::host_api::InstallError;
@@ -719,6 +719,15 @@ impl UserAndroid for UpdatingAndroid {
         content: &mut dyn std::io::Read,
     ) -> Result<InstallOutcome, InstallError> {
         UserAndroid::install_apk_for(&*self.session, name, size, abi, content)
+    }
+    fn install_parts(
+        &self,
+        name: &str,
+        parts: &[InstallPart],
+        abi: Option<&str>,
+        content: &mut dyn std::io::Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        UserAndroid::install_parts(&*self.session, name, parts, abi, content)
     }
     fn set_run_as_arm(
         &self,

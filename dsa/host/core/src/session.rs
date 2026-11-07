@@ -73,8 +73,9 @@
 //! removed. What the user does with one ([`Session::notification_action`]) goes back to the
 //! guest: a click first wakes a guest in Doze, as a shown window does, so the app opens on a
 //! screen that is on, and a dismissal waits for a frozen guest to be thawed.
-//! APKs from the host go to the guest with [`Session::install_apk`], streamed in chunks paced
-//! by the agent's progress reports, one install at a time; a second waits for the first.
+//! APKs from the host go to the guest with [`Session::install_apk`], and apps made of several
+//! APKs and expansion files with [`Session::install_parts`], streamed in chunks paced by the
+//! agent's progress reports, one install at a time; a second waits for the first.
 //!
 //! The widgets the agent hosts go to every [`Session::watch_widgets`] watcher, with what each
 //! one shows ([`crate::widgets`]). They are kept while the guest is stopped, so their windows
@@ -114,7 +115,7 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, TreeUpdate,
 };
 use crate::adb_bridge::{AdbBridge, BridgeStream, GuestAdb};
-use crate::apk::{self, InstallOutcome, InstalledPackage};
+use crate::apk::{self, InstallOutcome, InstallPart, InstalledPackage};
 use crate::apps::UninstallOutcome;
 use crate::arm_translation::GuestArmTranslation;
 use crate::background::{
@@ -1645,6 +1646,34 @@ impl Session {
         apk::check_name(name)
             .and_then(|()| apk::check_size(size))
             .map_err(SessionError::InstallRefused)?;
+        self.install(name, size, abi, &[], content)
+    }
+
+    /// Installs an app made of several files in the guest: the APKs of `parts` go into one
+    /// install session, with their native code for `abi` as in
+    /// [`install_apk_for`](Self::install_apk_for), and the agent copies the expansion files
+    /// among them into the app's folder under `Android/obb/` once the app is installed. Their
+    /// bytes are read from `content` one after another, in the order of `parts`; `name` is the
+    /// bundle they come from, for the log. Otherwise as [`install_apk`](Self::install_apk).
+    pub fn install_parts(
+        &self,
+        name: &str,
+        parts: &[InstallPart],
+        abi: Option<&str>,
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, SessionError> {
+        let size = apk::check_parts(name, parts).map_err(SessionError::InstallRefused)?;
+        self.install(name, size, abi, parts, content)
+    }
+
+    fn install(
+        &self,
+        name: &str,
+        size: u64,
+        abi: Option<&str>,
+        parts: &[InstallPart],
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, SessionError> {
         let _turn = self
             .shared
             .install_turn
@@ -1669,10 +1698,18 @@ impl Session {
             .unwrap_or_else(|e| e.into_inner())
             .insert(transfer_id, tx);
         eprintln!(
-            "install: sending {name} ({size} bytes) to Android as install {transfer_id}{}",
+            "install: sending {name} ({size} bytes, {} files) as install {transfer_id}{}",
+            parts.len().max(1),
             abi.map(|abi| format!(", for {abi}")).unwrap_or_default()
         );
-        let result = self.send_apk(transfer_id, name, size, abi, content, &events);
+        let announce = control::InstallApk {
+            transfer_id,
+            name: name.to_string(),
+            size,
+            abi: abi.unwrap_or_default().to_string(),
+            parts: parts.iter().map(InstallPart::to_control).collect(),
+        };
+        let result = self.send_apk(announce, content, &events);
         self.shared
             .installs
             .lock()
@@ -1685,23 +1722,18 @@ impl Session {
         result
     }
 
+    /// Announces the install `install` and sends its content, paced by the agent's progress.
     fn send_apk(
         &self,
-        transfer_id: u32,
-        name: &str,
-        size: u64,
-        abi: Option<&str>,
+        install: control::InstallApk,
         content: &mut dyn Read,
         events: &Receiver<InstallEvent>,
     ) -> Result<InstallOutcome, SessionError> {
+        let transfer_id = install.transfer_id;
+        let size = install.size;
+        let name = install.name.clone();
         self.send(dsa_protocol::encode(&control::Envelope {
-            body: Some(Body::InstallApk(control::InstallApk {
-                transfer_id,
-                name: name.to_string(),
-                size,
-                abi: abi.unwrap_or_default().to_string(),
-                parts: Vec::new(),
-            })),
+            body: Some(Body::InstallApk(install)),
         }))?;
         let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;
         let mut sent = 0u64;

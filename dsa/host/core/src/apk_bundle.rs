@@ -45,6 +45,23 @@ pub use crate::native_abi::{ARM64, X86_64};
 /// The largest manifest read from a split.
 const MAX_MANIFEST: usize = 4 * 1024 * 1024;
 
+/// The file extensions of what goes to the install flow rather than to an app: APKs, the
+/// bundles taken, and App Bundles, which the flow refuses with its reason.
+pub const INSTALL_EXTENSIONS: [&str; 5] = ["apk", "xapk", "apks", "apkm", "aab"];
+
+/// Whether the file at `path` goes to the install flow, by its extension. What it is, the flow
+/// tells from its content.
+pub fn is_install_file(path: &Path) -> bool {
+    path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            INSTALL_EXTENSIONS
+                .iter()
+                .any(|known| extension.eq_ignore_ascii_case(known))
+        })
+}
+
 /// The kinds of split-APK bundle taken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Format {

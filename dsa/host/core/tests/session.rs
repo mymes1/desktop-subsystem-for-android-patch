@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use dsa_host_core::apk::{self, InstallStatus};
+use dsa_host_core::apk::{self, InstallPart, InstallStatus};
 use dsa_host_core::apps::UninstallStatus;
 use dsa_host_core::background::{BackgroundCommand, BackgroundEvent, MediaCommand, Playback};
 use dsa_host_core::handshake::ControlHandshake;
@@ -3743,6 +3743,81 @@ fn fr11_a_second_install_waits_until_the_first_has_ended() {
         ),
     );
     assert!(second.join().unwrap().unwrap().installed());
+}
+
+#[test]
+fn fr11_a_split_install_names_its_parts_and_sends_them_one_after_another() {
+    let (session, mut agent, _launcher) = active_session();
+    let session = Arc::new(session);
+    let base = apk_bytes(apk::CHUNK_BYTES * 2 + 5);
+    let split = apk_bytes(1000);
+    let obb = apk_bytes(77);
+    let parts = vec![
+        part("base.apk", base.len(), false),
+        part("split_config.x86_64.apk", split.len(), false),
+        part("main.42.com.example.notes.obb", obb.len(), true),
+    ];
+    let content = [base, split, obb].concat();
+    let installing = {
+        let session = Arc::clone(&session);
+        let (parts, content) = (parts.clone(), content.clone());
+        let abi = Some("arm64-v8a");
+        thread::spawn(move || session.install_parts("notes.xapk", &parts, abi, &mut &content[..]))
+    };
+    let announced = match next_install_body(&mut agent) {
+        Body::InstallApk(install) => install,
+        other => panic!("expected an install, got {other:?}"),
+    };
+    assert_eq!(announced.name, "notes.xapk");
+    assert_eq!(announced.size, content.len() as u64);
+    assert_eq!(announced.abi, "arm64-v8a");
+    let expected: Vec<_> = parts.iter().map(InstallPart::to_control).collect();
+    assert_eq!(announced.parts, expected);
+    let mut received = Vec::new();
+    while received.len() < content.len() {
+        match next_install_body(&mut agent) {
+            Body::ApkChunk(chunk) => {
+                assert_eq!(chunk.offset, received.len() as u64, "in order");
+                received.extend_from_slice(&chunk.data);
+                send_body(
+                    &mut agent,
+                    install_progress(announced.transfer_id, received.len() as u64),
+                );
+            }
+            other => panic!("expected a piece of the install, got {other:?}"),
+        }
+    }
+    assert!(received == content, "the files arrived changed");
+    send_body(
+        &mut agent,
+        install_result(
+            announced.transfer_id,
+            dsa_protocol::control::InstallStatus::Success,
+            "com.example.notes",
+            "",
+        ),
+    );
+    let outcome = installing.join().unwrap().expect("installed");
+    assert!(outcome.installed());
+}
+
+#[test]
+fn fr11_a_split_install_android_cannot_take_is_refused_before_anything_is_sent() {
+    let (session, mut agent, _launcher) = active_session();
+    let only_obb = [part("main.1.com.example.notes.obb", 3, true)];
+    match session.install_parts("notes.xapk", &only_obb, None, &mut &b"obb"[..]) {
+        Err(SessionError::InstallRefused(why)) => assert!(why.contains("no APK"), "{why}"),
+        other => panic!("expected the install to be refused, got {other:?}"),
+    }
+    nothing_for_the_guest(&mut agent);
+}
+
+fn part(name: &str, size: usize, obb: bool) -> InstallPart {
+    InstallPart {
+        name: name.into(),
+        size: size as u64,
+        obb,
+    }
 }
 
 #[test]

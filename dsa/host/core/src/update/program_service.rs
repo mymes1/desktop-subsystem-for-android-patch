@@ -33,7 +33,7 @@ use super::service::UpdateNotices;
 use super::store::{download_checked, DownloadFailure, Expected, Fetch};
 use super::{from_hex, to_hex};
 use crate::accessibility::{AccessibilityWatch, ActionRequest};
-use crate::apk::{InstallOutcome, InstalledPackage};
+use crate::apk::{InstallOutcome, InstallPart, InstalledPackage};
 use crate::apps::UninstallOutcome;
 use crate::background::{BackgroundApp, BackgroundWatch, MediaSession};
 use crate::host_api::InstallError;
@@ -933,6 +933,15 @@ impl UserAndroid for WithProgramStatus {
         content: &mut dyn std::io::Read,
     ) -> Result<InstallOutcome, InstallError> {
         UserAndroid::install_apk_for(&*self.android, name, size, abi, content)
+    }
+    fn install_parts(
+        &self,
+        name: &str,
+        parts: &[InstallPart],
+        abi: Option<&str>,
+        content: &mut dyn std::io::Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        UserAndroid::install_parts(&*self.android, name, parts, abi, content)
     }
     fn set_run_as_arm(
         &self,
