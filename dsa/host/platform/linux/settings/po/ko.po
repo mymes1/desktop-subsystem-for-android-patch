@@ -54,6 +54,9 @@ msgstr "가상 머신(crosvm)"
 msgid "Window manager"
 msgstr "창 관리자"
 
+msgid "Graphics renderer"
+msgstr "그래픽 렌더러"
+
 msgid "App window"
 msgstr "앱 창"
 

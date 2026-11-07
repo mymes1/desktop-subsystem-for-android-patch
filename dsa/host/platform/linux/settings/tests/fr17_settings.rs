@@ -328,7 +328,8 @@ fn fr17_the_memory_page_shows_the_vm_and_the_guest_breakdown() {
     let memory = Memory::read(&json!({
         "host": [
             { "role": "vm", "pid": 10, "working_set_kb": 1048576, "private_kb": 1000 },
-            { "role": "window manager", "pid": 11, "working_set_kb": 2048, "private_kb": 1024 }
+            { "role": "window manager", "pid": 11, "working_set_kb": 2048, "private_kb": 1024 },
+            { "role": "graphics renderer", "pid": 12, "working_set_kb": 4096, "private_kb": 2048 }
         ],
         "host_total_kb": 1050624,
         "vm_beyond_guest_kb": 524288,
@@ -343,8 +344,10 @@ fn fr17_the_memory_page_shows_the_vm_and_the_guest_breakdown() {
     }));
     assert_eq!(view::vm_size_kb(&memory), Some(1048576));
     let host = view::host_rows(&memory);
-    assert_eq!(host.len(), 2);
+    assert_eq!(host.len(), 3);
     assert_eq!(host[0].size, "1.0 GB");
+    // The graphics renderer runs in a process of its own and shows as one.
+    assert_eq!(host[2].label, "Graphics renderer");
     let guest = memory.guest.as_ref().unwrap();
     let rows = view::guest_rows(guest);
     assert_eq!(rows[0].size, "800 MB");
