@@ -186,7 +186,7 @@ public class ApkInstallerStyleTests
         var doc = Window();
         var link = Named(doc, "MoreLink");
         Assert.Equal(XNamespace.Get("clr-namespace:Dsa.ApkInstaller") + "ExpandLink", link.Name);
-        Assert.Single(doc.Descendants().Where(e => (string?)e.Attribute(X + "Name") == "MoreLink"));
+        Assert.Single(doc.Descendants(), e => (string?)e.Attribute(X + "Name") == "MoreLink");
         foreach (var hidden in new[] { "PermissionPreview", "PermissionList", "ExpandedPanel" })
         {
             Assert.DoesNotContain(link, Named(doc, hidden).Descendants());
