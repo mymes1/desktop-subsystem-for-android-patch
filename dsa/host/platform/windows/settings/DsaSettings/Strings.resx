@@ -452,7 +452,7 @@
     <value>Memory limit</value>
   </data>
   <data name="MemoryLimitCard.Description" xml:space="preserve">
-    <value>The most memory Android may grow to. Android takes memory only as it needs it and gives it back when idle. Automatic lets it grow to 3 GB, never past this PC's memory. Takes effect the next time Android starts.</value>
+    <value>The most memory Android may grow to. Android takes memory only as it needs it and returns it at once when it no longer does. Automatic sets no fixed limit: Android can grow up to this PC's memory less what Windows keeps. Takes effect the next time Android starts.</value>
   </data>
   <data name="MemoryLimit_Auto" xml:space="preserve">
     <value>Automatic</value>
