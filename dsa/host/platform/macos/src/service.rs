@@ -273,7 +273,8 @@ impl Planner {
         Ok(BootPlan {
             vm,
             properties,
-            bootconfig: arm_translation_bootconfig(&*self.settings, &self.name),
+            bootconfig: arm_translation_bootconfig(&*self.settings, &self.name)
+                + &dsa_host_core::gapps::bootconfig_for(&*self.settings, &self.name),
         })
     }
 }
@@ -706,6 +707,12 @@ pub fn serve(
                     .and_then(|(dir, _)| ImageBuild::from_image_dir(&dir))
             }),
         );
+    // Google Play, for a user who asks: downloaded from LiteGapps and made ready in the
+    // user's own folder.
+    service = service.with_gapps(dsa_host_core::gapps::Source::new(
+        Arc::new(CurlFetch),
+        config.settings_dir(&user).with_file_name("gapps"),
+    ));
     if let Some(store) = &store {
         // The agent keeps this user's own images, so the choice is theirs alone.
         service = service.with_android_versions(Arc::new(StoreVersions {

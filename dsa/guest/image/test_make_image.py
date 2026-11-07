@@ -93,6 +93,7 @@ class ImageLayoutTests(unittest.TestCase):
     CHANNELD_DATA_PATHS = {
         "/data/media/0": ["system_data_root_file", "media_userdir_file", "media_rw_data_file"],
         "/data/vendor/dsa/arm-translation": ["system_data_root_file", "vendor_data_file"],
+        "/data/vendor/dsa/gapps": ["system_data_root_file", "vendor_data_file"],
     }
 
     # What each file system call in the file sharing jobs asks of the storage's label
@@ -3647,6 +3648,93 @@ class ArmTranslationImageTests(unittest.TestCase):
                         "sets ro.dalvik.vm.native.bridge=libhoudini.so"]:
             self.assertIn(problem, outputs[0])
             self.assertNotIn(problem, outputs[1])
+
+    def test_fr32_the_product_props_import_the_google_play_properties_before_the_arm_ones(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            product = archive.read("PRODUCT/etc/build.prop").decode().splitlines()
+            self.assertEqual(product[-2:], [
+                "import /system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop",
+                "import /system/etc/dsa/arm-translation-${ro.boot.dsa.arm_translation:-off}.prop",
+            ])
+            self.assertEqual(product.count(product[-2]), 1)
+            on = archive.read("SYSTEM/etc/dsa/gapps-on.prop").decode().splitlines()
+            props = [line for line in on if line and not line.startswith("#")]
+            self.assertEqual([line.split("=", 1)[0] for line in props], ["ro.oem.build.fingerprint"])
+            off = archive.read("SYSTEM/etc/dsa/gapps-off.prop").decode().splitlines()
+            self.assertEqual([line for line in off if line and not line.startswith("#")], [])
+            config = archive.read("META/filesystem_config.txt").decode()
+            for rule in make_image.GAPPS_FS_CONFIG:
+                self.assertIn(rule, config)
+
+    def test_fr32_the_google_apps_are_laid_over_only_when_the_host_says_they_are_installed(self):
+        rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
+        trigger = "on post-fs-data && property:ro.boot.dsa.gapps=on\n"
+        before, after = rc.split(trigger, 1)
+        section, rest = after.split("\n\n", 1)
+        self.assertIn("mount erofs loop@/data/vendor/dsa/gapps/system.img /mnt/dsa-gapps ro nodev nosuid "
+                      "context=u:object_r:system_file:s0", section)
+        for partition in ["product", "system_ext"]:
+            self.assertIn(
+                f"mount overlay overlay /{partition} ro nodev nosuid "
+                f"lowerdir=/mnt/dsa-gapps/{partition}:/{partition}",
+                section,
+            )
+        # Every mount waits for the host's word.
+        self.assertNotIn("mount ", before)
+        self.assertNotIn("mount ", rest)
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            self.assertEqual(archive.read("SYSTEM/etc/init/dsa-gapps.rc").decode(), rc)
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertIn("(allow init system_file (filesystem (relabelto associate)))", policy)
+            self.assertIn("(allow system_file labeledfs (filesystem (associate)))", policy)
+
+    def test_fr32_x86_64_stays_the_first_abi_when_arm_translation_is_on(self):
+        on = (Path(make_image.__file__).with_name("arm-translation-on.prop")).read_text().splitlines()
+        abilists = [line.split("=", 1)[1] for line in on if ".cpu.abilist" in line.split("=", 1)[0]]
+        self.assertTrue(abilists)
+        for abilist in abilists:
+            self.assertEqual(abilist.split(",")[0], "x86_64", abilist)
+
+    def test_fr32_check_image_rejects_an_image_that_lays_the_google_apps_over_by_itself(self):
+        check_script = Path(__file__).with_name("check-image.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            img_dir = root / "image"
+            img_dir.mkdir()
+            keys_dir = root / "keys"
+            keys_dir.mkdir()
+            (img_dir / "image.json").write_text(json.dumps({"files": {}, "kernel_cmdline": ""}))
+            (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            gapps_rc = (Path(make_image.__file__).with_name("dsa-gapps.rc")).read_text()
+            outputs = []
+            for case in ["missing", "always", "arm-first", "good"]:
+                with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
+                    archive.writestr("META/apkcerts.txt", "")
+                    archive.writestr("SYSTEM/build.prop", "ro.debuggable=0\n")
+                    abilist = "arm64-v8a,x86_64" if case == "arm-first" else "x86_64,arm64-v8a"
+                    archive.writestr("SYSTEM/etc/dsa/arm-translation-on.prop",
+                                     f"ro.product.cpu.abilist={abilist}\n")
+                    if case == "missing":
+                        archive.writestr("PRODUCT/etc/build.prop", "ro.product.product.name=dsa\n")
+                    else:
+                        rc = gapps_rc if case != "always" else "on post-fs-data\n    mount overlay overlay /product ro\n"
+                        archive.writestr("SYSTEM/etc/init/dsa-gapps.rc", rc)
+                        archive.writestr("SYSTEM/etc/dsa/gapps-on.prop", "ro.oem.build.fingerprint=x\n")
+                        archive.writestr("SYSTEM/etc/dsa/gapps-off.prop", "# nothing\n")
+                        archive.writestr("PRODUCT/etc/build.prop",
+                                         make_image.add_arm_translation_import(make_image.add_gapps_import("")))
+                outputs.append(subprocess.run(
+                    [sys.executable, str(check_script), str(img_dir), str(keys_dir)],
+                    capture_output=True, text=True,
+                ).stdout)
+        missing, always, arm_first, good = outputs
+        for problem in ["dsa-gapps.rc is missing", "does not import the Google Play properties"]:
+            self.assertIn(problem, missing)
+            self.assertNotIn(problem, good)
+        self.assertIn("without waiting for the host", always)
+        self.assertNotIn("without waiting for the host", good)
+        self.assertIn("x86_64 is not the ABI apps are installed for first", arm_first)
+        self.assertNotIn("x86_64 is not the ABI apps are installed for first", good)
 
 
 if __name__ == "__main__":

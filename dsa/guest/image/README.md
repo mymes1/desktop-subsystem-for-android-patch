@@ -22,6 +22,7 @@ default is x86_64. The arm64 guest runs no 32-bit ARM code, because the target h
 | `dsa-channel-manifest.xml` | The vendor manifest entry declaring the daemon's binder service |
 | `dsa-trace.rc` | Turns on main thread timing in every app when the input trace is on |
 | `dsa-arm-translation.rc`, `arm-translation-on.prop`, `arm-translation-off.prop` | Use an ARM translation package the user installed, only on a boot the host marks (`../arm-translation/README.md`) |
+| `dsa-gapps.rc`, `gapps-on.prop`, `gapps-off.prop` | Lay the Google apps the user installed (`dsa gapps install`) over `/product` and `/system_ext`, only on a boot the host marks |
 | `sepolicy/` | Policy added to the image: vsock for graphics, the control daemon's domain and binder service, the memory controls (`memory.cil`), the audio module's socket to the host (`audio.cil`), and what the agent needs to force Doze and set the battery (`agent.cil`) |
 
 ```
@@ -118,6 +119,18 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   `/data/vendor/dsa/arm-translation/system.img` over `/system`'s `lib64`, `bin` and `etc` before
   the zygote starts, and registers its binfmt_misc handlers. `sepolicy/arm-translation.cil`
   lets init do so; dsa-channeld writes and removes the image.
+- Google Play stays out of the image. A user who wants it runs `dsa gapps install` (or the
+  settings app's Google Play item): the host downloads LiteGapps' Core build for this Android
+  and sends an erofs image of its apps, permission lists, system configuration and framework
+  files, which dsa-channeld keeps at `/data/vendor/dsa/gapps/system.img`. While one is installed
+  the host puts `androidboot.dsa.gapps=on` in the bootconfig. Then `dsa-gapps.rc` mounts the
+  image and lays its `product` and `system_ext` folders over `/product` and `/system_ext`
+  before the zygote starts, so each app's privileged permission list stays in its own
+  partition, where the package manager reads it. The product `build.prop` imports
+  `/system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop` just before the ARM translation
+  import: the "on" file sets the fingerprint of the oem partition, which the image does not
+  have, so the boot is an upgrade and the package manager installs the new system apps for every
+  user and grants their default permissions. `sepolicy/gapps.cil` lets init do so.
 - Cuttlefish's `seriallogging.rc` is removed. Its logger writes to a virtio console Hyper-V
   does not have, and init would restart it every five seconds for as long as the guest runs.
 - `sepolicy/memory.cil` lets the audio HAL and the software codecs share memory through
