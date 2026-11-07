@@ -1197,9 +1197,9 @@ macro_rules! host_api_conformance {
         }
         #[test]
         fn fr11_parts_that_do_not_add_up_or_that_android_cannot_take_are_refused() {
-            $crate::host_api_conformance::wrong_parts_are_refused_before_they_are_sent(
-                &mut || $make,
-            );
+            $crate::host_api_conformance::wrong_parts_are_refused_before_they_are_sent(&mut || {
+                $make
+            });
         }
         #[test]
         fn fr11_an_apk_android_refuses_is_answered_with_the_reason() {
