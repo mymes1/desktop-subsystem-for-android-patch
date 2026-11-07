@@ -633,7 +633,9 @@
             "include/pathops",
             "include/ports",
             "include/private",
+            "include/sksl",
             "include/svg",
+            "include/third_party",
             "include/utils",
             "linux",
             "modules/skcms",
@@ -931,6 +933,11 @@
           ]
         },
         {
+          "path": "hardware/libhardware_legacy",
+          "url": "https://android.googlesource.com/platform/hardware/libhardware_legacy",
+          "commit": "3e1bd41dcb66b0ee75ada6e2167a3d7fecd7fce9"
+        },
+        {
           "path": "libnativehelper",
           "url": "https://android.googlesource.com/platform/libnativehelper",
           "commit": "2d584ec2da2c5271ed1576593c6590d652806f0d"
@@ -971,7 +978,9 @@
             "soong",
             "{clang}",
             "clang-stable",
-            "llvm-binutils-stable"
+            "llvm-binutils-stable",
+            "clang-r563880/bin",
+            "clang-r563880/lib"
           ]
         },
         {
@@ -1688,6 +1697,7 @@
           "url": "https://android.googlesource.com/platform/external/protobuf",
           "commit": "db06feae31e2a10ffc7ddaccd9e285ff7c13c0ab",
           "cone": [
+            "rust/cpp_kernel",
             "src",
             "third_party/utf8_range",
             "upb/base",
@@ -1696,6 +1706,7 @@
             "upb/message",
             "upb/mini_descriptor",
             "upb/mini_table",
+            "upb/port",
             "upb/reflection",
             "upb/util",
             "upb/wire",
@@ -1858,7 +1869,9 @@
             "include/pathops",
             "include/ports",
             "include/private",
+            "include/sksl",
             "include/svg",
+            "include/third_party",
             "include/utils",
             "linux",
             "modules/skcms",
@@ -2148,6 +2161,11 @@
           ]
         },
         {
+          "path": "hardware/libhardware_legacy",
+          "url": "https://android.googlesource.com/platform/hardware/libhardware_legacy",
+          "commit": "2a073cd42ec822914ed4e680e7b708485d3a172b"
+        },
+        {
           "path": "libnativehelper",
           "url": "https://android.googlesource.com/platform/libnativehelper",
           "commit": "5b63a7e308ca88c5c4a2a74dfda9c73ed17cfebb"
@@ -2188,7 +2206,9 @@
             "soong",
             "{clang}",
             "clang-stable",
-            "llvm-binutils-stable"
+            "llvm-binutils-stable",
+            "clang-r584948/bin",
+            "clang-r584948/lib"
           ]
         },
         {

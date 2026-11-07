@@ -1609,6 +1609,34 @@ statslog 생성 헤더를 기다리는 SurfaceFlinger와 libhwui의 소스는 �
 
 남은 것: SurfaceFlinger, libhwui, libEGL과 그 아래 라이브러리(frameworks/native, frameworks/base, Skia 등)의 소스는 이번에 받아 보지 않았다. 컴파일이 처음으로 그 소스까지 가므로 그 헤더는 다음 실행이 보인다. `m -k`라 서로 기다리지 않는 소스는 모두 시도되므로, 그 층의 빠진 헤더는 한 실행에 함께 나온다.
 
+### 일곱 번째 실행(run 42417890599, 네 작업)과 고친 것
+
+프레임워크 쪽이 네 작업 모두 컴파일되었다. 실패한 동작은 16이 작업마다 819개, 17이 65개였다. `error.log`의 `FAILED` 블록마다 첫 오류를 모아 원인으로 묶었다.
+
+| 원인 | 16 | 17 |
+|---|---|---|
+| Skia `include/sksl/SkSLVersion.h`, `SkSLDebugTrace.h`(Skia, libhwui, RenderEngine) | 813 | 0 |
+| `upb/port/def.inc`(protobuf의 upb) | 0 | 59 |
+| `hardware_legacy/power.h`(PowerHalLoader) | 1 | 1 |
+| Rust bindgen 동작마다 `Unable to find libclang` | 5 | 5 |
+
+17에는 Skia 오류가 없었다. 17의 Skia도 같은 cone이고 같은 헤더를 읽으므로(아래 확인), 그 소스가 이번에 컴파일 단계까지 가지 않았던 것으로 보고 두 판 모두 고친다.
+
+- bindgen: Soong은 bindgen을 C 컴파일러와 다른 Clang으로 돌린다(`build/soong/rust/bindgen.go`의 `bindgenClangVersion`, 16은 `clang-r563880`, 17은 `clang-r584948`). `LIBCLANG_PATH`가 그 판의 `lib/`인데, 잠금은 C 컴파일러의 Clang(`{clang}`)만 받았다. 그 판의 `bin`과 `lib`를 더 받는다(판마다 약 2 GB).
+- `hardware_legacy/power.h`: Soong의 전역 include 폴더 `hardware/libhardware_legacy/include`의 파일인데 그 프로젝트가 잠금에 없었다. 파일 31개짜리 프로젝트라 통째로 받는다(커밋은 매니페스트에서).
+
+같은 층을 한 번에 찾으려고, 이번에는 잠금의 소스 프로젝트를 모두 잠금의 cone 그대로 실제로 받았다(프리빌트, `build/`, Rust 상자, Go 프로젝트는 빼고 판마다 약 1.6 GB, `.scratch`). 그리고 세 라이브러리가 닿는 모듈(묶음의 모듈 목록과, 그 뒤 더한 호스트 도구 `stats-log-api-gen`, `aprotoc`, `aconfig`, `hidl-gen`, `aidl` 등에서 따라간 모듈)의 C, C++, 어셈블리 소스를 시작점으로 `#include`를 끝까지 따라갔다(16은 소스 5,201개에서 파일 12,769개, 17은 5,324개에서 13,105개). 찾는 곳은 소스의 폴더, 그 모듈들이 적은 include 폴더, Soong의 전역 include 폴더다. 체크아웃에 없고 고정한 커밋에는 있는 헤더가 다음이었다.
+
+- Skia `include/sksl`, `include/third_party`(16, 17).
+- protobuf `upb/port`, `rust/cpp_kernel`(17, protoc의 Rust 생성기가 쓴다).
+- 그 밖에는 조건부로만 읽히는 것뿐이다. pdfium의 시험과 끈 XFA, googletest의 abseil flags(`GTEST_HAS_ABSL`), Skia의 Rust BMP와 Vello가 그렇다.
+
+어느 프로젝트에도 없는 include 경로도 살폈다. 생성되는 헤더(AIDL, perfetto의 `pbzero`), 다른 플랫폼의 헤더, Clang 자신의 헤더(`sanitizer/*`)뿐이었다. 빠진 프로젝트는 `hardware/libhardware_legacy` 하나다.
+
+고친 것: 위의 cone 넷과 Clang 두 폴더, 새 프로젝트 하나를 잠금에 더했다. 바꾼 잠금으로 받아 같은 확인을 다시 돌렸고, 남은 것은 조건부 헤더뿐이었다. 앞의 훑기(AIDL, gensrcs, 라이선스, Go 소스, 링크)도 깨끗했다.
+
+남은 것: 이 확인은 `#if`를 보지 않으므로, 실제로는 읽히지 않는 헤더를 보고할 수는 있어도 읽히는 헤더를 놓치지는 않는다. 다만 생성되는 소스(AIDL, protobuf, 생성 헤더)의 include는 따라가지 못한다. 그리고 묶음의 모듈 목록이 정적 추정이라 거기 없는 모듈의 소스는 시작점이 아니다. 링크는 아직 한 번도 돌지 않았으므로 링크 오류(빠진 정적 라이브러리, 심볼)는 다음 실행이 처음 보인다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 추정이다. 첫 실행의 `m -k` 요약이 빠진 프로젝트를 보이고, `update-lock.py --add`로 더한다. kati가 `bp4a`, `cp2a`와 이 제품을 받아들이는지, Soong만 쓰는 빌드에서 설치 경로를 대상으로 줄 수 있는지는 번역기 빌드와 같이 실행에서 확인한다.
