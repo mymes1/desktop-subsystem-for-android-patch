@@ -45,8 +45,8 @@ public class ApkInstallerStyleTests
 
     [Theory]
     // The WinUI type ramp: Title for the app's name, Body Strong, Body and Caption.
-    [InlineData("AppNameText", "28", "36", "Normal", "{StaticResource StrongDisplayFont}")]
-    [InlineData("SectionHeader", "14", "20", "Normal", "{StaticResource StrongTextFont}")]
+    [InlineData("AppNameText", "28", "36", "Normal", "{DynamicResource StrongDisplayFont}")]
+    [InlineData("SectionHeader", "14", "20", "Normal", "{DynamicResource StrongTextFont}")]
     [InlineData("DetailLine", "14", "20", "Normal", "{StaticResource TextFont}")]
     [InlineData("BodyText", "14", "20", "Normal", "{StaticResource TextFont}")]
     [InlineData("CaptionText", "12", "16", "Normal", "{StaticResource TextFont}")]

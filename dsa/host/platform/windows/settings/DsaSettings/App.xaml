@@ -22,10 +22,10 @@
                    Body Strong 14 px   section header
                    Body        14 px   setting (card) header
                    Caption     12 px   description, secondary colour
-                 Strong text names a Semibold face and keeps FontWeight Normal. Malgun Gothic has
-                 no Semibold, so FontWeight SemiBold would pick its Bold for Korean, while the
-                 Settings app shows Korean titles in Regular. This way Latin text is Semibold and
-                 Korean text is Regular. -->
+                 Malgun Gothic has no Semibold, so a Semibold request draws Korean in its Bold,
+                 even when the Semibold comes from a family name in the list, because WPF applies
+                 that weight to the whole list. The Settings app shows Korean titles in Regular,
+                 so App.OnStartup points the strong fonts at the regular ones in Korean. -->
             <FontFamily x:Key="TextFont">Segoe UI Variable Text, Segoe UI, Malgun Gothic</FontFamily>
             <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI, Malgun Gothic</FontFamily>
             <FontFamily x:Key="StrongTextFont">Segoe UI Variable Text Semibold, Segoe UI Semibold, Malgun Gothic</FontFamily>
@@ -49,7 +49,7 @@
                 <Setter Property="MaxWidth" Value="{StaticResource PageMaxWidth}" />
             </Style>
             <Style x:Key="PageTitle" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{StaticResource StrongDisplayFont}" />
+                <Setter Property="FontFamily" Value="{DynamicResource StrongDisplayFont}" />
                 <Setter Property="FontWeight" Value="Normal" />
                 <Setter Property="FontSize" Value="28" />
                 <Setter Property="LineHeight" Value="36" />
@@ -58,7 +58,7 @@
                 <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             </Style>
             <Style x:Key="SectionHeader" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{StaticResource StrongTextFont}" />
+                <Setter Property="FontFamily" Value="{DynamicResource StrongTextFont}" />
                 <Setter Property="FontWeight" Value="Normal" />
                 <Setter Property="FontSize" Value="14" />
                 <Setter Property="LineHeight" Value="20" />
@@ -84,7 +84,7 @@
             </Style>
             <!-- Subtitle: 20 px, 28 px line, for a value that leads a card. -->
             <Style x:Key="SubtitleText" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{StaticResource StrongDisplayFont}" />
+                <Setter Property="FontFamily" Value="{DynamicResource StrongDisplayFont}" />
                 <Setter Property="FontWeight" Value="Normal" />
                 <Setter Property="FontSize" Value="20" />
                 <Setter Property="LineHeight" Value="28" />
