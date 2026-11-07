@@ -687,6 +687,10 @@ unsafe extern "system" fn task_window_proc(
                 if titled(data) {
                     data.caption.report_height(hwnd, &*data.report);
                 }
+                // A splash still up keeps its icon sharp and its size on the new monitor.
+                if let Some(presenter) = data.presenter.borrow().as_deref() {
+                    presenter.splash_dpi_changed(dpi.max(96));
+                }
             }
             // A per-monitor aware window is handed the rectangle that keeps its size in
             // points on the new monitor, and takes it at once (keep_to_frame), within what

@@ -1594,6 +1594,27 @@ impl WindowPresenter {
         }
     }
 
+    /// The window is now on a monitor of `dpi`. A splash still shown keeps its icon 160 dp
+    /// large there: it is drawn again from the icon's full image at the new size, with the
+    /// client area the window takes for the new scale, when that comes.
+    pub fn splash_dpi_changed(&self, dpi: u32) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.closed || state.first_frame.is_some() {
+            return;
+        }
+        let Some(image) = state.splash_image.as_mut() else {
+            return;
+        };
+        if image.dpi == dpi {
+            return;
+        }
+        image.dpi = dpi;
+        let view = state.asked;
+        if let Err(why) = self.draw_splash(&mut state, view) {
+            note(self.logger.as_deref(), &why);
+        }
+    }
+
     /// Draws the splash at the size of a `view` pixel client area, and commits it.
     fn draw_splash(&self, state: &mut State, view: (u32, u32)) -> Result<(), String> {
         let Some(image) = state.splash_image.as_ref() else {
@@ -1606,11 +1627,12 @@ impl WindowPresenter {
             size: *size,
             pixels,
         });
+        let source = icon.map_or(0, |icon| icon.size.0.min(icon.size.1));
         let pixels = splash::compose(
             view,
             image.background,
             icon,
-            splash::icon_edge(view, image.dpi),
+            splash::icon_edge(view, image.dpi, source),
         );
         let dcomp = self.gpu.dcomp()?.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: plain COM calls on objects this presenter owns; the update reads only

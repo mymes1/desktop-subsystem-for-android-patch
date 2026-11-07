@@ -35,7 +35,8 @@ class AndroidLauncherApps(
             if (packageName in apps) continue
             val label = activity.loadLabel(pm).toString().ifEmpty { packageName }
             val icon = try {
-                iconPng(activity.loadIcon(pm))
+                val iconRes = if (activity.resolvePackageName == null) activity.iconResource else 0
+                sharpIconPng(pm, activity.activityInfo.applicationInfo, iconRes) { activity.loadIcon(pm) }
             } catch (e: Exception) {
                 log.warn("could not draw the icon of $packageName", e)
                 ByteArray(0)
