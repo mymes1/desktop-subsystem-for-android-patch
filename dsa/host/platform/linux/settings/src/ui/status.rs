@@ -206,7 +206,7 @@ pub fn memory(ctx: &Shared) -> gtk::Widget {
         let (ctx, page, current_limit) = (ctx.clone(), page.clone(), current_limit.clone());
         Combo::new(
             &tr("Memory limit"),
-            &tr("The most memory Android may grow to. Android takes memory only as it needs it and gives it back when idle. Automatic lets it grow to 3 GB, never past this computer's memory. Takes effect the next time Android starts."),
+            &tr("The most memory Android may grow to. Android takes memory only as it needs it and returns it at once when it no longer does. Automatic sets no fixed limit: Android can grow up to this computer's memory less what Linux keeps. Takes effect the next time Android starts."),
             move |index| {
                 let choices = view::memory_limit_choices(current_limit.get());
                 let Some((_, mb)) = choices.get(index as usize).cloned() else {

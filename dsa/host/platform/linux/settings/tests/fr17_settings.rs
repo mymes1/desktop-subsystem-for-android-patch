@@ -508,6 +508,40 @@ fn placeholders(text: &str) -> Vec<String> {
     found
 }
 
+/// Whether `text` names a size, such as "3 GB" or "16GiB".
+fn names_a_size(text: &str) -> bool {
+    ["GB", "GiB"].iter().any(|unit| {
+        text.match_indices(unit).any(|(at, _)| {
+            text[..at]
+                .trim_end()
+                .ends_with(|c: char| c.is_ascii_digit())
+        })
+    })
+}
+
+#[test]
+fn fr17_automatic_memory_limit_names_no_fixed_size() {
+    let shown = shown_strings();
+    let english = shown
+        .iter()
+        .find(|text| text.starts_with("The most memory Android may grow to."))
+        .expect("the memory limit's description is on a page");
+    let ko = catalogue(&crate_dir().join("po/ko.po"));
+    let korean = ko.get(english).expect("the description has a Korean text");
+    for text in [english, korean] {
+        assert!(
+            !names_a_size(text),
+            "this names a size, which reads as a limit on Automatic: {text}"
+        );
+        assert!(
+            text.contains("Linux"),
+            "this should say that Automatic stops at the computer's memory less what Linux keeps: {text}"
+        );
+    }
+    assert!(english.contains("no fixed limit"), "{english}");
+    assert!(korean.contains("고정된 한도가 없"), "{korean}");
+}
+
 #[test]
 fn fr17_every_string_is_translated_into_korean() {
     let ko = catalogue(&crate_dir().join("po/ko.po"));

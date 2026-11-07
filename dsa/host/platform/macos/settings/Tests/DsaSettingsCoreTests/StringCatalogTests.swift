@@ -76,6 +76,17 @@ final class StringCatalogTests: XCTestCase {
         }
     }
 
+    func test_fr17_automatic_memory_limit_names_no_fixed_size() throws {
+        let values = try XCTUnwrap(try catalog()["MemoryLimitCard.Description"])
+        for (language, half) in [("en", "half of this Mac's memory"), ("ko", "이 Mac 메모리의 절반")] {
+            let text = try XCTUnwrap(values[language])
+            XCTAssertNil(
+                text.range(of: #"\d\s*(GB|GiB)"#, options: [.regularExpression, .caseInsensitive]),
+                "\(language) names a size, which reads as a limit on Automatic: \(text)")
+            XCTAssertTrue(text.contains(half), "\(language) should say that Automatic stops at half this Mac's memory: \(text)")
+        }
+    }
+
     func test_fr17_the_mac_texts_name_the_mac_and_not_windows() throws {
         for (key, values) in try catalog() where key != "AboutIndependent.Text" {
             for language in ["en", "ko"] {
