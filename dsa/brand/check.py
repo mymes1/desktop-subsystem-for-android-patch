@@ -131,11 +131,24 @@ def fr17_the_readme_logo_is_there(out):
 
 
 def fr11_the_apk_installer_icon_is_its_own_drawing(out):
-    """The APK Installer ships the parcel master, not the DSA symbol with a badge."""
+    """The APK Installer ships the open box master, not the DSA symbol with a badge.
+
+    The colour master is the open cardboard box with plain fills and gradients only (no
+    filter or mask, so every renderer draws it the same), and the symbolic one is that box
+    as a one colour outline on the 16 px grid. The earlier parcel with an arrow fails both.
+    """
     for badge, name in icons.OWN_MASTERS.items():
         if badge in icons.BADGES:
             fail(f"{badge} is both drawn from {name}.svg and given a badge")
         own = (icons.BRAND / f"{name}.svg").read_text(encoding="utf-8")
+        if "open cardboard box" not in own or "arrow" in own:
+            fail(f"{name}.svg is not the open cardboard box")
+        if "<filter" in own or "<mask" in own:
+            fail(f"{name}.svg uses a filter or a mask, which renderers draw differently")
+        outline = (icons.BRAND / f"{name}-symbolic.svg").read_text(encoding="utf-8")
+        flat = 'viewBox="0 0 16 16"' in outline and 'fill="none"' in outline
+        if not flat or "arrow" in outline or "<mask" in outline:
+            fail(f"{name}-symbolic.svg is not the box as an outline on the 16 px grid")
         symbol = (icons.BRAND / "symbol.svg").read_text(encoding="utf-8")
         if inner_paths(symbol) & inner_paths(own):
             fail(f"{name}.svg reuses the DSA symbol's shapes")
