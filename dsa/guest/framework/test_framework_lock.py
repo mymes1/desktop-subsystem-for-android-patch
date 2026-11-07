@@ -408,6 +408,31 @@ class NinjaInputsTests(unittest.TestCase):
                 self.assertNotIn("cone", projects[whole], whole)
                 self.assertNotIn("patterns", projects[whole], whole)
 
+    def test_nfr5_bindgen_finds_the_clang_soong_gives_it(self):
+        # Rust bindgen runs with LIBCLANG_PATH set to its own Clang (bindgenClangVersion in
+        # build/soong/rust/bindgen.go), not the C compiler's; the seventh run's bindgen rules
+        # all failed with "Unable to find libclang".
+        bindgen_clang = {"android16": "clang-r563880", "android17": "clang-r584948"}
+        for version in framework_lock.load()["versions"]:
+            clang = next(p for p in version["projects"] if p["path"] == "prebuilts/clang/host/linux-x86")
+            for folder in ("bin", "lib"):
+                self.assertIn(f"{bindgen_clang[version['android']]}/{folder}", clang["cone"], version["android"])
+
+    def test_nfr5_the_seventh_runs_headers_are_fetched(self):
+        # Skia's SkSL and third-party headers, upb's port headers and the Rust kernel headers
+        # protoc's Rust generator includes (17), and hardware_legacy/power.h, which
+        # PowerHalLoader includes through Soong's global hardware/libhardware_legacy/include.
+        for version in framework_lock.load()["versions"]:
+            projects = {p["path"]: p for p in version["projects"]}
+            for folder in ("include/sksl", "include/third_party"):
+                self.assertIn(folder, projects["external/skia"]["cone"], version["android"])
+            if version["android"] == "android17":
+                for folder in ("upb/port", "rust/cpp_kernel"):
+                    self.assertIn(folder, projects["external/protobuf"]["cone"])
+            legacy = projects["hardware/libhardware_legacy"]
+            self.assertNotIn("cone", legacy)
+            self.assertNotIn("patterns", legacy)
+
     def test_nfr5_boringssls_go_build_tools_are_fetched(self):
         # bssl_inject_hash and the Go packages it uses, which the fifth run stopped on.
         lock = framework_lock.load()
