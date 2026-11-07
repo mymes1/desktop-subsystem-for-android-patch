@@ -3560,7 +3560,7 @@ fn read_install_file(path: &std::path::Path) -> Result<(ApkInfo, Option<Bundle>)
     }
     match InstallFile::open(path).map_err(|refusal| describe_file_refusal(path, &refusal))? {
         InstallFile::Apk(_) => Ok((ApkInfo::read(path)?, None)),
-        InstallFile::Bundle(bundle) => Ok((bundle.base.clone(), Some(bundle))),
+        InstallFile::Bundle(bundle) => Ok((bundle.base.clone(), Some(*bundle))),
     }
 }
 

@@ -176,7 +176,7 @@
                 </ui:CardControl>
 
                 <TextBlock Text="{l:Text GappsHeader.Text}" Style="{StaticResource SectionHeader}" />
-                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Store24}">
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ShoppingBag24}">
                     <ui:CardControl.Header>
                         <StackPanel>
                             <TextBlock Text="{l:Text GappsCard.Header}" Style="{StaticResource CardTitle}" />

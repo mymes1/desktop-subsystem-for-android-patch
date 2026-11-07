@@ -660,8 +660,14 @@ mod tests {
         // program icon, with no folder badge in its corner.
         let files = include_bytes!("../icons/files.ico");
         let program = include_bytes!("../../installer/setup-ui/assets/logo.ico");
-        assert!(files[..] == program[..], "files.ico is not the plain DSA symbol");
-        assert_ne!(FILES_ICON_GROUP_ID, 2, "index 2 is the badged icon Explorer may have cached");
+        assert!(
+            files[..] == program[..],
+            "files.ico is not the plain DSA symbol"
+        );
+        assert_ne!(
+            FILES_ICON_GROUP_ID, 2,
+            "index 2 is the badged icon Explorer may have cached"
+        );
         assert_ne!(FILES_ICON_GROUP_ID, ICON_GROUP_ID);
     }
 

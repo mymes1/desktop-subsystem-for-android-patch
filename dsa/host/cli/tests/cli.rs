@@ -1149,7 +1149,7 @@ fn fr25_dsa_uses_the_images_default_translator_until_a_package_replaces_it() {
     let text = stdout(&dsa(&endpoint, "arm-translation"));
     assert!(
         text.contains(
-            "ARM apps: supported by Digitalis 17-abefbe2b1600 (Apache-2.0), this Android's              default translator"
+            "ARM apps: supported by Digitalis 17-abefbe2b1600 (Apache-2.0), this Android's default translator"
         ),
         "{text}"
     );

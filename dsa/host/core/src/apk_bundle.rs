@@ -1005,7 +1005,8 @@ impl Bundle {
 /// A file to install: one APK, or a bundle of them.
 pub enum InstallFile {
     Apk(ApkFile),
-    Bundle(Bundle),
+    /// Boxed: a bundle holds its whole table of parts, many times the size of one APK.
+    Bundle(Box<Bundle>),
 }
 
 impl InstallFile {
@@ -1034,7 +1035,9 @@ impl InstallFile {
                     .map(InstallFile::Apk)
                     .map_err(Refusal::NotAnApp)
             }
-            FileKind::Bundle(_) => Bundle::open(path).map(InstallFile::Bundle),
+            FileKind::Bundle(_) => {
+                Bundle::open(path).map(|bundle| InstallFile::Bundle(Box::new(bundle)))
+            }
             FileKind::AppBundle => Err(Refusal::AppBundle),
             FileKind::EncryptedBundle => Err(Refusal::Encrypted),
         }
