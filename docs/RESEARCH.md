@@ -1547,6 +1547,26 @@ ninja: 'out/host/linux-x86/bin/protoc-gen-rust', needed by 'out/soong/.intermedi
 
 남은 것: 의존으로 붙는 모듈이 트리에 없으면 ninja가 아니라 그 동작이 실행될 때 "missing dependencies"로 실패한다. 그런 것은 다음 실행의 `m -k` 요약에 모두 나온다.
 
+### 다섯 번째 실행(run 42412209469, 네 작업)과 빌드 전 입력 확인
+
+네 작업 모두 ninja가 컴파일 전에 멈추었다.
+
+```
+ninja: 'external/boringssl/src/util/fipstools/inject_hash/inject_hash.go', needed by 'out/host/linux-x86/bin/go/bssl_inject_hash/linux_glibc_x86_64/pkg/bssl_inject_hash.a', missing and no known rule to make it
+```
+
+`bssl_inject_hash`는 boringssl의 FIPS 해시를 넣는 Go 도구(`blueprint_go_binary`)다. Go 모듈의 소스는 `ALLOW_MISSING_DEPENDENCIES`가 덮지 않는다. 앞의 정적 훑기는 AIDL, gensrcs, 라이선스, 경로로 부르는 도구를 보았지만 Go 모듈의 소스는 보지 않았다. 이렇게 훑기가 종류 하나를 놓칠 때마다, ninja가 첫 파일에서 멈추므로 실행 한 번에 파일 하나씩만 드러났다.
+
+그래서 빌드 자체가 빠진 입력을 한꺼번에 보이게 했다. 두 빌드 스크립트(`framework/build.sh`, `translator/build.sh`)가 이제 세 단계로 돈다.
+
+1. `m --skip-ninja <대상>`: Soong 분석만 하고 ninja 파일(`out/combined-<제품>.ninja`)을 만든다.
+2. `check-ninja-inputs.py`(`.github/scripts/translator/`, 두 빌드가 함께 쓴다): `ninja -t graph <대상>`으로 대상에 이르는 그래프 전체를 받는다. 어떤 동작도 만들지 않는 파일(그래프의 잎)을 모두 골라, 그중 트리에 없는 것을 모두 적고 실패한다. 목록은 콘솔과 `out/missing-inputs.txt`(로그 artifact에 포함)에 남는다. `-t graph`는 모든 ninja 판에 있다.
+3. 둘 다 통과하면 `m -k`로 진짜 빌드를 한다.
+
+이 확인은 ninja가 멈추는 바로 그 조건(입력이 없고 만드는 규칙도 없음)을 대상의 그래프 전체에 대해 한 번에 본다. 그래서 다음 실행은 이런 파일을 종류와 상관없이 모두 한 목록으로 보인다. 의존 누락으로 처리된 모듈은 Soong이 오류 동작으로 바꾸므로 이 목록이 아니라 `m -k`의 요약에 나온다.
+
+이번 오류도 고쳤다. 정적 훑기에 Go 모듈(`bootstrap_go_package`, `blueprint_go_binary`)의 `srcs`를 더해 보니, 트리에 없는 것은 boringssl의 셋(`bssl_inject_hash`, 그것이 쓰는 `bssl_ar`, `bssl_fipscommon`)이었다. boringssl의 cone에 `src/util/ar`, `src/util/fipstools/fipscommon`, `src/util/fipstools/inject_hash`를 더했다. `src/util`과 `src/util/fipstools` 바로 아래의 파일(Go 스크립트 등)은 조상 폴더라 함께 들어오고, 그 안에 Android.bp는 없다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 추정이다. 첫 실행의 `m -k` 요약이 빠진 프로젝트를 보이고, `update-lock.py --add`로 더한다. kati가 `bp4a`, `cp2a`와 이 제품을 받아들이는지, Soong만 쓰는 빌드에서 설치 경로를 대상으로 줄 수 있는지는 번역기 빌드와 같이 실행에서 확인한다.

@@ -314,6 +314,67 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(fetch_source.toolchains(version, Path("/nonexistent")), (["clang-r563880c"], ["1.88.0"]))
 
 
+check_ninja_inputs = load_module("check_ninja_inputs", REPO / ".github/scripts/translator/check-ninja-inputs.py")
+
+# What `ninja -t graph out/lib.so` prints for: lib.so <- link(a.o, b.o); a.o <- cc(a.c);
+# b.o <- cc(gen/b.c, missing.h); gen/b.c <- gen() with no inputs.
+GRAPH = """digraph ninja {
+rankdir="LR"
+node [fontsize=10, shape=box, height=0.25]
+edge [fontsize=10]
+"0x1" [label="out/lib.so"]
+"0x2" [label="link", shape=ellipse]
+"0x2" -> "0x1"
+"0x3" -> "0x2" [arrowhead=none]
+"0x4" -> "0x2" [arrowhead=none]
+"0x3" [label="out/a.o"]
+"0x5" [label="src/a.c"]
+"0x5" -> "0x3" [label=" cc"]
+"0x4" [label="out/b.o"]
+"0x6" [label="cc", shape=ellipse]
+"0x6" -> "0x4"
+"0x7" -> "0x6" [arrowhead=none]
+"0x8" -> "0x6" [arrowhead=none]
+"0x7" [label="out/gen/b.c"]
+"0x9" [label="gen", shape=ellipse]
+"0x9" -> "0x7"
+"0x8" [label="src/missing.h"]
+}
+"""
+
+
+class NinjaInputsTests(unittest.TestCase):
+    def test_nfr5_every_input_no_rule_makes_is_found(self):
+        self.assertEqual(check_ninja_inputs.leaves(GRAPH.splitlines()), ["src/a.c", "src/missing.h"])
+
+    def test_nfr5_every_missing_input_is_listed_at_once(self):
+        # Ninja stops at the first missing input; the fifth run stopped on boringssl's
+        # inject_hash.go, so each run showed one file. The check lists all of them.
+        with tempfile.TemporaryDirectory() as top:
+            Path(top, "src").mkdir()
+            Path(top, "src/a.c").write_text("")
+            leaves = check_ninja_inputs.leaves(GRAPH.splitlines())
+            self.assertEqual(check_ninja_inputs.missing(top, leaves), ["src/missing.h"])
+
+    def test_nfr5_both_builds_check_the_inputs_before_building(self):
+        for build in (".github/scripts/framework/build.sh", ".github/scripts/translator/build.sh"):
+            text = (REPO / build).read_text()
+            analysis = text.index("m --skip-ninja")
+            check = text.index("check-ninja-inputs.py")
+            real = text.index('m -k -j"$(nproc)"')
+            self.assertLess(analysis, check, build)
+            self.assertLess(check, real, build)
+            self.assertIn('--file "$top/out/combined-$product.ninja"', text, build)
+
+    def test_nfr5_boringssls_go_build_tools_are_fetched(self):
+        # bssl_inject_hash and the Go packages it uses, which the fifth run stopped on.
+        lock = framework_lock.load()
+        for version in lock["versions"]:
+            cone = next(p for p in version["projects"] if p["path"] == "external/boringssl")["cone"]
+            for folder in ("src/util/ar", "src/util/fipstools/fipscommon", "src/util/fipstools/inject_hash"):
+                self.assertIn(folder, cone, version["android"])
+
+
 class ApplyPatchesTests(unittest.TestCase):
     ORIGINAL = "first line\nsecond line\nthird line\n"
 
