@@ -121,8 +121,9 @@ pub const ICON_GROUP_ID: u16 = 1;
 pub const VERSION_ID: u16 = 1;
 /// The ID of the second icon group the installed window host carries: the icon of Android's
 /// entry in Explorer's navigation pane (DSA Files), which the entry names as
-/// `dsa-app-window.exe,-2`.
-pub const FILES_ICON_GROUP_ID: u16 = 2;
+/// `dsa-app-window.exe,-3`. It was 2 while the icon carried a Files badge; Explorer caches
+/// an icon by file and index, so a new index makes an upgrade show the new drawing.
+pub const FILES_ICON_GROUP_ID: u16 = 3;
 /// The `RT_ICON` ID of the Files icon's first image, clear of the program icon's images.
 pub const FILES_ICON_FIRST_IMAGE_ID: u16 = 101;
 
@@ -651,6 +652,17 @@ mod tests {
         assert_eq!(group.id, FILES_ICON_GROUP_ID);
         assert_eq!(&group.data[4..6], &8u16.to_le_bytes());
         assert!(icon_resources(b"nonsense", 2, 101).is_err());
+    }
+
+    #[test]
+    fn fr29_the_files_icon_is_the_plain_symbol_without_a_badge() {
+        // The navigation pane entry shows the DSA symbol alone, the same drawing as the
+        // program icon, with no folder badge in its corner.
+        let files = include_bytes!("../icons/files.ico");
+        let program = include_bytes!("../../installer/setup-ui/assets/logo.ico");
+        assert!(files[..] == program[..], "files.ico is not the plain DSA symbol");
+        assert_ne!(FILES_ICON_GROUP_ID, 2, "index 2 is the badged icon Explorer may have cached");
+        assert_ne!(FILES_ICON_GROUP_ID, ICON_GROUP_ID);
     }
 
     #[test]
