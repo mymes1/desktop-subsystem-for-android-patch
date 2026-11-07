@@ -23,7 +23,7 @@
     <SelfContained>true</SelfContained>
     <ImplicitUsings>enable</ImplicitUsings>
     <NeutralLanguage>en</NeutralLanguage>
-    <SatelliteResourceLanguages>en;ko</SatelliteResourceLanguages>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <DebugType>embedded</DebugType>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
   </PropertyGroup>
@@ -36,11 +36,11 @@
     <ProjectReference Include="..\DsaSettings.Core\DsaSettings.Core.csproj" />
   </ItemGroup>
 
-  <!-- The settings app's string tables: the window's texts live beside the rest of DSA's, so
-       both languages are kept and checked in one place. -->
+  <!-- The settings app's English string table: the window's texts live beside the rest of
+       DSA's. The window is English in every language, as App Installer's labels are, so the
+       translations are left out and no language mixes into it. -->
   <ItemGroup>
     <EmbeddedResource Include="..\DsaSettings\Strings.resx" Link="Strings.resx" />
-    <EmbeddedResource Include="..\DsaSettings\Strings.ko.resx" Link="Strings.ko.resx" />
   </ItemGroup>
 
   <ItemGroup>
