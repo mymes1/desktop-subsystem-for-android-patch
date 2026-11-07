@@ -38,6 +38,8 @@ export SOONG_ONLY=true
 # Android 17 runs siso by default, which the tree leaves out; ninja is in build-tools.
 export SOONG_NINJA=ninja
 export SKIP_ABI_CHECKS=true
+# The tree has no framework, so there are no hidden API lists to make for boot jars.
+export UNSAFE_DISABLE_HIDDENAPI_FLAGS=true
 export DISABLE_ARTIFACT_PATH_REQUIREMENTS=true
 # Not TEMPORARY_DISABLE_PATH_RESTRICTIONS: soong_ui stops when it is set (the third run did).
 export BUILD_USERNAME=dsa-translator BUILD_HOSTNAME=github-actions

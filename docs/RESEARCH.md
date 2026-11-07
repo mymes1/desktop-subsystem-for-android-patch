@@ -1206,6 +1206,14 @@ Soong 분석 단계는 흉내 낼 수 없는 부분이 남는다. 이 트리의 
 
 그 값을 빼면 PATH 제한이 켜진다. 빌드가 쓰는 `python3`와 기본 명령은 `prebuilts/build-tools/path/linux-x86`에 있고(잠금이 `path` 폴더를 받는다), ccache는 `CC_WRAPPER`에 절대 경로로 주므로 제한에 걸리지 않는다. soong_ui가 환경 변수 때문에 멈추는 다른 경우(JDK 실험 값, `BUILD_USERNAME` 없음)도 `build.sh`에 없다.
 
+### 네 번째 실행(run 42394768870, android17)과 고친 것
+
+처음으로 Soong까지 갔다. soong_ui, blueprint, `soong_build`(플러그인 포함)가 약 58초 만에 빌드되었고, Android.bp 분석이 끝까지 돌아 모듈마다 빌드 동작을 만드는 단계(`GenerateBuildActions`)에서 멈추었다. Go 의존과 모듈 형식에서는 오류가 없었다.
+
+멈춘 곳은 `dex_bootjars`의 패닉이다(`Failed to lookup dex2oatd dependency`, `build/soong/dexpreopt/config.go`). `module_common.mk`가 기본 ART 설정을 가져오고, 보드가 dexpreopt를 끄지 않아서(`WITH_DEXPREOPT ?= true`), Soong이 부트 이미지를 만들려고 dex2oat를 찾았다. 트리에 ART가 없으므로 의존이 없고, 패닉은 다른 오류를 모으기 전에 분석 전체를 끝낸다. 그래서 이번 로그에는 이 하나만 있다.
+
+보드 설정에 `WITH_DEXPREOPT := false`를 넣었다. 그러면 `dex_preopt_config.mk`가 앱과 부트 이미지의 dexpreopt를 모두 끄고(`DisablePreopt`, `DisablePreoptBootImages`), `IsDex2oatNeeded`가 거짓이 되어 dex2oat를 찾는 곳이 모두 빈 값을 받는다. Soong 안에서 dex2oat를 찾는 다섯 곳(`dexpreopt.go`, `dexpreopt_bootjars.go`)이 모두 이 검사를 거친다. 같은 이유로 프레임워크가 없는 트리에서 숨은 API 목록을 만들지 않도록 `UNSAFE_DISABLE_HIDDENAPI_FLAGS=true`를 둔다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
