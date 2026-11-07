@@ -67,6 +67,12 @@ class LockTests(unittest.TestCase):
                 self.assertIn("!Android.bp", patterns)
                 self.assertTrue(all(p.startswith(("/", "!")) for p in patterns))
 
+    def test_fr25_bionic_s_runtime_apex_is_left_out(self):
+        # com.android.runtime needs system/sepolicy's file_contexts and APEX keys, and nothing
+        # the package holds comes from it; its Android.bp stopped the sixth run's analysis.
+        for version in self.lock["versions"]:
+            self.assertIn("apex/Android.bp", digitalis_lock.project(version, "bionic").get("exclude", []))
+
     def test_fr25_a_lock_that_does_not_pin_or_escapes_the_tree_is_refused(self):
         version = self.lock["versions"][0]
         broken = []
@@ -79,6 +85,7 @@ class LockTests(unittest.TestCase):
             lambda v: v["projects"][0].update(linkfiles=[{"src": "a", "dest": "/etc/x"}]),
             lambda v: v.update(android_major=v["android_major"] + 1),
             lambda v: v["manifest"].update(commit=""),
+            lambda v: v["projects"][0].update(exclude=["../outside/Android.bp"]),
             lambda v: v.update(projects=[p for p in v["projects"]
                                          if p["path"] != digitalis_lock.TRANSLATOR_PATH]),
         ]:
@@ -87,7 +94,7 @@ class LockTests(unittest.TestCase):
             with self.assertRaises(digitalis_lock.LockError):
                 digitalis_lock.check(lock)
             broken.append(lock)
-        self.assertEqual(len(broken), 9)
+        self.assertEqual(len(broken), 10)
 
     def test_fr25_clang_entries_take_the_release_configuration_s_clang(self):
         with tempfile.TemporaryDirectory() as tmp:
