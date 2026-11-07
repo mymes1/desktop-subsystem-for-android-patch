@@ -87,7 +87,19 @@ lunch "$product-trunk_staging-userdebug"
 set -u
 
 status=0
-m -k -j"$(nproc)" $(cat "$top/.dsa-targets") berberis_arm64_host_tests || status=$?
+# Soong's analysis on its own first, then every file the targets are built from that the tree
+# lacks and no rule makes, listed together: ninja would stop at the first one.
+m --skip-ninja $(cat "$top/.dsa-targets") berberis_arm64_host_tests || status=$?
+if (( status == 0 )); then
+  uv run "$here/check-ninja-inputs.py" --top "$top" \
+    --ninja "$top/prebuilts/build-tools/linux-x86/bin/ninja" \
+    --file "$top/out/combined-$product.ninja" --report "$top/out/missing-inputs.txt" \
+    $(cat "$top/.dsa-targets") berberis_arm64_host_tests \
+    || status=$?
+fi
+if (( status == 0 )); then
+  m -k -j"$(nproc)" $(cat "$top/.dsa-targets") berberis_arm64_host_tests || status=$?
+fi
 
 if command -v ccache >/dev/null; then
   ccache --show-stats || true

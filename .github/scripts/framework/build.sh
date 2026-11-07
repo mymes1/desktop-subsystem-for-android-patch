@@ -110,7 +110,18 @@ lunch "$product-$release-userdebug"
 set -u
 
 status=0
-m -k -j"$(nproc)" "${targets[@]}" || status=$?
+# Soong's analysis on its own first, then every file the targets are built from that the tree
+# lacks and no rule makes, listed together: ninja would stop at the first one.
+m --skip-ninja "${targets[@]}" || status=$?
+if (( status == 0 )); then
+  uv run "$repo/.github/scripts/translator/check-ninja-inputs.py" --top "$top" \
+    --ninja "$top/prebuilts/build-tools/linux-x86/bin/ninja" \
+    --file "$top/out/combined-$product.ninja" --report "$top/out/missing-inputs.txt" \
+    "${targets[@]}" || status=$?
+fi
+if (( status == 0 )); then
+  m -k -j"$(nproc)" "${targets[@]}" || status=$?
+fi
 
 if command -v ccache >/dev/null; then
   ccache --show-stats || true

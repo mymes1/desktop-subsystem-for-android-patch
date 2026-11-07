@@ -156,7 +156,10 @@
             "src/gen/test_support",
             "src/include",
             "src/ssl",
-            "src/third_party/fiat/asm"
+            "src/third_party/fiat/asm",
+            "src/util/ar",
+            "src/util/fipstools/fipscommon",
+            "src/util/fipstools/inject_hash"
           ]
         },
         {
@@ -1380,7 +1383,10 @@
             "src/gen/test_support",
             "src/include",
             "src/ssl",
-            "src/third_party/fiat/asm"
+            "src/third_party/fiat/asm",
+            "src/util/ar",
+            "src/util/fipstools/fipscommon",
+            "src/util/fipstools/inject_hash"
           ]
         },
         {
