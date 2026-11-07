@@ -372,6 +372,7 @@
           "url": "https://android.googlesource.com/platform/external/libultrahdr",
           "commit": "4a5906659019f5b73b211759d0bfca0375fc6300",
           "cone": [
+            "adobe-hdr-gain-map-license",
             "lib/include",
             "lib/src"
           ]
@@ -801,6 +802,7 @@
             "core/java/android/content/res",
             "core/java/android/hardware/flags",
             "core/java/android/os",
+            "core/java/android/security/rkp",
             "core/java/android/text/flags",
             "core/java/android/view/accessibility/flags",
             "core/jni",
@@ -810,6 +812,7 @@
             "libs/hwui",
             "libs/nativehelper_jvm",
             "libs/protoutil",
+            "media/aidl/android/media/soundtrigger_middleware",
             "media/java/android/media/flags",
             "media/java/android/media/quality",
             "media/java/android/media/tv/flags",
@@ -1571,6 +1574,7 @@
           "url": "https://android.googlesource.com/platform/external/libultrahdr",
           "commit": "4a5906659019f5b73b211759d0bfca0375fc6300",
           "cone": [
+            "adobe-hdr-gain-map-license",
             "lib/include",
             "lib/src"
           ]
@@ -2010,6 +2014,7 @@
             "core/java/android/content/res",
             "core/java/android/hardware/flags",
             "core/java/android/os",
+            "core/java/android/security/rkp",
             "core/java/android/text/flags",
             "core/java/android/view/accessibility/flags",
             "core/java/android/window/flags",
@@ -2020,6 +2025,8 @@
             "libs/hwui",
             "libs/nativehelper_jvm",
             "libs/protoutil",
+            "media/aidl/android/media/audio",
+            "media/aidl/android/media/soundtrigger_middleware",
             "media/java/android/media/flags",
             "media/java/android/media/quality",
             "media/java/android/media/tv/flags",

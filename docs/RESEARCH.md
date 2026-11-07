@@ -1472,6 +1472,26 @@ x86_64 작업이 9 ~ 10분 만에 끝난 것도 같은 오류다. 작업 사이�
 
 다음 실행에서 분석의 뒤 단계가 처음으로 돈다. 그 단계의 오류(패닉이나 의존 누락이 아닌 검사)는 그 로그에서 고친다.
 
+### 두 번째 실행(run 42405466107, 네 작업)과 고친 것
+
+`prebuilts/sdk` 대역으로 파일 읽기를 지나, 네 작업 모두 분석이 끝까지 돌았다(`[100% 248/248]`). 그 뒤 의존 누락으로 넘어가지 않는 오류에서 멈추었다. 패닉은 없었다. 네 작업의 `error.log`와 `verbose.log.gz`에 있는 서로 다른 오류는 둘이다.
+
+| 오류 | 작업 |
+|---|---|
+| `frameworks/base/core/java/Android.bp:635:9: module "android.security.rkp_aidl_interface": srcs: No sources provided in` | 16 arm64, 16 x86_64 |
+| `external/libultrahdr/Android.bp:15:1: "//external/libultrahdr" depends on undefined module "adobe_hdr_gain_map_license"` | 16 x86_64, 17 arm64, 17 x86_64 |
+
+- `aidl_interface`는 `srcs`가 가리키는 파일이 하나도 없으면 오류를 낸다(`system/tools/aidl/build/aidl_interface.go`의 `getPaths`). 이름만 적은 파일은 `ALLOW_MISSING_DEPENDENCIES`에서 경로가 남아 지나가지만, 글로브(`android/security/rkp/*.aidl`)는 맞는 파일이 없으면 빈 목록이 된다. `core/java/Android.bp`는 `core/java/android/os` 등이 cone에 있어 조상 폴더의 파일로 들어오는데, 그 안의 다른 모듈의 소스 폴더는 받지 않았다.
+- 패키지의 기본 라이선스(`default_applicable_licenses`)는 모듈의 의존과 달리 없으면 오류다. `adobe_hdr_gain_map_license`는 `external/libultrahdr/adobe-hdr-gain-map-license/Android.bp`에 있는데, cone이 `lib/include`와 `lib/src`만 받았다.
+- 16 arm64에 라이선스 오류가 없고 17에 rkp 오류가 없는 것은 오류가 없어서가 아니다. 두 판 모두 같은 모듈과 같은 cone을 가지므로 둘 다 고친다.
+
+빌드 파일만 받은 사본에서 같은 종류를 모두 찾았다(트리의 모든 Android.bp를 문자열과 주석을 구분해 읽었다).
+
+- 트리에 없는 라이선스: `adobe_hdr_gain_map_license` 하나뿐이다. `license_kinds`와 `team`(`default_team`)은 모두 트리에 있다.
+- 받은 폴더 밖을 가리키는 글로브만 `srcs`로 가진 모듈 중 빈 목록이 오류인 것은 `aidl_interface` 셋이다. `android.security.rkp_aidl`(16, 17), `frameworks/base/media`의 `soundtrigger_middleware-aidl`(16, 17)과 `audio-aidl`(17). 나머지(`filegroup`, Java 모듈, `cc_defaults`)는 빈 글로브를 오류로 치지 않는다. 미디어의 둘은 이번 로그에 없었다. 같은 형식이고 폴더가 작아(`.aidl` 4 ~ 12개) 함께 받는다.
+
+고친 것: `frameworks/base`의 cone에 `core/java/android/security/rkp`, `media/aidl/android/media/soundtrigger_middleware`, (17은) `media/aidl/android/media/audio`를 더했고, `external/libultrahdr`의 cone에 `adobe-hdr-gain-map-license`를 더했다. 새 폴더와 그 조상 폴더에는 다른 Android.bp가 없다. 받을 소스가 작으므로 `core/java/Android.bp`를 대역으로 나누지 않았다. 대역은 그 파일이 바뀔 때마다 따로 맞춰야 한다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 추정이다. 첫 실행의 `m -k` 요약이 빠진 프로젝트를 보이고, `update-lock.py --add`로 더한다. kati가 `bp4a`, `cp2a`와 이 제품을 받아들이는지, Soong만 쓰는 빌드에서 설치 경로를 대상으로 줄 수 있는지는 번역기 빌드와 같이 실행에서 확인한다.
