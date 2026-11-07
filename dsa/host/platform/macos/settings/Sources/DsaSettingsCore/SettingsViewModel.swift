@@ -64,6 +64,13 @@ public final class SettingsViewModel: ObservableObject {
     public var developerMode: Bool { settings?.developerMode ?? false }
     public var adbPort: Int { settings?.adbPort ?? SettingsInfo.defaultAdbPort }
     public var adbConnect: String { settings?.adbConnect ?? "adb connect 127.0.0.1:\(SettingsInfo.defaultAdbPort)" }
+    /// Whether developer mode's port is attached to this Mac's adb server by itself, so adb and
+    /// Android Studio list Android without adb connect.
+    public var adbAutoConnect: Bool { settings?.adbAutoConnect ?? true }
+    /// Where auto-connect stands, as the service last reported it.
+    public var adbAutoConnectState: AdbAutoConnectState { settings?.adbAutoConnectState ?? .off }
+    /// Where auto-connect stands, in the user's language.
+    public var adbAutoConnectStateText: String { text.get(adbAutoConnectState.textKey) }
 
     // MARK: ARM translation
 
@@ -340,6 +347,21 @@ public final class SettingsViewModel: ObservableObject {
     public func setDeveloperMode(_ on: Bool) async {
         if on == developerMode && loaded { return }
         await change { try await service.setDeveloperMode(on) }
+    }
+
+    public func setAdbAutoConnect(_ on: Bool) async {
+        if on == adbAutoConnect && loaded { return }
+        await change { try await service.setAdbAutoConnect(on) }
+    }
+
+    /// Reads where auto-connect stands again, as the page does every few seconds while it is
+    /// shown and developer mode is on. Only the state is taken, so a port being typed is kept.
+    public func pollAdbAutoConnect() async {
+        guard !isBusy, let kept = settings, kept.developerMode else { return }
+        guard let now = try? await service.settings() else { return }
+        guard !isBusy, var current = settings, now.adbAutoConnectState != current.adbAutoConnectState else { return }
+        current.adbAutoConnectState = now.adbAutoConnectState
+        settings = current
     }
 
     /// Picks the loopback port adb connects to. Text that is not a port from 1 to 65535
