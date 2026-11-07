@@ -321,12 +321,15 @@ pub(crate) mod fixture {
     const TABLE: usize = 2;
     const FIRST_DATA: usize = TABLE + INODES * INODE_SIZE / BLOCK;
 
+    /// A folder entry: its name, its inode and its file type.
+    type Entry = (String, u32, u8);
+
     struct Builder {
         image: Vec<u8>,
         next_inode: u32,
         next_block: usize,
         /// Each folder: its path, its inode and its entries.
-        folders: Vec<(String, u32, Vec<(String, u32, u8)>)>,
+        folders: Vec<(String, u32, Vec<Entry>)>,
     }
 
     impl Builder {

@@ -425,6 +425,8 @@ PROTOBUF_CONSTEXPR PointerEvent::PointerEvent(
   , /*decltype(_impl_.pressure_)*/0
   , /*decltype(_impl_.scroll_x_)*/0
   , /*decltype(_impl_.scroll_y_)*/0
+  , /*decltype(_impl_.tilt_x_)*/0
+  , /*decltype(_impl_.tilt_y_)*/0
   , /*decltype(_impl_._cached_size_)*/{}} {}
 struct PointerEventDefaultTypeInternal {
   PROTOBUF_CONSTEXPR PointerEventDefaultTypeInternal()
@@ -11160,12 +11162,14 @@ PointerEvent::PointerEvent(const PointerEvent& from)
     , decltype(_impl_.pressure_){}
     , decltype(_impl_.scroll_x_){}
     , decltype(_impl_.scroll_y_){}
+    , decltype(_impl_.tilt_x_){}
+    , decltype(_impl_.tilt_y_){}
     , /*decltype(_impl_._cached_size_)*/{}};
 
   _internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
   ::memcpy(&_impl_.task_id_, &from._impl_.task_id_,
-    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.scroll_y_) -
-    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.scroll_y_));
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.tilt_y_) -
+    reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.tilt_y_));
   // @@protoc_insertion_point(copy_constructor:dsa.control.v1.PointerEvent)
 }
 
@@ -11184,6 +11188,8 @@ inline void PointerEvent::SharedCtor(
     , decltype(_impl_.pressure_){0}
     , decltype(_impl_.scroll_x_){0}
     , decltype(_impl_.scroll_y_){0}
+    , decltype(_impl_.tilt_x_){0}
+    , decltype(_impl_.tilt_y_){0}
     , /*decltype(_impl_._cached_size_)*/{}
   };
 }
@@ -11212,8 +11218,8 @@ void PointerEvent::Clear() {
   (void) cached_has_bits;
 
   ::memset(&_impl_.task_id_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&_impl_.scroll_y_) -
-      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.scroll_y_));
+      reinterpret_cast<char*>(&_impl_.tilt_y_) -
+      reinterpret_cast<char*>(&_impl_.task_id_)) + sizeof(_impl_.tilt_y_));
   _internal_metadata_.Clear<std::string>();
 }
 
@@ -11301,6 +11307,22 @@ const char* PointerEvent::_InternalParse(const char* ptr, ::_pbi::ParseContext* 
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 85)) {
           _impl_.scroll_y_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else
+          goto handle_unusual;
+        continue;
+      // float tilt_x = 11;
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 93)) {
+          _impl_.tilt_x_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
+          ptr += sizeof(float);
+        } else
+          goto handle_unusual;
+        continue;
+      // float tilt_y = 12;
+      case 12:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 101)) {
+          _impl_.tilt_y_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr);
           ptr += sizeof(float);
         } else
           goto handle_unusual;
@@ -11416,6 +11438,26 @@ uint8_t* PointerEvent::_InternalSerialize(
     target = ::_pbi::WireFormatLite::WriteFloatToArray(10, this->_internal_scroll_y(), target);
   }
 
+  // float tilt_x = 11;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_tilt_x = this->_internal_tilt_x();
+  uint32_t raw_tilt_x;
+  memcpy(&raw_tilt_x, &tmp_tilt_x, sizeof(tmp_tilt_x));
+  if (raw_tilt_x != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(11, this->_internal_tilt_x(), target);
+  }
+
+  // float tilt_y = 12;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_tilt_y = this->_internal_tilt_y();
+  uint32_t raw_tilt_y;
+  memcpy(&raw_tilt_y, &tmp_tilt_y, sizeof(tmp_tilt_y));
+  if (raw_tilt_y != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteFloatToArray(12, this->_internal_tilt_y(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = stream->WriteRaw(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).data(),
         static_cast<int>(_internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size()), target);
@@ -11504,6 +11546,24 @@ size_t PointerEvent::ByteSizeLong() const {
     total_size += 1 + 4;
   }
 
+  // float tilt_x = 11;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_tilt_x = this->_internal_tilt_x();
+  uint32_t raw_tilt_x;
+  memcpy(&raw_tilt_x, &tmp_tilt_x, sizeof(tmp_tilt_x));
+  if (raw_tilt_x != 0) {
+    total_size += 1 + 4;
+  }
+
+  // float tilt_y = 12;
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_tilt_y = this->_internal_tilt_y();
+  uint32_t raw_tilt_y;
+  memcpy(&raw_tilt_y, &tmp_tilt_y, sizeof(tmp_tilt_y));
+  if (raw_tilt_y != 0) {
+    total_size += 1 + 4;
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     total_size += _internal_metadata_.unknown_fields<std::string>(::PROTOBUF_NAMESPACE_ID::internal::GetEmptyString).size();
   }
@@ -11575,6 +11635,20 @@ void PointerEvent::MergeFrom(const PointerEvent& from) {
   if (raw_scroll_y != 0) {
     _this->_internal_set_scroll_y(from._internal_scroll_y());
   }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_tilt_x = from._internal_tilt_x();
+  uint32_t raw_tilt_x;
+  memcpy(&raw_tilt_x, &tmp_tilt_x, sizeof(tmp_tilt_x));
+  if (raw_tilt_x != 0) {
+    _this->_internal_set_tilt_x(from._internal_tilt_x());
+  }
+  static_assert(sizeof(uint32_t) == sizeof(float), "Code assumes uint32_t and float are the same size.");
+  float tmp_tilt_y = from._internal_tilt_y();
+  uint32_t raw_tilt_y;
+  memcpy(&raw_tilt_y, &tmp_tilt_y, sizeof(tmp_tilt_y));
+  if (raw_tilt_y != 0) {
+    _this->_internal_set_tilt_y(from._internal_tilt_y());
+  }
   _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
 }
 
@@ -11593,8 +11667,8 @@ void PointerEvent::InternalSwap(PointerEvent* other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PointerEvent, _impl_.scroll_y_)
-      + sizeof(PointerEvent::_impl_.scroll_y_)
+      PROTOBUF_FIELD_OFFSET(PointerEvent, _impl_.tilt_y_)
+      + sizeof(PointerEvent::_impl_.tilt_y_)
       - PROTOBUF_FIELD_OFFSET(PointerEvent, _impl_.task_id_)>(
           reinterpret_cast<char*>(&_impl_.task_id_),
           reinterpret_cast<char*>(&other->_impl_.task_id_));

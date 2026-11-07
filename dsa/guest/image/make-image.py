@@ -147,6 +147,24 @@ SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH = {
     "res/xml/accessibility_settings.xml": [
         "com.android.settings.accessibility.AccessibilityHearingAidPreferenceController",
     ],
+    # The previously connected devices list on Connected devices. It counts as available
+    # without Bluetooth, because the dock updater it also drives is always there, and its
+    # SavedBluetoothDeviceUpdater asks the null default adapter isEnabled() as soon as the
+    # screen is shown. It lists saved Bluetooth devices (and docks, which a VM has none of).
+    "res/xml/connected_devices.xml": [
+        "com.android.settings.connecteddevice.PreviouslyConnectedDevicePreferenceController",
+    ],
+    # The page behind that list's "see all", which search still opens: its saved devices
+    # list counts as available for the same dock reason and calls the same forceUpdate.
+    "res/xml/previously_connected_devices.xml": [
+        "com.android.settings.connecteddevice.SavedDeviceGroupController",
+    ],
+    # The hearing devices page, which search and the accessibility shortcut still open with
+    # its entry gone: the available hearing devices list registers with the null
+    # LocalBluetoothManager's event manager in onStart, which runs while it is unavailable.
+    "res/xml/accessibility_hearing_aids.xml": [
+        "com.android.settings.accessibility.AvailableHearingDevicePreferenceController",
+    ],
 }
 
 # Settings code that dereferences the missing Bluetooth adapter where no preference can be
@@ -163,6 +181,11 @@ SETTINGS_CONTROLLERS_WITHOUT_BLUETOOTH = {
 # That controller cannot be made without Bluetooth (above), so the fragment's lookup returns
 # null and the call threw. The call is skipped; nothing else uses its result.
 #
+# ConnectedDeviceDashboardFragment, PreviouslyConnectedDeviceDashboardFragment and
+# AccessibilityHearingAidsFragment hand themselves, in onAttach, to the controllers taken out
+# of their screens above, which their use() lookups no longer find: those init calls are
+# skipped too.
+#
 # Bluetooth comes back as a host HAL, and these edits go with it.
 SETTINGS_CODE_WITHOUT_BLUETOOTH = {
     "Lcom/android/settingslib/bluetooth/BluetoothUtils;->isAudioSharingSupported": ("return false", None),
@@ -170,6 +193,15 @@ SETTINGS_CODE_WITHOUT_BLUETOOTH = {
         "skip call",
         "Lcom/android/settings/accessibility/AccessibilityHearingAidPreferenceController;->setFragmentManager",
     ),
+    "Lcom/android/settings/connecteddevice/ConnectedDeviceDashboardFragment;->onAttach": [
+        ("skip call", "Lcom/android/settings/connecteddevice/PreviouslyConnectedDevicePreferenceController;->init"),
+    ],
+    "Lcom/android/settings/connecteddevice/PreviouslyConnectedDeviceDashboardFragment;->onAttach": [
+        ("skip call", "Lcom/android/settings/connecteddevice/SavedDeviceGroupController;->init"),
+    ],
+    "Lcom/android/settings/accessibility/AccessibilityHearingAidsFragment;->onAttach": [
+        ("skip call", "Lcom/android/settings/accessibility/AvailableHearingDevicePreferenceController;->init"),
+    ],
 }
 
 # Cuttlefish's logger writes to a virtio console Hyper-V does not have, so it exits as soon as
@@ -973,15 +1005,18 @@ def dex_instructions(dex, code_off):
 
 
 def edit_dex(dex, edits):
-    """Applies {"Lclass;->method": edit} to a dex file. An edit is ("return false", None),
-    which makes a method that returns a boolean return false at once, or ("skip call",
-    "Lclass;->method"), which turns each call to that method, whose result is not used, into
-    no-ops. Returns the new file and the methods it changed; a method already edited, or not
-    in this file, is not changed."""
+    """Applies {"Lclass;->method": edit, or a list of edits} to a dex file. An edit is
+    ("return false", None), which makes a method that returns a boolean return false at once,
+    or ("skip call", "Lclass;->method"), which turns each call to that method, whose result is
+    not used, into no-ops. Returns the new file and the methods it changed; a method already
+    edited, or not in this file, is not changed."""
     defined, refs = dex_methods(dex)
     out = bytearray(dex)
     changed = []
-    for method, (kind, target) in edits.items():
+    for method, kind, target in (
+            (method, kind, target)
+            for method, edit in edits.items()
+            for kind, target in (edit if isinstance(edit, list) else [edit])):
         for code_off, shorty in defined.get(method, []):
             registers, = struct.unpack_from("<H", dex, code_off)
             insns = code_off + 16

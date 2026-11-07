@@ -403,6 +403,13 @@ pub struct PointerEvent {
     pub scroll_x: f32,
     #[prost(float, tag = "10")]
     pub scroll_y: f32,
+    /// A pen's tilt, in degrees from upright, from -90 to 90: positive `tilt_x` leans its top
+    /// toward the right of the screen, positive `tilt_y` toward the bottom (toward the user).
+    /// 0 for a pointer that does not measure it.
+    #[prost(float, tag = "11")]
+    pub tilt_x: f32,
+    #[prost(float, tag = "12")]
+    pub tilt_y: f32,
 }
 /// Host to guest: a key pressed or released in a task's window while the window has the
 /// keyboard focus. One message per event, sent as it happens; the agent injects it into the
