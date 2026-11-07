@@ -194,14 +194,15 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   the kernel's early boot and a panic, which the host keeps as the VM's console log.
 - The image reports DSA's device identity instead of Cuttlefish's, in every partition's
   `build.prop` and in the generic ramdisk's: manufacturer `thisisthepy`, brand `DSA`, model
-  `Desktop Subsystem for Android`, device and product name `dsa_x86_64`,
-  `ro.build.characteristics=tablet`, and `user` in every fingerprint. The product
-  `build.prop` ends with `import` lines that take these properties from
-  `/second_stage_resources/system/etc/ramdisk/build.prop`. When a user changes the identity
-  in the settings, the host appends a small cpio archive with that file to the boot's
-  initrd; first stage init keeps it for the second stage, and init reads it before the
+  `Desktop Subsystem for Android`, device and product name `dsa_x86_64` (`dsa_arm64` in an
+  arm64 image), `ro.build.characteristics=tablet`, and `user` in every fingerprint. The
+  product `build.prop` ends with `import` lines that take these properties, and the chip's
+  (`ro.soc.*`), from `/second_stage_resources/system/etc/ramdisk/build.prop`. At every boot
+  the host appends a small cpio archive with that file to the boot's initrd, holding the
+  computer's manufacturer, brand, model, model name and chip, and what the user changed in
+  the settings; first stage init keeps it for the second stage, and init reads it before the
   property service locks `ro.*`. `image.json` names the build's release, ID, incremental
-  version and tags under `identity`, so the host can compose a fingerprint.
+  version and tags under `identity`, and its `arch`, so the host can compose a fingerprint.
 - Every APK, APEX and verified boot image is re-signed. The published build is signed with
   AOSP's test keys, whose private halves are public.
 

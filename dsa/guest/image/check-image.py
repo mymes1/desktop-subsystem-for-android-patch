@@ -533,7 +533,8 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
             if m and value != make_image.IDENTITY[m.group(2)]:
                 problems.append(f"{name} sets {line}, not DSA's {m.group(2)}")
             if make_image.FINGERPRINT_KEY.match(key):
-                if not value.startswith("DSA/dsa_x86_64/dsa_x86_64:") or ":user/" not in value:
+                device = make_image.IDENTITY["device"]
+                if not value.startswith(f"DSA/{make_image.IDENTITY['name']}/{device}:") or ":user/" not in value:
                     problems.append(f"{name} sets {line}, not DSA's user build fingerprint")
             if key == "ro.build.characteristics" and value != make_image.CHARACTERISTICS:
                 problems.append(f"{name} sets {line}, not {make_image.CHARACTERISTICS}")

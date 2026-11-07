@@ -3202,7 +3202,7 @@ class DeviceIdentityTests(unittest.TestCase):
         imports = [line for line in lines if line.startswith("import ")]
         prop = "/second_stage_resources/system/etc/ramdisk/build.prop"
         for key in ["ro.product.*", "ro.build.characteristics", "ro.build.fingerprint",
-                    "ro.system.build.fingerprint", "ro.vendor.build.fingerprint"]:
+                    "ro.system.build.fingerprint", "ro.vendor.build.fingerprint", "ro.soc.*"]:
             self.assertIn(f"import {prop} {key}", imports)
         # The imports come last, so they win over every value read before them.
         self.assertTrue(all(line.startswith(("import ", "#")) for line in lines[-len(imports):]))
@@ -3485,6 +3485,18 @@ class Arm64GuestTests(unittest.TestCase):
         self.assertIn("--instruction-set=arm64", cmd)
         self.assertIn("--instruction-set-variant=generic", cmd)
         self.assertNotIn("--instruction-set=x86_64", cmd)
+
+    def test_fr17_an_arm64_image_names_its_device_dsa_arm64(self):
+        make_image.use_arch("arm64")
+        props = make_image.edit_identity(
+            "ro.product.vendor.device=vsoc_arm64_only\n"
+            "ro.product.name=aosp_cf_arm64_only_phone\n"
+            "ro.build.fingerprint=generic/aosp_cf/vsoc:16/BP4A/15581820:userdebug/test-keys\n")
+        self.assertIn("ro.product.vendor.device=dsa_arm64", props)
+        self.assertIn("ro.product.name=dsa_arm64", props)
+        self.assertIn("ro.build.fingerprint=DSA/dsa_arm64/dsa_arm64:16/BP4A/15581820:user/test-keys", props)
+        make_image.use_arch("x86_64")
+        self.assertEqual(make_image.IDENTITY["device"], "dsa_x86_64")
 
     def test_fr27_x86_64_stays_the_default(self):
         self.assertEqual(make_image.DEFAULT_ARCH, "x86_64")

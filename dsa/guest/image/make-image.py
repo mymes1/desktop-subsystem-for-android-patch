@@ -1094,10 +1094,12 @@ def tag_build_version(key, value, build_tag):
     return value
 
 
-# The device identity the image reports instead of Cuttlefish's. A user may change it from the
-# settings; the host then hands the guest a property file in the boot's initrd, which first
-# stage init keeps for the second stage at RAMDISK_PROP, and the product build.prop, which
-# init reads last, ends with imports that take the identity properties from it.
+# The device identity the image reports instead of Cuttlefish's. At each boot the host hands
+# the guest a property file in the boot's initrd with the computer's manufacturer, brand,
+# model, model name and chip, and what the user changed in the settings; first stage init
+# keeps it for the second stage at RAMDISK_PROP, and the product build.prop, which init reads
+# last, ends with imports that take the identity properties from it. The device and product
+# name follow the architecture (use_arch): dsa_x86_64 or dsa_arm64.
 IDENTITY = {
     "brand": "DSA",
     "manufacturer": "thisisthepy",
@@ -1121,6 +1123,8 @@ IDENTITY_IMPORTS = [
     "ro.build.description",
     "ro.build.fingerprint",
     *(f"ro.{p}.build.fingerprint" for p in IDENTITY_PARTITIONS),
+    # Build.SOC_MANUFACTURER and Build.SOC_MODEL: the computer's CPU.
+    "ro.soc.*",
 ]
 # Read only for DSA's identity, not for the rest of what edit_props sets: the dlkm partitions'
 # files and the generic ramdisk's, which first stage init hands the second stage.
@@ -2630,13 +2634,20 @@ FRAMEWORK_ODEX = f"SYSTEM/framework/oat/{COMPILED_ISA}/services.odex"
 
 
 def use_arch(arch):
-    """Aims the app compilation and its checks at `arch`'s boot image."""
+    """Aims the app compilation and its checks at `arch`'s boot image, and names the device
+    after it: dsa_x86_64 or dsa_arm64."""
     global COMPILED_ISA, COMPILED_ISA_VARIANT, FRAMEWORK_ODEX
     if arch not in ARCHES:
         raise ValueError(f"the guest architecture must be one of {', '.join(ARCHES)}, not {arch}")
     COMPILED_ISA = ARCHES[arch]["isa"]
     COMPILED_ISA_VARIANT = ARCHES[arch]["isa_variant"]
     FRAMEWORK_ODEX = f"SYSTEM/framework/oat/{COMPILED_ISA}/services.odex"
+    IDENTITY["device"] = IDENTITY["name"] = identity_device(arch)
+
+
+def identity_device(arch):
+    """The device and product name of an image for `arch`."""
+    return f"dsa_{arch}"
 
 
 def image_spec(images, major, arch=DEFAULT_ARCH):
