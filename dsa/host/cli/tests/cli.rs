@@ -2144,6 +2144,72 @@ fn fr23_dsa_apps_uninstall_removes_a_user_app_and_refuses_a_system_app() {
 }
 
 #[test]
+fn fr25_dsa_apps_run_as_arm_is_parsed() {
+    use dsa_cli::AppsAction;
+    let line = args("apps run-as-arm com.example.game on");
+    let on = parse(&line).unwrap();
+    assert_eq!(
+        on.apps,
+        Some(AppsAction::RunAsArm("com.example.game".into(), true))
+    );
+    assert!(!on.erase_data);
+    let line = args("apps run-as-arm com.example.game off --erase-data");
+    let erase = parse(&line).unwrap();
+    assert_eq!(
+        erase.apps,
+        Some(AppsAction::RunAsArm("com.example.game".into(), false))
+    );
+    assert!(erase.erase_data);
+    assert!(parse(&args("apps run-as-arm com.example.game")).is_err());
+    assert!(parse(&args("apps run-as-arm com.example.game maybe")).is_err());
+    assert!(parse(&args("apps run-as-arm not/a/package on")).is_err());
+}
+
+#[test]
+fn fr25_dsa_apps_run_as_arm_asks_before_erasing_data_and_lists_the_switch() {
+    let ((listener, _, user), endpoint) = local_pair();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+
+    let off = dsa(&endpoint, "apps run-as-arm com.example.notes on");
+    assert_eq!(off.status.code(), Some(1));
+    assert!(
+        stderr(&off).contains("not changed (translation-off)"),
+        "{}",
+        stderr(&off)
+    );
+    *androids.of(&user).unwrap().translating.lock().unwrap() = true;
+    let asks = dsa(&endpoint, "apps run-as-arm com.example.notes on");
+    assert_eq!(asks.status.code(), Some(1));
+    assert!(
+        stderr(&asks).contains("not changed (data-would-be-erased)"),
+        "{}",
+        stderr(&asks)
+    );
+    let done = dsa(
+        &endpoint,
+        "apps run-as-arm com.example.notes on --erase-data --json",
+    );
+    assert!(done.status.success(), "{}", stderr(&done));
+    let json = json_of(&done);
+    assert_eq!(json["status"], "done");
+    assert_eq!(json["on"], true);
+
+    // The sample apps have no native code, so their switch cannot be changed.
+    let list = json_of(&dsa(&endpoint, "apps list --json"));
+    let notes = list["apps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|app| app["package"] == "com.example.notes")
+        .expect("the notes app")
+        .clone();
+    assert_eq!(notes["run_as_arm"]["available"], false);
+    assert_eq!(notes["run_as_arm"]["reason"], "no-arm-libraries");
+    assert_eq!(notes["native_abis"], serde_json::json!([]));
+}
+
+#[test]
 fn fr23_dsa_apps_settings_opens_androids_app_page_or_its_list_of_apps() {
     let ((listener, _, user), endpoint) = local_pair();
     let androids = Arc::new(FakeAndroids::default());
