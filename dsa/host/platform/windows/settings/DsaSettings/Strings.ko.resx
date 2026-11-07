@@ -61,6 +61,39 @@
   <data name="LastReasonBar.Title" xml:space="preserve">
     <value>마지막 종료 이유</value>
   </data>
+  <data name="LastReason_Requested" xml:space="preserve">
+    <value>요청에 따라 Android를 종료했습니다. 필요할 때 다시 시작하십시오.</value>
+  </data>
+  <data name="LastReason_Updating" xml:space="preserve">
+    <value>DSA를 업데이트하고 있습니다. 업데이트가 끝나면 Android를 다시 시작하십시오.</value>
+  </data>
+  <data name="LastReason_Virtualization" xml:space="preserve">
+    <value>가상화가 꺼져 있거나 Hyper-V가 없습니다. 가상 머신 플랫폼을 켠 뒤 PC를 다시 시작하십시오.</value>
+  </data>
+  <data name="LastReason_InvalidConfiguration" xml:space="preserve">
+    <value>Windows가 Android 가상 머신의 설정을 거부했습니다. DSA를 업데이트하거나 다시 설치하십시오.</value>
+  </data>
+  <data name="LastReason_OutOfMemory" xml:space="preserve">
+    <value>메모리가 부족해 Android를 시작할 수 없습니다. 다른 앱을 닫고 다시 시도하십시오.</value>
+  </data>
+  <data name="LastReason_Disk" xml:space="preserve">
+    <value>디스크 문제로 Android를 시작하지 못했습니다. 공간을 확보하거나 드라이브를 점검한 뒤 다시 시도하십시오.</value>
+  </data>
+  <data name="LastReason_TimedOut" xml:space="preserve">
+    <value>Android 시작이 너무 오래 걸렸습니다. 다시 시작해 보십시오.</value>
+  </data>
+  <data name="LastReason_Lost" xml:space="preserve">
+    <value>Android가 예기치 않게 종료되었습니다. 다시 시작해 보십시오.</value>
+  </data>
+  <data name="LastReason_General" xml:space="preserve">
+    <value>Android를 시작할 수 없습니다. 다시 시도하고, 계속 실패하면 자세히 보기를 확인하십시오.</value>
+  </data>
+  <data name="LastReasonDetails.Header" xml:space="preserve">
+    <value>자세히 보기</value>
+  </data>
+  <data name="LastReasonCopy.ToolTip" xml:space="preserve">
+    <value>자세한 내용 복사</value>
+  </data>
   <data name="UpdateNoticeBar.Title" xml:space="preserve">
     <value>업데이트</value>
   </data>

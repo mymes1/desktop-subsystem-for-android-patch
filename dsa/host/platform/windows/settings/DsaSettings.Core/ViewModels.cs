@@ -69,8 +69,13 @@ public sealed partial class GeneralViewModel : ObservableObject
 
     public SessionState State => _status?.State ?? SessionState.Unknown;
     public string StateText => _text.Get($"State_{State}");
-    public string LastReason => _status?.LastReason ?? "";
+    /// <summary>Why Android last stopped, as a short sentence in the user's language.</summary>
+    public string LastReason => HasLastReason ? _text.Get(StopReasonText.KeyFor(_status!.LastReason!)) : "";
     public bool HasLastReason => !string.IsNullOrEmpty(_status?.LastReason);
+    /// <summary>The service's own words for it, shown only when the user asks for the details.
+    /// A stop on request has none worth showing.</summary>
+    public string LastReasonDetail => HasLastReasonDetail ? _status!.LastReason! : "";
+    public bool HasLastReasonDetail => HasLastReason && StopReasonText.KeyFor(_status!.LastReason!) != StopReasonText.Requested;
     public string Problem => _status?.Problem ?? "";
     public bool HasProblem => !string.IsNullOrEmpty(_status?.Problem);
     public string UpdateNotice => _status?.UpdateNotice ?? "";
