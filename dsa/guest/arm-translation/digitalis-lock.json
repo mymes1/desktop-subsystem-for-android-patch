@@ -486,6 +486,15 @@
           "name": "platform/external/rust/android-crates-io",
           "url": "https://android.googlesource.com/platform/external/rust/android-crates-io",
           "commit": "1f5e95cd6e996995023c9c0f7df0f15a8a43269e"
+        },
+        {
+          "path": "toolchain/pgo-profiles",
+          "cone": [
+            "sampling"
+          ],
+          "name": "toolchain/pgo-profiles",
+          "url": "https://android.googlesource.com/toolchain/pgo-profiles",
+          "commit": "44bae3346df2d8657cde54a5ee069067d607e689"
         }
       ],
       "superproject": {
@@ -966,6 +975,15 @@
           "name": "platform/external/rust/android-crates-io",
           "url": "https://android.googlesource.com/platform/external/rust/android-crates-io",
           "commit": "0bb9c7a4cb26e195379037742a853fa381ecc102"
+        },
+        {
+          "path": "toolchain/pgo-profiles",
+          "cone": [
+            "sampling"
+          ],
+          "name": "toolchain/pgo-profiles",
+          "url": "https://android.googlesource.com/toolchain/pgo-profiles",
+          "commit": "09143208038651bf107b8557d79a206b962cb7b6"
         }
       ],
       "superproject": {

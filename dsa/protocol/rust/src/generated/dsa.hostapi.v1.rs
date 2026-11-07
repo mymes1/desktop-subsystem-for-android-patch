@@ -1468,6 +1468,19 @@ pub struct Settings {
     /// chooses another; 0 in a request means the default.
     #[prost(uint32, tag = "15")]
     pub adb_port: u32,
+    /// Whether, while developer mode is on, the service attaches 127.0.0.1:adb_port to the
+    /// caller's adb server by itself (as `adb connect` would), so adb and Android Studio list it
+    /// with nothing typed. On unless the user turned it off; a client sends back the value it
+    /// read. Off, the service sends the adb server nothing.
+    #[prost(bool, tag = "21")]
+    pub adb_auto_connect: bool,
+    /// Where auto-connect stands: "off" (developer mode or auto-connect is off),
+    /// "waiting-for-server" (no adb server runs), "waiting-for-android" (Android is not running
+    /// or adb in Android has not answered yet), "attached" (the adb server lists it) or
+    /// "detached" (the user ran adb disconnect; it is attached again when the adb server
+    /// restarts). Empty from a service that does not report it. A client cannot change it.
+    #[prost(string, tag = "22")]
+    pub adb_auto_connect_state: ::prost::alloc::string::String,
     /// Whether the caller's Android uses an installed ARM translation package. On unless the
     /// user turned it off; a client sends back the value it read. It applies from the next start
     /// of Android, because the ABIs Android installs apps for are fixed at boot.

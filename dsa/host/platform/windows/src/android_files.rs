@@ -494,7 +494,7 @@ mod tests {
         assert_eq!(
             value("DefaultIcon", None),
             Some(RegValue::Text(
-                r"C:\Program Files\DSA\dsa-app-window.exe,-2".into()
+                r"C:\Program Files\DSA\dsa-app-window.exe,-3".into()
             ))
         );
     }
