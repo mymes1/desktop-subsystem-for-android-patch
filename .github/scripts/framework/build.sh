@@ -35,6 +35,18 @@ rm -rf "$device"
 mkdir -p "$device"
 cp "$here/device/AndroidProducts.mk" "$here/device/dsa_framework.mk" "$device/"
 cp "$here/device/$arch/BoardConfig.mk" "$device/"
+cp -r "$here/device/hosttools" "$device/"
+
+# The lock takes only the SDK's finalized flag lists from prebuilts/sdk, so its Android.bp is
+# DSA's stand-in (see prebuilts-sdk/Android.bp): the real one declares the prebuilt SDKs,
+# whose API files the tree does not have, and Soong's analysis stops on that.
+sdk="$top/prebuilts/sdk"
+[[ -d "$sdk" ]] || { echo "the tree has no prebuilts/sdk" >&2; exit 1; }
+if [[ -e "$sdk/Android.bp" ]] && ! cmp -s "$here/prebuilts-sdk/Android.bp" "$sdk/Android.bp"; then
+  echo "prebuilts/sdk/Android.bp came with the checkout; the lock must not fetch it" >&2
+  exit 1
+fi
+cp "$here/prebuilts-sdk/Android.bp" "$sdk/Android.bp"
 
 targets=()
 for installed in $(uv run "$repo/dsa/guest/framework/framework_lock.py" outputs); do
