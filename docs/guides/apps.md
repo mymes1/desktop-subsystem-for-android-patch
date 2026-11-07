@@ -76,10 +76,13 @@ windows, stays when you show the desktop, and is not in the taskbar or Alt+Tab.
 1. Open the **Widgets** page of DSA Settings.
 2. Under **Widgets your apps offer**, select **Add to desktop** next to a widget. If the app
    asks you to set the widget up, its setup opens in a window.
-3. Drag the band along the widget's top to move it. Drag its edges to resize it. DSA
-   remembers where you put it.
-4. Right-click the widget for **Resize**, to pick one of the sizes it allows, and
-   **Remove**.
+3. To move a widget, drag the round **More** button that appears at its top right corner
+   when you point at it. You can also press anywhere on the widget, hold still for half a
+   second, and then drag. A quick drag stays the widget's own, so its lists still scroll.
+   Drag its edges to resize it. DSA remembers where you put it.
+4. Select the **More** button, or right-click the widget, for **Resize**, to pick one of
+   the sizes it allows, and **Remove**. The arrow keys, Enter and Esc work in this menu
+   too, and a letter picks an item: R for **Resize** and M for **Remove**.
 
 From the command line: `dsa widgets list`, `dsa widgets add <provider>` and
 `dsa widgets remove <id>`.
