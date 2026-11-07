@@ -28,6 +28,7 @@ pub mod arm_translation;
 #[cfg(target_os = "android")]
 pub mod binder;
 pub mod gamepad;
+pub mod image_store;
 pub mod logbridge;
 pub mod logd;
 pub mod pressure;
