@@ -73,7 +73,9 @@ rough edges. Linux, macOS and ARM64 Windows are in progress (see
   identity, updates, developer mode with adb, Android's live log and diagnostics.
 
 **Not shipped:** Google Play services or an app store (their licences make them a user's
-choice), and any of Microsoft's WSA binaries.
+choice), and any of Microsoft's WSA binaries. A user who wants Google Play installs it from
+DSA Settings or with `dsa gapps install`: DSA then downloads the public LiteGapps Core package
+for that user's Android and lays it over the system. Google's apps follow Google's terms.
 
 ## Supported platforms
 
