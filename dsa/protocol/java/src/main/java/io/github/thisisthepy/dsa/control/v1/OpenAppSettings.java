@@ -67,6 +67,68 @@ public  final class OpenAppSettings extends
     
   }
 
+  public static final int PAGE_FIELD_NUMBER = 2;
+  private int page_;
+  /**
+   * <pre>
+   * Which of Android's pages for the app. Ignored without a package.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+   * @return The enum numeric value on the wire for page.
+   */
+  @java.lang.Override
+  public int getPageValue() {
+    return page_;
+  }
+  /**
+   * <pre>
+   * Which of Android's pages for the app. Ignored without a package.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+   * @return The page.
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.AppSettingsPage getPage() {
+    io.github.thisisthepy.dsa.control.v1.AppSettingsPage result = io.github.thisisthepy.dsa.control.v1.AppSettingsPage.forNumber(page_);
+    return result == null ? io.github.thisisthepy.dsa.control.v1.AppSettingsPage.UNRECOGNIZED : result;
+  }
+  /**
+   * <pre>
+   * Which of Android's pages for the app. Ignored without a package.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+   * @param value The enum numeric value on the wire for page to set.
+   */
+  private void setPageValue(int value) {
+      page_ = value;
+  }
+  /**
+   * <pre>
+   * Which of Android's pages for the app. Ignored without a package.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+   * @param value The page to set.
+   */
+  private void setPage(io.github.thisisthepy.dsa.control.v1.AppSettingsPage value) {
+    page_ = value.getNumber();
+    
+  }
+  /**
+   * <pre>
+   * Which of Android's pages for the app. Ignored without a package.
+   * </pre>
+   *
+   * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+   */
+  private void clearPage() {
+    
+    page_ = 0;
+  }
+
   public static io.github.thisisthepy.dsa.control.v1.OpenAppSettings parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -217,6 +279,72 @@ public  final class OpenAppSettings extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Which of Android's pages for the app. Ignored without a package.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+     * @return The enum numeric value on the wire for page.
+     */
+    @java.lang.Override
+    public int getPageValue() {
+      return instance.getPageValue();
+    }
+    /**
+     * <pre>
+     * Which of Android's pages for the app. Ignored without a package.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+     * @param value The page to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPageValue(int value) {
+      copyOnWrite();
+      instance.setPageValue(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Which of Android's pages for the app. Ignored without a package.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+     * @return The page.
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.AppSettingsPage getPage() {
+      return instance.getPage();
+    }
+    /**
+     * <pre>
+     * Which of Android's pages for the app. Ignored without a package.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+     * @param value The enum numeric value on the wire for page to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPage(io.github.thisisthepy.dsa.control.v1.AppSettingsPage value) {
+      copyOnWrite();
+      instance.setPage(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Which of Android's pages for the app. Ignored without a package.
+     * </pre>
+     *
+     * <code>.dsa.control.v1.AppSettingsPage page = 2;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPage() {
+      copyOnWrite();
+      instance.clearPage();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.OpenAppSettings)
   }
   @java.lang.Override
@@ -234,9 +362,11 @@ public  final class OpenAppSettings extends
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
             "packageName_",
+            "page_",
           };
           java.lang.String info =
-              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0000\u0000\u0001\u0208";
+              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u0208\u0002\f" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

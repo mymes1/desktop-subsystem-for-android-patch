@@ -11,6 +11,11 @@ package io.github.thisisthepy.dsa.control.v1;
  * toolbar below the caption buttons and draws its status bar background behind them. The
  * host sends it when the window opens and whenever the height changes, as on a move to a
  * monitor of another scale. 0 removes the inset.
+ * `start_width` and `end_width` are how far the parts the host draws over the band reach in
+ * from its left end (the app's icon) and from its right end (the caption buttons), in guest
+ * display pixels. An app that draws its own title bar (TaskUpdated.transparent_caption)
+ * receives them as the bounding rectangles of its caption bar inset
+ * (WindowInsets.getBoundingRects), so it keeps its controls out of them.
  * </pre>
  *
  * Protobuf type {@code dsa.control.v1.SetTaskCaption}
@@ -72,6 +77,58 @@ public  final class SetTaskCaption extends
   private void clearHeight() {
     
     height_ = 0;
+  }
+
+  public static final int START_WIDTH_FIELD_NUMBER = 3;
+  private int startWidth_;
+  /**
+   * <code>uint32 start_width = 3;</code>
+   * @return The startWidth.
+   */
+  @java.lang.Override
+  public int getStartWidth() {
+    return startWidth_;
+  }
+  /**
+   * <code>uint32 start_width = 3;</code>
+   * @param value The startWidth to set.
+   */
+  private void setStartWidth(int value) {
+    
+    startWidth_ = value;
+  }
+  /**
+   * <code>uint32 start_width = 3;</code>
+   */
+  private void clearStartWidth() {
+    
+    startWidth_ = 0;
+  }
+
+  public static final int END_WIDTH_FIELD_NUMBER = 4;
+  private int endWidth_;
+  /**
+   * <code>uint32 end_width = 4;</code>
+   * @return The endWidth.
+   */
+  @java.lang.Override
+  public int getEndWidth() {
+    return endWidth_;
+  }
+  /**
+   * <code>uint32 end_width = 4;</code>
+   * @param value The endWidth to set.
+   */
+  private void setEndWidth(int value) {
+    
+    endWidth_ = value;
+  }
+  /**
+   * <code>uint32 end_width = 4;</code>
+   */
+  private void clearEndWidth() {
+    
+    endWidth_ = 0;
   }
 
   public static io.github.thisisthepy.dsa.control.v1.SetTaskCaption parseFrom(
@@ -163,6 +220,11 @@ public  final class SetTaskCaption extends
    * toolbar below the caption buttons and draws its status bar background behind them. The
    * host sends it when the window opens and whenever the height changes, as on a move to a
    * monitor of another scale. 0 removes the inset.
+   * `start_width` and `end_width` are how far the parts the host draws over the band reach in
+   * from its left end (the app's icon) and from its right end (the caption buttons), in guest
+   * display pixels. An app that draws its own title bar (TaskUpdated.transparent_caption)
+   * receives them as the bounding rectangles of its caption bar inset
+   * (WindowInsets.getBoundingRects), so it keeps its controls out of them.
    * </pre>
    *
    * Protobuf type {@code dsa.control.v1.SetTaskCaption}
@@ -234,6 +296,62 @@ public  final class SetTaskCaption extends
       return this;
     }
 
+    /**
+     * <code>uint32 start_width = 3;</code>
+     * @return The startWidth.
+     */
+    @java.lang.Override
+    public int getStartWidth() {
+      return instance.getStartWidth();
+    }
+    /**
+     * <code>uint32 start_width = 3;</code>
+     * @param value The startWidth to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStartWidth(int value) {
+      copyOnWrite();
+      instance.setStartWidth(value);
+      return this;
+    }
+    /**
+     * <code>uint32 start_width = 3;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStartWidth() {
+      copyOnWrite();
+      instance.clearStartWidth();
+      return this;
+    }
+
+    /**
+     * <code>uint32 end_width = 4;</code>
+     * @return The endWidth.
+     */
+    @java.lang.Override
+    public int getEndWidth() {
+      return instance.getEndWidth();
+    }
+    /**
+     * <code>uint32 end_width = 4;</code>
+     * @param value The endWidth to set.
+     * @return This builder for chaining.
+     */
+    public Builder setEndWidth(int value) {
+      copyOnWrite();
+      instance.setEndWidth(value);
+      return this;
+    }
+    /**
+     * <code>uint32 end_width = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearEndWidth() {
+      copyOnWrite();
+      instance.clearEndWidth();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.SetTaskCaption)
   }
   @java.lang.Override
@@ -252,10 +370,12 @@ public  final class SetTaskCaption extends
           java.lang.Object[] objects = new java.lang.Object[] {
             "taskId_",
             "height_",
+            "startWidth_",
+            "endWidth_",
           };
           java.lang.String info =
-              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u0004\u0002\u000b" +
-              "";
+              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0004\u0002\u000b" +
+              "\u0003\u000b\u0004\u000b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

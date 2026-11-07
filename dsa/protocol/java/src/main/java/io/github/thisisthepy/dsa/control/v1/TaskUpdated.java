@@ -20,6 +20,7 @@ public  final class TaskUpdated extends
   private TaskUpdated() {
     packageName_ = "";
     label_ = "";
+    captionInteractive_ = emptyProtobufList();
   }
   public static final int TASK_ID_FIELD_NUMBER = 1;
   private int taskId_;
@@ -735,6 +736,285 @@ public  final class TaskUpdated extends
   private void clearPictureInPicture() {
     
     pictureInPicture_ = false;
+  }
+
+  public static final int TRANSPARENT_CAPTION_FIELD_NUMBER = 23;
+  private boolean transparentCaption_;
+  /**
+   * <pre>
+   * Whether the task's app asked to draw its own title bar: it set a transparent caption bar
+   * background (WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND), as
+   * an app does on Android's own desktop windows to put its controls, such as a browser's
+   * tabs, in the title bar. The host then draws only its caption buttons and the app's icon
+   * over the app, not the app's name, and leaves the rest of the band to the app.
+   * </pre>
+   *
+   * <code>bool transparent_caption = 23;</code>
+   * @return The transparentCaption.
+   */
+  @java.lang.Override
+  public boolean getTransparentCaption() {
+    return transparentCaption_;
+  }
+  /**
+   * <pre>
+   * Whether the task's app asked to draw its own title bar: it set a transparent caption bar
+   * background (WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND), as
+   * an app does on Android's own desktop windows to put its controls, such as a browser's
+   * tabs, in the title bar. The host then draws only its caption buttons and the app's icon
+   * over the app, not the app's name, and leaves the rest of the band to the app.
+   * </pre>
+   *
+   * <code>bool transparent_caption = 23;</code>
+   * @param value The transparentCaption to set.
+   */
+  private void setTransparentCaption(boolean value) {
+    
+    transparentCaption_ = value;
+  }
+  /**
+   * <pre>
+   * Whether the task's app asked to draw its own title bar: it set a transparent caption bar
+   * background (WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND), as
+   * an app does on Android's own desktop windows to put its controls, such as a browser's
+   * tabs, in the title bar. The host then draws only its caption buttons and the app's icon
+   * over the app, not the app's name, and leaves the rest of the band to the app.
+   * </pre>
+   *
+   * <code>bool transparent_caption = 23;</code>
+   */
+  private void clearTransparentCaption() {
+    
+    transparentCaption_ = false;
+  }
+
+  public static final int CAPTION_INTERACTIVE_FIELD_NUMBER = 24;
+  private com.google.protobuf.Internal.ProtobufList<io.github.thisisthepy.dsa.control.v1.Rect> captionInteractive_;
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  @java.lang.Override
+  public java.util.List<io.github.thisisthepy.dsa.control.v1.Rect> getCaptionInteractiveList() {
+    return captionInteractive_;
+  }
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  public java.util.List<? extends io.github.thisisthepy.dsa.control.v1.RectOrBuilder> 
+      getCaptionInteractiveOrBuilderList() {
+    return captionInteractive_;
+  }
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  @java.lang.Override
+  public int getCaptionInteractiveCount() {
+    return captionInteractive_.size();
+  }
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.Rect getCaptionInteractive(int index) {
+    return captionInteractive_.get(index);
+  }
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  public io.github.thisisthepy.dsa.control.v1.RectOrBuilder getCaptionInteractiveOrBuilder(
+      int index) {
+    return captionInteractive_.get(index);
+  }
+  private void ensureCaptionInteractiveIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<io.github.thisisthepy.dsa.control.v1.Rect> tmp = captionInteractive_;
+    if (!tmp.isModifiable()) {
+      captionInteractive_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  private void setCaptionInteractive(
+      int index, io.github.thisisthepy.dsa.control.v1.Rect value) {
+    value.getClass();
+  ensureCaptionInteractiveIsMutable();
+    captionInteractive_.set(index, value);
+  }
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  private void addCaptionInteractive(io.github.thisisthepy.dsa.control.v1.Rect value) {
+    value.getClass();
+  ensureCaptionInteractiveIsMutable();
+    captionInteractive_.add(value);
+  }
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  private void addCaptionInteractive(
+      int index, io.github.thisisthepy.dsa.control.v1.Rect value) {
+    value.getClass();
+  ensureCaptionInteractiveIsMutable();
+    captionInteractive_.add(index, value);
+  }
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  private void addAllCaptionInteractive(
+      java.lang.Iterable<? extends io.github.thisisthepy.dsa.control.v1.Rect> values) {
+    ensureCaptionInteractiveIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, captionInteractive_);
+  }
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  private void clearCaptionInteractive() {
+    captionInteractive_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * While `transparent_caption` is set: the parts of the title bar band where the app has
+   * controls, which take the pointer, relative to the task's top left corner in guest
+   * display pixels. They are what the app asked the system to keep its gestures out of
+   * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+   * The rest of the band drags the window.
+   * </pre>
+   *
+   * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+   */
+  private void removeCaptionInteractive(int index) {
+    ensureCaptionInteractiveIsMutable();
+    captionInteractive_.remove(index);
+  }
+
+  public static final int CAN_GO_BACK_FIELD_NUMBER = 25;
+  private boolean canGoBack_;
+  /**
+   * <pre>
+   * Whether the task has somewhere to go back to: its top activity is not the first one of
+   * the task (it holds more than one activity). The host's window then shows a back button
+   * in the place of the app's icon, and Esc or Backspace an app leaves become Back; on the
+   * task's first screen they never do, so a key never closes the window.
+   * </pre>
+   *
+   * <code>bool can_go_back = 25;</code>
+   * @return The canGoBack.
+   */
+  @java.lang.Override
+  public boolean getCanGoBack() {
+    return canGoBack_;
+  }
+  /**
+   * <pre>
+   * Whether the task has somewhere to go back to: its top activity is not the first one of
+   * the task (it holds more than one activity). The host's window then shows a back button
+   * in the place of the app's icon, and Esc or Backspace an app leaves become Back; on the
+   * task's first screen they never do, so a key never closes the window.
+   * </pre>
+   *
+   * <code>bool can_go_back = 25;</code>
+   * @param value The canGoBack to set.
+   */
+  private void setCanGoBack(boolean value) {
+    
+    canGoBack_ = value;
+  }
+  /**
+   * <pre>
+   * Whether the task has somewhere to go back to: its top activity is not the first one of
+   * the task (it holds more than one activity). The host's window then shows a back button
+   * in the place of the app's icon, and Esc or Backspace an app leaves become Back; on the
+   * task's first screen they never do, so a key never closes the window.
+   * </pre>
+   *
+   * <code>bool can_go_back = 25;</code>
+   */
+  private void clearCanGoBack() {
+    
+    canGoBack_ = false;
   }
 
   public static io.github.thisisthepy.dsa.control.v1.TaskUpdated parseFrom(
@@ -1591,6 +1871,305 @@ public  final class TaskUpdated extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Whether the task's app asked to draw its own title bar: it set a transparent caption bar
+     * background (WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND), as
+     * an app does on Android's own desktop windows to put its controls, such as a browser's
+     * tabs, in the title bar. The host then draws only its caption buttons and the app's icon
+     * over the app, not the app's name, and leaves the rest of the band to the app.
+     * </pre>
+     *
+     * <code>bool transparent_caption = 23;</code>
+     * @return The transparentCaption.
+     */
+    @java.lang.Override
+    public boolean getTransparentCaption() {
+      return instance.getTransparentCaption();
+    }
+    /**
+     * <pre>
+     * Whether the task's app asked to draw its own title bar: it set a transparent caption bar
+     * background (WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND), as
+     * an app does on Android's own desktop windows to put its controls, such as a browser's
+     * tabs, in the title bar. The host then draws only its caption buttons and the app's icon
+     * over the app, not the app's name, and leaves the rest of the band to the app.
+     * </pre>
+     *
+     * <code>bool transparent_caption = 23;</code>
+     * @param value The transparentCaption to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTransparentCaption(boolean value) {
+      copyOnWrite();
+      instance.setTransparentCaption(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Whether the task's app asked to draw its own title bar: it set a transparent caption bar
+     * background (WindowInsetsController's APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND), as
+     * an app does on Android's own desktop windows to put its controls, such as a browser's
+     * tabs, in the title bar. The host then draws only its caption buttons and the app's icon
+     * over the app, not the app's name, and leaves the rest of the band to the app.
+     * </pre>
+     *
+     * <code>bool transparent_caption = 23;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTransparentCaption() {
+      copyOnWrite();
+      instance.clearTransparentCaption();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    @java.lang.Override
+    public java.util.List<io.github.thisisthepy.dsa.control.v1.Rect> getCaptionInteractiveList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getCaptionInteractiveList());
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    @java.lang.Override
+    public int getCaptionInteractiveCount() {
+      return instance.getCaptionInteractiveCount();
+    }/**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.Rect getCaptionInteractive(int index) {
+      return instance.getCaptionInteractive(index);
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    public Builder setCaptionInteractive(
+        int index, io.github.thisisthepy.dsa.control.v1.Rect value) {
+      copyOnWrite();
+      instance.setCaptionInteractive(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    public Builder setCaptionInteractive(
+        int index, io.github.thisisthepy.dsa.control.v1.Rect.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCaptionInteractive(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    public Builder addCaptionInteractive(io.github.thisisthepy.dsa.control.v1.Rect value) {
+      copyOnWrite();
+      instance.addCaptionInteractive(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    public Builder addCaptionInteractive(
+        int index, io.github.thisisthepy.dsa.control.v1.Rect value) {
+      copyOnWrite();
+      instance.addCaptionInteractive(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    public Builder addCaptionInteractive(
+        io.github.thisisthepy.dsa.control.v1.Rect.Builder builderForValue) {
+      copyOnWrite();
+      instance.addCaptionInteractive(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    public Builder addCaptionInteractive(
+        int index, io.github.thisisthepy.dsa.control.v1.Rect.Builder builderForValue) {
+      copyOnWrite();
+      instance.addCaptionInteractive(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    public Builder addAllCaptionInteractive(
+        java.lang.Iterable<? extends io.github.thisisthepy.dsa.control.v1.Rect> values) {
+      copyOnWrite();
+      instance.addAllCaptionInteractive(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    public Builder clearCaptionInteractive() {
+      copyOnWrite();
+      instance.clearCaptionInteractive();
+      return this;
+    }
+    /**
+     * <pre>
+     * While `transparent_caption` is set: the parts of the title bar band where the app has
+     * controls, which take the pointer, relative to the task's top left corner in guest
+     * display pixels. They are what the app asked the system to keep its gestures out of
+     * (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
+     * The rest of the band drags the window.
+     * </pre>
+     *
+     * <code>repeated .dsa.control.v1.Rect caption_interactive = 24;</code>
+     */
+    public Builder removeCaptionInteractive(int index) {
+      copyOnWrite();
+      instance.removeCaptionInteractive(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * Whether the task has somewhere to go back to: its top activity is not the first one of
+     * the task (it holds more than one activity). The host's window then shows a back button
+     * in the place of the app's icon, and Esc or Backspace an app leaves become Back; on the
+     * task's first screen they never do, so a key never closes the window.
+     * </pre>
+     *
+     * <code>bool can_go_back = 25;</code>
+     * @return The canGoBack.
+     */
+    @java.lang.Override
+    public boolean getCanGoBack() {
+      return instance.getCanGoBack();
+    }
+    /**
+     * <pre>
+     * Whether the task has somewhere to go back to: its top activity is not the first one of
+     * the task (it holds more than one activity). The host's window then shows a back button
+     * in the place of the app's icon, and Esc or Backspace an app leaves become Back; on the
+     * task's first screen they never do, so a key never closes the window.
+     * </pre>
+     *
+     * <code>bool can_go_back = 25;</code>
+     * @param value The canGoBack to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCanGoBack(boolean value) {
+      copyOnWrite();
+      instance.setCanGoBack(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Whether the task has somewhere to go back to: its top activity is not the first one of
+     * the task (it holds more than one activity). The host's window then shows a back button
+     * in the place of the app's icon, and Esc or Backspace an app leaves become Back; on the
+     * task's first screen they never do, so a key never closes the window.
+     * </pre>
+     *
+     * <code>bool can_go_back = 25;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCanGoBack() {
+      copyOnWrite();
+      instance.clearCanGoBack();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:dsa.control.v1.TaskUpdated)
   }
   @java.lang.Override
@@ -1622,11 +2201,16 @@ public  final class TaskUpdated extends
             "orientation_",
             "fullscreen_",
             "pictureInPicture_",
+            "transparentCaption_",
+            "captionInteractive_",
+            io.github.thisisthepy.dsa.control.v1.Rect.class,
+            "canGoBack_",
           };
           java.lang.String info =
-              "\u0000\u000f\u0000\u0000\u0001\u0016\u000f\u0000\u0000\u0000\u0001\u0004\u0002\t" +
+              "\u0000\u0012\u0000\u0000\u0001\u0019\u0012\u0000\u0001\u0000\u0001\u0004\u0002\t" +
               "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u000b\u0007\u000b\b\u000b\t\u000b\n\u000b" +
-              "\u000b\f\f\u0006\u0014\f\u0015\u0007\u0016\u0007";
+              "\u000b\f\f\u0006\u0014\f\u0015\u0007\u0016\u0007\u0017\u0007\u0018\u001b\u0019\u0007" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

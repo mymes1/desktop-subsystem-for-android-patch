@@ -1766,6 +1766,10 @@ Windows의 Hyper-V VM 대신 USB로 연결한 폰의 AVF(Android Virtualization 
 
 결정은 소유자의 몫이다(INTENT를 바꾸는 일이다). 이 조사가 권하는 다음 단계는 기기 하나(Pixel 8 이후나 Exynos 2600)에서 두 가지를 재는 것이다. 하나는 DSA arm64 커널로 crosvm VM을 shell에서 띄우는 것이고, 다른 하나는 adb forward(burst 켬과 끔) 위의 작은 메시지 왕복과 처리량이다. 이 두 수치가 있어야 앱 시작 비용을 계산할 수 있다.
 
+2026-11-08 소유자가 이 백엔드를 정식으로 받아들였다(INTENT D26, SPEC FR-33, PROJECT M10). 구현은 M9 뒤에 위의 측정부터 시작한다.
+
+폰의 안드로이드 자체에서 앱을 띄워 PC로 보내는 방식은 하지 않는다. 폰을 잠근 채 쓰려면 잠금을 무시하는 가상 화면이 필요한데, 그 화면은 PC 앞의 누구에게나 그 앱을 잠금 없이 여는 것과 같다. 이 백엔드의 VM은 폰과 별개의 시스템이라 폰의 잠금이 폰의 앱과 데이터를 그대로 지킨다.
+
 ### 출처
 
 - AVF 문서: https://source.android.com/docs/core/virtualization , https://android.googlesource.com/platform/packages/modules/Virtualization/+/refs/heads/android17-release/docs/custom_vm.md , https://android.googlesource.com/platform/packages/modules/Virtualization/+/refs/heads/android17-release/docs/getting_started.md
