@@ -26,6 +26,7 @@
 //! builds everywhere.
 
 pub mod compositor;
+pub mod computer_identity;
 pub mod config;
 pub mod console;
 pub mod crosvm;

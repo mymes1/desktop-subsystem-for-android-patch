@@ -20,9 +20,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use dsa_host_core::device_identity::{
-    DeviceIdentity, DeviceIdentityStore, FileDeviceIdentities, ImageBuild,
-};
+use dsa_host_core::device_identity::{BootIdentity, FileDeviceIdentities, ImageBuild};
 use dsa_host_core::diagnostics::HostFile;
 use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
 use dsa_host_core::handshake::ControlHandshake;
@@ -180,7 +178,7 @@ struct Planner {
     name: String,
     store: Option<Arc<ImageStore>>,
     settings: Arc<dyn SettingsStore>,
-    identities: FileDeviceIdentities,
+    identity: Arc<BootIdentity>,
 }
 
 impl Planner {
@@ -265,14 +263,13 @@ impl Planner {
             mac_address: Some(mac_address_for(&self.name)),
             listen_ports,
         };
-        let identity = self.identities.get(&self.name).unwrap_or_else(|why| {
-            eprintln!("{why}; Android starts with the image's device identity");
-            DeviceIdentity::default()
-        });
-        let properties = identity.boot_properties(ImageBuild::from_image_dir(&dir).as_ref());
+        // The user's device identity on this Mac, read again at each start.
+        let properties = self
+            .identity
+            .boot_properties(ImageBuild::from_image_dir(&dir).as_ref());
         Ok(BootPlan {
             vm,
-            properties,
+            properties: Some(properties),
             bootconfig: dsa_host_core::arm_translation::bootconfig_for(
                 &*self.settings,
                 &self.name,
@@ -450,13 +447,18 @@ struct Shared {
 fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, String> {
     let config = &shared.config;
     let channels = Arc::new(PortChannels::default());
+    let boot_identity = BootIdentity::new(
+        Arc::new(FileDeviceIdentities::new(config.settings_dir(&shared.user))),
+        name,
+        Arc::new(crate::computer_identity::read),
+    );
     let planner = Planner {
         config: config.clone(),
         user: shared.user.clone(),
         name: name.to_string(),
         store: shared.store.clone(),
         settings: Arc::clone(&shared.settings),
-        identities: FileDeviceIdentities::new(config.settings_dir(&shared.user)),
+        identity: Arc::clone(&boot_identity),
     };
     let launcher = MacVmLauncher::new(
         Box::new(move || planner.plan()),
@@ -703,6 +705,8 @@ pub fn serve(
                     .and_then(|(dir, _)| ImageBuild::from_image_dir(&dir))
             }),
         )
+        // The defaults the settings show are what this Mac says it is now.
+        .with_computer_identity(Arc::new(crate::computer_identity::read))
         // An arm64 image runs ARM apps itself and has no default translator; this reports
         // whatever the image says, which for every image this host boots is none.
         .with_default_arm_translation({

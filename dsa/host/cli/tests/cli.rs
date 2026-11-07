@@ -2157,6 +2157,13 @@ fn fr12_dsa_widgets_says_why_a_widget_was_not_placed() {
 }
 
 fn identity_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> RunningService {
+    identity_service_on(listener, None)
+}
+
+fn identity_service_on(
+    listener: Box<dyn dsa_transport::local::LocalListener>,
+    computer: Option<dsa_host_core::computer_identity::ComputerInfo>,
+) -> RunningService {
     use dsa_host_core::device_identity::{ImageBuild, MemoryDeviceIdentities};
     use dsa_host_core::host_api::HostApiService;
     let build = ImageBuild {
@@ -2164,13 +2171,63 @@ fn identity_service(listener: Box<dyn dsa_transport::local::LocalListener>) -> R
         id: "BP2A".into(),
         incremental: "1.dsaab".into(),
         tags: "release-keys".into(),
+        arch: "x86_64".into(),
     };
-    let service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
+    let mut service = HostApiService::new(Arc::new(FakeAndroids::default()), "test service")
         .with_device_identities(
             Arc::new(MemoryDeviceIdentities::default()),
             Arc::new(move |_: &str| Some(build.clone())),
         );
+    if let Some(computer) = computer {
+        service = service.with_computer_identity(Arc::new(move || computer.clone()));
+    }
     RunningService::start_service(listener, service)
+}
+
+#[test]
+fn fr17_dsa_shows_the_computers_identity_and_where_each_default_came_from() {
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = identity_service_on(
+        listener,
+        Some(dsa_host_core::computer_identity::ComputerInfo {
+            system_manufacturer: "SAMSUNG ELECTRONICS CO., LTD.".into(),
+            system_product: "960XGL".into(),
+            system_family: "Galaxy Book4 Ultra".into(),
+            system_version: "P10ALX".into(),
+            baseboard_product: "NT960XGP-G72AG".into(),
+            computer_name: "BREW-BOOK".into(),
+            cpu_vendor: "GenuineIntel".into(),
+            cpu_name: "Intel(R) Core(TM) Ultra 7 155H".into(),
+        }),
+    );
+    let shown = json_of(&dsa(&endpoint, "settings device --json"));
+    assert_eq!(shown["effective"]["manufacturer"], "Samsung");
+    assert_eq!(shown["effective"]["model"], "NT960XGP-G72AG");
+    assert_eq!(shown["effective"]["model_name"], "Galaxy Book4 Ultra");
+    assert_eq!(shown["effective"]["device_name"], "BREW-BOOK");
+    assert_eq!(shown["effective"]["soc_manufacturer"], "Intel");
+    assert_eq!(shown["effective"]["soc_model"], "Core Ultra 7 155H");
+    assert_eq!(shown["sources"]["model"], "computer");
+    assert_eq!(shown["sources"]["device_name"], "computer");
+    assert_eq!(shown["sources"]["device"], "dsa");
+    assert_eq!(shown["sources"]["fingerprint_type"], "dsa");
+
+    let changed = json_of(&dsa(&endpoint, "settings set device.model Tab --json"));
+    assert_eq!(changed["effective"]["model"], "Tab");
+    assert_eq!(changed["defaults"]["model"], "NT960XGP-G72AG");
+    let reset = json_of(&dsa(&endpoint, "settings reset device.model --json"));
+    assert_eq!(reset["effective"]["model"], "NT960XGP-G72AG");
+
+    let text = stdout(&dsa(&endpoint, "settings device"));
+    assert!(
+        text.contains("model: NT960XGP-G72AG (from this computer)"),
+        "{text}"
+    );
+    assert!(text.contains("device: dsa_x86_64 (DSA's value)"), "{text}");
+    assert!(
+        text.contains("device_name: BREW-BOOK (from this computer)"),
+        "{text}"
+    );
 }
 
 fn dsa_words(endpoint: &str, words: &[&str]) -> Output {

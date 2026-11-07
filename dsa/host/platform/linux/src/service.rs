@@ -20,9 +20,7 @@ use std::time::{Duration, Instant};
 
 use dsa_host_core::clock_trace::{ClockTrace, HostClock};
 use dsa_host_core::data_reset::TemplateDataDisk;
-use dsa_host_core::device_identity::{
-    DeviceIdentity, DeviceIdentityStore, FileDeviceIdentities, ImageBuild,
-};
+use dsa_host_core::device_identity::{BootIdentity, FileDeviceIdentities, ImageBuild};
 use dsa_host_core::diagnostics::HostFile;
 use dsa_host_core::guest_log::{LogFilter, LogWatch, DEFAULT_BUFFERS, WARN};
 use dsa_host_core::handshake::ControlHandshake;
@@ -320,6 +318,12 @@ pub fn create_user_android(
         })
     };
     let cid = guest_cid(uid);
+    // What this computer says it is, with what the user chose, read at each start.
+    let boot_identity = BootIdentity::new(
+        Arc::new(FileDeviceIdentities::new(config.settings_dir())),
+        user,
+        Arc::new(crate::computer_identity::read),
+    );
     let mut launcher = LinuxVmLauncher::new(
         LauncherSetup {
             account: account.clone(),
@@ -349,22 +353,16 @@ pub fn create_user_android(
         })
     })
     .with_boot_properties({
-        // The user's device identity, which Android reads once while it boots.
-        let identities = FileDeviceIdentities::new(config.settings_dir());
-        let (owner, build) = (user.to_string(), build.to_string());
+        // The user's device identity on this computer, which Android reads once while it
+        // boots. The computer is read again at each start, so a renamed one is followed.
+        let identity = Arc::clone(&boot_identity);
         Box::new(move |image: &ImageFiles| {
-            let identity = identities.get(&owner).unwrap_or_else(|why| {
-                eprintln!(
-                    "{owner}: {build}: {why}; Android starts with the image's device identity"
-                );
-                DeviceIdentity::default()
-            });
             let built = image
                 .initrd
                 .as_deref()
                 .and_then(Path::parent)
                 .and_then(ImageBuild::from_image_dir);
-            identity.boot_properties(built.as_ref())
+            Some(identity.boot_properties(built.as_ref()))
         })
     });
     if config.network {
@@ -828,6 +826,8 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
                 ImageBuild::from_image_dir(&dir)
             }),
         )
+        // The defaults the settings show are what this computer says it is now.
+        .with_computer_identity(Arc::new(crate::computer_identity::read))
         // The default ARM translator of the image the next start boots: only an x86_64 image
         // has one.
         .with_default_arm_translation(Arc::new(move |_: &str| {

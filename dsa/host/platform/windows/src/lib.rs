@@ -70,6 +70,7 @@ pub mod camera_capture;
 pub mod child_probe;
 #[cfg(windows)]
 pub mod compositor;
+pub mod computer_identity;
 pub mod console_log;
 #[cfg(windows)]
 pub mod console_pipe;

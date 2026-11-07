@@ -1580,7 +1580,8 @@ message SetDeviceIdentity {
   DeviceIdentity identity = 1;
 }
 
-// The names and build fingerprint Android reports to apps. An empty value is the image's own.
+// The names and build fingerprint Android reports to apps. An empty value is the default: the
+// computer's manufacturer, brand and model, and DSA's own for the rest.
 message DeviceIdentity {
   string manufacturer = 1;
   string brand = 2;
@@ -1598,6 +1599,16 @@ message DeviceIdentity {
   string fingerprint_incremental = 10;
   string fingerprint_type = 11;
   string fingerprint_tags = 12;
+  // The values below follow the computer and are not chosen: a report carries them, and
+  // SetDeviceIdentity ignores them. The name the product is sold under, such as
+  // "Galaxy Book4 Ultra".
+  string model_name = 13;
+  // Android's device name: the computer's name.
+  string device_name = 14;
+  // The chip's maker and model, such as "Intel" and "Core Ultra 7 155H"; empty when the
+  // computer does not say.
+  string soc_manufacturer = 15;
+  string soc_model = 16;
 }
 
 // The answer to GetDeviceIdentity and SetDeviceIdentity.
@@ -1607,6 +1618,12 @@ message DeviceIdentityReport {
   // Every value as Android reports it from its next start. The fingerprint's release, build ID
   // and incremental version are empty when the image does not say them.
   DeviceIdentity effective = 2;
+  // Every value as Android reports it when the user chooses nothing.
+  DeviceIdentity defaults = 3;
+  // The fields whose default is the computer's, named as `dsa settings set device.<name>`
+  // names them (and model_name, device_name, soc_manufacturer, soc_model). Every other
+  // default is DSA's own.
+  repeated string from_computer = 4;
 }
 
 // Turns the connection into the accessibility tree of one of the caller's task windows, for a
