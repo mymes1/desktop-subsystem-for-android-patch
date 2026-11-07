@@ -186,6 +186,23 @@ impl<R: Read + Seek> Archive<R> {
         }
     }
 
+    /// Where the stored or compressed bytes of `entry` are in the file, for an entry too
+    /// large to read into memory: its compression method, the offset and the length.
+    pub fn data_span(&mut self, entry: &Entry) -> Result<(u16, u64, u64), String> {
+        let header = read_at(&mut self.reader, entry.header_offset, 30)?;
+        if !header.starts_with(b"PK\x03\x04") {
+            return Err(format!("the archive's entry {} is damaged", entry.name));
+        }
+        let skip = 30 + u64::from(u16_at(&header, 26)?) + u64::from(u16_at(&header, 28)?);
+        let offset = entry.header_offset + skip;
+        Ok((entry.method, offset, entry.compressed_size))
+    }
+
+    /// The file the archive is read from.
+    pub fn into_inner(self) -> R {
+        self.reader
+    }
+
     /// `length` bytes from `offset` in the file, as the signing block needs.
     pub fn read_raw(&mut self, offset: u64, length: usize) -> Result<Vec<u8>, String> {
         read_at(&mut self.reader, offset, length)

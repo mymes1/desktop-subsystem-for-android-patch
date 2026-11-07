@@ -38,6 +38,7 @@
 //! - [`ime`]: text input through the host's input method in a task's window.
 //! - [`file_share`]: the user's host folders in the guest's shared storage, and the guest's
 //!   shared storage on the host.
+//! - [`erofs`]: erofs images, the read-only file systems the host hands the guest as one file.
 //! - [`settings`]: the settings a user changes from the settings app, kept by the service.
 //! - [`system_settings`]: the host's time zone, languages, regional format, theme and accent
 //!   color, which each user's Android follows.
@@ -66,6 +67,7 @@ pub mod data_reset;
 pub mod device_identity;
 pub mod diagnostics;
 pub mod drag;
+pub mod erofs;
 pub mod file_share;
 pub mod files;
 pub mod files_door;

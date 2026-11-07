@@ -989,6 +989,15 @@ fn fr25_dsa_arm_translation_commands_are_parsed() {
     );
     assert!(parse(&args("arm-translation install")).is_err());
     assert!(parse(&args("arm-translation enable")).is_err());
+    let fetch = parse(&args("arm-translation fetch google")).unwrap();
+    assert_eq!(fetch.command, Cmd::ArmTranslationFetchGoogle);
+    assert!(!fetch.yes, "it asks first");
+    let agreed = parse(&args("arm-translation fetch google --yes --json")).unwrap();
+    assert_eq!(agreed.command, Cmd::ArmTranslationFetchGoogle);
+    assert!(agreed.yes && agreed.json);
+    assert!(parse(&args("arm-translation fetch")).is_err());
+    assert!(parse(&args("arm-translation fetch houdini")).is_err());
+    assert!(parse(&args("arm-translation status --yes")).is_err());
     assert_eq!(
         parse(&args("settings set arm-translation off"))
             .unwrap()
@@ -1048,6 +1057,88 @@ fn fr25_dsa_installs_reports_and_removes_an_arm_translation_package() {
     assert!(!refused.status.success());
     assert!(stderr(&refused).contains("erofs"), "{}", stderr(&refused));
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// `dsa` with Google's repository replaced by the one in `repository`.
+fn dsa_with_repository(endpoint: &str, line: &str, repository: &std::path::Path) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_dsa"))
+        .args(args(line))
+        .args([endpoint_flag(), endpoint])
+        .env("DSA_GOOGLE_REPOSITORY", repository)
+        .output()
+        .expect("running dsa")
+}
+
+#[test]
+fn fr25_dsa_fetches_googles_translator_and_installs_it_only_when_agreed() {
+    use dsa_host_core::arm_translation::google::fixture;
+    let id = std::process::id();
+    let repository = std::env::temp_dir().join(format!("dsa-cli-google-{id}"));
+    let _ = std::fs::remove_dir_all(&repository);
+    let zip = fixture::image_archive(true);
+    fixture::write_repository(&repository, &zip, None, &["36", "37.0"]).unwrap();
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let status = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert_eq!(
+        status["google_fetch_available"],
+        dsa_cli::GOOGLE_FETCH_AVAILABLE
+    );
+    let agreed = "arm-translation fetch google --yes --json";
+    if !dsa_cli::GOOGLE_FETCH_AVAILABLE {
+        // An ARM64 computer runs ARM apps itself.
+        let refused = dsa_with_repository(&endpoint, agreed, &repository);
+        assert!(!refused.status.success());
+        assert!(stderr(&refused).contains("ARM64"), "{}", stderr(&refused));
+        let _ = std::fs::remove_dir_all(&repository);
+        return;
+    }
+
+    // Asked with nobody to answer, it says where the download comes from and its terms, and
+    // downloads nothing.
+    let asked = dsa_with_repository(&endpoint, "arm-translation fetch google", &repository);
+    assert!(!asked.status.success());
+    let said = stderr(&asked);
+    assert!(said.contains("Android SDK License"), "{said}");
+    assert!(
+        said.contains("https://developer.android.com/studio/terms"),
+        "{said}"
+    );
+    assert!(said.contains("nothing was changed"), "{said}");
+    let none = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert!(none["package"].is_null(), "{none}");
+
+    let fetched = json_of(&dsa_with_repository(&endpoint, agreed, &repository));
+    assert_eq!(fetched["package"]["name"], "Google ARM translator");
+    assert_eq!(fetched["package"]["library"], "libndk_translation.so");
+    assert_eq!(fetched["package"]["license"], "Android SDK License");
+    assert_eq!(fetched["package"]["abis"][0], "arm64-v8a");
+    assert_eq!(fetched["android"]["installed"], true);
+    assert_eq!(fetched["restart_needed"], true);
+    let _ = std::fs::remove_dir_all(&repository);
+}
+
+#[test]
+fn fr25_dsa_refuses_googles_image_when_its_hash_differs() {
+    use dsa_host_core::arm_translation::google::fixture;
+    if !dsa_cli::GOOGLE_FETCH_AVAILABLE {
+        return;
+    }
+    let id = std::process::id();
+    let repository = std::env::temp_dir().join(format!("dsa-cli-google-hash-{id}"));
+    let _ = std::fs::remove_dir_all(&repository);
+    let zip = fixture::image_archive(true);
+    let wrong = Some("0123456789012345678901234567890123456789");
+    fixture::write_repository(&repository, &zip, wrong, &["36", "37.0"]).unwrap();
+    let ((listener, _, _), endpoint) = local_pair();
+    let _service = settings_service(listener);
+    let line = "arm-translation fetch google --yes";
+    let refused = dsa_with_repository(&endpoint, line, &repository);
+    assert!(!refused.status.success());
+    assert!(stderr(&refused).contains("SHA-1"), "{}", stderr(&refused));
+    let none = json_of(&dsa(&endpoint, "arm-translation --json"));
+    assert!(none["package"].is_null(), "the stored state is unchanged");
+    let _ = std::fs::remove_dir_all(&repository);
 }
 
 #[test]
