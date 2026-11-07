@@ -2312,10 +2312,14 @@ class GuestMemoryTests(unittest.TestCase):
             self.assertIn("(allow dsa_channeld dsa_boot_prop (file (read open getattr map)))", policy)
 
     def test_nfr1_apps_a_desktop_has_no_use_for_are_removed_and_the_ones_apps_need_are_kept(self):
-        removed = ["Dialer", "messaging", "Stk", "BasicDreams", "LiveWallpapersPicker", "QuickSearchBox"]
+        removed = ["Dialer", "messaging", "Stk", "BasicDreams", "LiveWallpapersPicker", "QuickSearchBox",
+                   "Calendar", "Gallery2", "Music"]
         kept = [
             "SYSTEM/app/webview/webview.apk",
             "SYSTEM/priv-app/ContactsProvider/ContactsProvider.apk",
+            "SYSTEM/priv-app/CalendarProvider/CalendarProvider.apk",
+            "SYSTEM/priv-app/DownloadProvider/DownloadProvider.apk",
+            "SYSTEM/priv-app/MusicFX/MusicFX.apk",
             "SYSTEM/priv-app/PackageInstaller/PackageInstaller.apk",
             "SYSTEM/priv-app/DocumentsUI/DocumentsUI.apk",
             "SYSTEM/app/PrintSpooler/PrintSpooler.apk",
@@ -2344,7 +2348,8 @@ class GuestMemoryTests(unittest.TestCase):
                 self.assertIn(f'name="{Path(name).name}"', certs)
         for needed in ["webview", "ContactsProvider", "PackageInstaller", "PermissionController",
                        "DocumentsUI", "PrintSpooler", "Settings", "Provision", "Telecom",
-                       "TeleService", "DeskClock"]:
+                       "TeleService", "DeskClock", "CalendarProvider", "DownloadProvider",
+                       "MusicFX"]:
             self.assertNotIn(needed, make_image.REMOVED_APPS)
 
 
