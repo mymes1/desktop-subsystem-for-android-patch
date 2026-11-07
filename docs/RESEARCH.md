@@ -1176,5 +1176,22 @@ DSA에 필요한 것은 안드로이드의 네이티브 브리지다. 곧 `libbe
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
 - 헤더만 받는 프로젝트를 가리키는 `export_include_dirs`(`../../../../frameworks/...`)를 Soong이 받아들이는지 확인해야 한다. 안 되면 헤더를 제품 폴더로 복사한다.
 - Soong만 쓰는 빌드에서 설치 경로를 빌드 대상으로 줄 수 있는지 확인해야 한다. 안 되면 모듈 이름으로 바꾼다.
-- FR-25는 기본 묶음이 있는 x86_64 이미지가 처음부터 그 묶음으로 번역하고, 사용자가 다른 묶음으로 바꾼 뒤에도 기본 묶음으로 되돌릴 수 있다고 정한다. 그 호스트와 게스트 쪽 동작은 아직 없다(진행 중이 아니다). 지금은 배포물의 zip을 풀어 `dsa arm-translation install`로 넣어야 한다. 제안하는 방법: x86_64 이미지의 시스템 파티션에 기본 묶음의 `system.img`를 넣고(`/system/etc/dsa/arm-translation/default.img`), 호스트는 사용자 묶음이 없고 설정이 켜져 있으면 `androidboot.dsa.arm_translation=default`를 넣으며, 게스트는 그 값에서 기본 이미지를 얹는다. 사용자 묶음을 지우면 기본으로 돌아간다. 상태 보고(`restart_needed`, 설정 앱의 이름과 버전)도 기본 묶음을 알아야 한다.
+- FR-25는 기본 묶음이 있는 x86_64 이미지가 처음부터 그 묶음으로 번역하고, 사용자가 다른 묶음으로 바꾼 뒤에도 기본 묶음으로 되돌릴 수 있다고 정한다. 이 절을 쓸 때는 그 호스트와 게스트 쪽 동작이 없었다. 아래 "기본 묶음의 자리와 binfmt_misc"가 그 뒤의 구현이다. 지금은 배포물의 zip을 풀어 `dsa arm-translation install`로 넣어야 한다. 제안하는 방법: x86_64 이미지의 시스템 파티션에 기본 묶음의 `system.img`를 넣고(`/system/etc/dsa/arm-translation/default.img`), 호스트는 사용자 묶음이 없고 설정이 켜져 있으면 `androidboot.dsa.arm_translation=default`를 넣으며, 게스트는 그 값에서 기본 이미지를 얹는다. 사용자 묶음을 지우면 기본으로 돌아간다. 상태 보고(`restart_needed`, 설정 앱의 이름과 버전)도 기본 묶음을 알아야 한다.
 - 기본 묶음이 DSA 게스트에서 ARM64 전용 앱을 실제로 돌리는지는 PC에서 확인한다(FR-25의 수동 확인).
+
+### 기본 묶음의 자리와 binfmt_misc (2026-11-08)
+
+위의 제안대로 구현했다. 고른 이유와 확인한 것을 적는다.
+
+- 자리: 기본 묶음의 `system.img`는 x86_64 이미지의 시스템 파티션(`/system/etc/dsa/arm-translation/default.img`)에 들어간다. 호스트가 이미지와 함께 받아 사용자 데이터에 두는 방법도 있었지만 쓰지 않았다. 시스템 파티션에 두면 이미지 업데이트(FR-14)의 서명 확인, 해시 확인, 시험 부팅, 되돌리기를 그대로 탄다. 컴퓨터의 모든 사용자가 한 벌을 함께 쓰고, 사용자마다 디스크로 보낼 필요가 없으며, 이미지와 번역기의 버전이 어긋날 수 없다. 이미지는 묶음 크기(약 50 ~ 100 MB)만큼 커진다.
+- 호스트가 아는 법: `image.json`의 `arm_translation`에 `system_image`(그 경로)와 `system_image_sha256`이 있다. 호스트는 x86_64 이미지에서 그 경로를 말하는 항목만 기본 묶음으로 친다. 그래서 PR #373의 배포물처럼 zip만 있고 시스템 파티션에는 없는 이미지는 기본 묶음이 없는 것으로 다룬다.
+- 고르기: 사용자가 설치한 묶음(자기 것이나 Google 것)이 있으면 `androidboot.dsa.arm_translation=on`, 없고 기본 묶음이 있으면 `=default`, 설정이 꺼져 있으면 아무것도 넣지 않는다. 묶음을 지우면 기본으로 돌아가므로 "기본 번역기 사용"은 설치한 묶음을 지우는 일이다. 게스트의 사용자 묶음 자리는 하나뿐이라 기본으로 돌아가면서 다른 묶음을 남겨 둘 곳이 없다.
+- 다시 시작 안내: 게스트는 번역기가 얹혔는지만 보고하므로, 두 번역기 사이를 바꾼 것(실행 중에 Google 것을 설치한 경우 등)을 알 수 없다. 호스트는 부팅마다 넣은 번역기를 사용자 설정 폴더(`<user>.arm-translation-boot.json`)에 적고, 상태를 낼 때 그것과 지금의 선택을 비교한다. 제어 프로토콜은 바꾸지 않았다.
+- `ro.boot.dsa.arm_translation=default`인데 기본 묶음이 없는 이미지는 `arm-translation-default.prop`도 없다. 가져올 파일이 없으므로 `x86_64`만 알린다. 이미지 검사는 arm64 이미지가 기본 묶음이나 그 속성 파일을 가지면 실패한다.
+
+binfmt_misc: PR #373은 `dsa-arm-translation.rc`가 binfmt_misc를 마운트하지 않는다고 지적했다. 고정한 x86_64 입력(`aosp_cf_x86_64_only_phone-target_files-15581820.zip`)에서 확인했다.
+
+- `SYSTEM/etc/init/hw/init.rc`에 binfmt_misc를 말하는 줄이 없다. `ro.enable.native.bridge.exec`에 걸린 동작도 없다. 그러므로 아무도 `/proc/sys/fs/binfmt_misc`에 binfmt_misc를 마운트하지 않고, 규칙을 `register`에 쓰는 `copy`는 procfs의 빈 디렉터리에 쓰다 실패한다. 앱이 실행하는 ARM64 프로그램이 번역기로 돌지 않는다.
+- 플랫폼 정책(`plat_sepolicy.cil`): 그 디렉터리는 `proc`(`genfscon proc "/"`)이고, init에게 `proc` 디렉터리의 `mounton`이 없다. `neverallow`는 init과 `dexopt_chroot_setup`을 빼 두었으므로 더할 수 있다. 파일 시스템 `mount`는 init의 `fs_type` 규칙이 이미 덮고, `binfmt_miscfs` 파일 쓰기는 벤더 정책에 있다.
+- 고친 것: 두 `copy` 앞에 `mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid`를 넣고, `arm-translation.cil`에 `(allow init proc (dir (mounton)))`와 `(allow init binfmt_miscfs (filesystem (mount)))`를 더했다. 기본 묶음 쪽 동작도 같은 순서다.
+- 남은 확인: 실제 부팅에서 `cat /proc/sys/fs/binfmt_misc/arm64_exe`가 `enabled`이고, 앱이 실행하는 ARM64 실행 파일이 도는지는 PC에서 본다.
