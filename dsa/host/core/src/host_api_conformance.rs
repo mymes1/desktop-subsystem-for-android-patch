@@ -176,6 +176,7 @@ pub fn sample_installed_apps() -> Vec<crate::tasks::AppInfo> {
             app_bytes: 3_000_000,
             data_bytes: 20_480,
             cache_bytes: 1_024,
+            ..Default::default()
         },
     ]
 }
@@ -2783,7 +2784,7 @@ fn default_arm_package() -> Package {
 pub fn default_arm_translation_reaches_the_caller(make: MakeLocal<'_>) {
     use crate::arm_translation::Source;
     use sha2::Digest;
-    let (listener, mut connector, user) = make();
+    let (listener, mut connector, _) = make();
     let store = Arc::new(MemorySettings::default());
     let androids = Arc::new(FakeAndroids::default());
     let service = HostApiService::new(androids.clone(), "test service")

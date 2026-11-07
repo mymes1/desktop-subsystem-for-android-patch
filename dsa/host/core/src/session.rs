@@ -5607,6 +5607,7 @@ impl Worker {
             | Some(Body::PrintJobResult(_))
             | Some(Body::QueryPackage(_))
             | Some(Body::UninstallApp(_))
+            | Some(Body::ReinstallApp(_))
             | Some(Body::RefreshApps(_))
             | Some(Body::OpenAppSettings(_))
             | Some(Body::RequestGuestMemory(_))
