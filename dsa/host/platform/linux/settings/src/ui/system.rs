@@ -1,6 +1,6 @@
 //! The pages about how Android meets this computer: Device identity, Network and Advanced.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use adw::prelude::*;
@@ -522,6 +522,9 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         request(ctx, |c| c.arm_translation(), move |r| show_arm(r));
     }
 
+    // Google Play.
+    google_play(ctx, &page);
+
     // Developer.
     let developer_group = group(&tr("Developer"), None);
     let developer = user_switch(
@@ -684,6 +687,140 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         );
     }
     page.root.clone().upcast()
+}
+
+/// The Google Play item: whether Google's apps are installed, installing and removing them,
+/// Google's terms and how to register this device with Google.
+fn google_play(ctx: &Shared, page: &Rc<Page>) {
+    let gapps_group = group(
+        &tr("Google Play"),
+        Some(&tr("Google Play services and the Play Store are not part of DSA. When you ask, DSA downloads LiteGapps Core, a public package of Google's apps, and installs it in your Android. Without it, the rest of DSA works as before.")),
+    );
+    let (status_row, status) = value_row(&tr("Status"), "");
+    gapps_group.add(&status_row);
+    let busy_row = action_row(&view::gapps_busy_text(), "");
+    busy_row.set_visible(false);
+    gapps_group.add(&busy_row);
+    let restart = action_row(
+        &tr("Restart Android to apply"),
+        &tr("Android started before this change. Stop and start Android for Google Play to follow it."),
+    );
+    restart.set_visible(false);
+    gapps_group.add(&restart);
+    let (install_row, install) = button_row(
+        &tr("Install Google Play"),
+        &tr("Downloads LiteGapps Core for your Android version from the LiteGapps project, about 120 to 260 MB, checks it and installs it in your Android. Android starts if it is not running. Google Play is there from the next start of Android."),
+        &tr("Install"),
+    );
+    install.add_css_class("suggested-action");
+    gapps_group.add(&install_row);
+    let (remove_row, remove) = button_row(
+        &tr("Remove Google Play"),
+        &tr("Deletes Google's apps from your Android disk. They are gone from the next start of Android."),
+        &tr("Remove"),
+    );
+    remove.add_css_class("destructive-action");
+    gapps_group.add(&remove_row);
+    let terms = link_row(
+        &tr("Google's terms"),
+        &tr("Google's apps belong to Google and follow Google's terms. DSA does not distribute them: it downloads the public LiteGapps package when you ask."),
+    );
+    gapps_group.add(&terms);
+    let register = link_row(
+        &tr("Register this device with Google"),
+        &tr("Google has not certified this Android, so Google may refuse to sign you in until you register it. Open Google's registration page, sign in with your Google account and enter the Android ID below."),
+    );
+    gapps_group.add(&register);
+    let (id_row, id) = value_row(&tr("Android ID"), "");
+    gapps_group.add(&id_row);
+    page.add(&gapps_group);
+
+    let now: Rc<RefCell<Option<crate::model::Gapps>>> = Rc::default();
+    let busy: Rc<Cell<bool>> = Rc::default();
+    // The buttons follow what is installed, and neither works while a request is under way.
+    let buttons: Rc<dyn Fn()> = {
+        let (now, busy) = (now.clone(), busy.clone());
+        Rc::new(move || {
+            let (now, busy) = (now.borrow(), busy.get());
+            install_row.set_sensitive(now.as_ref().is_some_and(|g| g.can_install(busy)));
+            remove_row.set_sensitive(now.as_ref().is_some_and(|g| g.can_remove(busy)));
+        })
+    };
+    let show: Rc<dyn Fn(String, Result<crate::model::Gapps, crate::api::Failure>)> = {
+        let (page, now, buttons) = (page.clone(), now.clone(), buttons.clone());
+        Rc::new(
+            move |failed: String, r: Result<crate::model::Gapps, crate::api::Failure>| {
+                page.show_failure(&failed, r.as_ref().err());
+                if let Ok(gapps) = r {
+                    status.set_label(&view::gapps_status(&gapps));
+                    status_row.set_subtitle(&view::gapps_source(&gapps));
+                    restart.set_visible(gapps.restart_needed);
+                    id.set_label(gapps.device_id.as_deref().unwrap_or_default());
+                    id_row.set_subtitle(&view::gapps_device_id(&gapps));
+                    *now.borrow_mut() = Some(gapps);
+                }
+                buttons();
+            },
+        )
+    };
+    {
+        let (ctx, show, busy, buttons) = (ctx.clone(), show.clone(), busy.clone(), buttons.clone());
+        install.connect_clicked(move |_| {
+            busy.set(true);
+            busy_row.set_visible(true);
+            buttons();
+            let (show, busy, busy_row) = (show.clone(), busy.clone(), busy_row.clone());
+            request(
+                &ctx,
+                |c| c.install_gapps(),
+                move |r| {
+                    busy.set(false);
+                    busy_row.set_visible(false);
+                    show(tr("Google Play was not installed"), r);
+                },
+            );
+        });
+    }
+    {
+        let (ctx, show, busy, buttons) = (ctx.clone(), show.clone(), busy.clone(), buttons.clone());
+        remove.connect_clicked(move |_| {
+            busy.set(true);
+            buttons();
+            let (show, busy) = (show.clone(), busy.clone());
+            request(
+                &ctx,
+                |c| c.remove_gapps(),
+                move |r| {
+                    busy.set(false);
+                    show(tr("Google Play was not removed"), r);
+                },
+            );
+        });
+    }
+    {
+        let (ctx, now) = (ctx.clone(), now.clone());
+        terms.connect_activated(move |_| {
+            let url = now.borrow().as_ref().map(|g| g.terms_url.clone());
+            open_page(&ctx, &url.unwrap_or_else(|| crate::model::GAPPS_TERMS_URL.into()));
+        });
+    }
+    {
+        let (ctx, now) = (ctx.clone(), now.clone());
+        register.connect_activated(move |_| {
+            let url = now.borrow().as_ref().map(|g| g.registration_url.clone());
+            open_page(&ctx, &url.unwrap_or_else(|| crate::model::GAPPS_REGISTRATION_URL.into()));
+        });
+    }
+    request(ctx, |c| c.gapps(), move |r| show(tr("Where Google Play stands could not be read"), r));
+}
+
+/// Opens a web page in the user's browser, or says why it cannot.
+fn open_page(ctx: &Shared, url: &str) {
+    if let Err(error) =
+        gtk::gio::AppInfo::launch_default_for_uri(url, None::<&gtk::gio::AppLaunchContext>)
+    {
+        tell(ctx, &tr("The page could not be opened"), error.message());
+    }
 }
 
 fn apply(s: &Switches, now: &Settings) {
