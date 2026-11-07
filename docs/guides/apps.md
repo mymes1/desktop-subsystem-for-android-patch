@@ -99,8 +99,9 @@ From the command line: `dsa widgets list`, `dsa widgets add <provider>` and
 
 ## Apps built only for ARM
 
-On an x64 PC, an app with code only for ARM processors needs an ARM translation package.
-DSA does not include one. You choose one of these:
+On an x64 PC, an app with code only for ARM processors runs through an ARM translator.
+Android on an x64 PC comes with one, the open source translator Digitalis, and uses it from
+its first start. You can use another instead:
 
 - **Google's ARM translator.** On the **Advanced** page, select **Get** beside **Google's ARM
   translator**, or run `dsa arm-translation fetch google`. DSA first shows where it comes
@@ -114,9 +115,14 @@ DSA does not include one. You choose one of these:
 
 Then restart Android: stop it on the **General** page of DSA Settings, then open an app.
 
-`dsa arm-translation status` says what is installed. The **Run apps built only for ARM**
-switch on the **Advanced** page turns the package on or off without removing it. Only
-64-bit ARM apps (`arm64-v8a`) can run.
+To go back to the translator that comes with Android, select **Use** beside **Use the default
+translator** on the **Advanced** page, or run `dsa arm-translation use-default`. It removes the
+package you installed, from the next start of Android.
+
+`dsa arm-translation status` says which translator Android uses. The **Run apps built only for
+ARM** switch on the **Advanced** page turns translation on or off without removing anything.
+Only 64-bit ARM apps (`arm64-v8a`) can run. On an ARM64 PC, Android runs ARM apps itself and
+needs no translator.
 
 ---
 

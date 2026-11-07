@@ -46,6 +46,7 @@ one. They are marked "(admin)" below.
 | **Reset Android's data** | | `dsa reset-data` |
 | **Run apps built only for ARM** | | `arm-translation` |
 | **Google's ARM translator** (not on ARM64) | | `dsa arm-translation fetch google` |
+| **Use the default translator** (not on ARM64) | | `dsa arm-translation use-default` |
 | **Developer mode** | Off | `developer-mode`, `adb-port` |
 | **Input trace** (admin) | Off | `input-trace` |
 | **Resize trace** (admin) | Off | `resize-trace` |

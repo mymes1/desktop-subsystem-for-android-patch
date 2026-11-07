@@ -44,6 +44,7 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
 | **안드로이드 데이터 초기화** | | `dsa reset-data` |
 | **ARM 전용 앱 실행** | | `arm-translation` |
 | **Google의 ARM 번역기** (ARM64 제외) | | `dsa arm-translation fetch google` |
+| **기본 번역기 사용** (ARM64 제외) | | `dsa arm-translation use-default` |
 | **개발자 모드** | 끔 | `developer-mode`, `adb-port` |
 | **입력 추적**(관리자) | 끔 | `input-trace` |
 | **크기 조정 추적**(관리자) | 끔 | `resize-trace` |
