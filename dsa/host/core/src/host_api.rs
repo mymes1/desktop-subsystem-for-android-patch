@@ -4298,9 +4298,11 @@ impl HostApiService {
                 response::Body::GappsProgress(gapps_progress_to_wire(news)),
             )
         };
-        let mut sending = gapps::Reporting::new(&mut image, &mut report);
-        let installed = android.install_gapps(size, &prepared.sha256, &mut sending);
-        drop(sending);
+        let installed = android.install_gapps(
+            size,
+            &prepared.sha256,
+            &mut gapps::Reporting::new(&mut image, &mut report),
+        );
         let body = match installed {
             Ok(guest) => match store.set_gapps(&peer.user, Some(&prepared.package)) {
                 Ok(()) => {
