@@ -267,8 +267,12 @@
 
             <!-- A toggle switch as the Windows Settings app shows it: "On" or "Off" to the left
                  of the switch, 12 px from it. The library puts the text on the right. The
-                 switch itself is the library's (WPF UI, MIT licence, Leszek Pomianowski and
-                 WPF UI contributors): the same 40 by 20 track, knob and animation. -->
+                 track, its brushes and the animation are the library's (WPF UI, MIT licence,
+                 Leszek Pomianowski and WPF UI contributors). The on fill is the library style's
+                 Background, ToggleSwitchFillOn, so this style must stay based on that style.
+                 The knob is as in WinUI, which the library does not do: 12 px and 4 px from the
+                 end at rest, 14 px under the pointer, and 17 by 14 px when pressed, 3 px from
+                 the end it rests at. -->
             <Style TargetType="ui:ToggleSwitch" BasedOn="{StaticResource DefaultUiToggleSwitchStyle}">
                 <Setter Property="OnContent" Value="{DynamicResource ToggleOnText}" />
                 <Setter Property="OffContent" Value="{DynamicResource ToggleOffText}" />
@@ -292,13 +296,13 @@
                                     <Ellipse x:Name="ToggleEllipse" Width="12" Height="12"
                                              Fill="{DynamicResource ToggleSwitchKnobFillOff}">
                                         <Ellipse.RenderTransform>
-                                            <TranslateTransform X="-9" />
+                                            <TranslateTransform X="-10" />
                                         </Ellipse.RenderTransform>
                                     </Ellipse>
                                     <Ellipse x:Name="ActiveToggleEllipse" Width="12" Height="12" Opacity="0"
                                              Fill="{DynamicResource ToggleSwitchKnobFillOn}">
                                         <Ellipse.RenderTransform>
-                                            <TranslateTransform X="-9" />
+                                            <TranslateTransform X="-10" />
                                         </Ellipse.RenderTransform>
                                     </Ellipse>
                                 </Grid>
@@ -312,8 +316,8 @@
                                                 <DoubleAnimation Storyboard.TargetName="ActiveToggleRectangle" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.167" />
                                                 <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.167" />
                                                 <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.167" />
-                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="9" Duration="0:0:0.167" />
-                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="9" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="10" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="10" Duration="0:0:0.167" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.EnterActions>
@@ -324,8 +328,8 @@
                                                 <DoubleAnimation Storyboard.TargetName="ActiveToggleRectangle" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.167" />
                                                 <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.167" />
                                                 <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.167" />
-                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="-9" Duration="0:0:0.167" />
-                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="-9" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="-10" Duration="0:0:0.167" />
+                                                <DoubleAnimation Storyboard.TargetName="ActiveToggleEllipse" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)" To="-10" Duration="0:0:0.167" />
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </Trigger.ExitActions>
@@ -353,6 +357,8 @@
                                     <Setter TargetName="ToggleRectangle" Property="Fill" Value="{DynamicResource ToggleSwitchFillOffPointerOver}" />
                                     <Setter TargetName="ToggleRectangle" Property="Stroke" Value="{DynamicResource ToggleSwitchStrokeOffPointerOver}" />
                                     <Setter TargetName="ToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOffPointerOver}" />
+                                    <Setter TargetName="ToggleEllipse" Property="Width" Value="14" />
+                                    <Setter TargetName="ToggleEllipse" Property="Height" Value="14" />
                                 </MultiTrigger>
                                 <MultiTrigger>
                                     <MultiTrigger.Conditions>
@@ -362,6 +368,32 @@
                                     </MultiTrigger.Conditions>
                                     <Setter Property="Background" Value="{DynamicResource ToggleSwitchFillOnPointerOver}" />
                                     <Setter TargetName="ActiveToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOnPointerOver}" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Width" Value="14" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Height" Value="14" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsPressed" Value="True" />
+                                        <Condition Property="IsChecked" Value="False" />
+                                        <Condition Property="IsEnabled" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter TargetName="ToggleRectangle" Property="Fill" Value="{DynamicResource ControlAltFillColorQuarternaryBrush}" />
+                                    <Setter TargetName="ToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOffPressed}" />
+                                    <Setter TargetName="ToggleEllipse" Property="Width" Value="17" />
+                                    <Setter TargetName="ToggleEllipse" Property="Height" Value="14" />
+                                    <Setter TargetName="ToggleEllipse" Property="Margin" Value="3,0,0,0" />
+                                </MultiTrigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions>
+                                        <Condition Property="IsPressed" Value="True" />
+                                        <Condition Property="IsChecked" Value="True" />
+                                        <Condition Property="IsEnabled" Value="True" />
+                                    </MultiTrigger.Conditions>
+                                    <Setter Property="Background" Value="{DynamicResource AccentButtonBackgroundPressed}" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Fill" Value="{DynamicResource ToggleSwitchKnobFillOnPressed}" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Width" Value="17" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Height" Value="14" />
+                                    <Setter TargetName="ActiveToggleEllipse" Property="Margin" Value="0,0,3,0" />
                                 </MultiTrigger>
                                 <MultiTrigger>
                                     <MultiTrigger.Conditions>
