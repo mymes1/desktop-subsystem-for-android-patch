@@ -439,6 +439,81 @@
   <data name="Arm_NotRunning" xml:space="preserve">
     <value>Android is not running, so what it supports now is not known.</value>
   </data>
+  <data name="GappsHeader.Text" xml:space="preserve">
+    <value>Google Play</value>
+  </data>
+  <data name="GappsCard.Header" xml:space="preserve">
+    <value>Google Play services and Play Store</value>
+  </data>
+  <data name="GappsCard.Description" xml:space="preserve">
+    <value>DSA does not include Google's apps. When you ask, it downloads LiteGapps Core, a public package of Google Play services, the Play Store and the account sync components made for this Android version, and installs it. It applies from the next start of Android.</value>
+  </data>
+  <data name="GappsInstallButton.Content" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="GappsInstallingBar.Title" xml:space="preserve">
+    <value>Installing Google Play</value>
+  </data>
+  <data name="GappsInstallingBar.Message" xml:space="preserve">
+    <value>Downloading and installing Google Play. This can take several minutes.</value>
+  </data>
+  <data name="GappsRestartBar.Title" xml:space="preserve">
+    <value>Restart Android to apply this</value>
+  </data>
+  <data name="GappsRestartBar.Message" xml:space="preserve">
+    <value>Android started before this change. Stop Android and start it again to apply it to Google Play.</value>
+  </data>
+  <data name="GappsRemoveCard.Header" xml:space="preserve">
+    <value>Remove Google Play</value>
+  </data>
+  <data name="GappsRemoveCard.Description" xml:space="preserve">
+    <value>Deletes Google's apps from Android's disk. They are gone from the next start of Android. Apps you installed from the Play Store stay, but those that need Google Play services may stop working.</value>
+  </data>
+  <data name="GappsRemoveButton.Content" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="GappsTermsCard.Header" xml:space="preserve">
+    <value>Google's terms</value>
+  </data>
+  <data name="GappsTermsCard.Description" xml:space="preserve">
+    <value>Google Play services and the Play Store are Google's software and follow Google's terms. DSA does not distribute them: it downloads the public LiteGapps package only when you ask for it.</value>
+  </data>
+  <data name="GappsTermsLink.Content" xml:space="preserve">
+    <value>Google Terms of Service</value>
+  </data>
+  <data name="GappsRegisterCard.Header" xml:space="preserve">
+    <value>Register this device with Google</value>
+  </data>
+  <data name="GappsRegisterCard.Description" xml:space="preserve">
+    <value>Google has not certified Android here, so Google may refuse to sign you in until you register this device. Open the registration page, sign in with your Google account, and enter this device's Android ID. Then restart Android and sign in again.</value>
+  </data>
+  <data name="GappsRegisterLink.Content" xml:space="preserve">
+    <value>Open the registration page</value>
+  </data>
+  <data name="GappsDeviceIdLabel.Text" xml:space="preserve">
+    <value>Android ID</value>
+  </data>
+  <data name="Gapps_NotInstalled" xml:space="preserve">
+    <value>Not installed: Android has no Google Play services or Play Store.</value>
+  </data>
+  <data name="Gapps_Installed" xml:space="preserve">
+    <value>Installed: LiteGapps Core {0} for Android {1} ({2}).</value>
+  </data>
+  <data name="Gapps_InstalledPending" xml:space="preserve">
+    <value>Installed: LiteGapps Core {0} for Android {1} ({2}). It is used from the next start of Android.</value>
+  </data>
+  <data name="Gapps_RemovedPending" xml:space="preserve">
+    <value>Removed: Google's apps leave Android at its next start.</value>
+  </data>
+  <data name="Gapps_Source" xml:space="preserve">
+    <value>Downloaded from LiteGapps: {0}</value>
+  </data>
+  <data name="Gapps_DeviceId" xml:space="preserve">
+    <value>Android ID: {0}</value>
+  </data>
+  <data name="Gapps_NoDeviceId" xml:space="preserve">
+    <value>The Android ID shows here once Google Play is installed and Android has started with it.</value>
+  </data>
   <data name="DeveloperHeader.Text" xml:space="preserve">
     <value>Developer</value>
   </data>

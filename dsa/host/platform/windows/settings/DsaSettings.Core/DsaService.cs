@@ -6,7 +6,7 @@ namespace Dsa.Settings.Core;
 /// <summary>Asks the DSA service, through the dsa command, for what the pages show, and
 /// changes the settings through it. Every change goes through the service; the app writes no
 /// settings file of its own.</summary>
-public sealed class DsaService
+public sealed partial class DsaService
 {
     private readonly IDsaCli _cli;
 

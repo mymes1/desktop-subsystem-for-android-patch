@@ -41,6 +41,52 @@ public partial class AdvancedPage : Page
     private async void OnRemoveArmTranslation(object sender, RoutedEventArgs e) =>
         await ViewModel.RemoveArmTranslationAsync();
 
+    private async void OnInstallGapps(object sender, RoutedEventArgs e) =>
+        await ViewModel.InstallGappsAsync();
+
+    private async void OnRemoveGapps(object sender, RoutedEventArgs e) =>
+        await ViewModel.RemoveGappsAsync();
+
+    private void OnOpenGappsTerms(object sender, RoutedEventArgs e) => OpenWebPage(ViewModel.GappsTermsUrl);
+
+    private void OnOpenGappsRegistration(object sender, RoutedEventArgs e) =>
+        OpenWebPage(ViewModel.GappsRegistrationUrl);
+
+    /// <summary>Opens an https page in the default browser. The view model gives only https
+    /// addresses; anything else is left alone.</summary>
+    private static void OpenWebPage(string url)
+    {
+        if (!url.StartsWith("https://", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // No program opens web pages on this computer, so nothing opens.
+        }
+    }
+
+    /// <summary>Copies the Android ID the registration page asks for, and shows a check mark
+    /// on the button for a moment.</summary>
+    private async void OnCopyGappsDeviceId(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Windows.Clipboard.SetDataObject(GappsDeviceIdBox.Text, copy: true);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            return;
+        }
+        GappsDeviceIdCopyButton.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Checkmark24 };
+        await System.Threading.Tasks.Task.Delay(1500);
+        GappsDeviceIdCopyButton.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Copy24 };
+    }
+
     private async void OnDeveloperModeToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetDeveloperModeAsync(DeveloperModeSwitch.IsChecked == true);
 
