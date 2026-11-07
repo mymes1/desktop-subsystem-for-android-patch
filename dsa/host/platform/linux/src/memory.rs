@@ -1,5 +1,6 @@
-//! The host's share of each user's Android: its crosvm process, and the window processes in
-//! the user's session, from `/proc`.
+//! The host's share of each user's Android: its crosvm process, and the window manager, the
+//! graphics renderer (`dsa-gfx`) and the window processes in the user's session, from
+//! `/proc`.
 //!
 //! crosvm keeps the guest's memory in a memory file that its sandboxed device processes map
 //! too, so the guest's pages count as shared in crosvm's own `smaps_rollup`. The VM's share is
@@ -47,12 +48,15 @@ pub fn owner_uid(status: &str) -> Option<u32> {
 pub fn window_role(name: &str) -> Option<HostRole> {
     match name {
         "dsa-compositor" => Some(HostRole::WindowManager),
+        "dsa-gfx" => Some(HostRole::Renderer),
         "dsa-app-window" => Some(HostRole::AppWindow),
         _ => None,
     }
 }
 
-fn process(pid: u32, role: HostRole) -> Option<HostProcessMemory> {
+/// One process's memory from `/proc`: resident, and only its own (for the VM, all of the
+/// guest's).
+pub fn process(pid: u32, role: HostRole) -> Option<HostProcessMemory> {
     let dir = format!("/proc/{pid}");
     let status = std::fs::read_to_string(format!("{dir}/status")).ok()?;
     let working_set_kb = resident_kb(&status)?;
@@ -130,6 +134,7 @@ mod tests {
         let rollup = "Rss: 9 kB\nPrivate_Clean:  100 kB\nPrivate_Dirty:  700000 kB\nSwap: 20 kB\n";
         assert_eq!(private_kb(rollup), Some(700_120));
         assert_eq!(window_role("dsa-compositor"), Some(HostRole::WindowManager));
+        assert_eq!(window_role("dsa-gfx"), Some(HostRole::Renderer));
         assert_eq!(window_role("bash"), None);
     }
 

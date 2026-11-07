@@ -20,6 +20,11 @@ path = "src/bin/dsa-devices.rs"
 name = "dsa-compositor"
 path = "src/bin/dsa-compositor.rs"
 
+# The graphics renderer, which the compositor starts beside itself.
+[[bin]]
+name = "dsa-gfx"
+path = "src/bin/dsa-gfx.rs"
+
 # The service. Its name differs from the other hosts' dsa-hostd because every host is built in
 # one workspace, where two programs of one name would overwrite each other.
 [[bin]]

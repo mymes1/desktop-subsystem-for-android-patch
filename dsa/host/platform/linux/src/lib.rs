@@ -2,7 +2,8 @@
 //! and the display, input and desktop shell.
 //!
 //! [`compositor`] shows each Android task in a Wayland toplevel of its own, with the task's
-//! frames from gfxstream's host renderer, and runs the window rules the Windows host shares
+//! frames from gfxstream's host renderer, which runs in a process of its own (`renderer`,
+//! `dsa-gfx`), and runs the window rules the Windows host shares
 //! (`dsa_host_core::compositor`). [`input`] turns the seat's keyboard, pointer, touch, pen,
 //! input method and game controllers into the guest's input. [`shell`] gives the desktop
 //! what it shows of the apps: launcher entries and icons, notifications, the clipboard and
@@ -48,6 +49,8 @@ pub mod package_updates;
 #[cfg(target_os = "linux")]
 pub mod performance;
 pub mod pstore;
+#[cfg(target_os = "linux")]
+pub mod renderer;
 #[cfg(target_os = "linux")]
 pub mod service;
 pub mod shell;

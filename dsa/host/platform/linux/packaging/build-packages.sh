@@ -134,7 +134,8 @@ for program in "$bin_dir"/dsa "$bin_dir"/dsa-*; do
     programs+=("$(basename "$program")")
 done
 ln -s ../lib/dsa/bin/dsa "$stage/usr/bin/dsa"
-# gfxstream's host renderer, which the compositor loads from beside itself.
+# gfxstream's host renderer, which the graphics renderer process (dsa-gfx, which the
+# compositor starts) loads from beside itself.
 if [[ -f "$bin_dir/libgfxstream_backend.so" ]]; then
     install -m 0755 "$bin_dir/libgfxstream_backend.so" "$stage/usr/lib/dsa/bin/"
 fi

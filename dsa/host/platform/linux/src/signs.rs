@@ -39,8 +39,8 @@ pub fn explain_unfinished_boot(signs: &BootSigns, log: &Path) -> String {
     if signs.renderer_unreachable > 0 {
         format!(
             "Android could not reach its renderer {} times, so it cannot draw and keeps \
-             restarting. The renderer is in DSA's window manager, which must run in your desktop \
-             session. The whole boot is in {}.",
+             restarting. The renderer (dsa-gfx) is started by DSA's window manager, which must \
+             run in your desktop session. The whole boot is in {}.",
             signs.renderer_unreachable,
             log.display()
         )
