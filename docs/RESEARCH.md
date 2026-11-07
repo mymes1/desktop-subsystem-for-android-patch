@@ -1460,7 +1460,7 @@ x86_64 작업이 9 ~ 10분 만에 끝난 것도 같은 오류다. 작업 사이�
 
 - 원인: 잠금이 `prebuilts/sdk`에서 `Android.bp`와 판마다의 `finalized-flags.txt`만 받았다. 그 `Android.bp`의 `sdk`(`prebuilt_apis`)는 파일을 읽는 순간(load hook) 판마다의 API 파일(`<판>/<범위>/api/*.txt`)을 찾고, 하나도 없으면 오류를 낸다(`build/soong/java/prebuilt_apis.go`의 `prebuiltApiFiles`). `ALLOW_MISSING_DEPENDENCIES`는 이것을 덮지 않는다. 이 오류는 파일을 읽는 단계에서 나므로, 그 뒤 단계(의존 해석, 빌드 동작 만들기)의 오류는 이번 로그에 없다.
 - 이 프로젝트에서 빌드가 쓰는 것은 확정된 플래그 목록뿐이다. aconfig는 `finalized_flags_record.json`을 소스로 넣고(`build/make/tools/aconfig/aconfig`), 그 genrule이 `//prebuilts/sdk:finalized-api-flags`를 읽는다. `build/soong/aconfig`의 `all_aconfig_declarations`는 `:latest-finalized-flags`를 읽는다. API 파일과 jar는 이 빌드가 쓰지 않는다.
-- 고친 것: API 파일을 받는 대신 `Android.bp`를 받지 않고, `build.sh`가 그 자리에 대역(`.github/scripts/framework/prebuilts-sdk/Android.bp`)을 둔다. 대역에는 원래 파일의 라이선스와 `finalized-api-flags`, `latest-finalized-flags`가 그대로 있고 `prebuilt_apis`는 없다. 잠금은 `/NOTICE`와 `/*/finalized-flags.txt`를 받는다. 체크아웃에 진짜 `Android.bp`가 있으면 `build.sh`가 멈춘다.
+- 고친 것: API 파일을 받는 대신 `Android.bp`를 받지 않고, `build.sh`가 그 자리에 대역(`.github/scripts/framework/stand-ins/common/prebuilts/sdk/Android.bp`)을 둔다. 대역에는 원래 파일의 라이선스와 `finalized-api-flags`, `latest-finalized-flags`가 그대로 있고 `prebuilt_apis`는 없다. 잠금은 `/NOTICE`와 `/*/finalized-flags.txt`를 받는다. 체크아웃에 진짜 `Android.bp`가 있으면 `build.sh`가 멈춘다.
 - 이것으로 분석이 멈추지 않는다고 보는 근거: 번역기 트리에는 `prebuilts/sdk`가 아예 없었는데 분석이 통과했다(R16의 여섯 번째 실행). Java 모듈의 SDK 의존은 SDK jar가 없으면 `ALLOW_MISSING_DEPENDENCIES`에서 누락으로 처리된다(`build/soong/java/sdk.go`의 `toPrebuilt`).
 - 앞을 내다보고 고친 것: R16의 일곱 번째 실행처럼 Soong은 모든 `python_binary_host`에 `libsqlite`와 `aprotoc`를 붙인다. 이 빌드도 `gensyscalls` 같은 Python 도구로 `libc`의 소스를 만든다. 트리에 `libsqlite`가 없으므로(`toolchain/pgo-profiles`의 같은 이름은 자기 namespace 안의 `fdo_profile`이다) 제품 폴더에 빈 호스트 `libsqlite`를 둔다(`device/hosttools`). `aprotoc`는 대역을 두지 않는다. 트리에 `external/protobuf`가 있어 진짜가 정의되어 있고, 대역은 이름이 겹친다. SurfaceFlinger와 perfetto의 `.proto` 소스가 어차피 진짜를 쓴다.
 
@@ -1490,7 +1490,42 @@ x86_64 작업이 9 ~ 10분 만에 끝난 것도 같은 오류다. 작업 사이�
 - 트리에 없는 라이선스: `adobe_hdr_gain_map_license` 하나뿐이다. `license_kinds`와 `team`(`default_team`)은 모두 트리에 있다.
 - 받은 폴더 밖을 가리키는 글로브만 `srcs`로 가진 모듈 중 빈 목록이 오류인 것은 `aidl_interface` 셋이다. `android.security.rkp_aidl`(16, 17), `frameworks/base/media`의 `soundtrigger_middleware-aidl`(16, 17)과 `audio-aidl`(17). 나머지(`filegroup`, Java 모듈, `cc_defaults`)는 빈 글로브를 오류로 치지 않는다. 미디어의 둘은 이번 로그에 없었다. 같은 형식이고 폴더가 작아(`.aidl` 4 ~ 12개) 함께 받는다.
 
-고친 것: `frameworks/base`의 cone에 `core/java/android/security/rkp`, `media/aidl/android/media/soundtrigger_middleware`, (17은) `media/aidl/android/media/audio`를 더했고, `external/libultrahdr`의 cone에 `adobe-hdr-gain-map-license`를 더했다. 새 폴더와 그 조상 폴더에는 다른 Android.bp가 없다. 받을 소스가 작으므로 `core/java/Android.bp`를 대역으로 나누지 않았다. 대역은 그 파일이 바뀔 때마다 따로 맞춰야 한다.
+고친 것: `frameworks/base`의 cone에 `core/java/android/security/rkp`, `media/aidl/android/media/soundtrigger_middleware`, (17은) `media/aidl/android/media/audio`를 더했고, `external/libultrahdr`의 cone에 `adobe-hdr-gain-map-license`를 더했다. 새 폴더와 그 조상 폴더에는 다른 Android.bp가 없다. 받을 소스가 작으므로 `core/java/Android.bp`를 대역으로 나누지 않았다. 대역은 그 파일이 바뀔 때마다 따로 맞춰야 한다. (세 번째 실행 뒤 이 판단을 바꾸었다. 아래 절을 본다.)
+
+### 세 번째 실행(run 42407626974, 네 작업)과 고친 것
+
+같은 종류의 오류가 한 번에 하나씩 드러나 실행마다 하나씩 고치게 되었으므로, 이번에는 트리 전체를 정적으로 훑었다. 네 작업의 오류는 다음과 같다.
+
+| 오류 | 작업 |
+|---|---|
+| `frameworks/av/services/mediaresourcemanager/Android.bp:50:9: module "resourceobserver_aidl_interface_interface": srcs: No sources for a previous version in aidl_api/resourceobserver_aidl_interface/1` (그리고 같은 모듈의 `No sources provided in aidl_api/resourceobserver_aidl_interface/1`) | 16 arm64, 16 x86_64, 17 arm64 |
+| `internal error: panic in GenerateBuildActions for module "framework-javastream-protos"` (`runtime error: index out of range [0] with length 0`, `build/soong/genrule/genrule.go`의 `AndroidMk`) | 17 x86_64 |
+
+- 첫째: 고정된(frozen) 판이 있는 `aidl_interface`는 판마다 `aidl_api/<이름>/<판>`의 파일을 소스로 쓰고, 그 폴더가 비면 오류다. cone이 `services/mediaresourcemanager/aidl`만 받았다.
+- 둘째: `gensrcs`는 입력 파일마다 출력을 하나 만든다. 입력이 하나도 없으면 출력 목록이 비고, `AndroidMk`가 그 첫 원소를 읽다 패닉한다. `framework-javastream-protos`(`frameworks/base/ProtoLibraries.bp`, 루트 `Android.bp`의 `build = [...]`로 읽힘)의 입력은 받지 않은 `core/proto/**/*.proto` 글로브와 트리에 없는 모듈이다. 패닉은 분석 전체를 끝내므로, 다른 세 작업은 그보다 앞의 오류에서 멈추었을 뿐 같은 패닉을 안고 있다.
+
+방법: 잠금의 프로젝트마다 고정한 커밋의 파일 목록을 받았다(`git fetch --depth=1 --filter=blob:none`, 블롭 없이 트리만, 187개 커밋). 잠금의 cone, patterns, `exclude`로 체크아웃을 흉내 내고(16은 약 14만, 17은 약 16만 파일), 그 안의 빌드 파일(`build = [...]`로 읽히는 `.bp` 포함, 16은 2,265개, 17은 2,685개)을 문자열과 주석을 구분해 읽어 다음을 확인했다.
+
+1. `aidl_interface`(16과 17 모두 약 100개): 글로브만으로 된 `srcs`가 받은 파일과 맞는가, `srcs`가 모듈이면 그 모듈이 파일을 내는가, `versions`와 `versions_with_info`의 판마다 `aidl_api/<이름>/<판>`에 `.aidl`이 있는가(48개 판), 고정 판이 있는 안정 인터페이스에 `aidl_api/<이름>/current`가 있는가, `imports`의 모듈이 트리에 있는가. 이름을 적은 파일은 없어도 `ALLOW_MISSING_DEPENDENCIES`에서 경로가 남으므로(`build/soong/android/paths.go`의 `expandOneSrcPath`가 오류를 의존 누락으로 바꾼다) 빈 목록이 되지 않는다.
+2. `gensrcs`: `srcs`가 파일 하나라도 내는가. `:모듈`은 그 모듈이 파일을 내는지 따라간다.
+3. 패키지의 기본 라이선스가 트리에 있는가.
+
+찾은 것은 위의 둘과, 같은 패닉을 낼 `framework-cppstream-protos`다(`jemalloc`의 시험용 `gensrcs` 넷은 이름을 적은 파일이라 해당하지 않는다). 다른 판 폴더, 가져오는 모듈, 라이선스는 모두 맞았다.
+
+고친 것:
+
+- `frameworks/av`의 cone에 `services/mediaresourcemanager/aidl_api`를 더했다.
+- `frameworks/base`의 Java 쪽 빌드 파일은 대역으로 바꾼다. 소스를 하나씩 더 받는 대신, 네이티브 빌드가 쓰지 않는 Java, API, proto 모듈을 트리에서 뺀다. 잠금이 `frameworks/base`의 `Android.bp`, `api/Android.bp`, `core/java/Android.bp`, `libs/hwui/Android.bp`, `media/Android.bp`, `services/Android.bp`, `services/core/Android.bp`를 `exclude`로 지우고, `build.sh`가 `.github/scripts/framework/stand-ins/`(판에 공통인 `common/`과 판마다의 `android16/`, `android17/`)의 대역을 그 자리에 둔다. 체크아웃에 대역의 자리에 해당하는 파일이 있으면 `build.sh`가 멈춘다. `prebuilts/sdk`의 대역도 이 폴더로 옮겼다.
+  - 루트 `Android.bp`: 패키지와 라이선스(`frameworks_base_license`, `frameworks/base`의 여러 빌드 파일이 기본 라이선스로 쓴다)만 두고, `build = [...]`에는 `AconfigFlags.bp`만 남긴다. `ProtoLibraries.bp`, `TestProtoLibraries.bp`, `Ravenwood.bp`는 읽히지 않는다. 세 라이브러리가 닿는 모듈은 원래 파일에 없다.
+  - `core/java/Android.bp`: 패키지, 세 라이브러리가 닿는 모듈(`libpowermanager_aidl`, `android.os.hintmanager_aidl`, `process_info_service_aidl` 등), 트리의 다른 빌드 파일이 이름으로 부르는 Java가 아닌 모듈(`frameworks/native/libs/binder`의 `activity_manager_*_aidl` 파일 그룹, `hardware/interfaces/media/c2`가 헤더로 쓰는 `HardwareBuffer_aidl`, `libincremental_aidl-cpp` 등), 그리고 그것들이 다시 부르는 같은 파일의 모듈만 둔다. 패키지를 포함해 16은 68개 블록 중 13개, 17은 84개 중 15개다.
+  - `libs/hwui/Android.bp`: 원래 파일에서 Java 라이브러리 `framework-graphics`(`java_sdk_library`)와 그 파일 그룹 둘만 뺐다. 그 모듈은 prebuilt SDK와 프레임워크 소스로 API 스텁을 만드는데, 둘 다 트리에 없다. `libhwui`를 포함한 나머지 블록은 그대로다.
+  - `api`, `media`, `services`, `services/core`의 `Android.bp`는 대역 없이 뺀다. 세 라이브러리가 닿는 모듈이 없다. 거기서 정의한 기본값(`platform_service_defaults` 등)을 남은 파일이 쓰지만, 없는 기본값은 의존 누락으로 처리된다. 지금 트리에도 없는 기본값을 부르는 곳이 41곳 있는데 세 번째 실행의 의존 해석 단계가 통과했다. `api/Android.bp`의 `soong_config_module_type`을 가져오는 파일은 `api/StubLibraries.bp`와 `services/Android.bp`뿐이고, 둘 다 함께 빠진다.
+  - 대역의 블록은 고정한 커밋의 파일에서 그대로 잘라 냈다. 판마다 다른 파일은 판마다 따로 둔다.
+- 앞의 실행에서 더한 `core/java/android/security/rkp`와 미디어의 AIDL 폴더 둘은 그 모듈이 대역에서 빠지므로 cone에서 다시 뺐다.
+
+대역을 둔 뒤 같은 훑기를 다시 돌려, 위의 세 항목에서 걸리는 것이 없음을 확인했다. 대역 뒤 트리에 남은 모듈 형식 중 번역기 트리에 없던 Java 쪽 형식은 `external/perfetto`의 `android_library`와 시험 도우미 앱(`android_test_helper_app`)뿐이다.
+
+이 훑기가 보지 못하는 것: 빌드 동작을 만드는 단계(`GenerateBuildActions`)는 어느 실행에서도 끝까지 돈 적이 없다. 그 단계의 다른 모듈 형식의 검사나 패닉은 다음 실행이 처음으로 보인다.
 
 ### 남은 위험과 확인할 것
 
