@@ -147,16 +147,101 @@ public class CardStyleTests
         Assert.Equal("{DynamicResource PageHeaderMargin}", Setter(KeyedStyle("PageHeader"), "Margin"));
     }
 
+    private static readonly XNamespace Ui = "http://schemas.lepo.co/wpfui/2022/xaml";
+
+    private static XElement Named(XDocument doc, string name) =>
+        doc.Descendants().Single(e => (string?)e.Attribute(X + "Name") == name);
+
+    private static XElement PaneTemplate(XDocument doc) => doc.Descendants(Wpf + "ControlTemplate")
+        .Single(e => (string?)e.Attribute(X + "Key") == "PaneTemplate");
+
+    private static XElement PaneItemTemplate(XDocument doc) => doc.Descendants(Wpf + "ControlTemplate")
+        .Single(e => (string?)e.Attribute(X + "Key") == "PaneItemTemplate");
+
+    private static double[] Thickness(string? value) => value!.Split(',').Select(double.Parse).ToArray();
+
     [Fact]
-    public void Fr17_navigation_matches_the_settings_app()
+    public void Fr17_the_navigation_pane_has_no_back_button()
     {
-        Assert.Equal("40", Setter(TypedStyle("ui:NavigationViewItem"), "MinHeight"));
-        XNamespace ui = "http://schemas.lepo.co/wpfui/2022/xaml";
         var window = Xaml("MainWindow.xaml");
-        var nav = window.Descendants(ui + "NavigationView").Single();
-        Assert.Equal("320", (string?)nav.Attribute("OpenPaneLength"));
-        Assert.Equal("Auto", (string?)nav.Attribute("IsBackButtonVisible"));
+        var nav = window.Descendants(Ui + "NavigationView").Single();
+        Assert.Equal("Collapsed", (string?)nav.Attribute("IsBackButtonVisible"));
+        Assert.Equal("{StaticResource PaneTemplate}", (string?)nav.Attribute("Template"));
+        Assert.Equal("{StaticResource PaneItemTemplate}", (string?)nav.Attribute("ItemTemplate"));
+        Assert.DoesNotContain(window.Descendants(), e => (string?)e.Attribute(X + "Name") == "PART_BackButton");
+    }
+
+    [Fact]
+    public void Fr17_the_title_bar_lines_up_with_the_navigation_pane()
+    {
+        var window = Xaml("MainWindow.xaml");
+        var bar = window.Descendants(Ui + "TitleBar").Single();
+        Assert.Equal("48", (string?)bar.Attribute("Height"));
+        Assert.Null(bar.Attribute("Padding")); // the library's 16 px from the window's edge
+
+        const double titleBarPadding = 16;
+        const double titleBarIconGap = 12; // the library's, after the icon
+        var icon = window.Descendants(Ui + "ImageIcon").Single();
+        var iconWidth = double.Parse((string?)icon.Attribute("Width")!);
+        var iconRight = Thickness((string?)icon.Attribute("Margin"))[2];
+
+        var paneLeft = Thickness((string?)Named(window, "PaneGrid").Attribute("Margin"))[0];
+        var iconColumn = double.Parse((string?)PaneItemTemplate(window).Descendants(Wpf + "ColumnDefinition").First().Attribute("Width")!);
+        var labelMargin = Thickness((string?)Named(window, "ElementContentPresenter").Attribute("Margin"))[0];
+        var toggle = Named(window, "PART_ToggleButton");
+
+        // The icon column: title bar, hamburger and items share one centre line, which stays
+        // where it is when the pane closes to the icon column's width.
+        Assert.Equal(24, titleBarPadding + iconWidth / 2);
+        Assert.Equal(24, paneLeft + iconColumn / 2);
+        Assert.Equal(24, paneLeft + double.Parse((string?)toggle.Attribute("Width")!) / 2);
+        Assert.Contains("To=\"40\"", PaneTemplate(window).ToString());
+
+        // The label column: the title starts where the labels do, twice the icon's width from
+        // the icon's left edge.
+        var titleLeft = titleBarPadding + iconWidth + iconRight + titleBarIconGap;
+        Assert.Equal(48, titleLeft);
+        Assert.Equal(48, paneLeft + iconColumn + labelMargin);
+        Assert.Equal(2 * iconWidth, titleLeft - titleBarPadding);
+    }
+
+    [Fact]
+    public void Fr17_the_pane_and_the_page_start_right_under_the_title_bar()
+    {
+        var window = Xaml("MainWindow.xaml");
+        // A closed install bar must not leave its margins between the title bar and the pane.
+        Assert.Equal("{Binding IsOpen, Converter={StaticResource Visible}}",
+            (string?)Named(window, "InstallBar").Attribute("Visibility"));
+        var card = Named(window, "ContentCard");
+        Assert.Equal("8,0,0,0", (string?)card.Attribute("CornerRadius"));
+        Assert.Equal("{TemplateBinding FrameMargin}", (string?)card.Attribute("Margin"));
+        Assert.Equal("0", (string?)Named(window, "PART_ToggleButton").Attribute("Grid.Row"));
+    }
+
+    [Fact]
+    public void Fr17_navigation_items_have_task_managers_spacing_and_selection()
+    {
+        var style = TypedStyle("ui:NavigationViewItem");
+        Assert.Equal("36", Setter(style, "MinHeight"));
+        Assert.Equal("0,2,0,2", Setter(style, "Margin"));
+
+        var window = Xaml("MainWindow.xaml");
+        Assert.Equal("36", (string?)Named(window, "MainBorder").Attribute("Height"));
+        Assert.Equal("{DynamicResource ControlCornerRadius}", (string?)Named(window, "MainBorder").Attribute("CornerRadius"));
+        var pill = Named(window, "ActiveRectangle");
+        Assert.Equal("3", (string?)pill.Attribute("Width"));
+        Assert.Equal("16", (string?)pill.Attribute("Height"));
+        Assert.Equal("{DynamicResource NavigationViewSelectionIndicatorForeground}", (string?)pill.Attribute("Fill"));
+        var triggers = PaneItemTemplate(window).ToString();
+        Assert.Contains("NavigationViewItemBackgroundSelected", triggers);
+        Assert.Contains("NavigationViewItemBackgroundPointerOver", triggers);
+    }
+
+    [Fact]
+    public void Fr17_the_window_keeps_its_pane_width_and_backdrop()
+    {
+        var window = Xaml("MainWindow.xaml");
+        Assert.Equal("320", (string?)window.Descendants(Ui + "NavigationView").Single().Attribute("OpenPaneLength"));
         Assert.Equal("Mica", (string?)window.Root!.Attribute("WindowBackdropType"));
-        Assert.Equal("48", (string?)window.Descendants(ui + "TitleBar").Single().Attribute("Height"));
     }
 }
