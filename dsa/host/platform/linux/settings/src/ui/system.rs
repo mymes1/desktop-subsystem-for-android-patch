@@ -886,17 +886,27 @@ fn google_play(ctx: &Shared, page: &Rc<Page>) {
         let (ctx, now) = (ctx.clone(), now.clone());
         terms.connect_activated(move |_| {
             let url = now.borrow().as_ref().map(|g| g.terms_url.clone());
-            open_page(&ctx, &url.unwrap_or_else(|| crate::model::GAPPS_TERMS_URL.into()));
+            open_page(
+                &ctx,
+                &url.unwrap_or_else(|| crate::model::GAPPS_TERMS_URL.into()),
+            );
         });
     }
     {
         let (ctx, now) = (ctx.clone(), now.clone());
         register.connect_activated(move |_| {
             let url = now.borrow().as_ref().map(|g| g.registration_url.clone());
-            open_page(&ctx, &url.unwrap_or_else(|| crate::model::GAPPS_REGISTRATION_URL.into()));
+            open_page(
+                &ctx,
+                &url.unwrap_or_else(|| crate::model::GAPPS_REGISTRATION_URL.into()),
+            );
         });
     }
-    request(ctx, |c| c.gapps(), move |r| show(tr("Where Google Play stands could not be read"), r));
+    request(
+        ctx,
+        |c| c.gapps(),
+        move |r| show(tr("Where Google Play stands could not be read"), r),
+    );
 }
 
 /// Opens a web page in the user's browser, or says why it cannot.

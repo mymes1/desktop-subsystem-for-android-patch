@@ -82,10 +82,13 @@ pub fn builds(rss: &str, target: &Target) -> Vec<Build> {
             let title = between(item, "<title><![CDATA[", "]]></title>")?;
             let (folder, file) = title.strip_prefix(&folder_prefix)?.split_once('/')?;
             let folder_ok = folder.len() == 10
-                && folder
-                    .chars()
-                    .enumerate()
-                    .all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() });
+                && folder.chars().enumerate().all(|(i, c)| {
+                    if i == 4 || i == 7 {
+                        c == '-'
+                    } else {
+                        c.is_ascii_digit()
+                    }
+                });
             if !folder_ok {
                 return None;
             }
@@ -194,8 +197,8 @@ fn download_to(
     path: &Path,
     progress: &mut dyn FnMut(u64),
 ) -> Result<GappsPackage, String> {
-    let file = File::create(path)
-        .map_err(|e| format!("{} cannot be written: {e}", path.display()))?;
+    let file =
+        File::create(path).map_err(|e| format!("{} cannot be written: {e}", path.display()))?;
     let mut out = Counted {
         file: BufWriter::new(file),
         md5: Md5::new(),

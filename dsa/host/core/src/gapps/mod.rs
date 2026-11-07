@@ -376,7 +376,10 @@ mod tests {
         };
         let inactive = GuestGapps::default();
         assert!(!restart_needed(Some(&installed), None), "nothing known");
-        assert!(restart_needed(Some(&installed), Some(&inactive)), "installed");
+        assert!(
+            restart_needed(Some(&installed), Some(&inactive)),
+            "installed"
+        );
         assert!(!restart_needed(Some(&installed), Some(&active)));
         assert!(restart_needed(None, Some(&active)), "removed");
         assert!(!restart_needed(None, Some(&inactive)));

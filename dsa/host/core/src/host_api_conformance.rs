@@ -2707,17 +2707,24 @@ pub fn gapps_reach_the_caller(make: MakeLocal<'_>) {
     assert_eq!(package.android_version, "16.0");
     assert_eq!((package.arch.as_str(), package.sdk), ("x86_64", 36));
     assert_eq!(package.md5, md5_of(&zip));
-    let guest = installed.guest.clone().expect("the running Android answered");
+    let guest = installed
+        .guest
+        .clone()
+        .expect("the running Android answered");
     assert!(guest.installed);
-    assert!(!guest.active, "the Google apps are used from the next start");
+    assert!(
+        !guest.active,
+        "the Google apps are used from the next start"
+    );
     assert!(installed.restart_needed);
     assert_eq!(store.gapps(&user).unwrap(), Some(package));
     let android = androids.of(&user).unwrap();
     let image = android.gapps_image.lock().unwrap().clone().unwrap();
     let files = crate::erofs::read::files(&image);
     assert!(files.contains_key("product/priv-app/GmsCore/GmsCore.apk"));
-    assert!(files.keys().all(|path| path.starts_with("product/")
-        || path.starts_with("system_ext/")));
+    assert!(files
+        .keys()
+        .all(|path| path.starts_with("product/") || path.starts_with("system_ext/")));
 
     let status = client.gapps().unwrap();
     assert!(status.package.is_some());
