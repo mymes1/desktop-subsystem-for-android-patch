@@ -151,7 +151,8 @@ public final class DsaService {
             enabled: json.bool("enabled", missing: true),
             supported: json.bool("supported"),
             android: a.isObject ? ArmGuestInfo(installed: a.bool("installed"), active: a.bool("active"), abilist: a.string("abilist")) : nil,
-            restartNeeded: json.bool("restart_needed"))
+            restartNeeded: json.bool("restart_needed"),
+            googleFetchAvailable: json.bool("google_fetch_available"))
     }
 
     public func armTranslation() async throws -> ArmTranslationInfo {
@@ -161,6 +162,20 @@ public final class DsaService {
     /// Removes the ARM translation package; Android goes without it from its next start.
     public func removeArmTranslation() async throws -> ArmTranslationInfo {
         DsaService.readArmTranslation(try await runJson(["arm-translation", "remove"]))
+    }
+
+    /// Google's terms for what its SDK repository gives, the Android SDK License, which cover
+    /// its ARM translator.
+    public static let googleArmTermsUrl = "https://developer.android.com/studio/terms"
+
+    /// Where the emulator image Google's ARM translator comes from is downloaded.
+    public static let googleArmSource = "https://dl.google.com/android/repository/sys-img/google_apis/"
+
+    /// Downloads Google's emulator image for this Android from Google, takes its ARM translator
+    /// out and installs it, starting Android first when it is not running. The user agreed to
+    /// Google's terms in the app first, so dsa does not ask again. It takes minutes.
+    public func fetchGoogleArmTranslator() async throws -> ArmTranslationInfo {
+        DsaService.readArmTranslation(try await runJson(["arm-translation", "fetch", "google", "--yes"]))
     }
 
     // MARK: Memory and GPUs

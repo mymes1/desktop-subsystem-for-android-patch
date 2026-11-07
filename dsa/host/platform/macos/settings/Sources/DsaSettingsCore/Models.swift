@@ -131,13 +131,15 @@ public struct ArmGuestInfo: Equatable, Sendable {
     public var abilist: String
 }
 
-/// Whether apps built only for 64-bit ARM can run.
+/// Whether apps built only for 64-bit ARM can run, and whether Google's translator can be
+/// fetched here (not on an ARM64 Mac, whose Android runs ARM apps itself).
 public struct ArmTranslationInfo: Equatable, Sendable {
     public var package: ArmPackageInfo?
     public var enabled: Bool
     public var supported: Bool
     public var android: ArmGuestInfo?
     public var restartNeeded: Bool
+    public var googleFetchAvailable = false
 }
 
 /// What a host process does for the user's Android.
