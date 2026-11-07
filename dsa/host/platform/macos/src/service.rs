@@ -273,17 +273,13 @@ impl Planner {
         Ok(BootPlan {
             vm,
             properties,
-            bootconfig: arm_translation_bootconfig(&*self.settings, &self.name)
-                + &dsa_host_core::gapps::bootconfig_for(&*self.settings, &self.name),
+            bootconfig: dsa_host_core::arm_translation::bootconfig_for(
+                &*self.settings,
+                &self.name,
+                Some(dir.as_path()),
+            ) + &dsa_host_core::gapps::bootconfig_for(&*self.settings, &self.name),
         })
     }
-}
-
-/// The bootconfig that tells the next boot to use the user's ARM translation package.
-fn arm_translation_bootconfig(store: &dyn SettingsStore, user: &str) -> String {
-    let package = store.arm_translation(user).unwrap_or(None);
-    let enabled = store.get(user).map(|s| s.arm_translation).unwrap_or(true);
-    dsa_host_core::arm_translation::bootconfig(package.as_ref(), enabled).to_string()
 }
 
 /// Relays each of the guest's connections to `port` to the socket of the user's program that
@@ -706,7 +702,17 @@ pub fn serve(
                     .ok()
                     .and_then(|(dir, _)| ImageBuild::from_image_dir(&dir))
             }),
-        );
+        )
+        // An arm64 image runs ARM apps itself and has no default translator; this reports
+        // whatever the image says, which for every image this host boots is none.
+        .with_default_arm_translation({
+            let shared = Arc::clone(&shared);
+            Arc::new(move |_: &str| {
+                current_image(&shared.config, shared.store.as_deref())
+                    .ok()
+                    .and_then(|(dir, _)| dsa_host_core::arm_translation::default_package(&dir))
+            })
+        });
     // Google Play, for a user who asks: downloaded from LiteGapps and made ready in the
     // user's own folder.
     service = service.with_gapps(dsa_host_core::gapps::Source::new(
