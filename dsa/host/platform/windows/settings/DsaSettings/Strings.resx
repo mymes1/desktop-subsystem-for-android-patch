@@ -61,6 +61,39 @@
   <data name="LastReasonBar.Title" xml:space="preserve">
     <value>Last stopped</value>
   </data>
+  <data name="LastReason_Requested" xml:space="preserve">
+    <value>Android was stopped on request. Start it again when you need it.</value>
+  </data>
+  <data name="LastReason_Updating" xml:space="preserve">
+    <value>DSA is being updated. Start Android again when the update finishes.</value>
+  </data>
+  <data name="LastReason_Virtualization" xml:space="preserve">
+    <value>Virtualization is off or Hyper-V is missing. Turn on Virtual Machine Platform, then restart the PC.</value>
+  </data>
+  <data name="LastReason_InvalidConfiguration" xml:space="preserve">
+    <value>Windows refused the settings for Android's virtual machine. Update or reinstall DSA.</value>
+  </data>
+  <data name="LastReason_OutOfMemory" xml:space="preserve">
+    <value>There is not enough memory to start Android. Close other apps and try again.</value>
+  </data>
+  <data name="LastReason_Disk" xml:space="preserve">
+    <value>A disk problem kept Android from starting. Free up space or check the drive, then try again.</value>
+  </data>
+  <data name="LastReason_TimedOut" xml:space="preserve">
+    <value>Android took too long to start. Try starting it again.</value>
+  </data>
+  <data name="LastReason_Lost" xml:space="preserve">
+    <value>Android stopped unexpectedly. Try starting it again.</value>
+  </data>
+  <data name="LastReason_General" xml:space="preserve">
+    <value>Android could not start. Try again, and check the details if it keeps failing.</value>
+  </data>
+  <data name="LastReasonDetails.Header" xml:space="preserve">
+    <value>Details</value>
+  </data>
+  <data name="LastReasonCopy.ToolTip" xml:space="preserve">
+    <value>Copy the details</value>
+  </data>
   <data name="UpdateNoticeBar.Title" xml:space="preserve">
     <value>Update</value>
   </data>

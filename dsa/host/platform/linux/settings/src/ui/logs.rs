@@ -75,7 +75,6 @@ pub fn logs(ctx: &Shared) -> gtk::Widget {
     let text = gtk::TextView::builder()
         .editable(false)
         .cursor_visible(false)
-        .monospace(true)
         .wrap_mode(gtk::WrapMode::WordChar)
         .build();
     let scroll = gtk::ScrolledWindow::builder()

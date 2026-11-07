@@ -2249,19 +2249,61 @@ pub fn describe_tasks(list: &TaskList) -> String {
     lines.join("\n")
 }
 
+/// What a start failure's first line means for the user, when it holds an error code or says
+/// that the host cannot run VMs. Other reasons are already plain and stay as they are. The codes
+/// arrive as text, so this names no host API.
+fn plain_start_failure(first_line: &str) -> Option<&'static str> {
+    const VIRTUALIZATION: &str = "virtualization is off or Hyper-V is missing; \
+        turn on Virtual Machine Platform, then restart the PC";
+    const CONFIGURATION: &str = "the host refused the settings for Android's virtual machine; \
+        update or reinstall DSA";
+    const MEMORY: &str = "there is not enough memory to start Android; \
+        close other apps and try again";
+    const DISK: &str = "a disk problem kept Android from starting; \
+        free up space or check the drive, then try again";
+    const GENERAL: &str = "Android could not start; \
+        try again, and check the details if it keeps failing";
+    if first_line.contains("Host Compute System is not available") {
+        return Some(VIRTUALIZATION);
+    }
+    let codes: Vec<String> = first_line
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|token| {
+            token.len() == 10
+                && token.starts_with("0x")
+                && token[2..].chars().all(|c| c.is_ascii_hexdigit())
+        })
+        .map(str::to_ascii_lowercase)
+        .collect();
+    let known = codes.iter().find_map(|code| match code.as_str() {
+        "0x80370102" | "0xc0351000" => Some(VIRTUALIZATION),
+        "0x80070057" | "0x8037010d" => Some(CONFIGURATION),
+        "0x8007000e" | "0x80070008" | "0x800705aa" | "0x800705af" => Some(MEMORY),
+        "0x80070070" | "0x80070027" | "0x80070017" | "0x8007045d" => Some(DISK),
+        _ => None,
+    });
+    known.or_else(|| (!codes.is_empty()).then_some(GENERAL))
+}
+
 /// A line describing `status`, and one more for each piece of news about an update.
 ///
 /// A reason's first line goes in the status line. Any further lines (the end of the guest's
-/// console, after a failed start) follow it as they are, so they can be copied whole.
+/// console, after a failed start) follow it as they are, so they can be copied whole. A failure
+/// that carries an error code reads as a plain sentence, with the raw first line on a
+/// `details:` line below it, because that line can hold a whole HCS document.
 pub fn describe(status: &Status) -> String {
     let mut line = format!("Android: {}", status.state);
     if let Some(reason) = &status.last_reason {
         let mut lines = reason.lines();
-        let _ = write!(
-            line,
-            " (last stopped: {})",
-            lines.next().unwrap_or_default()
-        );
+        let first = lines.next().unwrap_or_default();
+        match plain_start_failure(first) {
+            Some(sentence) => {
+                let _ = write!(line, " (last stopped: {sentence})\ndetails: {first}");
+            }
+            None => {
+                let _ = write!(line, " (last stopped: {first})");
+            }
+        }
         for detail in lines {
             let _ = write!(line, "\n{detail}");
         }

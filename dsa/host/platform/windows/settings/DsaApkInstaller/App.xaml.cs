@@ -40,6 +40,12 @@ public partial class App : Application
             {
             }
         }
+        // Malgun Gothic has no Semibold: a strong font would draw Korean titles in Bold.
+        if (CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ko")
+        {
+            Resources["StrongTextFont"] = Resources["TextFont"];
+            Resources["StrongDisplayFont"] = Resources["DisplayFont"];
+        }
         var path = ApkPath(e.Args);
         if (path is null)
         {

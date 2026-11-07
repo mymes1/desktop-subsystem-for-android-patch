@@ -403,6 +403,15 @@ fn fr17_shared_folders_keep_the_service_order() {
 }
 
 #[test]
+fn fr21_the_log_page_uses_the_app_font() {
+    let page = std::fs::read_to_string(crate_dir().join("src/ui/logs.rs")).unwrap();
+    assert!(
+        !page.contains("monospace"),
+        "the log page sets a monospace font instead of the app's own"
+    );
+}
+
+#[test]
 fn fr17_the_log_page_filters_pauses_and_keeps_the_newest_lines() {
     let record = |message: &str| {
         json!({ "time": "10:00:00.000", "priority": "I", "tag": "Tag", "pid": 1, "tid": 2,
@@ -506,6 +515,40 @@ fn placeholders(text: &str) -> Vec<String> {
         .collect();
     found.sort();
     found
+}
+
+/// Whether `text` names a size, such as "3 GB" or "16GiB".
+fn names_a_size(text: &str) -> bool {
+    ["GB", "GiB"].iter().any(|unit| {
+        text.match_indices(unit).any(|(at, _)| {
+            text[..at]
+                .trim_end()
+                .ends_with(|c: char| c.is_ascii_digit())
+        })
+    })
+}
+
+#[test]
+fn fr17_automatic_memory_limit_names_no_fixed_size() {
+    let shown = shown_strings();
+    let english = shown
+        .iter()
+        .find(|text| text.starts_with("The most memory Android may grow to."))
+        .expect("the memory limit's description is on a page");
+    let ko = catalogue(&crate_dir().join("po/ko.po"));
+    let korean = ko.get(english).expect("the description has a Korean text");
+    for text in [english, korean] {
+        assert!(
+            !names_a_size(text),
+            "this names a size, which reads as a limit on Automatic: {text}"
+        );
+        assert!(
+            text.contains("Linux"),
+            "this should say that Automatic stops at the computer's memory less what Linux keeps: {text}"
+        );
+    }
+    assert!(english.contains("no fixed limit"), "{english}");
+    assert!(korean.contains("고정된 한도가 없"), "{korean}");
 }
 
 #[test]

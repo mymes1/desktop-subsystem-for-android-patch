@@ -4886,13 +4886,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The most memory Android may grow to. Android takes memory only as it needs it and gives it back when idle. Automatic lets it grow to 3 GB, never past this Mac's memory. Takes effect the next time Android starts."
+            "value": "The most memory Android may grow to. Android takes memory only as it needs it and returns it at once when it no longer does. Automatic limits it to half of this Mac's memory. Choose a size here to change the limit. Takes effect the next time Android starts."
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Android가 늘어날 수 있는 최대 메모리입니다. Android는 필요한 만큼만 메모리를 쓰고 유휴 상태가 되면 돌려줍니다. 자동이면 3 GB까지 늘어나고, 이 Mac의 메모리를 넘지 않습니다. 다음에 Android를 시작할 때 적용됩니다."
+            "value": "Android가 늘어날 수 있는 최대 메모리입니다. Android는 필요한 만큼만 메모리를 쓰고, 더 필요하지 않으면 바로 돌려줍니다. 자동이면 이 Mac 메모리의 절반까지 늘어날 수 있습니다. 여기에서 크기를 골라 한도를 바꿀 수 있습니다. 다음에 Android를 시작할 때 적용됩니다."
           }
         }
       }

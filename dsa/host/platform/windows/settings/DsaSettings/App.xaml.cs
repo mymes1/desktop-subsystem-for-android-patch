@@ -47,6 +47,12 @@ public partial class App : Application
             {
             }
         }
+        // Malgun Gothic has no Semibold: a strong font would draw Korean titles in Bold.
+        if (System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ko")
+        {
+            Resources["StrongTextFont"] = Resources["TextFont"];
+            Resources["StrongDisplayFont"] = Resources["DisplayFont"];
+        }
         // The text beside every toggle switch, in the language just chosen.
         Resources["ToggleOnText"] = Text.Get("Toggle.On");
         Resources["ToggleOffText"] = Text.Get("Toggle.Off");
