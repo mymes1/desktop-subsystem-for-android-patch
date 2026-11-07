@@ -132,6 +132,14 @@ function Test-RowText($Text) {
     -not $r.IsEmpty -and $r.Width -ge 20 -and $r.Height -gt 0 -and $r.Height -le 60
 }
 
+# Whether $Element lies inside $Window. UI Automation's IsOffscreen stays false for a row
+# scrolled out of a page's scroll viewer, so it cannot say this.
+function Test-InWindow($Window, $Element) {
+    $w = $Window.Current.BoundingRectangle
+    $r = $Element.Current.BoundingRectangle
+    -not $Element.Current.IsOffscreen -and $r.Top -ge $w.Top -and $r.Bottom -le $w.Bottom
+}
+
 # Fails unless every label is a laid out row of the list on the page in $Window, and at least
 # $MinVisible of them are in view. A count above the list says nothing about this: the blank
 # Apps page had the right count.
@@ -139,13 +147,15 @@ function Assert-RowsShown($Window, [string[]]$Labels, [int]$MinVisible = 1, [int
     $deadline = (Get-Date).AddSeconds($Seconds)
     do {
         $missing = @($Labels | Where-Object { -not (Find-RowTexts $Window $_ | Where-Object { Test-RowText $_ }) })
-        $visible = @($Labels | Where-Object { Find-RowTexts $Window $_ | Where-Object { (Test-RowText $_) -and -not $_.Current.IsOffscreen } })
+        $visible = @($Labels | Where-Object { Find-RowTexts $Window $_ | Where-Object { (Test-RowText $_) -and (Test-InWindow $Window $_) } })
         if ($missing.Count -eq 0 -and $visible.Count -ge $MinVisible) {
             Write-Host "rows laid out: $($Labels.Count), in view: $($visible.Count) ($($visible -join ', '))"
             return
         }
         Start-Sleep -Milliseconds 500
     } while ((Get-Date) -lt $deadline)
+    $all = $Window.FindAll($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($Auto::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)))
+    Write-Host "text on the page: $(($all | ForEach-Object { $_.Current.Name }) -join ' | ')"
     foreach ($label in $Labels) {
         foreach ($text in (Find-RowTexts $Window $label)) {
             Write-Host "'$label': $($text.Current.BoundingRectangle) offscreen=$($text.Current.IsOffscreen)"
