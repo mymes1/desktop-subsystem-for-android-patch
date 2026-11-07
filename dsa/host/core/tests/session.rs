@@ -3436,7 +3436,10 @@ fn fr25_a_native_library_crash_offers_to_run_the_app_as_arm_and_a_click_reinstal
     };
     assert_eq!(reinstall.package_name, "com.example.game");
     assert_eq!(reinstall.abi, "arm64-v8a");
-    assert!(!reinstall.erase_data, "the data stays unless the user says otherwise");
+    assert!(
+        !reinstall.erase_data,
+        "the data stays unless the user says otherwise"
+    );
     assert_eq!(
         watch.recv_timeout(WAIT).unwrap(),
         NotificationEvent::Removed { key: offer.key }
