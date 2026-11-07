@@ -552,6 +552,8 @@ unsafe extern "system" fn task_window_proc(
                     if titled(data) {
                         data.caption.paint(hwnd, data.presenter.borrow().as_deref());
                     }
+                    // A narrow window has no room for the icon's cell, and so no back arrow.
+                    sync_back_button(hwnd, data);
                 }
             }
             0
@@ -742,6 +744,8 @@ unsafe extern "system" fn task_window_proc(
                 if titled(data) {
                     data.caption.paint(hwnd, data.presenter.borrow().as_deref());
                 }
+                // The icon's cell follows the scale.
+                sync_back_button(hwnd, data);
             }
             0
         }
@@ -751,6 +755,7 @@ unsafe extern "system" fn task_window_proc(
                 data.caption.report_height(hwnd, &*data.report);
                 data.caption
                     .repaint(hwnd, data.presenter.borrow().as_deref());
+                sync_back_button(hwnd, data);
             }
             DefWindowProcW(hwnd, message, wparam, lparam)
         }
@@ -980,6 +985,19 @@ fn titled(data: &WindowData) -> bool {
     data.shown_mode.get() != WindowMode::Fullscreen
 }
 
+/// Tells the window's UI Automation tree whether the title bar shows the back arrow now, and
+/// the icon's cell it is in, so its button comes, goes and moves with the arrow.
+unsafe fn sync_back_button(hwnd: HWND, data: &WindowData) {
+    let cell = if titled(data) && data.caption.shows_back() {
+        data.caption.layout(hwnd).icon_cell()
+    } else {
+        None
+    };
+    if let Ok(mut tree) = data.accessibility.try_borrow_mut() {
+        tree.set_back(hwnd as isize, cell);
+    }
+}
+
 /// The whole of the monitor `hwnd` is on, when the monitor says.
 unsafe fn monitor_rect(hwnd: HWND) -> Option<RECT> {
     let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -1026,6 +1044,7 @@ unsafe fn mode_message(
                 let shown = mode.toggle_fullscreen();
                 data.mode.set(mode);
                 apply_mode(hwnd, data, shown);
+                sync_back_button(hwnd, data);
             }
             Some(0)
         }
@@ -1294,6 +1313,7 @@ impl Ui {
                                 let shown = state.app_asks(mode);
                                 data.mode.set(state);
                                 apply_mode(*hwnd, data, shown);
+                                sync_back_button(*hwnd, data);
                             }
                         }
                     }
@@ -1327,6 +1347,7 @@ impl Ui {
                             if let Some(data) = window_data(*hwnd) {
                                 let presenter = data.presenter.borrow().clone();
                                 data.caption.set_back(*hwnd, back, presenter.as_deref());
+                                sync_back_button(*hwnd, data);
                             }
                         }
                     }
@@ -1411,6 +1432,7 @@ impl Ui {
             accessibility: RefCell::new(AccessibilityWindow::new(
                 task_id,
                 size,
+                self.setup.input.clone(),
                 self.setup.accessibility.clone(),
                 self.setup.logger.clone(),
             )),

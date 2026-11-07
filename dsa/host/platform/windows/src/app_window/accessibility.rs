@@ -17,6 +17,12 @@
 //! accessibility action in Android, so Invoke presses a list row without moving the cursor.
 //! As changes arrive the window raises structure, property and focus change events.
 //!
+//! While the title bar shows the back arrow in the icon's cell, the root's first child is a
+//! button for it ([`BackProvider`]), before the task's nodes because it sits at the window's top
+//! left. It is named "Back" ("뒤로" on a Korean display language), its bounds are the icon's
+//! cell, and its Invoke sends the task Back as a click on the arrow does. It appears and goes
+//! with the arrow, and the window raises a structure change event each time.
+//!
 //! A tree that breaks the rules is dropped and logged, and the watch starts over; nothing a
 //! tree holds can end the window host.
 //!
@@ -38,6 +44,7 @@ use dsa_host_core::accessibility::{
     NodeAction, PresenceChange, Tree, TreeError,
 };
 use dsa_host_core::host_api::HostApiClient;
+use dsa_host_core::input::InputEvent;
 use dsa_transport::Connector;
 use windows::core::{
     implement, Error, IUnknown, IUnknownImpl, Interface, BOOL, BSTR, HRESULT, PCWSTR,
@@ -48,10 +55,90 @@ use windows::Win32::System::Ole::{SafeArrayCreateVector, SafeArrayPutElement};
 use windows::Win32::System::Variant::{VARIANT, VT_BOOL, VT_BSTR, VT_EMPTY, VT_I4};
 use windows::Win32::UI::Accessibility::*;
 
+use super::caption::back_keys;
 use crate::compositor::log::{note, CompositorLogger};
+use crate::compositor::widget_menu::is_korean;
 use crate::ui_automation::{
     control_type_of, is_content_element, is_control_element, patterns_of, scroll_action, Pattern,
 };
+
+/// A rectangle in the window's client pixels: left, top, width, height.
+pub type ClientRect = (i32, i32, u32, u32);
+
+/// The back button's runtime ID. A node's has three parts, so this one of two never equals it.
+const BACK_RUNTIME_ID: [i32; 2] = [UiaAppendRuntimeId as i32, 0x4241_434b];
+
+/// The back button's name in the user's display language: Korean or English.
+fn back_name(korean: bool) -> &'static str {
+    if korean {
+        "뒤로"
+    } else {
+        "Back"
+    }
+}
+
+/// The back button's name for the user's display language now.
+fn display_back_name() -> &'static str {
+    use windows_sys::Win32::Globalization::GetUserDefaultUILanguage;
+    // SAFETY: reads the user's display language.
+    back_name(is_korean(unsafe { GetUserDefaultUILanguage() }))
+}
+
+/// One child of the window's fragment root.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RootChild {
+    /// The title bar's back arrow.
+    Back,
+    /// A top-level node of the task.
+    Node(u32),
+}
+
+/// The root's children in order: the back arrow first while it shows (it is at the window's
+/// top left), then the task's top-level nodes.
+fn root_children(back: bool, roots: &[u32]) -> Vec<RootChild> {
+    back.then_some(RootChild::Back)
+        .into_iter()
+        .chain(roots.iter().copied().map(RootChild::Node))
+        .collect()
+}
+
+/// The child after (`forward`) or before `of` among the root's `children`.
+fn root_sibling(children: &[RootChild], of: RootChild, forward: bool) -> Option<RootChild> {
+    let at = children.iter().position(|child| *child == of)?;
+    if forward {
+        children.get(at + 1).copied()
+    } else {
+        at.checked_sub(1)
+            .and_then(|before| children.get(before).copied())
+    }
+}
+
+/// Whether the client point (`x`, `y`) is in `cell`.
+fn in_cell(cell: ClientRect, x: f64, y: f64) -> bool {
+    let (left, top, width, height) = cell;
+    x >= left as f64
+        && x < left as f64 + width as f64
+        && y >= top as f64
+        && y < top as f64 + height as f64
+}
+
+/// What happened to the back button, for the events the window raises.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BackChange {
+    Added,
+    Removed,
+    Moved,
+}
+
+/// The change from the back arrow's cell `before` to `after`; `None` while it shows neither.
+fn back_change(before: Option<ClientRect>, after: Option<ClientRect>) -> Option<BackChange> {
+    match (before, after) {
+        (None, Some(_)) => Some(BackChange::Added),
+        (Some(_), None) => Some(BackChange::Removed),
+        (Some(a), Some(b)) if a != b => Some(BackChange::Moved),
+        _ => None,
+    }
+}
 
 /// Dials the service's local API, once for each watch.
 pub type ApiConnect = Arc<dyn Fn() -> Box<dyn Connector> + Send + Sync>;
@@ -84,11 +171,18 @@ struct State {
     /// Changes waiting for the UI thread to raise their events, each with the tree's names
     /// from before it.
     pending: Vec<(Changes, Vec<(u32, String)>)>,
+    /// The icon's cell while the title bar shows the back arrow in it.
+    back: Option<ClientRect>,
+    /// Changes to the back button waiting for the UI thread to raise their events.
+    back_changes: Vec<BackChange>,
+    /// Where the back button's Back goes: the window host's input for the guest.
+    input: Sender<InputEvent>,
 }
 
 /// The state a window's providers read, behind one lock.
 pub struct Shared {
     hwnd: isize,
+    task_id: i32,
     state: Mutex<State>,
 }
 
@@ -153,6 +247,25 @@ impl Shared {
             Some(actions) if actions.send(request).is_ok() => Ok(()),
             _ => Err(not_available()),
         }
+    }
+
+    /// Sends the task Back, as a click on the back arrow does. An error while the arrow is
+    /// not shown.
+    fn go_back(&self) -> windows::core::Result<()> {
+        let state = self.lock();
+        if state.back.is_none() {
+            return Err(not_available());
+        }
+        // The same clock as a message's time, which a click's Back carries; UI Automation may
+        // call from a thread other than the window's, which has no message time of its own.
+        // SAFETY: a plain query.
+        let time = unsafe { windows_sys::Win32::System::SystemInformation::GetTickCount() };
+        for key in back_keys(self.task_id, time) {
+            if state.input.send(InputEvent::Key(key)).is_err() {
+                return Err(not_available());
+            }
+        }
+        Ok(())
     }
 }
 
@@ -262,6 +375,36 @@ struct NodeProvider {
     id: u32,
 }
 
+/// The title bar's back arrow, while it shows in the icon's cell.
+#[implement(
+    IRawElementProviderSimple,
+    IRawElementProviderFragment,
+    IInvokeProvider
+)]
+struct BackProvider {
+    shared: Arc<Shared>,
+}
+
+fn back_of(shared: &Arc<Shared>) -> IRawElementProviderFragment {
+    BackProvider {
+        shared: Arc::clone(shared),
+    }
+    .into()
+}
+
+/// The provider of one of the root's children; a node is of tree `epoch`.
+fn child_of(
+    shared: &Arc<Shared>,
+    epoch: Option<u32>,
+    child: Option<RootChild>,
+) -> windows::core::Result<IRawElementProviderFragment> {
+    match (child, epoch) {
+        (Some(RootChild::Back), _) => Ok(back_of(shared)),
+        (Some(RootChild::Node(id)), Some(epoch)) => Ok(node_of(shared, epoch, id)),
+        _ => none(),
+    }
+}
+
 fn root_of(shared: &Arc<Shared>) -> IRawElementProviderFragmentRoot {
     RootProvider {
         shared: Arc::clone(shared),
@@ -306,19 +449,23 @@ impl IRawElementProviderFragment_Impl for RootProvider_Impl {
         &self,
         direction: NavigateDirection,
     ) -> windows::core::Result<IRawElementProviderFragment> {
-        let state = self.shared.lock();
-        let Some(epoch) = state.tree.epoch() else {
-            return none();
+        let (epoch, child) = {
+            let state = self.shared.lock();
+            let epoch = state.tree.epoch();
+            let roots: &[u32] = if epoch.is_some() {
+                state.tree.roots()
+            } else {
+                &[]
+            };
+            let children = root_children(state.back.is_some(), roots);
+            let child = match direction {
+                NavigateDirection_FirstChild => children.first().copied(),
+                NavigateDirection_LastChild => children.last().copied(),
+                _ => None,
+            };
+            (epoch, child)
         };
-        let id = match direction {
-            NavigateDirection_FirstChild => state.tree.roots().first().copied(),
-            NavigateDirection_LastChild => state.tree.roots().last().copied(),
-            _ => None,
-        };
-        match id {
-            Some(id) => Ok(node_of(&self.shared, epoch, id)),
-            None => none(),
-        }
+        child_of(&self.shared, epoch, child)
     }
 
     fn GetRuntimeId(&self) -> windows::core::Result<*mut SAFEARRAY> {
@@ -352,6 +499,13 @@ impl IRawElementProviderFragmentRoot_Impl for RootProvider_Impl {
     ) -> windows::core::Result<IRawElementProviderFragment> {
         let (origin, client) = self.shared.client();
         let state = self.shared.lock();
+        // The arrow is drawn over the app's top left, so it is what a point in its cell hits.
+        if let Some(cell) = state.back {
+            if in_cell(cell, x - origin.0 as f64, y - origin.1 as f64) {
+                drop(state);
+                return Ok(back_of(&self.shared));
+            }
+        }
         let Some(epoch) = state.tree.epoch() else {
             return none();
         };
@@ -457,18 +611,33 @@ impl IRawElementProviderFragment_Impl for NodeProvider_Impl {
         &self,
         direction: NavigateDirection,
     ) -> windows::core::Result<IRawElementProviderFragment> {
+        let back = self.shared.lock().back.is_some();
+        // A top-level node's siblings are the root's children, the back arrow among them.
+        let sibling = |tree: &Tree, id: u32, forward: bool| match tree.parent(id) {
+            Some(_) => tree.sibling(id, forward).map(Target::Node),
+            None => match root_sibling(
+                &root_children(back, tree.roots()),
+                RootChild::Node(id),
+                forward,
+            ) {
+                Some(RootChild::Back) => Some(Target::Back),
+                Some(RootChild::Node(id)) => Some(Target::Node(id)),
+                None => None,
+            },
+        };
         let target = self.with_node(|tree, node| match direction {
             NavigateDirection_Parent => {
                 Some(tree.parent(node.id).map_or(Target::Root, Target::Node))
             }
-            NavigateDirection_NextSibling => tree.sibling(node.id, true).map(Target::Node),
-            NavigateDirection_PreviousSibling => tree.sibling(node.id, false).map(Target::Node),
+            NavigateDirection_NextSibling => sibling(tree, node.id, true),
+            NavigateDirection_PreviousSibling => sibling(tree, node.id, false),
             NavigateDirection_FirstChild => node.children.first().copied().map(Target::Node),
             NavigateDirection_LastChild => node.children.last().copied().map(Target::Node),
             _ => None,
         })?;
         match target {
             Some(Target::Root) => Ok(root_of(&self.shared).cast()?),
+            Some(Target::Back) => Ok(back_of(&self.shared)),
             Some(Target::Node(id)) => Ok(node_of(&self.shared, self.epoch, id)),
             None => none(),
         }
@@ -513,7 +682,116 @@ impl IRawElementProviderFragment_Impl for NodeProvider_Impl {
 
 enum Target {
     Root,
+    Back,
     Node(u32),
+}
+
+impl BackProvider {
+    /// The icon's cell while the arrow shows; an error once it is gone.
+    fn cell(&self) -> windows::core::Result<ClientRect> {
+        self.shared.lock().back.ok_or_else(not_available)
+    }
+}
+
+impl IRawElementProviderSimple_Impl for BackProvider_Impl {
+    fn ProviderOptions(&self) -> windows::core::Result<ProviderOptions> {
+        Ok(ProviderOptions_ServerSideProvider)
+    }
+
+    fn GetPatternProvider(&self, pattern: UIA_PATTERN_ID) -> windows::core::Result<IUnknown> {
+        self.cell()?;
+        if pattern == UIA_InvokePatternId {
+            Ok(self.to_interface::<IRawElementProviderSimple>().cast()?)
+        } else {
+            none()
+        }
+    }
+
+    fn GetPropertyValue(&self, property: UIA_PROPERTY_ID) -> windows::core::Result<VARIANT> {
+        self.cell()?;
+        Ok(match property {
+            UIA_ControlTypePropertyId => variant_i4(UIA_ButtonControlTypeId.0),
+            UIA_NamePropertyId => variant_str(display_back_name()),
+            UIA_AutomationIdPropertyId => variant_str("Back"),
+            UIA_IsEnabledPropertyId => variant_bool(true),
+            UIA_IsKeyboardFocusablePropertyId => variant_bool(false),
+            UIA_HasKeyboardFocusPropertyId => variant_bool(false),
+            UIA_IsControlElementPropertyId => variant_bool(true),
+            UIA_IsContentElementPropertyId => variant_bool(true),
+            UIA_IsInvokePatternAvailablePropertyId => variant_bool(true),
+            _ => variant_empty(),
+        })
+    }
+
+    fn HostRawElementProvider(&self) -> windows::core::Result<IRawElementProviderSimple> {
+        none()
+    }
+}
+
+impl IRawElementProviderFragment_Impl for BackProvider_Impl {
+    fn Navigate(
+        &self,
+        direction: NavigateDirection,
+    ) -> windows::core::Result<IRawElementProviderFragment> {
+        if direction == NavigateDirection_Parent {
+            return Ok(root_of(&self.shared).cast()?);
+        }
+        let forward = match direction {
+            NavigateDirection_NextSibling => true,
+            NavigateDirection_PreviousSibling => false,
+            // The button has no children.
+            _ => return none(),
+        };
+        let (epoch, child) = {
+            let state = self.shared.lock();
+            if state.back.is_none() {
+                return Err(not_available());
+            }
+            let epoch = state.tree.epoch();
+            let roots: &[u32] = if epoch.is_some() {
+                state.tree.roots()
+            } else {
+                &[]
+            };
+            let children = root_children(true, roots);
+            (epoch, root_sibling(&children, RootChild::Back, forward))
+        };
+        child_of(&self.shared, epoch, child)
+    }
+
+    fn GetRuntimeId(&self) -> windows::core::Result<*mut SAFEARRAY> {
+        safe_array(&BACK_RUNTIME_ID)
+    }
+
+    fn BoundingRectangle(&self) -> windows::core::Result<UiaRect> {
+        let (left, top, width, height) = self.cell()?;
+        let (origin, _) = self.shared.client();
+        Ok(UiaRect {
+            left: (origin.0 + left) as f64,
+            top: (origin.1 + top) as f64,
+            width: width as f64,
+            height: height as f64,
+        })
+    }
+
+    fn GetEmbeddedFragmentRoots(&self) -> windows::core::Result<*mut SAFEARRAY> {
+        Ok(std::ptr::null_mut())
+    }
+
+    fn SetFocus(&self) -> windows::core::Result<()> {
+        // The arrow takes no keyboard focus, as a caption button does not.
+        Err(invalid_operation())
+    }
+
+    fn FragmentRoot(&self) -> windows::core::Result<IRawElementProviderFragmentRoot> {
+        Ok(root_of(&self.shared))
+    }
+}
+
+impl IInvokeProvider_Impl for BackProvider_Impl {
+    fn Invoke(&self) -> windows::core::Result<()> {
+        self.shared.go_back()
+    }
 }
 
 impl IInvokeProvider_Impl for NodeProvider_Impl {
@@ -645,14 +923,19 @@ pub struct AccessibilityWindow {
     connect: Option<ApiConnect>,
     logger: Option<Arc<CompositorLogger>>,
     task_size: (u32, u32),
+    /// The icon's cell while the title bar shows the back arrow in it.
+    back: Option<ClientRect>,
+    /// Where the back button's Back goes.
+    input: Sender<InputEvent>,
 }
 
 impl AccessibilityWindow {
     /// A window's tree, which watches nothing until a client asks for it. Without `connect`
-    /// the window answers clients with an empty tree.
+    /// the window answers clients with an empty tree. The back button's Back goes to `input`.
     pub fn new(
         task_id: i32,
         task_size: (u32, u32),
+        input: Sender<InputEvent>,
         connect: Option<ApiConnect>,
         logger: Option<Arc<CompositorLogger>>,
     ) -> AccessibilityWindow {
@@ -665,6 +948,28 @@ impl AccessibilityWindow {
             connect,
             logger,
             task_size,
+            back: None,
+            input,
+        }
+    }
+
+    /// Whether the title bar shows the back arrow, by the icon's cell in client pixels, or
+    /// `None` while it does not. A client that reads the window is told the button came,
+    /// went or moved.
+    pub fn set_back(&mut self, hwnd: isize, cell: Option<ClientRect>) {
+        if self.back == cell {
+            return;
+        }
+        self.back = cell;
+        if let Some(shared) = &self.shared {
+            let mut state = shared.lock();
+            let change = back_change(state.back, cell);
+            state.back = cell;
+            if let Some(change) = change {
+                state.back_changes.push(change);
+                drop(state);
+                post_events(hwnd);
+            }
         }
     }
 
@@ -683,12 +988,16 @@ impl AccessibilityWindow {
         let task_size = self.task_size;
         let shared = Arc::new(Shared {
             hwnd,
+            task_id: self.task_id,
             state: Mutex::new(State {
                 tree: Tree::new(),
                 task_size,
                 actions: None,
                 next_request: 0,
                 pending: Vec::new(),
+                back: self.back,
+                back_changes: Vec::new(),
+                input: self.input.clone(),
             }),
         });
         self.shared = Some(Arc::clone(&shared));
@@ -848,15 +1157,25 @@ impl EventTarget {
     /// Raises the UI Automation events of the changes the watch received.
     pub fn raise(&self, hwnd: isize) {
         let shared = Arc::clone(&self.shared);
-        let (pending, epoch) = {
+        let (pending, back_changes, epoch) = {
             let mut state = shared.lock();
-            (std::mem::take(&mut state.pending), state.tree.epoch())
+            (
+                std::mem::take(&mut state.pending),
+                std::mem::take(&mut state.back_changes),
+                state.tree.epoch(),
+            )
         };
+        if pending.is_empty() && back_changes.is_empty() {
+            return;
+        }
         // SAFETY: a plain query.
-        if pending.is_empty() || !unsafe { UiaClientsAreListening() }.as_bool() {
+        if !unsafe { UiaClientsAreListening() }.as_bool() {
             return;
         }
         let root = self.root.clone();
+        for change in back_changes {
+            raise_back(&shared, &root, change);
+        }
         let foreground = {
             use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
             // SAFETY: a plain query.
@@ -1038,6 +1357,47 @@ fn raise(
     }
 }
 
+/// Raises the event of a change to the back button: an added child is raised on itself, a
+/// removed one on its parent with its runtime ID, as UI Automation asks.
+fn raise_back(shared: &Arc<Shared>, root: &IRawElementProviderSimple, change: BackChange) {
+    let mut runtime = BACK_RUNTIME_ID;
+    // SAFETY: UI Automation's event calls, with providers of this window.
+    unsafe {
+        match change {
+            BackChange::Added => {
+                if let Ok(provider) = back_of(shared).cast::<IRawElementProviderSimple>() {
+                    let _ = UiaRaiseStructureChangedEvent(
+                        &provider,
+                        StructureChangeType_ChildAdded,
+                        runtime.as_mut_ptr(),
+                        runtime.len() as i32,
+                    );
+                }
+            }
+            BackChange::Removed => {
+                let _ = UiaRaiseStructureChangedEvent(
+                    root,
+                    StructureChangeType_ChildRemoved,
+                    runtime.as_mut_ptr(),
+                    runtime.len() as i32,
+                );
+            }
+            BackChange::Moved => {
+                if let Ok(provider) = back_of(shared).cast::<IRawElementProviderSimple>() {
+                    let old = variant_empty();
+                    let new = variant_empty();
+                    let _ = UiaRaiseAutomationPropertyChangedEvent(
+                        &provider,
+                        UIA_BoundingRectanglePropertyId,
+                        &old,
+                        &new,
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Frees a VARIANT this module made.
 fn free_variant(mut variant: VARIANT) {
     // SAFETY: a VARIANT made by one of the constructors above, cleared once.
@@ -1191,5 +1551,79 @@ mod tests {
         assert_eq!(Pattern::Scroll.id(), UIA_ScrollPatternId.0);
         assert_eq!(ScrollAmount_LargeIncrement.0, 3);
         assert_eq!(ScrollAmount_SmallDecrement.0, 1);
+    }
+
+    #[test]
+    fn fr22_the_back_arrow_is_a_button_named_back_for_ui_automation() {
+        assert_eq!(back_name(true), "뒤로");
+        assert_eq!(back_name(false), "Back");
+        // The language IDs Windows gives Korean and US English.
+        assert_eq!(back_name(is_korean(0x0412)), "뒤로");
+        assert_eq!(back_name(is_korean(0x0409)), "Back");
+    }
+
+    #[test]
+    fn fr22_the_back_button_is_the_roots_first_child_while_the_arrow_shows() {
+        assert_eq!(
+            root_children(true, &[7, 9]),
+            vec![RootChild::Back, RootChild::Node(7), RootChild::Node(9)]
+        );
+        assert_eq!(root_children(true, &[]), vec![RootChild::Back]);
+        assert_eq!(
+            root_children(false, &[7, 9]),
+            vec![RootChild::Node(7), RootChild::Node(9)]
+        );
+        assert!(root_children(false, &[]).is_empty());
+    }
+
+    #[test]
+    fn fr22_the_back_button_and_the_tasks_nodes_are_siblings() {
+        let children = root_children(true, &[7, 9]);
+        assert_eq!(
+            root_sibling(&children, RootChild::Back, true),
+            Some(RootChild::Node(7))
+        );
+        assert_eq!(root_sibling(&children, RootChild::Back, false), None);
+        assert_eq!(
+            root_sibling(&children, RootChild::Node(7), false),
+            Some(RootChild::Back)
+        );
+        assert_eq!(
+            root_sibling(&children, RootChild::Node(7), true),
+            Some(RootChild::Node(9))
+        );
+        assert_eq!(root_sibling(&children, RootChild::Node(9), true), None);
+        // Without the arrow the first node has nothing before it.
+        let children = root_children(false, &[7, 9]);
+        assert_eq!(root_sibling(&children, RootChild::Node(7), false), None);
+        assert_eq!(root_sibling(&children, RootChild::Back, true), None);
+    }
+
+    #[test]
+    fn fr22_a_point_in_the_icons_cell_hits_the_back_button() {
+        let cell = (4, 0, 40, 32);
+        assert!(in_cell(cell, 4.0, 0.0));
+        assert!(in_cell(cell, 43.5, 31.5));
+        assert!(!in_cell(cell, 44.0, 10.0));
+        assert!(!in_cell(cell, 3.9, 10.0));
+        assert!(!in_cell(cell, 10.0, 32.0));
+    }
+
+    #[test]
+    fn fr22_the_back_button_comes_and_goes_with_the_arrow() {
+        let cell = (4, 0, 40, 32);
+        assert_eq!(back_change(None, Some(cell)), Some(BackChange::Added));
+        assert_eq!(back_change(Some(cell), None), Some(BackChange::Removed));
+        assert_eq!(
+            back_change(Some(cell), Some((6, 0, 50, 40))),
+            Some(BackChange::Moved)
+        );
+        assert_eq!(back_change(Some(cell), Some(cell)), None);
+        assert_eq!(back_change(None, None), None);
+    }
+
+    #[test]
+    fn fr22_the_back_buttons_runtime_id_cannot_equal_a_nodes() {
+        assert_ne!(BACK_RUNTIME_ID.len(), runtime_id(0, 0).len());
     }
 }
