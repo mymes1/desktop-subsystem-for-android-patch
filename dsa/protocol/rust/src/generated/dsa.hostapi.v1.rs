@@ -1566,6 +1566,94 @@ pub struct ArmTranslation {
     #[prost(bool, tag = "7")]
     pub restart_needed: bool,
 }
+/// The Google apps package a user installed: LiteGapps' Core build for their Android, which the
+/// service downloaded from LiteGapps' file host.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsPackage {
+    /// LiteGapps' name for the build: "core".
+    #[prost(string, tag = "1")]
+    pub variant: ::prost::alloc::string::String,
+    /// The build's date, yyyymmdd, from its file name.
+    #[prost(string, tag = "2")]
+    pub version: ::prost::alloc::string::String,
+    /// The Android version the build is for, as LiteGapps names it ("16.0").
+    #[prost(string, tag = "3")]
+    pub android_version: ::prost::alloc::string::String,
+    /// The Android API level the build is for.
+    #[prost(uint32, tag = "4")]
+    pub sdk: u32,
+    /// The processor architecture the build is for, as LiteGapps names it ("x86_64", "arm64").
+    #[prost(string, tag = "5")]
+    pub arch: ::prost::alloc::string::String,
+    /// The file the service downloaded.
+    #[prost(string, tag = "6")]
+    pub file: ::prost::alloc::string::String,
+    /// Where it downloaded it from.
+    #[prost(string, tag = "7")]
+    pub source: ::prost::alloc::string::String,
+    /// The MD5 digest the file host published for it, which the download matched.
+    #[prost(string, tag = "8")]
+    pub md5: ::prost::alloc::string::String,
+}
+/// Installs Google Play for the caller's Android: the service finds the newest LiteGapps Core
+/// build for the Android version and architecture the running Android reports, downloads it,
+/// checks it, makes a system image of its apps and permission files, and sends the image to
+/// the caller's Android, which lays it over its system from its next start. While it works it
+/// answers the request id with GappsProgress, as often as there is news; it then answers once
+/// more with Gapps, or an error. The connection then ends. Android must be running.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct InstallGapps {}
+/// Asks where Google Play stands for the caller. Answered with Gapps.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetGapps {}
+/// Removes the caller's Google apps. Answered with Gapps. Android goes on using an image it
+/// has mounted until it restarts.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RemoveGapps {}
+/// News of an InstallGapps under way.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsProgress {
+    #[prost(enumeration = "GappsStage", tag = "1")]
+    pub stage: i32,
+    #[prost(uint64, tag = "2")]
+    pub done: u64,
+    /// 0 when not known.
+    #[prost(uint64, tag = "3")]
+    pub total: u64,
+}
+/// Where Google Play stands for the caller.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Gapps {
+    /// The installed package; absent when there is none.
+    #[prost(message, optional, tag = "1")]
+    pub package: ::core::option::Option<GappsPackage>,
+    /// Whether the running Android was asked, and answered: the fields below up to device_id
+    /// hold only then.
+    #[prost(bool, tag = "2")]
+    pub guest_known: bool,
+    /// The Google apps image is on the user's Android disk.
+    #[prost(bool, tag = "3")]
+    pub guest_installed: bool,
+    /// The running Android has the Google apps laid over its system.
+    #[prost(bool, tag = "4")]
+    pub guest_active: bool,
+    /// The running Android's API level and primary ABI.
+    #[prost(uint32, tag = "5")]
+    pub sdk: u32,
+    #[prost(string, tag = "6")]
+    pub abi: ::prost::alloc::string::String,
+    /// The ABIs the running Android installs apps for, in the order it prefers them.
+    #[prost(string, tag = "7")]
+    pub abilist: ::prost::alloc::string::String,
+    /// The running Android's Google Services Framework Android ID, in decimal, which Google's
+    /// page for uncertified devices asks for; empty until Google's apps have one.
+    #[prost(string, tag = "8")]
+    pub device_id: ::prost::alloc::string::String,
+    /// What is installed differs from what the running Android booted with, so it applies once
+    /// Android starts again.
+    #[prost(bool, tag = "9")]
+    pub restart_needed: bool,
+}
 /// Asks for the device identity of the caller's Android.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetDeviceIdentity {}
@@ -1908,7 +1996,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 400, 401, 402"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2040,6 +2128,12 @@ pub mod request {
         GetAndroidVersions(super::GetAndroidVersions),
         #[prost(message, tag = "331")]
         UseAndroidVersion(super::UseAndroidVersion),
+        #[prost(message, tag = "400")]
+        InstallGapps(super::InstallGapps),
+        #[prost(message, tag = "401")]
+        GetGapps(super::GetGapps),
+        #[prost(message, tag = "402")]
+        RemoveGapps(super::RemoveGapps),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2048,7 +2142,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 400, 401"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -2102,6 +2196,10 @@ pub mod response {
         DragData(super::DragData),
         #[prost(message, tag = "330")]
         AndroidVersions(super::AndroidVersions),
+        #[prost(message, tag = "400")]
+        Gapps(super::Gapps),
+        #[prost(message, tag = "401")]
+        GappsProgress(super::GappsProgress),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -2843,6 +2941,46 @@ impl StatusBarAppearance {
             "STATUS_BAR_APPEARANCE_UNSPECIFIED" => Some(Self::Unspecified),
             "STATUS_BAR_APPEARANCE_LIGHT" => Some(Self::Light),
             "STATUS_BAR_APPEARANCE_DARK" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+}
+/// What an InstallGapps is doing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum GappsStage {
+    Unspecified = 0,
+    /// Reading the file host's list of builds.
+    Listing = 1,
+    /// Downloading the build: `done` of `total` bytes.
+    Downloading = 2,
+    /// Checking the build and making the system image.
+    Building = 3,
+    /// Sending the image to Android: `done` of `total` bytes.
+    Sending = 4,
+}
+impl GappsStage {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "GAPPS_STAGE_UNSPECIFIED",
+            Self::Listing => "GAPPS_STAGE_LISTING",
+            Self::Downloading => "GAPPS_STAGE_DOWNLOADING",
+            Self::Building => "GAPPS_STAGE_BUILDING",
+            Self::Sending => "GAPPS_STAGE_SENDING",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "GAPPS_STAGE_UNSPECIFIED" => Some(Self::Unspecified),
+            "GAPPS_STAGE_LISTING" => Some(Self::Listing),
+            "GAPPS_STAGE_DOWNLOADING" => Some(Self::Downloading),
+            "GAPPS_STAGE_BUILDING" => Some(Self::Building),
+            "GAPPS_STAGE_SENDING" => Some(Self::Sending),
             _ => None,
         }
     }

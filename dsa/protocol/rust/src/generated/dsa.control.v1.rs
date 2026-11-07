@@ -667,6 +667,86 @@ pub struct ArmTranslationState {
     #[prost(string, tag = "7")]
     pub abilist: ::prost::alloc::string::String,
 }
+/// Host to guest, to the control daemon: the system image (erofs) of the Google apps the user
+/// chose to install follows in GappsChunk messages of the same `transfer_id`, in order. The
+/// daemon keeps it on the user's disk as it keeps an ARM translation package's image: beside
+/// any image already there, checked for its length and SHA-256 once all `size` bytes have
+/// arrived, and only then in the old one's place. It answers each chunk with GappsState. The
+/// guest lays the image over its product and system_ext partitions from its next boot, when
+/// the host says one is installed. One transfer at a time; a new one drops an unfinished one.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsInstall {
+    #[prost(uint32, tag = "1")]
+    pub transfer_id: u32,
+    #[prost(uint64, tag = "2")]
+    pub size: u64,
+    /// The SHA-256 digest of the whole image.
+    #[prost(bytes = "vec", tag = "3")]
+    pub sha256: ::prost::alloc::vec::Vec<u8>,
+}
+/// Host to guest: part of the image a GappsInstall announced.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsChunk {
+    #[prost(uint32, tag = "1")]
+    pub transfer_id: u32,
+    /// Where `data` starts in the image.
+    #[prost(uint64, tag = "2")]
+    pub offset: u64,
+    #[prost(bytes = "vec", tag = "3")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+}
+/// Host to guest, to the control daemon: remove the Google apps image. The guest goes on using
+/// an image it has mounted until it restarts. Answered with GappsState.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsRemove {}
+/// Host to guest, to the control daemon: asks for GappsState.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsQuery {}
+/// Guest to host, from the control daemon: where the Google apps stand in the guest. It answers
+/// each of the messages above.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsState {
+    /// The transfer this answers, or 0.
+    #[prost(uint32, tag = "1")]
+    pub transfer_id: u32,
+    /// How many bytes of that transfer the daemon has written.
+    #[prost(uint64, tag = "2")]
+    pub received: u64,
+    /// The transfer is complete and its image checked and in place.
+    #[prost(bool, tag = "3")]
+    pub done: bool,
+    /// Non-empty when the transfer or the removal failed: why, in words a person can act on. A
+    /// failed transfer leaves the image that was there before.
+    #[prost(string, tag = "4")]
+    pub error: ::prost::alloc::string::String,
+    /// A Google apps image is on the user's disk.
+    #[prost(bool, tag = "5")]
+    pub installed: bool,
+    /// This boot runs with the image laid over the system.
+    #[prost(bool, tag = "6")]
+    pub active: bool,
+    /// The guest's API level (ro.build.version.sdk), which the image must be built for.
+    #[prost(uint32, tag = "7")]
+    pub sdk: u32,
+    /// The guest's primary ABI (ro.product.cpu.abi), which the image must be built for.
+    #[prost(string, tag = "8")]
+    pub abi: ::prost::alloc::string::String,
+    /// The ABIs the package manager installs apps for, in the order it prefers them
+    /// (ro.product.cpu.abilist).
+    #[prost(string, tag = "9")]
+    pub abilist: ::prost::alloc::string::String,
+}
+/// Host to guest, to the agent: asks for GoogleDeviceId.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GoogleDeviceIdQuery {}
+/// Guest to host, from the agent: the Google Services Framework Android ID, which Google's page
+/// for uncertified devices asks for, in decimal; empty while Google's apps are not installed or
+/// have not made one yet. It answers GoogleDeviceIdQuery.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GoogleDeviceId {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+}
 /// Guest to host, from the agent: a notification an app posted, or a new version of one it
 /// posted before under the same key, which replaces it. Only notifications a person would see
 /// come: not the ongoing notice of a foreground service, and not a group's summary, whose
@@ -2143,7 +2223,7 @@ pub struct GamepadRumble {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2227,6 +2307,20 @@ pub mod envelope {
         ArmTranslationQuery(super::ArmTranslationQuery),
         #[prost(message, tag = "154")]
         ArmTranslationState(super::ArmTranslationState),
+        #[prost(message, tag = "400")]
+        GappsInstall(super::GappsInstall),
+        #[prost(message, tag = "401")]
+        GappsChunk(super::GappsChunk),
+        #[prost(message, tag = "402")]
+        GappsRemove(super::GappsRemove),
+        #[prost(message, tag = "403")]
+        GappsQuery(super::GappsQuery),
+        #[prost(message, tag = "404")]
+        GappsState(super::GappsState),
+        #[prost(message, tag = "405")]
+        GoogleDeviceIdQuery(super::GoogleDeviceIdQuery),
+        #[prost(message, tag = "406")]
+        GoogleDeviceId(super::GoogleDeviceId),
         #[prost(message, tag = "42")]
         DeviceIdle(super::DeviceIdle),
         #[prost(message, tag = "43")]
