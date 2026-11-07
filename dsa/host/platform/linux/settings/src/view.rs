@@ -537,7 +537,11 @@ pub fn gapps_status(gapps: &Gapps) -> String {
 pub fn gapps_source(gapps: &Gapps) -> String {
     match &gapps.package {
         Some(p) => {
-            let file = if p.file.is_empty() { &p.source } else { &p.file };
+            let file = if p.file.is_empty() {
+                &p.source
+            } else {
+                &p.file
+            };
             trf("Downloaded from the LiteGapps project: {0}", &[file])
         }
         None => String::new(),

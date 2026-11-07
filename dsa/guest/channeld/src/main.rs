@@ -544,7 +544,10 @@ mod daemon {
                     arm_translation::DIR,
                     BootFacts::of_system(|| read_property("ro.product.cpu.abilist")),
                 )))
-                .on_gapps(Arc::new(Gapps::new(gapps::DIR, GuestFacts::of_system(read_property))))
+                .on_gapps(Arc::new(Gapps::new(
+                    gapps::DIR,
+                    GuestFacts::of_system(read_property),
+                )))
                 .on_gamepads(gamepads),
         );
         let (to_guest, from_host) = mpsc::channel::<Vec<u8>>();

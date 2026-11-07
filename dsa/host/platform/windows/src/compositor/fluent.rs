@@ -534,8 +534,8 @@ pub mod text {
         CreateCompatibleDC, CreateDIBSection, CreateFontIndirectW, DeleteDC, DeleteObject,
         DrawTextW, GdiFlush, GetTextExtentPoint32W, GetTextFaceW, SelectObject, SetBkMode,
         SetTextColor, ANTIALIASED_QUALITY, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DEFAULT_CHARSET,
-        DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER,
-        HDC, HFONT, LOGFONTW, TRANSPARENT,
+        DIB_RGB_COLORS, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_NOPREFIX, DT_SINGLELINE,
+        DT_VCENTER, HDC, HFONT, LOGFONTW, TRANSPARENT,
     };
 
     /// The faces text is written in, the first one installed winning: Segoe UI Variable at

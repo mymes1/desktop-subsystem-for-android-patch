@@ -228,6 +228,27 @@ extern GamepadRumbleDefaultTypeInternal _GamepadRumble_default_instance_;
 class GamepadState;
 struct GamepadStateDefaultTypeInternal;
 extern GamepadStateDefaultTypeInternal _GamepadState_default_instance_;
+class GappsChunk;
+struct GappsChunkDefaultTypeInternal;
+extern GappsChunkDefaultTypeInternal _GappsChunk_default_instance_;
+class GappsInstall;
+struct GappsInstallDefaultTypeInternal;
+extern GappsInstallDefaultTypeInternal _GappsInstall_default_instance_;
+class GappsQuery;
+struct GappsQueryDefaultTypeInternal;
+extern GappsQueryDefaultTypeInternal _GappsQuery_default_instance_;
+class GappsRemove;
+struct GappsRemoveDefaultTypeInternal;
+extern GappsRemoveDefaultTypeInternal _GappsRemove_default_instance_;
+class GappsState;
+struct GappsStateDefaultTypeInternal;
+extern GappsStateDefaultTypeInternal _GappsState_default_instance_;
+class GoogleDeviceId;
+struct GoogleDeviceIdDefaultTypeInternal;
+extern GoogleDeviceIdDefaultTypeInternal _GoogleDeviceId_default_instance_;
+class GoogleDeviceIdQuery;
+struct GoogleDeviceIdQueryDefaultTypeInternal;
+extern GoogleDeviceIdQueryDefaultTypeInternal _GoogleDeviceIdQuery_default_instance_;
 class GuestBoot;
 struct GuestBootDefaultTypeInternal;
 extern GuestBootDefaultTypeInternal _GuestBoot_default_instance_;
@@ -554,6 +575,13 @@ template<> ::dsa::control::v1::GamepadConnected* Arena::CreateMaybeMessage<::dsa
 template<> ::dsa::control::v1::GamepadDisconnected* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadDisconnected>(Arena*);
 template<> ::dsa::control::v1::GamepadRumble* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadRumble>(Arena*);
 template<> ::dsa::control::v1::GamepadState* Arena::CreateMaybeMessage<::dsa::control::v1::GamepadState>(Arena*);
+template<> ::dsa::control::v1::GappsChunk* Arena::CreateMaybeMessage<::dsa::control::v1::GappsChunk>(Arena*);
+template<> ::dsa::control::v1::GappsInstall* Arena::CreateMaybeMessage<::dsa::control::v1::GappsInstall>(Arena*);
+template<> ::dsa::control::v1::GappsQuery* Arena::CreateMaybeMessage<::dsa::control::v1::GappsQuery>(Arena*);
+template<> ::dsa::control::v1::GappsRemove* Arena::CreateMaybeMessage<::dsa::control::v1::GappsRemove>(Arena*);
+template<> ::dsa::control::v1::GappsState* Arena::CreateMaybeMessage<::dsa::control::v1::GappsState>(Arena*);
+template<> ::dsa::control::v1::GoogleDeviceId* Arena::CreateMaybeMessage<::dsa::control::v1::GoogleDeviceId>(Arena*);
+template<> ::dsa::control::v1::GoogleDeviceIdQuery* Arena::CreateMaybeMessage<::dsa::control::v1::GoogleDeviceIdQuery>(Arena*);
 template<> ::dsa::control::v1::GuestBoot* Arena::CreateMaybeMessage<::dsa::control::v1::GuestBoot>(Arena*);
 template<> ::dsa::control::v1::GuestMemory* Arena::CreateMaybeMessage<::dsa::control::v1::GuestMemory>(Arena*);
 template<> ::dsa::control::v1::GuestMemoryPressure* Arena::CreateMaybeMessage<::dsa::control::v1::GuestMemoryPressure>(Arena*);
@@ -8574,6 +8602,1039 @@ class ArmTranslationState final :
 };
 // -------------------------------------------------------------------
 
+class GappsInstall final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GappsInstall) */ {
+ public:
+  inline GappsInstall() : GappsInstall(nullptr) {}
+  ~GappsInstall() override;
+  explicit PROTOBUF_CONSTEXPR GappsInstall(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GappsInstall(const GappsInstall& from);
+  GappsInstall(GappsInstall&& from) noexcept
+    : GappsInstall() {
+    *this = ::std::move(from);
+  }
+
+  inline GappsInstall& operator=(const GappsInstall& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GappsInstall& operator=(GappsInstall&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GappsInstall& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GappsInstall* internal_default_instance() {
+    return reinterpret_cast<const GappsInstall*>(
+               &_GappsInstall_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    47;
+
+  friend void swap(GappsInstall& a, GappsInstall& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GappsInstall* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GappsInstall* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GappsInstall* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GappsInstall>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GappsInstall& from);
+  void MergeFrom(const GappsInstall& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GappsInstall* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GappsInstall";
+  }
+  protected:
+  explicit GappsInstall(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kSha256FieldNumber = 3,
+    kSizeFieldNumber = 2,
+    kTransferIdFieldNumber = 1,
+  };
+  // bytes sha256 = 3;
+  void clear_sha256();
+  const std::string& sha256() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_sha256(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_sha256();
+  PROTOBUF_NODISCARD std::string* release_sha256();
+  void set_allocated_sha256(std::string* sha256);
+  private:
+  const std::string& _internal_sha256() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_sha256(const std::string& value);
+  std::string* _internal_mutable_sha256();
+  public:
+
+  // uint64 size = 2;
+  void clear_size();
+  uint64_t size() const;
+  void set_size(uint64_t value);
+  private:
+  uint64_t _internal_size() const;
+  void _internal_set_size(uint64_t value);
+  public:
+
+  // uint32 transfer_id = 1;
+  void clear_transfer_id();
+  uint32_t transfer_id() const;
+  void set_transfer_id(uint32_t value);
+  private:
+  uint32_t _internal_transfer_id() const;
+  void _internal_set_transfer_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GappsInstall)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr sha256_;
+    uint64_t size_;
+    uint32_t transfer_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GappsChunk final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GappsChunk) */ {
+ public:
+  inline GappsChunk() : GappsChunk(nullptr) {}
+  ~GappsChunk() override;
+  explicit PROTOBUF_CONSTEXPR GappsChunk(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GappsChunk(const GappsChunk& from);
+  GappsChunk(GappsChunk&& from) noexcept
+    : GappsChunk() {
+    *this = ::std::move(from);
+  }
+
+  inline GappsChunk& operator=(const GappsChunk& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GappsChunk& operator=(GappsChunk&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GappsChunk& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GappsChunk* internal_default_instance() {
+    return reinterpret_cast<const GappsChunk*>(
+               &_GappsChunk_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    48;
+
+  friend void swap(GappsChunk& a, GappsChunk& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GappsChunk* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GappsChunk* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GappsChunk* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GappsChunk>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GappsChunk& from);
+  void MergeFrom(const GappsChunk& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GappsChunk* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GappsChunk";
+  }
+  protected:
+  explicit GappsChunk(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kDataFieldNumber = 3,
+    kOffsetFieldNumber = 2,
+    kTransferIdFieldNumber = 1,
+  };
+  // bytes data = 3;
+  void clear_data();
+  const std::string& data() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_data(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_data();
+  PROTOBUF_NODISCARD std::string* release_data();
+  void set_allocated_data(std::string* data);
+  private:
+  const std::string& _internal_data() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_data(const std::string& value);
+  std::string* _internal_mutable_data();
+  public:
+
+  // uint64 offset = 2;
+  void clear_offset();
+  uint64_t offset() const;
+  void set_offset(uint64_t value);
+  private:
+  uint64_t _internal_offset() const;
+  void _internal_set_offset(uint64_t value);
+  public:
+
+  // uint32 transfer_id = 1;
+  void clear_transfer_id();
+  uint32_t transfer_id() const;
+  void set_transfer_id(uint32_t value);
+  private:
+  uint32_t _internal_transfer_id() const;
+  void _internal_set_transfer_id(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GappsChunk)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr data_;
+    uint64_t offset_;
+    uint32_t transfer_id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GappsRemove final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GappsRemove) */ {
+ public:
+  inline GappsRemove() : GappsRemove(nullptr) {}
+  ~GappsRemove() override;
+  explicit PROTOBUF_CONSTEXPR GappsRemove(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GappsRemove(const GappsRemove& from);
+  GappsRemove(GappsRemove&& from) noexcept
+    : GappsRemove() {
+    *this = ::std::move(from);
+  }
+
+  inline GappsRemove& operator=(const GappsRemove& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GappsRemove& operator=(GappsRemove&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GappsRemove& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GappsRemove* internal_default_instance() {
+    return reinterpret_cast<const GappsRemove*>(
+               &_GappsRemove_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    49;
+
+  friend void swap(GappsRemove& a, GappsRemove& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GappsRemove* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GappsRemove* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GappsRemove* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GappsRemove>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GappsRemove& from);
+  void MergeFrom(const GappsRemove& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GappsRemove* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GappsRemove";
+  }
+  protected:
+  explicit GappsRemove(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GappsRemove)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GappsQuery final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GappsQuery) */ {
+ public:
+  inline GappsQuery() : GappsQuery(nullptr) {}
+  ~GappsQuery() override;
+  explicit PROTOBUF_CONSTEXPR GappsQuery(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GappsQuery(const GappsQuery& from);
+  GappsQuery(GappsQuery&& from) noexcept
+    : GappsQuery() {
+    *this = ::std::move(from);
+  }
+
+  inline GappsQuery& operator=(const GappsQuery& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GappsQuery& operator=(GappsQuery&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GappsQuery& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GappsQuery* internal_default_instance() {
+    return reinterpret_cast<const GappsQuery*>(
+               &_GappsQuery_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    50;
+
+  friend void swap(GappsQuery& a, GappsQuery& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GappsQuery* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GappsQuery* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GappsQuery* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GappsQuery>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GappsQuery& from);
+  void MergeFrom(const GappsQuery& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GappsQuery* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GappsQuery";
+  }
+  protected:
+  explicit GappsQuery(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GappsQuery)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GappsState final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GappsState) */ {
+ public:
+  inline GappsState() : GappsState(nullptr) {}
+  ~GappsState() override;
+  explicit PROTOBUF_CONSTEXPR GappsState(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GappsState(const GappsState& from);
+  GappsState(GappsState&& from) noexcept
+    : GappsState() {
+    *this = ::std::move(from);
+  }
+
+  inline GappsState& operator=(const GappsState& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GappsState& operator=(GappsState&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GappsState& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GappsState* internal_default_instance() {
+    return reinterpret_cast<const GappsState*>(
+               &_GappsState_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    51;
+
+  friend void swap(GappsState& a, GappsState& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GappsState* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GappsState* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GappsState* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GappsState>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GappsState& from);
+  void MergeFrom(const GappsState& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GappsState* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GappsState";
+  }
+  protected:
+  explicit GappsState(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kErrorFieldNumber = 4,
+    kAbiFieldNumber = 8,
+    kAbilistFieldNumber = 9,
+    kReceivedFieldNumber = 2,
+    kTransferIdFieldNumber = 1,
+    kDoneFieldNumber = 3,
+    kInstalledFieldNumber = 5,
+    kActiveFieldNumber = 6,
+    kSdkFieldNumber = 7,
+  };
+  // string error = 4;
+  void clear_error();
+  const std::string& error() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_error(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_error();
+  PROTOBUF_NODISCARD std::string* release_error();
+  void set_allocated_error(std::string* error);
+  private:
+  const std::string& _internal_error() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_error(const std::string& value);
+  std::string* _internal_mutable_error();
+  public:
+
+  // string abi = 8;
+  void clear_abi();
+  const std::string& abi() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_abi(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_abi();
+  PROTOBUF_NODISCARD std::string* release_abi();
+  void set_allocated_abi(std::string* abi);
+  private:
+  const std::string& _internal_abi() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_abi(const std::string& value);
+  std::string* _internal_mutable_abi();
+  public:
+
+  // string abilist = 9;
+  void clear_abilist();
+  const std::string& abilist() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_abilist(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_abilist();
+  PROTOBUF_NODISCARD std::string* release_abilist();
+  void set_allocated_abilist(std::string* abilist);
+  private:
+  const std::string& _internal_abilist() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_abilist(const std::string& value);
+  std::string* _internal_mutable_abilist();
+  public:
+
+  // uint64 received = 2;
+  void clear_received();
+  uint64_t received() const;
+  void set_received(uint64_t value);
+  private:
+  uint64_t _internal_received() const;
+  void _internal_set_received(uint64_t value);
+  public:
+
+  // uint32 transfer_id = 1;
+  void clear_transfer_id();
+  uint32_t transfer_id() const;
+  void set_transfer_id(uint32_t value);
+  private:
+  uint32_t _internal_transfer_id() const;
+  void _internal_set_transfer_id(uint32_t value);
+  public:
+
+  // bool done = 3;
+  void clear_done();
+  bool done() const;
+  void set_done(bool value);
+  private:
+  bool _internal_done() const;
+  void _internal_set_done(bool value);
+  public:
+
+  // bool installed = 5;
+  void clear_installed();
+  bool installed() const;
+  void set_installed(bool value);
+  private:
+  bool _internal_installed() const;
+  void _internal_set_installed(bool value);
+  public:
+
+  // bool active = 6;
+  void clear_active();
+  bool active() const;
+  void set_active(bool value);
+  private:
+  bool _internal_active() const;
+  void _internal_set_active(bool value);
+  public:
+
+  // uint32 sdk = 7;
+  void clear_sdk();
+  uint32_t sdk() const;
+  void set_sdk(uint32_t value);
+  private:
+  uint32_t _internal_sdk() const;
+  void _internal_set_sdk(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GappsState)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr error_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr abi_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr abilist_;
+    uint64_t received_;
+    uint32_t transfer_id_;
+    bool done_;
+    bool installed_;
+    bool active_;
+    uint32_t sdk_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GoogleDeviceIdQuery final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GoogleDeviceIdQuery) */ {
+ public:
+  inline GoogleDeviceIdQuery() : GoogleDeviceIdQuery(nullptr) {}
+  ~GoogleDeviceIdQuery() override;
+  explicit PROTOBUF_CONSTEXPR GoogleDeviceIdQuery(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GoogleDeviceIdQuery(const GoogleDeviceIdQuery& from);
+  GoogleDeviceIdQuery(GoogleDeviceIdQuery&& from) noexcept
+    : GoogleDeviceIdQuery() {
+    *this = ::std::move(from);
+  }
+
+  inline GoogleDeviceIdQuery& operator=(const GoogleDeviceIdQuery& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GoogleDeviceIdQuery& operator=(GoogleDeviceIdQuery&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GoogleDeviceIdQuery& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GoogleDeviceIdQuery* internal_default_instance() {
+    return reinterpret_cast<const GoogleDeviceIdQuery*>(
+               &_GoogleDeviceIdQuery_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    52;
+
+  friend void swap(GoogleDeviceIdQuery& a, GoogleDeviceIdQuery& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GoogleDeviceIdQuery* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GoogleDeviceIdQuery* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GoogleDeviceIdQuery* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GoogleDeviceIdQuery>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GoogleDeviceIdQuery& from);
+  void MergeFrom(const GoogleDeviceIdQuery& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GoogleDeviceIdQuery* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GoogleDeviceIdQuery";
+  }
+  protected:
+  explicit GoogleDeviceIdQuery(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GoogleDeviceIdQuery)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
+class GoogleDeviceId final :
+    public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GoogleDeviceId) */ {
+ public:
+  inline GoogleDeviceId() : GoogleDeviceId(nullptr) {}
+  ~GoogleDeviceId() override;
+  explicit PROTOBUF_CONSTEXPR GoogleDeviceId(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  GoogleDeviceId(const GoogleDeviceId& from);
+  GoogleDeviceId(GoogleDeviceId&& from) noexcept
+    : GoogleDeviceId() {
+    *this = ::std::move(from);
+  }
+
+  inline GoogleDeviceId& operator=(const GoogleDeviceId& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GoogleDeviceId& operator=(GoogleDeviceId&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const GoogleDeviceId& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const GoogleDeviceId* internal_default_instance() {
+    return reinterpret_cast<const GoogleDeviceId*>(
+               &_GoogleDeviceId_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    53;
+
+  friend void swap(GoogleDeviceId& a, GoogleDeviceId& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(GoogleDeviceId* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GoogleDeviceId* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  GoogleDeviceId* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<GoogleDeviceId>(arena);
+  }
+  void CheckTypeAndMergeFrom(const ::PROTOBUF_NAMESPACE_ID::MessageLite& from)  final;
+  void CopyFrom(const GoogleDeviceId& from);
+  void MergeFrom(const GoogleDeviceId& from);
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _impl_._cached_size_.Get(); }
+
+  private:
+  void SharedCtor(::PROTOBUF_NAMESPACE_ID::Arena* arena, bool is_message_owned);
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(GoogleDeviceId* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "dsa.control.v1.GoogleDeviceId";
+  }
+  protected:
+  explicit GoogleDeviceId(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  public:
+
+  std::string GetTypeName() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kIdFieldNumber = 1,
+  };
+  // string id = 1;
+  void clear_id();
+  const std::string& id() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_id(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_id();
+  PROTOBUF_NODISCARD std::string* release_id();
+  void set_allocated_id(std::string* id);
+  private:
+  const std::string& _internal_id() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_id(const std::string& value);
+  std::string* _internal_mutable_id();
+  public:
+
+  // @@protoc_insertion_point(class_scope:dsa.control.v1.GoogleDeviceId)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  struct Impl_ {
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr id_;
+    mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_control_2eproto;
+};
+// -------------------------------------------------------------------
+
 class GuestNotification final :
     public ::PROTOBUF_NAMESPACE_ID::MessageLite /* @@protoc_insertion_point(class_definition:dsa.control.v1.GuestNotification) */ {
  public:
@@ -8613,7 +9674,7 @@ class GuestNotification final :
                &_GuestNotification_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    47;
+    54;
 
   friend void swap(GuestNotification& a, GuestNotification& b) {
     a.Swap(&b);
@@ -8872,7 +9933,7 @@ class NotificationRemoved final :
                &_NotificationRemoved_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    48;
+    55;
 
   friend void swap(NotificationRemoved& a, NotificationRemoved& b) {
     a.Swap(&b);
@@ -9007,7 +10068,7 @@ class NotificationClicked final :
                &_NotificationClicked_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    49;
+    56;
 
   friend void swap(NotificationClicked& a, NotificationClicked& b) {
     a.Swap(&b);
@@ -9142,7 +10203,7 @@ class NotificationDismissed final :
                &_NotificationDismissed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    50;
+    57;
 
   friend void swap(NotificationDismissed& a, NotificationDismissed& b) {
     a.Swap(&b);
@@ -9277,7 +10338,7 @@ class BackgroundApp final :
                &_BackgroundApp_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    51;
+    58;
 
   friend void swap(BackgroundApp& a, BackgroundApp& b) {
     a.Swap(&b);
@@ -9502,7 +10563,7 @@ class BackgroundAppGone final :
                &_BackgroundAppGone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    52;
+    59;
 
   friend void swap(BackgroundAppGone& a, BackgroundAppGone& b) {
     a.Swap(&b);
@@ -9637,7 +10698,7 @@ class BackgroundAppAction final :
                &_BackgroundAppAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    53;
+    60;
 
   friend void swap(BackgroundAppAction& a, BackgroundAppAction& b) {
     a.Swap(&b);
@@ -9794,7 +10855,7 @@ class MediaSession final :
                &_MediaSession_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    54;
+    61;
 
   friend void swap(MediaSession& a, MediaSession& b) {
     a.Swap(&b);
@@ -10064,7 +11125,7 @@ class MediaSessionGone final :
                &_MediaSessionGone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    55;
+    62;
 
   friend void swap(MediaSessionGone& a, MediaSessionGone& b) {
     a.Swap(&b);
@@ -10199,7 +11260,7 @@ class MediaControl final :
                &_MediaControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    56;
+    63;
 
   friend void swap(MediaControl& a, MediaControl& b) {
     a.Swap(&b);
@@ -10345,7 +11406,7 @@ class RequestGuestMemory final :
                &_RequestGuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    57;
+    64;
 
   friend void swap(RequestGuestMemory& a, RequestGuestMemory& b) {
     a.Swap(&b);
@@ -10462,7 +11523,7 @@ class ProcessMemory final :
                &_ProcessMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    58;
+    65;
 
   friend void swap(ProcessMemory& a, ProcessMemory& b) {
     a.Swap(&b);
@@ -10630,7 +11691,7 @@ class GuestMemory final :
                &_GuestMemory_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    59;
+    66;
 
   friend void swap(GuestMemory& a, GuestMemory& b) {
     a.Swap(&b);
@@ -11000,7 +12061,7 @@ class AgentConnected final :
                &_AgentConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    60;
+    67;
 
   friend void swap(AgentConnected& a, AgentConnected& b) {
     a.Swap(&b);
@@ -11117,7 +12178,7 @@ class GuestBoot final :
                &_GuestBoot_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    61;
+    68;
 
   friend void swap(GuestBoot& a, GuestBoot& b) {
     a.Swap(&b);
@@ -11258,7 +12319,7 @@ class InstallApk final :
                &_InstallApk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    62;
+    69;
 
   friend void swap(InstallApk& a, InstallApk& b) {
     a.Swap(&b);
@@ -11415,7 +12476,7 @@ class ApkChunk final :
                &_ApkChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    63;
+    70;
 
   friend void swap(ApkChunk& a, ApkChunk& b) {
     a.Swap(&b);
@@ -11572,7 +12633,7 @@ class QueryPackage final :
                &_QueryPackage_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    64;
+    71;
 
   friend void swap(QueryPackage& a, QueryPackage& b) {
     a.Swap(&b);
@@ -11718,7 +12779,7 @@ class PackageState final :
                &_PackageState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    65;
+    72;
 
   friend void swap(PackageState& a, PackageState& b) {
     a.Swap(&b);
@@ -11912,7 +12973,7 @@ class OpenLink final :
                &_OpenLink_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    66;
+    73;
 
   friend void swap(OpenLink& a, OpenLink& b) {
     a.Swap(&b);
@@ -12047,7 +13108,7 @@ class LinkHandling final :
                &_LinkHandling_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    67;
+    74;
 
   friend void swap(LinkHandling& a, LinkHandling& b) {
     a.Swap(&b);
@@ -12177,7 +13238,7 @@ class OpenFile final :
                &_OpenFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    68;
+    75;
 
   friend void swap(OpenFile& a, OpenFile& b) {
     a.Swap(&b);
@@ -12361,7 +13422,7 @@ class FileChunk final :
                &_FileChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    69;
+    76;
 
   friend void swap(FileChunk& a, FileChunk& b) {
     a.Swap(&b);
@@ -12518,7 +13579,7 @@ class CancelInstall final :
                &_CancelInstall_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    70;
+    77;
 
   friend void swap(CancelInstall& a, CancelInstall& b) {
     a.Swap(&b);
@@ -12648,7 +13709,7 @@ class InstallProgress final :
                &_InstallProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    71;
+    78;
 
   friend void swap(InstallProgress& a, InstallProgress& b) {
     a.Swap(&b);
@@ -12789,7 +13850,7 @@ class InstallResult final :
                &_InstallResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    72;
+    79;
 
   friend void swap(InstallResult& a, InstallResult& b) {
     a.Swap(&b);
@@ -12962,7 +14023,7 @@ class FileProgress final :
                &_FileProgress_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    80;
 
   friend void swap(FileProgress& a, FileProgress& b) {
     a.Swap(&b);
@@ -13119,7 +14180,7 @@ class FileSharing final :
                &_FileSharing_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    81;
 
   friend void swap(FileSharing& a, FileSharing& b) {
     a.Swap(&b);
@@ -13302,7 +14363,7 @@ class AndroidFiles final :
                &_AndroidFiles_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    82;
 
   friend void swap(AndroidFiles& a, AndroidFiles& b) {
     a.Swap(&b);
@@ -13448,7 +14509,7 @@ class DragItem final :
                &_DragItem_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    83;
 
   friend void swap(DragItem& a, DragItem& b) {
     a.Swap(&b);
@@ -13648,7 +14709,7 @@ class DragOut final :
                &_DragOut_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    84;
 
   friend void swap(DragOut& a, DragOut& b) {
     a.Swap(&b);
@@ -13833,7 +14894,7 @@ class DragOffer final :
                &_DragOffer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    85;
 
   friend void swap(DragOffer& a, DragOffer& b) {
     a.Swap(&b);
@@ -14010,7 +15071,7 @@ class DragRead final :
                &_DragRead_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    86;
 
   friend void swap(DragRead& a, DragRead& b) {
     a.Swap(&b);
@@ -14184,7 +15245,7 @@ class DragData final :
                &_DragData_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    87;
 
   friend void swap(DragData& a, DragData& b) {
     a.Swap(&b);
@@ -14357,7 +15418,7 @@ class DragEnd final :
                &_DragEnd_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    88;
 
   friend void swap(DragEnd& a, DragEnd& b) {
     a.Swap(&b);
@@ -14498,7 +15559,7 @@ class ClockProbe final :
                &_ClockProbe_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    89;
 
   friend void swap(ClockProbe& a, ClockProbe& b) {
     a.Swap(&b);
@@ -14628,7 +15689,7 @@ class VideoCodecSupport final :
                &_VideoCodecSupport_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    90;
 
   friend void swap(VideoCodecSupport& a, VideoCodecSupport& b) {
     a.Swap(&b);
@@ -14780,7 +15841,7 @@ class VideoCapabilities final :
                &_VideoCapabilities_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    91;
 
   friend void swap(VideoCapabilities& a, VideoCapabilities& b) {
     a.Swap(&b);
@@ -14919,7 +15980,7 @@ class VideoDecoderOpen final :
                &_VideoDecoderOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    92;
 
   friend void swap(VideoDecoderOpen& a, VideoDecoderOpen& b) {
     a.Swap(&b);
@@ -15071,7 +16132,7 @@ class VideoDecoderOpened final :
                &_VideoDecoderOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    93;
 
   friend void swap(VideoDecoderOpened& a, VideoDecoderOpened& b) {
     a.Swap(&b);
@@ -15217,7 +16278,7 @@ class VideoPacket final :
                &_VideoPacket_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    94;
 
   friend void swap(VideoPacket& a, VideoPacket& b) {
     a.Swap(&b);
@@ -15396,7 +16457,7 @@ class VideoFrame final :
                &_VideoFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    95;
 
   friend void swap(VideoFrame& a, VideoFrame& b) {
     a.Swap(&b);
@@ -15597,7 +16658,7 @@ class VideoFlush final :
                &_VideoFlush_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    89;
+    96;
 
   friend void swap(VideoFlush& a, VideoFlush& b) {
     a.Swap(&b);
@@ -15714,7 +16775,7 @@ class VideoFlushed final :
                &_VideoFlushed_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    90;
+    97;
 
   friend void swap(VideoFlushed& a, VideoFlushed& b) {
     a.Swap(&b);
@@ -15831,7 +16892,7 @@ class VideoError final :
                &_VideoError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    91;
+    98;
 
   friend void swap(VideoError& a, VideoError& b) {
     a.Swap(&b);
@@ -15966,7 +17027,7 @@ class SensorDescription final :
                &_SensorDescription_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    92;
+    99;
 
   friend void swap(SensorDescription& a, SensorDescription& b) {
     a.Swap(&b);
@@ -16161,7 +17222,7 @@ class SensorList final :
                &_SensorList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    93;
+    100;
 
   friend void swap(SensorList& a, SensorList& b) {
     a.Swap(&b);
@@ -16300,7 +17361,7 @@ class SensorActivate final :
                &_SensorActivate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    94;
+    101;
 
   friend void swap(SensorActivate& a, SensorActivate& b) {
     a.Swap(&b);
@@ -16452,7 +17513,7 @@ class SensorReading final :
                &_SensorReading_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    95;
+    102;
 
   friend void swap(SensorReading& a, SensorReading& b) {
     a.Swap(&b);
@@ -16617,7 +17678,7 @@ class SensorReadings final :
                &_SensorReadings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    96;
+    103;
 
   friend void swap(SensorReadings& a, SensorReadings& b) {
     a.Swap(&b);
@@ -16756,7 +17817,7 @@ class ClockAnswer final :
                &_ClockAnswer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    97;
+    104;
 
   friend void swap(ClockAnswer& a, ClockAnswer& b) {
     a.Swap(&b);
@@ -16897,7 +17958,7 @@ class ListWidgetProviders final :
                &_ListWidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    98;
+    105;
 
   friend void swap(ListWidgetProviders& a, ListWidgetProviders& b) {
     a.Swap(&b);
@@ -17027,7 +18088,7 @@ class WidgetProvider final :
                &_WidgetProvider_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    99;
+    106;
 
   friend void swap(WidgetProvider& a, WidgetProvider& b) {
     a.Swap(&b);
@@ -17314,7 +18375,7 @@ class WidgetProviders final :
                &_WidgetProviders_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    100;
+    107;
 
   friend void swap(WidgetProviders& a, WidgetProviders& b) {
     a.Swap(&b);
@@ -17475,7 +18536,7 @@ class AddWidget final :
                &_AddWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    101;
+    108;
 
   friend void swap(AddWidget& a, AddWidget& b) {
     a.Swap(&b);
@@ -17621,7 +18682,7 @@ class WidgetAdded final :
                &_WidgetAdded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    102;
+    109;
 
   friend void swap(WidgetAdded& a, WidgetAdded& b) {
     a.Swap(&b);
@@ -17778,7 +18839,7 @@ class WidgetUpdated final :
                &_WidgetUpdated_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    103;
+    110;
 
   friend void swap(WidgetUpdated& a, WidgetUpdated& b) {
     a.Swap(&b);
@@ -17928,7 +18989,7 @@ class WidgetList final :
                &_WidgetList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    104;
+    111;
 
   friend void swap(WidgetList& a, WidgetList& b) {
     a.Swap(&b);
@@ -18072,7 +19133,7 @@ class RemoveWidget final :
                &_RemoveWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    105;
+    112;
 
   friend void swap(RemoveWidget& a, RemoveWidget& b) {
     a.Swap(&b);
@@ -18202,7 +19263,7 @@ class ResizeWidget final :
                &_ResizeWidget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    106;
+    113;
 
   friend void swap(ResizeWidget& a, ResizeWidget& b) {
     a.Swap(&b);
@@ -18387,7 +19448,7 @@ class WidgetFrame final :
                &_WidgetFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    107;
+    114;
 
   friend void swap(WidgetFrame& a, WidgetFrame& b) {
     a.Swap(&b);
@@ -18555,7 +19616,7 @@ class WidgetPointer final :
                &_WidgetPointer_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    108;
+    115;
 
   friend void swap(WidgetPointer& a, WidgetPointer& b) {
     a.Swap(&b);
@@ -18729,7 +19790,7 @@ class AccessibilityWatch final :
                &_AccessibilityWatch_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    109;
+    116;
 
   friend void swap(AccessibilityWatch& a, AccessibilityWatch& b) {
     a.Swap(&b);
@@ -18870,7 +19931,7 @@ class NodeRange final :
                &_NodeRange_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    110;
+    117;
 
   friend void swap(NodeRange& a, NodeRange& b) {
     a.Swap(&b);
@@ -19022,7 +20083,7 @@ class AccessibilityNode final :
                &_AccessibilityNode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    111;
+    118;
 
   friend void swap(AccessibilityNode& a, AccessibilityNode& b) {
     a.Swap(&b);
@@ -19465,7 +20526,7 @@ class AccessibilityTree final :
                &_AccessibilityTree_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    112;
+    119;
 
   friend void swap(AccessibilityTree& a, AccessibilityTree& b) {
     a.Swap(&b);
@@ -19698,7 +20759,7 @@ class AccessibilityAction final :
                &_AccessibilityAction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    113;
+    120;
 
   friend void swap(AccessibilityAction& a, AccessibilityAction& b) {
     a.Swap(&b);
@@ -19888,7 +20949,7 @@ class AccessibilityActionResult final :
                &_AccessibilityActionResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    114;
+    121;
 
   friend void swap(AccessibilityActionResult& a, AccessibilityActionResult& b) {
     a.Swap(&b);
@@ -20056,7 +21117,7 @@ class AudioOutputOpen final :
                &_AudioOutputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    115;
+    122;
 
   friend void swap(AudioOutputOpen& a, AudioOutputOpen& b) {
     a.Swap(&b);
@@ -20235,7 +21296,7 @@ class AudioOutputReady final :
                &_AudioOutputReady_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    116;
+    123;
 
   friend void swap(AudioOutputReady& a, AudioOutputReady& b) {
     a.Swap(&b);
@@ -20376,7 +21437,7 @@ class AudioPcm final :
                &_AudioPcm_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    117;
+    124;
 
   friend void swap(AudioPcm& a, AudioPcm& b) {
     a.Swap(&b);
@@ -20522,7 +21583,7 @@ class AudioInputOpen final :
                &_AudioInputOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    118;
+    125;
 
   friend void swap(AudioInputOpen& a, AudioInputOpen& b) {
     a.Swap(&b);
@@ -20701,7 +21762,7 @@ class AudioInputOpened final :
                &_AudioInputOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    119;
+    126;
 
   friend void swap(AudioInputOpened& a, AudioInputOpened& b) {
     a.Swap(&b);
@@ -20847,7 +21908,7 @@ class AudioOutputControl final :
                &_AudioOutputControl_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    120;
+    127;
 
   friend void swap(AudioOutputControl& a, AudioOutputControl& b) {
     a.Swap(&b);
@@ -20977,7 +22038,7 @@ class LogStream final :
                &_LogStream_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    121;
+    128;
 
   friend void swap(LogStream& a, LogStream& b) {
     a.Swap(&b);
@@ -21140,7 +22201,7 @@ class LogDump final :
                &_LogDump_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    122;
+    129;
 
   friend void swap(LogDump& a, LogDump& b) {
     a.Swap(&b);
@@ -21292,7 +22353,7 @@ class LogRecord final :
                &_LogRecord_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    123;
+    130;
 
   friend void swap(LogRecord& a, LogRecord& b) {
     a.Swap(&b);
@@ -21520,7 +22581,7 @@ class LogRecords final :
                &_LogRecords_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    124;
+    131;
 
   friend void swap(LogRecords& a, LogRecords& b) {
     a.Swap(&b);
@@ -21697,7 +22758,7 @@ class CollectDiagnostics final :
                &_CollectDiagnostics_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    125;
+    132;
 
   friend void swap(CollectDiagnostics& a, CollectDiagnostics& b) {
     a.Swap(&b);
@@ -21827,7 +22888,7 @@ class DiagnosticsFile final :
                &_DiagnosticsFile_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    126;
+    133;
 
   friend void swap(DiagnosticsFile& a, DiagnosticsFile& b) {
     a.Swap(&b);
@@ -22000,7 +23061,7 @@ class DiagnosticsDone final :
                &_DiagnosticsDone_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    127;
+    134;
 
   friend void swap(DiagnosticsDone& a, DiagnosticsDone& b) {
     a.Swap(&b);
@@ -22146,7 +23207,7 @@ class PrintJob final :
                &_PrintJob_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    128;
+    135;
 
   friend void swap(PrintJob& a, PrintJob& b) {
     a.Swap(&b);
@@ -22412,7 +23473,7 @@ class PrintJobChunk final :
                &_PrintJobChunk_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    129;
+    136;
 
   friend void swap(PrintJobChunk& a, PrintJobChunk& b) {
     a.Swap(&b);
@@ -22569,7 +23630,7 @@ class PrintJobCancel final :
                &_PrintJobCancel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    130;
+    137;
 
   friend void swap(PrintJobCancel& a, PrintJobCancel& b) {
     a.Swap(&b);
@@ -22699,7 +23760,7 @@ class PrintJobResult final :
                &_PrintJobResult_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    131;
+    138;
 
   friend void swap(PrintJobResult& a, PrintJobResult& b) {
     a.Swap(&b);
@@ -22856,7 +23917,7 @@ class CameraMode final :
                &_CameraMode_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    132;
+    139;
 
   friend void swap(CameraMode& a, CameraMode& b) {
     a.Swap(&b);
@@ -23019,7 +24080,7 @@ class CameraDevice final :
                &_CameraDevice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    133;
+    140;
 
   friend void swap(CameraDevice& a, CameraDevice& b) {
     a.Swap(&b);
@@ -23212,7 +24273,7 @@ class CameraList final :
                &_CameraList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    134;
+    141;
 
   friend void swap(CameraList& a, CameraList& b) {
     a.Swap(&b);
@@ -23351,7 +24412,7 @@ class CameraOpen final :
                &_CameraOpen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    135;
+    142;
 
   friend void swap(CameraOpen& a, CameraOpen& b) {
     a.Swap(&b);
@@ -23519,7 +24580,7 @@ class CameraOpened final :
                &_CameraOpened_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    136;
+    143;
 
   friend void swap(CameraOpened& a, CameraOpened& b) {
     a.Swap(&b);
@@ -23698,7 +24759,7 @@ class CameraFrame final :
                &_CameraFrame_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    137;
+    144;
 
   friend void swap(CameraFrame& a, CameraFrame& b) {
     a.Swap(&b);
@@ -23888,7 +24949,7 @@ class CameraStop final :
                &_CameraStop_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    138;
+    145;
 
   friend void swap(CameraStop& a, CameraStop& b) {
     a.Swap(&b);
@@ -24005,7 +25066,7 @@ class CameraStill final :
                &_CameraStill_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    139;
+    146;
 
   friend void swap(CameraStill& a, CameraStill& b) {
     a.Swap(&b);
@@ -24168,7 +25229,7 @@ class CameraStillTaken final :
                &_CameraStillTaken_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    140;
+    147;
 
   friend void swap(CameraStillTaken& a, CameraStillTaken& b) {
     a.Swap(&b);
@@ -24330,7 +25391,7 @@ class CameraError final :
                &_CameraError_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    141;
+    148;
 
   friend void swap(CameraError& a, CameraError& b) {
     a.Swap(&b);
@@ -24465,7 +25526,7 @@ class SystemSettings final :
                &_SystemSettings_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    142;
+    149;
 
   friend void swap(SystemSettings& a, SystemSettings& b) {
     a.Swap(&b);
@@ -24686,7 +25747,7 @@ class GamepadConnected final :
                &_GamepadConnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    143;
+    150;
 
   friend void swap(GamepadConnected& a, GamepadConnected& b) {
     a.Swap(&b);
@@ -24865,7 +25926,7 @@ class GamepadDisconnected final :
                &_GamepadDisconnected_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    144;
+    151;
 
   friend void swap(GamepadDisconnected& a, GamepadDisconnected& b) {
     a.Swap(&b);
@@ -24995,7 +26056,7 @@ class GamepadState final :
                &_GamepadState_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    145;
+    152;
 
   friend void swap(GamepadState& a, GamepadState& b) {
     a.Swap(&b);
@@ -25202,7 +26263,7 @@ class GamepadRumble final :
                &_GamepadRumble_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    146;
+    153;
 
   friend void swap(GamepadRumble& a, GamepadRumble& b) {
     a.Swap(&b);
@@ -25399,6 +26460,13 @@ class Envelope final :
     kArmTranslationRemove = 152,
     kArmTranslationQuery = 153,
     kArmTranslationState = 154,
+    kGappsInstall = 400,
+    kGappsChunk = 401,
+    kGappsRemove = 402,
+    kGappsQuery = 403,
+    kGappsState = 404,
+    kGoogleDeviceIdQuery = 405,
+    kGoogleDeviceId = 406,
     kDeviceIdle = 42,
     kHostMemory = 43,
     kHostSleep = 44,
@@ -25504,7 +26572,7 @@ class Envelope final :
                &_Envelope_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    147;
+    154;
 
   friend void swap(Envelope& a, Envelope& b) {
     a.Swap(&b);
@@ -25606,6 +26674,13 @@ class Envelope final :
     kArmTranslationRemoveFieldNumber = 152,
     kArmTranslationQueryFieldNumber = 153,
     kArmTranslationStateFieldNumber = 154,
+    kGappsInstallFieldNumber = 400,
+    kGappsChunkFieldNumber = 401,
+    kGappsRemoveFieldNumber = 402,
+    kGappsQueryFieldNumber = 403,
+    kGappsStateFieldNumber = 404,
+    kGoogleDeviceIdQueryFieldNumber = 405,
+    kGoogleDeviceIdFieldNumber = 406,
     kDeviceIdleFieldNumber = 42,
     kHostMemoryFieldNumber = 43,
     kHostSleepFieldNumber = 44,
@@ -26387,6 +27462,132 @@ class Envelope final :
   void unsafe_arena_set_allocated_arm_translation_state(
       ::dsa::control::v1::ArmTranslationState* arm_translation_state);
   ::dsa::control::v1::ArmTranslationState* unsafe_arena_release_arm_translation_state();
+
+  // .dsa.control.v1.GappsInstall gapps_install = 400;
+  bool has_gapps_install() const;
+  private:
+  bool _internal_has_gapps_install() const;
+  public:
+  void clear_gapps_install();
+  const ::dsa::control::v1::GappsInstall& gapps_install() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GappsInstall* release_gapps_install();
+  ::dsa::control::v1::GappsInstall* mutable_gapps_install();
+  void set_allocated_gapps_install(::dsa::control::v1::GappsInstall* gapps_install);
+  private:
+  const ::dsa::control::v1::GappsInstall& _internal_gapps_install() const;
+  ::dsa::control::v1::GappsInstall* _internal_mutable_gapps_install();
+  public:
+  void unsafe_arena_set_allocated_gapps_install(
+      ::dsa::control::v1::GappsInstall* gapps_install);
+  ::dsa::control::v1::GappsInstall* unsafe_arena_release_gapps_install();
+
+  // .dsa.control.v1.GappsChunk gapps_chunk = 401;
+  bool has_gapps_chunk() const;
+  private:
+  bool _internal_has_gapps_chunk() const;
+  public:
+  void clear_gapps_chunk();
+  const ::dsa::control::v1::GappsChunk& gapps_chunk() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GappsChunk* release_gapps_chunk();
+  ::dsa::control::v1::GappsChunk* mutable_gapps_chunk();
+  void set_allocated_gapps_chunk(::dsa::control::v1::GappsChunk* gapps_chunk);
+  private:
+  const ::dsa::control::v1::GappsChunk& _internal_gapps_chunk() const;
+  ::dsa::control::v1::GappsChunk* _internal_mutable_gapps_chunk();
+  public:
+  void unsafe_arena_set_allocated_gapps_chunk(
+      ::dsa::control::v1::GappsChunk* gapps_chunk);
+  ::dsa::control::v1::GappsChunk* unsafe_arena_release_gapps_chunk();
+
+  // .dsa.control.v1.GappsRemove gapps_remove = 402;
+  bool has_gapps_remove() const;
+  private:
+  bool _internal_has_gapps_remove() const;
+  public:
+  void clear_gapps_remove();
+  const ::dsa::control::v1::GappsRemove& gapps_remove() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GappsRemove* release_gapps_remove();
+  ::dsa::control::v1::GappsRemove* mutable_gapps_remove();
+  void set_allocated_gapps_remove(::dsa::control::v1::GappsRemove* gapps_remove);
+  private:
+  const ::dsa::control::v1::GappsRemove& _internal_gapps_remove() const;
+  ::dsa::control::v1::GappsRemove* _internal_mutable_gapps_remove();
+  public:
+  void unsafe_arena_set_allocated_gapps_remove(
+      ::dsa::control::v1::GappsRemove* gapps_remove);
+  ::dsa::control::v1::GappsRemove* unsafe_arena_release_gapps_remove();
+
+  // .dsa.control.v1.GappsQuery gapps_query = 403;
+  bool has_gapps_query() const;
+  private:
+  bool _internal_has_gapps_query() const;
+  public:
+  void clear_gapps_query();
+  const ::dsa::control::v1::GappsQuery& gapps_query() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GappsQuery* release_gapps_query();
+  ::dsa::control::v1::GappsQuery* mutable_gapps_query();
+  void set_allocated_gapps_query(::dsa::control::v1::GappsQuery* gapps_query);
+  private:
+  const ::dsa::control::v1::GappsQuery& _internal_gapps_query() const;
+  ::dsa::control::v1::GappsQuery* _internal_mutable_gapps_query();
+  public:
+  void unsafe_arena_set_allocated_gapps_query(
+      ::dsa::control::v1::GappsQuery* gapps_query);
+  ::dsa::control::v1::GappsQuery* unsafe_arena_release_gapps_query();
+
+  // .dsa.control.v1.GappsState gapps_state = 404;
+  bool has_gapps_state() const;
+  private:
+  bool _internal_has_gapps_state() const;
+  public:
+  void clear_gapps_state();
+  const ::dsa::control::v1::GappsState& gapps_state() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GappsState* release_gapps_state();
+  ::dsa::control::v1::GappsState* mutable_gapps_state();
+  void set_allocated_gapps_state(::dsa::control::v1::GappsState* gapps_state);
+  private:
+  const ::dsa::control::v1::GappsState& _internal_gapps_state() const;
+  ::dsa::control::v1::GappsState* _internal_mutable_gapps_state();
+  public:
+  void unsafe_arena_set_allocated_gapps_state(
+      ::dsa::control::v1::GappsState* gapps_state);
+  ::dsa::control::v1::GappsState* unsafe_arena_release_gapps_state();
+
+  // .dsa.control.v1.GoogleDeviceIdQuery google_device_id_query = 405;
+  bool has_google_device_id_query() const;
+  private:
+  bool _internal_has_google_device_id_query() const;
+  public:
+  void clear_google_device_id_query();
+  const ::dsa::control::v1::GoogleDeviceIdQuery& google_device_id_query() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GoogleDeviceIdQuery* release_google_device_id_query();
+  ::dsa::control::v1::GoogleDeviceIdQuery* mutable_google_device_id_query();
+  void set_allocated_google_device_id_query(::dsa::control::v1::GoogleDeviceIdQuery* google_device_id_query);
+  private:
+  const ::dsa::control::v1::GoogleDeviceIdQuery& _internal_google_device_id_query() const;
+  ::dsa::control::v1::GoogleDeviceIdQuery* _internal_mutable_google_device_id_query();
+  public:
+  void unsafe_arena_set_allocated_google_device_id_query(
+      ::dsa::control::v1::GoogleDeviceIdQuery* google_device_id_query);
+  ::dsa::control::v1::GoogleDeviceIdQuery* unsafe_arena_release_google_device_id_query();
+
+  // .dsa.control.v1.GoogleDeviceId google_device_id = 406;
+  bool has_google_device_id() const;
+  private:
+  bool _internal_has_google_device_id() const;
+  public:
+  void clear_google_device_id();
+  const ::dsa::control::v1::GoogleDeviceId& google_device_id() const;
+  PROTOBUF_NODISCARD ::dsa::control::v1::GoogleDeviceId* release_google_device_id();
+  ::dsa::control::v1::GoogleDeviceId* mutable_google_device_id();
+  void set_allocated_google_device_id(::dsa::control::v1::GoogleDeviceId* google_device_id);
+  private:
+  const ::dsa::control::v1::GoogleDeviceId& _internal_google_device_id() const;
+  ::dsa::control::v1::GoogleDeviceId* _internal_mutable_google_device_id();
+  public:
+  void unsafe_arena_set_allocated_google_device_id(
+      ::dsa::control::v1::GoogleDeviceId* google_device_id);
+  ::dsa::control::v1::GoogleDeviceId* unsafe_arena_release_google_device_id();
 
   // .dsa.control.v1.DeviceIdle device_idle = 42;
   bool has_device_idle() const;
@@ -28177,6 +29378,13 @@ class Envelope final :
   void set_has_arm_translation_remove();
   void set_has_arm_translation_query();
   void set_has_arm_translation_state();
+  void set_has_gapps_install();
+  void set_has_gapps_chunk();
+  void set_has_gapps_remove();
+  void set_has_gapps_query();
+  void set_has_gapps_state();
+  void set_has_google_device_id_query();
+  void set_has_google_device_id();
   void set_has_device_idle();
   void set_has_host_memory();
   void set_has_host_sleep();
@@ -28323,6 +29531,13 @@ class Envelope final :
       ::dsa::control::v1::ArmTranslationRemove* arm_translation_remove_;
       ::dsa::control::v1::ArmTranslationQuery* arm_translation_query_;
       ::dsa::control::v1::ArmTranslationState* arm_translation_state_;
+      ::dsa::control::v1::GappsInstall* gapps_install_;
+      ::dsa::control::v1::GappsChunk* gapps_chunk_;
+      ::dsa::control::v1::GappsRemove* gapps_remove_;
+      ::dsa::control::v1::GappsQuery* gapps_query_;
+      ::dsa::control::v1::GappsState* gapps_state_;
+      ::dsa::control::v1::GoogleDeviceIdQuery* google_device_id_query_;
+      ::dsa::control::v1::GoogleDeviceId* google_device_id_;
       ::dsa::control::v1::DeviceIdle* device_idle_;
       ::dsa::control::v1::HostMemory* host_memory_;
       ::dsa::control::v1::HostSleep* host_sleep_;
@@ -32596,6 +33811,534 @@ inline void ArmTranslationState::set_allocated_abilist(std::string* abilist) {
   }
 #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
   // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.ArmTranslationState.abilist)
+}
+
+// -------------------------------------------------------------------
+
+// GappsInstall
+
+// uint32 transfer_id = 1;
+inline void GappsInstall::clear_transfer_id() {
+  _impl_.transfer_id_ = 0u;
+}
+inline uint32_t GappsInstall::_internal_transfer_id() const {
+  return _impl_.transfer_id_;
+}
+inline uint32_t GappsInstall::transfer_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsInstall.transfer_id)
+  return _internal_transfer_id();
+}
+inline void GappsInstall::_internal_set_transfer_id(uint32_t value) {
+  
+  _impl_.transfer_id_ = value;
+}
+inline void GappsInstall::set_transfer_id(uint32_t value) {
+  _internal_set_transfer_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsInstall.transfer_id)
+}
+
+// uint64 size = 2;
+inline void GappsInstall::clear_size() {
+  _impl_.size_ = uint64_t{0u};
+}
+inline uint64_t GappsInstall::_internal_size() const {
+  return _impl_.size_;
+}
+inline uint64_t GappsInstall::size() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsInstall.size)
+  return _internal_size();
+}
+inline void GappsInstall::_internal_set_size(uint64_t value) {
+  
+  _impl_.size_ = value;
+}
+inline void GappsInstall::set_size(uint64_t value) {
+  _internal_set_size(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsInstall.size)
+}
+
+// bytes sha256 = 3;
+inline void GappsInstall::clear_sha256() {
+  _impl_.sha256_.ClearToEmpty();
+}
+inline const std::string& GappsInstall::sha256() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsInstall.sha256)
+  return _internal_sha256();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GappsInstall::set_sha256(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.sha256_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsInstall.sha256)
+}
+inline std::string* GappsInstall::mutable_sha256() {
+  std::string* _s = _internal_mutable_sha256();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GappsInstall.sha256)
+  return _s;
+}
+inline const std::string& GappsInstall::_internal_sha256() const {
+  return _impl_.sha256_.Get();
+}
+inline void GappsInstall::_internal_set_sha256(const std::string& value) {
+  
+  _impl_.sha256_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GappsInstall::_internal_mutable_sha256() {
+  
+  return _impl_.sha256_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GappsInstall::release_sha256() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GappsInstall.sha256)
+  return _impl_.sha256_.Release();
+}
+inline void GappsInstall::set_allocated_sha256(std::string* sha256) {
+  if (sha256 != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.sha256_.SetAllocated(sha256, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.sha256_.IsDefault()) {
+    _impl_.sha256_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GappsInstall.sha256)
+}
+
+// -------------------------------------------------------------------
+
+// GappsChunk
+
+// uint32 transfer_id = 1;
+inline void GappsChunk::clear_transfer_id() {
+  _impl_.transfer_id_ = 0u;
+}
+inline uint32_t GappsChunk::_internal_transfer_id() const {
+  return _impl_.transfer_id_;
+}
+inline uint32_t GappsChunk::transfer_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsChunk.transfer_id)
+  return _internal_transfer_id();
+}
+inline void GappsChunk::_internal_set_transfer_id(uint32_t value) {
+  
+  _impl_.transfer_id_ = value;
+}
+inline void GappsChunk::set_transfer_id(uint32_t value) {
+  _internal_set_transfer_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsChunk.transfer_id)
+}
+
+// uint64 offset = 2;
+inline void GappsChunk::clear_offset() {
+  _impl_.offset_ = uint64_t{0u};
+}
+inline uint64_t GappsChunk::_internal_offset() const {
+  return _impl_.offset_;
+}
+inline uint64_t GappsChunk::offset() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsChunk.offset)
+  return _internal_offset();
+}
+inline void GappsChunk::_internal_set_offset(uint64_t value) {
+  
+  _impl_.offset_ = value;
+}
+inline void GappsChunk::set_offset(uint64_t value) {
+  _internal_set_offset(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsChunk.offset)
+}
+
+// bytes data = 3;
+inline void GappsChunk::clear_data() {
+  _impl_.data_.ClearToEmpty();
+}
+inline const std::string& GappsChunk::data() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsChunk.data)
+  return _internal_data();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GappsChunk::set_data(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.data_.SetBytes(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsChunk.data)
+}
+inline std::string* GappsChunk::mutable_data() {
+  std::string* _s = _internal_mutable_data();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GappsChunk.data)
+  return _s;
+}
+inline const std::string& GappsChunk::_internal_data() const {
+  return _impl_.data_.Get();
+}
+inline void GappsChunk::_internal_set_data(const std::string& value) {
+  
+  _impl_.data_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GappsChunk::_internal_mutable_data() {
+  
+  return _impl_.data_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GappsChunk::release_data() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GappsChunk.data)
+  return _impl_.data_.Release();
+}
+inline void GappsChunk::set_allocated_data(std::string* data) {
+  if (data != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.data_.SetAllocated(data, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.data_.IsDefault()) {
+    _impl_.data_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GappsChunk.data)
+}
+
+// -------------------------------------------------------------------
+
+// GappsRemove
+
+// -------------------------------------------------------------------
+
+// GappsQuery
+
+// -------------------------------------------------------------------
+
+// GappsState
+
+// uint32 transfer_id = 1;
+inline void GappsState::clear_transfer_id() {
+  _impl_.transfer_id_ = 0u;
+}
+inline uint32_t GappsState::_internal_transfer_id() const {
+  return _impl_.transfer_id_;
+}
+inline uint32_t GappsState::transfer_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.transfer_id)
+  return _internal_transfer_id();
+}
+inline void GappsState::_internal_set_transfer_id(uint32_t value) {
+  
+  _impl_.transfer_id_ = value;
+}
+inline void GappsState::set_transfer_id(uint32_t value) {
+  _internal_set_transfer_id(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.transfer_id)
+}
+
+// uint64 received = 2;
+inline void GappsState::clear_received() {
+  _impl_.received_ = uint64_t{0u};
+}
+inline uint64_t GappsState::_internal_received() const {
+  return _impl_.received_;
+}
+inline uint64_t GappsState::received() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.received)
+  return _internal_received();
+}
+inline void GappsState::_internal_set_received(uint64_t value) {
+  
+  _impl_.received_ = value;
+}
+inline void GappsState::set_received(uint64_t value) {
+  _internal_set_received(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.received)
+}
+
+// bool done = 3;
+inline void GappsState::clear_done() {
+  _impl_.done_ = false;
+}
+inline bool GappsState::_internal_done() const {
+  return _impl_.done_;
+}
+inline bool GappsState::done() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.done)
+  return _internal_done();
+}
+inline void GappsState::_internal_set_done(bool value) {
+  
+  _impl_.done_ = value;
+}
+inline void GappsState::set_done(bool value) {
+  _internal_set_done(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.done)
+}
+
+// string error = 4;
+inline void GappsState::clear_error() {
+  _impl_.error_.ClearToEmpty();
+}
+inline const std::string& GappsState::error() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.error)
+  return _internal_error();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GappsState::set_error(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.error_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.error)
+}
+inline std::string* GappsState::mutable_error() {
+  std::string* _s = _internal_mutable_error();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GappsState.error)
+  return _s;
+}
+inline const std::string& GappsState::_internal_error() const {
+  return _impl_.error_.Get();
+}
+inline void GappsState::_internal_set_error(const std::string& value) {
+  
+  _impl_.error_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GappsState::_internal_mutable_error() {
+  
+  return _impl_.error_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GappsState::release_error() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GappsState.error)
+  return _impl_.error_.Release();
+}
+inline void GappsState::set_allocated_error(std::string* error) {
+  if (error != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.error_.SetAllocated(error, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.error_.IsDefault()) {
+    _impl_.error_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GappsState.error)
+}
+
+// bool installed = 5;
+inline void GappsState::clear_installed() {
+  _impl_.installed_ = false;
+}
+inline bool GappsState::_internal_installed() const {
+  return _impl_.installed_;
+}
+inline bool GappsState::installed() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.installed)
+  return _internal_installed();
+}
+inline void GappsState::_internal_set_installed(bool value) {
+  
+  _impl_.installed_ = value;
+}
+inline void GappsState::set_installed(bool value) {
+  _internal_set_installed(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.installed)
+}
+
+// bool active = 6;
+inline void GappsState::clear_active() {
+  _impl_.active_ = false;
+}
+inline bool GappsState::_internal_active() const {
+  return _impl_.active_;
+}
+inline bool GappsState::active() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.active)
+  return _internal_active();
+}
+inline void GappsState::_internal_set_active(bool value) {
+  
+  _impl_.active_ = value;
+}
+inline void GappsState::set_active(bool value) {
+  _internal_set_active(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.active)
+}
+
+// uint32 sdk = 7;
+inline void GappsState::clear_sdk() {
+  _impl_.sdk_ = 0u;
+}
+inline uint32_t GappsState::_internal_sdk() const {
+  return _impl_.sdk_;
+}
+inline uint32_t GappsState::sdk() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.sdk)
+  return _internal_sdk();
+}
+inline void GappsState::_internal_set_sdk(uint32_t value) {
+  
+  _impl_.sdk_ = value;
+}
+inline void GappsState::set_sdk(uint32_t value) {
+  _internal_set_sdk(value);
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.sdk)
+}
+
+// string abi = 8;
+inline void GappsState::clear_abi() {
+  _impl_.abi_.ClearToEmpty();
+}
+inline const std::string& GappsState::abi() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.abi)
+  return _internal_abi();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GappsState::set_abi(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.abi_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.abi)
+}
+inline std::string* GappsState::mutable_abi() {
+  std::string* _s = _internal_mutable_abi();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GappsState.abi)
+  return _s;
+}
+inline const std::string& GappsState::_internal_abi() const {
+  return _impl_.abi_.Get();
+}
+inline void GappsState::_internal_set_abi(const std::string& value) {
+  
+  _impl_.abi_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GappsState::_internal_mutable_abi() {
+  
+  return _impl_.abi_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GappsState::release_abi() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GappsState.abi)
+  return _impl_.abi_.Release();
+}
+inline void GappsState::set_allocated_abi(std::string* abi) {
+  if (abi != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.abi_.SetAllocated(abi, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.abi_.IsDefault()) {
+    _impl_.abi_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GappsState.abi)
+}
+
+// string abilist = 9;
+inline void GappsState::clear_abilist() {
+  _impl_.abilist_.ClearToEmpty();
+}
+inline const std::string& GappsState::abilist() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GappsState.abilist)
+  return _internal_abilist();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GappsState::set_abilist(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.abilist_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GappsState.abilist)
+}
+inline std::string* GappsState::mutable_abilist() {
+  std::string* _s = _internal_mutable_abilist();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GappsState.abilist)
+  return _s;
+}
+inline const std::string& GappsState::_internal_abilist() const {
+  return _impl_.abilist_.Get();
+}
+inline void GappsState::_internal_set_abilist(const std::string& value) {
+  
+  _impl_.abilist_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GappsState::_internal_mutable_abilist() {
+  
+  return _impl_.abilist_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GappsState::release_abilist() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GappsState.abilist)
+  return _impl_.abilist_.Release();
+}
+inline void GappsState::set_allocated_abilist(std::string* abilist) {
+  if (abilist != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.abilist_.SetAllocated(abilist, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.abilist_.IsDefault()) {
+    _impl_.abilist_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GappsState.abilist)
+}
+
+// -------------------------------------------------------------------
+
+// GoogleDeviceIdQuery
+
+// -------------------------------------------------------------------
+
+// GoogleDeviceId
+
+// string id = 1;
+inline void GoogleDeviceId::clear_id() {
+  _impl_.id_.ClearToEmpty();
+}
+inline const std::string& GoogleDeviceId::id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.GoogleDeviceId.id)
+  return _internal_id();
+}
+template <typename ArgT0, typename... ArgT>
+inline PROTOBUF_ALWAYS_INLINE
+void GoogleDeviceId::set_id(ArgT0&& arg0, ArgT... args) {
+ 
+ _impl_.id_.Set(static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:dsa.control.v1.GoogleDeviceId.id)
+}
+inline std::string* GoogleDeviceId::mutable_id() {
+  std::string* _s = _internal_mutable_id();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.GoogleDeviceId.id)
+  return _s;
+}
+inline const std::string& GoogleDeviceId::_internal_id() const {
+  return _impl_.id_.Get();
+}
+inline void GoogleDeviceId::_internal_set_id(const std::string& value) {
+  
+  _impl_.id_.Set(value, GetArenaForAllocation());
+}
+inline std::string* GoogleDeviceId::_internal_mutable_id() {
+  
+  return _impl_.id_.Mutable(GetArenaForAllocation());
+}
+inline std::string* GoogleDeviceId::release_id() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.GoogleDeviceId.id)
+  return _impl_.id_.Release();
+}
+inline void GoogleDeviceId::set_allocated_id(std::string* id) {
+  if (id != nullptr) {
+    
+  } else {
+    
+  }
+  _impl_.id_.SetAllocated(id, GetArenaForAllocation());
+#ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (_impl_.id_.IsDefault()) {
+    _impl_.id_.Set("", GetArenaForAllocation());
+  }
+#endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  // @@protoc_insertion_point(field_set_allocated:dsa.control.v1.GoogleDeviceId.id)
 }
 
 // -------------------------------------------------------------------
@@ -46902,6 +48645,524 @@ inline ::dsa::control::v1::ArmTranslationState* Envelope::mutable_arm_translatio
   return _msg;
 }
 
+// .dsa.control.v1.GappsInstall gapps_install = 400;
+inline bool Envelope::_internal_has_gapps_install() const {
+  return body_case() == kGappsInstall;
+}
+inline bool Envelope::has_gapps_install() const {
+  return _internal_has_gapps_install();
+}
+inline void Envelope::set_has_gapps_install() {
+  _impl_._oneof_case_[0] = kGappsInstall;
+}
+inline void Envelope::clear_gapps_install() {
+  if (_internal_has_gapps_install()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.gapps_install_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GappsInstall* Envelope::release_gapps_install() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gapps_install)
+  if (_internal_has_gapps_install()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsInstall* temp = _impl_.body_.gapps_install_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.gapps_install_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GappsInstall& Envelope::_internal_gapps_install() const {
+  return _internal_has_gapps_install()
+      ? *_impl_.body_.gapps_install_
+      : reinterpret_cast< ::dsa::control::v1::GappsInstall&>(::dsa::control::v1::_GappsInstall_default_instance_);
+}
+inline const ::dsa::control::v1::GappsInstall& Envelope::gapps_install() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gapps_install)
+  return _internal_gapps_install();
+}
+inline ::dsa::control::v1::GappsInstall* Envelope::unsafe_arena_release_gapps_install() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gapps_install)
+  if (_internal_has_gapps_install()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsInstall* temp = _impl_.body_.gapps_install_;
+    _impl_.body_.gapps_install_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_gapps_install(::dsa::control::v1::GappsInstall* gapps_install) {
+  clear_body();
+  if (gapps_install) {
+    set_has_gapps_install();
+    _impl_.body_.gapps_install_ = gapps_install;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gapps_install)
+}
+inline ::dsa::control::v1::GappsInstall* Envelope::_internal_mutable_gapps_install() {
+  if (!_internal_has_gapps_install()) {
+    clear_body();
+    set_has_gapps_install();
+    _impl_.body_.gapps_install_ = CreateMaybeMessage< ::dsa::control::v1::GappsInstall >(GetArenaForAllocation());
+  }
+  return _impl_.body_.gapps_install_;
+}
+inline ::dsa::control::v1::GappsInstall* Envelope::mutable_gapps_install() {
+  ::dsa::control::v1::GappsInstall* _msg = _internal_mutable_gapps_install();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gapps_install)
+  return _msg;
+}
+
+// .dsa.control.v1.GappsChunk gapps_chunk = 401;
+inline bool Envelope::_internal_has_gapps_chunk() const {
+  return body_case() == kGappsChunk;
+}
+inline bool Envelope::has_gapps_chunk() const {
+  return _internal_has_gapps_chunk();
+}
+inline void Envelope::set_has_gapps_chunk() {
+  _impl_._oneof_case_[0] = kGappsChunk;
+}
+inline void Envelope::clear_gapps_chunk() {
+  if (_internal_has_gapps_chunk()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.gapps_chunk_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GappsChunk* Envelope::release_gapps_chunk() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gapps_chunk)
+  if (_internal_has_gapps_chunk()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsChunk* temp = _impl_.body_.gapps_chunk_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.gapps_chunk_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GappsChunk& Envelope::_internal_gapps_chunk() const {
+  return _internal_has_gapps_chunk()
+      ? *_impl_.body_.gapps_chunk_
+      : reinterpret_cast< ::dsa::control::v1::GappsChunk&>(::dsa::control::v1::_GappsChunk_default_instance_);
+}
+inline const ::dsa::control::v1::GappsChunk& Envelope::gapps_chunk() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gapps_chunk)
+  return _internal_gapps_chunk();
+}
+inline ::dsa::control::v1::GappsChunk* Envelope::unsafe_arena_release_gapps_chunk() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gapps_chunk)
+  if (_internal_has_gapps_chunk()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsChunk* temp = _impl_.body_.gapps_chunk_;
+    _impl_.body_.gapps_chunk_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_gapps_chunk(::dsa::control::v1::GappsChunk* gapps_chunk) {
+  clear_body();
+  if (gapps_chunk) {
+    set_has_gapps_chunk();
+    _impl_.body_.gapps_chunk_ = gapps_chunk;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gapps_chunk)
+}
+inline ::dsa::control::v1::GappsChunk* Envelope::_internal_mutable_gapps_chunk() {
+  if (!_internal_has_gapps_chunk()) {
+    clear_body();
+    set_has_gapps_chunk();
+    _impl_.body_.gapps_chunk_ = CreateMaybeMessage< ::dsa::control::v1::GappsChunk >(GetArenaForAllocation());
+  }
+  return _impl_.body_.gapps_chunk_;
+}
+inline ::dsa::control::v1::GappsChunk* Envelope::mutable_gapps_chunk() {
+  ::dsa::control::v1::GappsChunk* _msg = _internal_mutable_gapps_chunk();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gapps_chunk)
+  return _msg;
+}
+
+// .dsa.control.v1.GappsRemove gapps_remove = 402;
+inline bool Envelope::_internal_has_gapps_remove() const {
+  return body_case() == kGappsRemove;
+}
+inline bool Envelope::has_gapps_remove() const {
+  return _internal_has_gapps_remove();
+}
+inline void Envelope::set_has_gapps_remove() {
+  _impl_._oneof_case_[0] = kGappsRemove;
+}
+inline void Envelope::clear_gapps_remove() {
+  if (_internal_has_gapps_remove()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.gapps_remove_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GappsRemove* Envelope::release_gapps_remove() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gapps_remove)
+  if (_internal_has_gapps_remove()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsRemove* temp = _impl_.body_.gapps_remove_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.gapps_remove_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GappsRemove& Envelope::_internal_gapps_remove() const {
+  return _internal_has_gapps_remove()
+      ? *_impl_.body_.gapps_remove_
+      : reinterpret_cast< ::dsa::control::v1::GappsRemove&>(::dsa::control::v1::_GappsRemove_default_instance_);
+}
+inline const ::dsa::control::v1::GappsRemove& Envelope::gapps_remove() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gapps_remove)
+  return _internal_gapps_remove();
+}
+inline ::dsa::control::v1::GappsRemove* Envelope::unsafe_arena_release_gapps_remove() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gapps_remove)
+  if (_internal_has_gapps_remove()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsRemove* temp = _impl_.body_.gapps_remove_;
+    _impl_.body_.gapps_remove_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_gapps_remove(::dsa::control::v1::GappsRemove* gapps_remove) {
+  clear_body();
+  if (gapps_remove) {
+    set_has_gapps_remove();
+    _impl_.body_.gapps_remove_ = gapps_remove;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gapps_remove)
+}
+inline ::dsa::control::v1::GappsRemove* Envelope::_internal_mutable_gapps_remove() {
+  if (!_internal_has_gapps_remove()) {
+    clear_body();
+    set_has_gapps_remove();
+    _impl_.body_.gapps_remove_ = CreateMaybeMessage< ::dsa::control::v1::GappsRemove >(GetArenaForAllocation());
+  }
+  return _impl_.body_.gapps_remove_;
+}
+inline ::dsa::control::v1::GappsRemove* Envelope::mutable_gapps_remove() {
+  ::dsa::control::v1::GappsRemove* _msg = _internal_mutable_gapps_remove();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gapps_remove)
+  return _msg;
+}
+
+// .dsa.control.v1.GappsQuery gapps_query = 403;
+inline bool Envelope::_internal_has_gapps_query() const {
+  return body_case() == kGappsQuery;
+}
+inline bool Envelope::has_gapps_query() const {
+  return _internal_has_gapps_query();
+}
+inline void Envelope::set_has_gapps_query() {
+  _impl_._oneof_case_[0] = kGappsQuery;
+}
+inline void Envelope::clear_gapps_query() {
+  if (_internal_has_gapps_query()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.gapps_query_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GappsQuery* Envelope::release_gapps_query() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gapps_query)
+  if (_internal_has_gapps_query()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsQuery* temp = _impl_.body_.gapps_query_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.gapps_query_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GappsQuery& Envelope::_internal_gapps_query() const {
+  return _internal_has_gapps_query()
+      ? *_impl_.body_.gapps_query_
+      : reinterpret_cast< ::dsa::control::v1::GappsQuery&>(::dsa::control::v1::_GappsQuery_default_instance_);
+}
+inline const ::dsa::control::v1::GappsQuery& Envelope::gapps_query() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gapps_query)
+  return _internal_gapps_query();
+}
+inline ::dsa::control::v1::GappsQuery* Envelope::unsafe_arena_release_gapps_query() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gapps_query)
+  if (_internal_has_gapps_query()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsQuery* temp = _impl_.body_.gapps_query_;
+    _impl_.body_.gapps_query_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_gapps_query(::dsa::control::v1::GappsQuery* gapps_query) {
+  clear_body();
+  if (gapps_query) {
+    set_has_gapps_query();
+    _impl_.body_.gapps_query_ = gapps_query;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gapps_query)
+}
+inline ::dsa::control::v1::GappsQuery* Envelope::_internal_mutable_gapps_query() {
+  if (!_internal_has_gapps_query()) {
+    clear_body();
+    set_has_gapps_query();
+    _impl_.body_.gapps_query_ = CreateMaybeMessage< ::dsa::control::v1::GappsQuery >(GetArenaForAllocation());
+  }
+  return _impl_.body_.gapps_query_;
+}
+inline ::dsa::control::v1::GappsQuery* Envelope::mutable_gapps_query() {
+  ::dsa::control::v1::GappsQuery* _msg = _internal_mutable_gapps_query();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gapps_query)
+  return _msg;
+}
+
+// .dsa.control.v1.GappsState gapps_state = 404;
+inline bool Envelope::_internal_has_gapps_state() const {
+  return body_case() == kGappsState;
+}
+inline bool Envelope::has_gapps_state() const {
+  return _internal_has_gapps_state();
+}
+inline void Envelope::set_has_gapps_state() {
+  _impl_._oneof_case_[0] = kGappsState;
+}
+inline void Envelope::clear_gapps_state() {
+  if (_internal_has_gapps_state()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.gapps_state_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GappsState* Envelope::release_gapps_state() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.gapps_state)
+  if (_internal_has_gapps_state()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsState* temp = _impl_.body_.gapps_state_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.gapps_state_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GappsState& Envelope::_internal_gapps_state() const {
+  return _internal_has_gapps_state()
+      ? *_impl_.body_.gapps_state_
+      : reinterpret_cast< ::dsa::control::v1::GappsState&>(::dsa::control::v1::_GappsState_default_instance_);
+}
+inline const ::dsa::control::v1::GappsState& Envelope::gapps_state() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.gapps_state)
+  return _internal_gapps_state();
+}
+inline ::dsa::control::v1::GappsState* Envelope::unsafe_arena_release_gapps_state() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.gapps_state)
+  if (_internal_has_gapps_state()) {
+    clear_has_body();
+    ::dsa::control::v1::GappsState* temp = _impl_.body_.gapps_state_;
+    _impl_.body_.gapps_state_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_gapps_state(::dsa::control::v1::GappsState* gapps_state) {
+  clear_body();
+  if (gapps_state) {
+    set_has_gapps_state();
+    _impl_.body_.gapps_state_ = gapps_state;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.gapps_state)
+}
+inline ::dsa::control::v1::GappsState* Envelope::_internal_mutable_gapps_state() {
+  if (!_internal_has_gapps_state()) {
+    clear_body();
+    set_has_gapps_state();
+    _impl_.body_.gapps_state_ = CreateMaybeMessage< ::dsa::control::v1::GappsState >(GetArenaForAllocation());
+  }
+  return _impl_.body_.gapps_state_;
+}
+inline ::dsa::control::v1::GappsState* Envelope::mutable_gapps_state() {
+  ::dsa::control::v1::GappsState* _msg = _internal_mutable_gapps_state();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.gapps_state)
+  return _msg;
+}
+
+// .dsa.control.v1.GoogleDeviceIdQuery google_device_id_query = 405;
+inline bool Envelope::_internal_has_google_device_id_query() const {
+  return body_case() == kGoogleDeviceIdQuery;
+}
+inline bool Envelope::has_google_device_id_query() const {
+  return _internal_has_google_device_id_query();
+}
+inline void Envelope::set_has_google_device_id_query() {
+  _impl_._oneof_case_[0] = kGoogleDeviceIdQuery;
+}
+inline void Envelope::clear_google_device_id_query() {
+  if (_internal_has_google_device_id_query()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.google_device_id_query_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GoogleDeviceIdQuery* Envelope::release_google_device_id_query() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.google_device_id_query)
+  if (_internal_has_google_device_id_query()) {
+    clear_has_body();
+    ::dsa::control::v1::GoogleDeviceIdQuery* temp = _impl_.body_.google_device_id_query_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.google_device_id_query_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GoogleDeviceIdQuery& Envelope::_internal_google_device_id_query() const {
+  return _internal_has_google_device_id_query()
+      ? *_impl_.body_.google_device_id_query_
+      : reinterpret_cast< ::dsa::control::v1::GoogleDeviceIdQuery&>(::dsa::control::v1::_GoogleDeviceIdQuery_default_instance_);
+}
+inline const ::dsa::control::v1::GoogleDeviceIdQuery& Envelope::google_device_id_query() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.google_device_id_query)
+  return _internal_google_device_id_query();
+}
+inline ::dsa::control::v1::GoogleDeviceIdQuery* Envelope::unsafe_arena_release_google_device_id_query() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.google_device_id_query)
+  if (_internal_has_google_device_id_query()) {
+    clear_has_body();
+    ::dsa::control::v1::GoogleDeviceIdQuery* temp = _impl_.body_.google_device_id_query_;
+    _impl_.body_.google_device_id_query_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_google_device_id_query(::dsa::control::v1::GoogleDeviceIdQuery* google_device_id_query) {
+  clear_body();
+  if (google_device_id_query) {
+    set_has_google_device_id_query();
+    _impl_.body_.google_device_id_query_ = google_device_id_query;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.google_device_id_query)
+}
+inline ::dsa::control::v1::GoogleDeviceIdQuery* Envelope::_internal_mutable_google_device_id_query() {
+  if (!_internal_has_google_device_id_query()) {
+    clear_body();
+    set_has_google_device_id_query();
+    _impl_.body_.google_device_id_query_ = CreateMaybeMessage< ::dsa::control::v1::GoogleDeviceIdQuery >(GetArenaForAllocation());
+  }
+  return _impl_.body_.google_device_id_query_;
+}
+inline ::dsa::control::v1::GoogleDeviceIdQuery* Envelope::mutable_google_device_id_query() {
+  ::dsa::control::v1::GoogleDeviceIdQuery* _msg = _internal_mutable_google_device_id_query();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.google_device_id_query)
+  return _msg;
+}
+
+// .dsa.control.v1.GoogleDeviceId google_device_id = 406;
+inline bool Envelope::_internal_has_google_device_id() const {
+  return body_case() == kGoogleDeviceId;
+}
+inline bool Envelope::has_google_device_id() const {
+  return _internal_has_google_device_id();
+}
+inline void Envelope::set_has_google_device_id() {
+  _impl_._oneof_case_[0] = kGoogleDeviceId;
+}
+inline void Envelope::clear_google_device_id() {
+  if (_internal_has_google_device_id()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete _impl_.body_.google_device_id_;
+    }
+    clear_has_body();
+  }
+}
+inline ::dsa::control::v1::GoogleDeviceId* Envelope::release_google_device_id() {
+  // @@protoc_insertion_point(field_release:dsa.control.v1.Envelope.google_device_id)
+  if (_internal_has_google_device_id()) {
+    clear_has_body();
+    ::dsa::control::v1::GoogleDeviceId* temp = _impl_.body_.google_device_id_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    _impl_.body_.google_device_id_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::dsa::control::v1::GoogleDeviceId& Envelope::_internal_google_device_id() const {
+  return _internal_has_google_device_id()
+      ? *_impl_.body_.google_device_id_
+      : reinterpret_cast< ::dsa::control::v1::GoogleDeviceId&>(::dsa::control::v1::_GoogleDeviceId_default_instance_);
+}
+inline const ::dsa::control::v1::GoogleDeviceId& Envelope::google_device_id() const {
+  // @@protoc_insertion_point(field_get:dsa.control.v1.Envelope.google_device_id)
+  return _internal_google_device_id();
+}
+inline ::dsa::control::v1::GoogleDeviceId* Envelope::unsafe_arena_release_google_device_id() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:dsa.control.v1.Envelope.google_device_id)
+  if (_internal_has_google_device_id()) {
+    clear_has_body();
+    ::dsa::control::v1::GoogleDeviceId* temp = _impl_.body_.google_device_id_;
+    _impl_.body_.google_device_id_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Envelope::unsafe_arena_set_allocated_google_device_id(::dsa::control::v1::GoogleDeviceId* google_device_id) {
+  clear_body();
+  if (google_device_id) {
+    set_has_google_device_id();
+    _impl_.body_.google_device_id_ = google_device_id;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:dsa.control.v1.Envelope.google_device_id)
+}
+inline ::dsa::control::v1::GoogleDeviceId* Envelope::_internal_mutable_google_device_id() {
+  if (!_internal_has_google_device_id()) {
+    clear_body();
+    set_has_google_device_id();
+    _impl_.body_.google_device_id_ = CreateMaybeMessage< ::dsa::control::v1::GoogleDeviceId >(GetArenaForAllocation());
+  }
+  return _impl_.body_.google_device_id_;
+}
+inline ::dsa::control::v1::GoogleDeviceId* Envelope::mutable_google_device_id() {
+  ::dsa::control::v1::GoogleDeviceId* _msg = _internal_mutable_google_device_id();
+  // @@protoc_insertion_point(field_mutable:dsa.control.v1.Envelope.google_device_id)
+  return _msg;
+}
+
 // .dsa.control.v1.DeviceIdle device_idle = 42;
 inline bool Envelope::_internal_has_device_idle() const {
   return body_case() == kDeviceIdle;
@@ -54092,6 +56353,20 @@ inline Envelope::BodyCase Envelope::body_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

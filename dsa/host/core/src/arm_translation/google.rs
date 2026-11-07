@@ -90,7 +90,9 @@ struct Listed {
 /// The API level of an Android major version: Android 13 is API 33, and each major since
 /// adds one.
 pub fn api_level(android_major: u32) -> Option<u32> {
-    (13..100).contains(&android_major).then_some(android_major + 20)
+    (13..100)
+        .contains(&android_major)
+        .then_some(android_major + 20)
 }
 
 /// The text inside the first `<name>` element of `xml`, or "" for an empty element.

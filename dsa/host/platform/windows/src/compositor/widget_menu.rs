@@ -181,7 +181,9 @@ pub fn entries(text: &MenuText, sizes: &[SizeChoice], placement: &Placement) -> 
     let mut out = Vec::with_capacity(3);
     if !sizes.is_empty() {
         let resize = MenuItem::new(RESIZE, text.resize).with_glyph(glyph::RESIZE);
-        out.push(MenuEntry::Item(resize.with_access_key('R').with_submenu(sizes)));
+        out.push(MenuEntry::Item(
+            resize.with_access_key('R').with_submenu(sizes),
+        ));
         out.push(MenuEntry::Separator);
     }
     out.push(MenuEntry::Item(remove.with_access_key('M')));
