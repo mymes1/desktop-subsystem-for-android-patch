@@ -71,7 +71,9 @@ DSA는 안드로이드를 전용 경량 VM에서 실행하고, 안드로이드 �
   업데이트, adb를 포함한 개발자 모드, 안드로이드의 실시간 로그와 진단.
 
 **함께 배포하지 않는 것:** Google Play 서비스와 앱 스토어(라이선스상 사용자가 선택할
-일입니다), 그리고 Microsoft의 WSA 바이너리.
+일입니다), 그리고 Microsoft의 WSA 바이너리. Google Play가 필요한 사용자는 DSA 설정이나
+`dsa gapps install`로 설치합니다. 그러면 DSA가 공개된 LiteGapps Core 패키지를 그 사용자의
+안드로이드에 맞게 내려받아 시스템 위에 얹습니다. Google 앱은 Google의 약관을 따릅니다.
 
 ## 지원 플랫폼
 

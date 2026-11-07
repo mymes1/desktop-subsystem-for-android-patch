@@ -51,12 +51,13 @@ use std::time::Duration;
 
 use dsa_protocol::control::envelope::Body;
 use dsa_protocol::control::{
-    AndroidFiles, ArmTranslationState, Envelope, FileSharing, GuestBoot, LocationRequest,
-    PowerHintKind,
+    AndroidFiles, ArmTranslationState, Envelope, FileSharing, GappsState, GuestBoot,
+    LocationRequest, PowerHintKind,
 };
 
 use crate::arm_translation::ArmTranslation;
 use crate::gamepad::GamepadDevices;
+use crate::gapps::Gapps;
 
 /// The agent's package, which is the name of its process.
 pub const AGENT_PROCESS: &str = "io.github.thisisthepy.dsa.agent";
@@ -239,6 +240,8 @@ pub struct Router {
     android_files: Option<AndroidFilesSwitch>,
     /// The ARM translation package on the user's disk, which the host installs and removes.
     arm_translation: Option<Arc<ArmTranslation>>,
+    /// The Google apps' image on the user's disk, which the host installs and removes.
+    gapps: Option<Arc<Gapps>>,
     /// The gamepad devices of the host's controllers.
     gamepads: Option<Arc<GamepadDevices>>,
     /// Where the agent's diagnostics go instead of the host's control channel.
@@ -276,6 +279,7 @@ impl Router {
             file_sharing: None,
             android_files: None,
             arm_translation: None,
+            gapps: None,
             gamepads: None,
             diagnostics: Mutex::new(None),
             apps_closed: (Mutex::new(0), Condvar::new()),
@@ -356,6 +360,12 @@ impl Router {
         self
     }
 
+    /// Hands the host's messages about the Google apps to `gapps`, and its answers to the host.
+    pub fn on_gapps(mut self, gapps: Arc<Gapps>) -> Router {
+        self.gapps = Some(gapps);
+        self
+    }
+
     /// Hands the host's game controller messages to `devices`.
     pub fn on_gamepads(mut self, devices: Arc<GamepadDevices>) -> Router {
         self.gamepads = Some(devices);
@@ -397,6 +407,32 @@ impl Router {
         };
         let _ = self.to_host.send(dsa_protocol::encode(&Envelope {
             body: Some(Body::ArmTranslationState(state)),
+        }));
+        true
+    }
+
+    /// Answers the host's message about the Google apps `body`, and says whether it was one.
+    /// A guest without their store answers that it has none.
+    fn gapps_message(&self, body: &Body) -> bool {
+        let state = match (body, &self.gapps) {
+            (_, Some(gapps)) => match gapps.handle(body) {
+                Some(state) => state,
+                None => return false,
+            },
+            (
+                Body::GappsInstall(_)
+                | Body::GappsChunk(_)
+                | Body::GappsRemove(_)
+                | Body::GappsQuery(_),
+                None,
+            ) => GappsState {
+                error: "this guest cannot keep the Google apps".into(),
+                ..GappsState::default()
+            },
+            _ => return false,
+        };
+        let _ = self.to_host.send(dsa_protocol::encode(&Envelope {
+            body: Some(Body::GappsState(state)),
         }));
         true
     }
@@ -526,6 +562,9 @@ impl Router {
             if self.arm_translation_message(body) {
                 return;
             }
+            if self.gapps_message(body) {
+                return;
+            }
             if self.gamepad_message(body) {
                 return;
             }
@@ -605,6 +644,18 @@ impl Router {
                 return Err(SendError::NotAllowed(
                     "how far the guest has got is the daemon's to say".to_string(),
                 ))
+            }
+            Some(Body::GappsState(_)) => {
+                return Err(SendError::NotAllowed(
+                    "where the Google apps stand is the daemon's to say".to_string(),
+                ))
+            }
+            Some(Body::GoogleDeviceId(_)) => {
+                (self.agent_check)(sender).map_err(|why| {
+                    SendError::NotAllowed(format!(
+                        "only the agent says the Google Services Framework Android ID: {why}"
+                    ))
+                })?;
             }
             Some(Body::AgentConnected(_)) => {
                 if !state.listeners.iter().any(|s| s.peer == sender) {

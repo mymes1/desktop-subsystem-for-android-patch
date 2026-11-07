@@ -1401,6 +1401,87 @@ message ArmTranslation {
   bool restart_needed = 7;
 }
 
+// The Google apps package a user installed: LiteGapps' Core build for their Android, which the
+// service downloaded from LiteGapps' file host.
+message GappsPackage {
+  // LiteGapps' name for the build: "core".
+  string variant = 1;
+  // The build's date, yyyymmdd, from its file name.
+  string version = 2;
+  // The Android version the build is for, as LiteGapps names it ("16.0").
+  string android_version = 3;
+  // The Android API level the build is for.
+  uint32 sdk = 4;
+  // The processor architecture the build is for, as LiteGapps names it ("x86_64", "arm64").
+  string arch = 5;
+  // The file the service downloaded.
+  string file = 6;
+  // Where it downloaded it from.
+  string source = 7;
+  // The MD5 digest the file host published for it, which the download matched.
+  string md5 = 8;
+}
+
+// Installs Google Play for the caller's Android: the service finds the newest LiteGapps Core
+// build for the Android version and architecture the running Android reports, downloads it,
+// checks it, makes a system image of its apps and permission files, and sends the image to
+// the caller's Android, which lays it over its system from its next start. While it works it
+// answers the request id with GappsProgress, as often as there is news; it then answers once
+// more with Gapps, or an error. The connection then ends. Android must be running.
+message InstallGapps {}
+
+// Asks where Google Play stands for the caller. Answered with Gapps.
+message GetGapps {}
+
+// Removes the caller's Google apps. Answered with Gapps. Android goes on using an image it
+// has mounted until it restarts.
+message RemoveGapps {}
+
+// What an InstallGapps is doing.
+enum GappsStage {
+  GAPPS_STAGE_UNSPECIFIED = 0;
+  // Reading the file host's list of builds.
+  GAPPS_STAGE_LISTING = 1;
+  // Downloading the build: `done` of `total` bytes.
+  GAPPS_STAGE_DOWNLOADING = 2;
+  // Checking the build and making the system image.
+  GAPPS_STAGE_BUILDING = 3;
+  // Sending the image to Android: `done` of `total` bytes.
+  GAPPS_STAGE_SENDING = 4;
+}
+
+// News of an InstallGapps under way.
+message GappsProgress {
+  GappsStage stage = 1;
+  uint64 done = 2;
+  // 0 when not known.
+  uint64 total = 3;
+}
+
+// Where Google Play stands for the caller.
+message Gapps {
+  // The installed package; absent when there is none.
+  GappsPackage package = 1;
+  // Whether the running Android was asked, and answered: the fields below up to device_id
+  // hold only then.
+  bool guest_known = 2;
+  // The Google apps image is on the user's Android disk.
+  bool guest_installed = 3;
+  // The running Android has the Google apps laid over its system.
+  bool guest_active = 4;
+  // The running Android's API level and primary ABI.
+  uint32 sdk = 5;
+  string abi = 6;
+  // The ABIs the running Android installs apps for, in the order it prefers them.
+  string abilist = 7;
+  // The running Android's Google Services Framework Android ID, in decimal, which Google's
+  // page for uncertified devices asks for; empty until Google's apps have one.
+  string device_id = 8;
+  // What is installed differs from what the running Android booted with, so it applies once
+  // Android starts again.
+  bool restart_needed = 9;
+}
+
 // Asks for the device identity of the caller's Android.
 message GetDeviceIdentity {}
 
@@ -1746,6 +1827,9 @@ message Request {
     EndDrag end_drag = 322;
     GetAndroidVersions get_android_versions = 330;
     UseAndroidVersion use_android_version = 331;
+    InstallGapps install_gapps = 400;
+    GetGapps get_gapps = 401;
+    RemoveGapps remove_gapps = 402;
   }
 }
 
@@ -1775,6 +1859,8 @@ message Response {
     DragOffer drag_offer = 320;
     DragData drag_data = 321;
     AndroidVersions android_versions = 330;
+    Gapps gapps = 400;
+    GappsProgress gapps_progress = 401;
   }
 }
 

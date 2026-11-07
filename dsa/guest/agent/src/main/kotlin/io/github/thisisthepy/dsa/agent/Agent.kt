@@ -13,6 +13,8 @@ import io.github.thisisthepy.dsa.agent.input.EditorConnection
 import io.github.thisisthepy.dsa.agent.install.ApkInstaller
 import io.github.thisisthepy.dsa.agent.install.AppUninstaller
 import io.github.thisisthepy.dsa.agent.install.PackageUninstallerPort
+import io.github.thisisthepy.dsa.agent.install.GoogleDeviceIdPort
+import io.github.thisisthepy.dsa.agent.install.GoogleDeviceIds
 import io.github.thisisthepy.dsa.agent.install.PackageInfoPort
 import io.github.thisisthepy.dsa.agent.install.PackageInstallerPort
 import io.github.thisisthepy.dsa.agent.install.PackageQueries
@@ -145,6 +147,7 @@ class Agent(
     stopper: AppStopper = AppStopper.NONE,
     packageInstaller: PackageInstallerPort = PackageInstallerPort.NONE,
     packages: PackageInfoPort = PackageInfoPort.NONE,
+    googleDeviceId: GoogleDeviceIdPort = GoogleDeviceIdPort.NONE,
     packageUninstaller: PackageUninstallerPort = PackageUninstallerPort.NONE,
     widgets: WidgetPlatform = WidgetPlatform.NONE,
     appProcesses: AppProcesses = AppProcesses.NONE,
@@ -239,6 +242,7 @@ class Agent(
         post = { work -> scheduler.post(work) },
     )
     private val packageQueries = PackageQueries(packages, { frame -> channel.send(frame) }, log)
+    private val googleDeviceIds = GoogleDeviceIds(googleDeviceId, { frame -> channel.send(frame) }, log)
     private val appUninstaller = AppUninstaller(
         ownPackage,
         packageUninstaller,
@@ -492,6 +496,7 @@ class Agent(
         if (backgroundApps.handle(envelope)) return true
         if (apkInstaller.handle(envelope)) return true
         if (packageQueries.handle(envelope)) return true
+        if (googleDeviceIds.handle(envelope)) return true
         if (dragOut.handle(envelope)) return true
         if (printer.handle(envelope)) return true
         if (appUninstaller.handle(envelope)) return true

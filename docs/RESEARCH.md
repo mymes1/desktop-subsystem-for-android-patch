@@ -1022,3 +1022,67 @@ Digitalis의 배포 묶음(`docker/build-digitalis.sh`)은 번역기(`libberberi
 
 - 이 번역기를 DSA 게스트(AOSP Cuttlefish 빌드)에 얹었을 때 `arm64-v8a` 전용 앱이 도는지. 에뮬레이터 빌드와 Cuttlefish 빌드의 시스템 라이브러리가 같은 AOSP 가지에서 나와도 빌드가 다르다. 실제 PC에서 확인한다(FR-25 수동 기준).
 - 36.1 이미지가 36 게스트에 더 맞는지. 지금은 기본판(36)을 고른다.
+
+## R15. Google Play 설치 도구: LiteGapps Core의 구조와, 다시 빌드하지 않고 얹을 때 권한이 서는 조건 (FR-32)
+
+**기준.** 2026-11-07. SourceForge의 LiteGapps 폴더 네 곳(`litegapps/x86_64/36/core`, `x86_64/37/core`, `arm64/36/core`, `arm64/37/core`)의 RSS 목록을 받아 읽었다. `LiteGapps-core-x86_64-16.0-20261001-official.zip`(122,196,440바이트, MD5 `ea9945a6d63849fa9e51782edfe613a4`)과 `LiteGapps-core-arm64-17.0-20261001-official.zip`(MD5 `52d7a470ad47be3dce1504e03a149f8e`)을 `.scratch/`에 받아 `unzip`, `xz -lvv`, `tar -t`로 풀어 보았다. 받은 파일의 MD5는 목록 값과 같았다. AOSP `android16-release`의 `core/java/android/content/pm/PackagePartitions.java`, `core/java/android/os/Build.java`, `services/core/java/com/android/server/pm/Settings.java`, `services/core/java/com/android/server/pm/permission/PermissionManagerServiceImpl.java`, `services/core/java/com/android/server/SystemConfig.java`를 읽었다. 게스트에서 설치해 보지는 않았다.
+
+### 배포처와 목록
+
+- 빌드 하나는 `litegapps/<arch>/<api>/core/<yyyy-mm-dd>/LiteGapps-core-<arch>-<android>-<yyyymmdd>-official.zip`에 있다. `arch`는 `x86_64`, `arm64`(그 밖에 `arm`, `x86`)이고, API 36과 37이 모두 있다. x86_64에는 `core`와 `lite`만 있고, arm64에는 `basic`, `go`, `micro`, `nano`, `pixel`, `user` 등도 있다.
+- `https://sourceforge.net/projects/litegapps/rss?path=/litegapps/<arch>/<api>/core`가 그 폴더의 파일을 최신 순으로 준다. 항목마다 경로(`<title>`), 크기(`filesize`), MD5(`<media:hash algo="md5">`)가 있다. 공개된 체크섬은 MD5뿐이다.
+- 받는 주소는 `https://sourceforge.net/projects/litegapps/files/litegapps/<arch>/<api>/core/<날짜>/<파일>/download`이고, HTTPS 미러로 넘어간다. curl `-L`과 WinHTTP가 그대로 따라간다.
+- 2026-11-07의 최신은 네 곳 모두 20261001이다. 크기는 x86_64/36 122 MB, x86_64/37 149 MB, arm64/36 215 MB, arm64/37 257 MB이다.
+
+### zip의 구조
+
+| 경로 | 내용 |
+|---|---|
+| `module.prop` | `litegapps_variant=core`, `litegapps_arch=x86_64`, `litegapps_sdk=36` |
+| `files/files.tar.xz` | 앱과 설정 파일. arm64판에는 같은 파일이 최상위 `files.tar.xz`로도 있다. zip 안에서는 deflate로 싸였지만 줄지 않는다(stored 블록) |
+| `modules/core/<이름>/<이름>-LiteGapps-Addon-<arch>-<android>.zip` | 덧붙이는 묶음. `module.prop`(`android_arch`, `android_sdk`), `system/` 아래 파일, 지울 앱 목록(`list-rm`) |
+| `META-INF/`, `customize.sh`, `bin/<arch>/{xz,tar,toybox}`, `*.sh` | 폰의 리커버리나 Magisk가 설치할 때 쓰는 것 |
+
+- `files.tar.xz`는 xz(LZMA2 필터만, 사전 64 MiB, 블록 2개, 블록마다 크기 기록, CRC64)이고, 풀면 267 MiB(x86_64/36)이다. tar 안에는 `<arch>/<api>/system/` 아래 `product/`와 `system_ext/`만 있다. 링크와 장치 파일은 없다.
+  - `product/priv-app/GmsCore`(183 MB), `product/priv-app/Phonesky`(90 MB)
+  - `product/app/GoogleCalendarSyncAdapter`, `GoogleContactsSyncAdapter`
+  - `product/framework/com.google.android.dialer.support.jar`
+  - `product/etc/permissions/`(`privapp-permissions-google*.xml`, `com.google.android.gms.xml`, `com.android.vending.xml` 등), `etc/default-permissions/`, `etc/sysconfig/`(`google*.xml`, `pixel_experience_*.xml`, `preinstalled-packages-*.xml`), `etc/preferred-apps/`
+  - `system_ext/priv-app/GoogleServicesFramework`, `system_ext/etc/permissions/privapp-permissions-google-se.xml`, `com.google.android.gsf.xml`
+- x86_64/36의 덧붙이는 묶음은 Common(권한과 sysconfig 파일의 새 판), GoogleExtShared, GoogleFeedback, GooglePartnerSetup, GoogleRestore, SetupWizard, PixelSetupWizard이다. arm64/37에는 GoogleFeedback이 없다.
+- `customize.sh`는 tar의 `<arch>/<api>/system/*`을 시스템으로 복사하고(API 29 이상이면 `product` 아래로), 덧붙이는 묶음을 차례로 깐다. 묶음마다 `android_sdk`와 `android_arch`가 기기와 다르면 거부한다.
+
+### 다시 빌드하지 않고 얹을 때 권한이 서는 조건 (AOSP android16-release)
+
+1. **특권 권한 허용 목록은 앱과 같은 파티션의 것만 본다.** SystemConfig는 `privapp-permissions` 항목을 그 파일의 경로가 `Environment.getProductDirectory()`(`/product/`), `getSystemExtDirectory()`(`/system_ext/`), `getVendorDirectory()`로 시작하는지로 나누어 따로 모은다. `PermissionManagerServiceImpl.checkPrivilegedPermissionAllowlist`는 앱이 있는 파티션의 목록만 본다. `ro.control_privapp_permissions=enforce`이면 목록에 없는 특권 권한은 부팅 때 위반으로 모인다. 그래서 `/product/priv-app`의 GmsCore와 `/product/etc/permissions`의 목록, `/system_ext/priv-app`의 GoogleServicesFramework와 `/system_ext/etc/permissions`의 목록이 각각 같은 경로로 보여야 한다. SystemConfig는 `/product/etc/sysconfig`, `/product/etc/permissions`, `/system_ext/etc/...`를 디렉터리째 읽고, PackagePartitions는 `/product/priv-app`과 `/system_ext/priv-app`을 특권 앱 폴더로 본다. 오버레이를 파티션 자리(`/product`, `/system_ext`)에 그대로 얹으면 어느 경로도 바뀌지 않는다.
+2. **기본 권한(`etc/default-permissions`)은 첫 부팅이나 업그레이드 때만 준다.** `Settings.RuntimePermissionPersistence.isPermissionUpgradeNeeded`는 사용자별로 저장해 둔 지문이 `PackagePartitions.FINGERPRINT + "?pc_version=" + 권한 컨트롤러 버전`과 다를 때만 참이고, 그때만 기본 권한 정책이 돈다. `PackagePartitions.FINGERPRINT`는 `ro.build.fingerprint`와 시스템 파티션(system, vendor, odm, oem, product, system_ext)마다의 `ro.<파티션>.build.fingerprint`를 `SystemProperties.digestOf`로 합친 값이다. 그래서 이미 쓰던 사용자 디스크에 Google 앱을 얹기만 하면 지문이 같아, GmsCore와 동기화 앱이 위치, 연락처, 캘린더 같은 기본 권한을 받지 못한다. 새로 나타난 시스템 앱을 사용자 종류별 허용 목록대로 사용자마다 설치하는 일도 업그레이드 경로에서 일어난다.
+3. **oem 파티션의 지문은 앱이 보지 않는다.** `Build.getFingerprintedPartitions()`는 bootimage, odm, product, system_ext, system, vendor만 나열한다. `Build.isBuildConsistent()`는 system과 vendor만 비교한다. DSA 이미지에는 oem 파티션이 없으므로 `ro.oem.build.fingerprint`를 정하는 쪽은 DSA뿐이다.
+
+### 결정
+
+1. 받는 것은 Core 빌드다. 목록에서 이름이 `LiteGapps-core-<arch>-<android>-<yyyymmdd>-official.zip`이고 폴더가 날짜 모양인 것 가운데 날짜가 가장 늦은 것을 고른다. 받은 파일의 크기와 MD5가 목록과 같아야 쓴다. `arch`와 API는 실행 중인 게스트가 알리는 `ro.product.cpu.abi`(x86_64는 `x86_64`, arm64-v8a는 `arm64`)와 `ro.build.version.sdk`로 정한다.
+2. 이미지에는 tar와 덧붙이는 묶음의 `product/`, `system_ext/` 아래 `app`, `priv-app`, `etc`, `framework`만 넣는다. 파티션 구조를 그대로 두므로 허용 목록이 앱과 같은 파티션에 남는다. 나머지(`vendor`, `lib64`, 설치 스크립트와 도구)는 넣지 않는다. zip, tar, 덧붙이는 묶음 어디에든 `..`나 절대 경로, 드라이브 이름이 있으면 빌드 전체를 거부한다. `module.prop`의 arch나 API가 게스트와 다르거나, 그 arch와 API 아래에 GmsCore와 Phonesky가 없거나, 덧붙이는 묶음의 arch나 API가 다르면 거부한다. 거부하면 저장된 상태는 그대로다.
+3. 덧붙이는 묶음 가운데 SetupWizard, PixelSetupWizard, GoogleRestore는 넣지 않는다. 설정 마법사는 HOME 활동으로 DSA 에이전트의 HOME을 밀어내는데, DSA에서는 호스트가 셸이다(D6). GoogleRestore는 마법사가 부르는 복원 단계다. 계정 추가와 Play 로그인은 GmsCore의 자체 화면으로 된다. 나머지(Common, GoogleExtShared, GoogleFeedback, GooglePartnerSetup)는 넣는다.
+4. 게스트는 bootconfig에 `androidboot.dsa.gapps=on`이 있을 때만(`dsa-gapps.rc`, `on post-fs-data && property:ro.boot.dsa.gapps=on`) 이미지를 loop 장치로 올린다. 레이블은 `context=u:object_r:system_file:s0`으로, 원래 `/product`와 `/system_ext`의 앱과 설정 파일과 같다. 그 위에 overlayfs로 `lowerdir=/mnt/dsa-gapps/product:/product`를 `/product`에, `system_ext`도 같은 방식으로 얹는다. zygote와 system_server가 시작하기 전이다.
+5. 같은 조건에서 product `build.prop`이 `/system/etc/dsa/gapps-on.prop`을 가져와 `ro.oem.build.fingerprint`를 정한다(조건이 없으면 아무것도 정하지 않는 `gapps-off.prop`). 그러면 `PackagePartitions.FINGERPRINT`가 바뀌어 그 부팅이 업그레이드가 된다. 패키지 관리자는 시스템 앱을 다시 훑고, 새 앱을 사용자마다 설치하고, 기본 권한을 준다. 앱이 읽는 지문은 바뀌지 않는다. 제거하면 값이 사라져 다시 업그레이드가 되고, 사라진 앱이 정리된다. 가져오는 줄은 ARM 번역의 가져오는 줄 바로 앞에 둔다(ARM 쪽이 끝줄이어야 한다).
+6. ABI 순서: `arm-translation-on.prop`의 목록은 `x86_64,arm64-v8a`이다. 패키지 관리자와 Play는 목록의 앞쪽 ABI를 고르므로, 번역기를 켜도 Play 서비스와 시스템 앱의 갱신은 x86_64판으로 온다. 이미지 검사가 x86_64이 맨 앞인지 확인한다.
+7. erofs 이미지는 호스트가 직접 쓴다(`dsa/host/core/src/erofs.rs`). 압축하지 않는 평면 배치, 32바이트 inode, 디렉터리와 일반 파일만 쓰고, 파일 데이터는 도착하는 대로 쓰고 inode와 디렉터리는 마지막에 데이터 뒤에 쓴다. zip은 APK를 읽던 코드(`apk_info::zip`, `inflate`)로, `files.tar.xz`는 새로 쓴 xz/LZMA2 해독기(`gapps/xz.rs`, xz-embedded의 해독 방식)와 흘려 읽는 tar 해석기로 읽는다. MD5도 직접 계산한다. Windows, Linux, macOS가 같은 코드를 쓰고, mkfs.erofs나 xz, Python 같은 도구가 필요 없다. 받기는 이미지 업데이트가 쓰는 `Fetch`(Windows는 WinHTTP, Linux와 macOS는 curl)를 그대로 쓴다. Google의 ARM 번역기로 묶음을 만들 때(R14) 쓰는 `Builder`는 트리 전체를 메모리에 두므로, 수백 MiB인 Google 앱에는 파일을 받는 대로 쓰는 `Stream`을 같은 모듈에 두고 폴더 배치와 inode, 슈퍼블록 부호화를 함께 쓴다.
+8. 인증되지 않은 기기: DSA의 안드로이드는 Google이 인증한 기기가 아니므로 Google 로그인이 막힐 수 있다. 사용자는 `https://www.google.com/android/uncertified/`에 Google Services Framework Android ID를 등록한다. 에이전트가 GSF의 `content://com.google.android.gsf.gservices`에서 `android_id`(10진수)를 읽어 호스트에 알리고, `dsa gapps status`와 설정 앱이 보여 준다.
+
+### 검증
+
+- 해독기의 논리는 같은 코드를 줄 단위로 옮긴 Python 시험판(`.scratch/`)으로, `xz` 5.x가 만든 시험 파일 여섯 개(기본, 블록 4 KiB, `-9e`와 SHA-256 검사, `lc=1,lp=2,pb=1`, `preset=0`과 검사 없음, 청크 둘 이상)를 풀어 원본과 같음을 확인했다. 같은 파일들이 `gapps/testdata/`에서 Rust 테스트로 돈다.
+- erofs 이미지는 테스트 안의 읽기 코드로 되읽고, Linux CI에서는 erofs-utils의 `fsck.erofs --extract`로 풀어 내용을 비교한다(`fr32_erofs_utils_read_the_image_back_when_they_are_installed`).
+
+### 대가
+
+- 설치하거나 제거한 뒤의 첫 부팅은 업그레이드라 오래 걸린다(모든 패키지를 다시 훑고 컴파일 상태를 맞춘다).
+- 서비스는 만드는 동안 압축된 `files.tar.xz`(약 100 MB)와 해독 사전(64 MiB)을 메모리에 둔다. 받은 zip과 만든 이미지는 서비스 폴더에 잠시 있고, 끝나면 지운다. 이미지(270 MB 안팎)는 사용자 디스크에 한 벌 남는다.
+- MD5만 공개되므로, 무결성은 받은 파일이 목록과 같다는 데까지다. 목록과 파일이 같은 곳(SourceForge)에서 오므로 배포처 자체가 바뀐 것은 막지 못한다.
+
+### 확인하지 못한 것 (수동 확인)
+
+- 실제 게스트에서 overlay 위의 GmsCore, Phonesky, GoogleServicesFramework가 특권 권한과 기본 권한을 받는지(`dumpsys package com.google.android.gms`의 granted 목록), Play 로그인과 캘린더, 주소록 동기화가 되는지.
+- overlayfs가 init의 자격으로 아래 파일을 읽을 때 SELinux 거부가 없는지(`dmesg | grep avc`).
+- 에이전트가 `READ_GSERVICES` 권한 없이 gservices에서 `android_id`를 읽을 수 있는지. 못 읽으면 ID는 비어 있고 설정 앱은 안내만 보인다.
+- ARM 번역기를 켠 채 Play가 Play 서비스를 x86_64판으로 갱신하는지.

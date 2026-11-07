@@ -1523,6 +1523,34 @@ def add_arm_translation_import(text):
     imported properties win over every partition's own."""
     lines = [line for line in text.splitlines() if line.strip() != ARM_TRANSLATION_IMPORT]
     return "\n".join(lines + [ARM_TRANSLATION_IMPORT]) + "\n"
+
+
+# Google Play, for a user who installs it (`dsa gapps install`). The host puts
+# androidboot.dsa.gapps=on in the boot's bootconfig only while the user has a Google apps image
+# installed. The init script then lays the image over /product and /system_ext before the
+# zygote starts, and the product build.prop imports the "on" file, whose fingerprint for the
+# oem partition (which the image does not have) makes the boot an upgrade, so the package
+# manager installs the new system apps for every user and grants their default permissions.
+# Without it the "off" file sets nothing. ro.* properties are fixed once read, so this is decided
+# at boot.
+GAPPS_RC = "SYSTEM/etc/init/dsa-gapps.rc"
+GAPPS_PROPS = {
+    "SYSTEM/etc/dsa/gapps-on.prop": HERE / "gapps-on.prop",
+    "SYSTEM/etc/dsa/gapps-off.prop": HERE / "gapps-off.prop",
+}
+GAPPS_IMPORT = "import /system/etc/dsa/gapps-${ro.boot.dsa.gapps:-off}.prop"
+GAPPS_FS_CONFIG = [
+    "system/etc/init/dsa-gapps.rc 0 0 644 capabilities=0x0",
+    "system/etc/dsa/gapps-on.prop 0 0 644 capabilities=0x0",
+    "system/etc/dsa/gapps-off.prop 0 0 644 capabilities=0x0",
+]
+
+
+def add_gapps_import(text):
+    """Returns the product build.prop ending with the Google Play import. The ARM translation
+    import goes after it (add_arm_translation_import), as the last line."""
+    lines = [line for line in text.splitlines() if line.strip() != GAPPS_IMPORT]
+    return "\n".join(lines + [GAPPS_IMPORT]) + "\n"
 # The property dsa-channeld sets to have init drop the caches and compact memory, so free
 # page reporting hands idle memory back to the host. vendor_property_contexts gives it the
 # type the daemon's policy lets it set.
@@ -1815,6 +1843,7 @@ AUDIO_POLICY = HERE / "sepolicy/audio.cil"
 ADB_POLICY = HERE / "sepolicy/adb.cil"
 KERNEL_POLICY = HERE / "sepolicy/kernel.cil"
 ARM_TRANSLATION_POLICY = HERE / "sepolicy/arm-translation.cil"
+GAPPS_POLICY = HERE / "sepolicy/gapps.cil"
 
 
 def narrow_vsock_neverallows(text):
@@ -2068,6 +2097,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             plat_patched += "\n" + KERNEL_POLICY.read_text()
             # init mounting a user's ARM translation package over /system.
             plat_patched += "\n" + ARM_TRANSLATION_POLICY.read_text()
+            # init laying a user's Google apps over /product and /system_ext.
+            plat_patched += "\n" + GAPPS_POLICY.read_text()
             if channeld_payload is not None:
                 # Its rules name the domain they declare, so they go in whole.
                 plat_patched += "\n" + CHANNELD_POLICY.read_text()
@@ -2182,7 +2213,7 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                                       product=name == PRODUCT_PROP_FILE,
                                       network=name == NETWORK_PROPS_FILE).encode()
                     if name == ARM_TRANSLATION_PRODUCT_PROPS:
-                        data = add_arm_translation_import(data.decode()).encode()
+                        data = add_arm_translation_import(add_gapps_import(data.decode())).encode()
                 elif name in IDENTITY_PROP_FILES:
                     data = edit_identity(data.decode(), build_tag=build_tag).encode()
                 elif name.rsplit("/", 1)[-1].startswith("fstab.") and kernel_disk_names(data.decode(errors="replace")):
@@ -2215,7 +2246,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                         data += SETTINGS_OVERLAY_APKCERTS.encode() + b"\n"
                 elif name == SYSTEM_FS_CONFIG:
                     data = add_filesystem_config(data.decode(),
-                                                 TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG).encode()
+                                                 TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG
+                                                 + GAPPS_FS_CONFIG).encode()
                 elif name == SYSTEM_EXT_FS_CONFIG and agent_payload is not None:
                     data = add_filesystem_config(data.decode(), AGENT_FS_CONFIG).encode()
                 elif name in FSTAB_DIRS.values():
@@ -2258,6 +2290,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         zout.writestr(CONSOLE_RC, (HERE / "dsa-console.rc").read_bytes())
         zout.writestr(ARM_TRANSLATION_RC, (HERE / "dsa-arm-translation.rc").read_bytes())
         for target, source_file in ARM_TRANSLATION_PROPS.items():
+            zout.writestr(target, source_file.read_bytes())
+        zout.writestr(GAPPS_RC, (HERE / "dsa-gapps.rc").read_bytes())
+        for target, source_file in GAPPS_PROPS.items():
             zout.writestr(target, source_file.read_bytes())
         if VENDOR_PROPERTY_CONTEXTS not in names:
             zout.writestr(VENDOR_PROPERTY_CONTEXTS, update_vendor_property_contexts(""))

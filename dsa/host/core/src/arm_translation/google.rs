@@ -26,7 +26,7 @@
 
 mod disk;
 mod ext4;
-mod inflate;
+pub(crate) mod inflate;
 mod sha1;
 
 use std::fs::{self, File};

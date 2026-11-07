@@ -794,6 +794,20 @@ impl UserAndroid for WithProgramStatus {
     fn arm_translation(&self) -> Option<crate::arm_translation::GuestArmTranslation> {
         self.android.arm_translation()
     }
+    fn install_gapps(
+        &self,
+        size: u64,
+        sha256: &[u8],
+        content: &mut dyn std::io::Read,
+    ) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
+        self.android.install_gapps(size, sha256, content)
+    }
+    fn remove_gapps(&self) -> Result<crate::gapps::GuestGapps, crate::host_api::InstallError> {
+        self.android.remove_gapps()
+    }
+    fn gapps(&self) -> Option<crate::gapps::GuestGapps> {
+        self.android.gapps()
+    }
     fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
         self.android.developer_mode(on, port)
     }

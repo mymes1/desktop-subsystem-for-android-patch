@@ -44,6 +44,8 @@
 //!   color, which each user's Android follows.
 //! - [`gamepads`]: the host's game controllers, shown to the guest as gamepads.
 //! - [`app_windows`]: a user's window settings for each app.
+//! - [`gapps`]: Google Play for a user who asks for it, downloaded and laid over the guest's
+//!   system as an erofs image.
 //! - [`memory`]: how much memory a user's Android takes, in the guest and on the host.
 //! - [`window_manager`]: keeping a user's window manager running while their Android runs.
 //! - [`compositor`]: platform-neutral graphics stream bookkeeping, renderer interfaces, and
@@ -72,6 +74,7 @@ pub mod file_share;
 pub mod files;
 pub mod files_door;
 pub mod gamepads;
+pub mod gapps;
 pub mod guest_display;
 pub mod guest_log;
 pub mod guest_log_api;
