@@ -76,6 +76,12 @@ final class StringCatalogTests: XCTestCase {
         }
     }
 
+    func test_fr21_the_log_page_uses_the_app_font() throws {
+        let source = try String(contentsOf: package.appendingPathComponent("Sources/DsaSettings/AndroidPages.swift"), encoding: .utf8)
+        let page = try XCTUnwrap(source.range(of: "struct LogsPage"))
+        XCTAssertFalse(source[page.lowerBound...].contains("monospaced"), "the log page sets a monospaced font instead of the app's own")
+    }
+
     func test_fr17_automatic_memory_limit_names_no_fixed_size() throws {
         let values = try XCTUnwrap(try catalog()["MemoryLimitCard.Description"])
         for (language, half) in [("en", "half of this Mac's memory"), ("ko", "이 Mac 메모리의 절반")] {

@@ -403,6 +403,15 @@ fn fr17_shared_folders_keep_the_service_order() {
 }
 
 #[test]
+fn fr21_the_log_page_uses_the_app_font() {
+    let page = std::fs::read_to_string(crate_dir().join("src/ui/logs.rs")).unwrap();
+    assert!(
+        !page.contains("monospace"),
+        "the log page sets a monospace font instead of the app's own"
+    );
+}
+
+#[test]
 fn fr17_the_log_page_filters_pauses_and_keeps_the_newest_lines() {
     let record = |message: &str| {
         json!({ "time": "10:00:00.000", "priority": "I", "tag": "Tag", "pid": 1, "tid": 2,

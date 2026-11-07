@@ -477,7 +477,6 @@ struct LogsPage: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(vm.lines) { line in
                             Text(line.text)
-                                .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(color(line.priority))
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
