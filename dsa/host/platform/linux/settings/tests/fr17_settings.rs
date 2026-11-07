@@ -80,7 +80,10 @@ fn fr17_the_app_has_every_page_the_windows_settings_app_has() {
         repo().join("dsa/host/platform/windows/settings/DsaSettings/MainWindow.xaml"),
     )
     .unwrap();
-    let windows_pages = main_window.matches("<ui:NavigationViewItem ").count();
+    // Each page is a pane item: the app's own `PaneItem` (a NavigationViewItem
+    // that names itself to UI Automation) or a plain NavigationViewItem.
+    let windows_pages = main_window.matches("<l:PaneItem ").count()
+        + main_window.matches("<ui:NavigationViewItem ").count();
     assert_eq!(
         Page::ALL.len(),
         windows_pages,
