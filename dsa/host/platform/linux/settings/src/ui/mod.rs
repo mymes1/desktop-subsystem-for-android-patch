@@ -35,13 +35,17 @@ fn parse_args(args: &[String]) -> Start {
         match arg.as_str() {
             "--page" => start.page = args.next().and_then(|id| Page::from_id(id)),
             "--install-apk" => start.apks.extend(args.next().cloned()),
-            other if other.to_ascii_lowercase().ends_with(".apk") => {
-                start.apks.push(other.to_string())
-            }
+            other if is_install_file(other) => start.apks.push(other.to_string()),
             _ => {}
         }
     }
     start
+}
+
+/// Whether `path` names what the install takes: an APK, a split-APK bundle (`.xapk`, `.apks`,
+/// `.apkm`), or an App Bundle, which it refuses with its reason.
+fn is_install_file(path: &str) -> bool {
+    dsa_host_core::apk_bundle::is_install_file(std::path::Path::new(path))
 }
 
 /// Runs the app until its window closes.
@@ -192,18 +196,17 @@ fn show_page(ctx: &Shared, split: &adw::NavigationSplitView, page: Page) {
     split.set_show_content(true);
 }
 
-/// Installs the APKs at `paths` one after the other, starting Android first when it is not
-/// running, and says how each went.
+/// Installs the APKs and split-APK bundles at `paths` one after the other, starting Android
+/// first when it is not running, and says how each went.
 fn install(ctx: &Shared, paths: Vec<String>) {
-    let (apks, others): (Vec<String>, Vec<String>) = paths
-        .into_iter()
-        .partition(|p| p.to_ascii_lowercase().ends_with(".apk"));
+    let (apks, others): (Vec<String>, Vec<String>) =
+        paths.into_iter().partition(|p| is_install_file(p));
     if !others.is_empty() {
         common::tell(
             ctx,
             &tr("Not installed"),
             &trf(
-                "Only APK files can be installed: {0}",
+                "Only APK files and split APK bundles can be installed: {0}",
                 &[&others.join(", ")],
             ),
         );

@@ -131,6 +131,7 @@ jobs:
               /usr/lib/systemd/user/dsa-devices.service /usr/lib/udev/rules.d/70-dsa.rules \
               /usr/lib/modules-load.d/dsa.conf /usr/share/applications/dsa-open.desktop \
               /usr/share/applications/dsa-apk.desktop /etc/geoclue/conf.d/90-dsa.conf \
+              /usr/share/mime/packages/io.github.thisisthepy.DSA.apk-bundles.xml \
               /etc/dsa/dsa-hostd.json /usr/lib/dsa/vm/image/image.json \
               /usr/lib/dsa/bin/crosvm /usr/lib/dsa/bin/passt /usr/lib/dsa/bin/libgfxstream_backend.so \
               /etc/apparmor.d/dsa-vm \

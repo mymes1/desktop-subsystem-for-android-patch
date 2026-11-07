@@ -528,8 +528,8 @@ msgstr "DSA 설정"
 msgid "Not installed"
 msgstr "설치하지 못했습니다"
 
-msgid "Only APK files can be installed: {0}"
-msgstr "APK 파일만 설치할 수 있습니다: {0}"
+msgid "Only APK files and split APK bundles can be installed: {0}"
+msgstr "APK 파일과 분할 APK 묶음만 설치할 수 있습니다: {0}"
 
 msgid "Installing {0} in Android…"
 msgstr "{0}을(를) Android에 설치하는 중입니다…"
