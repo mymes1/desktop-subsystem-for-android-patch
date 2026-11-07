@@ -1633,6 +1633,431 @@
         }
       }
     },
+    "GappsHeader.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play"
+          }
+        }
+      }
+    },
+    "GappsErrorBar.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play could not be changed"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play를 바꾸지 못했습니다"
+          }
+        }
+      }
+    },
+    "GappsStatusCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play services and the Play Store"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play 서비스와 Play 스토어"
+          }
+        }
+      }
+    },
+    "GappsStatusCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play is not part of DSA. You can have DSA download it and install it in Android. Android works without it too."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play는 DSA에 들어 있지 않습니다. 원하면 DSA가 받아서 Android에 설치합니다. 설치하지 않아도 Android는 그대로 쓸 수 있습니다."
+          }
+        }
+      }
+    },
+    "Gapps_Unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not known: the DSA service did not say whether Google Play is installed."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알 수 없음: DSA 서비스가 Google Play 설치 여부를 알려 주지 않았습니다."
+          }
+        }
+      }
+    },
+    "Gapps_NotInstalled": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not installed."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설치되어 있지 않습니다."
+          }
+        }
+      }
+    },
+    "Gapps_Installed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed: LiteGapps Core {0} for Android {1} ({2}), from {3}."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설치됨: Android {1}({2})용 LiteGapps Core {0}, 받은 곳 {3}."
+          }
+        }
+      }
+    },
+    "Gapps_InstalledRestart": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed. Google's apps appear once Android starts again."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설치했습니다. Android를 다시 시작하면 Google 앱이 나타납니다."
+          }
+        }
+      }
+    },
+    "Gapps_RemovedRestart": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removed. Google's apps go away once Android starts again."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제거했습니다. Android를 다시 시작하면 Google 앱이 사라집니다."
+          }
+        }
+      }
+    },
+    "GappsRestartBar.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Android"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android를 다시 시작하세요"
+          }
+        }
+      }
+    },
+    "GappsRestartBar.Message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android started before this change. Stop and start Android for Google Play to follow it."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android가 이 변경 전에 시작되었습니다. Android를 멈췄다가 다시 시작하면 Google Play에 반영됩니다."
+          }
+        }
+      }
+    },
+    "GappsInstallCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install Google Play"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play 설치"
+          }
+        }
+      }
+    },
+    "GappsInstallCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloads LiteGapps Core, a public package of Google's apps, for this Android version (about 120 to 260 MB), and installs it. Android starts first if it is not running."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "공개된 Google 앱 패키지인 LiteGapps Core를 이 Android 버전에 맞게 받아(약 120~260MB) 설치합니다. Android가 꺼져 있으면 먼저 켭니다."
+          }
+        }
+      }
+    },
+    "GappsInstalling.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading and installing Google Play. This can take several minutes."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play를 받아 설치하는 중입니다. 몇 분 걸릴 수 있습니다."
+          }
+        }
+      }
+    },
+    "GappsInstallButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설치"
+          }
+        }
+      }
+    },
+    "GappsRemoveCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove Google Play"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play 제거"
+          }
+        }
+      }
+    },
+    "GappsRemoveCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deletes Google's apps from your Android disk. They are gone from the next start of Android."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 디스크에서 Google 앱을 지웁니다. 다음에 Android를 시작할 때부터 사라집니다."
+          }
+        }
+      }
+    },
+    "GappsRemoveButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제거"
+          }
+        }
+      }
+    },
+    "GappsTerms.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google's apps belong to Google and follow Google's terms. DSA does not distribute them: on your request it downloads the public LiteGapps package from LiteGapps' site."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google 앱은 Google의 것이며 Google의 약관을 따릅니다. DSA는 이 앱을 배포하지 않습니다. 요청하면 LiteGapps 배포처에서 공개 LiteGapps 패키지를 받을 뿐입니다."
+          }
+        }
+      }
+    },
+    "GappsTermsLink.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google's terms of service"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google 서비스 약관"
+          }
+        }
+      }
+    },
+    "GappsRegisterCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Register this device with Google"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 기기를 Google에 등록하기"
+          }
+        }
+      }
+    },
+    "GappsRegisterCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android here is not a device Google has certified, so Google may refuse to sign you in until you register it. Open the page below, sign in with your Google account, and enter this device's Android ID. Sign-in works some minutes after that."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 Android는 Google이 인증한 기기가 아니어서, 등록하기 전에는 Google이 로그인을 거부할 수 있습니다. 아래 페이지를 열어 Google 계정으로 로그인하고 이 기기의 Android ID를 입력하세요. 몇 분 뒤부터 로그인할 수 있습니다."
+          }
+        }
+      }
+    },
+    "GappsDeviceIdCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android ID"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android ID"
+          }
+        }
+      }
+    },
+    "GappsDeviceIdCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Google Services Framework's ID for this device, which the registration page asks for."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "등록 페이지가 묻는, 이 기기의 Google 서비스 프레임워크 ID입니다."
+          }
+        }
+      }
+    },
+    "GappsDeviceIdUnknown.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Android ID shows here once Google Play is installed and Android has started with it."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Play를 설치하고 Android가 그것과 함께 시작되면 여기에 Android ID가 나타납니다."
+          }
+        }
+      }
+    },
     "Background_Paused": {
       "extractionState": "manual",
       "localizations": {

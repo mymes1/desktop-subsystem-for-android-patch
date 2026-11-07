@@ -335,6 +335,7 @@ struct NetworkPage: View {
 /// developer mode, the traces, the logs and the command line.
 struct AdvancedPage: View {
     @ObservedObject var vm: SettingsViewModel
+    @ObservedObject var gapps: GappsViewModel
     @State private var adbPort = ""
 
     var body: some View {
@@ -393,6 +394,7 @@ struct AdvancedPage: View {
                     Task { await vm.removeArmTranslation() }
                 }
             }
+            GappsSection(vm: gapps)
             Section(T("DeveloperHeader.Text")) {
                 SwitchRow(title: T("DeveloperModeCard.Header"), detail: T("DeveloperModeCard.Description"),
                           isOn: vm.developerMode, enabled: vm.canChange, set: { await vm.setDeveloperMode($0) })
