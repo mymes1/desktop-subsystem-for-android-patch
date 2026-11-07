@@ -1009,6 +1009,9 @@ message Task {
   // relative to the task's top left corner in Android display pixels. The rest of the band
   // drags the window.
   repeated Rect caption_interactive = 24;
+  // Whether the task has somewhere to go back to (it is past its first activity), so the
+  // window shows a back button in the place of the app's icon.
+  bool can_go_back = 25;
 }
 
 // The orientation a task's top activity asks for.

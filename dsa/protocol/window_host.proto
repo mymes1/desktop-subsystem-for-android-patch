@@ -258,6 +258,15 @@ message SetCaptionMode {
   repeated ClientRect interactive = 3;
 }
 
+// Window manager to window host: whether the task has somewhere to go back to (it is past
+// its first screen). While it has, the title bar shows a back arrow in the place of the app's
+// icon, in the same cell, and a click on it sends the task Back; otherwise the cell shows the
+// icon and opens the system menu. Sent when it changes; a window opens with the icon.
+message SetCaptionBack {
+  int32 task_id = 1;
+  bool back = 2;
+}
+
 // Window manager to window host: what the app's windows offer in their system menu. Sent
 // after Attached, and again when the app changes.
 message AppMenu {
@@ -349,6 +358,7 @@ message Envelope {
     SetCaptionMode set_caption_mode = 33;
     AppMenu app_menu = 34;
     MenuChosen menu_chosen = 35;
+    SetCaptionBack set_caption_back = 36;
     SetWindowMode set_window_mode = 60;
   }
 }

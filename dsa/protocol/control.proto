@@ -158,6 +158,11 @@ message TaskUpdated {
   // (View.setSystemGestureExclusionRects) inside the band, less the host's buttons and icon.
   // The rest of the band drags the window.
   repeated Rect caption_interactive = 24;
+  // Whether the task has somewhere to go back to: its top activity is not the first one of
+  // the task (it holds more than one activity). The host's window then shows a back button
+  // in the place of the app's icon, and Esc or Backspace an app leaves become Back; on the
+  // task's first screen they never do, so a key never closes the window.
+  bool can_go_back = 25;
 }
 
 // The orientation a task's top activity asks for.
