@@ -55,6 +55,8 @@ object Messages {
             .setPackageName(packageName)
             .setLabel(details.label)
             .setIconPng(ByteString.copyFrom(details.iconPng))
+            .setCaptionIconPng(ByteString.copyFrom(details.captionIconPng))
+            .setMultipleWindows(details.multipleWindows)
         return Envelope.newBuilder().setAppInfo(info).build().toByteArray()
     }
 
