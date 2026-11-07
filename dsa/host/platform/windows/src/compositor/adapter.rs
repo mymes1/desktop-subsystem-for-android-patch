@@ -265,6 +265,37 @@ pub trait GfxBackend: Send + Sync {
     fn memory(&self) -> Option<RendererMemory> {
         None
     }
+
+    /// Makes every Vulkan device of the renderer act lost, as a GPU reset leaves them, for a
+    /// test. Returns whether the backend could.
+    fn simulate_device_loss(&self) -> bool {
+        false
+    }
+
+    /// How many times the renderer has made its own Vulkan device again after losing it.
+    fn device_generation(&self) -> u64 {
+        0
+    }
+}
+
+/// The renderer's log callback: `dsa_gfx_log_fn`.
+type LogFn = unsafe extern "C" fn(*mut c_void, c_char, *const c_char);
+
+/// Writes one of the renderer's lines to the window manager's log. Runs on any renderer
+/// thread, and must not unwind into the renderer.
+unsafe extern "C" fn renderer_log_trampoline(
+    _context: *mut c_void,
+    severity: c_char,
+    message: *const c_char,
+) {
+    if message.is_null() {
+        return;
+    }
+    // The renderer passes a NUL-terminated line that lives for the call.
+    let message = CStr::from_ptr(message).to_string_lossy();
+    let _ = std::panic::catch_unwind(|| {
+        super::log::renderer_log(severity as u8, &message);
+    });
 }
 
 /// Native backend loaded from `gfxstream_backend.dll`.
@@ -290,6 +321,9 @@ pub struct NativeBackend {
     fn_forget_display: Option<unsafe extern "C" fn(u32)>,
     /// Absent from a backend built before the renderer counted its memory.
     fn_get_memory_stats: Option<GetMemoryStatsFn>,
+    /// Absent from a backend built before it survived a GPU reset.
+    fn_simulate_device_loss: Option<unsafe extern "C" fn() -> c_int>,
+    fn_device_generation: Option<unsafe extern "C" fn() -> u64>,
 }
 
 // SAFETY: HMODULE is owned and accessed across threads safely through the loaded function pointers.
@@ -338,6 +372,17 @@ impl NativeBackend {
             let fn_forget_display = Self::get_symbol(handle, b"dsa_gfx_forget_display\0").ok();
             let fn_get_memory_stats: Option<GetMemoryStatsFn> =
                 Self::get_symbol(handle, b"dsa_gfx_get_memory_stats\0").ok();
+            let fn_simulate_device_loss =
+                Self::get_symbol(handle, b"dsa_gfx_simulate_device_loss\0").ok();
+            let fn_device_generation =
+                Self::get_symbol(handle, b"dsa_gfx_device_generation\0").ok();
+
+            // Before the start, so what the start says reaches the log too.
+            let set_log: Option<unsafe extern "C" fn(Option<LogFn>, *mut c_void)> =
+                Self::get_symbol(handle, b"dsa_gfx_set_log_callback\0").ok();
+            if let Some(set_log) = set_log {
+                set_log(Some(renderer_log_trampoline), std::ptr::null_mut());
+            }
 
             let note = select_gpu(fn_select_gpu, request);
 
@@ -361,6 +406,8 @@ impl NativeBackend {
                     fn_get_gpu_info,
                     fn_forget_display,
                     fn_get_memory_stats,
+                    fn_simulate_device_loss,
+                    fn_device_generation,
                 },
                 note,
             ))
@@ -523,6 +570,18 @@ impl GfxBackend for NativeBackend {
             return None;
         }
         Some(renderer_memory(&stats))
+    }
+
+    fn simulate_device_loss(&self) -> bool {
+        // SAFETY: takes nothing; the renderer is running while the backend is loaded.
+        self.fn_simulate_device_loss
+            .is_some_and(|simulate| unsafe { simulate() } == 0)
+    }
+
+    fn device_generation(&self) -> u64 {
+        // SAFETY: takes nothing.
+        self.fn_device_generation
+            .map_or(0, |generation| unsafe { generation() })
     }
 }
 
@@ -704,6 +763,21 @@ impl GfxstreamAdapter {
     /// Returns the resolved path to `gfxstream_backend.dll` if found.
     pub fn backend_path(&self) -> Option<&Path> {
         self.dll_path.as_deref()
+    }
+
+    /// Makes every Vulkan device of the renderer act lost, as a GPU reset leaves them: the
+    /// renderer's tests use it. Returns whether the backend could.
+    pub fn simulate_device_loss(&self) -> bool {
+        self.backend
+            .as_ref()
+            .is_some_and(|backend| backend.simulate_device_loss())
+    }
+
+    /// How many times the renderer has made its own Vulkan device again after losing it.
+    pub fn device_generation(&self) -> u64 {
+        self.backend
+            .as_ref()
+            .map_or(0, |backend| backend.device_generation())
     }
 
     /// Whether the graphics backend is available and ready to serve streams.
