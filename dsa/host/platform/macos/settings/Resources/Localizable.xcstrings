@@ -7514,6 +7514,329 @@
           }
         }
       }
+    },
+    "AppsRunAsArm.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run as ARM"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ARM으로 실행"
+          }
+        }
+      }
+    },
+    "Apps_RunAsArm_system-app": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apps that are part of Android run as Android installed them."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android에 포함된 앱은 Android가 설치한 대로 실행됩니다."
+          }
+        }
+      }
+    },
+    "Apps_RunAsArm_no-arm-libraries": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No APK of this app on the device holds its ARM code."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기에 이 앱의 ARM 코드를 담은 APK가 없습니다."
+          }
+        }
+      }
+    },
+    "Apps_RunAsArm_translation-off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ARM translation is not on. Turn it on under ARM apps and restart Android."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ARM 번역이 꺼져 있습니다. ARM 앱에서 켜고 Android를 다시 시작하십시오."
+          }
+        }
+      }
+    },
+    "Apps_RunAsArm_arm-only": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This app has only ARM code, so it always runs as ARM."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 앱은 ARM 코드만 있어 늘 ARM으로 실행됩니다."
+          }
+        }
+      }
+    },
+    "Apps_RunAsArm_unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This version of DSA cannot say whether the app can run as ARM."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 버전의 DSA는 앱을 ARM으로 실행할 수 있는지 알 수 없습니다."
+          }
+        }
+      }
+    },
+    "AppsRunAsArmEraseTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erase {0}'s data?"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0}의 데이터를 지울까요?"
+          }
+        }
+      }
+    },
+    "AppsRunAsArmEraseBody": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android cannot change how {0} runs and keep its data. Installing it again erases its data: sign-ins, settings and files it keeps for itself."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android가 데이터를 지킨 채 {0}의 실행 방식을 바꿀 수 없습니다. 다시 설치하면 로그인, 설정, 앱이 보관한 파일 같은 데이터가 지워집니다."
+          }
+        }
+      }
+    },
+    "AppsRunAsArmEraseButton": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erase and install again"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지우고 다시 설치"
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmKept": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} was left as it was, with its data."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0}을(를) 데이터와 함께 그대로 두었습니다."
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmOn": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} runs as ARM now."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0}이(가) 이제 ARM으로 실행됩니다."
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmOff": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} runs its x86_64 code now."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0}이(가) 이제 x86_64 코드로 실행됩니다."
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmNotChanged": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0} was not installed again: {1} ({2})"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{0}을(를) 다시 설치하지 않았습니다: {1} ({2})"
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmRefused_not-installed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "it is no longer installed"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "더 이상 설치되어 있지 않습니다"
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmRefused_system-app": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "it is part of Android"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android에 포함된 앱입니다"
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmRefused_no-libraries": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "its APKs on the device hold no code for that"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기의 APK에 그 코드가 없습니다"
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmRefused_translation-off": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ARM translation is not on"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ARM 번역이 꺼져 있습니다"
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmRefused_data-would-be-erased": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "its data would be erased"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "데이터가 지워집니다"
+          }
+        }
+      }
+    },
+    "Apps_RunAsArmRefused_other": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android refused"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android가 거절했습니다"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

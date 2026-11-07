@@ -97,8 +97,29 @@ struct AppRowView: View {
                     .help(row.uninstallTip ?? "")
             }
             .disabled(vm.isBusy)
+            // Whether the app runs its ARM code through the translator, and why not when it cannot.
+            HStack {
+                Toggle(T("AppsRunAsArm.Content"), isOn: Binding(
+                    get: { row.runAsArm },
+                    set: { value in Task { await vm.setRunAsArm(row.package, value, confirmErase: confirmErase) } }))
+                    .toggleStyle(.switch)
+                    .disabled(!row.canRunAsArm || vm.isBusy)
+                    .help(row.runAsArmTip ?? "")
+                if let tip = row.runAsArmTip {
+                    Text(tip).font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
         }
         .padding(.vertical, 2)
+    }
+
+    /// Asks whether to erase the app's data, which Android cannot keep when the app's ABI changes.
+    @MainActor
+    private func confirmErase(_ label: String) async -> Bool {
+        Shell.confirm(Format.fill(T("AppsRunAsArmEraseTitle"), [label]),
+                      Format.fill(T("AppsRunAsArmEraseBody"), [label]),
+                      T("AppsRunAsArmEraseButton"))
     }
 
     private func uninstall() {
