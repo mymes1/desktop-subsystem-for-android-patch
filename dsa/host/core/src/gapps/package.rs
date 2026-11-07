@@ -415,11 +415,15 @@ pub mod fixture {
             .iter()
             .map(|(name, _)| format!("modules/core/{name}/{name}-LiteGapps-Addon-{arch}.zip"))
             .collect();
-        let mut entries: Vec<(&str, &[u8])> = Vec::new();
-        entries.push(("module.prop", prop.as_bytes()));
-        entries.push(("META-INF/com/google/android/update-binary", b"#!/sbin/sh\n"));
-        entries.push(("customize.sh", b"# installs on a phone\n"));
-        entries.push(("files/files.tar.xz", &packed));
+        let mut entries: Vec<(&str, &[u8])> = vec![
+            ("module.prop", prop.as_bytes()),
+            (
+                "META-INF/com/google/android/update-binary",
+                &b"#!/sbin/sh\n"[..],
+            ),
+            ("customize.sh", &b"# installs on a phone\n"[..]),
+            ("files/files.tar.xz", packed.as_slice()),
+        ];
         for (name, (_, data)) in names.iter().zip(addons) {
             entries.push((name, data));
         }

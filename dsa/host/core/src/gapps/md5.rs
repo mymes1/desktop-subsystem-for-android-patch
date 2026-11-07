@@ -93,7 +93,7 @@ impl Md5 {
             ]);
         }
         let [mut a, mut b, mut c, mut d] = self.state;
-        for i in 0..64 {
+        for (i, (&constant, &shift)) in self.table.iter().zip(&SHIFTS).enumerate() {
             let (f, g) = match i / 16 {
                 0 => ((b & c) | (!b & d), i),
                 1 => ((d & b) | (!d & c), (5 * i + 1) % 16),
@@ -102,9 +102,9 @@ impl Md5 {
             };
             let rotated = a
                 .wrapping_add(f)
-                .wrapping_add(self.table[i])
+                .wrapping_add(constant)
                 .wrapping_add(words[g])
-                .rotate_left(SHIFTS[i]);
+                .rotate_left(shift);
             a = d;
             d = c;
             c = b;
