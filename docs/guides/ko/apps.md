@@ -91,10 +91,18 @@ Android 위젯을 바탕 화면에 독립된 창으로 놓을 수 있습니다. 
 ## ARM 전용 앱
 
 x64 PC에서 ARM 프로세서용 코드만 있는 앱을 쓰려면 ARM 변환 패키지가 필요합니다. DSA에는 이 패키지가 들어
-있지 않습니다.
+있지 않습니다. 다음 중 하나를 고릅니다.
 
-1. 패키지 폴더를 지정해 설치합니다: `dsa arm-translation install <folder>`
-2. Android를 다시 시작합니다. DSA 설정 **일반** 페이지에서 Android를 종료한 다음 앱을 엽니다.
+- **Google의 ARM 번역기.** **고급** 페이지의 **Google의 ARM 번역기** 옆 **받기**를 선택하거나
+  `dsa arm-translation fetch google`을 실행합니다. DSA가 먼저 출처와 Google의 약관
+  ([Android SDK 라이선스](https://developer.android.com/studio/terms))을 보여 주며, 동의하기 전에는
+  아무것도 받지 않습니다. 그다음 PC가 Google이 이 Android 버전용으로 제공하는 Android 에뮬레이터
+  이미지(약 2GB)를 받아 번역기만 남기고 나머지는 지웁니다. DSA는 Google의 번역기를 싣거나 다시
+  배포하지 않습니다.
+- **직접 만들거나 따로 구한 패키지.** 오픈 소스 번역기 Digitalis로 만든 패키지 같은 것입니다:
+  `dsa arm-translation install <folder>`
+
+그다음 Android를 다시 시작합니다. DSA 설정 **일반** 페이지에서 Android를 종료한 다음 앱을 엽니다.
 
 설치 상태는 `dsa arm-translation status`로 확인합니다. **고급** 페이지의 **ARM 전용 앱 실행** 스위치는
 패키지를 지우지 않고 켜거나 끕니다. 64비트 ARM 앱(`arm64-v8a`)만 실행할 수 있습니다.

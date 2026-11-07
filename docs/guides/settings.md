@@ -45,6 +45,7 @@ one. They are marked "(admin)" below.
 | **Open web links in Android apps** | Off | `links-in-android` |
 | **Reset Android's data** | | `dsa reset-data` |
 | **Run apps built only for ARM** | | `arm-translation` |
+| **Google's ARM translator** (not on ARM64) | | `dsa arm-translation fetch google` |
 | **Developer mode** | Off | `developer-mode`, `adb-port` |
 | **Input trace** (admin) | Off | `input-trace` |
 | **Resize trace** (admin) | Off | `resize-trace` |

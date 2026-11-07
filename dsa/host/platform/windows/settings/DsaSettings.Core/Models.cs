@@ -105,13 +105,15 @@ public sealed record ArmPackageInfo(string Name, string Version, string Library,
 public sealed record ArmGuestInfo(bool Installed, bool Active, string Abilist);
 
 /// <summary>Whether apps built only for 64-bit ARM can run: the package the user installed,
-/// the setting, what the running Android booted with, and whether a restart is due.</summary>
+/// the setting, what the running Android booted with, whether a restart is due, and whether
+/// Google's translator can be fetched here.</summary>
 public sealed record ArmTranslationInfo(
     ArmPackageInfo? Package,
     bool Enabled,
     bool Supported,
     ArmGuestInfo? Android,
-    bool RestartNeeded);
+    bool RestartNeeded,
+    bool GoogleFetchAvailable = false);
 
 /// <summary>What a host process does for the user's Android.</summary>
 public enum HostRole

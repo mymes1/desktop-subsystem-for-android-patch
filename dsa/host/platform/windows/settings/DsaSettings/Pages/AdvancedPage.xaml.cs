@@ -41,6 +41,19 @@ public partial class AdvancedPage : Page
     private async void OnRemoveArmTranslation(object sender, RoutedEventArgs e) =>
         await ViewModel.RemoveArmTranslationAsync();
 
+    /// <summary>Says where Google's translator comes from and under which terms, and fetches it
+    /// only when the user accepts.</summary>
+    private async void OnFetchGoogleArm(object sender, RoutedEventArgs e)
+    {
+        if (await Shell.Confirm(App.Text.Get("ArmGoogleConfirm.Title"), ViewModel.GoogleArmNotice,
+                App.Text.Get("ArmGoogleConfirm.Action")))
+        {
+            await ViewModel.FetchGoogleArmTranslatorAsync();
+        }
+    }
+
+    private void OnOpenGoogleArmTerms(object sender, RoutedEventArgs e) => OpenWebPage(ViewModel.GoogleArmTermsUrl);
+
     private async void OnInstallGapps(object sender, RoutedEventArgs e) =>
         await ViewModel.InstallGappsAsync();
 
