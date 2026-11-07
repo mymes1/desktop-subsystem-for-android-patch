@@ -41,6 +41,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
+use dsa_host_core::compositor::caption::CaptionBand;
 use dsa_host_core::compositor::task_windows::fit_within;
 use dsa_host_core::compositor::window_hosts::{FromHost, ToHost};
 use dsa_host_core::compositor::window_mode::{picture_in_picture_place, ModeState, WindowMode};
@@ -1108,7 +1109,7 @@ unsafe fn apply_mode(hwnd: HWND, data: &WindowData, mode: WindowMode) {
             // No title bar, so no top inset: the app draws to the monitor's top edge.
             (data.report)(FromHost::Caption {
                 task_id: data.task_id,
-                height: 0,
+                band: CaptionBand::default(),
             });
             if let Some(presenter) = data.presenter.borrow().as_deref() {
                 presenter.hide_caption();
@@ -1304,6 +1305,31 @@ impl Ui {
                             }
                         }
                     }
+                    ToHost::CaptionMode {
+                        task_id,
+                        app_drawn,
+                        interactive,
+                    } => {
+                        if let Some(hwnd) = self.open.get(&task_id) {
+                            if let Some(data) = window_data(*hwnd) {
+                                let presenter = data.presenter.borrow().clone();
+                                data.caption.set_mode(
+                                    *hwnd,
+                                    app_drawn,
+                                    interactive,
+                                    presenter.as_deref(),
+                                );
+                            }
+                        }
+                    }
+                    ToHost::CaptionBack { task_id, back } => {
+                        if let Some(hwnd) = self.open.get(&task_id) {
+                            if let Some(data) = window_data(*hwnd) {
+                                let presenter = data.presenter.borrow().clone();
+                                data.caption.set_back(*hwnd, back, presenter.as_deref());
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1392,7 +1418,13 @@ impl Ui {
             min_client: Cell::new(None),
             reporting: Cell::new(false),
             minimized: Cell::new(false),
-            caption: CaptionWindow::new(task_id, TASK_STYLE, TASK_EX_STYLE, ICON_ID),
+            caption: CaptionWindow::new(
+                task_id,
+                TASK_STYLE,
+                TASK_EX_STYLE,
+                ICON_ID,
+                self.setup.input.clone(),
+            ),
             drag_edges: Cell::new((false, false)),
             following: Cell::new(false),
             mode: Cell::new(ModeState::new()),

@@ -23,10 +23,10 @@ use dsa_protocol::window_host::{
 };
 use dsa_transport::Connection;
 
-use super::caption::CaptionTone;
+use super::caption::{CaptionBand, CaptionTone};
 use super::task_windows::WindowChange;
 use super::window_mode::WindowMode;
-use crate::tasks::AppInfo;
+use crate::tasks::{AppInfo, Bounds};
 
 /// Whether `name` is an Android package name: two or more dot-separated parts, each an ASCII
 /// letter followed by letters, digits and underscores. Only such a name becomes a file name
@@ -100,6 +100,18 @@ pub enum ToHost {
         mode: WindowMode,
         resizable: bool,
     },
+    /// Whether the app draws its own title bar, and where its controls are in the band, in
+    /// client pixels.
+    CaptionMode {
+        task_id: i32,
+        app_drawn: bool,
+        interactive: Vec<Bounds>,
+    },
+    /// Whether the title bar shows a back arrow in the place of the app's icon.
+    CaptionBack {
+        task_id: i32,
+        back: bool,
+    },
 }
 
 impl ToHost {
@@ -112,6 +124,8 @@ impl ToHost {
             | ToHost::ImeCursor { task_id, .. }
             | ToHost::CaptionTone { task_id, .. }
             | ToHost::Mode { task_id, .. }
+            | ToHost::CaptionMode { task_id, .. }
+            | ToHost::CaptionBack { task_id, .. }
             | ToHost::Close { task_id } => *task_id,
         }
     }
@@ -136,8 +150,10 @@ pub enum FromHost {
     Dragging { task_id: i32, dragging: bool },
     /// The window was minimized (`shown` false), or shown again after it was.
     Shown { task_id: i32, shown: bool },
-    /// The window draws its title bar over its top `height` client pixels.
-    Caption { task_id: i32, height: u32 },
+    /// The window draws its title bar over its top `band.height` client pixels, with its
+    /// icon's cell and its caption buttons reaching `band.start_width` and `band.end_width`
+    /// in from the ends.
+    Caption { task_id: i32, band: CaptionBand },
 }
 
 impl FromHost {
@@ -375,6 +391,19 @@ impl WindowHosts {
                 task_id: *task_id,
                 mode: *mode,
                 resizable: *resizable,
+            }),
+            WindowChange::CaptionMode {
+                task_id,
+                app_drawn,
+                interactive,
+            } => self.forward(ToHost::CaptionMode {
+                task_id: *task_id,
+                app_drawn: *app_drawn,
+                interactive: interactive.clone(),
+            }),
+            WindowChange::CaptionBack { task_id, back } => self.forward(ToHost::CaptionBack {
+                task_id: *task_id,
+                back: *back,
             }),
         }
     }
@@ -729,6 +758,29 @@ pub fn to_wire(message: &ToHost) -> Body {
                 resizable,
             })
         }
+        ToHost::CaptionMode {
+            task_id,
+            app_drawn,
+            interactive,
+        } => {
+            use dsa_protocol::window_host::types::{ClientRect, SetCaptionMode};
+            Body::SetCaptionMode(SetCaptionMode {
+                task_id,
+                app_drawn,
+                interactive: interactive
+                    .iter()
+                    .map(|area| ClientRect {
+                        left: area.left,
+                        top: area.top,
+                        right: area.right,
+                        bottom: area.bottom,
+                    })
+                    .collect(),
+            })
+        }
+        ToHost::CaptionBack { task_id, back } => {
+            Body::SetCaptionBack(dsa_protocol::window_host::types::SetCaptionBack { task_id, back })
+        }
     }
 }
 
@@ -796,6 +848,28 @@ pub fn to_host_from_wire(body: &Body) -> Option<ToHost> {
                 resizable: set.resizable,
             }
         }
+        Body::SetCaptionMode(set) => ToHost::CaptionMode {
+            task_id: set.task_id,
+            app_drawn: set.app_drawn,
+            // The controls count only while the app draws its own title bar.
+            interactive: if set.app_drawn {
+                set.interactive
+                    .iter()
+                    .map(|area| Bounds {
+                        left: area.left,
+                        top: area.top,
+                        right: area.right,
+                        bottom: area.bottom,
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            },
+        },
+        Body::SetCaptionBack(set) => ToHost::CaptionBack {
+            task_id: set.task_id,
+            back: set.back,
+        },
         _ => return None,
     })
 }
@@ -822,8 +896,13 @@ pub fn report_to_wire(report: &FromHost) -> Body {
             Body::WindowDragging(WindowDragging { task_id, dragging })
         }
         FromHost::Shown { task_id, shown } => Body::WindowShown(WindowShown { task_id, shown }),
-        FromHost::Caption { task_id, height } => {
-            Body::WindowCaption(dsa_protocol::window_host::types::WindowCaption { task_id, height })
+        FromHost::Caption { task_id, band } => {
+            Body::WindowCaption(dsa_protocol::window_host::types::WindowCaption {
+                task_id,
+                height: band.height,
+                start_width: band.start_width,
+                end_width: band.end_width,
+            })
         }
     }
 }
@@ -857,7 +936,11 @@ pub fn report_from_wire(body: &Body) -> Option<FromHost> {
         },
         Body::WindowCaption(ref caption) => FromHost::Caption {
             task_id: caption.task_id,
-            height: caption.height,
+            band: CaptionBand {
+                height: caption.height,
+                start_width: caption.start_width,
+                end_width: caption.end_width,
+            },
         },
         _ => return None,
     })
@@ -1318,6 +1401,25 @@ mod tests {
                 task_id: 9,
                 tone: CaptionTone::DarkGlyphs,
             },
+            ToHost::CaptionMode {
+                task_id: 10,
+                app_drawn: true,
+                interactive: vec![Bounds {
+                    left: 48,
+                    top: 0,
+                    right: 600,
+                    bottom: 31,
+                }],
+            },
+            ToHost::CaptionMode {
+                task_id: 10,
+                app_drawn: false,
+                interactive: Vec::new(),
+            },
+            ToHost::CaptionBack {
+                task_id: 11,
+                back: true,
+            },
         ] {
             assert_eq!(to_host_from_wire(&to_wire(&message)), Some(message));
         }
@@ -1346,7 +1448,11 @@ mod tests {
             },
             FromHost::Caption {
                 task_id: 9,
-                height: 62,
+                band: CaptionBand {
+                    height: 62,
+                    start_width: 80,
+                    end_width: 276,
+                },
             },
         ] {
             assert_eq!(report_from_wire(&report_to_wire(&report)), Some(report));

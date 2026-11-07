@@ -19,8 +19,17 @@
 //! - [`paint_title_bar`]: the whole band as an image: the app's icon and name at the left
 //!   (the platform lays the name out), the buttons at the right, and a fill when
 //!   [`band_fill`] finds that the app leaves the band empty.
+//! - [`title_bar_hit`]: the same, with the icon's cell (the system menu, or a back button
+//!   while the task can go back) and an app that draws its own title bar, whose controls in
+//!   the band take the pointer.
+//!
+//! An app may ask to draw its own title bar, as on Android's desktop windows (a transparent
+//! caption bar background): its content then fills the band, as a browser puts its tabs
+//! there. The window draws only its caption buttons and the icon's cell over it, never the
+//! app's name or a fill, and tells the app how far those reach in from each end
+//! ([`CaptionLayout::band`]), so the app keeps its controls clear of them.
 
-use crate::tasks::StatusBarAppearance;
+use crate::tasks::{Bounds, StatusBarAppearance};
 
 /// Whether a window's caption glyphs are dark (over a light status bar) or light.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -109,6 +118,68 @@ pub enum CaptionHit {
     TopRight,
 }
 
+/// How far the parts a window draws over the title bar band reach into it, in client pixels:
+/// the band's height, the icon's cell from the left end and the caption buttons from the
+/// right end. The guest receives it as the task's caption inset and, for an app that draws
+/// its own title bar, as the bounding rectangles of that inset.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct CaptionBand {
+    pub height: u32,
+    pub start_width: u32,
+    pub end_width: u32,
+}
+
+/// What a point of a task window's title bar does, the icon's cell and an app's own title
+/// bar included.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TitleBarHit {
+    /// As [`CaptionLayout::hit`] says: the app below the band (or an app's control in it),
+    /// the drag area, a caption button or the top edge.
+    Window(CaptionHit),
+    /// The icon's cell while it shows the icon: it opens the window's system menu.
+    SystemMenu,
+    /// The icon's cell while it shows the back arrow: a press sends the task Back.
+    Back,
+}
+
+/// What a window's title bar shows besides its layout: whether the app draws its own title
+/// bar, where its controls are in the band (client pixels), and whether the icon's cell
+/// shows the back arrow.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TitleBarMode<'a> {
+    pub app_drawn: bool,
+    pub interactive: &'a [Bounds],
+    pub back: bool,
+}
+
+/// What the client point (`x`, `y`) of a window laid out as `layout` and showing `mode`
+/// belongs to. The top resize edge and the caption buttons come first, then the icon's cell,
+/// then, in the band of an app that draws its own title bar, the app's controls, which go to
+/// the app; the rest of the band drags the window.
+pub fn title_bar_hit(layout: &CaptionLayout, x: i32, y: i32, mode: &TitleBarMode) -> TitleBarHit {
+    let hit = layout.hit(x, y);
+    if hit != CaptionHit::Caption {
+        return TitleBarHit::Window(hit);
+    }
+    if layout.on_icon(x, y) {
+        return if mode.back {
+            TitleBarHit::Back
+        } else {
+            TitleBarHit::SystemMenu
+        };
+    }
+    let on_control = mode.app_drawn
+        && mode
+            .interactive
+            .iter()
+            .any(|area| x >= area.left && x < area.right && y >= area.top && y < area.bottom);
+    if on_control {
+        TitleBarHit::Window(CaptionHit::Client)
+    } else {
+        TitleBarHit::Window(CaptionHit::Caption)
+    }
+}
+
 /// The width of a caption button at 100%, in pixels.
 pub const BUTTON_WIDTH_AT_100: u32 = 46;
 
@@ -193,18 +264,40 @@ impl CaptionLayout {
         Some((left, 0, (right - left) as u32, self.height))
     }
 
-    /// Whether the client point (`x`, `y`) is on the app's icon, which opens the window's
-    /// system menu. The top resize edge comes first, as it does for the buttons.
+    /// The icon's cell: the icon with half the padding on each side, the whole height of the
+    /// band. It is the same whether it shows the icon or the back arrow, so the name never
+    /// moves and an app drawing its own title bar is told the same area either way. `None`
+    /// when the window is too narrow for the icon.
+    pub fn icon_cell(&self) -> Option<(i32, i32, u32, u32)> {
+        let (left, _, side, _) = self.icon_rect()?;
+        let half = self.padding / 2;
+        Some((left - half as i32, 0, side + 2 * half, self.height))
+    }
+
+    /// Whether the client point (`x`, `y`) is in the icon's cell, which opens the window's
+    /// system menu (or goes back, while the cell shows the back arrow). The top resize edge
+    /// comes first, as it does for the buttons.
     pub fn on_icon(&self, x: i32, y: i32) -> bool {
         if y < self.resize_border as i32 {
             return false;
         }
-        match self.icon_rect() {
-            // The whole height of the band over the icon, as a caption icon takes it.
-            Some((left, _, side, _)) => {
-                x >= left && x < left + side as i32 && y >= 0 && y < self.height as i32
+        match self.icon_cell() {
+            Some((left, top, width, height)) => {
+                x >= left && x < left + width as i32 && y >= top && y < top + height as i32
             }
             None => false,
+        }
+    }
+
+    /// How far the icon's cell and the caption buttons reach into the band from its ends.
+    /// They depend on the scale alone, not on the window's width, so a resize never moves
+    /// what an app drawing its own title bar is told.
+    pub fn band(&self) -> CaptionBand {
+        let half = self.padding / 2;
+        CaptionBand {
+            height: self.height,
+            start_width: (self.padding - half) + self.icon + 2 * half,
+            end_width: 3 * self.button_width,
         }
     }
 
@@ -383,11 +476,28 @@ pub struct TitleBarContent<'a> {
     /// The color the band is filled with (0xAARRGGBB), when the app leaves it empty; `None`
     /// keeps it transparent, so the app shows through.
     pub fill: Option<u32>,
-    /// The app's icon: rows of premultiplied BGRA pixels, `layout.icon` pixels square.
+    /// The app's icon: rows of premultiplied BGRA pixels, `layout.icon` pixels square. For an
+    /// app with an adaptive icon it is the icon's foreground layer alone, so no square plate
+    /// stands over the app's content.
     pub icon: Option<&'a [u8]>,
     /// The app's name, already laid out and cut to fit: one coverage byte (0 to 255) per
     /// pixel, rows of the width and height of [`CaptionLayout::title_rect`].
     pub title: Option<&'a [u8]>,
+    /// Whether the app draws its own title bar: the band then shows only the icon's cell and
+    /// the buttons over the app, with no name and no fill.
+    pub app_drawn: bool,
+    /// The back arrow in the place of the icon, while the task can go back, with the state
+    /// the pointer leaves it in; `None` shows the icon.
+    pub back: Option<BackButton>,
+}
+
+/// The back arrow the icon's cell shows while the task can go back.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct BackButton {
+    /// The pointer is over it.
+    pub hovered: bool,
+    /// It is being pressed.
+    pub pressed: bool,
 }
 
 /// The whole title bar as rows of premultiplied BGRA pixels, `layout.width` wide and
@@ -402,8 +512,11 @@ pub fn paint_title_bar(
 ) -> Vec<u8> {
     let width = layout.width as usize;
     let height = layout.height as usize;
-    // A high contrast theme gives the band its own background, as it does the buttons.
-    let fill = if palette.rest >> 24 != 0 {
+    // A high contrast theme gives the band its own background, as it does the buttons. An
+    // app that draws its own title bar keeps the band as it drew it.
+    let fill = if content.app_drawn {
+        None
+    } else if palette.rest >> 24 != 0 {
         Some(palette.rest)
     } else {
         content.fill
@@ -424,7 +537,9 @@ pub fn paint_title_bar(
         ];
         pixels[at..at + 4].copy_from_slice(&over(bottom, top));
     };
-    if let (Some(icon), Some((left, top, side, _))) = (content.icon, layout.icon_rect()) {
+    if let (Some(back), Some(cell)) = (content.back, layout.icon_cell()) {
+        paint_back(&mut pixels, layout, dpi, palette, state, back, cell);
+    } else if let (Some(icon), Some((left, top, side, _))) = (content.icon, layout.icon_rect()) {
         let opacity = if state.active {
             1.0
         } else {
@@ -450,8 +565,8 @@ pub fn paint_title_bar(
             }
         }
     }
-    if let (Some(title), Some((left, _, title_width, title_height))) =
-        (content.title, layout.title_rect())
+    let title = content.title.filter(|_| !content.app_drawn);
+    if let (Some(title), Some((left, _, title_width, title_height))) = (title, layout.title_rect())
     {
         let color = if state.active {
             palette.glyph
@@ -493,6 +608,72 @@ pub fn paint_title_bar(
         }
     }
     pixels
+}
+
+/// Draws the back arrow into the icon's `cell` of `pixels` (a whole title bar): the
+/// background of a hovered or pressed caption button, and a left arrow in the glyphs' color,
+/// as wide as a caption glyph.
+fn paint_back(
+    pixels: &mut [u8],
+    layout: &CaptionLayout,
+    dpi: u32,
+    palette: &CaptionPalette,
+    state: &CaptionState,
+    back: BackButton,
+    cell: (i32, i32, u32, u32),
+) {
+    let width = layout.width as usize;
+    let scale = f64::from(if dpi == 0 { 96 } else { dpi }) / 96.0;
+    let stroke = scale.round().max(1.0);
+    let highlighted = back.pressed || back.hovered;
+    let background = match (back.pressed, highlighted) {
+        (true, _) => palette.pressed,
+        (false, true) => palette.hover,
+        _ => 0,
+    };
+    let glyph = if highlighted {
+        palette.glyph_highlighted
+    } else if state.active {
+        palette.glyph
+    } else {
+        palette.glyph_inactive
+    };
+    let (left, top, cell_width, cell_height) = cell;
+    let half = (GLYPH_AT_100 * scale / 2.0).round();
+    let snap = |value: f64| {
+        if stroke as i64 % 2 == 1 {
+            value.floor() + 0.5
+        } else {
+            value.round()
+        }
+    };
+    let cx = snap(f64::from(left) + f64::from(cell_width) / 2.0);
+    let cy = snap(f64::from(top) + f64::from(cell_height) / 2.0);
+    let segments: [Segment; 3] = [
+        ((cx - half, cy), (cx + half, cy)),
+        ((cx - half, cy), (cx, cy - half)),
+        ((cx - half, cy), (cx, cy + half)),
+    ];
+    for y in top.max(0)..(top + cell_height as i32).min(layout.height as i32) {
+        for x in left.max(0)..(left + cell_width as i32).min(layout.width as i32) {
+            let point = (f64::from(x) + 0.5, f64::from(y) + 0.5);
+            let distance = segments
+                .iter()
+                .map(|segment| distance_to_segment(point, *segment))
+                .fold(f64::INFINITY, f64::min);
+            let coverage = (stroke / 2.0 + 0.5 - distance).clamp(0.0, 1.0);
+            let at = (y as usize * width + x as usize) * 4;
+            let bottom = [
+                f64::from(pixels[at]) / 255.0,
+                f64::from(pixels[at + 1]) / 255.0,
+                f64::from(pixels[at + 2]) / 255.0,
+                f64::from(pixels[at + 3]) / 255.0,
+            ];
+            let under = over(bottom, premultiply(background, 1.0));
+            let under = under.map(|channel| f64::from(channel) / 255.0);
+            pixels[at..at + 4].copy_from_slice(&over(under, premultiply(glyph, coverage)));
+        }
+    }
 }
 
 /// The color to fill the title bar's band with, from sample pixels of an app's frame
@@ -973,6 +1154,7 @@ mod tests {
                 fill: None,
                 icon: Some(&icon),
                 title: Some(&title),
+                ..TitleBarContent::default()
             };
             for (tone, glyph) in [
                 (CaptionTone::DarkGlyphs, 0u8),
@@ -1109,5 +1291,193 @@ mod tests {
         assert!(!drawn(46, 28) && !drawn(46, 33));
         assert!(drawn(37, 30) && drawn(54, 30));
         assert!(!drawn(34, 30) && !drawn(58, 30));
+    }
+
+    #[test]
+    fn fr22_the_icon_becomes_a_back_button_when_the_task_can_go_back() {
+        for dpi in [96, 144, 192] {
+            let layout = CaptionLayout::new(scaled(800, dpi), scaled(31, dpi), dpi, 0);
+            let (left, top, width, height) = layout.icon_cell().unwrap();
+            let (icon_left, _, side, _) = layout.icon_rect().unwrap();
+            // The cell holds the icon with half the padding on each side, over the band.
+            assert_eq!(left, icon_left - (layout.padding / 2) as i32, "at {dpi}");
+            assert_eq!(width, side + 2 * (layout.padding / 2), "at {dpi}");
+            assert_eq!((top, height), (0, layout.height));
+            let middle = (left + width as i32 / 2, layout.height as i32 / 2);
+            let icon = TitleBarMode::default();
+            let back = TitleBarMode {
+                back: true,
+                ..TitleBarMode::default()
+            };
+            assert_eq!(
+                title_bar_hit(&layout, middle.0, middle.1, &icon),
+                TitleBarHit::SystemMenu
+            );
+            assert_eq!(
+                title_bar_hit(&layout, middle.0, middle.1, &back),
+                TitleBarHit::Back
+            );
+            // Past the cell the band drags the window, whichever the cell shows.
+            let after = left + width as i32;
+            for mode in [&icon, &back] {
+                assert_eq!(
+                    title_bar_hit(&layout, after, middle.1, mode),
+                    TitleBarHit::Window(CaptionHit::Caption)
+                );
+            }
+            // The cell, the name and what an app is told do not move between the two.
+            let band = layout.band();
+            assert_eq!(band.start_width, (left + width as i32) as u32);
+            assert_eq!(band.end_width, 3 * layout.button_width);
+            assert_eq!(band.height, layout.height);
+
+            // The cell draws the icon, or the arrow in the glyphs' color instead of it.
+            let red: Vec<u8> = [0u8, 0, 255, 255].repeat((side * side) as usize);
+            let palette = CaptionPalette::of(CaptionTone::DarkGlyphs);
+            let active = CaptionState {
+                active: true,
+                ..CaptionState::default()
+            };
+            let with_icon = TitleBarContent {
+                icon: Some(&red),
+                ..TitleBarContent::default()
+            };
+            let with_back = TitleBarContent {
+                back: Some(BackButton::default()),
+                ..with_icon
+            };
+            let shown = paint_title_bar(&layout, dpi, &palette, &active, &with_icon);
+            let arrow = paint_title_bar(&layout, dpi, &palette, &active, &with_back);
+            let (cx, cy) = (middle.0 as u32, middle.1 as u32);
+            assert_eq!(bar_pixel(&shown, &layout, cx, cy), [0, 0, 255, 255]);
+            let shaft = bar_pixel(&arrow, &layout, cx, cy);
+            assert!(
+                shaft[3] > 128 && shaft[2] < 64,
+                "a dark arrow, not the icon: {shaft:?}"
+            );
+            // The arrow's head points left: its tip is left of the middle, nothing to the right
+            // of the shaft's end above it.
+            let tip = (left as u32 + width / 2 - scaled(5, dpi), cy);
+            assert!(
+                bar_pixel(&arrow, &layout, tip.0, tip.1)[3] > 128,
+                "at {dpi}"
+            );
+            let above_end = (
+                left as u32 + width / 2 + scaled(4, dpi),
+                cy - scaled(3, dpi),
+            );
+            assert_eq!(bar_pixel(&arrow, &layout, above_end.0, above_end.1)[3], 0);
+            // Hovered, it takes the caption buttons' hover background.
+            let hovered = TitleBarContent {
+                back: Some(BackButton {
+                    hovered: true,
+                    pressed: false,
+                }),
+                ..with_icon
+            };
+            let hover = paint_title_bar(&layout, dpi, &palette, &active, &hovered);
+            let corner = bar_pixel(&hover, &layout, left as u32 + 1, 1);
+            assert_eq!(corner[3], (palette.hover >> 24) as u8, "at {dpi}");
+        }
+    }
+
+    #[test]
+    fn fr22_an_app_that_draws_its_own_title_bar_gets_its_controls_in_the_band() {
+        let layout = at_100();
+        let controls = [Bounds {
+            left: 60,
+            top: 0,
+            right: 300,
+            bottom: 31,
+        }];
+        let app_drawn = TitleBarMode {
+            app_drawn: true,
+            interactive: &controls,
+            back: false,
+        };
+        // On a control (a tab) the pointer goes to the app.
+        assert_eq!(
+            title_bar_hit(&layout, 100, 20, &app_drawn),
+            TitleBarHit::Window(CaptionHit::Client)
+        );
+        // Between the controls the band drags the window, and the buttons stay buttons.
+        assert_eq!(
+            title_bar_hit(&layout, 400, 20, &app_drawn),
+            TitleBarHit::Window(CaptionHit::Caption)
+        );
+        assert_eq!(
+            title_bar_hit(&layout, 760, 20, &app_drawn),
+            TitleBarHit::Window(CaptionHit::Button(CaptionButton::Close))
+        );
+        assert_eq!(
+            title_bar_hit(&layout, 20, 15, &app_drawn),
+            TitleBarHit::SystemMenu
+        );
+        // A control under the buttons or the icon's cell never takes them.
+        let greedy = [Bounds {
+            left: 0,
+            top: 0,
+            right: 800,
+            bottom: 31,
+        }];
+        let greedy = TitleBarMode {
+            interactive: &greedy,
+            ..app_drawn
+        };
+        assert_eq!(
+            title_bar_hit(&layout, 708, 20, &greedy),
+            TitleBarHit::Window(CaptionHit::Button(CaptionButton::Maximize))
+        );
+        assert_eq!(
+            title_bar_hit(&layout, 20, 15, &greedy),
+            TitleBarHit::SystemMenu
+        );
+        assert_eq!(
+            title_bar_hit(&layout, 400, 4, &greedy),
+            TitleBarHit::Window(CaptionHit::Top)
+        );
+        // Withdrawn, the band is the window's again.
+        let default = TitleBarMode {
+            interactive: &controls,
+            ..TitleBarMode::default()
+        };
+        assert_eq!(
+            title_bar_hit(&layout, 100, 20, &default),
+            TitleBarHit::Window(CaptionHit::Caption)
+        );
+        // It is told how far the icon's cell and the buttons reach in.
+        assert_eq!(
+            layout.band(),
+            CaptionBand {
+                height: 31,
+                start_width: 40,
+                end_width: 138,
+            }
+        );
+        // No name and no fill are drawn over an app's own title bar: the band stays clear
+        // but for the icon and the buttons.
+        let (left, _, title_width, title_height) = layout.title_rect().unwrap();
+        let title = vec![255u8; (title_width * title_height) as usize];
+        let content = TitleBarContent {
+            fill: Some(0xFF20_4080),
+            title: Some(&title),
+            app_drawn: true,
+            ..TitleBarContent::default()
+        };
+        let image = paint_title_bar(
+            &layout,
+            96,
+            &CaptionPalette::of(CaptionTone::DarkGlyphs),
+            &CaptionState {
+                active: true,
+                ..CaptionState::default()
+            },
+            &content,
+        );
+        assert_eq!(
+            bar_pixel(&image, &layout, left as u32 + 2, 15),
+            [0, 0, 0, 0]
+        );
+        assert_eq!(bar_pixel(&image, &layout, 400, 15), [0, 0, 0, 0]);
     }
 }

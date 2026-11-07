@@ -16,7 +16,7 @@ use windows_sys::Win32::System::LibraryLoader::{
 };
 
 use crate::compositor::present::SplashImage;
-use dsa_exe_resources::{RT_RCDATA, SPLASH_ICON_ID};
+use dsa_exe_resources::{CAPTION_ICON_ID, RT_RCDATA, SPLASH_ICON_ID};
 
 /// The size the program's icon is read at when it carries no larger image of it.
 const ICON_EDGE: u32 = 256;
@@ -56,15 +56,37 @@ fn full_icon() -> Option<(Vec<u8>, (u32, u32))> {
     Some((pixels, (width, height)))
 }
 
+/// The icon the window's title bar shows, `side` pixels square, as rows of premultiplied BGRA
+/// pixels: the foreground layer of the app's adaptive icon, which this program carries beside
+/// its own icon, scaled from the size the guest drew it at. `None` when the program carries
+/// none (the app's icon is not adaptive) or it cannot be read; the title bar then shows the
+/// program's icon.
+pub(super) fn caption_icon_pixels(side: u32) -> Option<Vec<u8>> {
+    let png = rcdata(CAPTION_ICON_ID)?;
+    let (width, height) = crate::compositor::widgets::png::size(png)?;
+    if side == 0 || width > MAX_SPLASH_SOURCE || height > MAX_SPLASH_SOURCE {
+        return None;
+    }
+    crate::compositor::widgets::png::with_com(|| {
+        let decoder = crate::compositor::widgets::png::Decoder::new().ok()?;
+        decoder.decode(png, side, side).ok()
+    })
+}
+
 /// The bytes of this program's splash icon resource.
 fn splash_png() -> Option<&'static [u8]> {
+    rcdata(SPLASH_ICON_ID)
+}
+
+/// The bytes of this program's raw data resource `id`.
+fn rcdata(id: u16) -> Option<&'static [u8]> {
     // SAFETY: integer resource IDs in this program's own module, which stays loaded while it
     // runs, so the locked resource lives as long as the program.
     unsafe {
         let module = GetModuleHandleW(std::ptr::null());
         let found = FindResourceW(
             module,
-            SPLASH_ICON_ID as usize as *const u16,
+            id as usize as *const u16,
             RT_RCDATA as usize as *const u16,
         );
         if found.is_null() {

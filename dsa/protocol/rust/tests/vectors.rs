@@ -296,6 +296,7 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
             "launch_app",
             wrap(Body::LaunchApp(LaunchApp {
                 package_name: "com.example.notes".into(),
+                ..Default::default()
             })),
         ),
         (
@@ -304,6 +305,7 @@ fn cases() -> BTreeMap<&'static str, Envelope> {
                 package_name: "com.example.notes".into(),
                 label: "Notes".into(),
                 icon_png: vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
+                ..Default::default()
             })),
         ),
         (

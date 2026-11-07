@@ -99,8 +99,8 @@ use crate::session::{BackgroundRequest, Session, SessionError, SessionState};
 use crate::settings::{Settings, SettingsStore};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
-    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation, TaskRequest,
-    TaskRequestError, TaskWatch,
+    AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
+    TaskRequest, TaskRequestError, TaskWatch,
 };
 use crate::widgets::{
     self, MemoryWidgetPlacements, Placement, Widget, WidgetError, WidgetEvent, WidgetFrame,
@@ -502,6 +502,22 @@ pub trait UserAndroid: Send + Sync {
             "this Android cannot open its app settings".into(),
         ))
     }
+    /// Opens one of Android's settings pages of `package` (`page`), or the list of every app
+    /// when it is `None`. An Android that only has the app's info page opens that one.
+    fn open_app_settings_page(
+        &self,
+        package: Option<&str>,
+        page: AppSettingsPage,
+    ) -> Result<(), TaskRequestError> {
+        match page {
+            AppSettingsPage::Details => self.open_app_settings(package),
+            AppSettingsPage::AspectRatio | AppSettingsPage::OpenByDefault => {
+                Err(TaskRequestError::Failed(
+                    "this Android cannot open that settings page of an app".into(),
+                ))
+            }
+        }
+    }
     /// Uninstalls the user app `package` and says how it went.
     fn uninstall_app(&self, package: &str) -> Result<UninstallOutcome, TaskRequestError> {
         let _ = package;
@@ -813,6 +829,13 @@ impl UserAndroid for Session {
     fn open_app_settings(&self, package: Option<&str>) -> Result<(), TaskRequestError> {
         Session::open_app_settings(self, package).map_err(request_error)
     }
+    fn open_app_settings_page(
+        &self,
+        package: Option<&str>,
+        page: AppSettingsPage,
+    ) -> Result<(), TaskRequestError> {
+        Session::open_app_settings_page(self, package, page).map_err(request_error)
+    }
     fn uninstall_app(&self, package: &str) -> Result<UninstallOutcome, TaskRequestError> {
         Session::uninstall_app(self, package, apps::UNINSTALL_WAIT).map_err(request_error)
     }
@@ -1013,6 +1036,18 @@ fn task_to_wire(task: Task) -> types::Task {
         } as i32,
         fullscreen: task.fullscreen,
         picture_in_picture: task.picture_in_picture,
+        transparent_caption: task.transparent_caption,
+        caption_interactive: task
+            .caption_interactive
+            .iter()
+            .map(|rect| types::Rect {
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+                bottom: rect.bottom,
+            })
+            .collect(),
+        can_go_back: task.can_go_back,
     }
 }
 
@@ -1049,6 +1084,18 @@ fn task_from_wire(task: types::Task) -> Task {
         orientation,
         fullscreen: task.fullscreen,
         picture_in_picture: task.picture_in_picture,
+        transparent_caption: task.transparent_caption,
+        caption_interactive: task
+            .caption_interactive
+            .iter()
+            .map(|rect| Bounds {
+                left: rect.left,
+                top: rect.top,
+                right: rect.right,
+                bottom: rect.bottom,
+            })
+            .collect(),
+        can_go_back: task.can_go_back,
     }
 }
 
@@ -1123,6 +1170,8 @@ fn app_to_wire(app: AppInfo) -> types::AppInfo {
         cache_bytes: app.cache_bytes,
         native_libraries: app.native_libraries.to_wire(),
         primary_abi: app.primary_abi,
+        caption_icon_png: app.caption_icon_png,
+        multiple_windows: app.multiple_windows,
     }
 }
 
@@ -1141,6 +1190,8 @@ fn app_from_wire(app: types::AppInfo) -> AppInfo {
         cache_bytes: app.cache_bytes,
         primary_abi: app.primary_abi,
         native_libraries: NativeLibraries::from_wire(&app.native_libraries),
+        caption_icon_png: app.caption_icon_png,
+        multiple_windows: app.multiple_windows,
     }
 }
 
@@ -3037,7 +3088,12 @@ impl HostApiService {
         }
     }
 
-    fn open_app_settings(&self, peer: &Peer, package: &str) -> response::Body {
+    fn open_app_settings(
+        &self,
+        peer: &Peer,
+        package: &str,
+        page: AppSettingsPage,
+    ) -> response::Body {
         if !package.is_empty() && !apk::valid_package_name(package) {
             return not_a_package(package);
         }
@@ -3045,7 +3101,7 @@ impl HostApiService {
             Ok(android) => android,
             Err(why) => return error(ErrorCode::Unavailable, why),
         };
-        match android.open_app_settings(Some(package).filter(|p| !p.is_empty())) {
+        match android.open_app_settings_page(Some(package).filter(|p| !p.is_empty()), page) {
             Ok(()) => response::Body::Done(types::Done {}),
             Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
             Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
@@ -3723,7 +3779,12 @@ impl HostApiService {
                 },
             },
             Some(request::Body::OpenAppSettings(open)) => {
-                self.open_app_settings(peer, &open.package_name)
+                let page = match open.page() {
+                    types::AppSettingsPage::Details => AppSettingsPage::Details,
+                    types::AppSettingsPage::AspectRatio => AppSettingsPage::AspectRatio,
+                    types::AppSettingsPage::OpenByDefault => AppSettingsPage::OpenByDefault,
+                };
+                self.open_app_settings(peer, &open.package_name, page)
             }
             Some(request::Body::UninstallApp(uninstall)) => {
                 self.uninstall_app(peer, &uninstall.package_name)
@@ -3733,6 +3794,12 @@ impl HostApiService {
                 peer,
                 TaskRequest::Close {
                     task_id: close.task_id,
+                },
+            ),
+            Some(request::Body::LaunchApp(launch)) if launch.new_window => self.request(
+                peer,
+                TaskRequest::NewWindow {
+                    package_name: launch.package_name,
                 },
             ),
             Some(request::Body::LaunchApp(launch)) => self.request(
@@ -3773,6 +3840,8 @@ impl HostApiService {
                 TaskRequest::SetCaption {
                     task_id: caption.task_id,
                     height: caption.height,
+                    start_width: caption.start_width,
+                    end_width: caption.end_width,
                 },
             ),
             Some(request::Body::SetWindowsShown(shown)) => {
@@ -5274,8 +5343,24 @@ impl HostApiClient {
     /// Opens Android's own settings of `package` in a window of its own, or Android's list of
     /// every app when it is `None`.
     pub fn open_app_settings(&mut self, package: Option<&str>) -> Result<(), ClientError> {
+        self.open_app_settings_page(package, AppSettingsPage::Details)
+    }
+
+    /// Opens one of Android's settings pages of `package` (`page`) in a window of its own:
+    /// its info, its aspect ratio or whether it opens the links it supports.
+    pub fn open_app_settings_page(
+        &mut self,
+        package: Option<&str>,
+        page: AppSettingsPage,
+    ) -> Result<(), ClientError> {
+        let page = match page {
+            AppSettingsPage::Details => types::AppSettingsPage::Details,
+            AppSettingsPage::AspectRatio => types::AppSettingsPage::AspectRatio,
+            AppSettingsPage::OpenByDefault => types::AppSettingsPage::OpenByDefault,
+        };
         self.done(request::Body::OpenAppSettings(types::OpenAppSettings {
             package_name: package.unwrap_or_default().to_string(),
+            page: page as i32,
         }))
     }
 
@@ -5390,6 +5475,16 @@ impl HostApiClient {
     pub fn launch_app(&mut self, package_name: &str) -> Result<(), ClientError> {
         self.done(request::Body::LaunchApp(types::LaunchApp {
             package_name: package_name.into(),
+            new_window: false,
+        }))
+    }
+
+    /// Asks the caller's Android to start another task of an app that supports several
+    /// windows, even when it has one, in a window of its own.
+    pub fn new_window(&mut self, package_name: &str) -> Result<(), ClientError> {
+        self.done(request::Body::LaunchApp(types::LaunchApp {
+            package_name: package_name.into(),
+            new_window: true,
         }))
     }
 
@@ -5423,10 +5518,18 @@ impl HostApiClient {
 
     /// Asks the caller's Android to give a task a top inset of `height` pixels, which its
     /// window's title bar covers.
-    pub fn set_task_caption(&mut self, task_id: i32, height: u32) -> Result<(), ClientError> {
+    pub fn set_task_caption(
+        &mut self,
+        task_id: i32,
+        height: u32,
+        start_width: u32,
+        end_width: u32,
+    ) -> Result<(), ClientError> {
         self.done(request::Body::SetTaskCaption(types::SetTaskCaption {
             task_id,
             height,
+            start_width,
+            end_width,
         }))
     }
 
@@ -5435,6 +5538,7 @@ impl HostApiClient {
         match request {
             TaskRequest::Close { task_id } => self.close_task(*task_id),
             TaskRequest::Launch { package_name } => self.launch_app(package_name),
+            TaskRequest::NewWindow { package_name } => self.new_window(package_name),
             TaskRequest::Resize {
                 task_id,
                 width,
@@ -5445,7 +5549,12 @@ impl HostApiClient {
                 task_id,
                 density_dpi,
             } => self.set_task_density(*task_id, *density_dpi),
-            TaskRequest::SetCaption { task_id, height } => self.set_task_caption(*task_id, *height),
+            TaskRequest::SetCaption {
+                task_id,
+                height,
+                start_width,
+                end_width,
+            } => self.set_task_caption(*task_id, *height, *start_width, *end_width),
             TaskRequest::WindowsShown { shown } => self.set_windows_shown(*shown),
             TaskRequest::StopApp { package_name } => self.stop_app(package_name),
         }

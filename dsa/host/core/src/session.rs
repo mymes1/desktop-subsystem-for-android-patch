@@ -147,8 +147,8 @@ use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
-    AppInfo, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation, TaskRequest, TaskTable,
-    TaskWatch,
+    AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
+    TaskRequest, TaskTable, TaskWatch,
 };
 use crate::widgets::{
     self, Placement, Widget, WidgetEvent, WidgetFrame, WidgetProvider, WidgetSize,
@@ -2762,9 +2762,14 @@ impl Session {
         let body = match request {
             TaskRequest::WindowsShown { shown } => return self.windows_shown(shown),
             TaskRequest::Close { task_id } => Body::CloseTask(control::CloseTask { task_id }),
-            TaskRequest::Launch { package_name } => {
-                Body::LaunchApp(control::LaunchApp { package_name })
-            }
+            TaskRequest::Launch { package_name } => Body::LaunchApp(control::LaunchApp {
+                package_name,
+                new_window: false,
+            }),
+            TaskRequest::NewWindow { package_name } => Body::LaunchApp(control::LaunchApp {
+                package_name,
+                new_window: true,
+            }),
             TaskRequest::StopApp { package_name } => {
                 Body::StopApp(control::StopApp { package_name })
             }
@@ -2786,9 +2791,17 @@ impl Session {
                 task_id,
                 density_dpi,
             }),
-            TaskRequest::SetCaption { task_id, height } => {
-                Body::SetTaskCaption(control::SetTaskCaption { task_id, height })
-            }
+            TaskRequest::SetCaption {
+                task_id,
+                height,
+                start_width,
+                end_width,
+            } => Body::SetTaskCaption(control::SetTaskCaption {
+                task_id,
+                height,
+                start_width,
+                end_width,
+            }),
         };
         self.send(dsa_protocol::encode(&control::Envelope {
             body: Some(body),
@@ -3045,9 +3058,25 @@ impl Session {
     /// notifications) as a task in its own window, or the list of every app when it is
     /// `None`. Needs an active session.
     pub fn open_app_settings(&self, package: Option<&str>) -> Result<(), SessionError> {
+        self.open_app_settings_page(package, AppSettingsPage::Details)
+    }
+
+    /// Opens one of Android's settings pages of `package` (`page`), or the list of every app
+    /// when it is `None`. Needs an active session.
+    pub fn open_app_settings_page(
+        &self,
+        package: Option<&str>,
+        page: AppSettingsPage,
+    ) -> Result<(), SessionError> {
+        let page = match page {
+            AppSettingsPage::Details => control::AppSettingsPage::Details,
+            AppSettingsPage::AspectRatio => control::AppSettingsPage::AspectRatio,
+            AppSettingsPage::OpenByDefault => control::AppSettingsPage::OpenByDefault,
+        };
         self.send(dsa_protocol::encode(&control::Envelope {
             body: Some(Body::OpenAppSettings(control::OpenAppSettings {
                 package_name: package.unwrap_or_default().to_string(),
+                page: page as i32,
             })),
         }))
     }
@@ -4144,6 +4173,7 @@ impl Worker {
                 }
                 self.send_body(Body::LaunchApp(control::LaunchApp {
                     package_name: package,
+                    new_window: false,
                 }));
             }
             native_abi::Notice::NeedsErase | native_abi::Notice::Failed => {}
@@ -5509,6 +5539,18 @@ impl Worker {
                     orientation,
                     fullscreen: update.fullscreen,
                     picture_in_picture: update.picture_in_picture,
+                    transparent_caption: update.transparent_caption,
+                    caption_interactive: update
+                        .caption_interactive
+                        .iter()
+                        .map(|rect| Bounds {
+                            left: rect.left,
+                            top: rect.top,
+                            right: rect.right,
+                            bottom: rect.bottom,
+                        })
+                        .collect(),
+                    can_go_back: update.can_go_back,
                 }));
             }
             Some(Body::TaskRemoved(removed)) => {
@@ -5527,6 +5569,8 @@ impl Worker {
                     package_name: app.package_name,
                     label: app.label,
                     icon_png: app.icon_png,
+                    caption_icon_png: app.caption_icon_png,
+                    multiple_windows: app.multiple_windows,
                     ..Default::default()
                 }));
             }
@@ -5545,6 +5589,7 @@ impl Worker {
                     cache_bytes: app.cache_bytes,
                     native_libraries: NativeLibraries::from_control(&app.native_libraries),
                     primary_abi: native_abi::checked_abi(&app.primary_abi),
+                    ..Default::default()
                 });
             }
             Some(Body::InstalledApps(apps)) => {

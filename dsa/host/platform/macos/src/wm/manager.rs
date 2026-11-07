@@ -237,8 +237,8 @@ impl<P: Platform> Manager<P> {
                 let requests = self.windows.window_dragging(task_id, dragging, now);
                 self.request(requests);
             }
-            FromHost::Caption { task_id, height } => {
-                let requests = self.windows.window_caption(task_id, height);
+            FromHost::Caption { task_id, band } => {
+                let requests = self.windows.window_caption(task_id, band);
                 self.request(requests);
             }
             FromHost::Focus { task_id, focused } => {
