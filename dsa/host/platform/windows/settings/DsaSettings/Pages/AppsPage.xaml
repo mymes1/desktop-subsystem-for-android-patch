@@ -52,16 +52,29 @@
                            Visibility="{Binding HasNoApps, Converter={StaticResource Visible}}" />
                 <TextBlock Text="{l:Text AppsNoMatch.Text}" Style="{StaticResource Note}"
                            Visibility="{Binding HasNoMatches, Converter={StaticResource Visible}}" />
-                <ItemsControl ItemsSource="{Binding Rows, Mode=OneWay}">
+                <ItemsControl x:Name="AppList" ItemsSource="{Binding Rows, Mode=OneWay}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <!-- Two lines rather than a settings card: the actions together are
                                  wider than the page, and a card's header takes only the width its
                                  control leaves, so it got none and its text wrapped at every
                                  letter, which made the card taller than the window. -->
-                            <Border Margin="0,0,0,4" Padding="16" CornerRadius="4" BorderThickness="1"
-                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            <Border Margin="0,0,0,4" Padding="16" CornerRadius="4"
+                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                                <!-- The row a task window's App info opened the page at wears the
+                                     accent colour around it, so the eye finds it. -->
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="BorderThickness" Value="1" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                                                <Setter Property="BorderThickness" Value="2" />
+                                                <Setter Property="BorderBrush" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />

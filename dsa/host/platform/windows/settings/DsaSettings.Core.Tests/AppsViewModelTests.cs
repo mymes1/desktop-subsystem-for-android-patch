@@ -84,6 +84,34 @@ public class AppsViewModelTests
     }
 
     [Fact]
+    public async Task Fr22_app_info_of_a_window_opens_the_apps_page_at_the_app()
+    {
+        // A task window's App info starts the settings app with its app's package.
+        Assert.Equal("com.example.notes",
+            StartArguments.AppOf(new[] { "DsaSettings.exe", "--page", "apps", "--app", "com.example.notes" }));
+        Assert.Null(StartArguments.AppOf(new[] { "DsaSettings.exe", "--page", "apps" }));
+        Assert.Null(StartArguments.AppOf(new[] { "DsaSettings.exe", "--app" }));
+        Assert.Null(StartArguments.AppOf(new[] { "DsaSettings.exe", "--app", "../evil" }));
+        Assert.Null(StartArguments.AppOf(new[] { "DsaSettings.exe", "--app", "notes" }));
+
+        var (vm, _) = Make(new FakeCli().Answer("apps list --json", List));
+        vm.Search = "set";
+        vm.Highlight("com.example.notes");
+        await vm.RefreshAsync();
+        // The search that would hide the app is cleared, and only its row is marked.
+        Assert.Equal("", vm.Search);
+        Assert.Equal("com.example.notes", vm.Highlighted);
+        Assert.Equal(new[] { true, false }, vm.Rows.Select(r => r.IsHighlighted));
+        Assert.Equal("com.example.notes", vm.Rows.Single(r => r.IsHighlighted).Package);
+
+        // A search that shows the app is kept.
+        vm.Search = "note";
+        vm.Highlight("com.example.notes");
+        Assert.Equal("note", vm.Search);
+        Assert.True(vm.Rows.Single().IsHighlighted);
+    }
+
+    [Fact]
     public async Task Fr23_open_app_info_and_manage_apps_go_through_dsa()
     {
         var (vm, cli) = Make(new FakeCli()

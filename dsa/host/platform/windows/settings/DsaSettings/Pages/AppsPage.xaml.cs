@@ -21,7 +21,50 @@ public partial class AppsPage : Page
         {
             await ViewModel.RefreshAsync();
             await ViewModel.LoadWindowSettingsAsync();
+            ShowHighlighted();
         };
+    }
+
+    /// <summary>Brings the row of the app a task window's App info named into view and gives its
+    /// first button the keyboard focus, once the list has laid it out, so the user lands on the
+    /// app's settings and a screen reader reads its name.</summary>
+    private void ShowHighlighted()
+    {
+        if (ViewModel.Highlighted is not { } package)
+        {
+            return;
+        }
+        Dispatcher.BeginInvoke(() =>
+        {
+            var index = ViewModel.Rows.ToList().FindIndex(row => row.Package == package);
+            if (index < 0 || AppList.ItemContainerGenerator.ContainerFromIndex(index) is not FrameworkElement row)
+            {
+                return;
+            }
+            row.BringIntoView();
+            if (FirstFocusable(row) is { } first)
+            {
+                first.Focus();
+            }
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>The first element under <paramref name="root"/> that takes the keyboard focus.</summary>
+    private static UIElement? FirstFocusable(DependencyObject root)
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is ButtonBase { Focusable: true, IsEnabled: true } button)
+            {
+                return button;
+            }
+            if (FirstFocusable(child) is { } deeper)
+            {
+                return deeper;
+            }
+        }
+        return null;
     }
 
     private async void OnResizable(object sender, RoutedEventArgs e)
