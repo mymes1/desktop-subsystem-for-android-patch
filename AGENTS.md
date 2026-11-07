@@ -158,6 +158,7 @@ These bind the agent and whoever dispatches it equally.
    kernel or gfxstream. Builds and test runs take most of the machine's cores and memory, and
    several agents running them at once stall the owner's own work, down to mouse clicks. A
    background agent merges its branch and leaves building and testing to CI on `develop` (4).
+   The only exceptions are formatting (6) and the compile check script (7).
    Do not write a build or test command into a task prompt.
    Running the code on this machine (installing a build, booting it, checking it by hand)
    is done from `develop`, by the session that dispatches the agents, after the pull request
@@ -189,10 +190,18 @@ These bind the agent and whoever dispatches it equally.
    closes, resizes or captures an app or window on this machine, including DSA and Windows' own
    apps, because the owner is working at that desktop. It verifies from CI artifacts. The
    dispatching session says so first before it installs or launches anything on the PC.
-6. **Run `cargo fmt` on the crates you changed before you push.** It is the one exception to
+6. **Run `cargo fmt` on the crates you changed before you push.** It is an exception to
    (1): it rewrites only whitespace and line breaks, takes seconds and barely loads the
    machine. CI checks formatting first, so a branch pushed unformatted never reaches its real
-   tests. Run it in your own worktree only, and nothing else that `cargo` offers.
+   tests. Run it in your own worktree only.
+7. **Check that your change compiles before you push, through `scripts/compile-check.ps1`
+   only.** It is the other exception to (1), approved by the owner on 2026-11-08: `cargo
+   check`, `cargo clippy` and `dotnet build` of the crates and projects you changed. The
+   script runs them on four cores at the lowest priority and one at a time across all
+   worktrees, so the owner's work keeps the rest of the machine; never run those commands any
+   other way. Running tests, `cargo build` of binaries for use, Gradle, Swift, the Android
+   image, the guest kernel and gfxstream stay forbidden. A clean check is not a test result:
+   CI still decides.
 
 ## Writing
 
