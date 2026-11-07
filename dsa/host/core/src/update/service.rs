@@ -711,6 +711,23 @@ impl UserAndroid for UpdatingAndroid {
     ) -> Result<InstallOutcome, InstallError> {
         UserAndroid::install_apk(&*self.session, name, size, content)
     }
+    fn install_apk_for(
+        &self,
+        name: &str,
+        size: u64,
+        abi: Option<&str>,
+        content: &mut dyn std::io::Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        UserAndroid::install_apk_for(&*self.session, name, size, abi, content)
+    }
+    fn set_run_as_arm(
+        &self,
+        package: &str,
+        on: bool,
+        erase_data: bool,
+    ) -> Result<crate::native_abi::RunAsArmOutcome, TaskRequestError> {
+        UserAndroid::set_run_as_arm(&*self.session, package, on, erase_data)
+    }
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
         UserAndroid::package_state(&*self.session, package)
     }

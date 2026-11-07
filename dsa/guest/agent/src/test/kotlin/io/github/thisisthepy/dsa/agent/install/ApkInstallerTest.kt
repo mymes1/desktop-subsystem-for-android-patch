@@ -27,7 +27,7 @@ import org.junit.Test
 
 /** The guest's package installer: keeps what each session was given, and answers a commit when the test says. */
 class FakeInstaller : PackageInstallerPort {
-    inner class Session(val name: String, val size: Long) : InstallSession {
+    inner class Session(val name: String, val size: Long, val abi: String = "") : InstallSession {
         val written = ByteArrayOutputStream()
         var abandoned = false
         var onResult: ((InstallerResult) -> Unit)? = null
@@ -58,9 +58,9 @@ class FakeInstaller : PackageInstallerPort {
     var refuseOpen: Exception? = null
     var failWrites = false
 
-    override fun open(name: String, size: Long): InstallSession {
+    override fun open(name: String, size: Long, abi: String): InstallSession {
         refuseOpen?.let { throw it }
-        return Session(name, size).also { sessions += it }
+        return Session(name, size, abi).also { sessions += it }
     }
 }
 
@@ -133,6 +133,24 @@ class ApkInstallerTest {
         assertEquals(7, result.transferId)
         assertEquals(InstallStatus.INSTALL_STATUS_SUCCESS, result.status)
         assertEquals("com.example.notes", result.packageName)
+    }
+
+    @Test
+    fun fr25_the_abi_the_host_chose_is_the_install_sessions_abi_override() {
+        started()
+        deliver(Envelope.newBuilder().setInstallApk(InstallApk.newBuilder().setTransferId(3).setName("game.apk").setSize(10).setAbi("arm64-v8a")))
+        deliver(Envelope.newBuilder().setInstallApk(InstallApk.newBuilder().setTransferId(4).setName("notes.apk").setSize(10)))
+        assertEquals(listOf("arm64-v8a", ""), installer.sessions.map { it.abi })
+    }
+
+    @Test
+    fun fr25_an_abi_the_guest_cannot_run_is_refused_before_a_session_opens() {
+        started()
+        deliver(Envelope.newBuilder().setInstallApk(InstallApk.newBuilder().setTransferId(5).setName("old.apk").setSize(10).setAbi("armeabi-v7a")))
+        assertTrue(installer.sessions.isEmpty())
+        val result = results().single()
+        assertEquals(5, result.transferId)
+        assertEquals(InstallStatus.INSTALL_STATUS_OTHER, result.status)
     }
 
     @Test

@@ -7,7 +7,7 @@ use crate::api::{Failure, Problem};
 use crate::i18n::{tr, trf};
 use crate::model::{
     AndroidVersion, App, AppWindow, ArmTranslation, Gapps, GappsState, GuestMemory, HostRole,
-    Memory, Network, NetworkMode, State, Status, ALL_FOLDERS,
+    Memory, Network, NetworkMode, Outcome, State, Status, ALL_FOLDERS,
 };
 
 /// A problem in the user's language, with what the client said after it.
@@ -372,6 +372,75 @@ pub fn start_size_choices() -> Vec<(String, Option<(u32, u32)>)> {
 pub fn start_size_index(window: Option<&AppWindow>) -> Option<usize> {
     let size = window.and_then(|w| w.start_size);
     start_size_choices().iter().position(|(_, s)| *s == size)
+}
+
+/// What an app's "Run as ARM" switch shows: whether it is on, whether it can be changed, and
+/// what its row says under its title.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunAsArmView {
+    pub on: bool,
+    pub sensitive: bool,
+    pub subtitle: String,
+}
+
+/// The "Run as ARM" switch of `app`: off and insensitive, with the reason, when it cannot be
+/// changed.
+pub fn run_as_arm_view(app: &App) -> RunAsArmView {
+    let arm = &app.run_as_arm;
+    let subtitle = if arm.available {
+        tr("Runs the app's ARM code through the translator. Off runs its x86_64 code.")
+    } else {
+        tr(match arm.reason.as_str() {
+            "system-app" => "Apps that are part of Android run as Android installed them.",
+            "no-arm-libraries" => "No APK of this app on the device holds its ARM code.",
+            "translation-off" => {
+                "ARM translation is not on. Turn it on under ARM apps and restart Android."
+            }
+            "arm-only" => "This app has only ARM code, so it always runs as ARM.",
+            _ => "This version of DSA cannot say whether the app can run as ARM.",
+        })
+    };
+    RunAsArmView {
+        on: arm.on,
+        sensitive: arm.available,
+        subtitle,
+    }
+}
+
+/// What follows a change of the "Run as ARM" switch, from how `dsa` answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RunAsArmNext {
+    /// It is done; the toast says how the app runs now.
+    Done(String),
+    /// Android cannot keep the app's data: the user is asked whether to erase it.
+    ConfirmErase,
+    /// Android refused; the message says why.
+    Refused(String),
+}
+
+/// What follows `outcome` of switching `label` to ARM (`on`) or back.
+pub fn run_as_arm_next(label: &str, on: bool, outcome: &Outcome) -> RunAsArmNext {
+    if outcome.done {
+        return RunAsArmNext::Done(if on {
+            trf("{0} runs as ARM now.", &[label])
+        } else {
+            trf("{0} runs its x86_64 code now.", &[label])
+        });
+    }
+    if outcome.status == "data-would-be-erased" {
+        return RunAsArmNext::ConfirmErase;
+    }
+    let reason = tr(match outcome.status.as_str() {
+        "not-installed" => "it is no longer installed",
+        "system-app" => "it is part of Android",
+        "no-libraries" => "its APKs on the device hold no code for that",
+        "translation-off" => "ARM translation is not on",
+        _ => "Android refused",
+    });
+    RunAsArmNext::Refused(trf(
+        "{0} was not installed again: {1} ({2})",
+        &[label, &reason, &outcome.detail],
+    ))
 }
 
 /// Why Android refused to uninstall an app, in words.

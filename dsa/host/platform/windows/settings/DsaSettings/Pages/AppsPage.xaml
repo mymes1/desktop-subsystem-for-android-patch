@@ -66,6 +66,7 @@
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
@@ -113,7 +114,20 @@
                                                   ToolTip="{l:Text AppsStartSize.ToolTip}"
                                                   AutomationProperties.Name="{l:Text AppsStartSize.ToolTip}"
                                                   AutomationProperties.HelpText="{Binding Label}" />
+                                        <!-- Whether the app runs its ARM code through the translator. -->
+                                        <ui:ToggleSwitch Content="{l:Text AppsRunAsArm.Content}" Tag="{Binding Package}"
+                                                         IsChecked="{Binding RunAsArm, Mode=OneWay}" Click="OnRunAsArm"
+                                                         IsEnabled="{Binding CanRunAsArm}"
+                                                         Margin="16,4,0,0" VerticalAlignment="Center"
+                                                         ToolTipService.ShowOnDisabled="True"
+                                                         ToolTip="{Binding RunAsArmTip, TargetNullValue={x:Null}}"
+                                                         AutomationProperties.HelpText="{Binding Label}" />
                                     </WrapPanel>
+                                    <!-- Why the app cannot run as ARM, where the switch is. -->
+                                    <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding RunAsArmTip}"
+                                               Style="{StaticResource CardDescription}" HorizontalAlignment="Right"
+                                               TextWrapping="Wrap" Margin="0,4,0,0"
+                                               Visibility="{Binding HasRunAsArmTip, Converter={StaticResource Visible}}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>

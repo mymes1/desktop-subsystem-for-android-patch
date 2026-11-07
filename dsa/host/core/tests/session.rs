@@ -3361,6 +3361,149 @@ fn fr11_the_install_window_learns_the_installed_version_and_signer_from_the_agen
     assert_eq!(asking.join().unwrap().expect("an answer"), None);
 }
 
+fn game_libraries(abi: &str, names: &[&str]) -> dsa_protocol::control::NativeLibraries {
+    dsa_protocol::control::NativeLibraries {
+        abi: abi.into(),
+        names: names.iter().map(|name| name.to_string()).collect(),
+    }
+}
+
+/// Lists one app, `com.example.game`, whose x86_64 libraries leave out one of its arm64 ones.
+fn list_game(agent: &mut Box<dyn Connection>, watch: &dsa_host_core::tasks::TaskWatch) {
+    send_body(
+        agent,
+        Body::InstalledApp(dsa_protocol::control::InstalledApp {
+            package_name: "com.example.game".into(),
+            label: "Game".into(),
+            primary_abi: "x86_64".into(),
+            native_libraries: vec![
+                game_libraries("arm64-v8a", &["libmain.so", "libunity.so"]),
+                game_libraries("x86_64", &["libmain.so"]),
+            ],
+            ..Default::default()
+        }),
+    );
+    send_body(
+        agent,
+        Body::InstalledApps(dsa_protocol::control::InstalledApps {
+            package_names: vec!["com.example.game".into()],
+        }),
+    );
+    loop {
+        if let TaskEvent::Installed(apps) = watch.events.recv_timeout(WAIT).expect("the apps") {
+            assert_eq!(apps[0].primary_abi, "x86_64");
+            assert!(apps[0].native_libraries.has("arm64-v8a"));
+            break;
+        }
+    }
+}
+
+fn game_crash(arm64_supported: bool) -> Body {
+    Body::NativeLibraryCrash(dsa_protocol::control::NativeLibraryCrash {
+        package_name: "com.example.game".into(),
+        detail: "java.lang.UnsatisfiedLinkError: dlopen failed: library \"libunity.so\" not found"
+            .into(),
+        arm64_supported,
+    })
+}
+
+#[test]
+fn fr25_a_native_library_crash_offers_to_run_the_app_as_arm_and_a_click_reinstalls_it() {
+    use dsa_host_core::native_abi::Notice;
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_notifications();
+    let tasks = session.watch_tasks();
+    list_game(&mut agent, &tasks);
+    // Without a translator there is nothing to offer.
+    send_body(&mut agent, game_crash(false));
+    nothing_for_the_watcher(&watch);
+    send_body(&mut agent, game_crash(true));
+    let offer = match watch.recv_timeout(WAIT).unwrap() {
+        NotificationEvent::Posted(offer) => offer,
+        other => panic!("expected the offer, not {other:?}"),
+    };
+    assert_eq!(offer.key, Notice::Offer.key("com.example.game"));
+    assert_eq!(offer.app_label, "Game");
+    session
+        .notification_action(NotificationAction::Open {
+            key: offer.key.clone(),
+        })
+        .expect("taken");
+    let reinstall = loop {
+        if let Body::ReinstallApp(reinstall) = next_body(&mut agent) {
+            break reinstall;
+        }
+    };
+    assert_eq!(reinstall.package_name, "com.example.game");
+    assert_eq!(reinstall.abi, "arm64-v8a");
+    assert!(
+        !reinstall.erase_data,
+        "the data stays unless the user says otherwise"
+    );
+    assert_eq!(
+        watch.recv_timeout(WAIT).unwrap(),
+        NotificationEvent::Removed { key: offer.key }
+    );
+    send_body(
+        &mut agent,
+        Body::ReinstallResult(dsa_protocol::control::ReinstallResult {
+            request_id: reinstall.request_id,
+            package_name: "com.example.game".into(),
+            status: dsa_protocol::control::ReinstallStatus::Success as i32,
+            message: String::new(),
+            primary_abi: "arm64-v8a".into(),
+        }),
+    );
+    match watch.recv_timeout(WAIT).unwrap() {
+        NotificationEvent::Posted(done) => {
+            assert_eq!(done.key, Notice::Done.key("com.example.game"))
+        }
+        other => panic!("expected the news that it worked, not {other:?}"),
+    }
+}
+
+#[test]
+fn fr25_an_app_that_runs_as_arm_or_has_no_arm_code_is_offered_nothing() {
+    let (session, mut agent, _launcher) = active_session();
+    let watch = session.watch_notifications();
+    let tasks = session.watch_tasks();
+    list_game(&mut agent, &tasks);
+    // A package that is not installed, and one with no ARM code, are offered nothing.
+    send_body(
+        &mut agent,
+        Body::NativeLibraryCrash(dsa_protocol::control::NativeLibraryCrash {
+            package_name: "com.example.missing".into(),
+            detail: "dlopen failed".into(),
+            arm64_supported: true,
+        }),
+    );
+    send_body(
+        &mut agent,
+        Body::InstalledApp(dsa_protocol::control::InstalledApp {
+            package_name: "com.example.game".into(),
+            label: "Game".into(),
+            primary_abi: "arm64-v8a".into(),
+            native_libraries: vec![game_libraries("arm64-v8a", &["libmain.so"])],
+            ..Default::default()
+        }),
+    );
+    send_body(
+        &mut agent,
+        Body::InstalledApps(dsa_protocol::control::InstalledApps {
+            package_names: vec!["com.example.game".into()],
+        }),
+    );
+    loop {
+        if let TaskEvent::Installed(apps) = tasks.events.recv_timeout(WAIT).expect("the apps") {
+            if apps[0].primary_abi == "arm64-v8a" {
+                break;
+            }
+        }
+    }
+    send_body(&mut agent, game_crash(true));
+    nothing_for_the_watcher(&watch);
+}
+
 #[test]
 fn fr23_installed_apps_carry_their_version_dates_sizes_and_kind() {
     let (session, mut agent, _launcher) = active_session();
@@ -3379,6 +3522,7 @@ fn fr23_installed_apps_carry_their_version_dates_sizes_and_kind() {
             app_bytes: 3_000_000,
             data_bytes: 20_000,
             cache_bytes: 1_000,
+            ..Default::default()
         }),
     );
     send_body(

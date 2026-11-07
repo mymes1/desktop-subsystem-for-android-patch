@@ -1,5 +1,33 @@
 import Foundation
 
+/// The "Run as ARM" switch of an app, as `dsa apps list` reports it: whether the app runs its
+/// ARM code now, whether the switch can be changed, and if not, why (`system-app`,
+/// `no-arm-libraries`, `translation-off` or `arm-only`).
+public struct RunAsArmSwitch: Equatable, Sendable {
+    public var on: Bool
+    public var available: Bool
+    public var reason: String
+
+    public init(on: Bool, available: Bool, reason: String) {
+        self.on = on
+        self.available = available
+        self.reason = reason
+    }
+
+    /// The switch an older dsa says nothing of: off, and not to be changed.
+    public static let unknown = RunAsArmSwitch(on: false, available: false, reason: "unknown")
+}
+
+/// How a change of the "Run as ARM" switch went: `status` is dsa's stable reason (`done`,
+/// `data-would-be-erased`, `not-installed`, `system-app`, `no-libraries`, `translation-off` or
+/// `other`), `message` Android's own words.
+public struct RunAsArmReport: Equatable, Sendable {
+    public var done: Bool
+    public var status: String
+    public var message: String
+    public var on: Bool
+}
+
 /// One app installed in Android, as `dsa apps list` reports it.
 public struct InstalledAppInfo: Equatable, Sendable {
     public var package, label, versionName: String
@@ -8,6 +36,7 @@ public struct InstalledAppInfo: Equatable, Sendable {
     public var systemApp: Bool
     public var appBytes, dataBytes, cacheBytes: UInt64
     public var iconPng: Data
+    public var runAsArm: RunAsArmSwitch = .unknown
 
     public var totalBytes: UInt64 { appBytes + dataBytes + cacheBytes }
 }
@@ -58,13 +87,21 @@ public final class AppsService {
         service = DsaService(cli: cli)
     }
 
+    static func readRunAsArm(_ app: Json) -> RunAsArmSwitch {
+        let arm = app["run_as_arm"]
+        guard arm.isObject else {
+            return .unknown
+        }
+        return RunAsArmSwitch(on: arm.bool("on"), available: arm.bool("available"), reason: arm.string("reason"))
+    }
+
     static func readApp(_ app: Json) -> InstalledAppInfo {
         InstalledAppInfo(
             package: app.string("package"), label: app.string("label"), versionName: app.string("version_name"),
             versionCode: app.int64("version_code"), firstInstallMs: app.uint("first_install_time_ms"),
             lastUpdateMs: app.uint("last_update_time_ms"), systemApp: app.bool("system_app"),
             appBytes: app.uint("app_bytes"), dataBytes: app.uint("data_bytes"), cacheBytes: app.uint("cache_bytes"),
-            iconPng: app.base64("icon_png"))
+            iconPng: app.base64("icon_png"), runAsArm: readRunAsArm(app))
     }
 
     /// Every app installed in Android, with its size read again; Android is started first when
@@ -117,6 +154,26 @@ public final class AppsService {
         return AppsService.readWindowSettings(json)[setting.package] ?? .standard(setting.package)
     }
 
+    /// Installs `package` again with its ARM code (`on`) or its x86_64 code, keeping its data
+    /// unless `eraseData`. A refusal is a report with its reason; anything else that kept the
+    /// request from Android is a `DsaError`.
+    public func runAsArm(_ package: String, on: Bool, eraseData: Bool) async throws -> RunAsArmReport {
+        var args = ["apps", "run-as-arm", package, on ? "on" : "off"]
+        if eraseData {
+            args.append("--erase-data")
+        }
+        let result = try await service.cli.run(args + ["--json"])
+        if result.exitCode != 0 {
+            if let refused = DsaService.refusal(DsaError.detail(of: result), verb: "changed") {
+                return RunAsArmReport(done: false, status: refused.reason, message: refused.detail, on: !on)
+            }
+            throw DsaError.failure(result)
+        }
+        let json = try Json.parse(result.output)
+        return RunAsArmReport(done: json.string("status") == "done", status: json.string("status"),
+                              message: json.string("message"), on: json.bool("on"))
+    }
+
     /// Uninstalls `package`. A refusal by Android is a report with its reason; anything else
     /// that kept the request from Android is a `DsaError`.
     public func uninstall(_ package: String) async throws -> UninstallReport {
@@ -142,6 +199,11 @@ public struct AppRow: Equatable, Identifiable, Sendable {
     public var resizable: Bool
     /// Where the app's start size is among the choices; -1 for a size set another way.
     public var startSizeIndex: Int
+    /// Whether the app runs its ARM code through the translator, whether that can be changed,
+    /// and if not, why, in the user's language.
+    public var runAsArm = false
+    public var canRunAsArm = false
+    public var runAsArmTip: String?
 
     public var id: String { package }
 }
@@ -258,7 +320,14 @@ public final class AppsViewModel: ObservableObject {
             detail: parts.joined(separator: " · "), size: AppsViewModel.size(app.totalBytes),
             icon: app.iconPng.isEmpty ? nil : app.iconPng, canUninstall: !app.systemApp, isSystem: app.systemApp,
             uninstallTip: app.systemApp ? text.get("Apps_SystemTip") : nil,
-            resizable: !window.fixedSize, startSizeIndex: startSizeIndex(window))
+            resizable: !window.fixedSize, startSizeIndex: startSizeIndex(window),
+            runAsArm: app.runAsArm.on, canRunAsArm: app.runAsArm.available,
+            runAsArmTip: runAsArmTip(app.runAsArm))
+    }
+
+    /// Why the "Run as ARM" switch cannot be changed, in the user's language; nil when it can.
+    public func runAsArmTip(_ arm: RunAsArmSwitch) -> String? {
+        arm.available ? nil : text.get("Apps_RunAsArm_\(arm.reason.isEmpty ? "unknown" : arm.reason)")
     }
 
     /// The name an app goes by on the page.
@@ -363,6 +432,28 @@ public final class AppsViewModel: ObservableObject {
         await run(reload: false) {
             try await service.openSettings(nil)
             return nil
+        }
+    }
+
+    /// Installs the app again with its ARM code (`on`) or its x86_64 code. The app keeps its
+    /// data; when Android cannot keep it, `confirmErase` asks the user (with the app's name)
+    /// whether to go on and erase it. A refusal is the page's error, in the user's language.
+    public func setRunAsArm(_ package: String, _ on: Bool, confirmErase: (String) async -> Bool) async {
+        await run(reload: true) {
+            let label = labelOf(package)
+            var report = try await service.runAsArm(package, on: on, eraseData: false)
+            if !report.done && report.status == "data-would-be-erased" {
+                let erase = await confirmErase(label)
+                if !erase {
+                    return text.format("Apps_RunAsArmKept", label)
+                }
+                report = try await service.runAsArm(package, on: on, eraseData: true)
+            }
+            if !report.done {
+                let reason = text.get("Apps_RunAsArmRefused_\(report.status)")
+                throw RefusedByAndroid(message: text.format("Apps_RunAsArmNotChanged", label, reason, report.message))
+            }
+            return text.format(report.on ? "Apps_RunAsArmOn" : "Apps_RunAsArmOff", label)
         }
     }
 
