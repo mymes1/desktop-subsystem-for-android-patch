@@ -115,26 +115,26 @@
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <ItemsControl x:Name="PART_MenuItemsItemsControl" Grid.Row="0" Focusable="False"
+                            <l:PaneItemsControl x:Name="PART_MenuItemsItemsControl" Grid.Row="0" Focusable="False"
                                           KeyboardNavigation.DirectionalNavigation="Contained"
                                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                           ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                                <ItemsControl.ItemsPanel>
+                                <l:PaneItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel IsItemsHost="True" />
                                     </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
-                            <ItemsControl x:Name="PART_FooterMenuItemsItemsControl" Grid.Row="1" Margin="0,0,0,4" Focusable="False"
+                                </l:PaneItemsControl.ItemsPanel>
+                            </l:PaneItemsControl>
+                            <l:PaneItemsControl x:Name="PART_FooterMenuItemsItemsControl" Grid.Row="1" Margin="0,0,0,4" Focusable="False"
                                           KeyboardNavigation.DirectionalNavigation="Contained"
                                           ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                           ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                                <ItemsControl.ItemsPanel>
+                                <l:PaneItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel IsItemsHost="True" />
                                     </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
+                                </l:PaneItemsControl.ItemsPanel>
+                            </l:PaneItemsControl>
                         </Grid>
                     </ui:DynamicScrollViewer>
 

@@ -1,4 +1,6 @@
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
@@ -79,7 +81,11 @@ public sealed class PaneItemAutomationPeer : FrameworkElementAutomationPeer, ISe
 
     public bool IsSelected => Item.IsActive;
 
-    public IRawElementProviderSimple? SelectionContainer => null;
+    public IRawElementProviderSimple? SelectionContainer =>
+        ItemsControl.ItemsControlFromItemContainer(Item) is PaneItemsControl list
+        && UIElementAutomationPeer.CreatePeerForElement(list) is { } peer
+            ? ProviderFromPeer(peer)
+            : null;
 
     public void Select() => Item.Open();
 
@@ -102,4 +108,46 @@ public sealed class PaneItemAutomationPeer : FrameworkElementAutomationPeer, ISe
     }
 
     public void Invoke() => Item.Open();
+}
+
+/// <summary>The list that holds the navigation pane's items.
+/// A plain ItemsControl gives UI Automation a generic data item for each entry, a wrapper with
+/// neither the item's name nor a way to select it, so the pane item's own automation peer never
+/// reached a screen reader. This list exposes the items' own peers as its children instead.</summary>
+public class PaneItemsControl : ItemsControl
+{
+    protected override AutomationPeer OnCreateAutomationPeer() => new PaneItemsControlAutomationPeer(this);
+}
+
+/// <summary>A list whose children are the pane items themselves, with the open page's item
+/// as its selection.</summary>
+public sealed class PaneItemsControlAutomationPeer : FrameworkElementAutomationPeer, ISelectionProvider
+{
+    public PaneItemsControlAutomationPeer(PaneItemsControl owner) : base(owner)
+    {
+    }
+
+    private PaneItemsControl List => (PaneItemsControl)Owner;
+
+    protected override string GetClassNameCore() => nameof(PaneItemsControl);
+
+    // The children stay the element peer's: it walks the visual tree, and the items are their
+    // own containers, so it reaches each pane item's own peer, named by its label, selectable
+    // and invokable.
+    protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.List;
+
+    public override object? GetPattern(PatternInterface patternInterface) =>
+        patternInterface == PatternInterface.Selection ? this : base.GetPattern(patternInterface);
+
+    public bool CanSelectMultiple => false;
+
+    // The pane has two lists (the pages and the footer), and only one of them holds the open page.
+    public bool IsSelectionRequired => false;
+
+    public IRawElementProviderSimple[] GetSelection() => List.Items.OfType<PaneItem>()
+        .Where(item => item.IsActive)
+        .Select(item => UIElementAutomationPeer.CreatePeerForElement(item))
+        .OfType<AutomationPeer>()
+        .Select(ProviderFromPeer)
+        .ToArray();
 }
