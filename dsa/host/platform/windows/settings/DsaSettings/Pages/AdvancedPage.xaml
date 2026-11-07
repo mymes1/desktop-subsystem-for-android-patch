@@ -143,6 +143,76 @@
                                IsEnabled="{Binding CanRemoveArmTranslation, Mode=OneWay}" />
                 </ui:CardControl>
 
+                <TextBlock Text="{l:Text GappsHeader.Text}" Style="{StaticResource SectionHeader}" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Store24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text GappsCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{Binding GappsStatus, Mode=OneWay}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{Binding GappsSource, Mode=OneWay}" Style="{StaticResource CardDescription}"
+                                       Visibility="{Binding HasGappsSource, Converter={StaticResource Visible}}" />
+                            <TextBlock Text="{l:Text GappsCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:ProgressRing IsIndeterminate="True" Width="20" Height="20" Margin="0,0,12,0"
+                                         Visibility="{Binding IsInstallingGapps, Converter={StaticResource Visible}}" />
+                        <ui:Button Content="{l:Text GappsInstallButton.Content}" Click="OnInstallGapps"
+                                   IsEnabled="{Binding CanInstallGapps, Mode=OneWay}" />
+                    </StackPanel>
+                </ui:CardControl>
+                <ui:InfoBar Title="{l:Text GappsInstallingBar.Title}" Message="{l:Text GappsInstallingBar.Message}"
+                            Severity="Informational" IsClosable="False"
+                            IsOpen="{Binding IsInstallingGapps, Mode=OneWay}" Margin="0,0,0,4" />
+                <ui:InfoBar Title="{l:Text GappsRestartBar.Title}" Message="{l:Text GappsRestartBar.Message}"
+                            Severity="Informational" IsClosable="False"
+                            IsOpen="{Binding GappsRestartNeeded, Mode=OneWay}" Margin="0,0,0,4" />
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Delete24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text GappsRemoveCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text GappsRemoveCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:Button Content="{l:Text GappsRemoveButton.Content}" Click="OnRemoveGapps"
+                               IsEnabled="{Binding CanRemoveGapps, Mode=OneWay}" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Info24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text GappsTermsCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text GappsTermsCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:HyperlinkButton Content="{l:Text GappsTermsLink.Content}" Click="OnOpenGappsTerms" />
+                </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon PersonAccounts24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text GappsRegisterCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text GappsRegisterCard.Description}" Style="{StaticResource CardDescription}" />
+                            <TextBlock Text="{Binding GappsDeviceIdText, Mode=OneWay}" Style="{StaticResource CardDescription}"
+                                       Visibility="{Binding ShowsGappsDeviceIdHint, Converter={StaticResource Visible}}" />
+                            <Border Style="{StaticResource CodeBlock}"
+                                    Visibility="{Binding HasGappsDeviceId, Converter={StaticResource Visible}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="GappsDeviceIdBox" Style="{StaticResource SelectableCode}" VerticalAlignment="Center"
+                                             Text="{Binding GappsDeviceId, Mode=OneWay}"
+                                             AutomationProperties.Name="{l:Text GappsDeviceIdLabel.Text}" />
+                                    <ui:Button x:Name="GappsDeviceIdCopyButton" Grid.Column="1" Margin="8,0,0,0" MinWidth="32" Width="32" Height="32" Padding="0"
+                                               Appearance="Transparent" Icon="{ui:SymbolIcon Copy24}" Click="OnCopyGappsDeviceId"
+                                               ToolTip="{l:Text CopyButton.ToolTip}" AutomationProperties.Name="{l:Text CopyButton.ToolTip}" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <ui:HyperlinkButton Content="{l:Text GappsRegisterLink.Content}" Click="OnOpenGappsRegistration" />
+                </ui:CardControl>
+
                 <TextBlock Text="{l:Text DeveloperHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon DeveloperBoard24}">
                     <ui:CardControl.Header>
