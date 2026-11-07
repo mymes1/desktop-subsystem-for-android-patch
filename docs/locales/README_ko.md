@@ -117,7 +117,7 @@ DSA는 가장 새로운 안드로이드 메이저 버전 두 개를 지원합니
 
 ```
 dsa status                          # 안드로이드 상태와 대기 중인 업데이트
-dsa install app.apk                 # APK 설치
+dsa install app.apk                 # APK나 분할 APK 묶음(.xapk, .apks, .apkm) 설치
 dsa apps list                       # 설치된 앱
 dsa launch com.android.settings     # 앱을 자기 창으로 열기
 dsa settings set clipboard off      # 설정 바꾸기(DSA 설정에도 같은 스위치가 있습니다)

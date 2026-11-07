@@ -121,7 +121,7 @@ Open an Android app from the Start menu, or use the `dsa` command:
 
 ```
 dsa status                          # Android's state and any pending update
-dsa install app.apk                 # install an APK
+dsa install app.apk                 # install an APK, or a split-APK bundle (.xapk, .apks, .apkm)
 dsa apps list                       # the installed apps
 dsa launch com.android.settings     # open an app in its own window
 dsa settings set clipboard off      # change a setting (DSA Settings has the same switches)
