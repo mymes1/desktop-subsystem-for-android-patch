@@ -134,8 +134,25 @@ pub fn renderer_line(severity: u8, message: &str) -> Option<String> {
     }
 }
 
+/// Where the graphics renderer's lines go instead of a log file, when they are set to: in
+/// the renderer process, the window manager's log over its connection.
+pub type RendererLines = Box<dyn Fn(u8, &str) + Send + Sync>;
+static RENDERER_LINES: OnceLock<RendererLines> = OnceLock::new();
+
+/// Sends the graphics renderer's lines to `forward` (severity and message, as gfxstream gave
+/// them) instead of a log file.
+pub fn renderer_log_through(forward: RendererLines) {
+    let _ = RENDERER_LINES.set(forward);
+}
+
 /// Writes one of the graphics renderer's lines, from any of its threads.
 pub fn renderer_log(severity: u8, message: &str) {
+    if let Some(forward) = RENDERER_LINES.get() {
+        if matches!(severity, b'W' | b'E' | b'F') {
+            forward(severity, message);
+        }
+        return;
+    }
     if let Some(line) = renderer_line(severity, message) {
         note(RENDERER_LOG.get().map(|logger| &**logger), &line);
     }

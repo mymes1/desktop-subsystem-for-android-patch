@@ -47,6 +47,20 @@ pub const RENDERER_PROGRAM: &str = "dsa-gfx";
 /// descriptor or path (Linux, macOS).
 pub const WINDOW_MANAGER_ARGUMENT: &str = "--window-manager";
 
+/// Where the renderer finds its window manager's address when it is not given as an
+/// argument: a test that runs the renderer inside its own test program passes it this way.
+pub const ADDRESS_VARIABLE: &str = "DSA_RENDERER_ADDRESS";
+
+/// The window manager's address from the renderer's arguments (`--window-manager
+/// <address>`), else from [`ADDRESS_VARIABLE`].
+pub fn address_from(args: &[String]) -> Option<String> {
+    args.iter()
+        .position(|arg| arg == WINDOW_MANAGER_ARGUMENT)
+        .and_then(|at| args.get(at + 1).cloned())
+        .or_else(|| std::env::var(ADDRESS_VARIABLE).ok())
+        .filter(|address| !address.is_empty())
+}
+
 /// How long the window manager waits for a renderer it started to say hello.
 pub const HELLO_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -428,6 +442,8 @@ pub trait RendererHandler: Send + Sync {
     fn disconnected(&self);
     /// A line for the window manager's log.
     fn log(&self, line: &str);
+    /// A renderer could not be started, or ended before it answered `Start`.
+    fn start_failed(&self) {}
 }
 
 /// Waits up to `limit` for `stop`, in small steps. True when it was set.
@@ -595,6 +611,7 @@ pub fn supervise(
         let mut launched = match launcher.launch() {
             Ok(launched) => launched,
             Err(why) => {
+                handler.start_failed();
                 let wait = backoff.ended(Instant::now());
                 handler.log(&format!(
                     "the graphics renderer ({RENDERER_PROGRAM}) could not be started: {why}; \
@@ -622,6 +639,7 @@ pub fn supervise(
         // before it is ended.
         let reason = match outcome {
             Err(why) => {
+                handler.start_failed();
                 launched.connection.close();
                 let ended = reap(&mut *launched.process, Duration::from_secs(1));
                 format!("{why}; {ended}")
@@ -685,14 +703,16 @@ impl<H: PartialEq + Copy> TextureBook<H> {
         TextureBook::default()
     }
 
-    /// `display_id`'s next frame goes into `handle` (`None`: nowhere).
-    pub fn give(&mut self, display_id: u32, handle: Option<H>) -> Given {
+    /// `display_id`'s next frame goes into `handle` (`None`: nowhere). `held` is the
+    /// texture the renderer says it holds for the display: when it is not the one given last,
+    /// the texture goes over again, under a new ID.
+    pub fn give(&mut self, display_id: u32, handle: Option<H>, held: u64) -> Given {
         let Some(handle) = handle else {
             self.given.remove(&display_id);
             return Given::Drop;
         };
         if let Some((given, texture_id)) = self.given.get(&display_id) {
-            if *given == handle {
+            if *given == handle && *texture_id == held {
                 return Given::Same(*texture_id);
             }
         }
@@ -820,7 +840,15 @@ impl WindowManagerLink {
     /// Asks where display `display_id`'s new frame of `width` x `height` goes, and waits for
     /// the answer. `None` when the window manager did not answer in time or is gone; the
     /// frame is then dropped.
-    pub fn target(&self, display_id: u32, width: u32, height: u32, exact: bool) -> Option<Target> {
+    /// `held` is the texture the renderer holds for the display (0 for none).
+    pub fn target(
+        &self,
+        display_id: u32,
+        width: u32,
+        height: u32,
+        exact: bool,
+        held: u64,
+    ) -> Option<Target> {
         let request = self.targets.begin();
         let asked = self.send(Body::TargetRequest(TargetRequest {
             request,
@@ -828,6 +856,7 @@ impl WindowManagerLink {
             width,
             height,
             exact,
+            held_texture: held,
         }));
         if !asked {
             return None;

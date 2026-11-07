@@ -106,3 +106,34 @@ fn nfr1_the_processes_are_listed_vm_first_then_window_manager_then_app_windows()
     );
     assert_eq!(found[0].working_set_kb, 2444 * 1024);
 }
+
+#[test]
+fn nfr5_the_renderers_memory_shows_under_its_own_process() {
+    const RENDERER: &str = r"C:\Program Files\DSA\dsa-gfx.exe";
+    assert_eq!(
+        role_of(&process(21, RENDERER, USER, 310), USER, Some(VM)),
+        Some(HostRole::Renderer)
+    );
+    // Another user's renderer is not this user's.
+    assert_eq!(
+        role_of(&process(22, RENDERER, OTHER_USER, 310), USER, Some(VM)),
+        None
+    );
+    let processes = [
+        process(30, CLOCK, USER, 53),
+        process(21, RENDERER, USER, 310),
+        process(20, WINDOW_MANAGER, USER, 40),
+    ];
+    let order: Vec<(HostRole, u32)> = select(&processes, USER, Some(VM))
+        .iter()
+        .map(|p| (p.role, p.pid))
+        .collect();
+    assert_eq!(
+        order,
+        [
+            (HostRole::WindowManager, 20),
+            (HostRole::Renderer, 21),
+            (HostRole::AppWindow, 30),
+        ]
+    );
+}

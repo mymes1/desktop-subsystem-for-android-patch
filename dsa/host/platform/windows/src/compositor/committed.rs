@@ -4,18 +4,18 @@
 //! Task Manager shows a process's private commit as one number. To say whose it is, the window
 //! manager walks its own address space: every committed private page, split into the default
 //! heap (the window manager's own allocations go there), pages mapped write-combined or uncached
-//! (only GPU drivers map those), and the rest, which drivers and the renderer allocate straight
-//! from the system or keep in heaps of their own; those heaps are only counted. Beside that go
-//! the bytes the window manager's own allocator has handed out ([`CountingAllocator`]), the
-//! renderer's count of its GPU allocations, and the GPU memory the process uses. The breakdown
-//! is logged with every give-back (see `trim`), so a log from a real machine says where the
-//! memory is.
+//! (only GPU drivers map those), and the rest, which drivers allocate straight from the system
+//! or keep in heaps of their own; those heaps are only counted. Beside that go the bytes the
+//! window manager's own allocator has handed out ([`CountingAllocator`]) and the GPU memory the
+//! process uses. The graphics renderer runs in a process of its own (`dsa-gfx`), whose memory
+//! is logged on a line of its own. The breakdown is logged with every give-back (see `trim`),
+//! so a log from a real machine says where the memory is.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use dsa_host_core::memory::{CommittedMemory, RendererMemory};
+use dsa_host_core::memory::CommittedMemory;
 use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::System::Memory::{
     GetProcessHeap, GetProcessHeaps, HeapCompact, HeapSummary, VirtualQuery, HEAP_SUMMARY,
@@ -152,11 +152,7 @@ fn walk() -> (u64, u64, Vec<u64>) {
 
 /// This process's committed memory by owner. `private_kb` and the GPU's figures come from
 /// the caller, which reads them anyway.
-pub fn breakdown(
-    private_kb: Option<u64>,
-    renderer: Option<RendererMemory>,
-    gpu: (Option<u64>, Option<u64>),
-) -> CommittedMemory {
+pub fn breakdown(private_kb: Option<u64>, gpu: (Option<u64>, Option<u64>)) -> CommittedMemory {
     let all = heaps();
     let process_heap = all.first().map_or(0, |heap| heap_committed(*heap));
     // Other heaps may not lock (see compact_heaps), so they are counted, not read; their
@@ -173,7 +169,6 @@ pub fn breakdown(
         direct_kb: walked.saturating_sub(process_heap + other_heaps + gpu_mapped) / 1024,
         largest_private_kb: largest.into_iter().map(|bytes| bytes / 1024).collect(),
         own_live_kb: own_live_kb(),
-        renderer,
         gpu_local_kb: gpu.0,
         gpu_non_local_kb: gpu.1,
     }
@@ -187,7 +182,7 @@ mod tests {
     fn nfr2_a_breakdown_finds_a_large_private_allocation_and_the_heaps() {
         // A 32 MiB block, committed and touched, shows up among the largest allocations.
         let block = vec![1u8; 32 << 20];
-        let found = breakdown(None, None, (None, None));
+        let found = breakdown(None, (None, None));
         assert!(found.walked_private_kb >= 32 * 1024, "{found:?}");
         assert!(
             found.largest_private_kb.iter().any(|kb| *kb >= 32 * 1024),
@@ -226,7 +221,7 @@ mod tests {
             .collect();
         for _ in 0..200 {
             compact_heaps();
-            let found = breakdown(None, None, (None, None));
+            let found = breakdown(None, (None, None));
             assert!(found.walked_private_kb > 0);
         }
         stop.store(true, Ordering::Relaxed);

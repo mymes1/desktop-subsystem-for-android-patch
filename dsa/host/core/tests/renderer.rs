@@ -84,7 +84,7 @@ fn fake_renderer(connector: &mut dyn Connector, life: Arc<Life>, pid: u32) {
     let asking = Arc::clone(&link);
     let asked_life = Arc::clone(&life);
     let presenter = thread::spawn(move || {
-        if let Some(target) = asking.target(3, 640, 480, true) {
+        if let Some(target) = asking.target(3, 640, 480, true, 0) {
             asking.send(Body::FrameDone(FrameDone {
                 display_id: 3,
                 texture_id: target.texture_id,
@@ -153,11 +153,11 @@ impl RendererHandler for Window {
     fn message(&self, body: Body, link: &RendererLink) {
         match body {
             Body::TargetRequest(request) => {
-                let given = self
-                    .book
-                    .lock()
-                    .unwrap()
-                    .give(request.display_id, Some(0x1234));
+                let given = self.book.lock().unwrap().give(
+                    request.display_id,
+                    Some(0x1234),
+                    request.held_texture,
+                );
                 let (texture_id, handle) = match given {
                     Given::New(id) => (id, 0x55),
                     Given::Same(id) => (id, 0),
@@ -290,18 +290,28 @@ fn nfr5_an_answer_reaches_the_thread_that_waits_and_a_late_one_is_dropped() {
 #[test]
 fn nfr5_a_texture_crosses_to_the_renderer_once_and_again_after_a_restart() {
     let mut book: TextureBook<isize> = TextureBook::new();
-    let first = book.give(3, Some(0x10));
+    let first = book.give(3, Some(0x10), 0);
     let Given::New(id) = first else {
         panic!("expected a new texture, got {first:?}");
     };
-    assert_eq!(book.give(3, Some(0x10)), Given::Same(id));
+    assert_eq!(book.give(3, Some(0x10), id), Given::Same(id));
+    // The answer that carried the texture came too late, so the renderer does not hold it:
+    // it goes over again.
+    let again = book.give(3, Some(0x10), 0);
+    assert!(
+        matches!(again, Given::New(other) if other != id),
+        "{again:?}"
+    );
+    let Given::New(id) = again else {
+        unreachable!()
+    };
     // A resize makes another texture.
-    assert!(matches!(book.give(3, Some(0x20)), Given::New(other) if other != id));
+    assert!(matches!(book.give(3, Some(0x20), id), Given::New(other) if other != id));
     // A display without a window drops its frames.
-    assert_eq!(book.give(4, None), Given::Drop);
+    assert_eq!(book.give(4, None, 0), Given::Drop);
     // A new renderer gets every texture again.
     book.clear();
-    assert!(matches!(book.give(3, Some(0x20)), Given::New(_)));
+    assert!(matches!(book.give(3, Some(0x20), 0), Given::New(_)));
 }
 
 #[test]

@@ -182,6 +182,10 @@ message TargetRequest {
   // Whether the texture must be exactly that size (a GPU copy) or at least that size (a
   // frame read back and written by the CPU, macOS).
   bool exact = 5;
+  // The texture the renderer holds for the display, 0 for none. When it is not the one the
+  // window manager gave last (an answer came too late), the window manager hands that one
+  // over again.
+  uint64 held_texture = 6;
 }
 
 // Window manager to renderer: the answer to TargetRequest.
