@@ -18,7 +18,7 @@
                 <ProgressBar IsIndeterminate="True" Margin="0,0,0,4"
                              Visibility="{Binding IsBusy, Converter={StaticResource Visible}}" />
                 <ui:InfoBar Title="{l:Text SettingsErrorBar.Title}" Severity="Error" IsClosable="False"
-                            IsOpen="{Binding HasError, Mode=OneWay}" Message="{Binding Error, Mode=OneWay}" />
+                            IsOpen="{Binding HasError, Mode=OneWay}" Message="{Binding Error, Mode=OneWay}" Margin="0,0,0,4" />
                 <ui:InfoBar Title="{l:Text AndroidSwitchingBar.Title}" Severity="Informational" IsClosable="False"
                             IsOpen="{Binding IsSwitching, Mode=OneWay}" Message="{Binding SwitchingText, Mode=OneWay}"
                             Margin="0,0,0,4" />
