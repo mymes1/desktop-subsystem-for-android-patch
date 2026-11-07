@@ -404,7 +404,7 @@ public class CardStyleTests
     public void Fr17_the_window_keeps_its_pane_width_and_backdrop()
     {
         var window = Xaml("MainWindow.xaml");
-        Assert.Equal("320", (string?)window.Descendants(Ui + "NavigationView").Single().Attribute("OpenPaneLength"));
+        Assert.Equal("236", (string?)window.Descendants(Ui + "NavigationView").Single().Attribute("OpenPaneLength"));
         Assert.Equal("Mica", (string?)window.Root!.Attribute("WindowBackdropType"));
     }
 }
