@@ -15,6 +15,8 @@ import xml.etree.ElementTree as ET
 
 NS = {"w": "http://wixtoolset.org/schemas/v4/wxs", "util": "http://wixtoolset.org/schemas/v4/wxs/util"}
 EXE = "[SETTINGSFOLDER]DsaApkInstaller.exe"
+# The program's name, an indirect string, so each user sees it in their own language.
+NAME = "@[INSTALLFOLDER]dsa-app-window.exe,-110"
 failed = []
 
 
@@ -41,15 +43,15 @@ check(get(r"SOFTWARE\Classes\.apk\OpenWithProgids", "Dsa.ApkFile") is not None,
       "fr11: the APK Installer is not under Open with for .apk files")
 check(get(r"SOFTWARE\Classes\Dsa.ApkFile\DefaultIcon") == f'"{EXE}",0',
       "fr11: .apk files do not show the APK Installer's icon")
-check(get(r"SOFTWARE\Classes\Dsa.ApkFile\shell\open", "FriendlyAppName") == "APK Installer",
+check(get(r"SOFTWARE\Classes\Dsa.ApkFile\shell\open", "FriendlyAppName") == NAME,
       "fr11: Open with does not name the APK Installer")
 app = r"SOFTWARE\Classes\Applications\DsaApkInstaller.exe"
-check(get(app, "FriendlyAppName") == "APK Installer", "fr11: the program has no friendly name for Open with")
+check(get(app, "FriendlyAppName") == NAME, "fr11: the program has no friendly name for Open with")
 check(get(app + r"\SupportedTypes", ".apk") is not None, "fr11: the program does not list .apk as a type it opens")
 check(get(app + r"\shell\open\command") == f'"{EXE}" --install-apk "%1"',
       "fr11: the program's own open command does not install the APK")
 aumid = r"SOFTWARE\Classes\AppUserModelId\Thisisthepy.DSA.ApkInstaller"
-check(get(aumid, "DisplayName") == "APK Installer", "fr11: the APK Installer's AppUserModelID has no display name")
+check(get(aumid, "DisplayName") == NAME, "fr11: the APK Installer's AppUserModelID has no display name")
 for value in values.values():
     check(not (value and "DsaSettings.exe" in value and "install-apk" in value),
           f"fr11: something still opens APKs in the settings app: {value}")
