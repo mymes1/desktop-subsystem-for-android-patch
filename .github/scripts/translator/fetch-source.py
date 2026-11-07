@@ -60,6 +60,11 @@ def fetch(top, project, clang, rust):
             print(f"{project['path']}: fetch failed, again in {wait} s", flush=True)
             time.sleep(wait)
     shutil.rmtree(path / ".git")
+    for name in project.get("exclude", []):
+        excluded = path / name
+        if not excluded.is_file():
+            raise SystemExit(f"{project['path']}: {name}, which the lock excludes, is not in the checkout")
+        excluded.unlink()
     print(f"{project['path']} {project['commit'][:12]}"
           + (f" ({mode}: {' '.join(entries)})" if mode else ""), flush=True)
 

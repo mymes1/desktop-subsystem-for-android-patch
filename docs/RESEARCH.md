@@ -1222,6 +1222,12 @@ dexpreopt를 끈 뒤 `dex_bootjars`는 지나갔고, 분석이 다시 `GenerateB
 
 앞을 내다보고 이 트리의 위험한 모듈도 살폈다. 기기 단위 모듈은 `build/make/target/product/generic`과 `gsi`의 `android_system_image`, `bionic/apex`의 `runtime_apex`, `sdk`, `module_exports`, `build/soong`의 `product_config`, `build_prop` 정도이고, 모두 메인라인 모듈의 부분 트리 빌드에도 있는 것들이다. dexpreopt는 이미 꺼져 있다.
 
+### 여섯 번째 실행(run 42397789226, android17)과 고친 것
+
+패닉 없이 분석이 끝까지 돌았다(`[100% 256/256]`). 오류는 하나였다. `bionic/apex/Android.bp`의 `com.android.runtime`(런타임 APEX)이 `system/sepolicy/apex/com.android.runtime-file_contexts`를 찾지 못했다. 분석의 다른 단계에서는 오류가 없었다. 앞에서 걱정한 `build/make/target/product/generic`과 `gsi`의 `android_system_image`는 이 단계를 지나갔으므로 그대로 둔다.
+
+런타임 APEX에서 나오는 것은 묶음에 하나도 없다. 대상 파일에서 의존을 따라가도 `bionic/apex`의 모듈(`com.android.runtime`, 그 키와 인증서, `runtime-module-sdk`, `runtime-module-host-exports`, `bionic-linker-config`)에 닿지 않는다. 다른 `.bp`가 이 파일에서 모듈 형식을 가져오지도 않는다(`bionic/libc`의 `visibility`에 `//bionic/apex`가 있지만, Soong은 보이는 범위에 적힌 패키지가 있는지 묻지 않는다). 트리에 있는 APEX는 이것 하나다. 그래서 `system/sepolicy`와 APEX 키를 더하는 대신 이 파일을 트리에서 뺀다. 잠금에 `exclude`(체크아웃 뒤 지우는 파일)를 더했고, bionic이 `apex/Android.bp`를 뺀다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
