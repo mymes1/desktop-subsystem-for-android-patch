@@ -184,11 +184,13 @@ jobs:
         run: rustc -vV
 
       # The Linux settings app is a member of the workspace and links GTK 4 and libadwaita.
-      - name: Install GTK 4 and libadwaita
+      # erofs-utils reads back the erofs images the host writes (the Google apps' image), the
+      # way the guest's kernel will.
+      - name: Install GTK 4, libadwaita and erofs-utils
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev
+          sudo apt-get install -y libgtk-4-dev libadwaita-1-dev erofs-utils
 
       - name: Check formatting
         run: cargo fmt --all --check
