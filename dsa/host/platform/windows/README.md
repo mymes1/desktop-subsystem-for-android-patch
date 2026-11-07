@@ -493,15 +493,15 @@ request is served impersonating the signed-in user (`src/file_share.rs`), so Win
 user's own rights. Names that leave a folder (`..`, separators, device names) and links that
 point outside it are refused.
 
-The other way, Android's shared storage opens in Explorer from the "DSA Files" Start menu
-entry, the "Android files" button in DSA Settings, or `dsa files open`. The guest serves its
-storage as WebDAV on vsock port 5591, the service bridges a loopback port to it, and Explorer
+The other way, Android's shared storage opens in Explorer from the "Android files" button in
+DSA Settings or `dsa files open`. It has no Start menu entry, so Windows search does not find
+it. The guest serves its storage as WebDAV on vsock port 5591, the service bridges a loopback port to it, and Explorer
 opens it through Windows' WebDAV redirector as `\\127.0.0.1@<port>\<token>`
 (`src/android_files.rs`). The token changes with each session. The redirector is the WebClient
 service, which Windows starts the first time such a path is opened.
 
-Android's storage also has its own entry, "Android", in Explorer's navigation pane, as WSL's
-"Linux" does. It is a shell folder shortcut whose target is the service's files door,
+Android's storage also has its own entry, "Android", in Explorer's navigation pane, directly
+below WSL's "Linux" (`SortOrderIndex` 120 to its 119). It is a shell folder shortcut whose target is the service's files door,
 `\\127.0.0.1@47591\<key>`: one loopback port the service opens when it starts, so the address
 holds while Android is stopped and across restarts. Opening it starts Android and waits for its
 storage. The key is the user's own, made by the window manager the first time it runs and kept

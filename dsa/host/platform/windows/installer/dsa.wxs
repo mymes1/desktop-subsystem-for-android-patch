@@ -201,18 +201,16 @@
             <!-- The app window host. The window manager copies it for each Android app into
                  the user's profile (%LOCALAPPDATA%\DSA\apps\<package>\<Label>.exe), named and drawn as the app. -->
             <Component Id="AppWindowExe" Guid="*">
-                <!-- The "DSA Files" shortcut opens the shared storage of the user's Android in
-                     Explorer, starting Android when it is not running. -->
-                <File Id="AppWindowExe" Source="$(SourceDir)\dsa-app-window.exe" KeyPath="yes">
-                    <Shortcut Id="AndroidFilesShortcut"
-                              Directory="ProgramMenuFolder"
-                              Name="DSA Files"
-                              Description="!(loc.FilesShortcutDescription)"
-                              DescriptionResourceDll="[#AppWindowExe]"
-                              DescriptionResourceId="103"
-                              Arguments="--android-files"
-                              WorkingDirectory="INSTALLFOLDER" />
-                </File>
+                <File Id="AppWindowExe" Source="$(SourceDir)\dsa-app-window.exe" KeyPath="yes" />
+                <!-- Android's files are only in Explorer's navigation pane, so Windows search
+                     must not find them. Earlier versions had a "DSA Files" Start menu shortcut
+                     in this component. An upgrade installs first and this component keeps its
+                     ID, so removing the older version would leave that shortcut behind: the
+                     package removes it by name instead. -->
+                <RemoveFile Id="OldAndroidFilesShortcut"
+                            Directory="ProgramMenuFolder"
+                            Name="DSA Files.lnk"
+                            On="both" />
             </Component>
             <!-- Opening an .apk file in Explorer opens it in the APK Installer, its own program
                  beside the settings app, which shows what the file is (its name, icon, version,
@@ -292,7 +290,9 @@
                  the user's key, in the user's classes, where it takes the place of this one,
                  and uninstalling removes those for every user (user_registry.rs). The
                  namespace entry and the desktop hiding are the machine's, so uninstalling
-                 takes the entry out of every user's navigation pane at once. -->
+                 takes the entry out of every user's navigation pane at once. Explorer sorts the
+                 pane by SortOrderIndex: WSL's "Linux" has 119, so 120 puts this directly below
+                 it. -->
             <Component Id="AndroidNavigationPane" Guid="3d7a1f52-8b6e-4c09-a5d4-6e2f9b0c1a87">
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
                                Type="string" Value="Android" KeyPath="yes" />
@@ -303,7 +303,7 @@
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
                                Name="System.IsPinnedToNameSpaceTree" Type="integer" Value="1" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}"
-                               Name="SortOrderIndex" Type="integer" Value="66" />
+                               Name="SortOrderIndex" Type="integer" Value="120" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\DefaultIcon"
                                Type="string" Value="[INSTALLFOLDER]dsa-app-window.exe,-2" />
                 <RegistryValue Root="HKLM" Key="SOFTWARE\Classes\CLSID\{6F1D4E2A-3B7C-4D85-9A1E-7C2B5D8F0A43}\InProcServer32"

@@ -42,7 +42,8 @@ x64 PC의 64비트 Windows 11이 필요하고, Windows 기능 **가상 머신 �
 
 - `DsaHost` 서비스: 사용자마다 Android를 실행합니다.
 - `dsa` 명령
-- 시작 메뉴의 **DSA Settings**(DSA 설정 앱)와 **DSA Files**(Android 파일 열기)
+- 시작 메뉴의 **DSA Settings**(DSA 설정 앱)
+- 파일 탐색기 탐색 창의 **Android**(Android 파일 열기)
 - APK 설치 관리자: `.apk` 파일을 엽니다.
 - DSA 창 관리자(`dsa-wm`): 로그인할 때 시작하면서 Android도 함께 시작합니다. 그래서 처음 여는 앱이
   Android 부팅을 기다리지 않습니다.

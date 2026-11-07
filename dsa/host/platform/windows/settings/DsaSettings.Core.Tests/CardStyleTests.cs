@@ -122,6 +122,39 @@ public class CardStyleTests
         Assert.Equal("120", Setter(TypedStyle("ui:Button"), "MinWidth"));
     }
 
+    [Theory]
+    [InlineData("ui:Button", "DefaultUiButtonStyle")]
+    [InlineData("ui:CardControl", "DefaultUiCardControlStyle")]
+    [InlineData("ui:CardAction", "DefaultUiCardActionStyle")]
+    [InlineData("ui:ToggleSwitch", "DefaultUiToggleSwitchStyle")]
+    [InlineData("ui:NavigationViewItem", "NavigationViewItemDefaultStyle")]
+    [InlineData("ToolTip", "DefaultToolTipStyle")]
+    [InlineData("ContextMenu", "UiContextMenu")]
+    public void Fr17_a_restyled_control_is_based_on_the_library_style(string type, string libraryStyle)
+    {
+        Assert.Equal("{StaticResource " + libraryStyle + "}", (string?)TypedStyle(type).Attribute("BasedOn"));
+    }
+
+    [Fact]
+    public void Fr17_a_button_keeps_the_library_template()
+    {
+        Assert.Empty(TypedStyle("ui:Button").Elements(Wpf + "Setter")
+            .Where(s => (string?)s.Attribute("Property") == "Template"));
+    }
+
+    [Fact]
+    public void Fr17_no_style_is_based_on_its_own_type_key()
+    {
+        // A style so based loses the library's setters, and a button then draws as a Win32 button.
+        var offenders = AppXaml().Descendants(Wpf + "Style")
+            .Where(s => ((string?)s.Attribute("BasedOn"))?.Contains("x:Type") == true)
+            .Select(s => (string?)s.Attribute("TargetType"))
+            .ToList();
+        Assert.True(offenders.Count == 0,
+            "App.xaml bases these styles on a type key, not on the library's named style: "
+            + string.Join(", ", offenders));
+    }
+
     [Fact]
     public void Fr17_text_boxes_and_combo_boxes_are_32_px_high()
     {
