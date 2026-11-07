@@ -401,21 +401,56 @@ pub fn install_reason(status: &str) -> String {
 
 /// What the ARM translation section says.
 pub fn arm_status(arm: &ArmTranslation) -> String {
-    match &arm.package {
-        None => tr("Not supported: no ARM translation package is installed."),
-        Some((name, version, _)) if !arm.enabled => trf(
+    use crate::model::ArmSource;
+    if let Some(translator) = &arm.translator {
+        let license = if translator.license.is_empty() {
+            tr("licence not given")
+        } else {
+            translator.license.clone()
+        };
+        let values = [
+            translator.name.as_str(),
+            translator.version.as_str(),
+            license.as_str(),
+        ];
+        return match translator.source {
+            ArmSource::Default => trf(
+                "Supported by {0} {1} ({2}), the translator that comes with this Android.",
+                &values,
+            ),
+            ArmSource::User | ArmSource::Google => trf("Supported by {0} {1} ({2}).", &values),
+        };
+    }
+    match (&arm.package, &arm.default) {
+        (Some((name, version, _)), _) if !arm.enabled => trf(
             "Not supported: {0} {1} is installed but turned off.",
             &[name, version],
         ),
-        Some((name, version, license)) => {
-            let license = if license.is_empty() {
-                tr("licence not given")
-            } else {
-                license.clone()
-            };
-            trf("Supported by {0} {1} ({2}).", &[name, version, &license])
+        (None, Some((name, version, _))) if !arm.enabled => {
+            trf("Not supported: {0} {1} is turned off.", &[name, version])
         }
+        _ => tr("Not supported: no ARM translation package is installed."),
     }
+}
+
+/// What the row that goes back to the default translator says, where the image has one.
+pub fn arm_default_text(arm: &ArmTranslation) -> Option<String> {
+    let (name, version, license) = arm.default.as_ref()?;
+    let license = if license.is_empty() {
+        tr("licence not given")
+    } else {
+        license.clone()
+    };
+    Some(trf(
+        "{0} {1} ({2}) comes with this Android and is used unless you install another translator. Going back to it removes the package installed in its place, from the next start of Android.",
+        &[name, version, &license],
+    ))
+}
+
+/// Whether the default translator can be chosen again: the image has one, and a package is
+/// installed in its place.
+pub fn arm_can_use_default(arm: &ArmTranslation) -> bool {
+    arm.default.is_some() && arm.package.is_some()
 }
 
 pub fn arm_abis(arm: &ArmTranslation) -> String {
