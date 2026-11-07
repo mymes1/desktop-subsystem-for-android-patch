@@ -3,7 +3,8 @@
 //! Six of them are the user's own: the GPU their window manager renders on, whether their
 //! Android may be frozen when idle, whether their clipboard is shared with it, whether web
 //! links open in apps in their Android instead of the host's browser, and developer mode
-//! (whether adb reaches their Android) with the loopback port adb connects to, and file sharing
+//! (whether adb reaches their Android) with the loopback port adb connects to and whether that
+//! port is attached to their adb server by itself, and file sharing
 //! (which of their host folders their Android shows in its shared storage). The others are the
 //! machine's, shared by every user: whether the service updates DSA itself, whether it
 //! downloads new Android images, and whether DSA's processes write the input trace and the
@@ -18,7 +19,8 @@
 //!                              "input_trace": false, "resize_trace": false}
 //! <dir>/users/<user>.json     {"render_gpu": "display", "freeze": false, "clipboard": true,
 //!                              "links_in_android": false, "developer_mode": false,
-//!                              "adb_port": 58526, "arm_translation": true,
+//!                              "adb_port": 58526, "adb_auto_connect": true,
+//!                              "arm_translation": true,
 //!                              "file_sharing": true,
 //!                              "shared_folders": ["Documents", "Pictures"],
 //!                              "advanced_networking": false}
@@ -92,6 +94,9 @@ pub struct Settings {
     /// The port on `127.0.0.1` adb connects to in developer mode. [`DEFAULT_ADB_PORT`] by
     /// default.
     pub adb_port: u16,
+    /// Whether, while developer mode is on, the service attaches the port to the user's adb
+    /// server by itself, so adb lists it without `adb connect`. On by default.
+    pub adb_auto_connect: bool,
     /// Whether the user's Android uses an installed ARM translation package, from its next
     /// start. On by default; it does nothing while no package is installed.
     pub arm_translation: bool,
@@ -118,6 +123,7 @@ impl Default for Settings {
             resize_trace: false,
             developer_mode: false,
             adb_port: DEFAULT_ADB_PORT,
+            adb_auto_connect: true,
             arm_translation: true,
             file_sharing: true,
             shared_folders: file_share::all_folders(),
@@ -189,6 +195,8 @@ pub struct UserSettings {
     #[serde(default = "default_adb_port")]
     pub adb_port: u16,
     #[serde(default = "yes")]
+    pub adb_auto_connect: bool,
+    #[serde(default = "yes")]
     pub arm_translation: bool,
     #[serde(default)]
     pub stop_without_asking: bool,
@@ -210,6 +218,7 @@ impl Default for UserSettings {
             clipboard: true,
             developer_mode: false,
             adb_port: DEFAULT_ADB_PORT,
+            adb_auto_connect: true,
             arm_translation: true,
             stop_without_asking: false,
             file_sharing: true,
@@ -235,6 +244,7 @@ impl UserSettings {
             clipboard: settings.clipboard,
             developer_mode: settings.developer_mode,
             adb_port: normalise_adb_port(settings.adb_port),
+            adb_auto_connect: settings.adb_auto_connect,
             arm_translation: settings.arm_translation,
             stop_without_asking: settings.stop_without_asking,
             file_sharing: settings.file_sharing,
@@ -459,6 +469,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         resize_trace: machine.resize_trace,
         developer_mode: mine.developer_mode,
         adb_port: normalise_adb_port(mine.adb_port),
+        adb_auto_connect: mine.adb_auto_connect,
         arm_translation: mine.arm_translation,
         file_sharing: mine.file_sharing,
         // A folder name a later release no longer knows is dropped rather than refused, so
@@ -804,6 +815,7 @@ mod tests {
                     resize_trace: false,
                     developer_mode: true,
                     adb_port: 5037,
+                    adb_auto_connect: false,
                     arm_translation: false,
                     file_sharing: false,
                     shared_folders: vec!["Pictures".into()],
@@ -1058,6 +1070,38 @@ mod tests {
             "the user's own"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr20_adb_auto_connect_is_on_by_default_and_kept_per_user() {
+        let dir = scratch("adb-auto-connect");
+        let store = FileSettings::new(&dir);
+        assert!(store.get("uid:1000").unwrap().adb_auto_connect);
+        let saved = store
+            .set(
+                "uid:1000",
+                &Settings {
+                    adb_auto_connect: false,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        assert!(!saved.adb_auto_connect);
+        let again = FileSettings::new(&dir);
+        assert!(!again.get("uid:1000").unwrap().adb_auto_connect);
+        assert!(
+            again.get("uid:1001").unwrap().adb_auto_connect,
+            "the user's own"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr20_a_settings_file_from_before_auto_connect_reads_it_as_on() {
+        let kept: UserSettings =
+            serde_json::from_str(r#"{"developer_mode": true, "adb_port": 58526}"#).unwrap();
+        assert!(kept.developer_mode);
+        assert!(kept.adb_auto_connect);
     }
 
     #[test]

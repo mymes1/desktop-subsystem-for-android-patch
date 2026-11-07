@@ -512,6 +512,12 @@ impl UserAndroid for UpdatingAndroid {
     fn developer_mode(&self, on: bool, port: u16) -> Result<(), String> {
         UserAndroid::developer_mode(&*self.session, on, port)
     }
+    fn adb_auto_connect(&self, on: bool) {
+        UserAndroid::adb_auto_connect(&*self.session, on)
+    }
+    fn adb_auto_connect_state(&self) -> crate::adb_discovery::AutoConnectState {
+        UserAndroid::adb_auto_connect_state(&*self.session)
+    }
     fn watch_links(&self) -> Option<std::sync::mpsc::Receiver<String>> {
         UserAndroid::watch_links(&*self.session)
     }
