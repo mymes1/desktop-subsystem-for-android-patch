@@ -4127,6 +4127,108 @@ class ListBottomMarginTests(unittest.TestCase):
         self.assertNotIn("sits on the window's bottom edge", outputs[1])
 
 
+PUBLISHED_KEYCHAIN = "SYSTEM/app/KeyChain/KeyChain.apk"
+
+
+class PublishedOdexTests(unittest.TestCase):
+    """The apps the published build shipped compiled keep a valid odex in the image."""
+
+    def published(self, apk, filter="speed", checksums="i;2/cb8fc4a6:i;2/f8c5165e", art=False, vdex_for=None):
+        files = {
+            apk: fake_apk(b"dex\n035\0keychain"),
+            make_image.FRAMEWORK_ODEX: fake_odex(**{"bootclasspath": BOOTCLASSPATH,
+                                                     "bootclasspath-checksums": "i;2/cb8fc4a6:i;2/f8c5165e"}),
+        }
+        odex, vdex = make_image.oat_files(apk)
+        files[odex] = fake_odex(**{"bootclasspath": BOOTCLASSPATH, "bootclasspath-checksums": checksums,
+                                    "classpath": "PCL[]", "compiler-filter": filter})
+        files[vdex] = fake_vdex(make_image.apk_dex_checksums(vdex_for or files[apk]))
+        if art:
+            files[odex[:-len(".odex")] + ".art"] = b"art"
+        return files
+
+    @staticmethod
+    def archive(files):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as z:
+            for name, data in files.items():
+                z.writestr(name, data)
+        return zipfile.ZipFile(io.BytesIO(buffer.getvalue()))
+
+    def test_fr5_the_published_builds_own_odex_files_are_recorded(self):
+        files = self.published(PUBLISHED_KEYCHAIN, art=True)
+        # system_other is not on the guest's disk, and a removed app is not in the image.
+        files["SYSTEM_OTHER/system/app/Stk/oat/x86_64/Stk.odex"] = fake_odex(**{"compiler-filter": "verify"})
+        files["SYSTEM/app/Stk/Stk.apk"] = fake_apk(b"dex\n035\0stk")
+        removed = "VENDOR/priv-app/CuttlefishService/CuttlefishService.apk"
+        files[removed] = fake_apk(b"dex\n035\0cf")
+        files["VENDOR/priv-app/CuttlefishService/oat/x86_64/CuttlefishService.odex"] = fake_odex(
+            **{"compiler-filter": "verify"})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                for name, data in files.items():
+                    archive.writestr(name, data)
+            make_image.modify(source, root / "modified.zip")
+            with zipfile.ZipFile(root / "modified.zip") as archive:
+                record = json.loads(archive.read(make_image.PREBUILT_OAT_RECORD))
+                self.assertEqual(make_image.prebuilt_oat_problems(archive), [])
+        self.assertEqual(record, {PUBLISHED_KEYCHAIN: {
+            "files": ["SYSTEM/app/KeyChain/oat/x86_64/KeyChain.odex", "SYSTEM/app/KeyChain/oat/x86_64/KeyChain.vdex",
+                      "SYSTEM/app/KeyChain/oat/x86_64/KeyChain.art"],
+            "filter": "speed", "classpath": "PCL[]"}})
+
+    def record(self, files, art=False):
+        record = make_image.prebuilt_oat(files, lambda n: files[n])
+        files[make_image.PREBUILT_OAT_RECORD] = json.dumps(record).encode()
+        return files
+
+    def test_fr5_an_app_whose_dex_changed_is_compiled_again_as_the_published_build_compiled_it(self):
+        unchanged = self.record(self.published(PUBLISHED_KEYCHAIN))
+        self.assertEqual(make_image.compile_jobs(unchanged, lambda n: unchanged[n]), [])
+        edited = self.record(self.published(PUBLISHED_KEYCHAIN, art=True))
+        edited[PUBLISHED_KEYCHAIN] = fake_apk(b"dex\n035\0edited")
+        self.assertEqual(make_image.compile_jobs(edited, lambda n: edited[n]),
+                         [(PUBLISHED_KEYCHAIN, "speed", "PCL[]", True)])
+        cmd = make_image.dex2oat_command(
+            "dex2oatd64", "/o/KeyChain.apk", "/system/app/KeyChain/KeyChain.apk", "/o/KeyChain.odex", Path("/r"),
+            BOOTCLASSPATH, ["/system/framework/boot.art"], ("PCL[]", "PCL[]"), "speed", app_image="/o/KeyChain.art")
+        self.assertIn("--app-image-file=/o/KeyChain.art", cmd)
+        self.assertIn("--compiler-filter=speed", cmd)
+        # The apps users open come first, with their own filters.
+        settings = {make_image.SETTINGS_APP: fake_apk(b"dex\n035\0settings")}
+        self.assertEqual(make_image.compile_jobs(settings, lambda n: settings[n]),
+                         [(make_image.SETTINGS_APP, None, make_image.DEFAULT_CLASS_LOADER_CONTEXT, False)])
+
+    def test_fr5_the_apps_whose_dex_is_edited_are_compiled_after_the_edits(self):
+        # Their published odex, in system_other, was made for the unedited dex; dex2oat
+        # verifies the edited methods as it compiles them.
+        for apk in make_image.EDITED_APPS:
+            self.assertIn(apk, make_image.COMPILED_APPS)
+        self.assertIn("SYSTEM/priv-app/DocumentsUI/DocumentsUI.apk", make_image.EDITED_APPS)
+        self.assertIn(make_image.SETTINGS_APP, make_image.EDITED_APPS)
+
+    def test_fr5_check_rejects_a_published_odex_that_is_gone_or_no_longer_matches(self):
+        good = self.record(self.published(PUBLISHED_KEYCHAIN))
+        self.assertEqual(make_image.prebuilt_oat_problems(self.archive(good)), [])
+        odex, vdex = make_image.oat_files(PUBLISHED_KEYCHAIN)
+        for change, words in [
+            (lambda f: f.pop(odex), "lost"),
+            (lambda f: f.pop(PUBLISHED_KEYCHAIN), "is gone"),
+            (lambda f: f.update({vdex: fake_vdex([1])}), "dex checksums"),
+            (lambda f: f.update({odex: fake_odex(**{"compiler-filter": "verify", "bootclasspath-checksums":
+                                                    "i;2/cb8fc4a6:i;2/f8c5165e"})}), "published build compiled it"),
+            (lambda f: f.update({odex: fake_odex(**{"compiler-filter": "speed", "bootclasspath-checksums":
+                                                    "i;2/00000000:i;2/f8c5165e"})}), "boot image"),
+            (lambda f: f.pop(make_image.PREBUILT_OAT_RECORD), "is missing"),
+        ]:
+            files = dict(good)
+            change(files)
+            problems = make_image.prebuilt_oat_problems(self.archive(files))
+            self.assertTrue(any(words in p for p in problems), (words, problems))
+
+
 def fake_kernel(arch):
     """The first page of a kernel file: a bzImage's setup header or an arm64 Image's magic."""
     data = bytearray(0x1000)

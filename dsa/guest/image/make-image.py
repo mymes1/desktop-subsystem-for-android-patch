@@ -15,7 +15,9 @@ It takes the pinned target_files, otatools and dexpreopt_tools (fetch.sh downloa
 4. re-signs every APK, APEX and verified boot image with the keys in --keys, because the
    published build is signed with AOSP's test keys, whose private halves are public;
 5. compiles the system apps users open (COMPILED_APPS) with the build's own dex2oat
-   (dexpreopt_tools.zip), against the guest's boot image, so they do not run interpreted;
+   (dexpreopt_tools.zip), against the guest's boot image, so they do not run interpreted, and
+   compiles again, with its own filter, any app the published build shipped compiled whose
+   dex no longer matches its odex (PREBUILT_OAT_RECORD);
 6. builds the images, and lays them out on the template of a user's Android disk.
 
 The results go to dsa/target/image/<version>/:
@@ -2944,6 +2946,12 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     data = update_vendor_property_contexts(data.decode()).encode()
             info.compress_type = zipfile.ZIP_STORED
             zout.writestr(info, data)
+        # What the published build compiled, for the apps the image keeps: compile_apps
+        # compiles an app again once its dex no longer matches, and the checks hold the image
+        # to it.
+        prebuilt = {apk: entry for apk, entry in prebuilt_oat(names, zin.read).items()
+                    if not removed(apk, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)}
+        zout.writestr(PREBUILT_OAT_RECORD, json.dumps(prebuilt, indent=2, sort_keys=True) + "\n")
         for directory in FSTAB_DIRS:
             zout.writestr(directory + "fstab.dsa", fstab)
         zout.writestr(MEMORY_RC, (HERE / "dsa-memory.rc").read_bytes())
@@ -3094,6 +3102,11 @@ COMPILED_APPS = [
     "PRODUCT/app/webview/webview.apk",
     AGENT_APK,
 ]
+# The apps whose dex make-image.py edits (edit_settings_apk, edit_documentsui_apk), compiled
+# after the edits with the rest. dex2oat verifies every method as it compiles, and refuses an
+# edited app with a method the verifier rejects outright: ART would throw a VerifyError
+# instead of running it, and the app would close the moment that class loads.
+EDITED_APPS = [SETTINGS_APP, "SYSTEM/priv-app/DocumentsUI/DocumentsUI.apk"]
 # What differs between the guest architectures DSA makes images for: the kernel's file
 # format and name, ART's instruction set and its variant, and the ELF machine number of a
 # binary built for the guest. arm64 is 64-bit only: the guest runs no 32-bit ARM code.
@@ -3298,9 +3311,9 @@ def apex_jar_sources(bootclasspath, names):
 
 
 def dex2oat_command(dex2oat, apk, dex_location, odex, root, bootclasspath, boot_images, contexts,
-                    filter, profile=None, extra=()):
+                    filter, profile=None, extra=(), app_image=None):
     """The dex2oat command line the build itself uses to compile a system app, aimed at the
-    guest's boot image (COMPILED_ISA)."""
+    guest's boot image (COMPILED_ISA), with an app image (.art) at `app_image` when given."""
     host_context, stored_context = contexts
     jars = bootclasspath.split(":")
     cmd = [
@@ -3324,6 +3337,8 @@ def dex2oat_command(dex2oat, apk, dex_location, odex, root, bootclasspath, boot_
     ]
     if profile is not None:
         cmd += [f"--profile-file={profile}", "--resolve-startup-const-strings=true"]
+    if app_image is not None:
+        cmd += [f"--app-image-file={app_image}", "--image-format=lz4"]
     return cmd
 
 
@@ -3365,6 +3380,102 @@ def compiled_app_problems(z):
             problems.append(f"{odex} was compiled for shared libraries {keys.get('classpath')}, but "
                             f"the app loads {expected}")
     return problems
+
+
+# The apps the published build compiled in their own partition (not in system_other): each
+# APK's odex, vdex and app image (.art) beside it, the filter and the shared libraries it was
+# compiled with. make-image.py records them from the published target_files, before any
+# edit, in the target_files it makes, so the image can be checked against them: signing
+# leaves an APK's dex as it is, so their odex files stay valid, but an APK whose dex DSA
+# edits is compiled again, with the same filter, against the same boot image.
+PREBUILT_OAT_RECORD = "META/dsa_prebuilt_oat.json"
+PREBUILT_OAT_PARTITIONS = "|".join(PARTITION_DIRS)
+
+
+def prebuilt_oat(names, read):
+    """{apk: {"files": [odex, vdex, art...], "filter": f, "classpath": c}} for each APK in a
+    target_files whose member names are `names` that has its odex in its own partition, for
+    the guest's instruction set. `read` reads a member."""
+    names = set(names)
+    found = {}
+    for odex in sorted(names):
+        m = re.fullmatch(rf"((?:{PREBUILT_OAT_PARTITIONS})/.+)/oat/{COMPILED_ISA}/([^/]+)\.odex", odex)
+        if not m or f"{m.group(1)}/{m.group(2)}.apk" not in names:
+            continue
+        keys = oat_key_values(read(odex))
+        found[f"{m.group(1)}/{m.group(2)}.apk"] = {
+            "files": [odex] + [odex[:-len(".odex")] + ext for ext in (".vdex", ".art")
+                               if odex[:-len(".odex")] + ext in names],
+            "filter": keys.get("compiler-filter"),
+            "classpath": keys.get("classpath", DEFAULT_CLASS_LOADER_CONTEXT),
+        }
+    return found
+
+
+def prebuilt_oat_problems(z):
+    """What is wrong with the apps the published build compiled (PREBUILT_OAT_RECORD) in a
+    target_files: an APK or one of its compiled files gone, a vdex made for another dex than
+    the APK's, an odex compiled with another filter than the published build's, or against
+    another boot image than the framework's."""
+    names = set(z.namelist())
+    if PREBUILT_OAT_RECORD not in names:
+        return [f"{PREBUILT_OAT_RECORD} is missing, so nothing says which apps the published build "
+                "shipped compiled"]
+    framework = oat_key_values(z.read(FRAMEWORK_ODEX)) if FRAMEWORK_ODEX in names else {}
+    problems = []
+    for apk, entry in sorted(json.loads(z.read(PREBUILT_OAT_RECORD)).items()):
+        if apk not in names:
+            problems.append(f"{apk} is gone, though the published build ships it compiled")
+            continue
+        missing = [member for member in entry["files"] if member not in names]
+        if missing:
+            problems.append(f"{apk} lost {', '.join(missing)}, which the published build ships, so it "
+                            "runs interpreted until Android compiles it again")
+            continue
+        odex = entry["files"][0]
+        vdex = odex[:-len(".odex")] + ".vdex"
+        made_for, dex = vdex_checksums(z.read(vdex)), apk_dex_checksums(z.read(apk))
+        if made_for != dex:
+            problems.append(f"{vdex} was made for dex checksums {made_for}, but the APK's are {dex}, "
+                            "so ART throws the odex away")
+        keys = oat_key_values(z.read(odex))
+        # An app compiled with speed-profile that carries no profile of its own is compiled
+        # again with speed, which compiles all of what speed-profile compiles.
+        if keys.get("compiler-filter") not in {entry["filter"]} | (
+                {"speed"} if entry["filter"] == "speed-profile" else set()):
+            problems.append(f"{odex} is compiled with {keys.get('compiler-filter')}, but the published "
+                            f"build compiled it with {entry['filter']}")
+        if framework and keys.get("bootclasspath-checksums") != framework.get("bootclasspath-checksums"):
+            problems.append(f"{odex} was compiled against boot image {keys.get('bootclasspath-checksums')}, "
+                            f"but the guest's is {framework.get('bootclasspath-checksums')}")
+    return problems
+
+
+def compile_jobs(names, read):
+    """What compile_apps compiles in a signed target_files: [(apk, filter, class loader
+    context, whether it has an app image)]. COMPILED_APPS come first, their filter None (speed,
+    or speed-profile when the APK carries a profile, see compiler_filter). Then each app the
+    published build compiled (PREBUILT_OAT_RECORD) whose odex no longer matches its APK's dex,
+    with the filter, the shared libraries and the app image it was compiled with."""
+    names = set(names)
+    jobs = []
+    for apk in COMPILED_APPS:
+        if apk not in names:
+            continue
+        published = factory_odex(apk)
+        context = (oat_key_values(read(published)).get("classpath", DEFAULT_CLASS_LOADER_CONTEXT)
+                   if published in names else DEFAULT_CLASS_LOADER_CONTEXT)
+        jobs.append((apk, None, context, False))
+    record = json.loads(read(PREBUILT_OAT_RECORD)) if PREBUILT_OAT_RECORD in names else {}
+    for apk, entry in sorted(record.items()):
+        if apk in COMPILED_APPS or apk not in names:
+            continue
+        vdex = entry["files"][0][:-len(".odex")] + ".vdex"
+        if vdex in names and vdex_checksums(read(vdex)) == apk_dex_checksums(read(apk)):
+            continue
+        app_image = any(member.endswith(".art") for member in entry["files"])
+        jobs.append((apk, entry["filter"], entry["classpath"], app_image))
+    return jobs
 
 
 # The key apexer signs a repacked APEX payload with. Signing gives every APEX the image's
@@ -3566,18 +3677,15 @@ def compile_apps(signed, tools_zip, otatools, work, env):
         for apk in COMPILED_APPS:
             if apk not in names:
                 print(f"not compiling {apk}: the image does not have it", flush=True)
-                continue
+        for apk, filter, context, app_image in compile_jobs(names, z.read):
             data = z.read(apk)
             host_apk = out / apk
             host_apk.parent.mkdir(parents=True, exist_ok=True)
             host_apk.write_bytes(data)
             location = device_path(apk)
-            published = factory_odex(apk)
-            context = (oat_key_values(z.read(published)).get("classpath", DEFAULT_CLASS_LOADER_CONTEXT)
-                       if published in names else DEFAULT_CLASS_LOADER_CONTEXT)
             profile = None
             with zipfile.ZipFile(io.BytesIO(data)) as a:
-                if EMBEDDED_PROFILE in a.namelist():
+                if filter in (None, "speed-profile") and EMBEDDED_PROFILE in a.namelist():
                     embedded = host_apk.with_suffix(".baseline.prof")
                     embedded.write_bytes(a.read(EMBEDDED_PROFILE))
                     profile = host_apk.with_suffix(".prof")
@@ -3589,20 +3697,32 @@ def compile_apps(signed, tools_zip, otatools, work, env):
                         print(f"{apk}: profman could not read its profile, so it is compiled with speed",
                               flush=True)
                         profile = None
-            filter = compiler_filter(apk, profile is not None)
+            if filter is None:
+                filter = compiler_filter(apk, profile is not None)
+            elif filter == "speed-profile" and profile is None:
+                print(f"{apk}: the published build compiled it with speed-profile and the APK carries no "
+                      "profile, so it is compiled with speed", flush=True)
+                filter = "speed"
             odex_member, vdex_member = oat_files(apk)
+            art_member = odex_member[:-len(".odex")] + ".art"
             odex = out / odex_member
             odex.parent.mkdir(parents=True, exist_ok=True)
+            edited = apk in EDITED_APPS or apk not in COMPILED_APPS
             run(*dex2oat_command(dex2oat, host_apk, location, odex, root, bootclasspath, boot_images,
                                  class_loader_contexts(context, root), filter,
-                                 profile=profile if filter == "speed-profile" else None, extra=extra),
+                                 profile=profile if filter == "speed-profile" else None,
+                                 extra=extra + (["--abort-on-hard-verifier-error"] if edited else []),
+                                 app_image=odex.with_suffix(".art") if app_image else None),
                 env=dict(env, ANDROID_LOG_TAGS="*:e"))
-            vdex = odex.with_suffix(".vdex")
-            compiled[odex_member] = odex.read_bytes()
-            compiled[vdex_member] = vdex.read_bytes()
-            sizes[apk] = len(compiled[odex_member]) + len(compiled[vdex_member])
-            print(f"compiled {apk} with {filter}: {sizes[apk] >> 10} KiB of odex and vdex", flush=True)
+            members = [odex_member, vdex_member] + ([art_member] if app_image else [])
+            for member in members:
+                compiled[member] = (out / member).read_bytes()
+            sizes[apk] = sum(len(compiled[member]) for member in members)
+            kinds = ", ".join(Path(member).suffix[1:] for member in members)
+            print(f"compiled {apk} with {filter}: {sizes[apk] >> 10} KiB of {kinds}", flush=True)
             config, app_rules = oat_filesystem_config(apk)
+            if app_image:
+                app_rules.append(f"{device_path(art_member).lstrip('/')} 0 0 644 capabilities=0x0")
             rules.setdefault(config, []).extend(app_rules)
 
         updated = signed.with_name(signed.stem + "-compiled.zip")
@@ -3620,7 +3740,7 @@ def compile_apps(signed, tools_zip, otatools, work, env):
                 zout.writestr(info, data)
     updated.replace(signed)
     with zipfile.ZipFile(signed) as z:
-        problems = compiled_app_problems(z)
+        problems = compiled_app_problems(z) + prebuilt_oat_problems(z)
     if problems:
         raise ValueError("; ".join(problems))
     print(f"compiled system apps: {sum(sizes.values()) >> 20} MiB in all", flush=True)

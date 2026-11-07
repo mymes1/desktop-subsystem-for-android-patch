@@ -93,8 +93,17 @@ aapt2 from the Android SDK's build-tools for the framework overlay.
   `speed`, the others with `speed-profile` when the APK carries a profile and `speed`
   otherwise. It prints the size each app adds. `check-image.py` fails an image whose compiled
   app is missing, was made for other dex checksums than the APK's, uses another filter, boot
-  image or set of shared libraries. PermissionController is not compiled: it is inside the
-  permission APEX, where ART takes no odex.
+  image or set of shared libraries. The apps whose dex it edits (`EDITED_APPS`: Settings and
+  Files) are compiled with `--abort-on-hard-verifier-error`, so an edited method the verifier
+  rejects stops the build instead of closing the app when it loads. PermissionController is
+  not compiled: it is inside the permission APEX, where ART takes no odex.
+- The apps the published build itself compiled into their own partition (KeyChain,
+  SettingsProvider, Telecom and a few more on Android 16) keep their odex, vdex and app image:
+  signing leaves an APK's dex as it is. `make-image.py` records them from the published
+  target_files (`META/dsa_prebuilt_oat.json`), and compiles any of them whose dex it changes
+  again, with the filter, shared libraries and boot image the published build used.
+  `check-image.py` fails an image where one of them lost a file, or has one made for another
+  dex, another boot image or another filter.
 - A static overlay (`/vendor/overlay/DsaFrameworkOverlay.apk`) sets the framework's tap
   timeout to 0. A view inside anything that scrolls, which includes every list row, waits that
   long before it shows that it is pressed, in case the touch becomes a scroll, so a mouse

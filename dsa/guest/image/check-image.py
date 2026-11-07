@@ -8,7 +8,9 @@ app is not signed with one of the keys in the key folder, when the framework ove
 trace script is missing, when the agent is missing or not signed with the platform key, when
 Settings still has the preferences or code that crash it without Bluetooth, when a list in
 Settings or Files that sets its own padding keeps no room below its last row, when a system
-app users open is not compiled for the guest's boot image and its own dex, when the files
+app users open is not compiled for the guest's boot image and its own dex, when an app the
+published build shipped compiled lost its odex, vdex or app image, or has one made for
+other dex, another boot image or another compiler filter, when the files
 do not match image.json, when an arm64 image carries an ARM translation package or an x86_64
 image's default one does not match image.json or would be refused by the host, when the kernel or a DSA guest binary is built for another
 architecture than the image's, when the ramdisk lacks the directories and links Android's
@@ -209,6 +211,9 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     # made for the APK's own (edited, signed) dex and the guest's boot image, or ART drops it
     # and the app runs interpreted again.
     problems += make_image.compiled_app_problems(z)
+    # The apps the published build shipped compiled keep their odex, vdex and app image,
+    # valid for their dex and the guest's boot image, with the filter they were compiled with.
+    problems += make_image.prebuilt_oat_problems(z)
     if "VENDOR/etc/fstab.dsa" not in names:
         problems.append("the Hyper-V mount table is missing")
     if "SYSTEM/etc/selinux/plat_sepolicy.cil" not in names:
