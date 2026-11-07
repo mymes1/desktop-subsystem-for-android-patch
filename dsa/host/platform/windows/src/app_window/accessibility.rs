@@ -734,7 +734,7 @@ impl IRawElementProviderFragment_Impl for BackProvider_Impl {
         direction: NavigateDirection,
     ) -> windows::core::Result<IRawElementProviderFragment> {
         if direction == NavigateDirection_Parent {
-            return Ok(root_of(&self.shared).cast()?);
+            return root_of(&self.shared).cast();
         }
         let forward = match direction {
             NavigateDirection_NextSibling => true,

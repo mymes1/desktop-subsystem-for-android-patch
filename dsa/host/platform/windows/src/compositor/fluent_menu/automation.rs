@@ -461,7 +461,7 @@ impl IRawElementProviderFragment_Impl for RowProvider_Impl {
     ) -> windows::core::Result<IRawElementProviderFragment> {
         let count = self.with_row(|_, level| level.rows.len())?;
         let row = match direction {
-            NavigateDirection_Parent => return Ok(level_of(&self.view, self.level).cast()?),
+            NavigateDirection_Parent => return level_of(&self.view, self.level).cast(),
             NavigateDirection_NextSibling if self.row + 1 < count => self.row + 1,
             NavigateDirection_PreviousSibling if self.row > 0 => self.row - 1,
             _ => return none(),

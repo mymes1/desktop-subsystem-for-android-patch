@@ -154,7 +154,7 @@ fn caption_changes(previous: Option<&Task>, task: &Task) -> Vec<WindowChange> {
             interactive: mode.1,
         });
     }
-    if previous.map_or(false, |previous| previous.can_go_back) != task.can_go_back {
+    if previous.is_some_and(|previous| previous.can_go_back) != task.can_go_back {
         changes.push(WindowChange::CaptionBack {
             task_id: task.task_id,
             back: task.can_go_back,
