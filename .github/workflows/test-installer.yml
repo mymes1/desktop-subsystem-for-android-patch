@@ -963,9 +963,11 @@ jobs:
 
             # The search narrows the list, and clearing it brings every app back.
             Set-Search $window 'notes'
+            Start-Sleep -Seconds 2
+            Save-WindowScreen $window "$PWD\screens\settings-apps-search.png"
+            Write-Host "the search box holds '$((Find-Typed $window $types::Edit)[0].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value)'"
             Assert-RowsShown $window 'Notes'
             if (Find-RowTexts $window 'Weather') { throw "the search for notes still lists Weather" }
-            Save-WindowScreen $window "$PWD\screens\settings-apps-search.png"
 
             # A row's actions, on the one row the search left.
             Press (Find-RowControl $window 'Notes' $types::Button 'Open')
@@ -1029,7 +1031,7 @@ jobs:
             while ($lines.Count -eq 0 -and (Get-Date) -lt $deadline) {
               Start-Sleep -Seconds 1
               $lines = @(Find-Typed $window $types::Text |
-                Where-Object { $_.Current.Name -like '*fixture line*' -and -not $_.Current.IsOffscreen -and $_.Current.BoundingRectangle.Height -gt 0 })
+                Where-Object { $_.Current.Name -like '*fixture line*' -and (Test-InWindow $window $_) -and $_.Current.BoundingRectangle.Height -gt 0 })
             }
             Save-WindowScreen $window "$PWD\screens\settings-logs.png"
             if ($lines.Count -eq 0) { throw "the Android log page shows no line of the log it read" }
