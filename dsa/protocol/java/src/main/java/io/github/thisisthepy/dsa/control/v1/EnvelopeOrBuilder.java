@@ -1449,6 +1449,17 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.SystemSettings getSystemSettings();
 
   /**
+   * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+   * @return Whether the deviceName field is set.
+   */
+  boolean hasDeviceName();
+  /**
+   * <code>.dsa.control.v1.DeviceName device_name = 383;</code>
+   * @return The deviceName.
+   */
+  io.github.thisisthepy.dsa.control.v1.DeviceName getDeviceName();
+
+  /**
    * <code>.dsa.control.v1.GamepadConnected gamepad_connected = 341;</code>
    * @return Whether the gamepadConnected field is set.
    */
