@@ -233,6 +233,22 @@ cc_prebuilt_library_shared {
 }
 
 cc_prebuilt_library_shared {
+    name: "libnativehelper",
+    prefer: true,
+    srcs: ["x86_64/libnativehelper.so"],
+    compile_multilib: "64",
+    installable: false,
+    check_elf_files: false,
+    strip: {
+        none: true,
+    },
+    system_shared_libs: [],
+    stl: "none",
+    header_libs: ["dsa_translator_framework_headers"],
+    export_header_lib_headers: ["dsa_translator_framework_headers"],
+}
+
+cc_prebuilt_library_shared {
     name: "libnativewindow",
     prefer: true,
     srcs: ["x86_64/libnativewindow.so"],

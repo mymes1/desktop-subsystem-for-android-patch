@@ -183,6 +183,24 @@ class LockTests(unittest.TestCase):
         self.assertRegex(hosttools, r'cc_library_host_shared \{\s*name: "libsqlite"')
         self.assertRegex(hosttools, r'sh_binary_host \{\s*name: "aprotoc"')
 
+    def test_fr25_header_modules_export_only_folders_inside_their_own(self):
+        # Soong turned "../../../../frameworks/..." into the module's own folder, so no framework
+        # header reached a compile (the eighth run). Each exported folder is a copy build.sh
+        # makes from include-dirs.txt, and each one is fetched.
+        text = (DEVICE / "headers/Android.bp").read_text()
+        exported = set(re.findall(r'"((?:art|frameworks|libnativehelper)/[^"]+)"', text))
+        self.assertNotIn("..", text.replace("../prebuilts", ""))
+        listed = {l.strip() for l in (DEVICE / "headers/include-dirs.txt").read_text().splitlines()
+                  if l.strip() and not l.startswith("#")}
+        self.assertLessEqual(exported, listed)
+        for version in self.lock["versions"]:
+            for folder in listed:
+                project = next(p for p in version["projects"] if folder.startswith(p["path"] + "/"))
+                if "patterns" in project:
+                    self.assertTrue(any(folder[len(project["path"]):].startswith(pattern.rstrip("/"))
+                                        for pattern in project["patterns"] if pattern.startswith("/")),
+                                    f"{version['android']} does not fetch {folder}")
+
     def test_fr25_the_build_product_is_x86_64_only_with_an_arm64_bridge(self):
         board = (DEVICE / "BoardConfig.mk").read_text()
         self.assertIn("TARGET_ARCH := x86_64", board)
