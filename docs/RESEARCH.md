@@ -1647,7 +1647,139 @@ statslog 생성 헤더를 기다리는 SurfaceFlinger와 libhwui의 소스는 �
 - 소유자 PC에서 Settings의 `oat/`가 없었다는 관찰은 위 릴리스 로그와 맞지 않는다. 설치된 이미지의 버전과, 실제 위치(`/system_ext/priv-app/Settings/oat/x86_64/`)를 PC에서 확인해야 한다.
 - 고친 메서드를 ART가 받아들이는지는 이 PC에서 돌려 보지 않았다. CI의 이미지 빌드에서 dex2oat가 Settings와 DocumentsUI를 `--abort-on-hard-verifier-error`로 컴파일하므로, 검증기가 거부하는 메서드가 있으면 빌드가 멈춘다. 화면의 여백은 실제 PC에서 확인한다.
 
-## R21. 앱이 그리는 제목 표시줄과 뒤로 가기 키: 시스템과 앱이 주고받는 것 (FR-22, FR-5)
+## R21. USB로 연결한 안드로이드 폰에서 게스트를 돌리고, 그리기와 창은 PC가 맡을 수 있는가 (두 번째 VM 백엔드)
+
+**기준.** 2026-11-08. 기기에서 실행해 보지 않았다. 아래 항목은 **[소스]**(코드나 정책 파일을 직접 읽어 확인), **[문서]**(공식 문서), **[보도]**(언론과 커뮤니티 보고), **[추론]**(읽은 것에서 이끌어 낸 것) 중 하나로 표시한다.
+
+### 질문
+
+Windows의 Hyper-V VM 대신 USB로 연결한 폰의 AVF(Android Virtualization Framework) VM에서 DSA 게스트 이미지(arm64)를 돌린다. 폰은 CPU, 메모리, ART, 앱만 맡는다. gfxstream 스트림과 제어 채널은 USB로 PC에 가고, PC의 GPU가 그리며, PC가 지금처럼 태스크마다 창 하나를 띄운다. 폰 자신의 앱은 관여하지 않고, 폰은 잠긴 채 화면이 꺼져 있다.
+
+### 확인한 자료
+
+- AOSP `platform/packages/modules/Virtualization`의 `android17-release`(22f1c9e, 2026-04-24)와 공개 `main` 미러(175a51b, 2025-03-26). 읽은 곳: `android/android.system.virtualmachine.res/AndroidManifest.xml`, `android/virtmgr/src/virtualmachine.rs`와 `crosvm.rs`, `android/virtualizationservice/src/aidl.rs`와 AIDL(`VirtualMachineRawConfig`, `GpuConfig`, `IVirtualMachine`), `android/vm/src/`, `libs/vmconfig`, `libs/libavf`, `android/TerminalApp`, `build/debian/vm_config.json`, `build/microdroid/`, `guest/pvmfw/`, `docs/custom_vm.md`와 `getting_started.md`, `tests/`의 `@VsrTest`.
+- AOSP `platform/system/sepolicy` `android17-release`(e066568, 2026-04-20)와 `android16-release`: `private/shell.te`, `crosvm.te`, `virtualizationmanager.te`, `vmlauncher_app.te`, `untrusted_app_all.te`, `te_macros`, `seapp_contexts`.
+- `frameworks/base` `android16-release`(99b01a6): `PermissionManagerServiceImpl.java`, `PowerManagerService.java`, `packages/Shell/AndroidManifest.xml`.
+- `packages/modules/adb` `android16-release`와 `android17-release`(9084198): `transport.cpp`, `sockets.cpp`, `adb.h`.
+- 커널 `kernel/common` `android14-6.1`의 `f_accessory.c`, `android15-6.6`의 `android_f_accessory.c`.
+- DSA가 쓰는 gfxstream(d047a572)의 `host/RenderControl.cpp`, `host/virtio-gpu-gfxstream-renderer.cpp`, `guest/renderControl_enc/`. DSA의 `dsa/graphics/patches/0001`, `0003`, `0008`과 `dsa/guest/*/src/host_link.cpp`.
+- 보도와 글: Android Authority의 VSR 의무화, Snapdragon, Galaxy S26, One UI 8.5 기사, lyc8503의 Snapdragon Gunyah 글, besworks의 Pixel 사용자 빌드 `vm run` 글, Qualcomm 지원 포럼, XDA의 adb 속도 글, scrcpy PR #646. 출처는 절 끝에 모았다.
+
+### 1. 어느 폰이 사용자 정의 커널과 디스크를 쓰는 비보호(non-protected) VM을 돌리는가
+
+- **VSR은 AVF 자체만 요구하고, 비보호 VM은 요구하지 않는다.** [소스] `MicrodroidCapabilitiesTest.avfIsRequired`(`VSR-7.1-001.004`)는 vendor API 레벨이 202404(Android 15로 출시한 칩셋) 이상이면 `FEATURE_VIRTUALIZATION_FRAMEWORK`를 요구한다. 시계, 자동차, TV는 빠진다. 같은 파일의 다른 시험은 "보호 VM과 비보호 VM 중 적어도 하나"만 요구한다. 그래서 보호 VM만 되는 칩도 VSR을 만족한다. [보도] Android Authority가 같은 내용을 보도했고(대상 칩: Snapdragon 8 Elite, Dimensity 9400, Exynos 2500), Google 직원이 "Android 16부터 AVF가 필수"라고 말했다는 보도도 있다.
+- **지원 여부는 `ro.boot.hypervisor.vm.supported`(비보호)와 `ro.boot.hypervisor.protected_vm.supported`(보호)가 정한다.** [소스] `vm info`가 `hypervisor_props`로 이 둘을 읽는다. 비보호가 거짓이면 Terminal 앱은 "Non-protected VMs are not supported on this device"로 실패한다.
+- **Google Pixel.** [문서] AVF 문서는 Pixel 6, 6 Pro, 7, 7 Pro, Fold, Tablet을 대상으로 적는다. Pixel 6과 6 Pro에는 AVF가 들어 있지만 기본으로 꺼져 있고, 켜려면 Android 14 이상에서 `fastboot flashing unlock`과 `fastboot oem pkvm enable`이 필요하다(부트로더 잠금 해제, 데이터 초기화). [보도] Terminal 앱은 Android 15 QPR2부터 Pixel에 들어갔고, Pixel 10은 Android 16 QPR2에서 Terminal의 GPU 가속(gfxstream)까지 켠다. Pixel 7 이후(Tensor G2 이후)는 잠금 해제 없이 비보호 VM이 된다고 본다([보도]와 [추론], 기기로 확인하지 않음).
+- **Samsung.** [보도] 비보호 VM이 되는 것은 Exynos와 MediaTek 기기뿐이다. Galaxy Z Flip7(Exynos 2500)이 Pixel 아닌 첫 Terminal 지원 폰이었고, Galaxy S26과 S26+(Exynos 2600), A56(Exynos 1580), Tab S11(Dimensity 9400+)이 된다. Snapdragon인 S25 시리즈, S26 Ultra, Z Fold7은 안 된다. One UI 8.5는 Terminal에 그래픽 앱과 저장소 접근을 더했다. Knox 때문이라는 추측은 확인되지 않았다.
+- **Qualcomm.** [보도] Snapdragon은 pKVM이 아니라 Qualcomm의 Gunyah 하이퍼바이저를 쓰고, 출시된 모든 Snapdragon(8 Elite Gen 5까지)이 보호 VM만 지원한다. 비보호 VM을 열어 달라는 요청이 Qualcomm 포럼에 있지만 답이 없다. [소스] crosvm에는 Gunyah 백엔드가 있다. 보호 VM으로 우회하는 길은 아래 3에 적는다.
+- **MediaTek.** [보도] Dimensity 9400, 9400+ 이후가 비보호 VM을 지원한다. Xiaomi 15T Pro(MediaTek)는 Terminal이 돌고, 같은 회사의 Snapdragon인 Xiaomi 17 Pro는 실행하면 죽는다. 그 밖의 OEM(OPPO, vivo, OnePlus의 Dimensity 기기)은 확인하지 못했다.
+
+### 2. 누가 VM을 만들 수 있는가, 어떤 제한이 있는가
+
+- **권한.** [소스] `MANAGE_VIRTUAL_MACHINE`은 `signature|preinstalled|development`, `USE_CUSTOM_VIRTUAL_MACHINE`은 `signature|development`, `DEBUG_VIRTUAL_MACHINE`은 `signature`다. `virtmgr`는 raw 설정(Microdroid가 아닌 모든 VM)을 "custom"으로 보고 `USE_CUSTOM_VIRTUAL_MACHINE`을 확인한다(`is_custom_config`).
+- **shell(adb)은 두 권한을 가진다.** [소스] `packages/Shell/AndroidManifest.xml`이 `MANAGE_VIRTUAL_MACHINE`, `USE_CUSTOM_VIRTUAL_MACHINE`, `DEBUG_VIRTUAL_MACHINE`, `WAKE_LOCK`, `DEVICE_POWER`, `INTERNET`을 요청한다. `shell.te`의 `virtualizationservice_use(shell)`은 `userdebug_or_eng`로 감싸여 있지 않으므로 사용자 빌드에도 있다.
+- **사용자 빌드에서 root 없이 `vm run`이 된다(소스로는 그렇고, 기기 보고 하나가 맞는다).** [소스] `vm` 도구는 JSON의 커널, initrd, 디스크를 스스로 열어 fd로 넘긴다(`vmconfig::to_parcelable`의 `open_parcel_file`). crosvm은 `shell_data_file`을 `open`할 수는 없지만(사용자 빌드), 넘겨받은 fd로 읽고 쓰는 것은 허용된다(`crosvm.te`의 `{ getattr read ioctl lock }`와 `shell_data_file:file write`). 그래서 `/data/local/tmp`의 파일로 VM을 띄울 수 있다. [문서] `custom_vm.md`는 "rooted AVF-enabled device"와 `adb root`를 예로 들지만, 이는 예시 절차이고 코드가 root를 요구하지는 않는다. [보도] besworks는 Android 15 Pixel 사용자 빌드에서 root 없이 `adb shell /apex/com.android.virt/bin/vm run`으로 Arch VM을 부팅했고, 네트워크(TAP)만 되지 않았다고 적었다.
+- **일반 앱도 개발 권한을 받으면 만들 수 있다.** [소스] 두 권한은 `development` 보호 수준이고, `PermissionManagerServiceImpl`은 개발 권한을 `pm grant`로 주는 것을 허용한다(testOnly 확인은 그 경로에 없다). `untrusted_app_all.te`도 `virtualizationservice_use`를 가진다. 다만 Java API(`android.system.virtualmachine`)는 `@SystemApi`이고, 사용자 정의 이미지 설정(`VirtualMachineCustomImageConfig`)은 숨은 API다. 일반 앱이 쓰려면 숨은 API 제한을 넘거나, 클라이언트가 `virtmgr`를 직접 실행하는 방식(`te_macros`의 `domain_auto_trans($1, virtualizationmanager_exec, ...)`)으로 안정되지 않은 AIDL을 직접 말해야 한다. 안정된 C API인 `libavf`(`AVirtualMachine_createRaw`, `AVirtualMachine_connectVsock`)는 LLNDK라 벤더 프로세스용이다.
+- **Linux Terminal 앱.** [소스] `com.android.virtualization.terminal`은 platform 서명 priv-app이고 SELinux 도메인이 `vmlauncher_app`이다. 이 도메인만 `vsock_socket`을 직접 만들고 `listen`, `accept`할 수 있다(`RELEASE_AVF_ENABLE_NETWORK` 플래그일 때). Terminal은 `specialUse` 포그라운드 서비스로 VM을 유지한다.
+- **vsock 방향 제한이 설계를 바꾼다.** [소스] `te_macros`는 클라이언트에게 `virtmgr`가 만든 vsock fd의 `read`, `write`만 주고 "we do not grant permission to create a vsock"라고 적는다. 즉 shell이나 일반 앱은 호스트 쪽(CID 2)에서 vsock을 `listen`할 수 없고, `IVirtualMachine.connectVsock(port)`로 **폰 쪽에서 게스트로** 연결만 할 수 있다. 지금 DSA 게스트의 모든 연결(gfxstream의 `HvSocketStream`, hwcomposer, 오디오, 카메라, 센서, codec2, channeld)은 게스트가 `VMADDR_CID_HOST`로 거는 방향이므로 그대로는 받을 쪽이 없다.
+- **메모리.** [소스] `memoryMib`의 기본은 256 MiB이고 상한 확인은 `virtmgr`에 없다. 실제 상한은 폰의 여유 메모리다. Terminal은 4096 MiB를 쓴다. 메모리 반환은 `balloon`을 요청하고 기기가 `hypervisor.memory_reclaim.supported`를 참으로 둘 때만 `--balloon-page-reporting`으로 켜진다. DSA가 Hyper-V에서 쓰는 빈 페이지 보고와 같은 방식이지만, 기기마다 켜졌는지 확인해야 한다.
+- **CPU.** [소스] `CpuCount(n)`이나 `MatchHost`(`--host-cpu-topology`, arm64는 `--virt-cpufreq`)를 고른다. `vm` 도구의 기본은 vCPU 1개다.
+- **장치.** [소스] 디스크(raw 이미지나 파티션으로 만든 composite 디스크, virtio-blk), 공유 경로(virtio-fs, vhost-user), 콘솔, 입력, 오디오(vhost-user snd), USB 패스스루(`UsbConfig`), 네트워크(TAP, `createTapInterface`가 `INTERNET`과 `USE_CUSTOM_VIRTUAL_MACHINE`을 확인), GPU와 디스플레이(`GpuConfig`, `DisplayConfig`)가 있다. GPU와 디스플레이는 `paravirtualized_devices` 빌드 플래그가 없으면 경고만 내고 무시된다. Terminal의 gfxstream 백엔드(`gfxstream-vulkan`, `gfxstream-composer`)는 **폰의 GPU**로 그리는 것이라 이 질문의 목적에는 쓰지 않는다. DSA는 이미 virtio-gpu 없이 스트림만으로 gfxstream을 돌린다(패치 0008, 0003).
+
+### 3. DSA 안드로이드 게스트가 AVF VM에서 부팅할 수 있는가
+
+- **안드로이드 계열 게스트가 AVF에서 도는 것은 이미 있다.** [소스] Microdroid는 "a (very) lightweight version of Android"(같은 소스, init, apexd, binder 사용)이고 AVF의 기본 게스트다. [보도] Google은 Pixel에서 ChromeOS(Ferrochrome)를 AVF로 시연했고, crosvm은 ChromeOS의 ARCVM(전체 안드로이드)과 Cuttlefish의 VMM이다. 전체 AOSP 시스템 이미지를 폰의 AVF로 부팅한 공개 사례는 찾지 못했다.
+- **DSA 이미지를 그대로 쓸 수는 없다.** [추론] 지금의 ARM64 이미지(R10)는 Hyper-V용이다. 커널은 ACPI, VMBus, `hv_sock`, Hyper-V SCSI, PL011을 쓴다. AVF의 crosvm은 장치 트리, virtio-pci, virtio-blk, virtio-vsock, 8250 UART(`console=ttyS0`), GICv3, arch timer를 준다. binder 내장, memfd, cgroup 패치는 아키텍처나 하이퍼바이저와 무관하므로 그대로 쓴다(R10의 표). 디스크는 SCSI 순서가 아니라 composite 디스크의 파티션 GUID와 라벨로 찾을 수 있다(`vm_config.json`의 `partitions[].guid`, R11과 같은 방식). `androidboot.boot_devices`도 PCI 경로로 바뀐다(Microdroid의 `bootconfig.arm64`가 `2e000000.pci`를 쓴다).
+- **보호 VM으로는 사용자 커널을 띄울 수 없다(Snapdragon의 유일한 길).** [소스] pvmfw는 게스트 커널을 AVB 해시 푸터로 검증하고, 신뢰하는 키는 빌드에 박힌 `pvmfw_embedded_key_pub.bin`과 설정의 추가 키뿐이다. 설정의 `customPvmfw`는 raw 설정에서 받지만 이것이 pKVM이나 Gunyah에서 실제로 보호 VM의 펌웨어를 바꾸는지는 확인하지 못했다. [보도] lyc8503은 OnePlus 13(8 Elite)에서 root로 crosvm을 직접 `--protected-vm-without-firmware`로 실행해 Debian과 Windows를 띄웠다. 1 GiB가 넘는 메모리는 자주 "Out of memory"로 실패해 hugepage 예약 모듈이 필요했고, virtio는 `CONFIG_DMA_RESTRICTED_POOL`(모든 I/O가 bounce 버퍼를 지난다)을 켜야 했다. 보호 VM의 메모리는 호스트에 빌려 준 것이라 유휴 메모리를 호스트가 돌려받는다는 DSA의 제약(INTENT §2)과도 맞지 않는다. 그래서 Snapdragon은 root 없이도, 제약 안에서도 대상이 아니다.
+
+### 4. 화면을 끄고 잠근 채 계속 도는가
+
+- **기기가 잠들면 VM도 멈춘다.** [소스] Android 17의 Terminal(`VmService.kt`)은 앱이 백그라운드로 가면 사용자가 고른 시간 동안 `PARTIAL_WAKE_LOCK`("TerminalApp:KeepAwake")을 잡는다. Google이 이 설정을 따로 둔 것은 웨이크 락 없이 화면이 꺼지면 커널 suspend로 vCPU가 멈춘다는 뜻이다([추론]).
+- **shell UID의 웨이크 락은 Doze가 끄지 않는다.** [소스] `PowerManagerService.setWakeLockDisabledStateLocked`는 앱 UID(`>= FIRST_APPLICATION_UID`)의 부분 웨이크 락만 Doze, 캐시 상태, 저전력 대기에서 끈다. shell(2000)은 해당되지 않는다. 앱이라도 포그라운드 서비스 상태(`PROCESS_STATE_BOUND_FOREGROUND_SERVICE` 이하)면 Doze 중에도 꺼지지 않는다. shell은 `WAKE_LOCK`과 `DEVICE_POWER`를 가진다. 플랫폼 정책은 `/sys/power/wake_lock` 쓰기를 `system_suspend`와 `init`에만 주므로 `PowerManager`를 거쳐야 한다.
+- **충전 중에는 깊은 Doze에 들어가지 않는다.** [문서] Doze는 기기가 전원에 연결되지 않았을 때만 시작한다. USB로 PC에 꽂혀 있으면 충전 상태이므로 Doze의 네트워크, 알람 제한은 사실상 걸리지 않는다. 다만 PC 포트가 충전 전류를 충분히 주지 못하면 배터리가 줄 수 있다([추론]).
+- **앱 대기 버킷, 캐시 프리저, 팬텀 프로세스 정리.** [추론] 셋 다 앱 프로세스 대상이다. adb에서 `setsid`로 띄운 shell 프로세스와 그 자식(`virtmgr`, crosvm)은 해당되지 않는다. 일반 앱으로 띄우면 `virtmgr`와 crosvm이 그 앱의 자식이므로, 포그라운드 서비스가 아니면 팬텀 프로세스 정리와 캐시 프리저의 대상이 될 수 있다. 기기에서 확인하지 않았다.
+- **VM의 수명은 클라이언트 프로세스에 묶인다.** [소스] 클라이언트가 `virtmgr`를 실행하고, 클라이언트는 그 프로세스 그룹을 죽일 수 있다(`te_macros`의 `sigkill`). [추론] 그러므로 VM을 띄운 프로세스가 USB 분리, adb 재시작에도 살아 있어야 한다. `adb shell`의 세션 종료는 SIGHUP을 보내므로 `setsid`로 떼어 낸 상주 프로세스가 필요하다.
+- **메모리 압박.** [추론] 비보호 VM의 메모리는 crosvm의 익명 메모리이므로 폰 커널이 zram으로 내보낼 수 있고, lmkd가 고르는 대상은 프로세스의 `oom_score_adj`에 달렸다. shell에서 띄운 프로세스의 값과 lmkd가 이를 죽이는지는 확인하지 못했다.
+- **발열.** [보도] lyc8503의 시험에서 8 Elite는 VM 안의 커널 컴파일로 SoC가 105°C에 이르러 중단했다. 충전 중 지속 부하는 폰의 열 관리가 CPU 클럭을 낮추게 하므로, 지속 성능은 처음 몇 분의 성능보다 낮다고 보아야 한다. 화면이 꺼져 있는 것은 열 예산에 유리하다([추론]).
+- **잠금과 저장소.** [추론] 이미지를 `/data/local/tmp`(기기 암호화 영역)에 두면 재부팅 뒤 처음 잠금을 풀기 전에도 읽을 수 있다. 앱의 자격 증명 암호화 영역에 두면 첫 잠금 해제 전에는 VM을 띄울 수 없다. USB 디버깅이 켜져 있고 PC 키가 승인되어 있어야 한다. 기기에 따라 adb 승인이 7일 뒤 만료되는 설정이 있다.
+
+### 5. 전송 경로와 비용
+
+경로는 게스트(vsock) → 폰의 중계 프로세스 → USB → PC의 DSA 호스트다. USB 구간의 후보는 셋이다.
+
+- **adb forward.** [소스] adb 패킷의 최대 페이로드는 1 MiB(`MAX_PAYLOAD`)다. 흐름 제어가 중요하다. 수신 쪽 확인을 미루는 `delayed_ack` 기능이 없으면, 로컬 소켓은 `WRTE` 하나를 보낸 뒤 `OKAY`가 올 때까지 읽기를 멈춘다(`sockets.cpp`의 "acks not deferred, blocking"). 그동안 쌓인 바이트는 다음 패킷에 합쳐지지만, 소켓마다 한 번에 패킷 하나만 날아가므로 어떤 메시지든 앞 패킷의 왕복을 기다릴 수 있다. adbd는 `delayed_ack`를 늘 알리지만, PC 쪽 adb는 환경 변수 `ADB_BURST_MODE=1`일 때만 켠다(`android17-release`에서도 같다). 켜면 소켓마다 32 MiB(`INITIAL_DELAYED_ACK_BYTES`)까지 확인 없이 보낸다. DSA가 adb를 쓴다면 자기 adb 서버를 이 변수로 띄우거나, ADB 프로토콜을 직접 말해야 한다. [보도] 처리량: USB 3 케이블에서 adb push와 pull이 146~202 MB/s(Xiaomi 13 Ultra, Xperia 5 II), USB 2에서 약 39.5 MB/s다. USB 2 bulk의 실효 상한은 약 38 MB/s다.
+- **AOA(USB 액세서리 모드).** [소스] 커널의 액세서리 기능은 16 KiB 버퍼, 송신 요청 4개, 수신 요청 2개를 쓰고 SuperSpeed 서술자를 가진다(`android14-6.1`의 `f_accessory.c`, `android15-6.6`의 `android_f_accessory.c`). 앱이 `UsbManager.openAccessory`로 열 수 있어 adb와 개발자 옵션 없이 쓸 수 있다. 측정된 처리량은 찾지 못했다. 다만 VM 생성 자체에 `pm grant`(adb)나 shell이 필요하므로 adb를 완전히 없애지는 못한다.
+- **USB 테더링(NCM).** [문서와 보도] Pixel은 NCM을 쓰고 USB 3에서 링크 속도가 수 Gbps다. 측정된 처리량과 지연은 찾지 못했다. 사용자가 테더링을 켜야 하고 PC의 네트워크 구성을 바꾸므로 기본 경로로는 맞지 않는다고 본다([추론]).
+
+**왕복 시간 추정 [추론, 측정하지 않음].** USB 2 고속 bulk는 125 µs 마이크로프레임으로 일정을 잡고, USB 3은 그보다 짧다. 하지만 adb 경로는 게스트 vsock → 중계 프로세스 → adbd(FunctionFS) → USB → PC의 adb 서버 → TCP 루프백 → DSA로 사용자 공간을 여러 번 지나고, 화면이 꺼진 폰의 CPU는 깊은 유휴 상태에서 깨어나야 한다. 작은 메시지의 왕복을 USB 3에서 0.3~1 ms, USB 2에서 0.5~2 ms로 추정한다. 같은 PC 안의 hvsocket 왕복은 재지 않았지만 수십 µs 수준으로 본다. DSA가 잰 호스트 왕복 `wm.frame`(게스트에서 호스트로 가서 호스트 일을 하고 돌아오는 것)은 중앙 0.8 ms였다(위 "터치 지연의 구간별 실측"). USB 경로는 동기 호출마다 대략 0.3~2 ms를 더한다.
+
+**gfxstream이 왕복을 줄이는 수단 [소스].** 호스트 기본값으로 `vkQueueSubmitAsyncGOOGLE`(비동기 제출), `VulkanQueueSubmitWithCommands`(명령 버퍼 기록을 제출 때 몰아 보냄), `VulkanBatchedDescriptorSetUpdate`(디스크립터 갱신을 제출 때까지 미룸)가 켜진다. `vkBeginCommandBufferAsyncGOOGLE`, `vkEndCommandBufferAsyncGOOGLE`, `vkResetCommandBufferAsyncGOOGLE`, `vkQueueWaitIdleAsyncGOOGLE`, `vkQueueSignalReleaseImageANDROIDAsyncGOOGLE`가 비동기다. `VulkanAsyncQsri`는 `GlAsyncSwap`이나 (`VirtioGpuNativeSync`와 `VirtioGpuFenceContexts`)가 켜질 때만 켜진다. DSA는 `VirtioGpuNext`만 끈다. 남는 동기 호출은 핸들이나 결과를 돌려받는 것들이다: `vkCreate*`, `vkAllocate*`, 펜스 대기와 상태, 메모리 요구 사항 질의, renderControl의 색 버퍼 생성.
+
+**프레임 시간 영향 추정 [추론].**
+
+| 경우 | 계산 | USB 3 | USB 2 |
+| --- | --- | --- | --- |
+| 정상 상태 UI 프레임 | 동기 호출 1~3개 × 왕복 + 제출당 8~25 KB(DSA 실측) | 약 0.5~3 ms 추가 | 약 1~7 ms 추가 |
+| 앱 시작, 창 크기 변경 | 파이프라인, 이미지, 메모리, 색 버퍼 생성이 수백~수천 번 동기 호출 | 수백 ms~1 s 넘게 추가 | 그 두 배 |
+| 큰 비트맵 하나(1080×2400 RGBA, 10.4 MB) | 처리량 | 약 50~70 ms | 약 270 ms |
+| 게스트 안 동영상 디코드(1080p60 NV12, 약 187 MB/s) | 처리량 | adb 상한 근처 | 불가능 |
+
+- 정상 상태 UI는 16.7 ms 예산 안에 들어가지만, 지금도 hwcomposer compose의 p90이 13 ms이므로 놓치는 프레임이 늘어난다.
+- 가장 큰 비용은 앱 시작과 크기 변경 때의 동기 호출 수다. 실제 수는 DSA 추적으로 셀 수 있지만 아직 세지 않았다.
+- 동영상은 DSA가 이미 codec2를 호스트로 보내므로(`dsa/guest/codec2/src/host_link.cpp`) 압축된 스트림(수 MB/s)만 지나야 한다. 카메라는 PC 카메라의 프레임을 게스트로 넣는 방향이라, 압축하지 않으면 USB 2로는 1080p30(약 93 MB/s)이 지나지 못한다.
+- 패치 0003의 host-visible 메모리 복사는 바뀐 4 KiB 블록만 보내므로 지금 전송량은 작다. 다만 게스트가 GPU 결과를 다시 읽는 경우(쿼리 결과, 읽기용 버퍼, 스크린샷)에는 그 데이터가 USB로 돌아온다.
+- 터치 입력은 PC에서 폰으로 한 방향이고 응답을 기다리지 않으므로 지연이 대략 USB 편도만큼 는다.
+
+### 6. 판단
+
+**root 없이 가능하다. 다만 개발자 옵션과 USB 디버깅이 필요하고, 비보호 VM을 지원하는 기기에서만 된다.** 근거: shell이 권한, SELinux, fd 전달 모두에서 사용자 정의 VM을 만들 수 있고([소스]), 같은 일이 사용자 빌드 Pixel에서 보고되었다([보도]).
+
+- **대상 기기**: Pixel 7 이후(Pixel 6, 6 Pro는 부트로더 잠금 해제와 `fastboot oem pkvm enable`이 필요), Exynos 2500, 2600, 1580 Galaxy(Z Flip7, S26, S26+, A56), Dimensity 9400+ 이후 기기(Galaxy Tab S11, Xiaomi 15T Pro). **대상이 아닌 기기**: 모든 Snapdragon 기기(Galaxy의 Snapdragon 모델 포함)와 AVF 이전 칩셋.
+- **주요 위험**:
+  1. 앱 시작과 크기 변경의 동기 호출 왕복. 측정 전에는 사용성을 장담할 수 없다.
+  2. 기기 범위가 좁고 OEM이 정한다. Snapdragon이 비보호 VM을 열지는 Qualcomm에 달렸다.
+  3. AVF의 클라이언트 AIDL은 안정 API가 아니고 APEX 업데이트로 바뀐다. 안정 C API(`libavf`)는 벤더 전용이다.
+  4. 폰 쪽에서 vsock을 `listen`할 수 없으므로 게스트의 모든 연결 방향을 바꾸는 중개가 필요하다.
+  5. 장시간 지속 부하의 발열과 클럭 저하, USB 포트 전류 부족.
+  6. 메모리 반환은 기기의 `hypervisor.memory_reclaim.supported`에 달렸다.
+  7. 설치 크기: 시스템, 벤더, 데이터 디스크를 폰 저장소에 올려야 한다(수 GB).
+  8. CI에 폰이 없으므로 검증은 소유자의 기기와 수동 점검에 의존한다.
+- **두 번째 백엔드에 필요한 구성 요소**:
+  1. **게스트 커널 구성**: crosvm arm64용(장치 트리, virtio-pci, virtio-blk, virtio-vsock과 `CONFIG_VSOCKETS_LOOPBACK`, 페이지 보고 balloon, 8250 콘솔, PSCI). binder 내장과 기존 패치는 유지하고 Hyper-V 장치는 뺀다.
+  2. **게스트 이미지 변형**: virtio-blk와 파티션 GUID로 찾는 fstab과 `androidboot.boot_devices`, 메모리와 CPU 기본값, AVF의 `vm_config` 형식에 맞춘 composite 디스크 구성.
+  3. **게스트 쪽 연결 중개**: 게스트 구성 요소가 `VMADDR_CID_HOST` 대신 게스트 안의 중개자(`VMADDR_CID_LOCAL`이나 유닉스 소켓)에 연결한다. 중개자는 폰이 걸어 온 vsock 연결 하나 위에서 다중화하거나, 제어 연결로 새 연결을 요청한다. gfxstream의 `HvSocketStream`과 각 `host_link`는 주소만 바꾸면 된다.
+  4. **폰 쪽 실행기와 중계 프로세스**: adb로 올려 `setsid`로 상주하는 shell 프로세스(네이티브 바이너리나 `app_process` 자바 프로그램)다. `virtmgr`를 띄워 raw 설정으로 VM을 만들고, `PowerManager` 부분 웨이크 락을 잡고, `connectVsock`으로 게스트에 연결해 adb의 `localabstract` 소켓과 잇는다. VM 상태와 발열 이벤트를 PC에 알린다. USB가 끊겨도 VM은 계속 두고 다시 연결을 기다린다.
+  5. **배포와 갱신**: 이미지를 `/data/local/tmp`에 올리고 해시로 확인하고, 데이터 디스크를 보존하며 갱신하고, 지울 때 남김없이 지운다.
+  6. **PC 쪽 백엔드**: 기기 찾기와 승인 안내, `ADB_BURST_MODE=1`로 띄운 자체 adb 서버(Apache-2.0)나 libusb 위의 ADB 구현, 지금 hvsocket 서비스 포트를 전달 스트림으로 바꾸는 전송 계층, gfxstream 렌더러와 제어 채널이 hvsocket 대신 그 스트림을 읽도록 하는 추상화. 플랫폼 중립이어야 하므로(D9) 전송 계층은 `dsa/host/core/`의 경계 뒤에 둔다.
+  7. **수명 주기 연결**: 게스트 Doze는 그대로 쓰고, Freeze는 crosvm `suspend`로 한다. 폰 분리, 발열, 저전력을 호스트 상태로 알린다.
+  8. **진단**: 동기 호출 수와 USB 왕복을 재는 추적 구간. 이것으로 위 추정을 실측으로 바꾼다.
+
+### 확인하지 못한 것
+
+- 실제 기기에서의 부팅, USB 왕복, 처리량, 앱 시작 시간. 이 조사에서는 기기를 쓰지 않았다.
+- `customPvmfw`로 Snapdragon의 보호 VM에 사용자 커널을 root 없이 띄울 수 있는지.
+- shell에서 띄운 crosvm의 `oom_score_adj`와 lmkd의 동작, 각 OEM의 백그라운드 정리(특히 Samsung, Xiaomi)가 shell 프로세스를 건드리는지.
+- Pixel 7 이후 각 모델과 Dimensity 기기의 `hypervisor.memory_reclaim.supported` 값.
+- AOA와 NCM의 실측 처리량과 지연.
+
+### 결정
+
+결정은 소유자의 몫이다(INTENT를 바꾸는 일이다). 이 조사가 권하는 다음 단계는 기기 하나(Pixel 8 이후나 Exynos 2600)에서 두 가지를 재는 것이다. 하나는 DSA arm64 커널로 crosvm VM을 shell에서 띄우는 것이고, 다른 하나는 adb forward(burst 켬과 끔) 위의 작은 메시지 왕복과 처리량이다. 이 두 수치가 있어야 앱 시작 비용을 계산할 수 있다.
+
+### 출처
+
+- AVF 문서: https://source.android.com/docs/core/virtualization , https://android.googlesource.com/platform/packages/modules/Virtualization/+/refs/heads/android17-release/docs/custom_vm.md , https://android.googlesource.com/platform/packages/modules/Virtualization/+/refs/heads/android17-release/docs/getting_started.md
+- VSR 의무화: https://www.androidauthority.com/android-15-virtual-machine-mandate-3498428/ , https://x.com/MishaalRahman/status/1887535813811908846
+- 칩셋별 Terminal 지원: https://www.androidauthority.com/snapdragon-chips-android-linux-terminal-3608648/ , https://www.androidauthority.com/galaxy-s26-linux-terminal-3645822/ , https://www.androidauthority.com/galaxy-z-flip-7-linux-terminal-3578675/ , https://www.androidauthority.com/samsung-phones-linux-terminal-one-ui-8-5-3652503/ , https://www.sammyfans.com/2026/03/03/not-all-samsung-galaxy-s26-phones-support-androids-linux-terminal/
+- Terminal GPU 가속: https://www.androidauthority.com/pixel-10-linux-apps-gpu-acceleration-3608754
+- Qualcomm Gunyah: https://blog.lyc8503.net/en/post/android-virtualization-on-snapdragon/ , https://mysupport.qualcomm.com/supportforums/s/question/0D5dK00000G7uG5SAJ/ , https://docs.qualcomm.com/bundle/publicresource/topics/80-70020-3/virtualization.html
+- 사용자 빌드의 `vm run`: https://dev.to/besworks/official-linux-terminal-on-android-hkf
+- Ferrochrome: https://www.androidpolice.com/google-dashes-our-hopes-of-running-chrome-os-on-android/
+- adb 처리량: https://xdaforums.com/t/xiaomi-13-ultra-adb-pull-push-speed-file-transfer-speed-via-usb-cable.4606831/ , https://x.com/fabynou/status/1009201231896563712
+- scrcpy 지연(영상 경로, 참고만): https://github.com/Genymobile/scrcpy/pull/646
+- Doze 조건: https://developer.android.com/training/monitoring-device-state/doze-standby
+
+## R22. 앱이 그리는 제목 표시줄과 뒤로 가기 키: 시스템과 앱이 주고받는 것 (FR-22, FR-5)
 
 ### 확인한 자료
 - `frameworks/base`의 고정 커밋 두 개: Android 16(빌드 15581820, `45034f0663f960d9ee5fb0a101a4732b71f6e2f4`)과 Android 17(빌드 16373615, `94b4c163b7dfe5ce3607f7bb8456f9573f7de57d`). `framework-lock.json`이 고정한 커밋이다. `frameworks/native`는 Android 16의 `fcbde2bcff56ca1d7bec9cabf8bdca5e288bf103`.
