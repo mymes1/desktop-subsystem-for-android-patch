@@ -1086,3 +1086,95 @@ Digitalis의 배포 묶음(`docker/build-digitalis.sh`)은 번역기(`libberberi
 - overlayfs가 init의 자격으로 아래 파일을 읽을 때 SELinux 거부가 없는지(`dmesg | grep avc`).
 - 에이전트가 `READ_GSERVICES` 권한 없이 gservices에서 `android_id`를 읽을 수 있는지. 못 읽으면 ID는 비어 있고 설정 앱은 안내만 보인다.
 - ARM 번역기를 켠 채 Play가 Play 서비스를 x86_64판으로 갱신하는지.
+
+## R16. 표준 GitHub 러너에서 Digitalis 빌드하기 (FR-25, FR-27)
+
+R9는 Digitalis를 기본 번역기로 넣지 못한 이유로 빌드 비용을 들었다. 트리 전체가 `out/`까지 약 300 GB이기 때문이다. 이 절은 GitHub의 표준 러너(ubuntu-24.04, 4 vCPU, 16 GB RAM, 작업당 6시간, 기본 여유 디스크 약 14 GB)만으로 Android 16과 17의 번역기를 빌드하는 방법을 조사한 기록이다. 2026-11-07에 확인했다.
+
+### 확인한 자료
+
+- Digitalis 사이트의 글 "Digitalis on AOSP 17, and the end of android-latest-release"(2026-10-30)와 "Eight projects building on Digitalis"(2026-10-27). `android16`, `android17` 가지가 있고 `android-latest-release`는 더 이상 쓰지 말라고 한다.
+- `DigitalisX64/manifest`의 `default.xml`과 `digitalis.xml`(`android16` c04ff67, `android17` 9cd1750). AOSP 쪽은 `android16-qpr2-release`, `android17-release`를 따른다. Digitalis는 `frameworks/libs/binary_translation`, `device/generic/goldfish`를 자기 저장소로 바꾸고 `digitalis`, `sample/hellodigitalis`를 더한다. GitHub 원격을 `git@github.com:`(ssh)으로 적는다.
+- `platform_frameworks_libs_binary_translation`(`android17` abefbe2, `android16` 8ab8e93)의 `Android.bp`, `berberis_config.mk`, `enable_arm64_to_x86_64.mk`, `prebuilt/`. AOSP `native_bridge_support`(`android17-release`)의 `native_bridge_support.mk`와 `android_api/`.
+- Digitalis 저장소의 `scripts/build-and-package-prebuilts.sh`, `docker/build-digitalis.sh`, goldfish의 `sdk_phone64_x86_64_digitalis.mk`와 `board/emu64xa/BoardConfig.mk`.
+- `icy-person/berberis-android17`의 `.github/workflows/google-berberis-arm64.yml`과 최근 40회 실행 기록.
+- `denialwm/droidloom`의 `docs/BUILDING.md`, `android/manifest/README.md`, `m2-sparse-source-lock.json`, `native-bridge-lock.json`, `android/native-bridge/product.mk`.
+- AOSP `build/soong`의 `ui/build/config.go`, `ui/build/ninja.go`, `cc/config/global.go`, `build/release`의 플래그 값, `build/make/target/product/module_common.mk`(두 가지 모두).
+
+### berberis-android17의 동기화가 실패하는 이유
+
+최근 40회 실행(2026-09-29부터 2026-11-07까지 매일)이 모두 "Sync Android PDK" 단계에서 끝났다. 단계는 결론 없이 40분에서 95분 뒤에 멈추고, 작업의 주석은 거의 매번 러너 자신의 로그를 쓰지 못한 `System.IO.IOException: No space left on device`다. 한 번은 "The hosted runner lost communication with the server"였는데, 이것도 디스크가 찬 러너에서 흔한 증상이다. 원인은 디스크다.
+
+- `repo sync -g pdk`의 `pdk` 그룹은 생각보다 크다. `android17` 매니페스트의 1,087개 프로젝트 중 852개(`android16`은 1,013개 중 811개)가 `pdk`에 든다. darwin용 Clang, 두 가지 Rust 툴체인, NDK, SDK, VNDK 스냅숏, `frameworks/base`까지 들어 있어 사실상 트리 전체다.
+- `--partial-clone --clone-filter=blob:limit=5M`은 받을 때만 큰 파일을 미룬다. `repo`가 작업 트리를 모두 체크아웃하므로 미룬 파일도 결국 받아 쓴다. 디스크를 줄이지 못한다.
+- 러너의 미리 깔린 SDK와 툴체인을 지우지 않아 루트 디스크의 여유가 약 14 GB에서 시작한다.
+- 네트워크나 빠진 프로젝트 문제는 아니었다. 실패한 실행 어느 것도 받기 오류를 남기지 않았다.
+
+이 워크플로는 동기화를 넘었더라도 쓸 수 있는 번역기를 만들지 못한다. `sdk_phone64_x86_64_riscv64`로 lunch하므로 네이티브 브리지 게스트가 riscv64이고, arm64 게스트 라이브러리(`.native_bridge` 변형)는 만들어지지 않는다. 또 지금 쓰지 말라고 한 `android-latest-release`를 따른다.
+
+### droidloom의 방법
+
+droidloom은 Digitalis에서 갈라진 번역기 Teto를 큰 자체 러너(32 GB RAM, 논리 CPU 16개, 여유 120 GiB)에서 빌드한다. 고르는 방법은 이렇다.
+
+- `repo sync`를 쓰지 않는다. 고정한 AOSP 슈퍼프로젝트의 gitlink에서 프로젝트마다 정확한 커밋을 잡아 잠금 파일(`m2-sparse-source-lock.json`, 프로젝트 225개)에 적고, 그 목록만 받는다.
+- 큰 프로젝트는 git의 cone 모드 부분 체크아웃(`sparse_paths`)으로 필요한 폴더만 받는다(`frameworks/base`, `hardware/interfaces`, `prebuilts/sdk`, `prebuilts/tools` 등).
+- 프레임워크와 시스템 파티션은 빌드하지 않고 공개 CI 이미지(`aosp_cf_x86_64_only_phone`)의 `system`, `system_ext`, `product`를 쓴다.
+- 번역기 제품 설정은 `berberis_config.mk`를 포함하고 `soong_config_set,berberis,translation_arch,arm64_to_x86_64`를 정한다.
+
+DSA가 가져온 생각은 슈퍼프로젝트로 커밋을 고정한 잠금 파일, 부분 체크아웃, 공개 이미지의 재사용이다. 코드는 가져오지 않았고, 스크립트는 이 저장소에서 따로 썼다.
+
+### AXRB와 Refract Native의 경로
+
+두 프로젝트는 번역기의 핵심(디코더, 해석기, 가벼운 JIT, 최적화 JIT, 어셈블러, 번역 캐시)을 CMake와 clang-cl로 AOSP 밖에서 빌드한다. 리눅스 계층(시그널, 스레드, 시스템 호출, 실행 메모리)은 자기 코드로 바꾸고, 네이티브 브리지와 bionic을 쓰지 않는다. AXRB 스스로 "This is a native Windows adapter, not Android NativeBridge"라고 한다.
+
+DSA에 필요한 것은 안드로이드의 네이티브 브리지다. 곧 `libberberis_arm64.so`(NativeBridge 인터페이스), 프록시 라이브러리 22개, 프로그램 실행기, 그리고 bionic을 고친 arm64 게스트 라이브러리(`libc`, `libm`, 링커, `app_process`, 스텁 라이브러리)다. 이것들은 Soong 모듈(`native_bridge_supported`, `.native_bridge` 변형, `soong_config` 변수)과 bionic 소스에 묶여 있다. CMake로 다시 쓰면 Digitalis의 빌드를 따로 하나 유지하는 셈이고, Digitalis가 바뀔 때마다 깨진다. 이 경로는 쓰지 않는다.
+
+### 게스트 쪽 파일과 그 출처
+
+번역기가 기대하는 파일은 `berberis_config.mk`의 `BERBERIS_DISTRIBUTION_ARTIFACTS_ARM64`(74개)다. Refract가 쓰는 Digitalis 배포판의 "74 artifacts"가 이것이다. `ld.config.arm64.txt`는 게스트 라이브러리를 `/system/lib64/arm64`와 `/system/lib64/arm64/bootstrap`에서 찾는다. `native_bridge_support.mk`는 게스트 라이브러리를 둘로 나눈다.
+
+- 고친 게스트 라이브러리(`NATIVE_BRIDGE_MODIFIED_GUEST_LIBS`): `libc`, `libm`, `libEGL`, `libGLESv1_CM`, `libGLESv2`, `libGLESv3`, `libvulkan`, `libandroid`, `libandroid_runtime`, `libbinder_ndk`, `libcamera2ndk`, `libmediandk`, `libnativewindow`, `libnativehelper`, `libjnigraphics`, `libneuralnetworks`, `libaaudio`, `libamidi`, `libOpenSLES`, `libOpenMAXAL`, `libwebviewchromium_plat_support`. 호출을 호스트의 x86_64 라이브러리로 넘기는 스텁이다. 링커(`native_bridge_guest_linker`), `app_process`, `libnative_bridge_vdso`, Digitalis의 `libgui` 스텁도 같다. arm64 이미지의 같은 이름 라이브러리는 진짜 구현이라 브리지를 거치지 않으므로 쓸 수 없다. 이것들은 빌드한다.
+- 원래 게스트 라이브러리(`NATIVE_BRIDGE_ORIG_GUEST_LIBS`): `libandroidicu`, `libicu`(와 `libicuuc`, `libicui18n`), `libcrypto`, `libssl`, `libsqlite`, `libcompiler_rt`, `libcutils`, `libutils`, `liblog`, `libz`, `libsync`, `libstdc++`, `libdl`, `libdl_android`, 그리고 의존 라이브러리 `libc++`, `libbase`, `libvndksupport`, `ld-android`. 같은 소스를 arm64로 빌드한 것이라 공개 arm64 빌드의 것과 같은 코드다.
+  - ICU 넷(`com.android.i18n` APEX), `libcrypto`와 `libssl`(`com.android.conscrypt` APEX), `libsqlite`(`SYSTEM/lib64`)는 DSA가 고정한 arm64 이미지(FR-27, `inputs.json`)에서 가져온다. 고친 라이브러리 어느 것도 이것들에 링크하지 않으므로 빌드 그래프에서 빠지고, `external/icu`, `external/boringssl`, `external/sqlite`를 받지도 빌드하지도 않는다.
+  - 나머지(`libcutils`, `liblog`, `libbase`, `libz`, `libc++`, `libdl`, 링커와 짝인 `ld-android` 등)는 고친 `libc`와 링커가 어차피 빌드해 링크하므로 함께 빌드한다. bionic 내부 인터페이스와 짝이 맞아야 하는 것들이라 이미지의 것을 섞지 않는다.
+  - arm64 이미지는 `aosp_cf_arm64_only_phone`(armv8-a)이고, Digitalis 보드도 `TARGET_NATIVE_BRIDGE_ARCH_VARIANT := armv8-a`다.
+- 프록시 라이브러리(x86_64)는 진짜 프레임워크 라이브러리(`libandroid_runtime`, `libmediandk`, `libEGL` 등 18개)에 링크한다. 이것들을 빌드하면 `libhwui`, Skia, 미디어 스택까지 프레임워크 대부분을 빌드하게 된다. 그래서 고정한 x86_64 이미지에서 꺼내 `cc_prebuilt_library_shared`(`prefer: true`)로 링크한다. 프록시는 바로 그 이미지 위에서 돌므로 정확히 같은 라이브러리에 링크하는 셈이다. 헤더는 해당 프로젝트에서 `include` 폴더만 받아 하나의 헤더 모듈로 내보낸다.
+
+### 빌드 설계
+
+- 잠금 파일 `dsa/guest/arm-translation/digitalis-lock.json`: 버전마다 Digitalis 매니페스트 커밋, AOSP 슈퍼프로젝트 커밋, 받을 프로젝트 40개와 각 커밋. AOSP 프로젝트의 커밋은 슈퍼프로젝트의 gitlink에서, Digitalis 프로젝트의 커밋은 가지 끝에서 `update-lock.py`가 잡는다. 받기는 GitHub 원격을 https로 바꾼다. 러너에는 ssh 키가 없다.
+- 받기(`.github/scripts/translator/fetch-source.py`): `repo` 대신 프로젝트마다 고정 커밋 하나를 `--depth=1`로 받는다. 부분 체크아웃 프로젝트는 `--filter=blob:none`과 sparse checkout으로 필요한 파일의 블롭만 받는다. Clang은 `build/release`의 `RELEASE_BUILD_CLANG_VERSION`(16: `clang-r563880c`, 17: `clang-r584948b`)이 고른 한 판만 받는다. 매니페스트의 linkfile을 만들고 각 `.git`은 지운다.
+- 제품: goldfish 전화 제품 대신 AOSP가 모듈만 빌드할 때 쓰는 `module_common.mk`(Soong만 쓰는 빌드)와 `core_64_bit_only.mk`에서 시작한 `dsa_translator` 제품을 넣는다. 보드는 x86_64 단독에 `TARGET_NATIVE_BRIDGE_ARCH := arm64`(emu64xa와 같다)다. 제품 설정이 기기와 앱 makefile을 읽지 않는다.
+- 빌드(`build.sh`): `ALLOW_MISSING_DEPENDENCIES=true`, `SOONG_ONLY=true`, `SOONG_NINJA=ninja`(17은 기본이 siso다), `SKIP_ABI_CHECKS=true`, ccache(`CC_WRAPPER`, `ALLOW_NINJA_ENV`). 모듈 이름 대신 묶음에 들어갈 설치 경로 67개와 `berberis_arm64_host_tests`만 빌드 대상으로 준다. `-k`로 한 번에 오류를 모두 모으고, 실패하면 찾지 못한 모듈과 경로를 요약한다.
+- 시험: 호스트 테스트를 돌리고 XML 보고서를 남긴다.
+- 묶음: `assemble-digitalis.py collect`가 빌드 산출물과 arm64 이미지의 라이브러리를 아키텍처를 확인하며 모으고, `make-package.py`가 erofs `system.img`와 `arm-translation.json`(이름 Digitalis, 버전 `<major>-<번역기 커밋 12자>`, Apache-2.0, `arm64-v8a`)을 만든다. Digitalis의 `LICENSE`와 받은 커밋 목록을 `system/etc/digitalis/`에 넣는다.
+- 캐시: ccache만 버전마다 3 GB까지 GitHub 캐시에 둔다. 실패하거나 시간이 다 된 실행도 저장하므로 다음 실행이 이어 간다. 소스는 캐시하지 않는다. 버전마다 수 GB라 저장소 전체 한도(약 10 GB)를 넘고, googlesource에서 다시 받는 시간이 캐시를 내려받는 시간과 비슷하다.
+- 배포: 이미지 배포 워크플로가 develop에서 성공한 가장 최근 "Translator build" 실행 중 지금 잠금의 버전을 가진 것을 찾아, x86_64 이미지마다 `arm-translation.zip`을 배포물에 함께 올리고 `image.json`의 `arm_translation`에 적는다. arm64 이미지는 받지 않고, `make-image.py`와 `check-image.py`가 그것을 막는다.
+
+### 단계별 예상 (실측 전, 버전 하나, 러너 하나)
+
+| 단계 | 디스크 | 시간 |
+|---|---|---|
+| 러너 정리(SDK, 툴체인, Docker 이미지 삭제) | 루트 여유 약 14 GB에서 약 45 GB 이상으로, `/mnt`가 더 크면 그쪽에 트리 | 2 ~ 4분 |
+| 고정 이미지 둘 받기와 라이브러리 꺼내기 | 잠시 약 6 GB(target_files, otatools, dexpreopt 두 벌), 끝나면 수십 MB | 3 ~ 6분 |
+| 소스 받기(프로젝트 40개) | 약 8 ~ 10 GB(Clang 한 판 약 3 GB, build-tools 약 1.5 GB, Go 약 0.5 GB, 나머지) | 10 ~ 20분 |
+| Soong 부트스트랩과 분석 | `out/` 1 ~ 2 GB, RAM 4 ~ 8 GB | 10 ~ 20분 |
+| 컴파일(번역기를 기기용과 호스트용으로 두 번, arm64와 x86_64 bionic, libc++ 등) | `out/` 15 ~ 25 GB, ccache 최대 3 GB | 처음 2 ~ 3.5시간, ccache가 차면 30 ~ 60분 |
+| 호스트 테스트(약 3,700개) | 작다 | 5 ~ 20분 |
+| 묶음 만들기와 올리기 | 묶음 약 50 ~ 100 MB | 2분 |
+
+최대 사용량은 소스와 `out/`과 ccache를 합해 약 30 ~ 40 GB다. 첫 실행이 6시간을 넘어도 ccache가 남으므로 다시 실행하면 이어 간다. 그래도 안 되면 단계를 나눈다(분석과 컴파일을 다른 작업으로).
+
+### 결정
+
+- Digitalis를 Soong 안에서, 잠금 파일로 고른 줄인 트리로, 표준 러너에서 빌드한다. CMake 재작성은 하지 않는다.
+- 고친 게스트 라이브러리와 번역기는 빌드하고, ICU, BoringSSL, SQLite는 arm64 이미지에서, 프록시가 링크하는 프레임워크 라이브러리는 x86_64 이미지에서 가져온다.
+- 묶음은 x86_64 이미지의 배포물에 기본 번역기로 함께 싣고, arm64 이미지에는 싣지 않는다.
+
+### 남은 위험과 확인할 것
+
+- 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
+- 헤더만 받는 프로젝트를 가리키는 `export_include_dirs`(`../../../../frameworks/...`)를 Soong이 받아들이는지 확인해야 한다. 안 되면 헤더를 제품 폴더로 복사한다.
+- Soong만 쓰는 빌드에서 설치 경로를 빌드 대상으로 줄 수 있는지 확인해야 한다. 안 되면 모듈 이름으로 바꾼다.
+- FR-25는 기본 묶음이 있는 x86_64 이미지가 처음부터 그 묶음으로 번역하고, 사용자가 다른 묶음으로 바꾼 뒤에도 기본 묶음으로 되돌릴 수 있다고 정한다. 그 호스트와 게스트 쪽 동작은 아직 없다(진행 중이 아니다). 지금은 배포물의 zip을 풀어 `dsa arm-translation install`로 넣어야 한다. 제안하는 방법: x86_64 이미지의 시스템 파티션에 기본 묶음의 `system.img`를 넣고(`/system/etc/dsa/arm-translation/default.img`), 호스트는 사용자 묶음이 없고 설정이 켜져 있으면 `androidboot.dsa.arm_translation=default`를 넣으며, 게스트는 그 값에서 기본 이미지를 얹는다. 사용자 묶음을 지우면 기본으로 돌아간다. 상태 보고(`restart_needed`, 설정 앱의 이름과 버전)도 기본 묶음을 알아야 한다.
+- 기본 묶음이 DSA 게스트에서 ARM64 전용 앱을 실제로 돌리는지는 PC에서 확인한다(FR-25의 수동 확인).
