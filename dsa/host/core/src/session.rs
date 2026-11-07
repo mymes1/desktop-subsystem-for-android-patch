@@ -138,6 +138,7 @@ use crate::keys::KeyEvent;
 use crate::links::{self, LinkGate};
 use crate::location::{LocationEvent, LocationHub, Wanted};
 use crate::memory::{GrowthAction, GuestMemory, GuestMemoryReport, GuestPressure, MemoryGrowth};
+use crate::native_abi::{self, NativeLibraries, RunAsArmOutcome, RunAsArmStatus};
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent, RateLimit};
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
@@ -648,6 +649,11 @@ struct Shared {
     uninstalls: Mutex<HashMap<u32, Sender<UninstallOutcome>>>,
     /// The ID of the last uninstall.
     last_uninstall: AtomicU32,
+    /// The installs of an app again with another ABI waiting for the agent's answer, by
+    /// request ID.
+    reinstalls: Mutex<HashMap<u32, Sender<control::ReinstallResult>>>,
+    /// The ID of the last install of an app again, whoever asked for it.
+    last_reinstall: AtomicU32,
     /// Who waits for the agent's next list of installed apps.
     app_refreshes: Mutex<Vec<Sender<()>>>,
     /// Who watches each task's accessibility tree.
@@ -850,6 +856,22 @@ impl Shared {
         }
         hub.watchers
             .retain(|watcher| watcher.send(event.clone()).is_ok());
+    }
+
+    /// The installed app `package`, as the guest last listed it.
+    fn installed_app(&self, package: &str) -> Option<AppInfo> {
+        let hub = self.tasks.lock().unwrap_or_else(|e| e.into_inner());
+        hub.table
+            .installed()?
+            .into_iter()
+            .find(|app| app.package_name == package)
+    }
+
+    /// The ID of the next install of an app again.
+    fn next_reinstall(&self) -> u32 {
+        self.last_reinstall
+            .fetch_add(1, Ordering::Relaxed)
+            .wrapping_add(1)
     }
 
     /// Records the name and icon of an installed app, for the list that names it next.
@@ -1146,6 +1168,8 @@ impl Session {
             last_drag_request: AtomicU32::new(0),
             uninstalls: Mutex::new(HashMap::new()),
             last_uninstall: AtomicU32::new(0),
+            reinstalls: Mutex::new(HashMap::new()),
+            last_reinstall: AtomicU32::new(0),
             app_refreshes: Mutex::new(Vec::new()),
             accessibility: Mutex::new(AccessibilityHub::default()),
             power_hint_watchers: Mutex::new(Vec::new()),
@@ -1203,6 +1227,7 @@ impl Session {
             notifications: HashMap::new(),
             notification_limit: RateLimit::new(Instant::now()),
             dismissals: Vec::new(),
+            offered_reinstalls: HashMap::new(),
             host_asleep: None,
             sleep_waiters: Vec::new(),
             clock_pending: None,
@@ -1604,6 +1629,19 @@ impl Session {
         size: u64,
         content: &mut dyn Read,
     ) -> Result<InstallOutcome, SessionError> {
+        self.install_apk_for(name, size, None, content)
+    }
+
+    /// Installs an APK as [`install_apk`](Self::install_apk) does, with its native code for
+    /// `abi` (`x86_64` or `arm64-v8a`), which the agent gives the package installer as its ABI
+    /// override. `None` leaves the choice to the package manager.
+    pub fn install_apk_for(
+        &self,
+        name: &str,
+        size: u64,
+        abi: Option<&str>,
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, SessionError> {
         apk::check_name(name)
             .and_then(|()| apk::check_size(size))
             .map_err(SessionError::InstallRefused)?;
@@ -1630,8 +1668,11 @@ impl Session {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(transfer_id, tx);
-        eprintln!("install: sending {name} ({size} bytes) to Android as install {transfer_id}");
-        let result = self.send_apk(transfer_id, name, size, content, &events);
+        eprintln!(
+            "install: sending {name} ({size} bytes) to Android as install {transfer_id}{}",
+            abi.map(|abi| format!(", for {abi}")).unwrap_or_default()
+        );
+        let result = self.send_apk(transfer_id, name, size, abi, content, &events);
         self.shared
             .installs
             .lock()
@@ -1649,6 +1690,7 @@ impl Session {
         transfer_id: u32,
         name: &str,
         size: u64,
+        abi: Option<&str>,
         content: &mut dyn Read,
         events: &Receiver<InstallEvent>,
     ) -> Result<InstallOutcome, SessionError> {
@@ -1657,6 +1699,7 @@ impl Session {
                 transfer_id,
                 name: name.to_string(),
                 size,
+                abi: abi.unwrap_or_default().to_string(),
             })),
         }))?;
         let window = apk::CHUNK_BYTES as u64 * apk::CHUNKS_IN_FLIGHT;
@@ -2894,6 +2937,72 @@ impl Session {
         result
     }
 
+    /// Installs the app `package` again from its APKs in the guest, with its native code for
+    /// arm64-v8a (`on`, run through the translator) or for x86_64, and says how it went. The
+    /// app keeps its data; when Android cannot keep it, the answer says so and nothing changes,
+    /// unless `erase_data` is set. Turning it on needs ARM translation in the running guest.
+    /// Waits up to `timeout` for the agent, which copies and checks every APK of the app.
+    pub fn set_run_as_arm(
+        &self,
+        package: &str,
+        on: bool,
+        erase_data: bool,
+        timeout: Duration,
+    ) -> Result<RunAsArmOutcome, SessionError> {
+        if on {
+            let guest = self.arm_translation()?;
+            if !native_abi::translates_arm64(&guest.abilist) {
+                return Ok(RunAsArmOutcome {
+                    package_name: package.to_string(),
+                    status: RunAsArmStatus::TranslationOff,
+                    message: format!("the guest's ABI list is {:?}", guest.abilist),
+                    on: false,
+                });
+            }
+        }
+        let abi = if on {
+            native_abi::ARM64
+        } else {
+            native_abi::X86_64
+        };
+        let request_id = self.shared.next_reinstall();
+        let (tx, answer) = mpsc::channel();
+        self.shared
+            .reinstalls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(request_id, tx);
+        eprintln!("apps: installing {package} again for {abi} (erase data: {erase_data})");
+        let result = self
+            .send(dsa_protocol::encode(&control::Envelope {
+                body: Some(Body::ReinstallApp(control::ReinstallApp {
+                    request_id,
+                    package_name: package.to_string(),
+                    abi: abi.to_string(),
+                    erase_data,
+                })),
+            }))
+            .and_then(|()| {
+                answer.recv_timeout(timeout).map_err(|_| {
+                    SessionError::NoAnswer(format!(
+                        "Android did not say within {} seconds whether {package} was installed \
+                         again",
+                        timeout.as_secs()
+                    ))
+                })
+            })
+            .map(|result| RunAsArmOutcome::from_control(&result));
+        self.shared
+            .reinstalls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&request_id);
+        if let Ok(outcome) = &result {
+            eprintln!("apps: {package}: {outcome}");
+        }
+        result
+    }
+
     /// The widgets the apps in the guest offer, in label order, asking the agent and waiting
     /// up to `timeout` for its whole answer. Needs an active session.
     pub fn widget_providers(&self, timeout: Duration) -> Result<Vec<WidgetProvider>, SessionError> {
@@ -3448,6 +3557,9 @@ struct Worker {
     notification_limit: RateLimit,
     /// Dismissals for a frozen guest, sent once it is thawed.
     dismissals: Vec<String>,
+    /// The installs of an app again as ARM that the user asked for from a notification, by
+    /// request ID, with the app's package: their outcome is a notification too.
+    offered_reinstalls: HashMap<u32, String>,
     /// While the host sleeps: when it said it would, and whether the guest's screen was on.
     host_asleep: Option<(Instant, bool)>,
     /// Who waits for the guest to say its data is on disk before the host sleeps.
@@ -3775,6 +3887,134 @@ impl Worker {
         }
     }
 
+    /// Shows one of the host's own notifications, replacing the one with its key.
+    fn post_notice(&mut self, notification: Notification) {
+        self.deliver_notification(notification);
+    }
+
+    /// Removes one of the host's own notifications, if it is shown.
+    fn remove_notice(&mut self, key: &str) {
+        if self.notifications.remove(key).is_some() {
+            self.shared
+                .publish_notification(NotificationEvent::Removed {
+                    key: key.to_string(),
+                });
+        }
+    }
+
+    /// The agent says an app ended because it could not load a native library. When the app's
+    /// APKs on the device hold its ARM code, it does not run as ARM yet, and the guest
+    /// translates ARM code, the user is offered to install it again as ARM.
+    fn native_library_crash(&mut self, crash: control::NativeLibraryCrash) {
+        let package = crash.package_name;
+        if !apk::valid_package_name(&package) {
+            eprintln!("apps: dropped a crash record that names no package");
+            return;
+        }
+        let detail: String = crash.detail.chars().take(512).collect();
+        eprintln!("apps: {package} ended because a native library did not load: {detail}");
+        let Some(app) = self.shared.installed_app(&package) else {
+            eprintln!("apps: {package} is not among the installed apps; nothing is offered");
+            return;
+        };
+        let switch = native_abi::run_as_arm(
+            app.system_app,
+            &app.primary_abi,
+            &app.native_libraries,
+            crash.arm64_supported,
+        );
+        if switch.on {
+            eprintln!("apps: {package} runs as ARM already; nothing is offered");
+            return;
+        }
+        if let Some(why) = switch.unavailable {
+            eprintln!(
+                "apps: {package} cannot run as ARM ({}); nothing is offered",
+                why.code()
+            );
+            return;
+        }
+        self.post_notice(native_abi::Notice::Offer.notification(&app));
+    }
+
+    /// What the user did with one of the host's notifications about running an app as ARM.
+    /// A click on the offer installs the app again as ARM, keeping its data; a click on the
+    /// news that it worked opens the app. Any other click, and any dismissal, removes it.
+    fn act_on_notice(
+        &mut self,
+        notice: native_abi::Notice,
+        package: String,
+        action: &NotificationAction,
+    ) -> Result<(), SessionError> {
+        let key = action.key().to_string();
+        self.remove_notice(&key);
+        if !matches!(action, NotificationAction::Open { .. }) {
+            return Ok(());
+        }
+        match notice {
+            native_abi::Notice::Offer => {
+                self.wake();
+                if !self.running() {
+                    return Err(SessionError::NotActive(self.state()));
+                }
+                let request_id = self.shared.next_reinstall();
+                self.offered_reinstalls.insert(request_id, package.clone());
+                eprintln!("apps: installing {package} again as ARM, as the user asked");
+                self.send_body(Body::ReinstallApp(control::ReinstallApp {
+                    request_id,
+                    package_name: package,
+                    abi: native_abi::ARM64.to_string(),
+                    erase_data: false,
+                }));
+            }
+            native_abi::Notice::Done => {
+                self.hidden_since = Instant::now();
+                self.wake();
+                if !self.running() {
+                    return Err(SessionError::NotActive(self.state()));
+                }
+                self.send_body(Body::LaunchApp(control::LaunchApp {
+                    package_name: package,
+                }));
+            }
+            native_abi::Notice::NeedsErase | native_abi::Notice::Failed => {}
+        }
+        Ok(())
+    }
+
+    /// The agent says how installing an app again went: to whoever waits for it, or, when the
+    /// user asked for it from a notification, as a notification.
+    fn guest_reinstall_result(&mut self, result: control::ReinstallResult) {
+        let waiting = self
+            .shared
+            .reinstalls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&result.request_id);
+        if let Some(waiting) = waiting {
+            let _ = waiting.send(result);
+            return;
+        }
+        let Some(package) = self.offered_reinstalls.remove(&result.request_id) else {
+            eprintln!(
+                "apps: dropped the agent's answer to reinstall request {}, which nobody waits for",
+                result.request_id
+            );
+            return;
+        };
+        let outcome = RunAsArmOutcome::from_control(&result);
+        eprintln!("apps: {package}: {outcome}");
+        let app = self
+            .shared
+            .installed_app(&package)
+            .unwrap_or_else(|| AppInfo {
+                package_name: package.clone(),
+                label: package.clone(),
+                ..Default::default()
+            });
+        self.post_notice(native_abi::Notice::of_outcome(&outcome).notification(&app));
+    }
+
     /// Takes a notification the guest posted or changed, and hands it to the watchers when its
     /// turn comes. One the same as what the watchers have is not handed again.
     fn guest_notification(&mut self, message: control::GuestNotification) {
@@ -3821,6 +4061,7 @@ impl Worker {
     fn clear_notifications(&mut self) {
         self.notification_limit.clear();
         self.dismissals.clear();
+        self.offered_reinstalls.clear();
         let keys: Vec<String> = self.notifications.drain().map(|(key, _)| key).collect();
         for key in keys {
             self.shared
@@ -3948,6 +4189,10 @@ impl Worker {
         ) || !self.agent_connected
         {
             return Err(SessionError::NotActive(state));
+        }
+        if let Some((notice, package)) = native_abi::Notice::parse(action.key()) {
+            let package = package.to_string();
+            return self.act_on_notice(notice, package, &action);
         }
         let Some(clearable) = self
             .notifications
@@ -5119,12 +5364,16 @@ impl Worker {
                     app_bytes: app.app_bytes,
                     data_bytes: app.data_bytes,
                     cache_bytes: app.cache_bytes,
+                    native_libraries: NativeLibraries::from_control(&app.native_libraries),
+                    primary_abi: native_abi::checked_abi(&app.primary_abi),
                 });
             }
             Some(Body::InstalledApps(apps)) => {
                 self.shared.publish_installed(&apps.package_names);
                 self.shared.apps_refreshed();
             }
+            Some(Body::ReinstallResult(result)) => self.guest_reinstall_result(result),
+            Some(Body::NativeLibraryCrash(crash)) => self.native_library_crash(crash),
             Some(Body::UninstallResult(result)) => {
                 let outcome = UninstallOutcome::from_control(&result);
                 let waiting = self

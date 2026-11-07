@@ -95,6 +95,9 @@ class ImageLayoutTests(unittest.TestCase):
         "/data/vendor/dsa/arm-translation": ["system_data_root_file", "vendor_data_file"],
         "/data/vendor/dsa/gapps": ["system_data_root_file", "vendor_data_file"],
     }
+    # Paths the daemon names but never opens, so no folder on their way needs a rule. The
+    # Google apps mount point is only compared with the mount points /proc/self/mounts lists.
+    CHANNELD_NAMED_NOT_OPENED = {"/mnt/dsa-gapps"}
 
     # What each file system call in the file sharing jobs asks of the storage's label
     # (media_rw_data_file), as {class: permissions}. A call not listed here fails the test, so
@@ -164,6 +167,8 @@ class ImageLayoutTests(unittest.TestCase):
             policy = (here / "sepolicy" / policy_file).read_text()
             for number, line in self._production_lines(source):
                 for path in literal.findall(line):
+                    if path in self.CHANNELD_NAMED_NOT_OPENED:
+                        continue
                     where = f"{source.name}:{number} uses {path}"
                     known = [p for p in self.CHANNELD_DATA_PATHS if path.startswith(p)]
                     self.assertTrue(
@@ -3603,6 +3608,26 @@ class ArmTranslationImageTests(unittest.TestCase):
             config = archive.read("META/filesystem_config.txt").decode()
             for rule in make_image.ARM_TRANSLATION_FS_CONFIG:
                 self.assertIn(rule, config)
+
+    def test_fr25_x86_64_stays_first_in_every_abi_list_when_translation_is_on(self):
+        # The package manager and the stores take the first ABI an app has code for, so an app
+        # with x86_64 code runs without the translator only while x86_64 comes first.
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            on = archive.read("SYSTEM/etc/dsa/arm-translation-on.prop").decode().splitlines()
+            lists = {}
+            for line in on:
+                name, _, value = line.partition("=")
+                if not line.startswith("#") and ".cpu.abilist" in name:
+                    lists[name] = value.split(",")
+            for name in [
+                "ro.product.cpu.abilist",
+                "ro.product.cpu.abilist64",
+                "ro.product.product.cpu.abilist",
+                "ro.product.product.cpu.abilist64",
+            ]:
+                self.assertIn(name, lists)
+            for name, abis in lists.items():
+                self.assertEqual(abis, ["x86_64", "arm64-v8a"], name)
 
     def test_fr25_the_package_is_mounted_over_system_only_when_the_host_turns_it_on(self):
         rc = (Path(make_image.__file__).with_name("dsa-arm-translation.rc")).read_text()

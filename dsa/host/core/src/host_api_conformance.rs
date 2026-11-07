@@ -138,6 +138,12 @@ pub struct FakeAndroid {
     pub app_settings: Mutex<Vec<Option<String>>>,
     /// How many times it was asked to read its apps again.
     pub app_refreshes: Mutex<u32>,
+    /// Whether it runs with an ARM translator, so its ABI list holds arm64-v8a.
+    pub translating: Mutex<bool>,
+    /// The ABI each install was given, in order; `None` for one left to Android.
+    pub install_abis: Mutex<Vec<Option<String>>>,
+    /// Each "Run as ARM" change it was asked for: the package, on, and whether its data may go.
+    pub run_as_arm: Mutex<Vec<(String, bool, bool)>>,
 }
 
 /// The system app the fake Android lists, which it refuses to uninstall.
@@ -241,6 +247,9 @@ impl FakeAndroid {
             gapps_image: Mutex::new(None),
             app_settings: Mutex::new(Vec::new()),
             app_refreshes: Mutex::new(0),
+            translating: Mutex::new(false),
+            install_abis: Mutex::new(Vec::new()),
+            run_as_arm: Mutex::new(Vec::new()),
         }
     }
 
@@ -670,10 +679,57 @@ impl UserAndroid for FakeAndroid {
         })
     }
     fn arm_translation(&self) -> Option<GuestArmTranslation> {
+        let translating = *self.translating.lock().unwrap();
         (self.state() == SessionState::Active).then(|| GuestArmTranslation {
-            installed: self.arm_image.lock().unwrap().is_some(),
-            active: false,
-            abilist: "x86_64".into(),
+            installed: self.arm_image.lock().unwrap().is_some() || translating,
+            active: translating,
+            abilist: if translating {
+                "x86_64,arm64-v8a".into()
+            } else {
+                "x86_64".into()
+            },
+        })
+    }
+    fn install_apk_for(
+        &self,
+        name: &str,
+        size: u64,
+        abi: Option<&str>,
+        content: &mut dyn std::io::Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        self.install_abis
+            .lock()
+            .unwrap()
+            .push(abi.map(str::to_string));
+        self.install_apk(name, size, content)
+    }
+    fn set_run_as_arm(
+        &self,
+        package: &str,
+        on: bool,
+        erase_data: bool,
+    ) -> Result<crate::native_abi::RunAsArmOutcome, TaskRequestError> {
+        use crate::native_abi::{RunAsArmOutcome, RunAsArmStatus};
+        self.running_or().map_err(TaskRequestError::NotRunning)?;
+        self.run_as_arm
+            .lock()
+            .unwrap()
+            .push((package.to_string(), on, erase_data));
+        let status = if package != KNOWN_PACKAGE {
+            RunAsArmStatus::NotInstalled
+        } else if on && !*self.translating.lock().unwrap() {
+            RunAsArmStatus::TranslationOff
+        } else if on && !erase_data {
+            // The fake keeps no data across an ABI change, so it asks first.
+            RunAsArmStatus::DataWouldBeErased
+        } else {
+            RunAsArmStatus::Done
+        };
+        Ok(RunAsArmOutcome {
+            package_name: package.to_string(),
+            on: on && status == RunAsArmStatus::Done,
+            status,
+            message: String::new(),
         })
     }
     fn install_apk(
@@ -1102,6 +1158,14 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr11_a_second_install_waits_for_the_first() {
             $crate::host_api_conformance::installs_run_one_at_a_time(&mut || $make);
+        }
+        #[test]
+        fn fr25_an_apk_with_partial_x86_64_code_is_installed_as_arm64_only_while_translating() {
+            $crate::host_api_conformance::install_abi_follows_the_libraries(&mut || $make);
+        }
+        #[test]
+        fn fr25_run_as_arm_reaches_the_callers_android_and_asks_before_erasing_data() {
+            $crate::host_api_conformance::run_as_arm_reaches_the_caller(&mut || $make);
         }
         #[test]
         fn nfr5_a_client_that_sends_something_else_during_an_install_is_refused() {
@@ -2043,6 +2107,87 @@ pub fn apk_is_installed(make: MakeLocal<'_>) {
     assert!(installs[0].1 == content, "the APK arrived changed");
 }
 
+pub fn install_abi_follows_the_libraries(make: MakeLocal<'_>) {
+    use crate::native_abi::NativeLibraries;
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let content = sample_apk();
+    let mut partial = NativeLibraries::new();
+    partial.add("x86_64", "libmain.so");
+    partial.add("arm64-v8a", "libmain.so");
+    partial.add("arm64-v8a", "libunity.so");
+    let mut whole = NativeLibraries::new();
+    whole.add("x86_64", "libmain.so");
+    whole.add("arm64-v8a", "libmain.so");
+    let install = |connector: &mut dyn Connector, libraries: &NativeLibraries| {
+        let outcome = connect(connector)
+            .install_apk_with_libraries(
+                "game.apk",
+                content.len() as u64,
+                libraries,
+                &mut &content[..],
+            )
+            .expect("installing");
+        assert_eq!(outcome.status, InstallStatus::Installed);
+    };
+    // Without a translator the partial x86_64 code is all there is.
+    install(&mut *connector, &partial);
+    let android = androids.of(&user).unwrap();
+    *android.translating.lock().unwrap() = true;
+    install(&mut *connector, &partial);
+    install(&mut *connector, &whole);
+    install(&mut *connector, &NativeLibraries::new());
+    assert_eq!(
+        *android.install_abis.lock().unwrap(),
+        vec![
+            Some("x86_64".to_string()),
+            Some("arm64-v8a".to_string()),
+            Some("x86_64".to_string()),
+            None,
+        ]
+    );
+}
+
+pub fn run_as_arm_reaches_the_caller(make: MakeLocal<'_>) {
+    use crate::native_abi::RunAsArmStatus;
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let android = androids.of(&user).unwrap();
+    let off = connect(&mut *connector)
+        .set_run_as_arm(KNOWN_PACKAGE, true, false)
+        .expect("an answer");
+    assert_eq!(off.status, RunAsArmStatus::TranslationOff);
+    *android.translating.lock().unwrap() = true;
+    let asks = connect(&mut *connector)
+        .set_run_as_arm(KNOWN_PACKAGE, true, false)
+        .expect("an answer");
+    assert_eq!(asks.status, RunAsArmStatus::DataWouldBeErased);
+    assert!(!asks.on);
+    let done = connect(&mut *connector)
+        .set_run_as_arm(KNOWN_PACKAGE, true, true)
+        .expect("an answer");
+    assert_eq!(done.status, RunAsArmStatus::Done);
+    assert!(done.on);
+    let missing = connect(&mut *connector)
+        .set_run_as_arm("com.example.missing", true, true)
+        .expect("an answer");
+    assert_eq!(missing.status, RunAsArmStatus::NotInstalled);
+    assert_eq!(
+        android.run_as_arm.lock().unwrap().last(),
+        Some(&("com.example.missing".to_string(), true, true))
+    );
+    // A name that is no package never reaches Android.
+    let before = android.run_as_arm.lock().unwrap().len();
+    assert!(connect(&mut *connector)
+        .set_run_as_arm("not a package", true, false)
+        .is_err());
+    assert_eq!(android.run_as_arm.lock().unwrap().len(), before);
+}
+
 pub fn refused_apk_has_its_reason(make: MakeLocal<'_>) {
     let (listener, mut connector, _) = make();
     let androids = Arc::new(FakeAndroids::default());
@@ -2151,6 +2296,7 @@ pub fn malformed_install_is_refused(make: MakeLocal<'_>) {
         body: Some(types::request::Body::InstallApk(types::InstallApk {
             name: "notes.apk".into(),
             size: 1000,
+            native_libraries: Vec::new(),
         })),
     };
     send(&mut *connection, envelope::Body::Request(request)).unwrap();

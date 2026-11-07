@@ -34,12 +34,25 @@ interface InstallSession {
 
 /** The guest's package installer, as the agent uses it. */
 fun interface PackageInstallerPort {
-    /** Opens a session for a full install of an APK of [size] bytes. */
-    fun open(name: String, size: Long): InstallSession
+    /**
+     * Opens a session for a full install of an APK of [size] bytes, with its native code for
+     * [abi] (the installer's ABI override: [Abis.X86_64] or [Abis.ARM64]); an empty [abi] lets
+     * the package manager choose.
+     */
+    fun open(name: String, size: Long, abi: String): InstallSession
 
     companion object {
-        val NONE = PackageInstallerPort { _, _ -> throw IllegalStateException("this agent installs no APKs") }
+        val NONE = PackageInstallerPort { _, _, _ -> throw IllegalStateException("this agent installs no APKs") }
     }
+}
+
+/** The ABIs the host may ask an app to be installed for. */
+object Abis {
+    const val X86_64 = "x86_64"
+    const val ARM64 = "arm64-v8a"
+
+    /** Whether [abi] is one the host may ask for: empty, which leaves it to Android, or one of the two above. */
+    fun allowed(abi: String): Boolean = abi.isEmpty() || abi == X86_64 || abi == ARM64
 }
 
 /** The values of android.content.pm.PackageInstaller's STATUS_ constants and the legacy codes used here. */
@@ -130,8 +143,11 @@ class ApkInstaller(
         if (install.size <= 0 || install.size > MAX_APK_BYTES) {
             return result(id, InstallStatus.INSTALL_STATUS_INVALID_APK, "", "the APK is ${install.size} bytes; Android takes APKs of 1 byte to ${MAX_APK_BYTES / (1024 * 1024)} MiB")
         }
+        if (!Abis.allowed(install.abi)) {
+            return result(id, InstallStatus.INSTALL_STATUS_OTHER, "", "the host asked for the ABI ${install.abi.take(32)}, which is neither ${Abis.X86_64} nor ${Abis.ARM64}")
+        }
         val session = try {
-            installer.open(install.name, install.size)
+            installer.open(install.name, install.size, install.abi)
         } catch (e: Exception) {
             log.warn("could not open an install session for ${install.name}", e)
             val storage = e is java.io.IOException && e.message?.contains("space", ignoreCase = true) == true
@@ -143,7 +159,8 @@ class ApkInstaller(
             )
         }
         transfer = Transfer(id, install.name, install.size, session)
-        log.info("installing ${install.name} (${install.size} bytes) from the host")
+        val abi = if (install.abi.isEmpty()) "" else " for ${install.abi}"
+        log.info("installing ${install.name} (${install.size} bytes) from the host$abi")
     }
 
     private fun chunk(chunk: ApkChunk) {

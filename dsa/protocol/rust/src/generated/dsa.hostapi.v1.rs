@@ -772,7 +772,7 @@ pub struct WidgetPointer {
 /// in ApkChunk frames, which are not answered, and the service answers the same request id once
 /// more: InstallResult once Android has installed the app or refused it, or an error when the
 /// APK did not reach Android. The connection then ends. A second install waits for the first.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InstallApk {
     /// The file's name, without any folder. It ends in ".apk".
     #[prost(string, tag = "1")]
@@ -780,6 +780,23 @@ pub struct InstallApk {
     /// The APK's length in bytes.
     #[prost(uint64, tag = "2")]
     pub size: u64,
+    /// The native libraries the APK holds, by ABI, as the client read them from the file's
+    /// `lib/` folder. The service chooses the ABI the app is installed for from them: arm64-v8a
+    /// when translation is on and the x86_64 libraries leave out some of the arm64 ones,
+    /// otherwise what Android chooses. Empty for an APK without native code.
+    #[prost(message, repeated, tag = "3")]
+    pub native_libraries: ::prost::alloc::vec::Vec<NativeLibraries>,
+}
+/// The native libraries of one ABI: the file names under `lib/<abi>/` of an APK, or of an APK
+/// and its splits together.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct NativeLibraries {
+    /// Such as "x86_64" or "arm64-v8a".
+    #[prost(string, tag = "1")]
+    pub abi: ::prost::alloc::string::String,
+    /// The library file names, such as "libmain.so", in name order, each once.
+    #[prost(string, repeated, tag = "2")]
+    pub names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Part of an APK's content, on a connection that installs one (InstallApk).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -1002,7 +1019,7 @@ pub struct TaskFrames {
 /// app's first task, and again before the next one once the app has had no task. In the list
 /// of installed apps it also carries the app's version, dates and sizes; for a task they are
 /// left empty.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AppInfo {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
@@ -1034,6 +1051,43 @@ pub struct AppInfo {
     pub data_bytes: u64,
     #[prost(uint64, tag = "11")]
     pub cache_bytes: u64,
+    /// The ABI the app's native code runs as, such as "x86_64" or "arm64-v8a". Empty for an app
+    /// without native code.
+    #[prost(string, tag = "12")]
+    pub primary_abi: ::prost::alloc::string::String,
+    /// The native libraries the app's APKs on the device hold, base and splits together, by
+    /// ABI. Empty for an app without native code.
+    #[prost(message, repeated, tag = "13")]
+    pub native_libraries: ::prost::alloc::vec::Vec<NativeLibraries>,
+}
+/// Installs an app of the caller's Android again from the APKs it has there, with its native
+/// code for arm64-v8a (`on`, run through the ARM translator) or for x86_64. Android must be
+/// running, with translation on to turn it on. The app keeps its data; when Android cannot
+/// keep it, the answer is RUN_AS_ARM_STATUS_DATA_WOULD_BE_ERASED and nothing changes, unless
+/// `erase_data` is set, which reinstalls the app and erases its data. The answer is
+/// RunAsArmResult.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetRunAsArm {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub on: bool,
+    #[prost(bool, tag = "3")]
+    pub erase_data: bool,
+}
+/// The answer to SetRunAsArm.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RunAsArmResult {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "RunAsArmStatus", tag = "2")]
+    pub status: i32,
+    /// Android's own words, for the log and a bug report.
+    #[prost(string, tag = "3")]
+    pub message: ::prost::alloc::string::String,
+    /// Whether the app's native code runs as arm64-v8a now.
+    #[prost(bool, tag = "4")]
+    pub on: bool,
 }
 /// The apps installed in the caller's Android that a launcher lists. The list is kept while
 /// the Android is stopped, because its apps stay installed.
@@ -1566,6 +1620,94 @@ pub struct ArmTranslation {
     #[prost(bool, tag = "7")]
     pub restart_needed: bool,
 }
+/// The Google apps package a user installed: LiteGapps' Core build for their Android, which the
+/// service downloaded from LiteGapps' file host.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsPackage {
+    /// LiteGapps' name for the build: "core".
+    #[prost(string, tag = "1")]
+    pub variant: ::prost::alloc::string::String,
+    /// The build's date, yyyymmdd, from its file name.
+    #[prost(string, tag = "2")]
+    pub version: ::prost::alloc::string::String,
+    /// The Android version the build is for, as LiteGapps names it ("16.0").
+    #[prost(string, tag = "3")]
+    pub android_version: ::prost::alloc::string::String,
+    /// The Android API level the build is for.
+    #[prost(uint32, tag = "4")]
+    pub sdk: u32,
+    /// The processor architecture the build is for, as LiteGapps names it ("x86_64", "arm64").
+    #[prost(string, tag = "5")]
+    pub arch: ::prost::alloc::string::String,
+    /// The file the service downloaded.
+    #[prost(string, tag = "6")]
+    pub file: ::prost::alloc::string::String,
+    /// Where it downloaded it from.
+    #[prost(string, tag = "7")]
+    pub source: ::prost::alloc::string::String,
+    /// The MD5 digest the file host published for it, which the download matched.
+    #[prost(string, tag = "8")]
+    pub md5: ::prost::alloc::string::String,
+}
+/// Installs Google Play for the caller's Android: the service finds the newest LiteGapps Core
+/// build for the Android version and architecture the running Android reports, downloads it,
+/// checks it, makes a system image of its apps and permission files, and sends the image to
+/// the caller's Android, which lays it over its system from its next start. While it works it
+/// answers the request id with GappsProgress, as often as there is news; it then answers once
+/// more with Gapps, or an error. The connection then ends. Android must be running.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct InstallGapps {}
+/// Asks where Google Play stands for the caller. Answered with Gapps.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GetGapps {}
+/// Removes the caller's Google apps. Answered with Gapps. Android goes on using an image it
+/// has mounted until it restarts.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RemoveGapps {}
+/// News of an InstallGapps under way.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsProgress {
+    #[prost(enumeration = "GappsStage", tag = "1")]
+    pub stage: i32,
+    #[prost(uint64, tag = "2")]
+    pub done: u64,
+    /// 0 when not known.
+    #[prost(uint64, tag = "3")]
+    pub total: u64,
+}
+/// Where Google Play stands for the caller.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct Gapps {
+    /// The installed package; absent when there is none.
+    #[prost(message, optional, tag = "1")]
+    pub package: ::core::option::Option<GappsPackage>,
+    /// Whether the running Android was asked, and answered: the fields below up to device_id
+    /// hold only then.
+    #[prost(bool, tag = "2")]
+    pub guest_known: bool,
+    /// The Google apps image is on the user's Android disk.
+    #[prost(bool, tag = "3")]
+    pub guest_installed: bool,
+    /// The running Android has the Google apps laid over its system.
+    #[prost(bool, tag = "4")]
+    pub guest_active: bool,
+    /// The running Android's API level and primary ABI.
+    #[prost(uint32, tag = "5")]
+    pub sdk: u32,
+    #[prost(string, tag = "6")]
+    pub abi: ::prost::alloc::string::String,
+    /// The ABIs the running Android installs apps for, in the order it prefers them.
+    #[prost(string, tag = "7")]
+    pub abilist: ::prost::alloc::string::String,
+    /// The running Android's Google Services Framework Android ID, in decimal, which Google's
+    /// page for uncertified devices asks for; empty until Google's apps have one.
+    #[prost(string, tag = "8")]
+    pub device_id: ::prost::alloc::string::String,
+    /// What is installed differs from what the running Android booted with, so it applies once
+    /// Android starts again.
+    #[prost(bool, tag = "9")]
+    pub restart_needed: bool,
+}
 /// Asks for the device identity of the caller's Android.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct GetDeviceIdentity {}
@@ -1908,7 +2050,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 400, 401, 402, 340"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2040,6 +2182,14 @@ pub mod request {
         GetAndroidVersions(super::GetAndroidVersions),
         #[prost(message, tag = "331")]
         UseAndroidVersion(super::UseAndroidVersion),
+        #[prost(message, tag = "400")]
+        InstallGapps(super::InstallGapps),
+        #[prost(message, tag = "401")]
+        GetGapps(super::GetGapps),
+        #[prost(message, tag = "402")]
+        RemoveGapps(super::RemoveGapps),
+        #[prost(message, tag = "340")]
+        SetRunAsArm(super::SetRunAsArm),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2048,7 +2198,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 400, 401, 340"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -2102,6 +2252,12 @@ pub mod response {
         DragData(super::DragData),
         #[prost(message, tag = "330")]
         AndroidVersions(super::AndroidVersions),
+        #[prost(message, tag = "400")]
+        Gapps(super::Gapps),
+        #[prost(message, tag = "401")]
+        GappsProgress(super::GappsProgress),
+        #[prost(message, tag = "340")]
+        RunAsArmResult(super::RunAsArmResult),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -2843,6 +2999,99 @@ impl StatusBarAppearance {
             "STATUS_BAR_APPEARANCE_UNSPECIFIED" => Some(Self::Unspecified),
             "STATUS_BAR_APPEARANCE_LIGHT" => Some(Self::Light),
             "STATUS_BAR_APPEARANCE_DARK" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+}
+/// How a SetRunAsArm went.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum RunAsArmStatus {
+    Unspecified = 0,
+    /// The app is installed again with the ABI asked for.
+    Success = 1,
+    /// Android cannot change the app's ABI and keep its data; nothing changed. Asking again
+    /// with `erase_data` does it and erases the data.
+    DataWouldBeErased = 2,
+    /// No app of that package is installed.
+    NotInstalled = 3,
+    /// The app is part of the Android image.
+    SystemApp = 4,
+    /// The app's APKs on the device hold no native libraries for that ABI.
+    NoLibraries = 5,
+    /// ARM translation is not on in the running Android, so the app cannot run as ARM.
+    TranslationOff = 6,
+    /// Anything else. The message says what.
+    Other = 7,
+}
+impl RunAsArmStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "RUN_AS_ARM_STATUS_UNSPECIFIED",
+            Self::Success => "RUN_AS_ARM_STATUS_SUCCESS",
+            Self::DataWouldBeErased => "RUN_AS_ARM_STATUS_DATA_WOULD_BE_ERASED",
+            Self::NotInstalled => "RUN_AS_ARM_STATUS_NOT_INSTALLED",
+            Self::SystemApp => "RUN_AS_ARM_STATUS_SYSTEM_APP",
+            Self::NoLibraries => "RUN_AS_ARM_STATUS_NO_LIBRARIES",
+            Self::TranslationOff => "RUN_AS_ARM_STATUS_TRANSLATION_OFF",
+            Self::Other => "RUN_AS_ARM_STATUS_OTHER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "RUN_AS_ARM_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "RUN_AS_ARM_STATUS_SUCCESS" => Some(Self::Success),
+            "RUN_AS_ARM_STATUS_DATA_WOULD_BE_ERASED" => Some(Self::DataWouldBeErased),
+            "RUN_AS_ARM_STATUS_NOT_INSTALLED" => Some(Self::NotInstalled),
+            "RUN_AS_ARM_STATUS_SYSTEM_APP" => Some(Self::SystemApp),
+            "RUN_AS_ARM_STATUS_NO_LIBRARIES" => Some(Self::NoLibraries),
+            "RUN_AS_ARM_STATUS_TRANSLATION_OFF" => Some(Self::TranslationOff),
+            "RUN_AS_ARM_STATUS_OTHER" => Some(Self::Other),
+            _ => None,
+        }
+    }
+}
+/// What an InstallGapps is doing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum GappsStage {
+    Unspecified = 0,
+    /// Reading the file host's list of builds.
+    Listing = 1,
+    /// Downloading the build: `done` of `total` bytes.
+    Downloading = 2,
+    /// Checking the build and making the system image.
+    Building = 3,
+    /// Sending the image to Android: `done` of `total` bytes.
+    Sending = 4,
+}
+impl GappsStage {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "GAPPS_STAGE_UNSPECIFIED",
+            Self::Listing => "GAPPS_STAGE_LISTING",
+            Self::Downloading => "GAPPS_STAGE_DOWNLOADING",
+            Self::Building => "GAPPS_STAGE_BUILDING",
+            Self::Sending => "GAPPS_STAGE_SENDING",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "GAPPS_STAGE_UNSPECIFIED" => Some(Self::Unspecified),
+            "GAPPS_STAGE_LISTING" => Some(Self::Listing),
+            "GAPPS_STAGE_DOWNLOADING" => Some(Self::Downloading),
+            "GAPPS_STAGE_BUILDING" => Some(Self::Building),
+            "GAPPS_STAGE_SENDING" => Some(Self::Sending),
             _ => None,
         }
     }

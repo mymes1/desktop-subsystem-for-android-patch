@@ -288,7 +288,6 @@ public sealed class ApkInstallViewModel : ObservableObject
             ChangedAll();
         }
     }
-    }
 
     private string VersionText(string? name, long code) =>
         string.IsNullOrEmpty(name)

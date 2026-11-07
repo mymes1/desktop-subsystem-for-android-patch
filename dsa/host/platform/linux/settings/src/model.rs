@@ -383,6 +383,37 @@ pub struct App {
     pub system_app: bool,
     pub total_bytes: u64,
     pub icon_png: Vec<u8>,
+    /// The app's "Run as ARM" switch.
+    pub run_as_arm: RunAsArm,
+}
+
+/// The "Run as ARM" switch of an app, as `dsa apps list` reports it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunAsArm {
+    /// The app runs its ARM code through the translator now.
+    pub on: bool,
+    /// The switch can be changed.
+    pub available: bool,
+    /// Why it cannot: `system-app`, `no-arm-libraries`, `translation-off` or `arm-only`;
+    /// `unknown` from a `dsa` that says nothing of the switch.
+    pub reason: String,
+}
+
+impl RunAsArm {
+    pub fn read(json: &Value) -> RunAsArm {
+        if !json.is_object() {
+            return RunAsArm {
+                on: false,
+                available: false,
+                reason: "unknown".into(),
+            };
+        }
+        RunAsArm {
+            on: flag(json, "on", false),
+            available: flag(json, "available", false),
+            reason: text(json, "reason"),
+        }
+    }
 }
 
 impl App {
@@ -396,6 +427,7 @@ impl App {
             total_bytes: number(json, "total_bytes")
                 .max(number(json, "app_bytes") + number(json, "data_bytes")),
             icon_png: base64_decode(json["icon_png"].as_str().unwrap_or_default()),
+            run_as_arm: RunAsArm::read(&json["run_as_arm"]),
         }
     }
 }
@@ -825,13 +857,15 @@ pub struct Outcome {
 }
 
 impl Outcome {
-    /// Reads `not installed (<reason>): <detail>` or `not uninstalled (<reason>): <detail>`,
-    /// as `dsa` says a refusal; `None` for any other failure.
+    /// Reads `not installed (<reason>): <detail>`, `not uninstalled (<reason>): <detail>` or
+    /// `not changed (<reason>): <detail>`, as `dsa` says a refusal; `None` for any other
+    /// failure.
     pub fn refusal(failure: &Failure) -> Option<Outcome> {
         let rest = failure
             .detail
             .strip_prefix("not installed (")
-            .or_else(|| failure.detail.strip_prefix("not uninstalled ("))?;
+            .or_else(|| failure.detail.strip_prefix("not uninstalled ("))
+            .or_else(|| failure.detail.strip_prefix("not changed ("))?;
         let (status, detail) = rest.split_once("): ")?;
         let valid =
             !status.is_empty() && status.chars().all(|c| c.is_ascii_lowercase() || c == '-');
@@ -1142,6 +1176,30 @@ impl Client {
         match self.json(&["apps", "uninstall", package]) {
             Ok(json) => Ok(Outcome {
                 done: flag(&json, "uninstalled", false),
+                status: text(&json, "status"),
+                package: Some(package.to_string()),
+                detail: text(&json, "message"),
+            }),
+            Err(failure) => Outcome::refusal(&failure).ok_or(failure),
+        }
+    }
+
+    /// Installs an app again with its ARM code (`on`) or its x86_64 code, keeping its data
+    /// unless `erase_data`; a refusal (`data-would-be-erased` among them) is an outcome with
+    /// its reason.
+    pub fn run_as_arm(
+        &self,
+        package: &str,
+        on: bool,
+        erase_data: bool,
+    ) -> Result<Outcome, Failure> {
+        let mut args = vec!["apps", "run-as-arm", package, if on { "on" } else { "off" }];
+        if erase_data {
+            args.push("--erase-data");
+        }
+        match self.json(&args) {
+            Ok(json) => Ok(Outcome {
+                done: text(&json, "status") == "done",
                 status: text(&json, "status"),
                 package: Some(package.to_string()),
                 detail: text(&json, "message"),

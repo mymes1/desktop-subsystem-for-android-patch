@@ -1176,7 +1176,7 @@ DSA에 필요한 것은 안드로이드의 네이티브 브리지다. 곧 `libbe
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.
 - 헤더만 받는 프로젝트를 가리키는 `export_include_dirs`(`../../../../frameworks/...`)를 Soong이 받아들이는지 확인해야 한다. 안 되면 헤더를 제품 폴더로 복사한다.
 - Soong만 쓰는 빌드에서 설치 경로를 빌드 대상으로 줄 수 있는지 확인해야 한다. 안 되면 모듈 이름으로 바꾼다.
-- FR-25는 기본 묶음이 있는 x86_64 이미지가 처음부터 그 묶음으로 번역하고, 사용자가 다른 묶음으로 바꾼 뒤에도 기본 묶음으로 되돌릴 수 있다고 정한다. 이 절을 쓸 때는 그 호스트와 게스트 쪽 동작이 없었다. 아래 "기본 묶음의 자리와 binfmt_misc"가 그 뒤의 구현이다. 지금은 배포물의 zip을 풀어 `dsa arm-translation install`로 넣어야 한다. 제안하는 방법: x86_64 이미지의 시스템 파티션에 기본 묶음의 `system.img`를 넣고(`/system/etc/dsa/arm-translation/default.img`), 호스트는 사용자 묶음이 없고 설정이 켜져 있으면 `androidboot.dsa.arm_translation=default`를 넣으며, 게스트는 그 값에서 기본 이미지를 얹는다. 사용자 묶음을 지우면 기본으로 돌아간다. 상태 보고(`restart_needed`, 설정 앱의 이름과 버전)도 기본 묶음을 알아야 한다.
+- FR-25는 기본 묶음이 있는 x86_64 이미지가 처음부터 그 묶음으로 번역하고, 사용자가 다른 묶음으로 바꾼 뒤에도 기본 묶음으로 되돌릴 수 있다고 정한다. 이 절을 쓸 때는 그 호스트와 게스트 쪽 동작이 없었다. 아래 "기본 묶음의 자리와 binfmt_misc"가 그 뒤의 구현이다. 그때는 배포물의 zip을 풀어 `dsa arm-translation install`로 넣어야 한다. 제안하는 방법: x86_64 이미지의 시스템 파티션에 기본 묶음의 `system.img`를 넣고(`/system/etc/dsa/arm-translation/default.img`), 호스트는 사용자 묶음이 없고 설정이 켜져 있으면 `androidboot.dsa.arm_translation=default`를 넣으며, 게스트는 그 값에서 기본 이미지를 얹는다. 사용자 묶음을 지우면 기본으로 돌아간다. 상태 보고(`restart_needed`, 설정 앱의 이름과 버전)도 기본 묶음을 알아야 한다.
 - 기본 묶음이 DSA 게스트에서 ARM64 전용 앱을 실제로 돌리는지는 PC에서 확인한다(FR-25의 수동 확인).
 
 ### 기본 묶음의 자리와 binfmt_misc (2026-11-08)
@@ -1195,3 +1195,38 @@ binfmt_misc: PR #373은 `dsa-arm-translation.rc`가 binfmt_misc를 마운트하�
 - 플랫폼 정책(`plat_sepolicy.cil`): 그 디렉터리는 `proc`(`genfscon proc "/"`)이고, init에게 `proc` 디렉터리의 `mounton`이 없다. `neverallow`는 init과 `dexopt_chroot_setup`을 빼 두었으므로 더할 수 있다. 파일 시스템 `mount`는 init의 `fs_type` 규칙이 이미 덮고, `binfmt_miscfs` 파일 쓰기는 벤더 정책에 있다.
 - 고친 것: 두 `copy` 앞에 `mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc nodev noexec nosuid`를 넣고, `arm-translation.cil`에 `(allow init proc (dir (mounton)))`와 `(allow init binfmt_miscfs (filesystem (mount)))`를 더했다. 기본 묶음 쪽 동작도 같은 순서다.
 - 남은 확인: 실제 부팅에서 `cat /proc/sys/fs/binfmt_misc/arm64_exe`가 `enabled`이고, 앱이 실행하는 ARM64 실행 파일이 도는지는 PC에서 본다.
+
+## R17. 정한 ABI로 설치하기와 ABI를 바꿔 다시 설치할 때의 데이터 (FR-25)
+
+질문: 호스트가 설치하는 APK를 `arm64-v8a`로 설치하게 하려면, 그리고 "ARM으로 실행" 스위치로 이미 설치된 앱을 다른 ABI로 다시 설치하려면 Android 16과 17에서 무엇을 쓰는가. 다시 설치할 때 앱의 데이터는 남는가.
+
+### 확인한 자료
+
+| 자료 | 버전 |
+|---|---|
+| AOSP `frameworks/base` `core/java/android/content/pm/PackageInstaller.java` | `android16-release`, `android17-release` |
+| AOSP `frameworks/base` `services/core/java/com/android/server/pm/PackageManagerShellCommand.java` | `android16-release` |
+| 이 저장소의 에이전트(`AndroidPackageInstaller.kt`, `AndroidPackageUninstaller.kt`)와 권한 목록 | `develop` `0d832ed2` |
+
+### 방법
+
+android.googlesource.com의 웹 보기로 소스를 읽었다. 기기에서는 아직 확인하지 않았다.
+
+### 찾은 것
+
+1. SDK에는 ABI를 정하는 공개 API가 없다. Android 16의 `PackageInstaller.SessionParams`는 숨은 공개 필드 `public String abiOverride;`를 가지고, `pm install --abi`도 셸 명령에서 `sessionParams.abiOverride`를 채워 같은 세션 경로로 설치한다. 설치 크기 계산(`InstallLocationUtils.calculateInstalledSize`)도 이 값을 쓴다.
+2. `android17-release`의 같은 파일은 웹 보기가 길이 제한으로 잘려 필드 선언 줄을 확인하지 못했다. 앞부분의 `InstallInfo`가 `params.abiOverride`를 쓰는 것은 같다.
+3. 에이전트는 플랫폼 키로 서명된 시스템 앱이라 숨은 API 제한을 받지 않는다. 그래서 리플렉션으로 `abiOverride`를 채운다. 필드가 없으면 설치를 거부한다. 조용히 Android가 고른 ABI로 설치하면 사용자가 고른 것과 다른 결과가 나오기 때문이다.
+4. 같은 패키지, 같은 서명, 같거나 높은 버전 코드의 전체 설치 세션은 교체 설치다. 교체 설치는 업데이트와 같은 경로라 앱 데이터(`/data/data/<package>`)를 지우지 않는다. 그래서 스위치는 기기에 있는 그 앱의 APK(기본과 분할)를 새 세션에 그대로 써서 ABI만 바꿔 다시 설치한다. 데이터는 남는다.
+5. 교체가 거절될 수 있는 경우는 남는다. 같은 공유 사용자 ID를 쓰는 패키지끼리 ABI를 맞춰야 하는 경우(`INSTALL_FAILED_SHARED_USER_INCOMPATIBLE`)와 기존 앱을 교체할 수 없다는 거절(`INSTALL_FAILED_UPDATE_INCOMPATIBLE`)이다. 이때는 제거한 뒤 설치해야 하고, 데이터가 지워진다.
+
+### 결정
+
+- 호스트가 설치하는 APK는 `InstallApk.abi`로 ABI를 정하고, 에이전트가 그것을 세션의 `abiOverride`로 넣는다. 비어 있으면 Android가 정한다.
+- "ARM으로 실행"은 교체 설치로 데이터를 지킨다. 위 5의 거절이 오면 아무것도 바꾸지 않고 `REINSTALL_STATUS_DATA_WOULD_BE_ERASED`로 답한다. 설정 앱은 데이터가 지워진다는 확인 창을 띄우고, 사용자가 동의하면 `erase_data`로 다시 요청한다. 에이전트는 APK를 자기 캐시에 복사하고, 앱을 제거하고, 복사본을 설치한다.
+- 설치가 끝나면 에이전트가 `primaryCpuAbi`를 다시 읽어, 요청한 ABI가 아니면 성공으로 알리지 않는다.
+
+### 확인하지 못한 것
+
+- Android 17 이미지에서 `SessionParams`에 `abiOverride` 필드가 있는지. 없으면 에이전트 로그에 "this Android's package installer takes no ABI override"가 남고 설치가 거부된다.
+- 실제 PC(수동 확인): x86_64와 arm64를 모두 가진 앱을 설치해 `dumpsys package <package>`의 `primaryCpuAbi`가 `x86_64`인지, "ARM으로 실행"을 켜면 `arm64-v8a`로 바뀌고 앱 데이터(로그인, 설정)가 남는지, 끄면 `x86_64`로 돌아오는지 본다. 공유 사용자 ID를 쓰는 앱에서 교체가 거절되는지도 본다. 결과는 이 절에 기록한다.

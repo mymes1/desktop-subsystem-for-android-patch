@@ -54,9 +54,10 @@ pub fn open(path: &Path) -> Result<ApkFile, String> {
 pub fn install(api: &mut dyn Connector, apk: &mut ApkFile) -> Result<InstallOutcome, String> {
     let name = apk.name.clone();
     let size = apk.size;
+    let libraries = apk.native_libraries.clone();
     HostApiClient::connect(api, BUILD, Duration::from_secs(5))
         .map_err(|e| format!("the DSA service cannot be reached: {e}"))?
-        .install_apk(&name, size, apk.reader())
+        .install_apk_with_libraries(&name, size, &libraries, apk.reader())
         .map_err(|e| e.to_string())
 }
 

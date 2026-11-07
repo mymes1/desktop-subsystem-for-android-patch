@@ -7,11 +7,15 @@ import io.github.thisisthepy.dsa.agent.channel.ChannelClient
 import io.github.thisisthepy.dsa.agent.channel.ChannelLocator
 import io.github.thisisthepy.dsa.agent.clipboard.ClipboardSync
 import io.github.thisisthepy.dsa.agent.clipboard.GuestClipboard
+import io.github.thisisthepy.dsa.agent.diagnostics.CrashRecordSource
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsCollector
 import io.github.thisisthepy.dsa.agent.diagnostics.DiagnosticsSource
+import io.github.thisisthepy.dsa.agent.diagnostics.NativeLibraryCrashes
 import io.github.thisisthepy.dsa.agent.input.EditorConnection
 import io.github.thisisthepy.dsa.agent.install.ApkInstaller
+import io.github.thisisthepy.dsa.agent.install.AppReinstaller
 import io.github.thisisthepy.dsa.agent.install.AppUninstaller
+import io.github.thisisthepy.dsa.agent.install.PackageReinstallerPort
 import io.github.thisisthepy.dsa.agent.install.PackageUninstallerPort
 import io.github.thisisthepy.dsa.agent.install.GoogleDeviceIdPort
 import io.github.thisisthepy.dsa.agent.install.GoogleDeviceIds
@@ -149,6 +153,9 @@ class Agent(
     packages: PackageInfoPort = PackageInfoPort.NONE,
     googleDeviceId: GoogleDeviceIdPort = GoogleDeviceIdPort.NONE,
     packageUninstaller: PackageUninstallerPort = PackageUninstallerPort.NONE,
+    packageReinstaller: PackageReinstallerPort = PackageReinstallerPort.NONE,
+    private val crashRecords: CrashRecordSource = CrashRecordSource.NONE,
+    arm64Supported: () -> Boolean = { false },
     widgets: WidgetPlatform = WidgetPlatform.NONE,
     appProcesses: AppProcesses = AppProcesses.NONE,
     widgetStore: WidgetStore = WidgetStore.memory(),
@@ -251,6 +258,21 @@ class Agent(
         post = { work -> scheduler.post(work) },
         onUninstalled = { requestAppsRefresh() },
     )
+    private val appReinstaller = AppReinstaller(
+        ownPackage,
+        packageReinstaller,
+        { frame -> channel.send(frame) },
+        log,
+        post = { work -> scheduler.post(work) },
+        onReinstalled = { requestAppsRefresh() },
+    )
+    private val nativeCrashes = NativeLibraryCrashes(
+        ownPackage,
+        { frame -> channel.send(frame) },
+        log,
+        arm64Supported,
+        clock,
+    )
     private val widgetManager = WidgetManager(
         widgets,
         widgetStore,
@@ -341,6 +363,7 @@ class Agent(
                 scheduler.post(work)
             }
             listenToApps()
+            listenToCrashes()
             channel.start()
             requestRefresh()
         }
@@ -352,6 +375,17 @@ class Agent(
         } catch (e: Exception) {
             log.warn("listening to installed apps failed; trying again", e)
             scheduler.postDelayed(RETRY_MILLIS, ::listenToApps)
+        }
+    }
+
+    /** Reports the apps that end because a native library did not load, while the host listens. */
+    private fun listenToCrashes() {
+        try {
+            crashRecords.listen { tag, text ->
+                scheduler.post { if (channel.connected) nativeCrashes.record(tag, text) }
+            }
+        } catch (e: Exception) {
+            log.warn("listening to the system's crash records failed; crashes of apps are not reported", e)
         }
     }
 
@@ -500,6 +534,7 @@ class Agent(
         if (dragOut.handle(envelope)) return true
         if (printer.handle(envelope)) return true
         if (appUninstaller.handle(envelope)) return true
+        if (appReinstaller.handle(envelope)) return true
         when (envelope.bodyCase) {
             Envelope.BodyCase.REFRESH_APPS -> requestAppsRefresh(force = true)
             Envelope.BodyCase.KEY_EVENT -> try {

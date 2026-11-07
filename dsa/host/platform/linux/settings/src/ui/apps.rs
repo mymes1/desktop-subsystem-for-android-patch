@@ -287,6 +287,24 @@ fn app_row(
     size.set(&labels, index as u32);
     row.add_row(&size.row);
 
+    // Whether the app runs its ARM code through the translator.
+    let arm = view::run_as_arm_view(app);
+    let run_as_arm = {
+        let (ctx, page, package, label) = (
+            ctx.clone(),
+            page.clone(),
+            app.package.clone(),
+            app.label.clone(),
+        );
+        let reload = reload.clone();
+        Switch::new(&tr("Run as ARM"), &arm.subtitle, move |on| {
+            switch_abi(&ctx, &page, &package, &label, on, false, reload.clone());
+        })
+    };
+    run_as_arm.set(arm.on);
+    run_as_arm.row.set_sensitive(arm.sensitive);
+    row.add_row(&run_as_arm.row);
+
     let (uninstall_row, uninstall) = button_row(&tr("Uninstall"), "", &tr("Uninstall"));
     if app.system_app {
         uninstall_row.set_subtitle(&tr(
@@ -352,6 +370,70 @@ fn app_row(
         });
     }
     row
+}
+
+/// Installs `package` again with its ARM code (`on`) or its x86_64 code. When Android cannot
+/// keep the app's data, the user is asked first, and only then is it erased.
+fn switch_abi(
+    ctx: &Shared,
+    page: &Rc<Page>,
+    package: &str,
+    label: &str,
+    on: bool,
+    erase_data: bool,
+    reload: Hook,
+) {
+    let (ctx2, page, package, label) = (
+        ctx.clone(),
+        page.clone(),
+        package.to_string(),
+        label.to_string(),
+    );
+    let asked = package.clone();
+    request(
+        ctx,
+        move |c| c.run_as_arm(&asked, on, erase_data),
+        move |r| {
+            page.show_failure(
+                &tr("The apps could not be read or changed"),
+                r.as_ref().err(),
+            );
+            if let Ok(outcome) = &r {
+                match view::run_as_arm_next(&label, on, outcome) {
+                    view::RunAsArmNext::Done(toast) => ctx2.toast(&toast),
+                    view::RunAsArmNext::ConfirmErase => {
+                        // The switch shows how the app runs until the user decides.
+                        if let Some(reload) = reload.borrow().clone() {
+                            reload();
+                        }
+                        let (ctx3, page, package, label) =
+                            (ctx2.clone(), page.clone(), package.clone(), label.clone());
+                        let reload = reload.clone();
+                        confirm(
+                            &ctx2,
+                            &trf("Erase {0}'s data?", &[&label]),
+                            &trf(
+                                "Android cannot change how {0} runs and keep its data. Installing it again erases its data: sign-ins, settings and files it keeps for itself.",
+                                &[&label],
+                            ),
+                            &tr("Erase and install again"),
+                            true,
+                            move || {
+                                switch_abi(&ctx3, &page, &package, &label, on, true, reload.clone())
+                            },
+                        );
+                        return;
+                    }
+                    view::RunAsArmNext::Refused(why) => {
+                        tell(&ctx2, &tr("Not installed again"), &why)
+                    }
+                }
+            }
+            if let Some(reload) = reload.borrow().clone() {
+                reload();
+            }
+        },
+    );
 }
 
 /// The apps that keep running with no window, with their media, and stopping them.

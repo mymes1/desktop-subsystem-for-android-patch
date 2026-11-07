@@ -1130,3 +1130,54 @@ msgstr "Google Play 상태를 읽지 못했습니다"
 
 msgid "The page could not be opened"
 msgstr "페이지를 열 수 없습니다"
+
+msgid "Runs the app's ARM code through the translator. Off runs its x86_64 code."
+msgstr "번역기로 앱의 ARM 코드를 실행합니다. 끄면 x86_64 코드로 실행합니다."
+
+msgid "Apps that are part of Android run as Android installed them."
+msgstr "Android에 포함된 앱은 Android가 설치한 대로 실행됩니다."
+
+msgid "No APK of this app on the device holds its ARM code."
+msgstr "기기에 이 앱의 ARM 코드를 담은 APK가 없습니다."
+
+msgid "ARM translation is not on. Turn it on under ARM apps and restart Android."
+msgstr "ARM 번역이 꺼져 있습니다. ARM 앱에서 켜고 Android를 다시 시작하십시오."
+
+msgid "This app has only ARM code, so it always runs as ARM."
+msgstr "이 앱은 ARM 코드만 있어 늘 ARM으로 실행됩니다."
+
+msgid "This version of DSA cannot say whether the app can run as ARM."
+msgstr "이 버전의 DSA는 앱을 ARM으로 실행할 수 있는지 알 수 없습니다."
+
+msgid "{0} runs as ARM now."
+msgstr "{0}이(가) 이제 ARM으로 실행됩니다."
+
+msgid "{0} runs its x86_64 code now."
+msgstr "{0}이(가) 이제 x86_64 코드로 실행됩니다."
+
+msgid "its APKs on the device hold no code for that"
+msgstr "기기의 APK에 그 코드가 없습니다"
+
+msgid "ARM translation is not on"
+msgstr "ARM 번역이 꺼져 있습니다"
+
+msgid "Android refused"
+msgstr "Android가 거절했습니다"
+
+msgid "{0} was not installed again: {1} ({2})"
+msgstr "{0}을(를) 다시 설치하지 않았습니다: {1} ({2})"
+
+msgid "Run as ARM"
+msgstr "ARM으로 실행"
+
+msgid "Erase {0}'s data?"
+msgstr "{0}의 데이터를 지울까요?"
+
+msgid "Android cannot change how {0} runs and keep its data. Installing it again erases its data: sign-ins, settings and files it keeps for itself."
+msgstr "Android가 데이터를 지킨 채 {0}의 실행 방식을 바꿀 수 없습니다. 다시 설치하면 로그인, 설정, 앱이 보관한 파일 같은 데이터가 지워집니다."
+
+msgid "Erase and install again"
+msgstr "지우고 다시 설치"
+
+msgid "Not installed again"
+msgstr "다시 설치하지 않음"

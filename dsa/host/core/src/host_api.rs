@@ -88,6 +88,7 @@ use crate::location::{Fix, LocationEvent, Wanted};
 use crate::memory::{
     snapshot_from_wire, snapshot_to_wire, GuestMemoryReport, HostMemory, MemorySnapshot,
 };
+use crate::native_abi::{self, NativeLibraries, RunAsArmOutcome};
 use crate::notifications::{self, Notification, NotificationAction, NotificationEvent};
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome, PrintSettings};
 use crate::resize_trace::{self, detail_requested, ResizeTrace, DETAIL_ENV};
@@ -351,6 +352,33 @@ pub trait UserAndroid: Send + Sync {
         let _ = (name, size, content);
         Err(InstallError::Refused(
             "this Android does not install APKs".into(),
+        ))
+    }
+    /// Installs an APK as [`install_apk`](UserAndroid::install_apk) does, with its native code
+    /// for `abi` (`x86_64` or `arm64-v8a`); `None` leaves the choice to Android. An Android
+    /// that cannot be told an ABI installs the APK as Android chooses.
+    fn install_apk_for(
+        &self,
+        name: &str,
+        size: u64,
+        abi: Option<&str>,
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        let _ = abi;
+        self.install_apk(name, size, content)
+    }
+    /// Installs the app `package` again from the APKs it has in this Android, with its native
+    /// code for arm64-v8a (`on`) or x86_64, keeping its data; with `erase_data`, also when
+    /// that erases its data. Says how it went.
+    fn set_run_as_arm(
+        &self,
+        package: &str,
+        on: bool,
+        erase_data: bool,
+    ) -> Result<RunAsArmOutcome, TaskRequestError> {
+        let _ = (package, on, erase_data);
+        Err(TaskRequestError::Failed(
+            "this Android cannot install its apps again".into(),
         ))
     }
     /// Sends an ARM translation package's system image, `size` bytes read from `content` whose
@@ -674,13 +702,31 @@ impl UserAndroid for Session {
         size: u64,
         content: &mut dyn Read,
     ) -> Result<InstallOutcome, InstallError> {
-        Session::install_apk(self, name, size, content).map_err(|error| match error {
+        UserAndroid::install_apk_for(self, name, size, None, content)
+    }
+    fn install_apk_for(
+        &self,
+        name: &str,
+        size: u64,
+        abi: Option<&str>,
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, InstallError> {
+        Session::install_apk_for(self, name, size, abi, content).map_err(|error| match error {
             SessionError::NotActive(state) => InstallError::NotRunning(format!(
                 "Android is {state}; start it and install the APK again"
             )),
             SessionError::InstallRefused(why) => InstallError::Refused(why),
             other => InstallError::Refused(format!("the APK did not reach Android: {other}")),
         })
+    }
+    fn set_run_as_arm(
+        &self,
+        package: &str,
+        on: bool,
+        erase_data: bool,
+    ) -> Result<RunAsArmOutcome, TaskRequestError> {
+        Session::set_run_as_arm(self, package, on, erase_data, native_abi::REINSTALL_WAIT)
+            .map_err(request_error)
     }
     fn package_state(&self, package: &str) -> Result<Option<InstalledPackage>, TaskRequestError> {
         Session::package_state(self, package, PACKAGE_QUERY_WAIT).map_err(request_error)
@@ -1025,6 +1071,8 @@ fn app_to_wire(app: AppInfo) -> types::AppInfo {
         app_bytes: app.app_bytes,
         data_bytes: app.data_bytes,
         cache_bytes: app.cache_bytes,
+        native_libraries: app.native_libraries.to_wire(),
+        primary_abi: app.primary_abi,
     }
 }
 
@@ -1041,6 +1089,8 @@ fn app_from_wire(app: types::AppInfo) -> AppInfo {
         app_bytes: app.app_bytes,
         data_bytes: app.data_bytes,
         cache_bytes: app.cache_bytes,
+        primary_abi: app.primary_abi,
+        native_libraries: NativeLibraries::from_wire(&app.native_libraries),
     }
 }
 
@@ -2953,6 +3003,21 @@ impl HostApiService {
         }
     }
 
+    fn set_run_as_arm(&self, peer: &Peer, set: types::SetRunAsArm) -> response::Body {
+        if !apk::valid_package_name(&set.package_name) {
+            return not_a_package(&set.package_name);
+        }
+        let android = match self.androids.android(&peer.user) {
+            Ok(android) => android,
+            Err(why) => return error(ErrorCode::Unavailable, why),
+        };
+        match android.set_run_as_arm(&set.package_name, set.on, set.erase_data) {
+            Ok(outcome) => response::Body::RunAsArmResult(outcome.to_wire()),
+            Err(TaskRequestError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
+            Err(TaskRequestError::Failed(why)) => error(ErrorCode::Unavailable, why),
+        }
+    }
+
     fn drag_out(&self, peer: &Peer, out: types::DragOut) -> response::Body {
         let android = match self.androids.android(&peer.user) {
             Ok(android) => android,
@@ -3455,10 +3520,21 @@ impl HostApiService {
             connection.close();
             return;
         }
+        // x86_64 first: arm64-v8a only when the APK's x86_64 libraries leave out some of its
+        // arm64 ones and the running Android translates ARM code. Android is asked only then.
+        let libraries = NativeLibraries::from_wire(&install.native_libraries);
+        let abi = native_abi::choose(&libraries, || {
+            android
+                .arm_translation()
+                .is_some_and(|guest| native_abi::translates_arm64(&guest.abilist))
+        });
         answer(&mut *connection, response::Body::Done(types::Done {}));
         eprintln!(
-            "install: {} asked to install {} ({} bytes)",
-            peer.user, install.name, install.size
+            "install: {} asked to install {} ({} bytes){}",
+            peer.user,
+            install.name,
+            install.size,
+            abi.map(|abi| format!(" as {abi}")).unwrap_or_default()
         );
         let mut content = ApkChunks {
             connection: &mut *connection,
@@ -3467,7 +3543,7 @@ impl HostApiService {
             piece: Vec::new(),
             at: 0,
         };
-        let body = match android.install_apk(&install.name, install.size, &mut content) {
+        let body = match android.install_apk_for(&install.name, install.size, abi, &mut content) {
             Ok(outcome) => response::Body::InstallResult(outcome.to_wire()),
             Err(InstallError::NotRunning(why)) => error(ErrorCode::NotRunning, why),
             Err(InstallError::Refused(why)) => error(ErrorCode::InstallRefused, why),
@@ -3564,6 +3640,7 @@ impl HostApiService {
             Some(request::Body::UninstallApp(uninstall)) => {
                 self.uninstall_app(peer, &uninstall.package_name)
             }
+            Some(request::Body::SetRunAsArm(set)) => self.set_run_as_arm(peer, set),
             Some(request::Body::CloseTask(close)) => self.request(
                 peer,
                 TaskRequest::Close {
@@ -3712,7 +3789,8 @@ impl HostApiService {
                         | request::Body::SetAppWindowSettings(_)
                         | request::Body::ResetData(_)
                         | request::Body::GetAndroidVersions(_)
-                        | request::Body::UseAndroidVersion(_) => unreachable!("answered above"),
+                        | request::Body::UseAndroidVersion(_)
+                        | request::Body::SetRunAsArm(_) => unreachable!("answered above"),
                     }
                     status(android.as_ref())
                 }
@@ -5091,6 +5169,30 @@ impl HostApiClient {
         }
     }
 
+    /// Installs the app `package` of the caller's Android again with its native code for
+    /// arm64-v8a (`on`) or x86_64, keeping its data unless `erase_data`, and says how it went.
+    pub fn set_run_as_arm(
+        &mut self,
+        package: &str,
+        on: bool,
+        erase_data: bool,
+    ) -> Result<RunAsArmOutcome, ClientError> {
+        match self.exchange(
+            request::Body::SetRunAsArm(types::SetRunAsArm {
+                package_name: package.to_string(),
+                on,
+                erase_data,
+            }),
+            self.timeout
+                .max(native_abi::REINSTALL_WAIT + Duration::from_secs(5)),
+        )? {
+            response::Body::RunAsArmResult(result) => Ok(RunAsArmOutcome::from_wire(result)),
+            _ => Err(ClientError::Malformed(
+                "expected how installing the app again went".into(),
+            )),
+        }
+    }
+
     /// Makes sure the caller's Android is ready: starts it when it is stopped, and waits at
     /// most `timeout` for it to have finished booting with its agent connected, asking every
     /// `poll`. `waiting` is called once whenever the state it waits through changes, so the
@@ -5370,9 +5472,22 @@ impl HostApiClient {
     /// error. An error means the APK did not get there. The connection ends with the install,
     /// so the client is used up.
     pub fn install_apk(
+        self,
+        name: &str,
+        size: u64,
+        content: &mut dyn Read,
+    ) -> Result<InstallOutcome, ClientError> {
+        self.install_apk_with_libraries(name, size, &NativeLibraries::new(), content)
+    }
+
+    /// Installs an APK as [`install_apk`](Self::install_apk) does, saying which native
+    /// libraries it holds ([`crate::apk::ApkFile::native_libraries`]), from which the service
+    /// chooses the ABI it is installed for.
+    pub fn install_apk_with_libraries(
         mut self,
         name: &str,
         size: u64,
+        libraries: &NativeLibraries,
         content: &mut dyn Read,
     ) -> Result<InstallOutcome, ClientError> {
         let id = self.next_id;
@@ -5380,6 +5495,7 @@ impl HostApiClient {
             request::Body::InstallApk(types::InstallApk {
                 name: name.to_string(),
                 size,
+                native_libraries: libraries.to_wire(),
             }),
             self.timeout,
         )? {

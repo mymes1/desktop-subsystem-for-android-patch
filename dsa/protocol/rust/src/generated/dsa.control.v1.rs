@@ -223,7 +223,7 @@ pub struct AppInfo {
 /// such app, and again whenever the app is installed again or updated, or the host asks
 /// (RefreshApps) and the app's sizes changed; the InstalledApps that follows says which apps
 /// are still there.
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InstalledApp {
     #[prost(string, tag = "1")]
     pub package_name: ::prost::alloc::string::String,
@@ -255,6 +255,77 @@ pub struct InstalledApp {
     pub data_bytes: u64,
     #[prost(uint64, tag = "11")]
     pub cache_bytes: u64,
+    /// The ABI the app's native code runs as (the package manager's primary CPU ABI), such as
+    /// "x86_64" or "arm64-v8a". Empty for an app without native code.
+    #[prost(string, tag = "12")]
+    pub primary_abi: ::prost::alloc::string::String,
+    /// The native libraries the app's APKs on the device hold, base and splits together, by
+    /// ABI, in ABI order. Empty for an app without native code.
+    #[prost(message, repeated, tag = "13")]
+    pub native_libraries: ::prost::alloc::vec::Vec<NativeLibraries>,
+}
+/// The native libraries of one ABI: the file names under `lib/<abi>/` of an APK, or of an APK
+/// and its splits together.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct NativeLibraries {
+    /// Such as "x86_64" or "arm64-v8a".
+    #[prost(string, tag = "1")]
+    pub abi: ::prost::alloc::string::String,
+    /// The library file names, such as "libmain.so", in name order, each once.
+    #[prost(string, repeated, tag = "2")]
+    pub names: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// Host to guest: install an app again from the APKs it has on the device (base and splits),
+/// with its native code for `abi`, as the "Run as ARM" switch of the host's settings does. The
+/// agent replaces the installed app, which keeps its data. When Android will not replace it
+/// with the other ABI, the agent answers REINSTALL_STATUS_DATA_WOULD_BE_ERASED and changes
+/// nothing, unless `erase_data` is set: then it keeps a copy of the APKs, uninstalls the app
+/// (its data goes) and installs the copy. Answered with ReinstallResult of the same
+/// `request_id`.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReinstallApp {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+    /// "arm64-v8a" or "x86_64".
+    #[prost(string, tag = "3")]
+    pub abi: ::prost::alloc::string::String,
+    #[prost(bool, tag = "4")]
+    pub erase_data: bool,
+}
+/// Guest to host, from the agent: how a ReinstallApp went.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ReinstallResult {
+    #[prost(uint32, tag = "1")]
+    pub request_id: u32,
+    #[prost(string, tag = "2")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "ReinstallStatus", tag = "3")]
+    pub status: i32,
+    /// The guest's own words, for the log and a bug report.
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
+    /// The ABI the app's native code runs as now; empty when it has none or is not installed.
+    #[prost(string, tag = "5")]
+    pub primary_abi: ::prost::alloc::string::String,
+}
+/// Guest to host, from the agent: an app ended because it could not load one of its native
+/// libraries (an UnsatisfiedLinkError, or "dlopen failed"), as the system's crash record
+/// says. The host offers to install the app again as arm64-v8a when it can. The agent sends
+/// one for an app at most every few minutes.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct NativeLibraryCrash {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    /// The line of the crash record that names the library, for the log; at most 512
+    /// characters.
+    #[prost(string, tag = "2")]
+    pub detail: ::prost::alloc::string::String,
+    /// Whether the guest's ABI list holds arm64-v8a this boot (a translator is in place), so
+    /// the app could run as ARM.
+    #[prost(bool, tag = "3")]
+    pub arm64_supported: bool,
 }
 /// Host to guest: read the installed apps again, sizes included, and send the InstalledApp of
 /// each one that changed, then InstalledApps, even when nothing changed, so the host knows its
@@ -667,6 +738,86 @@ pub struct ArmTranslationState {
     #[prost(string, tag = "7")]
     pub abilist: ::prost::alloc::string::String,
 }
+/// Host to guest, to the control daemon: the system image (erofs) of the Google apps the user
+/// chose to install follows in GappsChunk messages of the same `transfer_id`, in order. The
+/// daemon keeps it on the user's disk as it keeps an ARM translation package's image: beside
+/// any image already there, checked for its length and SHA-256 once all `size` bytes have
+/// arrived, and only then in the old one's place. It answers each chunk with GappsState. The
+/// guest lays the image over its product and system_ext partitions from its next boot, when
+/// the host says one is installed. One transfer at a time; a new one drops an unfinished one.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsInstall {
+    #[prost(uint32, tag = "1")]
+    pub transfer_id: u32,
+    #[prost(uint64, tag = "2")]
+    pub size: u64,
+    /// The SHA-256 digest of the whole image.
+    #[prost(bytes = "vec", tag = "3")]
+    pub sha256: ::prost::alloc::vec::Vec<u8>,
+}
+/// Host to guest: part of the image a GappsInstall announced.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsChunk {
+    #[prost(uint32, tag = "1")]
+    pub transfer_id: u32,
+    /// Where `data` starts in the image.
+    #[prost(uint64, tag = "2")]
+    pub offset: u64,
+    #[prost(bytes = "vec", tag = "3")]
+    pub data: ::prost::alloc::vec::Vec<u8>,
+}
+/// Host to guest, to the control daemon: remove the Google apps image. The guest goes on using
+/// an image it has mounted until it restarts. Answered with GappsState.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsRemove {}
+/// Host to guest, to the control daemon: asks for GappsState.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsQuery {}
+/// Guest to host, from the control daemon: where the Google apps stand in the guest. It answers
+/// each of the messages above.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GappsState {
+    /// The transfer this answers, or 0.
+    #[prost(uint32, tag = "1")]
+    pub transfer_id: u32,
+    /// How many bytes of that transfer the daemon has written.
+    #[prost(uint64, tag = "2")]
+    pub received: u64,
+    /// The transfer is complete and its image checked and in place.
+    #[prost(bool, tag = "3")]
+    pub done: bool,
+    /// Non-empty when the transfer or the removal failed: why, in words a person can act on. A
+    /// failed transfer leaves the image that was there before.
+    #[prost(string, tag = "4")]
+    pub error: ::prost::alloc::string::String,
+    /// A Google apps image is on the user's disk.
+    #[prost(bool, tag = "5")]
+    pub installed: bool,
+    /// This boot runs with the image laid over the system.
+    #[prost(bool, tag = "6")]
+    pub active: bool,
+    /// The guest's API level (ro.build.version.sdk), which the image must be built for.
+    #[prost(uint32, tag = "7")]
+    pub sdk: u32,
+    /// The guest's primary ABI (ro.product.cpu.abi), which the image must be built for.
+    #[prost(string, tag = "8")]
+    pub abi: ::prost::alloc::string::String,
+    /// The ABIs the package manager installs apps for, in the order it prefers them
+    /// (ro.product.cpu.abilist).
+    #[prost(string, tag = "9")]
+    pub abilist: ::prost::alloc::string::String,
+}
+/// Host to guest, to the agent: asks for GoogleDeviceId.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GoogleDeviceIdQuery {}
+/// Guest to host, from the agent: the Google Services Framework Android ID, which Google's page
+/// for uncertified devices asks for, in decimal; empty while Google's apps are not installed or
+/// have not made one yet. It answers GoogleDeviceIdQuery.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct GoogleDeviceId {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+}
 /// Guest to host, from the agent: a notification an app posted, or a new version of one it
 /// posted before under the same key, which replaces it. Only notifications a person would see
 /// come: not the ongoing notice of a foreground service, and not a group's summary, whose
@@ -932,6 +1083,13 @@ pub struct InstallApk {
     /// The APK's length in bytes.
     #[prost(uint64, tag = "3")]
     pub size: u64,
+    /// The ABI to install the app's native code for, which the agent gives the package
+    /// installer as its ABI override: "x86_64" or "arm64-v8a". Empty lets the package manager
+    /// take the first ABI of the guest's list the APK has code for. The host chooses arm64-v8a
+    /// only while translation is on and the APK's x86_64 libraries leave out some of its arm64
+    /// ones.
+    #[prost(string, tag = "4")]
+    pub abi: ::prost::alloc::string::String,
 }
 /// Host to guest: part of the APK an InstallApk announced.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2143,7 +2301,7 @@ pub struct GamepadRumble {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2227,6 +2385,20 @@ pub mod envelope {
         ArmTranslationQuery(super::ArmTranslationQuery),
         #[prost(message, tag = "154")]
         ArmTranslationState(super::ArmTranslationState),
+        #[prost(message, tag = "400")]
+        GappsInstall(super::GappsInstall),
+        #[prost(message, tag = "401")]
+        GappsChunk(super::GappsChunk),
+        #[prost(message, tag = "402")]
+        GappsRemove(super::GappsRemove),
+        #[prost(message, tag = "403")]
+        GappsQuery(super::GappsQuery),
+        #[prost(message, tag = "404")]
+        GappsState(super::GappsState),
+        #[prost(message, tag = "405")]
+        GoogleDeviceIdQuery(super::GoogleDeviceIdQuery),
+        #[prost(message, tag = "406")]
+        GoogleDeviceId(super::GoogleDeviceId),
         #[prost(message, tag = "42")]
         DeviceIdle(super::DeviceIdle),
         #[prost(message, tag = "43")]
@@ -2421,6 +2593,12 @@ pub mod envelope {
         DragData(super::DragData),
         #[prost(message, tag = "354")]
         DragEnd(super::DragEnd),
+        #[prost(message, tag = "380")]
+        ReinstallApp(super::ReinstallApp),
+        #[prost(message, tag = "381")]
+        ReinstallResult(super::ReinstallResult),
+        #[prost(message, tag = "382")]
+        NativeLibraryCrash(super::NativeLibraryCrash),
     }
 }
 /// The protocol version. CURRENT goes up when the meaning of existing messages changes.
@@ -2606,6 +2784,56 @@ impl StatusBarAppearance {
             "STATUS_BAR_APPEARANCE_UNSPECIFIED" => Some(Self::Unspecified),
             "STATUS_BAR_APPEARANCE_LIGHT" => Some(Self::Light),
             "STATUS_BAR_APPEARANCE_DARK" => Some(Self::Dark),
+            _ => None,
+        }
+    }
+}
+/// How an install with another ABI went. The reasons are stable, so the host can say in the
+/// user's language what went wrong; the message beside them gives the guest's own words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ReinstallStatus {
+    Unspecified = 0,
+    /// The app is installed again, with its native code for the ABI asked for.
+    Success = 1,
+    /// Android will not replace the app with the other ABI while it keeps its data; nothing
+    /// changed. Asking again with `erase_data` reinstalls it and erases its data.
+    DataWouldBeErased = 2,
+    /// No app of that package is installed.
+    NotInstalled = 3,
+    /// The app is part of the Android image, which is not installed again.
+    SystemApp = 4,
+    /// The app's APKs on the device hold no native libraries for that ABI.
+    NoLibraries = 5,
+    /// Anything else. The message says what.
+    Other = 6,
+}
+impl ReinstallStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "REINSTALL_STATUS_UNSPECIFIED",
+            Self::Success => "REINSTALL_STATUS_SUCCESS",
+            Self::DataWouldBeErased => "REINSTALL_STATUS_DATA_WOULD_BE_ERASED",
+            Self::NotInstalled => "REINSTALL_STATUS_NOT_INSTALLED",
+            Self::SystemApp => "REINSTALL_STATUS_SYSTEM_APP",
+            Self::NoLibraries => "REINSTALL_STATUS_NO_LIBRARIES",
+            Self::Other => "REINSTALL_STATUS_OTHER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "REINSTALL_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "REINSTALL_STATUS_SUCCESS" => Some(Self::Success),
+            "REINSTALL_STATUS_DATA_WOULD_BE_ERASED" => Some(Self::DataWouldBeErased),
+            "REINSTALL_STATUS_NOT_INSTALLED" => Some(Self::NotInstalled),
+            "REINSTALL_STATUS_SYSTEM_APP" => Some(Self::SystemApp),
+            "REINSTALL_STATUS_NO_LIBRARIES" => Some(Self::NoLibraries),
+            "REINSTALL_STATUS_OTHER" => Some(Self::Other),
             _ => None,
         }
     }

@@ -37,6 +37,63 @@ final class PageViewModelTests: XCTestCase {
         XCTAssertNil(apps.message)
     }
 
+    /// An app with partial x86_64 code, one without native code, and one that runs as ARM with
+    /// nothing to go back to, as dsa apps list --json prints them.
+    private func armList(translation: Bool) -> String {
+        let game = #"{"package":"com.example.game","label":"Game","system_app":false,"run_as_arm":{"on":false,"available":\#(translation),"reason":"\#(translation ? "" : "translation-off")"}}"#
+        let notes = #"{"package":"com.example.notes","label":"Notes","system_app":false,"run_as_arm":{"on":false,"available":false,"reason":"no-arm-libraries"}}"#
+        let tool = #"{"package":"com.example.tool","label":"Tool","system_app":false,"run_as_arm":{"on":true,"available":false,"reason":"arm-only"}}"#
+        return #"{"apps":[\#(game),\#(notes),\#(tool)]}"#
+    }
+
+    func test_fr25_the_run_as_arm_switch_is_off_with_its_reason_when_it_cannot_be_changed() async {
+        let cli = FakeCli()
+        cli.answer("apps list --json", armList(translation: false))
+        let apps = AppsViewModel(service: AppsService(cli: cli), text: KeyText())
+        await apps.refresh()
+        XCTAssertNil(apps.error)
+        let game = apps.rows.first { $0.package == "com.example.game" }
+        XCTAssertEqual(game?.canRunAsArm, false)
+        XCTAssertEqual(game?.runAsArmTip, "Apps_RunAsArm_translation-off")
+        let notes = apps.rows.first { $0.package == "com.example.notes" }
+        XCTAssertEqual(notes?.runAsArmTip, "Apps_RunAsArm_no-arm-libraries")
+        let tool = apps.rows.first { $0.package == "com.example.tool" }
+        XCTAssertEqual(tool?.runAsArm, true)
+        XCTAssertEqual(tool?.canRunAsArm, false)
+        XCTAssertEqual(tool?.runAsArmTip, "Apps_RunAsArm_arm-only")
+        // An older dsa that says nothing of the switch leaves it off and says so.
+        XCTAssertEqual(apps.runAsArmTip(.unknown), "Apps_RunAsArm_unknown")
+        XCTAssertNil(apps.runAsArmTip(RunAsArmSwitch(on: false, available: true, reason: "")))
+    }
+
+    func test_fr25_turning_run_as_arm_on_keeps_the_data_or_asks_before_it_goes() async {
+        let cli = FakeCli()
+        cli.answer("apps list --json", armList(translation: true))
+        cli.fail("apps run-as-arm com.example.game on --json",
+                 "dsa: not changed (data-would-be-erased): com.example.game: Android cannot change how the app runs and keep its data")
+        cli.answer("apps run-as-arm com.example.game on --erase-data --json",
+                   #"{"package":"com.example.game","status":"done","on":true,"message":""}"#)
+        let apps = AppsViewModel(service: AppsService(cli: cli), text: KeyText())
+        await apps.refresh()
+        XCTAssertEqual(apps.rows.first { $0.package == "com.example.game" }?.canRunAsArm, true)
+
+        // The user keeps the data: nothing is erased.
+        var asked: [String] = []
+        await apps.setRunAsArm("com.example.game", true) { label in
+            asked.append(label)
+            return false
+        }
+        XCTAssertEqual(asked, ["Game"])
+        XCTAssertEqual(apps.message, "Apps_RunAsArmKept")
+        XCTAssertFalse(cli.called("apps run-as-arm com.example.game on --erase-data --json"))
+
+        // The user lets it go: the app is installed again and its data erased.
+        await apps.setRunAsArm("com.example.game", true) { _ in true }
+        XCTAssertNil(apps.error)
+        XCTAssertTrue(cli.called("apps run-as-arm com.example.game on --erase-data --json"))
+        XCTAssertEqual(apps.message, "Apps_RunAsArmOn")
+    }
+
     func test_fr17_app_window_settings_go_through_app_window() async {
         let cli = FakeCli()
         cli.answer("apps list --json", #"{"apps":[\#(app)]}"#)

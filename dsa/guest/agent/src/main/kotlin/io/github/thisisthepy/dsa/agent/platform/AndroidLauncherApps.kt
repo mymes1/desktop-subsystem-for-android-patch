@@ -73,6 +73,7 @@ class AndroidLauncherApps(
                 log.warn("could not read the apps' storage sizes; they are reported as zero", e)
             }
         }
+        val application = info.applicationInfo
         return LauncherApp(
             packageName = packageName,
             label = label,
@@ -85,8 +86,12 @@ class AndroidLauncherApps(
             appBytes = appBytes,
             dataBytes = dataBytes,
             cacheBytes = cacheBytes,
+            primaryAbi = application?.let { AndroidApks.primaryAbi(it) }.orEmpty(),
+            nativeLibraries = application?.let { apks.libraries(it) }.orEmpty(),
         )
     }
+
+    private val apks = AndroidApks()
 
     private var warnedSizes = false
 

@@ -739,6 +739,20 @@ message InstallApk {
   string name = 1;
   // The APK's length in bytes.
   uint64 size = 2;
+  // The native libraries the APK holds, by ABI, as the client read them from the file's
+  // `lib/` folder. The service chooses the ABI the app is installed for from them: arm64-v8a
+  // when translation is on and the x86_64 libraries leave out some of the arm64 ones,
+  // otherwise what Android chooses. Empty for an APK without native code.
+  repeated NativeLibraries native_libraries = 3;
+}
+
+// The native libraries of one ABI: the file names under `lib/<abi>/` of an APK, or of an APK
+// and its splits together.
+message NativeLibraries {
+  // Such as "x86_64" or "arm64-v8a".
+  string abi = 1;
+  // The library file names, such as "libmain.so", in name order, each once.
+  repeated string names = 2;
 }
 
 // Part of an APK's content, on a connection that installs one (InstallApk).
@@ -995,6 +1009,54 @@ message AppInfo {
   uint64 app_bytes = 9;
   uint64 data_bytes = 10;
   uint64 cache_bytes = 11;
+  // The ABI the app's native code runs as, such as "x86_64" or "arm64-v8a". Empty for an app
+  // without native code.
+  string primary_abi = 12;
+  // The native libraries the app's APKs on the device hold, base and splits together, by
+  // ABI. Empty for an app without native code.
+  repeated NativeLibraries native_libraries = 13;
+}
+
+// Installs an app of the caller's Android again from the APKs it has there, with its native
+// code for arm64-v8a (`on`, run through the ARM translator) or for x86_64. Android must be
+// running, with translation on to turn it on. The app keeps its data; when Android cannot
+// keep it, the answer is RUN_AS_ARM_STATUS_DATA_WOULD_BE_ERASED and nothing changes, unless
+// `erase_data` is set, which reinstalls the app and erases its data. The answer is
+// RunAsArmResult.
+message SetRunAsArm {
+  string package_name = 1;
+  bool on = 2;
+  bool erase_data = 3;
+}
+
+// How a SetRunAsArm went.
+enum RunAsArmStatus {
+  RUN_AS_ARM_STATUS_UNSPECIFIED = 0;
+  // The app is installed again with the ABI asked for.
+  RUN_AS_ARM_STATUS_SUCCESS = 1;
+  // Android cannot change the app's ABI and keep its data; nothing changed. Asking again
+  // with `erase_data` does it and erases the data.
+  RUN_AS_ARM_STATUS_DATA_WOULD_BE_ERASED = 2;
+  // No app of that package is installed.
+  RUN_AS_ARM_STATUS_NOT_INSTALLED = 3;
+  // The app is part of the Android image.
+  RUN_AS_ARM_STATUS_SYSTEM_APP = 4;
+  // The app's APKs on the device hold no native libraries for that ABI.
+  RUN_AS_ARM_STATUS_NO_LIBRARIES = 5;
+  // ARM translation is not on in the running Android, so the app cannot run as ARM.
+  RUN_AS_ARM_STATUS_TRANSLATION_OFF = 6;
+  // Anything else. The message says what.
+  RUN_AS_ARM_STATUS_OTHER = 7;
+}
+
+// The answer to SetRunAsArm.
+message RunAsArmResult {
+  string package_name = 1;
+  RunAsArmStatus status = 2;
+  // Android's own words, for the log and a bug report.
+  string message = 3;
+  // Whether the app's native code runs as arm64-v8a now.
+  bool on = 4;
 }
 
 // The apps installed in the caller's Android that a launcher lists. The list is kept while
@@ -1838,6 +1900,7 @@ message Request {
     InstallGapps install_gapps = 400;
     GetGapps get_gapps = 401;
     RemoveGapps remove_gapps = 402;
+    SetRunAsArm set_run_as_arm = 340;
   }
 }
 
@@ -1869,6 +1932,7 @@ message Response {
     AndroidVersions android_versions = 330;
     Gapps gapps = 400;
     GappsProgress gapps_progress = 401;
+    RunAsArmResult run_as_arm_result = 340;
   }
 }
 

@@ -19,7 +19,8 @@
 //! dsa memory
 //! dsa gpus
 //! dsa widgets [list | add <provider> | remove <id> | watch]
-//! dsa apps [list | info <package> | uninstall <package> | settings [<package>]]
+//! dsa apps [list | info <package> | uninstall <package> | settings [<package>] |
+//!     run-as-arm <package> on|off [--erase-data]]
 //! dsa background [list | open <package> | stop <package>]
 //! dsa app-window [<package> [--fixed-size on|off] [--start-size <width>x<height>|auto] | <package> reset]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
@@ -119,6 +120,19 @@
 //! `total_bytes` and `icon_png` in base64; `info` prints one such object; `uninstall` prints
 //! `package`, `uninstalled`, `status` and `message`; `settings` prints `opened` with the package,
 //! or null for the list of apps.
+//!
+//! Each app of `list` and `info` also says how its native code runs: `primary_abi` (`x86_64`,
+//! `arm64-v8a`, or empty for none), `native_abis` (the ABIs its APKs on the device hold
+//! libraries for) and `run_as_arm`, the settings apps' "Run as ARM" switch: `on`, `available`,
+//! and `reason`, why it cannot be changed (`system-app`, `no-arm-libraries`,
+//! `translation-off` or `arm-only`; empty when it can). `dsa apps run-as-arm <package> on`
+//! installs the app again from its APKs in Android with its ARM code, run through the
+//! translator; `off` goes back to its x86_64 code. The app keeps its data. When Android cannot
+//! change the ABI and keep the data, nothing changes and the line on standard error starts with
+//! `not changed (data-would-be-erased):`, with exit code 1; `--erase-data` then does it and
+//! erases the app's data. Other refusals have the same form with `not-installed`,
+//! `system-app`, `no-libraries`, `translation-off` or `other`. With `--json` it prints
+//! `package`, `status`, `on` and `message`.
 //!
 //! `dsa background list` (or `dsa background`) lists the apps that keep running in Android
 //! with no window because they run a foreground service (music playback, a download, a VPN),
@@ -270,6 +284,7 @@ use dsa_host_core::host_api::{
     Status, TaskList,
 };
 use dsa_host_core::memory::MemorySnapshot;
+use dsa_host_core::native_abi;
 use dsa_host_core::session::SessionState;
 use dsa_host_core::tasks::{AppInfo, Task};
 use dsa_host_core::update::store::Fetch;
@@ -284,7 +299,8 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      tasks | settings [set <name> <value> | device | reset device[.<field>]] | memory | \
      network | gpus | \
      widgets [list | add <provider> | remove <id> | watch] | \
-     apps [list | info <package> | uninstall <package> | settings [<package>]] | \
+     apps [list | info <package> | uninstall <package> | settings [<package>] | \
+     run-as-arm <package> on|off [--erase-data]] | \
      background [list | open <package> | stop <package>] | \
      app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
@@ -418,6 +434,8 @@ pub enum AppsAction {
     Uninstall(String),
     /// Open Android's settings of one app, or Android's list of every app.
     Settings(Option<String>),
+    /// Install one app again with its ARM code (`true`) or its x86_64 code.
+    RunAsArm(String, bool),
 }
 
 /// What `dsa widgets` does.
@@ -811,6 +829,27 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
             "settings" if command == Some(Command::Apps) && apps.is_none() => {
                 apps = Some(AppsAction::Settings(None));
             }
+            "run-as-arm" if command == Some(Command::Apps) && apps.is_none() => {
+                let usage = "dsa apps run-as-arm needs the app's package and on or off, such as \
+                             dsa apps run-as-arm com.example.game on";
+                let package = args.next().ok_or_else(|| usage.to_string())?;
+                if !is_package_name(package) {
+                    return Err(format!(
+                        "{package:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                let on = match args
+                    .next()
+                    .map(|value| value.to_ascii_lowercase())
+                    .as_deref()
+                {
+                    Some("on") => true,
+                    Some("off") => false,
+                    _ => return Err(usage.to_string()),
+                };
+                apps = Some(AppsAction::RunAsArm(package.clone(), on));
+            }
             name if command == Some(Command::Apps)
                 && apps == Some(AppsAction::Settings(None))
                 && !name.starts_with('-') =>
@@ -1022,7 +1061,12 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     }
                 });
             }
-            "--erase-data" if command == Some(Command::AndroidUse) => erase_data = true,
+            "--erase-data"
+                if command == Some(Command::AndroidUse)
+                    || matches!(apps, Some(AppsAction::RunAsArm(..))) =>
+            {
+                erase_data = true
+            }
             "reset-data" if command.is_none() => command = Some(Command::ResetData),
             "--progress" if matches!(command, Some(Command::Install | Command::GappsInstall)) => {
                 progress = true
@@ -1407,6 +1451,22 @@ pub fn widget_event_line(event: &WidgetEvent, json: bool) -> Option<String> {
     }
 }
 
+/// The settings apps' "Run as ARM" switch of `app`, as one JSON object, while ARM translation
+/// is on in the running Android (`translation`) or not.
+pub fn run_as_arm_json(app: &AppInfo, translation: bool) -> Value {
+    let switch = native_abi::run_as_arm(
+        app.system_app,
+        &app.primary_abi,
+        &app.native_libraries,
+        translation,
+    );
+    json!({
+        "on": switch.on,
+        "available": switch.available(),
+        "reason": switch.unavailable.map(|why| why.code()).unwrap_or_default(),
+    })
+}
+
 /// An installed app as one JSON object. With `icon`, the icon is in it as base64 PNG.
 pub fn app_json(app: &AppInfo, icon: bool) -> Value {
     let mut value = json!({
@@ -1421,6 +1481,8 @@ pub fn app_json(app: &AppInfo, icon: bool) -> Value {
         "data_bytes": app.data_bytes,
         "cache_bytes": app.cache_bytes,
         "total_bytes": app.total_bytes(),
+        "primary_abi": app.primary_abi,
+        "native_abis": app.native_libraries.abis().collect::<Vec<_>>(),
     });
     if icon {
         value["icon_png"] = Value::String(base64(&app.icon_png));
@@ -1464,6 +1526,9 @@ pub fn describe_apps(apps: &[AppInfo]) -> String {
             human_size(app.total_bytes()),
             if app.system_app { "  (system)" } else { "" }
         );
+        if app.primary_abi == native_abi::ARM64 {
+            out.push_str("  (runs as ARM)");
+        }
     }
     out
 }
@@ -1505,8 +1570,26 @@ pub fn describe_app(app: &AppInfo) -> String {
         } else {
             "Installed by you: dsa apps uninstall removes it".to_string()
         },
+        format!(
+            "Native code: {}",
+            if app.primary_abi.is_empty() {
+                "none".to_string()
+            } else {
+                app.primary_abi.clone()
+            }
+        ),
     ]
     .join("\n")
+}
+
+/// Whether the caller's running Android translates ARM code: its ABI list holds arm64-v8a.
+/// False when it cannot be asked.
+fn translates_arm64(client: &mut HostApiClient) -> bool {
+    client
+        .arm_translation()
+        .ok()
+        .and_then(|status| status.guest)
+        .is_some_and(|guest| native_abi::translates_arm64(&guest.abilist))
 }
 
 /// `dsa apps`: makes sure Android runs, then lists or describes its apps with their sizes read
@@ -1533,9 +1616,17 @@ fn apps(
                 .refreshed_apps()
                 .map_err(|e| e.to_string())?
                 .unwrap_or_default();
+            let translation = translates_arm64(&mut client);
             Ok(if invocation.json {
-                json!({ "apps": apps.iter().map(|app| app_json(app, true)).collect::<Vec<_>>() })
-                    .to_string()
+                let apps: Vec<Value> = apps
+                    .iter()
+                    .map(|app| {
+                        let mut value = app_json(app, true);
+                        value["run_as_arm"] = run_as_arm_json(app, translation);
+                        value
+                    })
+                    .collect();
+                json!({ "apps": apps }).to_string()
             } else {
                 describe_apps(&apps)
             })
@@ -1552,7 +1643,9 @@ fn apps(
                     format!("no app of {package} is installed in Android; dsa apps list shows them")
                 })?;
             Ok(if invocation.json {
-                app_json(app, true).to_string()
+                let mut value = app_json(app, true);
+                value["run_as_arm"] = run_as_arm_json(app, translates_arm64(&mut client));
+                value.to_string()
             } else {
                 describe_app(app)
             })
@@ -1576,6 +1669,30 @@ fn apps(
                 .to_string()
             } else {
                 format!("Uninstalled {package}")
+            })
+        }
+        AppsAction::RunAsArm(package, on) => {
+            let outcome = client
+                .set_run_as_arm(&package, on, invocation.erase_data)
+                .map_err(|e| e.to_string())?;
+            if !outcome.done() {
+                return Err(format!(
+                    "not changed ({}): {package}: {outcome}",
+                    outcome.status.code()
+                ));
+            }
+            Ok(if invocation.json {
+                json!({
+                    "package": outcome.package_name,
+                    "status": outcome.status.code(),
+                    "on": outcome.on,
+                    "message": outcome.message,
+                })
+                .to_string()
+            } else if outcome.on {
+                format!("{package} runs as ARM now")
+            } else {
+                format!("{package} runs its x86_64 code now")
             })
         }
         AppsAction::Settings(package) => {
@@ -2553,6 +2670,7 @@ fn install(
     drop(client);
     let name = apk.name.clone();
     let size = apk.size;
+    let libraries = apk.native_libraries.clone();
     step("stage sending");
     let mut sending = Progress {
         inner: apk.reader(),
@@ -2562,7 +2680,7 @@ fn install(
         step: &step,
     };
     let outcome = connect(connector, None, false, Duration::from_secs(10))?
-        .install_apk(&name, size, &mut sending)
+        .install_apk_with_libraries(&name, size, &libraries, &mut sending)
         .map_err(|e| format!("{name} was not installed: {e}"))?;
     if !outcome.installed() {
         return Err(describe_refusal(&name, &outcome));
