@@ -68,7 +68,7 @@ jobs:
         android: ${{ fromJSON(needs.versions.outputs.android) }}
     env:
       ANDROID_BRANCH: ${{ matrix.android }}
-      CCACHE_DIR: /home/runner/.cache/ccache
+      CCACHE_DIR: /tmp/dsa-ccache
     steps:
       - uses: actions/checkout@v4
 
@@ -97,7 +97,7 @@ jobs:
       - name: Restore the compiler cache
         uses: actions/cache/restore@v4
         with:
-          path: /home/runner/.cache/ccache
+          path: /tmp/dsa-ccache
           key: translator-ccache-${{ matrix.android }}-${{ hashFiles('dsa/guest/arm-translation/digitalis-lock.json') }}-${{ github.run_id }}
           restore-keys: |
             translator-ccache-${{ matrix.android }}-${{ hashFiles('dsa/guest/arm-translation/digitalis-lock.json') }}-
@@ -142,7 +142,7 @@ jobs:
         if: always() && steps.pins.outcome == 'success'
         uses: actions/cache/save@v4
         with:
-          path: /home/runner/.cache/ccache
+          path: /tmp/dsa-ccache
           key: translator-ccache-${{ matrix.android }}-${{ hashFiles('dsa/guest/arm-translation/digitalis-lock.json') }}-${{ github.run_id }}
 
       - name: Make the package

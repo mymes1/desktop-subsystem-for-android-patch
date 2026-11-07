@@ -1228,6 +1228,24 @@ dexpreopt를 끈 뒤 `dex_bootjars`는 지나갔고, 분석이 다시 `GenerateB
 
 런타임 APEX에서 나오는 것은 묶음에 하나도 없다. 대상 파일에서 의존을 따라가도 `bionic/apex`의 모듈(`com.android.runtime`, 그 키와 인증서, `runtime-module-sdk`, `runtime-module-host-exports`, `bionic-linker-config`)에 닿지 않는다. 다른 `.bp`가 이 파일에서 모듈 형식을 가져오지도 않는다(`bionic/libc`의 `visibility`에 `//bionic/apex`가 있지만, Soong은 보이는 범위에 적힌 패키지가 있는지 묻지 않는다). 트리에 있는 APEX는 이것 하나다. 그래서 `system/sepolicy`와 APEX 키를 더하는 대신 이 파일을 트리에서 뺀다. 잠금에 `exclude`(체크아웃 뒤 지우는 파일)를 더했고, bionic이 `apex/Android.bp`를 뺀다.
 
+### 일곱 번째 실행(run 42399261076, android17)과 고친 것
+
+분석이 통과하고 컴파일이 시작되었다. 실패한 동작 1,663개 중 1,652개는 컴파일러 앞의 ccache가 `/home/runner/.cache/ccache/lock`을 만들지 못한 것이다(`Read-only file system`). soong_ui는 ninja를 nsjail 안에서 돌리고, 그 안에서 쓸 수 있는 곳은 `/tmp`와 `out/`뿐이다(`ui/build/sandbox_linux.go`의 `-B`). 그래서 캐시를 `/tmp/dsa-ccache`로 옮겼다. 워크플로의 캐시 복원과 저장도 같은 폴더를 쓰고, `build.sh`는 캐시가 그 두 곳 밖에 있으면 시작하지 않는다. 새 "Framework build" 워크플로도 같은 스크립트 구조라 함께 고쳤다(그쪽 `build.sh`에 남아 있던 `TEMPORARY_DISABLE_PATH_RESTRICTIONS`도 뺐다).
+
+나머지 11개는 Python 빌드 도구(`gen_asm`, `gensyscalls`, `gen_intrinsics` 등)의 `missing dependencies: libsqlite, aprotoc`다. Soong은 모든 `python_binary_host`에 실행기용 `libsqlite`와 protobuf 컴파일러 `aprotoc`를 의존으로 붙인다(`build/soong/python/python.go`). 쓰는 실행기는 `prebuilts/build-tools`의 프리빌트(`py3-launcher-autorun64`)인데, 이 파일의 `DT_NEEDED`는 glibc 라이브러리뿐이고 SQLite를 링크하지 않는다. 이 빌드의 Python 도구에는 `.proto` 소스가 없다. 진짜를 빌드하려면 `external/sqlite`가 호스트 ICU(`external/icu`)를, `external/protobuf`가 abseil을 끌고 온다. 그래서 제품 폴더에 대역을 둔다. 빈 호스트 공유 라이브러리 `libsqlite`와, 실행되면 이유를 말하고 실패하는 `aprotoc`(`sh_binary_host`)다.
+
+ccache 때문에 컴파일이 모두 실패해서, 진짜 컴파일 오류는 이번 로그에 아직 하나도 없다.
+
+### 여덟 번째 실행(run 42402218071, android17)과 고친 것
+
+ccache가 동작했고 컴파일이 약 19분 돌았다. `-k`로 모인 실패는 15개다. 14개는 프록시 라이브러리와 `libberberis_native_activity_arm64`가 프레임워크의 헤더(`android/rect.h`, `media/NdkImageReader.h`, `vulkan/vk_layer_interface.h`, `SLES/OpenSLES.h`, `OMXAL/OpenMAXAL.h`, `aaudio/AAudio.h`, `amidi/AMidi.h`, `camera/NdkCaptureRequest.h`, `android/binder_ibinder.h`, `android/hardware_buffer.h`, `android/native_window.h`, `android_runtime/AndroidRuntime.h`)를 찾지 못한 것이다. 헤더 파일은 모두 트리에 있었다. 컴파일 명령의 `-I` 목록에 그 폴더들이 없고 대신 `device/dsa/dsa_translator/headers`가 있었다. 헤더 모듈의 `export_include_dirs`에 적은 `../../../../frameworks/...`가 모듈 폴더 자체로 바뀐 것이다. 모듈은 자기 폴더 밖을 내보낼 수 없다.
+
+그래서 `build.sh`가 내보낼 include 폴더(`headers/include-dirs.txt`, 18개)를 트리에서 `device/dsa/dsa_translator/headers/` 아래 같은 경로로 복사하고, 헤더 모듈은 그 복사본을 내보낸다. 목록의 폴더가 트리에 없으면 빌드 전에 멈춘다.
+
+나머지 하나는 소스에서 빌드한 x86_64 `libnativehelper`의 링크였다. 버전 스크립트 `stub.map`이 비어 있었다(`unexpected EOF`). 이 라이브러리는 ART APEX의 것이고 `stubs`(`versions: ["S"]`)를 가진다. 이 축소 트리에서 그 판의 스텁 목록을 만드는 데 무엇이 빠졌는지는 로그로 알 수 없었다. 프록시가 링크하는 것은 게스트의 x86_64 시스템이 실제로 싣는 라이브러리이므로, 다른 프레임워크 라이브러리처럼 고정한 x86_64 이미지의 `com.android.art`에서 꺼내 프리빌트로 쓴다. 헤더(`libnativehelper/include`, `include_platform`)는 위의 복사본으로 내보낸다.
+
+컴파일 동작은 다른 라이브러리의 링크를 기다리지 않으므로, 이번 로그에 모든 컴파일 오류가 이미 나왔다. 실패한 모듈에 링크하는 모듈의 링크는 시도되지 않았으므로, 다음 실행에서 링크 오류가 처음 보일 수 있다.
+
 ### 남은 위험과 확인할 것
 
 - 프로젝트 목록은 읽어서 만든 첫 추정이다. 빠진 모듈은 빌드 로그의 "missing dependencies"로 드러나고, 그 프로젝트를 잠금에 더한 뒤 `update-lock.py --missing`으로 고정한다. 특히 Soong 플러그인(`aidl_interface` 같은 모듈 형식), Python 실행기 프리빌트, Rust(`aconfig`)가 더 필요할 수 있다.

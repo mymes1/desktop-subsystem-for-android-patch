@@ -24,6 +24,17 @@ mkdir -p "$device"
 cp -r "$here/device/." "$device/"
 mkdir -p "$device/prebuilts/x86_64"
 cp "$framework_libs"/*.so "$device/prebuilts/x86_64/"
+# The header modules export copies of these include folders: Soong does not let a module
+# export a folder outside its own.
+while read -r dir; do
+  case "$dir" in ""|"#"*) continue ;; esac
+  if [[ ! -d "$top/$dir" ]]; then
+    echo "the tree has no $dir, which the header modules export" >&2
+    exit 1
+  fi
+  mkdir -p "$device/headers/$dir"
+  cp -r "$top/$dir/." "$device/headers/$dir/"
+done < "$here/device/headers/include-dirs.txt"
 
 cd "$top"
 uv run "$repo/dsa/guest/arm-translation/assemble-digitalis.py" targets \
@@ -52,7 +63,13 @@ if command -v ccache >/dev/null; then
   export CC_WRAPPER="$(command -v ccache)"
   # soong_ui hands ninja only the environment it knows; ccache needs its own.
   export ALLOW_NINJA_ENV=true
-  export CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
+  # Ninja runs every action in a sandbox that can write only /tmp and out/, so the cache is
+  # under /tmp ($HOME is read-only there, which failed every compile of the seventh run).
+  export CCACHE_DIR="${CCACHE_DIR:-/tmp/dsa-ccache}"
+  case "$CCACHE_DIR" in
+    /tmp/*|"$top"/out/*) ;;
+    *) echo "CCACHE_DIR must be under /tmp or out/, where the build sandbox can write" >&2; exit 1 ;;
+  esac
   mkdir -p "$CCACHE_DIR"
   # A fresh checkout gives every file a new time, so the compiler is known by its version
   # rather than its time, and headers are trusted by content. The cache is restored from

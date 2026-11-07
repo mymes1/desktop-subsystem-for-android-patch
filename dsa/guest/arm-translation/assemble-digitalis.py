@@ -68,6 +68,7 @@ FRAMEWORK_LIBS = {
     "libcamera2ndk.so": None,
     "libjnigraphics.so": None,
     "libmediandk.so": None,
+    "libnativehelper.so": "com.android.art",
     "libnativewindow.so": None,
     "libneuralnetworks.so": "com.android.neuralnetworks",
     "libvulkan.so": None,

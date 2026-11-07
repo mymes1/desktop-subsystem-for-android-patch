@@ -52,7 +52,7 @@ export SOONG_ONLY=true
 export SOONG_NINJA=ninja
 export SKIP_ABI_CHECKS=true
 export DISABLE_ARTIFACT_PATH_REQUIREMENTS=true
-export TEMPORARY_DISABLE_PATH_RESTRICTIONS=true
+# Not TEMPORARY_DISABLE_PATH_RESTRICTIONS: soong_ui stops when it is set.
 export BUILD_USERNAME=dsa-framework BUILD_HOSTNAME=github-actions
 # An unbundled build, as the translator build learned: Soong then makes no device (its
 # generated android_device and partition images stop the analysis of a partial tree), no boot
@@ -64,7 +64,13 @@ if command -v ccache >/dev/null; then
   export CC_WRAPPER="$(command -v ccache)"
   # soong_ui hands ninja only the environment it knows; ccache needs its own.
   export ALLOW_NINJA_ENV=true
-  export CCACHE_DIR="${CCACHE_DIR:-$HOME/.cache/ccache}"
+  # Ninja runs every action in a sandbox that can write only /tmp and out/, so the cache is
+  # under /tmp ($HOME is read-only there, which failed every compile of the seventh run).
+  export CCACHE_DIR="${CCACHE_DIR:-/tmp/dsa-ccache}"
+  case "$CCACHE_DIR" in
+    /tmp/*|"$top"/out/*) ;;
+    *) echo "CCACHE_DIR must be under /tmp or out/, where the build sandbox can write" >&2; exit 1 ;;
+  esac
   mkdir -p "$CCACHE_DIR"
   # A fresh checkout gives every file a new time, so the compiler is known by its version
   # rather than its time, and headers are trusted by content. The cache is restored from
