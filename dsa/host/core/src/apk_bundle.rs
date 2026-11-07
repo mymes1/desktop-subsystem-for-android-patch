@@ -39,6 +39,7 @@ use crate::apk::{self, ApkFile, InstallPart};
 use crate::apk_info::zip::{Archive, Entry};
 use crate::apk_info::{attr, axml, signing, ApkInfo};
 use crate::arm_translation::google::inflate;
+use crate::host_api::ArmTranslationStatus;
 use crate::native_abi::{self, NativeLibraries};
 pub use crate::native_abi::{ARM64, X86_64};
 
@@ -269,6 +270,28 @@ impl Device {
             }
         }
         abis
+    }
+
+    /// What a host's Android takes: the ABIs as [`abis_for`](Self::abis_for) says them from
+    /// what the service says of ARM translation (`None` when it cannot be asked), the density
+    /// apps draw at on the host's main screen, and the host's display languages.
+    pub fn of_host(
+        translation: Option<&ArmTranslationStatus>,
+        arm64_host: bool,
+        density_dpi: u32,
+        locales: &[String],
+    ) -> Device {
+        let abilist = translation
+            .and_then(|status| status.guest.as_ref())
+            .map(|guest| guest.abilist.as_str())
+            .filter(|abilist| !abilist.is_empty());
+        let translating =
+            translation.is_some_and(|status| status.enabled && status.package.is_some());
+        Device {
+            abis: Device::abis_for(abilist, arm64_host, translating),
+            density_dpi,
+            languages: Device::languages_of(locales),
+        }
     }
 
     /// The language codes of `locales` (BCP 47 tags such as `ko-KR` or POSIX names such as

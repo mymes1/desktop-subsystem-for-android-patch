@@ -2663,23 +2663,12 @@ pub fn describe_file_refusal(path: &std::path::Path, refusal: &Refusal) -> Strin
 /// display languages of this computer, which Android follows.
 fn bundle_device(client: Option<&mut HostApiClient>) -> Device {
     let translation = client.and_then(|client| client.arm_translation().ok());
-    let abilist = translation
-        .as_ref()
-        .and_then(|status| status.guest.as_ref())
-        .map(|guest| guest.abilist.clone())
-        .filter(|abilist| !abilist.is_empty());
-    let translating = translation
-        .as_ref()
-        .is_some_and(|status| status.enabled && status.package.is_some());
-    Device {
-        abis: Device::abis_for(
-            abilist.as_deref(),
-            cfg!(target_arch = "aarch64"),
-            translating,
-        ),
-        density_dpi: host_density(),
-        languages: Device::languages_of(&host_locales()),
-    }
+    Device::of_host(
+        translation.as_ref(),
+        cfg!(target_arch = "aarch64"),
+        host_density(),
+        &host_locales(),
+    )
 }
 
 #[cfg(windows)]
