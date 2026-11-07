@@ -3,6 +3,5 @@
 <WixLocalization Culture="ko-KR" Language="1042" xmlns="http://wixtoolset.org/schemas/v4/wxl">
     <String Id="ArpComments" Value="Desktop Subsystem for Android는 독립 오픈 소스 프로젝트이며 Microsoft나 Google과 제휴하거나 그 보증이나 후원을 받지 않습니다. Android는 Google LLC의 상표입니다." />
     <String Id="SettingsShortcutDescription" Value="Desktop Subsystem for Android의 설정과 상태" />
-    <String Id="FilesShortcutDescription" Value="내 Android의 파일을 탐색기에서 엽니다" />
     <String Id="ApkFileType" Value="APK 앱 패키지" />
 </WixLocalization>

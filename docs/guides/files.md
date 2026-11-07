@@ -8,8 +8,7 @@ describes DSA on Windows.
 
 Use any of these. Each starts Android when it is not running.
 
-- **Android** in the navigation pane of File Explorer, the way WSL shows **Linux** there.
-- **DSA Files** in the Start menu.
+- **Android** in the navigation pane of File Explorer, directly below WSL's **Linux**.
 - **Android files** on the **Advanced** page of DSA Settings.
 - `dsa files open`. `dsa files` says where the storage is, without opening it.
 

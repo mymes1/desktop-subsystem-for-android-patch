@@ -190,8 +190,8 @@ fn main() -> std::process::ExitCode {
             }
         };
     }
-    // Opened from the "DSA Files" Start menu shortcut: Android's shared storage opens in
-    // Explorer, Android starting first when it is not running.
+    // Opened from a "DSA Files" shortcut an earlier version made and the user pinned: Android's
+    // shared storage opens in Explorer, Android starting first when it is not running.
     if args
         .iter()
         .any(|arg| arg == dsa_host_windows::android_files::ANDROID_FILES_ARGUMENT)

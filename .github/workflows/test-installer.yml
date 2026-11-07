@@ -179,8 +179,12 @@ jobs:
 
       - name: Install the package
         run: |
+          # fr29: the "DSA Files" shortcut an earlier version left must go.
+          $filesShortcut = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\DSA Files.lnk"
+          Set-Content $filesShortcut 'left by an earlier version'
           $p = Start-Process msiexec -Wait -PassThru -ArgumentList '/i', 'dsa\target\installer\dsa-test-0.0.9.msi', '/qn', '/l*v', 'install.log', "INSTALLFOLDER=`"$env:PROGRAM_DIR`"", "DATAFOLDER=`"$env:DATA_DIR`""
           if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 80; throw "install failed ($($p.ExitCode))" }
+          if (Test-Path $filesShortcut) { throw "installing left the DSA Files Start menu shortcut, which Windows search finds" }
 
       - name: Check the service, the command and the access lists
         run: |
@@ -1188,8 +1192,13 @@ jobs:
           New-Item -Force $ours | Out-Null
           New-ItemProperty -Path $ours -Name DisplayName -Value 'Example' -Force | Out-Null
           New-Item -Force $theirs | Out-Null
+          # fr29: the upgrade to this version left no "DSA Files" shortcut, and nor does uninstalling.
+          $filesShortcut = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\DSA Files.lnk"
+          if (Test-Path $filesShortcut) { throw "the upgrade left the DSA Files Start menu shortcut" }
+          Set-Content $filesShortcut 'left by an earlier version'
           $p = Start-Process 'dsa\target\installer\setup-test-0.0.10.exe' -Wait -PassThru -ArgumentList '/uninstall', '/quiet', '/log', 'uninstall.log'
           if ($p.ExitCode -ne 0) { Get-ChildItem uninstall*.log | ForEach-Object { Get-Content $_ -Tail 80 }; throw "uninstall failed ($($p.ExitCode))" }
+          if (Test-Path $filesShortcut) { throw "uninstalling left the DSA Files Start menu shortcut" }
           if (Get-Service DsaHost -ErrorAction SilentlyContinue) { throw "the service is still there" }
           if (Test-Path "$env:PROGRAM_DIR\dsa.exe") { throw "the program is still there" }
           if (Test-Path "$env:PROGRAM_DIR\dsa-wm.exe") { throw "dsa-wm.exe is still there" }
