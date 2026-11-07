@@ -21,6 +21,7 @@ use crate::accessibility::{
     AccessibilityWatch, ActionRequest, ActionResult, GuestAccessibility, Node, NodeAction,
     TreeUpdate,
 };
+use crate::adb_discovery::AutoConnectState;
 use crate::apk::{self, InstallOutcome, InstallPart, InstallStatus, InstalledPackage};
 use crate::arm_translation::{GuestArmTranslation, Package};
 use crate::background::{
@@ -87,6 +88,10 @@ pub struct FakeAndroid {
     pub developer_mode: Mutex<Vec<(bool, u16)>>,
     /// Set to refuse developer mode, as when the port is taken.
     pub refuse_developer_mode: Mutex<Option<String>>,
+    /// Each word on adb auto-connect, in order.
+    pub adb_auto_connect: Mutex<Vec<bool>>,
+    /// Where it says auto-connect stands.
+    pub adb_auto_connect_state: Mutex<AutoConnectState>,
     /// Each word on file sharing (on, and the folders), in order.
     pub shared_folders: Mutex<Vec<(bool, Vec<String>)>>,
     /// The drags the host ended, and whether each was dropped.
@@ -232,6 +237,8 @@ impl FakeAndroid {
             links_in_android: Mutex::new(Vec::new()),
             developer_mode: Mutex::new(Vec::new()),
             refuse_developer_mode: Mutex::new(None),
+            adb_auto_connect: Mutex::new(Vec::new()),
+            adb_auto_connect_state: Mutex::new(AutoConnectState::Off),
             shared_folders: Mutex::new(Vec::new()),
             ended_drags: Mutex::new(Vec::new()),
             link_watchers: Mutex::new(Vec::new()),
@@ -406,6 +413,12 @@ impl UserAndroid for FakeAndroid {
         }
         self.developer_mode.lock().unwrap().push((on, port));
         Ok(())
+    }
+    fn adb_auto_connect(&self, on: bool) {
+        self.adb_auto_connect.lock().unwrap().push(on);
+    }
+    fn adb_auto_connect_state(&self) -> AutoConnectState {
+        *self.adb_auto_connect_state.lock().unwrap()
     }
     fn watch_links(&self) -> Option<mpsc::Receiver<String>> {
         let (tx, rx) = mpsc::channel();
@@ -1197,9 +1210,9 @@ macro_rules! host_api_conformance {
         }
         #[test]
         fn fr11_parts_that_do_not_add_up_or_that_android_cannot_take_are_refused() {
-            $crate::host_api_conformance::wrong_parts_are_refused_before_they_are_sent(
-                &mut || $make,
-            );
+            $crate::host_api_conformance::wrong_parts_are_refused_before_they_are_sent(&mut || {
+                $make
+            });
         }
         #[test]
         fn fr11_an_apk_android_refuses_is_answered_with_the_reason() {
@@ -1272,6 +1285,11 @@ macro_rules! host_api_conformance {
         #[test]
         fn fr32_a_build_that_is_refused_leaves_the_settings_as_they_were() {
             $crate::host_api_conformance::refused_gapps_leave_nothing(&mut || $make);
+        }
+        #[test]
+        fn fr20_adb_auto_connect_is_on_by_default_reaches_the_callers_android_and_reports_its_state(
+        ) {
+            $crate::host_api_conformance::adb_auto_connect_reaches_the_caller(&mut || $make);
         }
         #[test]
         fn fr20_a_developer_mode_port_that_cannot_open_is_reported() {
@@ -2863,6 +2881,43 @@ pub fn developer_mode_reaches_the_caller(make: MakeLocal<'_>) {
     assert_eq!(
         *androids.of(&user).unwrap().developer_mode.lock().unwrap(),
         vec![(true, 58526), (true, 5037), (false, 58526)]
+    );
+}
+
+pub fn adb_auto_connect_reaches_the_caller(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids.clone(), "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    let fresh = client.settings().unwrap();
+    assert!(fresh.settings.adb_auto_connect, "on by default");
+    assert_eq!(fresh.adb_auto_connect_state, AutoConnectState::Off);
+    *androids
+        .of(&user)
+        .unwrap()
+        .adb_auto_connect_state
+        .lock()
+        .unwrap() = AutoConnectState::Attached;
+    assert_eq!(
+        client.settings().unwrap().adb_auto_connect_state,
+        AutoConnectState::Attached
+    );
+    let off = client
+        .set_settings(&Settings {
+            developer_mode: true,
+            adb_auto_connect: false,
+            ..Settings::default()
+        })
+        .expect("turning auto-connect off");
+    assert!(!off.settings.adb_auto_connect);
+    assert_eq!(off.adb_auto_connect_state, AutoConnectState::Attached);
+    assert!(!store.get(&user).unwrap().adb_auto_connect);
+    assert_eq!(
+        *androids.of(&user).unwrap().adb_auto_connect.lock().unwrap(),
+        vec![false]
     );
 }
 

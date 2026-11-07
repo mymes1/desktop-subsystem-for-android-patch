@@ -116,7 +116,20 @@ public sealed partial class DsaService
         Bool(json, "file_sharing", missing: true),
         json.TryGetProperty("shared_folders", out var shared) && shared.ValueKind == JsonValueKind.Array
             ? Strings(json, "shared_folders")
-            : null);
+            : null,
+        Bool(json, "adb_auto_connect", missing: true),
+        ReadAdbAutoConnectState(OptionalString(json, "adb_auto_connect_state")));
+
+    /// <summary>The auto-connect state a name stands for. An empty or unknown name, as an older
+    /// service gives, is off.</summary>
+    public static AdbAutoConnectState ReadAdbAutoConnectState(string? name) => name switch
+    {
+        "waiting-for-server" => AdbAutoConnectState.WaitingForServer,
+        "waiting-for-android" => AdbAutoConnectState.WaitingForAndroid,
+        "attached" => AdbAutoConnectState.Attached,
+        "detached" => AdbAutoConnectState.Detached,
+        _ => AdbAutoConnectState.Off,
+    };
 
     private static IReadOnlyList<string> Strings(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array
@@ -164,6 +177,10 @@ public sealed partial class DsaService
     public Task<SettingsInfo> SetClipboardAsync(bool on) => SetAsync("clipboard", on ? "on" : "off");
 
     public Task<SettingsInfo> SetDeveloperModeAsync(bool on) => SetAsync("developer-mode", on ? "on" : "off");
+
+    /// <summary>Whether developer mode's port is attached to this computer's adb server by
+    /// itself.</summary>
+    public Task<SettingsInfo> SetAdbAutoConnectAsync(bool on) => SetAsync("adb-auto-connect", on ? "on" : "off");
 
     /// <summary>Whether stopping an app from the notification area skips the question that
     /// confirms it.</summary>

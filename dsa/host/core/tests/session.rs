@@ -4571,6 +4571,98 @@ fn fr20_developer_mode_starts_adbd_and_opens_a_loopback_port_that_reaches_it() {
     );
 }
 
+fn wait_until(mut done: impl FnMut() -> bool) -> bool {
+    let deadline = std::time::Instant::now() + WAIT;
+    while std::time::Instant::now() < deadline {
+        if done() {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    false
+}
+
+#[test]
+fn fr20_developer_mode_attaches_its_port_to_the_adb_server_and_detaches_it_when_off() {
+    use dsa_host_core::adb_discovery::{fake::FakeAdbServer, AutoConnectState};
+    let (session, mut agent, _launcher) = active_session();
+    let (connect, _) = fake_adbd();
+    session.set_adb_connect(connect);
+    let server = FakeAdbServer::start();
+    session.set_adb_server(server.link());
+    assert_eq!(session.adb_auto_connect_state(), AutoConnectState::Off);
+
+    session.developer_mode(true, 0).unwrap();
+    assert_eq!(next_body(&mut agent), developer_mode(true));
+    let serial = session.adb_address().unwrap().to_string();
+    assert!(wait_until(
+        || session.adb_auto_connect_state() == AutoConnectState::Attached
+    ));
+    assert_eq!(
+        server.requests_starting("host:connect:"),
+        vec![format!("host:connect:{serial}")]
+    );
+
+    session.developer_mode(false, 0).unwrap();
+    assert!(wait_until(|| !server
+        .requests_starting("host:disconnect:")
+        .is_empty()));
+    assert_eq!(
+        server.requests_starting("host:disconnect:"),
+        vec![format!("host:disconnect:{serial}")]
+    );
+    assert!(wait_until(
+        || session.adb_auto_connect_state() == AutoConnectState::Off
+    ));
+}
+
+#[test]
+fn fr20_with_auto_connect_off_developer_mode_sends_the_adb_server_nothing() {
+    use dsa_host_core::adb_discovery::{fake::FakeAdbServer, AutoConnectState};
+    let (session, mut agent, _launcher) = active_session();
+    let (connect, _) = fake_adbd();
+    session.set_adb_connect(connect);
+    let server = FakeAdbServer::start();
+    session.adb_auto_connect(false);
+    session.set_adb_server(server.link());
+    session.developer_mode(true, 0).unwrap();
+    assert_eq!(next_body(&mut agent), developer_mode(true));
+    thread::sleep(Duration::from_millis(300));
+    assert_eq!(session.adb_auto_connect_state(), AutoConnectState::Off);
+    session.developer_mode(false, 0).unwrap();
+    thread::sleep(Duration::from_millis(100));
+    assert_eq!(server.connections(), 0);
+}
+
+#[test]
+fn fr20_developer_mode_advertises_its_port_over_mdns_while_it_is_on() {
+    struct Advert(u16, Arc<Mutex<Vec<String>>>);
+    impl Drop for Advert {
+        fn drop(&mut self) {
+            self.1.lock().unwrap().push(format!("end {}", self.0));
+        }
+    }
+    let (session, mut agent, _launcher) = active_session();
+    let (connect, _) = fake_adbd();
+    session.set_adb_connect(connect);
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&seen);
+    session.set_adb_advertise(Arc::new(move |port: u16| {
+        log.lock().unwrap().push(format!("advertise {port}"));
+        Some(Box::new(Advert(port, Arc::clone(&log))) as Box<dyn Send>)
+    }));
+    assert!(seen.lock().unwrap().is_empty(), "nothing while it is off");
+    session.developer_mode(true, 0).unwrap();
+    assert_eq!(next_body(&mut agent), developer_mode(true));
+    let port = session.adb_address().unwrap().port();
+    assert_eq!(*seen.lock().unwrap(), vec![format!("advertise {port}")]);
+    session.developer_mode(false, 0).unwrap();
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![format!("advertise {port}"), format!("end {port}")]
+    );
+}
+
 #[test]
 fn fr20_developer_mode_stays_off_without_a_way_to_reach_adbd() {
     let (session, mut agent, _launcher) = active_session();

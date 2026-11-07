@@ -1,18 +1,28 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Dsa.Settings.Core;
 
 namespace Dsa.Settings.Pages;
 
 public partial class AdvancedPage : Page
 {
+    /// <summary>Reads where adb auto-connect stands while the page is shown.</summary>
+    private readonly DispatcherTimer _adbTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+
     private static SettingsViewModel ViewModel => App.Settings;
 
     public AdvancedPage()
     {
         InitializeComponent();
         DataContext = ViewModel;
-        Loaded += async (_, _) => await ViewModel.LoadAsync();
+        _adbTimer.Tick += async (_, _) => await ViewModel.PollAdbAutoConnectAsync();
+        Loaded += async (_, _) =>
+        {
+            _adbTimer.Start();
+            await ViewModel.LoadAsync();
+        };
+        Unloaded += (_, _) => _adbTimer.Stop();
     }
 
     private async void OnLinksToggled(object sender, RoutedEventArgs e) =>
@@ -105,6 +115,9 @@ public partial class AdvancedPage : Page
 
     private async void OnDeveloperModeToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetDeveloperModeAsync(DeveloperModeSwitch.IsChecked == true);
+
+    private async void OnAdbAutoConnectToggled(object sender, RoutedEventArgs e) =>
+        await ViewModel.SetAdbAutoConnectAsync(AdbAutoConnectSwitch.IsChecked == true);
 
     /// <summary>Copies the adb command, and shows a check mark on the button for a moment. The
     /// clipboard can be held by another program, and then the button stays as it was.</summary>

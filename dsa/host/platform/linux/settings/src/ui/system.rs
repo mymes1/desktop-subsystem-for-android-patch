@@ -7,7 +7,7 @@ use adw::prelude::*;
 
 use super::common::*;
 use crate::i18n::tr;
-use crate::model::{Identity, Settings};
+use crate::model::{AdbAutoConnectState, Identity, Settings};
 use crate::view;
 
 /// The names and the build fingerprint Android reports to apps.
@@ -360,6 +360,8 @@ struct Switches {
     clipboard: Switch,
     arm: Switch,
     developer: Switch,
+    auto_connect: Switch,
+    auto_connect_state: adw::ActionRow,
     freeze: Switch,
     input_trace: Switch,
     resize_trace: Switch,
@@ -563,6 +565,17 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         tr("Off by default. When on, adb on this computer can connect to Android without asking in Android, through a port only this computer can reach. Turn it off when you are done."),
     );
     developer_group.add(&developer.row);
+    let auto_connect = user_switch(
+        "adb-auto-connect",
+        tr("Connect adb automatically"),
+        tr("On by default. While developer mode is on, Android shows up in adb devices and Android Studio without running adb connect. If you run adb disconnect, it stays off until the adb server restarts."),
+    );
+    developer_group.add(&auto_connect.row);
+    let auto_connect_state = action_row(
+        &tr("Automatic connection"),
+        &view::adb_auto_connect_text(AdbAutoConnectState::Off),
+    );
+    developer_group.add(&auto_connect_state);
     let (adb_row, adb_command) = value_row(
         &tr("Connect adb"),
         &format!("adb connect 127.0.0.1:{}", crate::model::DEFAULT_ADB_PORT),
@@ -698,6 +711,8 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         clipboard,
         arm,
         developer,
+        auto_connect,
+        auto_connect_state: auto_connect_state.clone(),
         freeze,
         input_trace,
         resize_trace,
@@ -715,6 +730,39 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
                 show(r);
             },
         );
+    }
+    // Where auto-connect stands changes by itself, so it is read again every few seconds
+    // while the page is shown and developer mode is on. Only the state row follows it, so a
+    // port being typed is kept.
+    {
+        let (ctx, settings) = (ctx.clone(), settings.clone());
+        let row = auto_connect_state.downgrade();
+        let asking = Rc::new(Cell::new(false));
+        gtk::glib::timeout_add_seconds_local(3, move || {
+            let Some(row) = row.upgrade() else {
+                return gtk::glib::ControlFlow::Break;
+            };
+            let developer_mode = settings.borrow().as_ref().is_some_and(|s| s.developer_mode);
+            if !row.is_mapped() || !developer_mode || asking.get() {
+                return gtk::glib::ControlFlow::Continue;
+            }
+            asking.set(true);
+            let (settings, asking) = (settings.clone(), asking.clone());
+            request(
+                &ctx,
+                |c| c.settings(),
+                move |r| {
+                    asking.set(false);
+                    if let Ok(now) = r {
+                        row.set_subtitle(&view::adb_auto_connect_text(now.adb_auto_connect_state));
+                        if let Some(kept) = settings.borrow_mut().as_mut() {
+                            kept.adb_auto_connect_state = now.adb_auto_connect_state;
+                        }
+                    }
+                },
+            );
+            gtk::glib::ControlFlow::Continue
+        });
     }
     page.root.clone().upcast()
 }
@@ -954,6 +1002,9 @@ fn apply(s: &Switches, now: &Settings) {
     s.clipboard.set(now.clipboard);
     s.arm.set(now.arm_translation);
     s.developer.set(now.developer_mode);
+    s.auto_connect.set(now.adb_auto_connect);
+    s.auto_connect_state
+        .set_subtitle(&view::adb_auto_connect_text(now.adb_auto_connect_state));
     s.freeze.set(now.freeze);
     s.input_trace.set(now.input_trace);
     s.resize_trace.set(now.resize_trace);
