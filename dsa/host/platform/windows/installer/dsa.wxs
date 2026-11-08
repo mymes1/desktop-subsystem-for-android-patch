@@ -615,6 +615,35 @@
                       Execute="deferred"
                       Impersonate="no"
                       Return="ignore" />
+        <!-- The service is held from just before it is stopped until the new files are in
+             place, so nothing starts it again meanwhile: the dsa command starts a stopped
+             service when it cannot reach it, and the settings app runs it every few seconds.
+             An old service started that way kept its files in use, started a window manager and
+             its renderer again after StopPrograms had ended them, and was the one still running
+             after setup, so the new dsa was refused. ReleaseService lets it start again once
+             the new files are in place, and stops a service that is running then (one started
+             from the old files), so StartServices starts the new one. If setup rolls back,
+             RestoreService lets it start again and starts it, which the rollback of
+             StopServices cannot do while it is held. They run from the package's own
+             dsa-hostd, as StopPrograms does. -->
+        <CustomAction Id="HoldService"
+                      BinaryRef="StopProgramsHost"
+                      ExeCommand="hold-service"
+                      Execute="deferred"
+                      Impersonate="no"
+                      Return="ignore" />
+        <CustomAction Id="RestoreService"
+                      BinaryRef="StopProgramsHost"
+                      ExeCommand="release-service --start"
+                      Execute="rollback"
+                      Impersonate="no"
+                      Return="ignore" />
+        <CustomAction Id="ReleaseService"
+                      BinaryRef="StopProgramsHost"
+                      ExeCommand="release-service"
+                      Execute="deferred"
+                      Impersonate="no"
+                      Return="ignore" />
         <!-- Once the old version is gone too: the window manager again, for every signed-in
              user, as signing in starts it. -->
         <CustomAction Id="StartWindowManagers"
@@ -641,7 +670,10 @@
              managers start only when dsa-hostd is being installed or reinstalled, for the
              same reason. -->
         <InstallExecuteSequence>
+            <Custom Action="RestoreService" Before="HoldService" Condition="NOT UPGRADINGPRODUCTCODE" />
+            <Custom Action="HoldService" Before="StopServices" Condition="NOT UPGRADINGPRODUCTCODE" />
             <Custom Action="StopPrograms" After="StopServices" Condition="NOT UPGRADINGPRODUCTCODE" />
+            <Custom Action="ReleaseService" After="InstallServices" Condition="NOT UPGRADINGPRODUCTCODE AND $HostdExe=3" />
             <Custom Action="StartWindowManagers" After="RemoveExistingProducts" Condition="$HostdExe=3" />
             <Custom Action="RemoveUserData" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND NOT REINSTALL AND ?HostdExe=3 AND $HostdExe=2" />
             <Custom Action="RemoveMachineData" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE AND NOT REINSTALL AND ?HostdExe=3 AND $HostdExe=2" />
