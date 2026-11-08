@@ -2225,6 +2225,14 @@ class GuestMemoryTests(unittest.TestCase):
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
         self.assertEqual(make_image.memfd_sharing_problems(policy), [])
 
+    def test_fr26_the_sensors_hal_may_use_the_event_queue_system_server_hands_it(self):
+        sensors = make_image.MEMFD_SHARING_SENSORS
+        refused = make_image.memfd_sharing_problems(self.PLATFORM_MEMFD_RULES, sharing=sensors, to_apps=[])
+        self.assertIn("the SELinux policy does not let hal_sensors_server getattr map read write the memfds "
+                      "labelled system_server_tmpfs, so the binder calls that carry them fail", refused)
+        policy = self.PLATFORM_MEMFD_RULES + make_image.SENSORS_POLICY.read_text()
+        self.assertEqual(make_image.memfd_sharing_problems(policy, sharing=sensors, to_apps=[]), [])
+
     def test_nfr1_the_guest_swaps_to_zram_of_half_its_memory(self):
         fstab = (Path(make_image.__file__).with_name("fstab.dsa")).read_text()
         self.assertIn("/dev/block/zram0 none swap defaults zramsize=50%", fstab)

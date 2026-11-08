@@ -3603,6 +3603,13 @@ MEMFD_SHARING = [
 MEMFD_TO_APPS = ["audioserver_tmpfs", "mediaextractor_tmpfs", "mediaserver_tmpfs", "cameraserver_tmpfs",
                  "system_server_tmpfs"]
 MEMFD_PERMS = {"read", "write", "getattr", "map"}
+# The sensors HAL's, when the image has DSA's (sensors.cil): the event queue and the wake lock
+# queue the framework's sensor service makes and hands it in ISensors.initialize, and an app's
+# direct channel.
+MEMFD_SHARING_SENSORS = [
+    ("hal_sensors_server", "system_server_tmpfs"),
+    ("hal_sensors_server", "appdomain_tmpfs"),
+]
 
 
 def memfd_sharing_problems(plat_sepolicy_text, sharing=None, to_apps=None):

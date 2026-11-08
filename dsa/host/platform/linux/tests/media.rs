@@ -42,6 +42,8 @@ const SHARED_MEMORY_TYPES: &[&str] = &[
     "mediaextractor_tmpfs",
     "cameraserver_tmpfs",
     "appdomain_tmpfs",
+    // The sensors HAL's event queue, which system_server makes.
+    "system_server_tmpfs",
 ];
 /// The whole test, boot included, stays under twelve minutes.
 const BUDGET: Duration = Duration::from_secs(690);
@@ -335,6 +337,14 @@ fn pr4_a_denial_of_a_media_services_shared_memory_is_found_in_the_log() {
     let found = denials(log, SHARED_MEMORY_TYPES);
     assert_eq!(found.len(), 1);
     assert!(found[0].contains("audioserver_tmpfs"));
+}
+
+#[test]
+fn fr26_the_sensors_hal_refused_its_event_queue_is_found_in_the_log() {
+    // What every boot logged before the sensors HAL could use system_server's memfds.
+    let log = "11-08 11:53:18.987   772   772 I auditd  : type=1400 audit(0.0:8): avc:  denied  { read write } for  comm=\"system-server-i\" path=2F6D656D66643A4D6573736167655175657565202864656C6574656429 dev=\"tmpfs\" ino=2073 scontext=u:r:hal_sensors_default:s0 tcontext=u:object_r:system_server_tmpfs:s0 tclass=file permissive=0
+";
+    assert_eq!(denials(log, SHARED_MEMORY_TYPES).len(), 1);
 }
 
 #[test]
