@@ -2,6 +2,8 @@
 //!
 //! - [`toplevel`]: a task window's sizes, scale, mode and title bar, with no Wayland in it.
 //! - [`frames`]: the task frames the renderer reads back, on their way to the windows.
+//! - [`dmabuf_read`]: GPU frames read back to memory in any layout, for the title bar's band
+//!   and a screenshot (Linux only).
 //! - [`wayland`]: the toplevels, their buffers and the seat (Linux only).
 //! - [`gfxstream`]: the host renderer and the guest's graphics streams (Linux only).
 //! - [`title_bar`]: what a task window's title bar shows and what its points do.
@@ -9,6 +11,8 @@
 //! - [`text`]: text for the title bar and the menu, drawn with Pango (Linux only).
 //! - [`session`]: what ties them to the DSA service (Linux only).
 
+#[cfg(target_os = "linux")]
+pub mod dmabuf_read;
 pub mod frames;
 pub mod title_bar;
 pub mod toplevel;

@@ -52,7 +52,7 @@ pub struct Window {
     /// Whether the first configure has been acknowledged; nothing is drawn before.
     configured: bool,
     /// The frame shown last (without the title bar), drawn again when the title bar changes.
-    last: Option<Frame>,
+    pub(crate) last: Option<Frame>,
     /// A frame that waits for a free buffer.
     waiting: Option<Frame>,
     pub caption: CaptionState,
@@ -71,6 +71,11 @@ pub struct Window {
     pub(crate) caption_layer: Option<super::gpu::CaptionLayer>,
     /// The GPU frame shown last, drawn again when the title bar changes.
     pub(crate) last_gpu: Option<(u32, crate::compositor::frames::GpuFrame)>,
+    /// The band's fill over GPU frames, as sampled last, and when it was sampled.
+    pub(crate) gpu_fill: Option<u32>,
+    pub(crate) band_probed: Option<Instant>,
+    /// Move or Size, chosen in the window menu: the next press in the window starts it.
+    pub(crate) armed: Option<crate::compositor::window_menu::MoveSize>,
     /// Where the task is shown while in picture-in-picture, instead of its toplevel.
     pub(crate) pip: Option<super::pip::Pip>,
     /// Whether the app draws its own title bar, and whether the icon's cell shows the back
@@ -167,6 +172,9 @@ impl State {
                 viewport: None,
                 caption_layer: None,
                 last_gpu: None,
+                gpu_fill: None,
+                band_probed: None,
+                armed: None,
                 pip: None,
                 title_bar: TitleBar::default(),
                 icon: CaptionIcon::new(&look.caption_icon_png),

@@ -250,13 +250,23 @@ impl TitleBar {
 /// app's color just under the band. `pixels` are the frame's `XRGB8888` rows (blue, green,
 /// red, unused in memory), `width` x `height`, and the band is `band` rows high.
 pub fn frame_band_fill(pixels: &[u8], width: u32, height: u32, band: u32) -> Option<u32> {
-    if band == 0 || band >= height || width == 0 {
+    let [inside, below] = crate::compositor::frames::band_probe_rows(band, height)?;
+    let row = width as usize * 4;
+    let row_at = |y: u32| pixels.get(y as usize * row..(y as usize + 1) * row);
+    rows_band_fill(row_at(inside)?, row_at(below)?, width)
+}
+
+/// The band's fill from the two rows [`crate::compositor::frames::band_probe_rows`] names, as
+/// `XRGB8888` rows `width` pixels wide: `inside` from the middle of the band, `below` from
+/// just under it. This is all a GPU frame reads back for the band.
+pub fn rows_band_fill(inside: &[u8], below: &[u8], width: u32) -> Option<u32> {
+    if width == 0 {
         return None;
     }
     const SAMPLES: u32 = 16;
-    let color = |x: u32, y: u32| -> Option<u32> {
-        let at = (y as usize * width as usize + x as usize) * 4;
-        let pixel = pixels.get(at..at + 4)?;
+    let color = |row: &[u8], x: u32| -> Option<u32> {
+        let at = x as usize * 4;
+        let pixel = row.get(at..at + 4)?;
         Some(
             0xFF00_0000
                 | (u32::from(pixel[2]) << 16)
@@ -267,8 +277,8 @@ pub fn frame_band_fill(pixels: &[u8], width: u32, height: u32, band: u32) -> Opt
     let columns: Vec<u32> = (0..SAMPLES)
         .map(|index| (2 * index + 1) * width / (2 * SAMPLES))
         .collect();
-    let inside: Option<Vec<u32>> = columns.iter().map(|&x| color(x, band / 2)).collect();
-    let below: Option<Vec<u32>> = columns.iter().map(|&x| color(x, band)).collect();
+    let inside: Option<Vec<u32>> = columns.iter().map(|&x| color(inside, x)).collect();
+    let below: Option<Vec<u32>> = columns.iter().map(|&x| color(below, x)).collect();
     band_fill(&inside?, &below?)
 }
 
@@ -514,6 +524,19 @@ mod tests {
         }
         assert_eq!(frame_band_fill(&drawn, width, height, band), None);
         assert_eq!(frame_band_fill(&pixels, width, height, 0), None);
+    }
+
+    #[test]
+    fn fr22_a_gpu_frame_fills_its_band_from_the_two_rows_read_back() {
+        let width = 64u32;
+        let row = |pixel: [u8; 4]| pixel.repeat(width as usize);
+        let empty = row([0, 0, 0, 0xff]);
+        let toolbar = row([0x30, 0x60, 0x90, 0xff]);
+        assert_eq!(rows_band_fill(&empty, &toolbar, width), Some(0xFF90_6030));
+        assert_eq!(rows_band_fill(&toolbar, &toolbar, width), None);
+        // Rows shorter than the width say nothing.
+        assert_eq!(rows_band_fill(&empty[..8], &toolbar, width), None);
+        assert_eq!(rows_band_fill(&empty, &toolbar, 0), None);
     }
 
     #[test]
