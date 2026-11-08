@@ -243,6 +243,14 @@ pub fn all_query() -> String {
     json!({ "SchemaVersion": schema() }).to_string()
 }
 
+/// The query that reads a network's or endpoint's properties. It names the schema the
+/// documents here are written in: an empty query gets the older schema 1 layout from some
+/// Windows builds (Windows Server 2022 among them), which names the subnets, addresses and
+/// routes differently. The readers below accept both layouts all the same.
+pub fn properties_query() -> String {
+    json!({ "SchemaVersion": schema() }).to_string()
+}
+
 /// The name in an HCN network's or endpoint's properties, if it has one.
 pub fn object_name(properties: &str) -> Option<String> {
     let value: Value = serde_json::from_str(properties).ok()?;
@@ -364,11 +372,13 @@ fn field<'a>(value: &'a Value, name: &str) -> Option<&'a Value> {
         .map(|(_, v)| v)
 }
 
-/// Reads a network's properties document.
+/// Reads a network's properties document, in the schema 2 layout (`Ipams[].Subnets[]
+/// .IpAddressPrefix`, the adapter in a `NetAdapterName` policy) or the schema 1 layout
+/// (`Subnets[].AddressPrefix`, `NetworkAdapterName`).
 pub fn network_facts(properties: &str) -> Option<NetworkFacts> {
     let value: Value = serde_json::from_str(properties).ok()?;
     let kind = field(&value, "Type")?.as_str()?.to_string();
-    let subnets = field(&value, "Ipams")
+    let mut subnets: Vec<Ipv4Subnet> = field(&value, "Ipams")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
@@ -377,6 +387,15 @@ pub fn network_facts(properties: &str) -> Option<NetworkFacts> {
         .filter_map(|subnet| field(subnet, "IpAddressPrefix").and_then(Value::as_str))
         .filter_map(parse_ipv4_subnet)
         .collect();
+    if subnets.is_empty() {
+        subnets = field(&value, "Subnets")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|subnet| field(subnet, "AddressPrefix").and_then(Value::as_str))
+            .filter_map(parse_ipv4_subnet)
+            .collect();
+    }
     let adapter = field(&value, "Policies")
         .and_then(Value::as_array)
         .into_iter()
@@ -385,7 +404,13 @@ pub fn network_facts(properties: &str) -> Option<NetworkFacts> {
         .filter_map(|policy| field(policy, "Settings"))
         .filter_map(|settings| field(settings, "NetworkAdapterName").and_then(Value::as_str))
         .map(str::to_string)
-        .next();
+        .next()
+        .or_else(|| {
+            field(&value, "NetworkAdapterName")
+                .and_then(Value::as_str)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+        });
     Some(NetworkFacts {
         kind,
         subnets,
@@ -413,25 +438,43 @@ pub struct EndpointFacts {
     pub dns_servers: Vec<IpAddr>,
 }
 
-/// Reads an endpoint's properties document.
+/// An address field of a schema 1 document, if it holds one that is not unspecified.
+fn address_field(value: &Value, name: &str) -> Option<IpAddr> {
+    field(value, name)?
+        .as_str()?
+        .parse()
+        .ok()
+        .filter(|ip: &IpAddr| !ip.is_unspecified())
+}
+
+/// Reads an endpoint's properties document, in the schema 2 layout (`IpConfigurations`,
+/// `Routes`, `Dns.ServerList`) or the schema 1 layout (`IPAddress`, `IPv6Address`,
+/// `GatewayAddress`, `DNSServerList` as a comma separated list).
 pub fn endpoint_facts(properties: &str) -> Option<EndpointFacts> {
     let value: Value = serde_json::from_str(properties).ok()?;
     let mac_address = field(&value, "MacAddress")?.as_str()?.to_string();
-    let addresses = field(&value, "IpConfigurations")
+    let mut addresses: Vec<IpAddr> = field(&value, "IpConfigurations")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .filter_map(|config| field(config, "IpAddress").and_then(Value::as_str))
         .filter_map(|ip| ip.parse().ok())
         .collect();
+    if addresses.is_empty() {
+        addresses = ["IPAddress", "IPv6Address"]
+            .iter()
+            .filter_map(|name| address_field(&value, name))
+            .collect();
+    }
     let gateway = field(&value, "Routes")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
         .filter_map(|route| field(route, "NextHop").and_then(Value::as_str))
         .filter_map(|ip| ip.parse().ok())
-        .find(|ip: &IpAddr| !ip.is_unspecified());
-    let dns_servers = field(&value, "Dns")
+        .find(|ip: &IpAddr| !ip.is_unspecified())
+        .or_else(|| address_field(&value, "GatewayAddress"));
+    let mut dns_servers: Vec<IpAddr> = field(&value, "Dns")
         .and_then(|dns| field(dns, "ServerList"))
         .and_then(Value::as_array)
         .into_iter()
@@ -439,6 +482,14 @@ pub fn endpoint_facts(properties: &str) -> Option<EndpointFacts> {
         .filter_map(Value::as_str)
         .filter_map(|ip| ip.parse().ok())
         .collect();
+    if dns_servers.is_empty() {
+        dns_servers = field(&value, "DNSServerList")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .split(',')
+            .filter_map(|ip| ip.trim().parse().ok())
+            .collect();
+    }
     Some(EndpointFacts {
         mac_address,
         addresses,
