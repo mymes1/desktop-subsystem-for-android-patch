@@ -12,7 +12,8 @@
 # stable channel and the pre-release one. Build each version's packages with the --channel
 # of its release (build-packages.sh), so a first installation registers that channel.
 #
-# It runs only by hand, after the packages of a version are attached to its release. The
+# It runs only by hand, after the packages of a version are attached to its release, and only
+# on main or develop: "Site release" refuses any other branch or a tag before it builds. The
 # packages must be built with --repo-key set to the public half of the same key. It needs
 # these repository secrets:
 #   DSA_REPO_GPG_KEY          the ASCII-armored secret GPG key that signs the repositories

@@ -7,9 +7,15 @@
 # service updates DSA itself from, in "images" too, and the ARM64 installer beside it with
 # its own program list.
 #
+# What a run may publish depends on the branch it runs on
+# (.github/scripts/release/release-branch-channel.sh), checked before anything is built:
+# main publishes reviewed releases, develop publishes pre-releases only, and any other
+# branch or a tag fails without publishing anything. Every release's tag names the commit
+# the run built (.github/scripts/release/check-release-tag.sh).
+#
 # Each installer release is on one release channel (the channel input, checked by
 # .github/scripts/release/release-channel.sh): every version below 1.0 is a pre-release,
-# and from 1.0 the person releasing chooses. A pre-release is published as a GitHub
+# and from 1.0 the person releasing on main chooses; develop is always a pre-release. A pre-release is published as a GitHub
 # pre-release and its list as program-prerelease.json (program-prerelease-arm64.json); a
 # stable release as program-stable.json (program-stable-arm64.json). The installer records
 # its channel, so a computer starts on it. program.json and program-arm64.json, which the
@@ -53,7 +59,7 @@ on:
         required: false
         default: true
       channel:
-        description: "The installer's release channel. Every version below 1.0 is a pre-release; stable is refused for it"
+        description: "The installer's release channel. Every version below 1.0, and every release from develop, is a pre-release; stable is refused for them"
         type: choice
         options:
           - prerelease
@@ -84,6 +90,34 @@ permissions:
   contents: read
 
 jobs:
+  # What this run may publish, decided from the branch it runs on before anything is built:
+  # main publishes reviewed releases (pre-releases below 1.0, then stable or pre-release as
+  # chosen), develop publishes pre-releases only, and any other branch or a tag publishes
+  # nothing (.github/scripts/release/release-branch-channel.sh). Every job waits for it, so
+  # a refused run builds nothing. With an installer version it also decides its channel.
+  channel:
+    name: Check the branch and decide the release channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      channel: ${{ steps.channel.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: channel
+        env:
+          REF: ${{ github.ref }}
+          VERSION: ${{ inputs.installer_version }}
+          REQUESTED: ${{ inputs.channel || 'prerelease' }}
+        run: |
+          if [[ -z "$VERSION" ]]; then
+            branch="$(.github/scripts/release/release-branch-channel.sh "$REF")"
+            echo "The images are released from $branch"
+            exit 0
+          fi
+          channel="$(.github/scripts/release/release-branch-channel.sh "$REF" "$VERSION" "$REQUESTED")"
+          echo "DSA $VERSION is released from ${REF#refs/heads/} on the $channel channel"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
   # The guest's own programs for one architecture, built one after another on one runner:
   # the graphics transport, the control daemon, the hwcomposer and the HALs. One job instead
   # of one per program holds two runners instead of eighteen, and sets up the NDK, the
@@ -92,6 +126,7 @@ jobs:
   # it, so one failure does not hide another, and the job still fails.
   guest-programs:
     name: Build the guest programs (${{ matrix.arch }})
+    needs: channel
     if: inputs.rebuild_images
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -351,6 +386,7 @@ jobs:
   # checked out, and its bundle goes beside it.
   kernel:
     name: Build the guest kernel (x86_64)
+    needs: channel
     if: inputs.rebuild_images
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -389,6 +425,7 @@ jobs:
   # Hyper-V's UEFI firmware starts.
   kernel-arm64:
     name: Build the guest kernel (arm64)
+    needs: channel
     if: inputs.rebuild_images
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
@@ -425,6 +462,7 @@ jobs:
 
   agent:
     name: Build the guest agent
+    needs: channel
     if: inputs.rebuild_images
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -460,6 +498,7 @@ jobs:
   # seconds each, so they share a runner.
   prebuilt:
     name: Find the default ARM translator and the patched framework
+    needs: channel
     if: inputs.rebuild_images && (inputs.arm_translation || inputs.framework)
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -777,6 +816,8 @@ jobs:
             echo "::error::$tag is already published; an image is never published twice under one version"
             exit 1
           fi
+          # The tag names the commit this run built; gh release create would reuse a stale one.
+          .github/scripts/release/check-release-tag.sh "$tag" "$GITHUB_SHA"
           gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" \
             --title "Android image $version" \
             --notes "Android image $version for Desktop Subsystem for Android. The service downloads it through the signed list in the release \"images\"."
@@ -891,6 +932,7 @@ jobs:
   # Instead of kernel, image and list: what the installer needs, from the published release.
   published:
     name: Take the kernel and the trust key from the published images
+    needs: channel
     if: ${{ !inputs.rebuild_images }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -958,25 +1000,6 @@ jobs:
             .scratch/kernel-out/bzImage
             .scratch/kernel-out/kernel-source.tar.gz
           if-no-files-found: error
-
-  # The installer's release channel, decided before anything is built for it.
-  channel:
-    name: Decide the release channel
-    if: ${{ inputs.installer_version != '' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      channel: ${{ steps.channel.outputs.channel }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: channel
-        env:
-          VERSION: ${{ inputs.installer_version }}
-          REQUESTED: ${{ inputs.channel || 'prerelease' }}
-        run: |
-          channel="$(.github/scripts/release/release-channel.sh "$VERSION" "$REQUESTED")"
-          echo "DSA $VERSION is released on the $channel channel"
-          echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
   installer:
     name: Build and publish the installer (windows-latest)
@@ -1071,6 +1094,9 @@ jobs:
             gh release delete "v$version" --yes --cleanup-tag
             if ($LASTEXITCODE -ne 0) { throw "removing the published v$version failed" }
           }
+          # The tag names the commit this run built; gh release create would reuse a stale one.
+          & "$env:ProgramFiles\Git\bin\bash.exe" .github/scripts/release/check-release-tag.sh "v$version" $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw "the tag v$version does not name the commit this run built" }
           # setup.exe carries the kernel, so this release carries the kernel's source.
           $kernelSource = '.scratch/kernel-out/kernel-source.tar.gz'
           if (-not (Test-Path $kernelSource)) { throw "the kernel source bundle is missing; a release that ships the kernel ships its source" }
