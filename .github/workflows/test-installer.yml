@@ -501,7 +501,7 @@ jobs:
           . .github/scripts/installer/setup-ui.ps1
           New-Item -ItemType Directory -Force screens | Out-Null
           $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
-          $pages = 'memory', 'apps', 'background', 'widgets', 'display', 'android', 'updates', 'device', 'network', 'advanced', 'logs', 'about', 'general'
+          $pages = 'memory', 'apps', 'background', 'widgets', 'display', 'device', 'network', 'updates', 'advanced', 'logs', 'about', 'general'
           foreach ($lang in 'en-US', 'ko-KR') {
             $app = Start-Process $exe -ArgumentList '--lang', $lang -PassThru
             $window = Wait-ProcessWindow $app.Id 90
@@ -587,7 +587,7 @@ jobs:
           New-Item -ItemType Directory -Force screens | Out-Null
           $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
           $name = [System.Windows.Automation.AutomationElement]::NameProperty
-          $items = 'General', 'Memory', 'Apps', 'Running in the background', 'Widgets', 'Display & GPU', 'Android', 'Updates', 'Device identity', 'Network', 'Advanced', 'Logs', 'About'
+          $items = 'General', 'Memory', 'Apps', 'Running in the background', 'Widgets', 'Display & GPU', 'Device identity', 'Network', 'Updates', 'Advanced', 'Logs', 'About'
 
           # The navigation item named $Text: the pane is on the left, so a page title of the
           # same name is not it.

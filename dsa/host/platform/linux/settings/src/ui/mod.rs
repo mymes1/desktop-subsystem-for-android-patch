@@ -248,7 +248,6 @@ fn show_page(ctx: &Shared, split: &adw::NavigationSplitView, page: Page) {
         Page::Background => apps::background(ctx),
         Page::Widgets => apps::widgets(ctx),
         Page::Display => status::display(ctx),
-        Page::Android => status::android(ctx),
         Page::Updates => status::updates(ctx),
         Page::Identity => system::identity(ctx),
         Page::Network => system::network(ctx),

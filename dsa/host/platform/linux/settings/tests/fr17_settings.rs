@@ -781,3 +781,48 @@ fn fr15_the_release_channel_is_read_and_chosen_as_an_administrator() {
     assert!(!older.prerelease_updates);
     assert!(!older.update_channel_available);
 }
+
+#[test]
+fn fr14_the_updates_page_shows_the_version_followed_and_the_download_with_its_progress() {
+    let read = |value: serde_json::Value| dsa_settings_linux::model::AndroidVersion::read(&value);
+    let downloading = read(json!({
+        "version": "17.0.0-1", "android_major": 17, "channel": "latest",
+        "supported_majors": [16, 17], "target_major": 17,
+        "notice": "downloading Android 17.0.0-2: 45% (0.81 of 1.8 GB)"
+    }));
+    assert!(view::android_channel_text(&downloading).contains("17"));
+    assert_eq!(
+        view::android_download_percent(downloading.notice.as_deref()),
+        Some(45)
+    );
+    assert!(view::android_update_text(&downloading).starts_with("downloading Android"));
+    assert_eq!(view::android_check_channel(&downloading), "latest");
+
+    let pinned = read(json!({
+        "version": "16.0.0-1", "android_major": 16, "channel": "16",
+        "supported_majors": [16, 17], "target_major": 16
+    }));
+    assert!(view::android_channel_text(&pinned).contains("16"));
+    assert_eq!(view::android_download_percent(None), None);
+    assert_eq!(
+        view::android_download_percent(Some("Android 17.0.0-2 is installed")),
+        None
+    );
+    assert!(view::android_update_text(&pinned).contains("No Android update"));
+    assert_eq!(view::android_check_channel(&pinned), "16");
+}
+
+#[test]
+fn fr14_check_now_chooses_the_version_already_followed_as_an_administrator() {
+    let fake = Fake::new(json!({}));
+    let elevated = Fake::new(json!({
+        "version": "17.0.0-1", "android_major": 17, "channel": "latest",
+        "supported_majors": [16, 17], "target_major": 17
+    }));
+    let c = client(&fake, &elevated);
+    c.use_android("latest", false).unwrap();
+    assert_eq!(
+        elevated.calls(),
+        vec![line(&["android", "use", "latest", "--json"])]
+    );
+}

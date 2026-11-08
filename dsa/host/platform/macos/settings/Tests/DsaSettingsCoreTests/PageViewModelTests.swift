@@ -215,6 +215,26 @@ final class PageViewModelTests: XCTestCase {
         XCTAssertFalse(android.isSwitching)
     }
 
+    func test_fr14_the_updates_page_shows_the_version_followed_the_download_and_checks_now() async {
+        let cli = FakeCli()
+        cli.answer("android version --json", #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16,"notice":"downloading Android 16.0.2: 45% (0.81 of 1.8 GB)"}"#)
+        let android = AndroidVersionViewModel(cli: cli, text: KeyText())
+        await android.load()
+        XCTAssertEqual(android.channelText, "Android_FollowsLatest")
+        XCTAssertEqual(android.downloadPercent, 45)
+        XCTAssertTrue(android.isDownloading)
+        XCTAssertTrue(android.updateStatusText.hasPrefix("downloading Android"))
+        XCTAssertNil(AndroidVersionViewModel.downloadPercent(of: "Android 16.0.2 is installed"))
+        XCTAssertTrue(android.canCheckNow)
+        XCTAssertEqual(android.checkArguments, ["android", "use", "latest", "--json"])
+        cli.answer("android use latest --json", #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16}"#)
+        await android.checkNow()
+        XCTAssertNil(android.error)
+        XCTAssertTrue(cli.calls.contains(["android", "use", "latest", "--json"]))
+        XCTAssertFalse(android.isDownloading)
+        XCTAssertEqual(android.updateStatusText, "Android_UpToDate")
+    }
+
     func test_fr17_log_page_filters_and_pauses() {
         let cli = FakeCli()
         let logs = LogViewModel(stream: cli, service: DsaService(cli: cli), text: KeyText())

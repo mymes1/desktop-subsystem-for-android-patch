@@ -477,6 +477,57 @@
         }
       }
     },
+    "AndroidCheckButton.Content": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check now"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 확인"
+          }
+        }
+      }
+    },
+    "AndroidFollowsCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version it follows"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "따르는 버전"
+          }
+        }
+      }
+    },
+    "AndroidUpdateCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android update"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 업데이트"
+          }
+        }
+      }
+    },
     "Android_ChoiceLatest": {
       "extractionState": "manual",
       "localizations": {
@@ -524,6 +575,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "Android {0}은(는) 지금 실행 중인 Android {1}보다 오래된 버전이고, Android는 더 새 버전이 쓴 데이터를 읽지 못합니다. 옮기면 이 컴퓨터 모든 사용자의 Android 데이터가 지워집니다: 설치한 모든 앱, 로그인한 계정, 모든 앱의 데이터입니다. 각 사용자의 Android는 처음 설치한 상태로 시작합니다. DSA 설정은 그대로 남습니다. 되돌릴 수 없습니다."
+          }
+        }
+      }
+    },
+    "Android_FollowsLatest": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The newest supported version (now Android {0})"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지원하는 가장 새 버전(지금은 Android {0})"
+          }
+        }
+      }
+    },
+    "Android_FollowsMajor": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android {0} and its security updates"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android {0} 버전과 그 보안 업데이트"
           }
         }
       }
@@ -817,23 +902,6 @@
         }
       }
     },
-    "AndroidTitle.Text": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Android"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Android"
-          }
-        }
-      }
-    },
     "AndroidUpConfirm.Body": {
       "extractionState": "manual",
       "localizations": {
@@ -864,6 +932,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "더 새 Android로 옮길까요?"
+          }
+        }
+      }
+    },
+    "Android_UpToDate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Android update is waiting. DSA checks every day, and an update applies at the next start of Android."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 업데이트는 다음에 Android를 시작할 때 적용됩니다."
           }
         }
       }
@@ -6042,23 +6127,6 @@
         }
       }
     },
-    "NavAndroid.Content": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Android"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Android"
-          }
-        }
-      }
-    },
     "NavApps.Content": {
       "extractionState": "manual",
       "localizations": {
@@ -7589,6 +7657,23 @@
         }
       }
     },
+    "UpdatesAndroidHeader.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android"
+          }
+        }
+      }
+    },
     "UpdatesMachineNote.Text": {
       "extractionState": "manual",
       "localizations": {
@@ -7602,6 +7687,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "이 설정은 이 Mac의 모든 사용자에게 적용되며, 관리자만 바꿀 수 있습니다. 꺼진 채 바뀌지 않는 스위치는 이 설치에서 제공하지 않는 기능입니다."
+          }
+        }
+      }
+    },
+    "UpdatesProgramHeader.Text": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSA"
           }
         }
       }

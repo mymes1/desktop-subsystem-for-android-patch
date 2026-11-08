@@ -438,25 +438,32 @@ pub fn display(ctx: &Shared) -> gtk::Widget {
     page.root.clone().upcast()
 }
 
-/// The Android version that runs, and the supported versions to choose from.
-pub fn android(ctx: &Shared) -> gtk::Widget {
-    let page = Rc::new(Page::new());
-    let running = group(&tr("Running now"), None);
+/// The Android part of the Updates page: the version that runs, the version it follows, where
+/// its image update stands (with the download's progress and a check now), and the supported
+/// versions to choose from. `image` is the automatic image updates group, shown between them.
+fn android_groups(ctx: &Shared, page: &Rc<Page>, image: &adw::PreferencesGroup) {
+    let page = page.clone();
+    let running = group(&tr("Android"), None);
     let (version_row, version_label) = value_row(&tr("Android"), "");
     let (build_row, build_label) = value_row(&tr("Build"), "");
     let (patch_row, patch_label) = value_row(&tr("Security patch level"), "");
-    let (notice_row, notice_label) = value_row(&tr("Update"), "");
-    let (switching_row, switching_label) = value_row(&tr("Changing the Android version"), "");
-    for row in [
-        &version_row,
-        &build_row,
-        &patch_row,
-        &notice_row,
-        &switching_row,
-    ] {
+    let (follows_row, follows_label) = value_row(&tr("Version it follows"), "");
+    for row in [&version_row, &build_row, &patch_row, &follows_row] {
         running.add(row);
     }
+    let update_row = action_row(&tr("Android update"), "");
+    update_row.set_subtitle_lines(0);
+    let progress = gtk::ProgressBar::builder()
+        .valign(gtk::Align::Center)
+        .width_request(120)
+        .visible(false)
+        .build();
+    update_row.add_suffix(&progress);
+    let check = button(&tr("Check now"));
+    update_row.add_suffix(&check);
+    running.add(&update_row);
     page.add(&running);
+    page.add(image);
 
     let choose = group(
         &tr("Android version"),
@@ -478,6 +485,8 @@ pub fn android(ctx: &Shared) -> gtk::Widget {
     choose.add(&combo.row);
     page.add(&choose);
 
+    // The row the refresh below follows; the closure that shows a version takes the row itself.
+    let watched_row = update_row.downgrade();
     let show: Rc<dyn Fn(Result<AndroidVersion, crate::api::Failure>)> = {
         let (page, info, combo, picked) =
             (page.clone(), info.clone(), combo.clone(), picked.clone());
@@ -493,13 +502,15 @@ pub fn android(ctx: &Shared) -> gtk::Widget {
                     .clone()
                     .unwrap_or_else(|| tr("Unknown")),
             );
-            notice_row.set_visible(version.notice.is_some());
-            notice_label.set_label(version.notice.as_deref().unwrap_or_default());
-            switching_row.set_visible(version.target_major != version.major);
-            switching_label.set_label(&trf(
-                "Android {0} is chosen. It is downloaded now and used the next time Android starts.",
-                &[&version.target_major.to_string()],
-            ));
+            follows_label.set_label(&view::android_channel_text(&version));
+            update_row.set_subtitle(&view::android_update_text(&version));
+            match view::android_download_percent(version.notice.as_deref()) {
+                Some(percent) => {
+                    progress.set_fraction(f64::from(percent) / 100.0);
+                    progress.set_visible(true);
+                }
+                None => progress.set_visible(false),
+            }
             let choices = view::android_choices(&version);
             let labels: Vec<String> = choices.into_iter().map(|c| c.label).collect();
             let index = view::android_choice_index(&version) as u32;
@@ -517,6 +528,19 @@ pub fn android(ctx: &Shared) -> gtk::Widget {
             *info.borrow_mut() = Some(version);
         })
     };
+    {
+        // Choosing the version already followed checks the signed image list at once and
+        // changes nothing else. The image is every user's, so an administrator asks.
+        let (ctx, show, info) = (ctx.clone(), show.clone(), info.clone());
+        check.connect_clicked(move |_| {
+            let Some(version) = info.borrow().clone() else {
+                return;
+            };
+            let channel = view::android_check_channel(&version);
+            let show = show.clone();
+            request(&ctx, move |c| c.use_android(&channel, false), move |r| show(r));
+        });
+    }
     {
         let (ctx, show) = (ctx.clone(), show.clone());
         apply.connect_clicked(move |_| {
@@ -566,12 +590,38 @@ pub fn android(ctx: &Shared) -> gtk::Widget {
             }
         });
     }
-    request(ctx, |c| c.android_version(), move |r| show(r));
-    page.root.clone().upcast()
+    {
+        let show = show.clone();
+        request(ctx, |c| c.android_version(), move |r| show(r));
+    }
+    // A download moves on by itself, so the version is read again every few seconds while
+    // the page is shown.
+    {
+        let ctx = ctx.clone();
+        let row = watched_row;
+        let asking = Rc::new(std::cell::Cell::new(false));
+        gtk::glib::timeout_add_seconds_local(3, move || {
+            let Some(row) = row.upgrade() else {
+                return gtk::glib::ControlFlow::Break;
+            };
+            if !row.is_mapped() || asking.get() {
+                return gtk::glib::ControlFlow::Continue;
+            }
+            asking.set(true);
+            let (show, asking) = (show.clone(), asking.clone());
+            request(&ctx, |c| c.android_version(), move |r| {
+                asking.set(false);
+                if r.is_ok() {
+                    show(r);
+                }
+            });
+            gtk::glib::ControlFlow::Continue
+        });
+    }
 }
 
-/// The update settings. DSA itself comes through the system's package manager on Linux; the
-/// Android image updates itself.
+/// The update settings: the Android image (what runs, the version it follows, its update and the
+/// version choice) and DSA itself, which comes through the system's package manager on Linux.
 pub fn updates(ctx: &Shared) -> gtk::Widget {
     let page = Rc::new(Page::new());
     let program = group(
@@ -609,7 +659,6 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
     if let Some(switch) = channel_switch.borrow().as_ref() {
         program.add(&switch.row);
     }
-    page.add(&program);
     {
         let ctx = ctx.clone();
         software.connect_activated(move |_| {
@@ -655,7 +704,9 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
     if let Some(switch) = image_switch.borrow().as_ref() {
         image.add(&switch.row);
     }
-    page.add(&image);
+    // Android first (what runs, its update, the version choice), then DSA itself.
+    android_groups(ctx, &page, &image);
+    page.add(&program);
 
     {
         let page = page.clone();

@@ -26,10 +26,9 @@ one. They are marked "(admin)" below.
 | **Running in the background** | Apps running with no window: **Open**, **Stop**; whether to ask before stopping | `dsa background`, `stop-without-asking` |
 | **Widgets** | Widgets on your desktop, and **Add to desktop** | `dsa widgets` |
 | **Display & GPU** | **Render GPU**, **Restart the window manager** | `render-gpu`, `dsa gpus` |
-| **Android** | The running version, **Version to use** (admin) | `dsa android version`, `dsa android use` |
-| **Updates** | **Update DSA automatically** (admin), **Get pre-release versions** (admin), **Update the Android image automatically** (admin), **Install now** | `program-updates`, `prerelease-updates`, `image-updates`, `dsa update` |
 | **Device identity** | The manufacturer, model and build fingerprint Android reports to apps | `dsa settings device`, `device.<field>` |
 | **Network** | How Android reaches the network, its address, DNS servers and gateway, **Advanced networking**, **Developer mode** (adb) | `dsa network`, `advanced-networking`, `developer-mode`, `adb-port`, `adb-auto-connect` |
+| **Updates** | **Android**: the running version and build, the version it follows, the Android update with its progress and **Check now** (admin), **Update the Android image automatically** (admin), **Version to use** (admin). **DSA**: **Update DSA automatically** (admin), **Get pre-release versions** (admin), **Install now** | `dsa android version`, `dsa android use`, `image-updates`, `program-updates`, `prerelease-updates`, `dsa update` |
 | **Advanced** | Clipboard, files, web links, freeze when idle, reset, ARM apps, traces (admin), log folders | see below |
 | **Logs** | Android's live log, **Save diagnostics** | `dsa logcat`, `dsa logs collect` |
 | **About** | Versions, licences, source code | |

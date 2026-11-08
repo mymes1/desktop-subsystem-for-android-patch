@@ -762,6 +762,24 @@ msgstr "Android 이미지"
 msgid "This setting applies to every user of this computer, so changing it asks for an administrator's permission."
 msgstr "이 설정은 이 컴퓨터의 모든 사용자에게 적용되므로, 바꾸려면 관리자 권한을 묻습니다."
 
+msgid "The newest supported version (now Android {0})"
+msgstr "지원하는 가장 새 버전(지금은 Android {0})"
+
+msgid "Android {0} and its security updates"
+msgstr "Android {0} 버전과 그 보안 업데이트"
+
+msgid "No Android update is waiting. DSA checks every day, and an update applies at the next start of Android."
+msgstr "기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 업데이트는 다음에 Android를 시작할 때 적용됩니다."
+
+msgid "Version it follows"
+msgstr "따르는 버전"
+
+msgid "Android update"
+msgstr "Android 업데이트"
+
+msgid "Check now"
+msgstr "지금 확인"
+
 msgid "Get pre-release versions"
 msgstr "프리릴리스 버전 받기"
 

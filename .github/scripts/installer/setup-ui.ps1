@@ -85,7 +85,7 @@ function Wait-ProcessWindow([int]$ProcessId, [int]$Seconds = 60) {
 # empty), read from the app's own string tables so the test and the app cannot disagree.
 $script:SettingsPageKeys = @{
     general = 'NavGeneral'; memory = 'NavMemory'; apps = 'NavApps'; background = 'NavBackground'
-    widgets = 'NavWidgets'; display = 'NavDisplay'; android = 'NavAndroid'; updates = 'NavUpdates'
+    widgets = 'NavWidgets'; display = 'NavDisplay'; updates = 'NavUpdates'
     device = 'NavIdentity'; network = 'NavNetwork'; advanced = 'NavAdvanced'; logs = 'NavLogs'; about = 'NavAbout'
 }
 function Get-SettingsPageLabel([string]$Page, [string]$Lang = '') {

@@ -163,4 +163,26 @@ public class TextInputStyleTests
         Assert.Equal("{StaticResource CardDescription}", (string?)note.Attribute("Style"));
         Assert.Contains(note.Ancestors(), e => e.Name == Ui + "CardControl");
     }
+
+    [Fact]
+    public void Fr17_updates_holds_android_and_sits_above_advanced_and_logs_above_about()
+    {
+        var window = File_("MainWindow.xaml");
+        var menu = window.Descendants(Ui + "NavigationView.MenuItems").Single().Elements()
+            .Select(e => ((string?)e.Attribute("Content"))?.Replace("{l:Text ", "").Replace(".Content}", ""))
+            .ToList();
+        Assert.Equal(new[]
+        {
+            "NavGeneral", "NavMemory", "NavApps", "NavBackground", "NavWidgets", "NavDisplay",
+            "NavIdentity", "NavNetwork", "NavUpdates", "NavAdvanced", "NavLogs",
+        }, menu);
+        var footer = window.Descendants(Ui + "NavigationView.FooterMenuItems").Single().Elements()
+            .Select(e => (string?)e.Attribute("Content")).ToList();
+        Assert.Equal(new[] { "{l:Text NavAbout.Content}" }, footer);
+        var updates = File_(Path.Combine("Pages", "UpdatesPage.xaml"));
+        foreach (var name in new[] { "Choice", "CheckNowButton", "ImageSwitch", "ProgramSwitch", "PrereleaseSwitch", "UpdateNowButton" })
+        {
+            Assert.Contains(updates.Descendants(), e => (string?)e.Attribute(X + "Name") == name);
+        }
+    }
 }

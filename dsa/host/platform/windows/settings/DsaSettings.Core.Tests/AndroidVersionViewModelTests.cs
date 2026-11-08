@@ -59,4 +59,40 @@ public class AndroidVersionViewModelTests
         Assert.True(vm.HasError);
         Assert.Contains("only an administrator", vm.Error);
     }
+
+    [Fact]
+    public async Task Fr14_the_updates_page_shows_the_version_followed_and_the_download_with_its_progress()
+    {
+        var downloading = Running17.Replace("\"notice\":null",
+            "\"notice\":\"downloading Android 17.0.0-16373615-9: 45% (0.81 of 1.8 GB)\"");
+        var cli = new FakeCli().Answer("android version --json", downloading);
+        var vm = new AndroidVersionViewModel(cli, new KeyText());
+        await vm.LoadAsync();
+        Assert.Equal("Android_FollowsLatest", vm.ChannelText);
+        Assert.True(vm.IsDownloading);
+        Assert.Equal(45, vm.DownloadPercent);
+        Assert.StartsWith("downloading Android", vm.UpdateStatusText);
+
+        var idle = new AndroidVersionViewModel(Cli(), new KeyText());
+        await idle.LoadAsync();
+        Assert.False(idle.IsDownloading);
+        Assert.Null(idle.DownloadPercent);
+        Assert.Equal("Android_UpToDate", idle.UpdateStatusText);
+        Assert.Null(AndroidVersionViewModel.DownloadPercentOf("Android 17.0.0-1 is installed"));
+    }
+
+    [Fact]
+    public async Task Fr14_check_now_asks_for_the_version_already_followed()
+    {
+        var pinned = Running17.Replace("\"channel\":\"latest\"", "\"channel\":\"17\"");
+        var cli = new FakeCli().Answer("android version --json", pinned).Answer("android use 17 --json", pinned);
+        var vm = new AndroidVersionViewModel(cli, new KeyText());
+        await vm.LoadAsync();
+        Assert.Equal("Android_FollowsMajor", vm.ChannelText);
+        Assert.True(vm.CanCheckNow);
+        Assert.Equal(new[] { "android", "use", "17", "--json" }, vm.CheckArguments);
+        await vm.CheckNowAsync();
+        Assert.False(vm.HasError, vm.Error);
+        Assert.Contains("android use 17 --json", cli.Calls);
+    }
 }

@@ -1579,12 +1579,6 @@
   <data name="Toggle.Off" xml:space="preserve">
     <value>Off</value>
   </data>
-  <data name="NavAndroid.Content" xml:space="preserve">
-    <value>Android</value>
-  </data>
-  <data name="AndroidTitle.Text" xml:space="preserve">
-    <value>Android</value>
-  </data>
   <data name="AndroidRunningHeader.Text" xml:space="preserve">
     <value>Running now</value>
   </data>
@@ -1755,5 +1749,29 @@
   </data>
   <data name="ApkWindow_Reason_invalid-bundle" xml:space="preserve">
     <value>The bundle is not one app that Android can install.</value>
+  </data>
+  <data name="UpdatesAndroidHeader.Text" xml:space="preserve">
+    <value>Android</value>
+  </data>
+  <data name="UpdatesProgramHeader.Text" xml:space="preserve">
+    <value>DSA</value>
+  </data>
+  <data name="AndroidFollowsCard.Header" xml:space="preserve">
+    <value>Version it follows</value>
+  </data>
+  <data name="Android_FollowsLatest" xml:space="preserve">
+    <value>The newest supported version (now Android {0})</value>
+  </data>
+  <data name="Android_FollowsMajor" xml:space="preserve">
+    <value>Android {0} and its security updates</value>
+  </data>
+  <data name="AndroidUpdateCard.Header" xml:space="preserve">
+    <value>Android update</value>
+  </data>
+  <data name="Android_UpToDate" xml:space="preserve">
+    <value>No Android update is waiting. DSA checks every day, and an update applies at the next start of Android.</value>
+  </data>
+  <data name="AndroidCheckButton.Content" xml:space="preserve">
+    <value>Check now</value>
   </data>
 </root>

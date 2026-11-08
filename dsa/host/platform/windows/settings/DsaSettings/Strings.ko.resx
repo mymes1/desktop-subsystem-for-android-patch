@@ -1579,12 +1579,6 @@
   <data name="Toggle.Off" xml:space="preserve">
     <value>끔</value>
   </data>
-  <data name="NavAndroid.Content" xml:space="preserve">
-    <value>Android</value>
-  </data>
-  <data name="AndroidTitle.Text" xml:space="preserve">
-    <value>Android</value>
-  </data>
   <data name="AndroidRunningHeader.Text" xml:space="preserve">
     <value>지금 실행 중</value>
   </data>
@@ -1755,5 +1749,29 @@
   </data>
   <data name="ApkWindow_Reason_invalid-bundle" xml:space="preserve">
     <value>Android가 설치할 수 있는 하나의 앱으로 된 묶음이 아닙니다.</value>
+  </data>
+  <data name="UpdatesAndroidHeader.Text" xml:space="preserve">
+    <value>Android</value>
+  </data>
+  <data name="UpdatesProgramHeader.Text" xml:space="preserve">
+    <value>DSA</value>
+  </data>
+  <data name="AndroidFollowsCard.Header" xml:space="preserve">
+    <value>따르는 버전</value>
+  </data>
+  <data name="Android_FollowsLatest" xml:space="preserve">
+    <value>지원하는 가장 새 버전(지금은 Android {0})</value>
+  </data>
+  <data name="Android_FollowsMajor" xml:space="preserve">
+    <value>Android {0} 버전과 그 보안 업데이트</value>
+  </data>
+  <data name="AndroidUpdateCard.Header" xml:space="preserve">
+    <value>Android 업데이트</value>
+  </data>
+  <data name="Android_UpToDate" xml:space="preserve">
+    <value>기다리는 Android 업데이트가 없습니다. DSA가 매일 확인하며, 업데이트는 다음에 Android를 시작할 때 적용됩니다.</value>
+  </data>
+  <data name="AndroidCheckButton.Content" xml:space="preserve">
+    <value>지금 확인</value>
   </data>
 </root>
