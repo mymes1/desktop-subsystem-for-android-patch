@@ -139,10 +139,18 @@ jobs:
       # app sees them: on the x64 runners ten fingers reached the task window as three or
       # none. They are turned off for the runner's user, as a user who wants such gestures in
       # apps turns them off, and the shell is started again to read the setting.
+      #
+      # DSA_INPUT_TRACE makes each task window log every touch and pen contact that comes
+      # down or up in it, so a run that loses fingers says whether Windows delivered them to
+      # the window at all.
       - name: fr5_real_fingers_and_a_pen_reach_a_task_window_as_touch_and_a_pen
         working-directory: dsa
+        env:
+          DSA_INPUT_TRACE: "1"
         run: |
+          Write-Host "touch gestures before: $((Get-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name TouchGestureSetting -ErrorAction SilentlyContinue).TouchGestureSetting)"
           Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name TouchGestureSetting -Value 0 -Type DWord
+          Get-Process WWAHost, StartMenuExperienceHost -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "running before the tests: $($_.ProcessName) ($($_.Id)) '$($_.MainWindowTitle)'" }
           Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
           if (-not (Get-Process explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe; Start-Sleep -Seconds 5 }
