@@ -631,6 +631,7 @@ impl Main {
             Event::PipInput { task_id, input } => {
                 self.desktop.state.pointer_input(task_id, input);
             }
+            Event::X11Menu(input) => self.desktop.state.x11_menu_input(input),
             Event::HostClipboard(text) => {
                 if self.guest_clipboard.as_deref() != Some(text.as_str()) {
                     let _ = self.clipboard.send(text);

@@ -34,6 +34,7 @@ use wayland_protocols::xdg::shell::client::xdg_toplevel::ResizeEdge;
 use super::menu::{MenuPlace, MenuSurface};
 use super::shm::ShmBuffer;
 use super::{task_of, Event, State};
+use crate::compositor::window_menu::{desktop_menu_point, opens_window_menu, size_edge, MoveSize};
 use crate::input::keymap::{self, evdev_key, guest_key};
 use crate::input::pointer::{evdev_button, mouse_button, window_hit, Scroll, WindowHit};
 use crate::input::xkb::Typed;
@@ -94,6 +95,15 @@ pub struct SeatState {
     key_clock: (u32, Instant),
     /// The arrow shown where the desktop has no cursor shapes to name.
     arrow: Option<(WlSurface, ShmBuffer)>,
+    /// A key whose press opened the window menu, so its release goes nowhere.
+    swallow_release: Option<u32>,
+}
+
+impl SeatState {
+    /// Forgets the cursor shape set last, so the next motion sets one again.
+    pub(crate) fn reset_shape(&mut self) {
+        self.shape = None;
+    }
 }
 
 impl Default for SeatState {
@@ -119,6 +129,7 @@ impl Default for SeatState {
             repeat: None,
             key_clock: (0, Instant::now()),
             arrow: None,
+            swallow_release: None,
         }
     }
 }
@@ -205,9 +216,18 @@ impl State {
         };
         let mut changed = window.hover(hovered);
         changed |= window.title_bar.hover_back(hit == WindowHit::Back);
-        let shape = match hit {
-            WindowHit::Resize(edge) => edge_shape(edge as u32),
-            _ => Shape::Default,
+        let shape = match (window.armed, hit) {
+            // Move or Size from the window menu waits for a press: the cursor says which.
+            (Some(MoveSize::Move), _) => Shape::Move,
+            (Some(MoveSize::Size), _) => {
+                let (width, height) = window.model.to_logical(window.model.shown);
+                edge_shape(size_edge(
+                    self.seat_state.position,
+                    (f64::from(width), f64::from(height)),
+                ))
+            }
+            (None, WindowHit::Resize(edge)) => edge_shape(edge as u32),
+            (None, _) => Shape::Default,
         };
         self.set_shape(shape);
         if changed {
@@ -246,6 +266,22 @@ impl State {
 
     fn pointer_button(&mut self, task_id: i32, serial: u32, code: u32, down: bool) {
         self.serial = serial;
+        // Move or Size from the window menu starts with this press, held; another button
+        // takes it back.
+        let armed = self
+            .windows
+            .get(&task_id)
+            .is_some_and(|window| window.armed.is_some());
+        if armed && down {
+            if code == evdev_button::LEFT {
+                let position = self.seat_state.position;
+                self.start_armed(task_id, serial, position);
+                self.seat_state.reset_shape();
+                return;
+            }
+            self.disarm();
+            self.seat_state.reset_shape();
+        }
         let Some(window) = self.windows.get_mut(&task_id) else {
             return;
         };
@@ -399,10 +435,40 @@ impl State {
     /// The desktop's own window menu, at the pointer.
     fn desktop_window_menu(&mut self, task_id: i32, serial: u32) {
         let (x, y) = self.seat_state.position;
+        self.desktop_window_menu_at(task_id, serial, (x as i32, y as i32));
+    }
+
+    /// The desktop's own window menu at `at` (logical units in the window), from the input
+    /// event `serial`. A desktop that has no window menu, or takes no such serial, shows
+    /// nothing; Wayland gives the window no word of it.
+    pub(crate) fn desktop_window_menu_at(&mut self, task_id: i32, serial: u32, at: (i32, i32)) {
         if let (Some(seat), Some(window)) = (&self.seat, self.windows.get(&task_id)) {
-            window
-                .toplevel
-                .show_window_menu(seat, serial, x as i32, y as i32);
+            window.toplevel.show_window_menu(seat, serial, at.0, at.1);
+        }
+    }
+
+    /// Alt+Space: the window menu below the icon's cell, as the system menu opens on Windows,
+    /// from the key's `serial`; the desktop's own where the window cannot draw its own (full
+    /// screen, or no Pango).
+    fn window_menu_from_key(&mut self, task_id: i32, serial: u32) {
+        let Some(window) = self.windows.get(&task_id) else {
+            return;
+        };
+        let layout = window.model.caption_layout();
+        let scale = window.model.scale.max(1) as i32;
+        let place = match layout.icon_cell() {
+            Some((cell_left, top, width, height)) if window.model.has_caption() => {
+                MenuPlace::Below(
+                    cell_left / scale,
+                    top / scale,
+                    (width as i32).div_ceil(scale),
+                    (height as i32).div_ceil(scale),
+                )
+            }
+            _ => MenuPlace::At(0, 0),
+        };
+        if !self.open_menu(task_id, place, serial) {
+            self.desktop_window_menu_at(task_id, serial, desktop_menu_point(place));
         }
     }
 
@@ -415,6 +481,13 @@ impl State {
 
     fn key(&mut self, serial: u32, time: u32, code: u32, down: bool) {
         self.serial = serial;
+        // The release of the key that opened the window menu goes nowhere.
+        if self.seat_state.swallow_release == Some(code) {
+            self.seat_state.swallow_release = None;
+            if !down {
+                return;
+            }
+        }
         // The window menu takes the keyboard while it is open.
         if self.menu.is_some() {
             if down {
@@ -425,8 +498,24 @@ impl State {
         let Some(task_id) = self.seat_state.keyboard_focus else {
             return;
         };
+        if down {
+            // A key takes back Move or Size armed from the window menu.
+            if self.windows.values().any(|window| window.armed.is_some()) {
+                self.disarm();
+                self.seat_state.reset_shape();
+            }
+        }
         if code == evdev_key::F11 && down {
             self.toggle_fullscreen(task_id);
+            return;
+        }
+        let (alt, ctrl) = match self.xkb.as_ref() {
+            Some(xkb) => (xkb.alt(), xkb.ctrl()),
+            None => (false, false),
+        };
+        if down && opens_window_menu(code, alt, ctrl) {
+            self.seat_state.swallow_release = Some(code);
+            self.window_menu_from_key(task_id, serial);
             return;
         }
         self.seat_state.key_clock = (time, Instant::now());
@@ -917,6 +1006,10 @@ impl Dispatch<WlTouch, ()> for State {
                 let Some(task_id) = task_of(&surface) else {
                     return;
                 };
+                // Move or Size from the window menu starts with this touch, held.
+                if state.start_armed(task_id, serial, (x, y)) {
+                    return;
+                }
                 let Some(window) = state.windows.get(&task_id) else {
                     return;
                 };

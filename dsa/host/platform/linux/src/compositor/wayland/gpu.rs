@@ -4,16 +4,18 @@
 //!
 //! The renderer keeps each task's images at the largest size the task can have, and a frame
 //! fills their top-left region, so a window crops the image to the frame and shows it one to
-//! one. Nothing of the frame passes through the CPU. Where the desktop lacks one of the three
-//! protocols, every frame is read back instead.
+//! one. Nothing of the frame passes through the CPU to be shown. Where the desktop lacks one
+//! of the three protocols, every frame is read back instead.
 //!
-//! A screenshot of a GPU frame maps its image and reads it, which works for an image in the
-//! linear layout; a GPU that keeps its images tiled gives no screenshot, and says so in the
-//! log.
+//! Two things read a GPU frame back, in whatever layout the GPU keeps it
+//! ([`crate::compositor::dmabuf_read`]): the title bar's band, which samples two rows at most
+//! every [`BAND_PROBE_EVERY`] to take the app's top color when the app leaves the band empty,
+//! and a screenshot, which reads every row under the band once.
 
-use std::os::fd::{AsFd, AsRawFd, OwnedFd};
+use std::os::fd::{AsFd, OwnedFd};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use wayland_client::protocol::wl_buffer::WlBuffer;
 use wayland_client::protocol::wl_shm::Format;
@@ -31,28 +33,28 @@ use wayland_protocols::wp::viewporter::client::{
 
 use super::shm::ShmBuffer;
 use super::State;
-use crate::compositor::frames::{Frame, GpuFrame, GpuImage};
+use crate::compositor::dmabuf_read::{read_linear, DmabufReader, Imported, Rows};
+use crate::compositor::frames::{
+    app_rows, band_probe_rows, Frame, GpuFrame, GpuImage, DRM_FORMAT_MOD_LINEAR,
+};
+use crate::compositor::session::log;
+use crate::compositor::title_bar::rows_band_fill;
 
-/// The linear layout's modifier, the only one the CPU can read as rows.
-const DRM_FORMAT_MOD_LINEAR: u64 = 0;
-
-/// `DMA_BUF_IOCTL_SYNC` (`_IOW('b', 0, struct dma_buf_sync)`), and its flags.
-const DMA_BUF_IOCTL_SYNC: libc::c_ulong = 0x4008_6200;
-const DMA_BUF_SYNC_READ: u64 = 1;
-const DMA_BUF_SYNC_END: u64 = 4;
-
-/// The four-character codes of the images' formats.
-const fn fourcc(code: &[u8; 4]) -> u32 {
-    (code[0] as u32) | ((code[1] as u32) << 8) | ((code[2] as u32) << 16) | ((code[3] as u32) << 24)
-}
+/// How often a GPU frame's band is sampled, at most: the app's top color changes with its
+/// screens, not with every frame, and each sample waits for the GPU.
+pub const BAND_PROBE_EVERY: Duration = Duration::from_millis(200);
 
 /// One of a display's GPU images, as a buffer of the desktop.
 pub struct GpuBuffer {
     buffer: WlBuffer,
     size: (u32, u32),
     image: GpuImage,
-    /// The image's dmabuf, kept for a screenshot.
+    /// The image's dmabuf, kept to read the frame back.
     fd: OwnedFd,
+    /// The image in the compositor's own GPU context, once a read needed it there.
+    imported: Option<Imported>,
+    /// Whether the band could not be read from this image, which is logged once.
+    band_unread: bool,
 }
 
 impl Drop for GpuBuffer {
@@ -61,68 +63,124 @@ impl Drop for GpuBuffer {
     }
 }
 
-impl GpuBuffer {
-    /// The top-left `width` x `height` pixels of the image, as a frame. Only an image in the
-    /// linear layout, in one of the 8-bit RGB formats, can be read.
-    pub fn read(&self, width: u32, height: u32) -> Result<Frame, String> {
-        let image = &self.image;
-        if image.modifier != DRM_FORMAT_MOD_LINEAR {
-            return Err(format!(
-                "the GPU keeps the frame in a layout the CPU cannot read (modifier {:#x})",
-                image.modifier
-            ));
+/// The compositor's own GPU context for reading frames back, made the first time a frame in a
+/// layout the CPU cannot read is read.
+#[derive(Default)]
+pub enum Reader {
+    #[default]
+    NotYet,
+    Ready(DmabufReader),
+    /// It could not be made; the reason was logged once.
+    Failed(String),
+}
+
+impl Reader {
+    fn get(&mut self) -> Result<&DmabufReader, String> {
+        if matches!(self, Reader::NotYet) {
+            *self = match DmabufReader::new() {
+                Ok(reader) => Reader::Ready(reader),
+                Err(why) => {
+                    log(&format!(
+                        "GPU frames in a tiled layout cannot be read back: {why}"
+                    ));
+                    Reader::Failed(why)
+                }
+            };
         }
-        let swap = match image.fourcc {
-            code if code == fourcc(b"XR24") || code == fourcc(b"AR24") => false,
-            code if code == fourcc(b"XB24") || code == fourcc(b"AB24") => true,
-            code => return Err(format!("the frame's format {code:#x} is not read")),
-        };
-        let (width, height) = (width.min(image.width), height.min(image.height));
-        let stride = image.stride as usize;
-        let len = image.offset as usize + stride * height as usize;
-        if width == 0 || height == 0 || stride < width as usize * 4 {
-            return Err("the frame is empty".into());
+        match self {
+            Reader::Ready(reader) => Ok(reader),
+            Reader::Failed(why) => Err(why.clone()),
+            Reader::NotYet => Err("the GPU context is not made".into()),
         }
-        let fd = self.fd.as_raw_fd();
-        // SAFETY: maps `len` bytes of the dmabuf for reading, reads them between the sync
-        // calls that make the GPU's writes visible, and unmaps them.
-        unsafe {
-            let map = libc::mmap(
-                std::ptr::null_mut(),
-                len,
-                libc::PROT_READ,
-                libc::MAP_SHARED,
-                fd,
-                0,
-            );
-            if map == libc::MAP_FAILED {
-                return Err(format!(
-                    "the frame cannot be mapped: {}",
-                    std::io::Error::last_os_error()
-                ));
+    }
+}
+
+/// Whether a GPU frame's band is due a new sample, last sampled at `last`.
+pub fn band_probe_due(last: Option<Instant>, now: Instant) -> bool {
+    last.is_none_or(|at| now.saturating_duration_since(at) >= BAND_PROBE_EVERY)
+}
+
+impl State {
+    /// Reads `rows` (from the top, inside the frame) of GPU image `slot` of `display_id`,
+    /// `width` pixels from the left: by mapping it when it is in the linear layout, else on
+    /// the GPU.
+    pub(crate) fn read_gpu_rows(
+        &mut self,
+        display_id: u32,
+        slot: u32,
+        width: u32,
+        rows: &[u32],
+    ) -> Result<Rows, String> {
+        let gpu = self
+            .gpu_buffers
+            .get_mut(&(display_id, slot))
+            .ok_or_else(|| "the frame's GPU image is gone".to_string())?;
+        let width = width.min(gpu.image.width);
+        if rows.iter().any(|row| *row >= gpu.image.height) {
+            return Err("the rows asked for are not in the frame".into());
+        }
+        let mut linear_failed = None;
+        if gpu.image.modifier == DRM_FORMAT_MOD_LINEAR {
+            match read_linear(&gpu.image, gpu.fd.as_fd(), width, rows) {
+                Ok(read) => return Ok(read),
+                Err(why) => linear_failed = Some(why),
             }
-            let mut sync: u64 = DMA_BUF_SYNC_READ;
-            libc::ioctl(fd, DMA_BUF_IOCTL_SYNC as _, &mut sync as *mut u64);
-            let bytes = std::slice::from_raw_parts(map.cast::<u8>(), len);
-            let mut pixels = Vec::with_capacity(width as usize * height as usize * 4);
-            for row in 0..height as usize {
-                let start = image.offset as usize + row * stride;
-                for pixel in bytes[start..start + width as usize * 4].chunks_exact(4) {
-                    if swap {
-                        pixels.extend_from_slice(&[pixel[2], pixel[1], pixel[0], 0xff]);
-                    } else {
-                        pixels.extend_from_slice(&[pixel[0], pixel[1], pixel[2], 0xff]);
+        }
+        let reader = self
+            .dmabuf_reader
+            .get()
+            .map_err(|why| match &linear_failed {
+                Some(linear) => format!("{linear}; {why}"),
+                None => why,
+            })?;
+        if gpu.imported.is_none() {
+            gpu.imported = Some(reader.import(&gpu.image, gpu.fd.as_fd())?);
+        }
+        let imported = gpu.imported.as_ref().ok_or("the frame was not imported")?;
+        reader.read(imported, width, rows)
+    }
+
+    /// The pixels of a GPU frame of `display_id` under the title bar's `band`, for a
+    /// screenshot: a frame of the rows under the band.
+    pub(crate) fn read_gpu_frame(
+        &mut self,
+        display_id: u32,
+        frame: GpuFrame,
+        band: u32,
+    ) -> Result<Frame, String> {
+        let rows: Vec<u32> = app_rows(band, frame.height).collect();
+        if rows.is_empty() {
+            return Err("the window shows nothing under its title bar".into());
+        }
+        let read = self.read_gpu_rows(display_id, frame.slot, frame.width, &rows)?;
+        Ok(Frame {
+            width: read.width,
+            height: read.count,
+            pixels: read.pixels,
+        })
+    }
+
+    /// The color the band of a GPU frame takes when the app leaves it empty, from the two
+    /// rows the band fill samples. `None` when the app draws the band, or the rows cannot be
+    /// read (which is logged once for each image).
+    fn gpu_band_fill(&mut self, display_id: u32, frame: GpuFrame, band: u32) -> Option<u32> {
+        let [inside, below] = band_probe_rows(band, frame.height)?;
+        match self.read_gpu_rows(display_id, frame.slot, frame.width, &[inside, below]) {
+            Ok(read) => {
+                let row = read.width as usize * 4;
+                let (inside, below) = read.pixels.split_at(row.min(read.pixels.len()));
+                rows_band_fill(inside, below, read.width)
+            }
+            Err(why) => {
+                if let Some(gpu) = self.gpu_buffers.get_mut(&(display_id, frame.slot)) {
+                    if !std::mem::replace(&mut gpu.band_unread, true) {
+                        log(&format!(
+                            "display {display_id}: the title bar cannot take the app's color: {why}"
+                        ));
                     }
                 }
+                None
             }
-            let mut sync: u64 = DMA_BUF_SYNC_READ | DMA_BUF_SYNC_END;
-            libc::ioctl(fd, DMA_BUF_IOCTL_SYNC as _, &mut sync as *mut u64);
-            libc::munmap(map, len);
-            Ok(Frame {
-                width,
-                height,
-                pixels,
-            })
         }
     }
 }
@@ -215,23 +273,24 @@ impl State {
             Arc::new(AtomicBool::new(false)),
         );
         params.destroy();
-        self.gpu_buffers.insert(
+        let replaced = self.gpu_buffers.insert(
             (image.display_id, image.slot),
             GpuBuffer {
                 buffer,
                 size: (image.width, image.height),
                 image,
                 fd,
+                imported: None,
+                band_unread: false,
             },
         );
-    }
-
-    /// The pixels of a GPU frame of `display_id`, for a screenshot.
-    pub(crate) fn read_gpu_frame(&self, display_id: u32, frame: GpuFrame) -> Result<Frame, String> {
-        self.gpu_buffers
-            .get(&(display_id, frame.slot))
-            .ok_or_else(|| "the frame's GPU image is gone".to_string())?
-            .read(frame.width, frame.height)
+        // The image it replaces leaves the compositor's GPU context too.
+        if let (Some(imported), Reader::Ready(reader)) = (
+            replaced.and_then(|mut old| old.imported.take()),
+            &self.dmabuf_reader,
+        ) {
+            reader.release(imported);
+        }
     }
 
     /// Shows a frame that is in one of the display's GPU images.
@@ -249,6 +308,21 @@ impl State {
                 window.model.frame_shown((frame.width, frame.height));
             }
             return;
+        }
+        // The band's fill, from two rows of the frame read back, now and then.
+        let now = Instant::now();
+        let probe = self.windows.get(&task_id).and_then(|window| {
+            (window.model.has_caption()
+                && window.pip.is_none()
+                && band_probe_due(window.band_probed, now))
+            .then(|| window.model.caption_height())
+        });
+        if let Some(band) = probe {
+            let fill = self.gpu_band_fill(display_id, frame, band);
+            if let Some(window) = self.windows.get_mut(&task_id) {
+                window.gpu_fill = fill;
+                window.band_probed = Some(now);
+            }
         }
         let Some(gpu) = self.gpu_buffers.get(&(display_id, frame.slot)) else {
             return;
@@ -279,12 +353,13 @@ impl State {
         viewport.set_source(0.0, 0.0, f64::from(width), f64::from(height));
         viewport.set_destination(logical_width, logical_height);
 
-        // The title bar's band, on its own surface over the frame. The CPU cannot read the
-        // frame, so the band is never filled with the app's top color here.
+        // The title bar's band, on its own surface over the frame, filled with the app's top
+        // color as sampled last when the app leaves the band empty.
         if window.model.has_caption() && !in_pip {
             let scale = window.model.scale.max(1) as i32;
             let parent = window.surface.clone();
-            let (layout, pixels) = window.band_pixels(self.text.as_ref(), None);
+            let fill = window.gpu_fill;
+            let (layout, pixels) = window.band_pixels(self.text.as_ref(), fill);
             let pixels = pixels.to_vec();
             let size = (layout.width.max(1), layout.height.max(1));
             let layer = window.caption_layer.get_or_insert_with(|| {

@@ -79,6 +79,9 @@ pub enum Event {
         task_id: i32,
         input: dsa_host_core::input::WindowInput,
     },
+    /// The window menu of a picture-in-picture window outside Wayland (X11): Alt+Space, or
+    /// input on the open menu.
+    X11Menu(crate::compositor::x11_pip::MenuInput),
     /// Files were dropped on a task's window.
     Dropped {
         task_id: i32,
@@ -134,6 +137,9 @@ pub struct State {
     pub(crate) subcompositor: Option<WlSubcompositor>,
     /// Each display's GPU images, as the desktop's buffers, by display and slot.
     pub(crate) gpu_buffers: HashMap<(u32, u32), gpu::GpuBuffer>,
+    /// What reads GPU frames back in a layout the CPU cannot read, made the first time one
+    /// is needed.
+    pub(crate) dmabuf_reader: gpu::Reader,
     pub(crate) layer_shell: Option<ZwlrLayerShellV1>,
     /// Picture-in-picture windows through XWayland, where the desktop has no layer shell.
     pub(crate) x11: Option<crate::compositor::x11_pip::X11Pip>,
@@ -238,6 +244,7 @@ impl Desktop {
             viewporter,
             subcompositor,
             gpu_buffers: HashMap::new(),
+            dmabuf_reader: gpu::Reader::default(),
             layer_shell,
             x11,
             seat: None,
