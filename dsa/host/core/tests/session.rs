@@ -5301,6 +5301,32 @@ fn fr35_turning_root_elevation_on_applies_from_the_next_start() {
     assert_eq!(config.apps[0].package, "com.example.ask");
 }
 
+#[test]
+fn fr35_turning_root_elevation_back_on_waits_for_the_next_start() {
+    use dsa_host_core::root_elevation::Level;
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.set_root_elevation_config(true, vec![root_app("com.example.ask", Level::Ask)]);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    assert!(next_root_config(&mut agent).enabled);
+
+    // Off applies to the running Android at once.
+    session.set_root_elevation_config(false, vec![root_app("com.example.ask", Level::Ask)]);
+    assert!(!next_root_config(&mut agent).enabled);
+    // On again: the running Android stays off until it starts again.
+    session.set_root_elevation_config(true, vec![root_app("com.example.ask", Level::Ask)]);
+    no_root_config(&mut agent);
+
+    session.stop();
+    assert!(session.wait_for(SessionState::Stopped, WAIT));
+    drop(agent);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(next_root_config(&mut agent).enabled);
+}
+
 /// The next su decision for the guest, past any other message.
 fn next_su_decision(daemon: &mut Box<dyn Connection>) -> dsa_protocol::control::SuDecision {
     loop {

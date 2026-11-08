@@ -24,7 +24,7 @@ fn terminal() -> io::Result<(File, File)> {
     if unsafe { libc::grantpt(fd) } != 0 || unsafe { libc::unlockpt(fd) } != 0 {
         return Err(io::Error::last_os_error());
     }
-    let mut path = [0i8; 256];
+    let mut path: [libc::c_char; 256] = [0; 256];
     // SAFETY: path has room for the name and fd is an open PTY master.
     if unsafe { libc::ptsname_r(fd, path.as_mut_ptr(), path.len()) } != 0 {
         return Err(io::Error::last_os_error());
@@ -147,41 +147,42 @@ fn run_shell(
             Ok(())
         });
     }
-    let mut child = shell.spawn()?;
+    // Everything that can fail is made before the shell starts, so no error path between the
+    // spawn and the wait below leaves the shell running without anyone waiting for it.
     let output = Arc::new(Mutex::new(socket.try_clone()?));
-    let (done, finished) = mpsc::channel();
-    let (input, output_count): (Box<dyn Write + Send>, usize) = if let Some(master) = pty_master {
-        pump_output(
-            master.try_clone()?,
-            Arc::clone(&output),
-            su_wire::STDOUT,
-            done,
-        );
-        (Box::new(master), 1)
-    } else {
-        pump_output(
-            child.stdout.take().unwrap(),
-            Arc::clone(&output),
-            su_wire::STDOUT,
-            done.clone(),
-        );
-        pump_output(
-            child.stderr.take().unwrap(),
-            Arc::clone(&output),
-            su_wire::STDERR,
-            done,
-        );
-        (Box::new(child.stdin.take().unwrap()), 2)
-    };
-    let (disconnected, connection) = mpsc::channel();
     let mut read_socket = socket.try_clone()?;
+    let pty_reader = pty_master.as_ref().map(File::try_clone).transpose()?;
+    let mut child = shell.spawn()?;
+    let (done, finished) = mpsc::channel();
+    let (input, output_count): (Box<dyn Write + Send>, usize) =
+        if let (Some(master), Some(reader)) = (pty_master, pty_reader) {
+            pump_output(reader, Arc::clone(&output), su_wire::STDOUT, done);
+            (Box::new(master), 1)
+        } else {
+            pump_output(
+                child.stdout.take().unwrap(),
+                Arc::clone(&output),
+                su_wire::STDOUT,
+                done.clone(),
+            );
+            pump_output(
+                child.stderr.take().unwrap(),
+                Arc::clone(&output),
+                su_wire::STDERR,
+                done,
+            );
+            (Box::new(child.stdin.take().unwrap()), 2)
+        };
+    let (disconnected, connection) = mpsc::channel();
     std::thread::spawn(move || {
         let mut input = Some(input);
         loop {
             match su_wire::read_frame(&mut read_socket) {
                 Ok(frame) if frame.kind == su_wire::STDIN && input.is_some() => {
-                    if input.as_mut().unwrap().write_all(&frame.payload).is_err() {
-                        input = None;
+                    if let Some(writer) = input.as_mut() {
+                        if writer.write_all(&frame.payload).is_err() {
+                            input = None;
+                        }
                     }
                 }
                 Ok(frame)
@@ -189,8 +190,8 @@ fn run_shell(
                         && frame.payload.is_empty()
                         && input.is_some() =>
                 {
-                    if interactive {
-                        let _ = input.as_mut().unwrap().write_all(&[4]);
+                    if let (true, Some(writer)) = (interactive, input.as_mut()) {
+                        let _ = writer.write_all(&[4]);
                     }
                     input = None;
                 }
@@ -202,8 +203,16 @@ fn run_shell(
         }
     });
     let status = loop {
-        if let Some(status) = child.try_wait()? {
-            break status;
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {}
+            Err(error) => {
+                // SAFETY: the negative PID addresses the process group created by setsid.
+                unsafe { libc::kill(-(child.id() as libc::pid_t), libc::SIGKILL) };
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error);
+            }
         }
         if connection.try_recv().is_ok() {
             // The shell created a session of its own. Stop its children as well when the
