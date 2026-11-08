@@ -233,6 +233,15 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn("+        throw GuestFatalError(mOss.str());", aemu)
         self.assertIn('+    OutputLog(stderr, \'F\', mFile, mLine, 0, "%s", mOss.str().c_str());', aemu)
 
+    def test_nfr5_every_guest_channel_has_an_event_callback_for_its_stop(self):
+        # The render thread stops a guest's channel from the host after a fatal command, and
+        # the channel calls its event callback on a stop: an empty one threw
+        # std::bad_function_call out of the render thread and ended the process.
+        backend = (HERE / "dsa_gfx_backend.cpp").read_text(encoding="utf-8")
+        self.assertEqual(backend.count("createRenderChannel("), 1)
+        self.assertIn("channel->setEventCallback(", backend)
+        self.assertEqual(backend.count("create_channel(renderer)"), 2)
+
     def test_pr3_gpu_preference_names_clear_x11_macros(self):
         # X11/X.h, which EGL pulls in on Linux, defines None as a macro.
         patch = (HERE.parent / "patches" /

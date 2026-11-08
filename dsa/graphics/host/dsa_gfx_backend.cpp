@@ -108,6 +108,18 @@ struct DsaChannelHolder {
     gfxstream::RenderChannelPtr channel;
 };
 
+/* A render channel for one guest stream. The pumps poll the channel rather than wait for
+ * its events, but the channel calls its event callback whenever it stops, and the render
+ * thread stops it from the host when a guest's command is fatal: with no callback set,
+ * that call throws std::bad_function_call out of the render thread and ends the process. */
+gfxstream::RenderChannelPtr create_channel(const gfxstream::RendererPtr& renderer) {
+    auto channel = renderer->createRenderChannel();
+    if (channel) {
+        channel->setEventCallback([](gfxstream::RenderChannel::State) {});
+    }
+    return channel;
+}
+
 }  // namespace
 
 extern "C" DSA_GFX_EXPORT int dsa_gfx_init(uint32_t width, uint32_t height) {
@@ -336,7 +348,7 @@ extern "C" DSA_GFX_EXPORT void* dsa_gfx_channel_create(void) {
     if (!renderer) {
         return nullptr;
     }
-    auto channel = renderer->createRenderChannel();
+    auto channel = create_channel(renderer);
     if (!channel) {
         return nullptr;
     }
@@ -425,7 +437,7 @@ extern "C" DSA_GFX_EXPORT int dsa_gfx_serve_stream(dsa_stream_read_fn read_cb,
     if (!renderer) {
         return -1;
     }
-    auto channel = renderer->createRenderChannel();
+    auto channel = create_channel(renderer);
     if (!channel) {
         return -2;
     }
