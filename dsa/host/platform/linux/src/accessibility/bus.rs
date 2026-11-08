@@ -77,16 +77,16 @@ impl Enabled {
 /// accessibility bus while it is on.
 pub fn start(shared: Arc<Shared>) {
     let enabled = Arc::new(Enabled::default());
-    {
+    let spawned = {
         let shared = Arc::clone(&shared);
         let enabled = Arc::clone(&enabled);
-        let spawned = thread::Builder::new()
+        thread::Builder::new()
             .name("dsa-compositor-a11y-status".into())
-            .spawn(move || follow_status(&shared, &enabled));
-        if let Err(why) = spawned {
-            shared.log(&format!("accessibility: cannot follow its status: {why}"));
-            return;
-        }
+            .spawn(move || follow_status(&shared, &enabled))
+    };
+    if let Err(why) = spawned {
+        shared.log(&format!("accessibility: cannot follow its status: {why}"));
+        return;
     }
     let spawned = {
         let shared = Arc::clone(&shared);
@@ -152,7 +152,7 @@ fn follow_status(shared: &Shared, enabled: &Enabled) {
                 continue;
             }
         };
-        let mut apply = || {
+        let apply = || {
             let on = read_flag(&session, "IsEnabled");
             let screen_reader = read_flag(&session, "ScreenReaderEnabled");
             shared.set_screen_reader(screen_reader);
@@ -475,7 +475,7 @@ impl Bus {
         let offered = shared.lock().interfaces(object);
         // A call that names no interface goes to the first that has the method.
         let order: Vec<&str> = if iface.is_empty() {
-            offered.clone()
+            offered
         } else if offered.contains(&iface) {
             vec![iface]
         } else {
