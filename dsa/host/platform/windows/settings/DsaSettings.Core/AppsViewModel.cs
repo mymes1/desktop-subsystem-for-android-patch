@@ -32,10 +32,49 @@ public sealed record InstalledAppInfo(
     ulong DataBytes,
     ulong CacheBytes,
     byte[] IconPng,
-    RunAsArmSwitch? RunAsArm = null)
+    RunAsArmSwitch? RunAsArm = null,
+    string Root = "")
 {
     public ulong TotalBytes => AppBytes + DataBytes + CacheBytes;
 }
+
+/// <summary>How far an app may use root: su does not exist for it (<see cref="Off"/>), each
+/// su call waits for an administrator's approval (<see cref="Ask"/>), or su is approved
+/// without asking (<see cref="Remember"/>). The order is the order the Apps page lists
+/// them.</summary>
+public enum RootLevel
+{
+    Off,
+    Ask,
+    Remember,
+}
+
+/// <summary>The words dsa uses for a <see cref="RootLevel"/>.</summary>
+public static class RootLevels
+{
+    public static readonly IReadOnlyList<RootLevel> All = new[] { RootLevel.Off, RootLevel.Ask, RootLevel.Remember };
+
+    public static string Code(RootLevel level) => level switch
+    {
+        RootLevel.Ask => "ask",
+        RootLevel.Remember => "remember",
+        _ => "off",
+    };
+
+    /// <summary>The level dsa named, or null for <c>unavailable</c> (root elevation is off for
+    /// the computer) and for a service that does not say.</summary>
+    public static RootLevel? Parse(string code) => code switch
+    {
+        "off" => RootLevel.Off,
+        "ask" => RootLevel.Ask,
+        "remember" => RootLevel.Remember,
+        _ => null,
+    };
+}
+
+/// <summary>How a change of an app's root level went: whether it was set, the level the app
+/// has now, and the service's words when it was not set.</summary>
+public sealed record RootReport(bool Done, string Level, string Message);
 
 /// <summary>The user's window settings for one app, as dsa app-window reports them: whether
 /// its windows keep their size, and the size they open at in density-independent pixels
@@ -155,7 +194,32 @@ public sealed class AppsService
         Number(app, "data_bytes"),
         Number(app, "cache_bytes"),
         Png(app, "icon_png"),
-        ReadRunAsArm(app));
+        ReadRunAsArm(app),
+        String(app, "root"));
+
+    /// <summary>The start of dsa's line for a root level the service did not set: the
+    /// package, then the service's words.</summary>
+    private static readonly Regex RootNotChanged = new(@"^not changed: [^:\s]+: (.*)$", RegexOptions.Singleline);
+
+    /// <summary>Sets how far <paramref name="package"/> may use root. A refusal by the service
+    /// (root elevation off for the computer, or "remember" without an administrator's
+    /// approval) is a report with its words; anything else is a <see cref="DsaException"/>.</summary>
+    public async Task<RootReport> SetRootAsync(string package, RootLevel level)
+    {
+        var result = await _cli.RunAsync(new[] { "apps", "root", package, RootLevels.Code(level), "--json" })
+            .ConfigureAwait(true);
+        if (result.ExitCode != 0)
+        {
+            var refused = RootNotChanged.Match(Detail(result));
+            if (refused.Success)
+            {
+                return new RootReport(false, "", refused.Groups[1].Value);
+            }
+            throw Failure(result);
+        }
+        var json = Parse(result.Output);
+        return new RootReport(true, String(json, "level"), "");
+    }
 
     /// <summary>Every app installed in Android, with its size read again; Android is started
     /// first when it is not running.</summary>
@@ -306,13 +370,19 @@ public sealed record AppRow(
     bool RunAsArm = false,
     bool CanRunAsArm = false,
     string? RunAsArmTip = null,
-    bool IsHighlighted = false)
+    bool IsHighlighted = false,
+    int RootIndex = -1,
+    bool CanChangeRoot = false,
+    string? RootTip = null)
 {
     public bool NoIcon => Icon is null;
 
     /// <summary>Whether the page says why the app cannot run as ARM.</summary>
     public bool HasRunAsArmTip => RunAsArmTip is not null;
 }
+
+/// <summary>A root level the Apps page offers: what the list shows, and the level.</summary>
+public sealed record RootChoice(string Label, RootLevel Level);
 
 /// <summary>The Apps page: every app installed in Android, searchable, each to open, to see
 /// in Android's own settings, or to uninstall; and Android's own list of apps.</summary>
@@ -487,7 +557,54 @@ public sealed class AppsViewModel : ObservableObject
             arm.On,
             arm.Available,
             RunAsArmTipOf(arm),
-            app.Package == _highlighted);
+            app.Package == _highlighted,
+            RootLevels.Parse(app.Root) is { } level ? (int)level : -1,
+            RootLevels.Parse(app.Root) is not null,
+            RootTipOf(app.Root));
+    }
+
+    /// <summary>The root levels the page offers, in the order of <see cref="RootLevel"/>.</summary>
+    public IReadOnlyList<RootChoice> RootChoices => RootLevels.All
+        .Select(level => new RootChoice(_text.Get($"Apps_Root_{RootLevels.Code(level)}"), level))
+        .ToList();
+
+    /// <summary>Whether root elevation is off for this PC, so no app's level can be chosen
+    /// and the page says where to turn it on.</summary>
+    public bool RootUnavailable => _apps?.Any(a => a.Root == "unavailable") ?? false;
+
+    /// <summary>Why an app's root level cannot be chosen, in the user's language; null when
+    /// it can.</summary>
+    public string? RootTipOf(string root) => RootLevels.Parse(root) is not null
+        ? null
+        : _text.Get(root == "unavailable" ? "Apps_RootTip_unavailable" : "Apps_RootTip_unknown");
+
+    /// <summary>Sets how far the app may use root: the level at <paramref name="index"/> of
+    /// <see cref="RootChoices"/>. "Remember" needs an administrator's approval, which the
+    /// service asks for; a refusal is the page's error with the service's words.</summary>
+    public Task SetRootAsync(string package, int index)
+    {
+        if (index < 0 || index >= RootLevels.All.Count)
+        {
+            return Task.CompletedTask;
+        }
+        var level = RootLevels.All[index];
+        var current = _apps?.FirstOrDefault(a => a.Package == package)?.Root;
+        if (current is not null && RootLevels.Parse(current) == level)
+        {
+            return Task.CompletedTask;
+        }
+        return Run(async () =>
+        {
+            var label = LabelOf(package);
+            var report = await _service.SetRootAsync(package, level).ConfigureAwait(true);
+            if (!report.Done)
+            {
+                throw new RefusedByAndroid(
+                    string.Format(CultureInfo.CurrentCulture, _text.Get("Apps_RootNotChanged"), label, report.Message));
+            }
+            var now = RootLevels.Parse(report.Level) ?? level;
+            return string.Format(CultureInfo.CurrentCulture, _text.Get($"Apps_RootSet_{RootLevels.Code(now)}"), label);
+        }, reload: true);
     }
 
     /// <summary>Why the "Run as ARM" switch cannot be changed, in the user's language; null

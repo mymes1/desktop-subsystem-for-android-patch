@@ -122,6 +122,12 @@ public partial class AdvancedPage : Page
     private async void OnResizeTraceToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetResizeTraceAsync(ResizeTraceSwitch.IsChecked == true);
 
+    private async void OnRootElevationToggled(object sender, RoutedEventArgs e) =>
+        await ViewModel.SetRootElevationAsync(RootElevationSwitch.IsChecked == true);
+
+    private void OnRootElevationAsAdministrator(object sender, RoutedEventArgs e) =>
+        ChangeAsAdministrator("root-elevation", !ViewModel.RootElevation);
+
     private void OnInputTraceAsAdministrator(object sender, RoutedEventArgs e) =>
         ChangeAsAdministrator("input-trace", !ViewModel.InputTrace);
 

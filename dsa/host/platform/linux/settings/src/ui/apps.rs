@@ -94,6 +94,9 @@ pub fn apps(ctx: &Shared) -> gtk::Widget {
             } else if shown.is_empty() {
                 rows.note(&tr("No app matches your search."));
             }
+            if view::root_unavailable(all) {
+                rows.note(&tr("Root access is off for this computer, so no app can use su. An administrator turns it on under Advanced, and then you choose each app's level here."));
+            }
             for app in shown {
                 let window = windows.borrow().get(&app.package).cloned();
                 let row = app_row(&ctx, &page, app, window, reload.clone());
@@ -315,6 +318,62 @@ fn app_row(
     run_as_arm.set(arm.on);
     run_as_arm.row.set_sensitive(arm.sensitive);
     row.add_row(&run_as_arm.row);
+
+    // How far the app may use root: not at all, asking an administrator each time, or without
+    // asking.
+    let root = view::root_view(app);
+    let root_level = {
+        let (ctx, page, package, label) = (
+            ctx.clone(),
+            page.clone(),
+            app.package.clone(),
+            app.label.clone(),
+        );
+        let reload = reload.clone();
+        let current = app.root.clone();
+        Combo::new(&tr("Root access"), &root.subtitle, move |index| {
+            let Some(level) = view::ROOT_LEVELS.get(index as usize) else {
+                return;
+            };
+            if *level == current {
+                return;
+            }
+            let (ctx2, page, label) = (ctx.clone(), page.clone(), label.clone());
+            let (package, level) = (package.clone(), level.to_string());
+            let reload = reload.clone();
+            request(
+                &ctx,
+                move |c| c.set_app_root(&package, &level),
+                move |r| {
+                    page.show_failure(
+                        &tr("The apps could not be read or changed"),
+                        r.as_ref().err(),
+                    );
+                    if let Ok(outcome) = &r {
+                        match view::root_next(&label, outcome) {
+                            Ok(toast) => ctx2.toast(&toast),
+                            Err(why) => tell(&ctx2, &tr("Not changed"), &why),
+                        }
+                    }
+                    // The list shows the level the service keeps, also after a refusal.
+                    if let Some(reload) = reload.borrow().clone() {
+                        reload();
+                    }
+                },
+            );
+        })
+    };
+    let mut root_labels = view::root_choices();
+    let root_index = match root.index {
+        Some(index) => index,
+        None => {
+            root_labels.push(tr("Not available"));
+            root_labels.len() - 1
+        }
+    };
+    root_level.set(&root_labels, root_index as u32);
+    root_level.row.set_sensitive(root.sensitive);
+    row.add_row(&root_level.row);
 
     let (uninstall_row, uninstall) = button_row(&tr("Uninstall"), "", &tr("Uninstall"));
     if app.system_app {

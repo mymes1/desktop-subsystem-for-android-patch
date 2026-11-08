@@ -1545,6 +1545,7 @@ pub fn app_json(app: &AppInfo, icon: bool) -> Value {
         "total_bytes": app.total_bytes(),
         "primary_abi": app.primary_abi,
         "native_abis": app.native_libraries.abis().collect::<Vec<_>>(),
+        "root": app.root,
     });
     if icon {
         value["icon_png"] = Value::String(base64(&app.icon_png));
@@ -1640,8 +1641,20 @@ pub fn describe_app(app: &AppInfo) -> String {
                 app.primary_abi.clone()
             }
         ),
+        format!("Root: {}", describe_root_level(&app.root)),
     ]
     .join("\n")
+}
+
+/// An app's root elevation level as `dsa apps info` says it.
+fn describe_root_level(level: &str) -> &'static str {
+    match level {
+        "off" => "off (su does not exist for it; dsa apps root changes it)",
+        "ask" => "ask (each su call waits for an administrator's approval)",
+        "remember" => "remember (approved without asking)",
+        "unavailable" => "unavailable (root elevation is off for this computer)",
+        _ => "unknown (the service did not say)",
+    }
 }
 
 /// Whether the caller's running Android translates ARM code: its ABI list holds arm64-v8a.
@@ -2006,6 +2019,7 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "image_updates": report.settings.image_updates,
         "input_trace": report.settings.input_trace,
         "resize_trace": report.settings.resize_trace,
+        "root_elevation": report.settings.root_elevation,
         "memory_limit_mb": report.settings.memory_limit_mb,
         "developer_mode": report.settings.developer_mode,
         "adb_port": report.settings.adb_port,
@@ -2284,6 +2298,10 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         ),
         format!("Input trace: {}", on_off(settings.input_trace)),
         format!("Resize trace: {}", on_off(settings.resize_trace)),
+        format!(
+            "Root elevation: {} (the computer's; it applies from the next start of Android)",
+            on_off(settings.root_elevation)
+        ),
         format!(
             "Memory limit: {}",
             match settings.memory_limit_mb {

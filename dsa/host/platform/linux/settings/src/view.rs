@@ -509,6 +509,94 @@ pub fn run_as_arm_next(label: &str, on: bool, outcome: &Outcome) -> RunAsArmNext
     ))
 }
 
+/// The root levels an app can have, as `dsa apps root` names them, in the order the Apps
+/// page lists them.
+pub const ROOT_LEVELS: [&str; 3] = ["off", "ask", "remember"];
+
+/// The root levels as the Apps page lists them.
+pub fn root_choices() -> Vec<String> {
+    vec![
+        tr("Not allowed"),
+        tr("Ask each time"),
+        tr("Remember (no asking)"),
+    ]
+}
+
+/// What an app's root level shows: the level chosen, whether it can be changed, and what its
+/// row says under its title.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RootView {
+    /// Where the level is among [`root_choices`]; `None` when there is none to show.
+    pub index: Option<usize>,
+    pub sensitive: bool,
+    pub subtitle: String,
+}
+
+/// The root level of `app`: insensitive, with the reason, while it cannot be chosen.
+pub fn root_view(app: &App) -> RootView {
+    let index = ROOT_LEVELS.iter().position(|level| *level == app.root);
+    let subtitle = match (index, app.root.as_str()) {
+        (Some(_), _) => tr("Not allowed hides su from the app. Ask each time asks an administrator for each request, then not again for 15 minutes. Remember approves without asking, and choosing it needs an administrator's approval."),
+        (None, "unavailable") => {
+            tr("Root access is off for this computer. An administrator turns it on under Advanced.")
+        }
+        (None, _) => tr("This version of DSA cannot say how far the app may use root."),
+    };
+    RootView {
+        index,
+        sensitive: index.is_some(),
+        subtitle,
+    }
+}
+
+/// Whether root elevation is off for the computer, as the apps' levels say, so the Apps page
+/// says where to turn it on.
+pub fn root_unavailable(apps: &[App]) -> bool {
+    apps.iter().any(|app| app.root == "unavailable")
+}
+
+/// What follows `outcome` of setting `label`'s root level: the toast when it is done, or why
+/// it was not.
+pub fn root_next(label: &str, outcome: &Outcome) -> Result<String, String> {
+    if !outcome.done {
+        return Err(trf(
+            "The root level of {0} was not changed: {1}",
+            &[label, &outcome.detail],
+        ));
+    }
+    Ok(match outcome.status.as_str() {
+        "off" => trf(
+            "{0} cannot use root any more. su disappears for it from the next start of Android.",
+            &[label],
+        ),
+        "remember" => trf(
+            "{0} now uses su without asking. If it could not see su before, it sees it from the next start of Android.",
+            &[label],
+        ),
+        _ => trf(
+            "{0} now asks an administrator of this computer each time it uses su. If it could not see su before, it sees it from the next start of Android.",
+            &[label],
+        ),
+    })
+}
+
+/// Whether root elevation differs from what it was when the page first read it: the change
+/// applies from the next start of Android.
+pub fn root_restart_needed(at_start: Option<bool>, now: bool) -> bool {
+    at_start.is_some_and(|before| before != now)
+}
+
+/// Where each root request and its result is recorded: the service log.
+pub fn root_log_text(log_dir: Option<&str>) -> String {
+    match log_dir.filter(|dir| !dir.is_empty()) {
+        Some(dir) => trf(
+            "Each request is kept in the service log with the app, the time, whether it was approved and the command: {0}",
+            &[dir],
+        ),
+        None => tr("Each request is kept in the service log with the app, the time, whether it was approved and the command."),
+    }
+}
+
 /// Why Android refused to uninstall an app, in words.
 pub fn uninstall_reason(status: &str) -> String {
     tr(match status {

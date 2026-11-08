@@ -120,7 +120,8 @@ public sealed partial class DsaService
         Bool(json, "adb_auto_connect", missing: true),
         ReadAdbAutoConnectState(OptionalString(json, "adb_auto_connect_state")),
         Bool(json, "prerelease_updates"),
-        Bool(json, "update_channel_available"));
+        Bool(json, "update_channel_available"),
+        Bool(json, "root_elevation"));
 
     /// <summary>The auto-connect state a name stands for. An empty or unknown name, as an older
     /// service gives, is off.</summary>
@@ -281,6 +282,11 @@ public sealed partial class DsaService
     public Task<SettingsInfo> SetPrereleaseUpdatesAsync(bool on) => SetAsync("prerelease-updates", on ? "on" : "off");
 
     public Task<SettingsInfo> SetImageUpdatesAsync(bool on) => SetAsync("image-updates", on ? "on" : "off");
+
+    /// <summary>Lets apps in Android ask for root through an administrator's approval, or
+    /// not. The computer's setting, so only an administrator changes it; it applies from the
+    /// next start of Android.</summary>
+    public Task<SettingsInfo> SetRootElevationAsync(bool on) => SetAsync("root-elevation", on ? "on" : "off");
 
     public Task<SettingsInfo> SetInputTraceAsync(bool on) => SetAsync("input-trace", on ? "on" : "off");
 

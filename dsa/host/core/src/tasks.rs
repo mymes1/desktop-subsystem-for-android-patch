@@ -155,6 +155,10 @@ pub struct AppInfo {
     pub caption_icon_png: Vec<u8>,
     /// Whether the app supports several windows at once, so its windows offer New window.
     pub multiple_windows: bool,
+    /// How far the app may elevate to root, as the service's list of installed apps reports
+    /// it: `off`, `ask` or `remember`, or `unavailable` while root elevation is off for the
+    /// computer. Empty where nothing reported it, as for an app that only has a task.
+    pub root: String,
 }
 
 impl AppInfo {

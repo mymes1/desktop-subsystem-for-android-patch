@@ -52,7 +52,8 @@ public sealed record SettingsInfo(
     bool AdbAutoConnect = true,
     AdbAutoConnectState AdbAutoConnectState = AdbAutoConnectState.Off,
     bool PrereleaseUpdates = false,
-    bool UpdateChannelAvailable = false)
+    bool UpdateChannelAvailable = false,
+    bool RootElevation = false)
 {
     /// <summary>The Windows folders that can be shared with Android, in the order the service
     /// keeps them.</summary>
