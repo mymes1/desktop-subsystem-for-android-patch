@@ -46,7 +46,12 @@ case "${1:-}" in
             echo "$kept is not in the cache, so the entries before it stay"
             exit 0
         fi
-        jq -r --arg kept "$kept" '.[] | select(.key != $kept) | "\(.id)\t\(.key)"' <<<"$caches" |
+        # Only the entries saved before the kept one go. A run that started later may have
+        # saved a newer key in the meantime, and the restore keys pick that one.
+        jq -r --arg kept "$kept" '
+            (map(select(.key == $kept)) | map(.createdAt) | min) as $saved
+            | .[] | select(.key != $kept and .createdAt < $saved)
+            | "\(.id)\t\(.key)"' <<<"$caches" |
             while IFS=$'\t' read -r id key; do
                 delete "$id" "$key is superseded by $kept"
             done
@@ -56,10 +61,12 @@ case "${1:-}" in
         # Develop: the newest entry of each family stays.
         jq -r --arg develop "$develop" '.[] | select(.ref == $develop) | "\(.key)\t\(.createdAt)\t\(.id)"' <<<"$caches" |
             while IFS=$'\t' read -r key created id; do
-                family="$(sed -E 's/(-([0-9a-f]{6,}|[0-9]+))+$//' <<<"$key")"
+                # Hashes and run numbers are at least 8 hex digits. A shorter number, such as
+                # the Android version in translator-ccache-14-<hash>-<run>, names the family.
+                family="$(sed -E 's/(-[0-9a-f]{8,})+$//' <<<"$key")"
                 printf '%s\t%s\t%s\t%s\n' "$family" "$created" "$id" "$key"
             done |
-            sort -t $'\t' -k1,1 -k2,2r |
+            LC_ALL=C sort -t $'\t' -k1,1 -k2,2r |
             awk -F '\t' 'seen[$1]++ { print $3 "\t" $4 }' |
             while IFS=$'\t' read -r id key; do
                 delete "$id" "$key has a newer entry in its family"
@@ -70,7 +77,7 @@ case "${1:-}" in
         jq -r --arg develop "$develop" '
             (now - 86400) as $cut
             | .[] | select(.ref != $develop)
-            | "\(.id)\t\(.ref)\t\(.key)\t\((.lastAccessedAt | sub("\.[0-9]+Z$"; "Z") | fromdateiso8601) < $cut)"' <<<"$caches" |
+            | "\(.id)\t\(.ref)\t\(.key)\t\((.lastAccessedAt | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601) < $cut)"' <<<"$caches" |
             while IFS=$'\t' read -r id ref key idle; do
                 why=""
                 if [[ "$ref" == refs/heads/* ]] && ! grep -qxF -- "${ref#refs/heads/}" <<<"$branches"; then

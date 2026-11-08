@@ -673,7 +673,7 @@ fn fr34_the_card_check_tells_rounded_cards_from_square_rows() {
     for y in 0..height {
         for x in 0..width {
             let in_card = (10..90).contains(&x);
-            let cut = y < 4 && (x < 14 || x >= 86);
+            let cut = y < 4 && !(14..86).contains(&x);
             let colour = if in_card && !cut { 255 } else { 230 };
             pixels[(y * width + x) * 4..(y * width + x) * 4 + 4]
                 .copy_from_slice(&[colour, colour, colour, 255]);
