@@ -136,6 +136,19 @@ jobs:
           -ListUrl "$env:MIRROR\images.json" -TrustedKey $env:TEST_PUBLIC_KEY
           -ProgramListUrl "$env:MIRROR\program.json"
 
+      # The setting that turns Windows 11's three- and four-finger touch gestures off while a
+      # task window is in front: with the gestures on and the setting turned on through the
+      # local API, a task window in front makes SystemParametersInfo 0x2030 read 0, another
+      # window in front makes it read the user's value again, and so does the window manager
+      # stopping. The test puts the gestures back as it found them. Server 2022 has no such
+      # gestures, so the test is left out there.
+      - name: fr5_touch_gestures_are_off_only_while_a_task_window_is_in_front
+        if: matrix.version != '2022'
+        working-directory: dsa
+        run: |
+          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input::fr5_real_touch_gestures_are_off_only_while_a_task_window_is_in_front
+          if ($LASTEXITCODE -ne 0) { throw "the touch gestures were not off only while a task window was in front" }
+
       # Fingers and a pen put into this machine's input with Windows' synthetic pointer
       # devices, on a task window opened over a fake Android: ten fingers and a pinch reach
       # the task as ten touch pointers, a pen with its pressure, barrel button and eraser, and
@@ -165,7 +178,7 @@ jobs:
           Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
           if (-not (Get-Process explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe; Start-Sleep -Seconds 5 }
-          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input
+          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input --skip fr5_real_touch_gestures
           if ($LASTEXITCODE -ne 0) { throw "touch or pen input on a task window did not reach its task" }
 
       # Nothing is installed yet, so setup.exe opens on its first screen. Pictures of it in
