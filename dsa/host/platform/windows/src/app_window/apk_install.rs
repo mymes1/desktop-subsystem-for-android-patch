@@ -47,9 +47,13 @@ pub fn install_request(args: &[String]) -> Option<PathBuf> {
 }
 
 /// Opens the APK or the split-APK bundle at `path`, refusing it before Android is started when
-/// it cannot be installed, with the reason.
+/// it cannot be installed, with the reason. A bundle's compressed APKs are unpacked into the
+/// user's DSA `tmp` folder.
 pub fn open(path: &Path) -> Result<InstallFile, String> {
-    InstallFile::open(path).map_err(|refusal| refusal.to_string())
+    let tmp = crate::paths::UserRoot::current()
+        .ok_or("neither LOCALAPPDATA nor USERPROFILE is set, so DSA has no folder of yours")?
+        .tmp();
+    InstallFile::open(path, &tmp).map_err(|refusal| refusal.to_string())
 }
 
 /// Streams `file` to the caller's Android through the service at `api`, and returns how the
