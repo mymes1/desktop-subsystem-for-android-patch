@@ -209,9 +209,24 @@ cargo build -p dsa-host-windows --release
 
 ## 기여
 
-작업은 `develop` 브랜치에서 하고, `main`은 거기서 게시합니다. 풀 리퀘스트는 `develop`으로
-열어 주세요. 커밋 하나에 논리적 변경 하나, 동작 변경마다 테스트 하나를 둡니다. 생성된 프로토콜
-코드는 손으로 고치지 않습니다. 글에 em 대시를 쓰지 말아 주세요. 저장소 검사가 거부합니다.
+DSA는 아직 초기이고 안정화 중이라, 고칠 방법을 몰라도 알려 주시는 것 하나하나가 큰 도움이
+됩니다.
+
+<p>
+  <a href="https://github.com/thisisthepy/desktop-subsystem-for-android/issues/new"><img alt="이슈 올리기" src="https://img.shields.io/badge/GitHub-%EC%9D%B4%EC%8A%88%20%EC%98%AC%EB%A6%AC%EA%B8%B0-24292f?logo=github&amp;logoColor=white"></a>
+  <a href="https://discord.gg/MtpQnR4eQQ"><img alt="Discord 참여하기" src="https://img.shields.io/badge/Discord-%EC%B0%B8%EC%97%AC%ED%95%98%EA%B8%B0-5865F2?logo=discord&amp;logoColor=white"></a>
+</p>
+
+- **버그를 찾았거나 아이디어가 있나요?** [이슈를 올려 주세요](https://github.com/thisisthepy/desktop-subsystem-for-android/issues/new). 무엇을
+  했고 어떻게 되었는지와 함께 Windows 빌드(`winver`), DSA와 Android 버전(`dsa status`)을
+  적어 주세요. `dsa logs collect -o diag.zip`으로 만든 진단 묶음이 있으면 원인을 훨씬 빨리
+  찾을 수 있습니다.
+- **먼저 물어보거나 이야기 나누고 싶나요?** [DSA Discord](https://discord.gg/MtpQnR4eQQ)에 남겨 주세요. 궁금한
+  점, 돌려 보려는 앱, 써 본 소감 모두 반갑습니다.
+- **변경을 보내 주시나요?** 작업은 `develop` 브랜치에서 하고, `main`은 거기서 게시합니다.
+  풀 리퀘스트는 `develop`으로 열어 주세요. 커밋 하나에 논리적 변경 하나, 동작 변경마다
+  테스트 하나를 둡니다. 생성된 프로토콜 코드는 손으로 고치지 않습니다. 글에 em 대시를 쓰지
+  말아 주세요. 저장소 검사가 거부합니다.
 
 ## 라이선스
 

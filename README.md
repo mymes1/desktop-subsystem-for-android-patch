@@ -216,10 +216,25 @@ revision and apply the patches kept here. Python tools run with `uv run`.
 
 ## Contributing
 
-Work happens on the `develop` branch; `main` is published from it. Open pull requests
-against `develop`, with one logical change per commit and a test for every behaviour
-change. Generated protocol code is never edited by hand. Please do not use em dashes in
-text: a repository check rejects them.
+DSA is young and still being stabilized, so every report helps, whether or not you have a
+fix in hand.
+
+<p>
+  <a href="https://github.com/thisisthepy/desktop-subsystem-for-android/issues/new"><img alt="Open an issue" src="https://img.shields.io/badge/GitHub-open%20an%20issue-24292f?logo=github&amp;logoColor=white"></a>
+  <a href="https://discord.gg/MtpQnR4eQQ"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-join%20the%20chat-5865F2?logo=discord&amp;logoColor=white"></a>
+</p>
+
+- **Found a bug or have an idea?** [Open an issue](https://github.com/thisisthepy/desktop-subsystem-for-android/issues/new). Say what you did and
+  what happened, with your Windows build (`winver`) and the DSA and Android versions
+  (`dsa status`). A diagnostic bundle from `dsa logs collect -o diag.zip` makes a bug much
+  easier to track down.
+- **Want to ask first or just talk it through?** Come to the
+  [DSA Discord](https://discord.gg/MtpQnR4eQQ). Questions, what you are trying to run, and early feedback are all
+  welcome there.
+- **Sending a change?** Work happens on the `develop` branch; `main` is published from it.
+  Open pull requests against `develop`, with one logical change per commit and a test for
+  every behaviour change. Generated protocol code is never edited by hand. Please do not use
+  em dashes in text: a repository check rejects them.
 
 ## License
 
