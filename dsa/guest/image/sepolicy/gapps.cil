@@ -17,3 +17,6 @@
 (allow init labeledfs (filesystem (relabelfrom)))
 (allow init system_file (filesystem (mount relabelfrom relabelto)))
 (allow system_file system_file (filesystem (associate)))
+; overlayfs reads the lower layer's filesystem attributes when init lays it over /product
+; and /system_ext.
+(allow init system_file (filesystem (getattr)))
