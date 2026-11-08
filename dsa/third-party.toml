@@ -173,6 +173,19 @@ distribution = "aggregate"
 notice = "Each guest image carries the AOSP NOTICE file (NOTICE.xml.gz) that its build produced, listing every AOSP module and its licence."
 source = "https://android.googlesource.com/"
 
+# The typeface of the screens Android draws itself (Settings, the system dialogs, the share
+# sheet), at its bold weight for titles. It is the image's own: the system screen overlays
+# name the family "sans-serif" and add no font file. Every drawing in those overlays is DSA's
+# own, under DSA's licence.
+[[component]]
+name = "Roboto (the system screens' typeface, from the AOSP image)"
+version = "3.005"
+license = "Apache-2.0 OR OFL-1.1"
+part = "guest"
+distribution = "aggregate"
+notice = "AOSP's external/roboto-fonts ships it under the Apache License 2.0 (its NOTICE, listed in the image's NOTICE.xml.gz); the upstream release, googlefonts/roboto-classic, is under the SIL Open Font License 1.1."
+source = "https://android.googlesource.com/platform/external/roboto-fonts"
+
 [[component]]
 name = "Guest kernel (WSL2 Linux kernel with DSA's configuration)"
 license = "GPL-2.0-only WITH Linux-syscall-note"
