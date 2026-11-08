@@ -149,6 +149,8 @@ use crate::notifications::{self, Notification, NotificationAction, NotificationE
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
+use crate::root_approval::{ApprovalRequest, RootElevation};
+use crate::root_elevation::DecisionDenied;
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
@@ -701,6 +703,9 @@ struct Shared {
     android_files_token: Mutex<Option<String>>,
     /// Says the device name the guest's agent is given each time it connects.
     device_name: Mutex<Option<DeviceNameSource>>,
+    /// How the host answers the guest's su requests, once the platform gives its
+    /// administrator prompt, with a way back to the worker for the answers.
+    root_elevation: Mutex<Option<(Arc<RootElevation>, Sender<Command>)>>,
 }
 
 /// Opens a stream to the guest's adbd in the VM with the given runtime ID: the platform's
@@ -1214,6 +1219,7 @@ impl Session {
             share_server: Mutex::new(None),
             android_files_token: Mutex::new(None),
             device_name: Mutex::new(None),
+            root_elevation: Mutex::new(None),
         });
         let freeze_delay = config.freeze_after.unwrap_or(DEFAULT_FREEZE_AFTER);
         let (commands, command_rx) = mpsc::channel();
@@ -1624,6 +1630,18 @@ impl Session {
             .unwrap_or_else(|e| e.into_inner())
             .as_ref()
             .map(|(_, bridge)| bridge.address())
+    }
+
+    /// Answers the guest's su requests through `root`: by the root elevation policy, and by
+    /// the host's administrator prompt when the policy asks for one. Without it every su
+    /// request is refused. Each start of Android starts `root` afresh, so no grace outlives
+    /// a restart.
+    pub fn set_root_elevation(&self, root: Arc<RootElevation>) {
+        *self
+            .shared
+            .root_elevation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some((root, self.commands.clone()));
     }
 
     /// Pairs the host's clock with the guest's while the guest runs and `trace` says the
@@ -4269,6 +4287,51 @@ impl Worker {
         self.post_notice(native_abi::Notice::of_outcome(&outcome).notification(&app));
     }
 
+    /// The guest's su relay asks whether a su call may run as root. The answer may wait for
+    /// the host's administrator, so it is worked out on a thread of its own and goes back to
+    /// the guest as a [`control::SuDecision`] when it is known.
+    fn su_request(&mut self, request: control::SuRequest) {
+        let root = self
+            .shared
+            .root_elevation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let Some((root, commands)) = root else {
+            eprintln!(
+                "root: {} asked to run as root, but this host has no administrator prompt",
+                request.package
+            );
+            self.send_body(Body::SuDecision(control::SuDecision {
+                request_id: request.request_id,
+                approved: false,
+                reason: DecisionDenied::NotAllowed.describe().to_string(),
+            }));
+            return;
+        };
+        let app = self.shared.installed_app(&request.package);
+        let (label, icon) = app.map(|app| (app.label, app.icon_png)).unwrap_or_default();
+        let question = ApprovalRequest::from_su(&request, &label, &icon);
+        let shared = Arc::clone(&self.shared);
+        let spawned = thread::Builder::new()
+            .name("dsa-su-request".into())
+            .spawn(move || {
+                let decision = root.answer(&question);
+                send_quietly(&shared, &commands, Body::SuDecision(decision));
+            });
+        if let Err(why) = spawned {
+            eprintln!(
+                "root: the request of {} was not answered: {why}",
+                request.package
+            );
+            self.send_body(Body::SuDecision(control::SuDecision {
+                request_id: request.request_id,
+                approved: false,
+                reason: format!("the host could not answer the root request: {why}"),
+            }));
+        }
+    }
+
     /// Takes a notification the guest posted or changed, and hands it to the watchers when its
     /// turn comes. One the same as what the watchers have is not handed again.
     fn guest_notification(&mut self, message: control::GuestNotification) {
@@ -5341,6 +5404,14 @@ impl Worker {
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = Some(secret.clone());
         self.secret = Some(secret);
+        if let Some((root, _)) = &*self
+            .shared
+            .root_elevation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+        {
+            root.restart();
+        }
         if let Err(why) = started {
             // The launcher may have got part of the way; make sure nothing is left behind.
             let _ = self.launcher.stop(self.config.stop_timeout);
@@ -5755,6 +5826,7 @@ impl Worker {
                 .shared
                 .publish_rumble(GamepadRumble::from_control(&rumble)),
             Some(Body::Notification(notification)) => self.guest_notification(notification),
+            Some(Body::SuRequest(request)) => self.su_request(request),
             Some(Body::NotificationRemoved(removed)) => {
                 self.guest_notification_removed(removed.key)
             }
@@ -5978,7 +6050,9 @@ impl Worker {
             | Some(Body::DeviceName(_))
             | Some(Body::GamepadConnected(_))
             | Some(Body::GamepadDisconnected(_))
-            | Some(Body::GamepadState(_)) => {
+            | Some(Body::GamepadState(_))
+            | Some(Body::RootElevationConfig(_))
+            | Some(Body::SuDecision(_)) => {
                 eprintln!("control channel: dropping a request only the host sends");
             }
             Some(Body::SensorList(_))

@@ -5077,3 +5077,92 @@ fn fr31_a_session_is_never_stopped_for_idle_time_after_the_last_window_closes() 
         "and nothing froze it"
     );
 }
+
+/// An administrator prompt that answers each request with the next of its answers.
+struct ScriptedPrompt {
+    answers: Mutex<Vec<dsa_host_core::root_approval::PromptAnswer>>,
+    asked: Mutex<Vec<String>>,
+}
+
+impl dsa_host_core::root_approval::AdminPrompt for ScriptedPrompt {
+    fn ask(
+        &self,
+        request: &dsa_host_core::root_approval::ApprovalRequest,
+    ) -> dsa_host_core::root_approval::PromptAnswer {
+        self.asked.lock().unwrap().push(request.package.clone());
+        self.answers.lock().unwrap().remove(0)
+    }
+}
+
+fn su_request(request_id: u64, package: &str) -> Body {
+    Body::SuRequest(dsa_protocol::control::SuRequest {
+        request_id,
+        package: package.into(),
+        uid: 10_123,
+        command: vec!["id".into()],
+        interactive: false,
+    })
+}
+
+/// The next su decision the guest is sent, passing over anything else.
+fn next_su_decision(agent: &mut Box<dyn Connection>) -> dsa_protocol::control::SuDecision {
+    loop {
+        if let Body::SuDecision(decision) = next_body(agent) {
+            return decision;
+        }
+    }
+}
+
+#[test]
+fn fr35_an_ask_apps_su_request_is_answered_by_the_hosts_administrator_prompt() {
+    use dsa_host_core::root_approval::{PromptAnswer, RootElevation};
+    use dsa_host_core::root_elevation::{AppLevel, Level};
+    let (session, mut agent, _launcher) = active_session();
+    let prompt = Arc::new(ScriptedPrompt {
+        answers: Mutex::new(vec![PromptAnswer::Denied, PromptAnswer::Approved]),
+        asked: Mutex::new(Vec::new()),
+    });
+    let root = RootElevation::new(
+        prompt.clone(),
+        Arc::new(|| {
+            (
+                true,
+                vec![AppLevel {
+                    package: "com.ask.app".into(),
+                    level: Level::Ask,
+                }],
+            )
+        }),
+    )
+    .with_log(Arc::new(|_: &str| {}));
+    session.set_root_elevation(Arc::new(root));
+
+    send_body(&mut agent, su_request(1, "com.ask.app"));
+    let refused = next_su_decision(&mut agent);
+    assert_eq!(refused.request_id, 1);
+    assert!(!refused.approved);
+    assert!(refused.reason.contains("refused"), "{}", refused.reason);
+
+    send_body(&mut agent, su_request(2, "com.ask.app"));
+    let approved = next_su_decision(&mut agent);
+    assert_eq!(approved.request_id, 2);
+    assert!(approved.approved);
+
+    // Within the grace: approved without a third prompt.
+    send_body(&mut agent, su_request(3, "com.ask.app"));
+    let again = next_su_decision(&mut agent);
+    assert!(again.approved);
+    // An app that may not use root never reaches the prompt.
+    send_body(&mut agent, su_request(4, "com.other.app"));
+    assert!(!next_su_decision(&mut agent).approved);
+    assert_eq!(prompt.asked.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn fr35_a_host_without_an_administrator_prompt_refuses_su() {
+    let (_session, mut agent, _launcher) = active_session();
+    send_body(&mut agent, su_request(9, "com.ask.app"));
+    let decision = next_su_decision(&mut agent);
+    assert_eq!(decision.request_id, 9);
+    assert!(!decision.approved);
+}
