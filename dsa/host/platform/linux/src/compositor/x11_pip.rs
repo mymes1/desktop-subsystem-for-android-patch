@@ -12,7 +12,7 @@ use std::os::fd::OwnedFd;
 use std::sync::{Arc, Mutex};
 
 use dsa_host_core::compositor::window_hosts::FromHost;
-use dsa_host_core::input::{MouseButton, WindowInput};
+use dsa_host_core::input::WindowInput;
 use x11rb::connection::Connection;
 use x11rb::protocol::dri3::ConnectionExt as _;
 use x11rb::protocol::render::{ConnectionExt as _, PictOp};
@@ -341,14 +341,7 @@ fn read_events(
             .ok()
             .and_then(|map| map.get(&window).copied())
     };
-    let button = |detail: u8| match detail {
-        1 => Some(MouseButton::Left),
-        2 => Some(MouseButton::Middle),
-        3 => Some(MouseButton::Right),
-        8 => Some(MouseButton::Back),
-        9 => Some(MouseButton::Forward),
-        _ => None,
-    };
+    let button = crate::input::pointer::x11_button;
     while let Ok(event) = connection.wait_for_event() {
         let (task_id, input) = match event {
             XEvent::ButtonPress(e) | XEvent::ButtonRelease(e) => {

@@ -1,7 +1,9 @@
 //! `wl_pointer`'s buttons and wheel, and the edges of a window that a press resizes.
 
-use dsa_host_core::compositor::caption::{CaptionHit, CaptionLayout};
+use dsa_host_core::compositor::caption::{CaptionHit, CaptionLayout, TitleBarHit};
 use dsa_host_core::input::MouseButton;
+
+use crate::compositor::title_bar::TitleBar;
 
 /// The evdev button codes `wl_pointer.button` reports.
 pub mod evdev_button {
@@ -26,6 +28,19 @@ pub fn mouse_button(code: u32) -> Option<MouseButton> {
         b::MIDDLE => MouseButton::Middle,
         b::SIDE | b::BACK => MouseButton::Back,
         b::EXTRA | b::FORWARD => MouseButton::Forward,
+        _ => return None,
+    })
+}
+
+/// The mouse button an X11 `ButtonPress` names by its `detail`: 1 to 3 are the left, middle
+/// and right buttons, 8 and 9 the back and forward buttons (4 to 7 are the wheel's steps).
+pub fn x11_button(detail: u8) -> Option<MouseButton> {
+    Some(match detail {
+        1 => MouseButton::Left,
+        2 => MouseButton::Middle,
+        3 => MouseButton::Right,
+        8 => MouseButton::Back,
+        9 => MouseButton::Forward,
         _ => return None,
     })
 }
@@ -107,17 +122,23 @@ pub enum WindowHit {
     Caption(CaptionHit),
     /// The press starts resizing the window by this edge.
     Resize(Edge),
+    /// The icon's cell while it shows the icon: a press opens the window menu.
+    WindowMenu,
+    /// The icon's cell while it shows the back arrow: a click sends the task Back.
+    Back,
 }
 
 /// Where a press lands in a window that draws its own frame (no server-side decorations):
 /// the left, right and bottom edges, within `border` pixels, resize it, and the title bar
-/// decides the rest, the top edge among it. A maximized or full screen window has no edges.
+/// `title` decides the rest, the top edge among it. A maximized or full screen window has no
+/// edges.
 pub fn window_hit(
     layout: &CaptionLayout,
     size: (u32, u32),
     border: u32,
     x: i32,
     y: i32,
+    title: &TitleBar,
 ) -> WindowHit {
     let (width, height) = (size.0 as i32, size.1 as i32);
     let border = border as i32;
@@ -137,11 +158,13 @@ pub fn window_hit(
             return WindowHit::Resize(edge);
         }
     }
-    match layout.hit(x, y) {
-        CaptionHit::Top => WindowHit::Resize(Edge::Top),
-        CaptionHit::TopLeft => WindowHit::Resize(Edge::TopLeft),
-        CaptionHit::TopRight => WindowHit::Resize(Edge::TopRight),
-        hit => WindowHit::Caption(hit),
+    match title.hit(layout, x, y) {
+        TitleBarHit::Window(CaptionHit::Top) => WindowHit::Resize(Edge::Top),
+        TitleBarHit::Window(CaptionHit::TopLeft) => WindowHit::Resize(Edge::TopLeft),
+        TitleBarHit::Window(CaptionHit::TopRight) => WindowHit::Resize(Edge::TopRight),
+        TitleBarHit::Window(hit) => WindowHit::Caption(hit),
+        TitleBarHit::SystemMenu => WindowHit::WindowMenu,
+        TitleBarHit::Back => WindowHit::Back,
     }
 }
 
@@ -190,38 +213,39 @@ mod tests {
 
     #[test]
     fn fr22_a_window_that_draws_its_frame_resizes_by_its_edges_and_moves_by_its_title_bar() {
+        let bar = TitleBar::default();
         let layout = CaptionLayout::new(400, 32, 96, 4);
         let size = (400, 300);
         assert_eq!(
-            window_hit(&layout, size, 6, 1, 150),
+            window_hit(&layout, size, 6, 1, 150, &bar),
             WindowHit::Resize(Edge::Left)
         );
         assert_eq!(
-            window_hit(&layout, size, 6, 398, 150),
+            window_hit(&layout, size, 6, 398, 150, &bar),
             WindowHit::Resize(Edge::Right)
         );
         assert_eq!(
-            window_hit(&layout, size, 6, 200, 298),
+            window_hit(&layout, size, 6, 200, 298, &bar),
             WindowHit::Resize(Edge::Bottom)
         );
         assert_eq!(
-            window_hit(&layout, size, 6, 1, 298),
+            window_hit(&layout, size, 6, 1, 298, &bar),
             WindowHit::Resize(Edge::BottomLeft)
         );
         assert_eq!(
-            window_hit(&layout, size, 6, 200, 1),
+            window_hit(&layout, size, 6, 200, 1, &bar),
             WindowHit::Resize(Edge::Top)
         );
         assert_eq!(
-            window_hit(&layout, size, 6, 100, 16),
+            window_hit(&layout, size, 6, 100, 16, &bar),
             WindowHit::Caption(CaptionHit::Caption)
         );
         assert_eq!(
-            window_hit(&layout, size, 6, 390, 16),
+            window_hit(&layout, size, 6, 390, 16, &bar),
             WindowHit::Caption(CaptionHit::Button(CaptionButton::Close))
         );
         assert_eq!(
-            window_hit(&layout, size, 6, 200, 150),
+            window_hit(&layout, size, 6, 200, 150, &bar),
             WindowHit::Caption(CaptionHit::Client)
         );
     }
@@ -230,8 +254,58 @@ mod tests {
     fn fr22_a_maximized_window_has_no_edges_to_resize() {
         let layout = CaptionLayout::new(400, 32, 96, 0);
         assert_eq!(
-            window_hit(&layout, (400, 300), 0, 1, 150),
+            window_hit(&layout, (400, 300), 0, 1, 150, &TitleBar::default()),
             WindowHit::Caption(CaptionHit::Client)
+        );
+    }
+
+    #[test]
+    fn fr5_the_mouse_back_and_forward_buttons_reach_the_guest_as_back_and_forward() {
+        use dsa_host_core::input::buttons;
+        // Wayland names them BTN_SIDE and BTN_EXTRA on most mice, BTN_BACK and BTN_FORWARD on
+        // some; X11 numbers them 8 and 9. Each reaches the guest's pointer as bit 8 (back) or
+        // bit 16 (forward), which the guest turns into KEYCODE_BACK and KEYCODE_FORWARD.
+        for code in [evdev_button::SIDE, evdev_button::BACK] {
+            assert_eq!(
+                mouse_button(code).map(MouseButton::bit),
+                Some(buttons::BACK)
+            );
+        }
+        for code in [evdev_button::EXTRA, evdev_button::FORWARD] {
+            assert_eq!(
+                mouse_button(code).map(MouseButton::bit),
+                Some(buttons::FORWARD)
+            );
+        }
+        assert_eq!(buttons::BACK, 8);
+        assert_eq!(buttons::FORWARD, 16);
+        assert_eq!(x11_button(8).map(MouseButton::bit), Some(buttons::BACK));
+        assert_eq!(x11_button(9).map(MouseButton::bit), Some(buttons::FORWARD));
+        assert_eq!(x11_button(1), Some(MouseButton::Left));
+        assert_eq!(x11_button(3), Some(MouseButton::Right));
+        // The wheel's steps are no buttons.
+        assert_eq!(x11_button(4), None);
+    }
+
+    #[test]
+    fn fr22_the_icon_cell_opens_the_window_menu_or_goes_back() {
+        let layout = CaptionLayout::new(400, 32, 96, 4);
+        let mut bar = TitleBar::default();
+        let (left, _, width, _) = layout.icon_cell().unwrap();
+        let x = left + width as i32 / 2;
+        assert_eq!(
+            window_hit(&layout, (400, 300), 6, x, 16, &bar),
+            WindowHit::WindowMenu
+        );
+        bar.set_back(true);
+        assert_eq!(
+            window_hit(&layout, (400, 300), 6, x, 16, &bar),
+            WindowHit::Back
+        );
+        // The top edge above the cell still resizes the window.
+        assert_eq!(
+            window_hit(&layout, (400, 300), 6, x, 1, &bar),
+            WindowHit::Resize(Edge::Top)
         );
     }
 }

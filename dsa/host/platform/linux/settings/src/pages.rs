@@ -96,3 +96,32 @@ impl Page {
         Page::ALL.into_iter().find(|page| page.id() == id)
     }
 }
+
+/// The app `--app` names in `args`, whose row the Apps page opens; `None` when there is none
+/// or it names no package. A task window's App info starts the app as
+/// `dsa-settings --page apps --app com.example.notes`.
+pub fn app_of(args: &[String]) -> Option<String> {
+    let at = args.iter().position(|arg| arg == "--app")?;
+    let package = args.get(at + 1)?;
+    dsa_host_core::compositor::window_hosts::is_valid_package(package).then(|| package.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|arg| arg.to_string()).collect()
+    }
+
+    #[test]
+    fn fr22_app_info_opens_the_apps_page_at_the_app() {
+        let start = args(&["--page", "apps", "--app", "com.example.notes"]);
+        assert_eq!(Page::from_id("apps"), Some(Page::Apps));
+        assert_eq!(app_of(&start), Some("com.example.notes".into()));
+        assert_eq!(app_of(&args(&["--app"])), None);
+        assert_eq!(app_of(&args(&["--app", "../evil"])), None);
+        assert_eq!(app_of(&args(&["--app", "notes"])), None);
+        assert_eq!(app_of(&args(&["--page", "apps"])), None);
+    }
+}

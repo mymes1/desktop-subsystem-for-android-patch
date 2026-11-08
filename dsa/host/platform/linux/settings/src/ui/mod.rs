@@ -8,32 +8,44 @@ mod logs;
 mod status;
 mod system;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use adw::prelude::*;
-use gtk::{gdk, glib};
+use gtk::{gdk, gio, glib};
 
 use crate::api::{is_administrator, Elevated, LocalApi};
 use crate::i18n::{tr, trf};
 use crate::model::Client;
-use crate::pages::Page;
+use crate::pages::{app_of, Page};
 use crate::view;
 use common::{request, Ctx, Shared};
 
-/// What the command line asked for: the page to open on, and APKs to install.
+/// What the command line asked for: the page to open on, the app whose row the Apps page
+/// opens, and APKs to install.
 #[derive(Debug, Default, Clone)]
 struct Start {
     page: Option<Page>,
+    app: Option<String>,
     apks: Vec<String>,
 }
 
 fn parse_args(args: &[String]) -> Start {
-    let mut start = Start::default();
+    let mut start = Start {
+        app: app_of(args),
+        ..Start::default()
+    };
+    if start.app.is_some() && start.page.is_none() {
+        start.page = Some(Page::Apps);
+    }
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--page" => start.page = args.next().and_then(|id| Page::from_id(id)),
+            "--app" => {
+                args.next();
+            }
             "--install-apk" => start.apks.extend(args.next().cloned()),
             other if is_install_file(other) => start.apks.push(other.to_string()),
             _ => {}
@@ -55,18 +67,65 @@ pub fn run() -> glib::ExitCode {
     let app = adw::Application::builder()
         .application_id(crate::APP_ID)
         .build();
+    // The window that runs already shows the page and the app a second start asks for, as
+    // App info in a task window's menu does while the settings are open.
+    let opener: Rc<RefCell<Option<Opener>>> = Rc::default();
+    let open = gio::SimpleAction::new("open", glib::VariantTy::new("(ss)").ok());
+    {
+        let opener = opener.clone();
+        open.connect_activate(move |_, parameter| {
+            let Some((page, package)) = parameter.and_then(|v| v.get::<(String, String)>()) else {
+                return;
+            };
+            if let Some(opener) = opener.borrow().as_ref() {
+                let package = (!package.is_empty()).then_some(package);
+                opener.open(Page::from_id(&page), package);
+            }
+        });
+    }
+    app.add_action(&open);
+    if start.page.is_some() && app.register(gio::Cancellable::NONE).is_ok() && app.is_remote() {
+        let page = start.page.map(Page::id).unwrap_or_default().to_string();
+        let package = start.app.clone().unwrap_or_default();
+        app.activate_action("open", Some(&glib::ToVariant::to_variant(&(page, package))));
+    }
     app.connect_activate(move |app| {
         if let Some(window) = app.active_window() {
             window.present();
             return;
         }
-        build(app, &start);
+        build(app, &start, &opener);
     });
     // GTK does not see the arguments; they were read above.
     app.run_with_args::<&str>(&[])
 }
 
-fn build(app: &adw::Application, start: &Start) {
+/// What shows a page of the window that runs, for a second start of the app.
+struct Opener {
+    ctx: Shared,
+    split: adw::NavigationSplitView,
+    list: gtk::ListBox,
+}
+
+impl Opener {
+    /// Shows `page`, with `package`'s row open when it is the Apps page, and brings the window
+    /// to the front.
+    fn open(&self, page: Option<Page>, package: Option<String>) {
+        if let Some(page) = page {
+            *self.ctx.focus_app.borrow_mut() = package;
+            let index = Page::ALL.iter().position(|p| *p == page).unwrap_or(0) as i32;
+            let selected = self.list.selected_row().map(|row| row.index());
+            if selected == Some(index) {
+                show_page(&self.ctx, &self.split, page);
+            } else if let Some(row) = self.list.row_at_index(index) {
+                self.list.select_row(Some(&row));
+            }
+        }
+        self.ctx.window.present();
+    }
+}
+
+fn build(app: &adw::Application, start: &Start, opener: &Rc<RefCell<Option<Opener>>>) {
     let window = adw::ApplicationWindow::builder()
         .application(app)
         .title(tr("DSA Settings"))
@@ -99,6 +158,7 @@ fn build(app: &adw::Application, start: &Start) {
         client,
         window: window.clone(),
         toasts,
+        focus_app: RefCell::new(start.app.clone()),
     });
 
     // The sidebar.
@@ -149,6 +209,11 @@ fn build(app: &adw::Application, start: &Start) {
     if start.page.is_some() {
         split.set_show_content(true);
     }
+    *opener.borrow_mut() = Some(Opener {
+        ctx: ctx.clone(),
+        split: split.clone(),
+        list: list.clone(),
+    });
 
     // APK files dropped anywhere on the window are installed in Android.
     let drop = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY);

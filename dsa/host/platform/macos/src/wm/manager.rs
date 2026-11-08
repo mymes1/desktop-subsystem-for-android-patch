@@ -17,8 +17,20 @@ use std::time::Instant;
 use dsa_host_core::app_windows::AppWindowSettings;
 use dsa_host_core::compositor::shown_windows::ShownWindows;
 use dsa_host_core::compositor::task_windows::{TaskWindows, WindowChange};
-use dsa_host_core::compositor::window_hosts::{FromHost, HostAction, HostId, ToHost, WindowHosts};
+use dsa_host_core::compositor::window_hosts::{
+    is_valid_package, FromHost, HostAction, HostId, MenuWork, ToHost, WindowHosts,
+};
 use dsa_host_core::tasks::{AppInfo, TaskEvent, TaskRequest};
+
+/// The URL scheme DSA's settings app (DSA.app) opens, which a running copy receives too.
+pub const SETTINGS_SCHEME: &str = "dsa-settings";
+
+/// The link that opens DSA's settings on the Apps page with `package`'s row in view, as a
+/// task window's App Info does: `dsa-settings://apps/com.example.notes`. `None` for a name
+/// that is no package, which never reaches the settings app.
+pub fn app_page_url(package: &str) -> Option<String> {
+    is_valid_package(package).then(|| format!("{SETTINGS_SCHEME}://apps/{package}"))
+}
 
 /// What the other threads tell the manager.
 pub enum ManagerEvent {
@@ -69,6 +81,8 @@ pub trait Platform {
     fn installed(&mut self, _apps: &[AppInfo]) {}
     /// Whether a task window is the active window now.
     fn focused(&mut self, _any: bool) {}
+    /// Opens DSA's settings on the Apps page at `package`, as a window's App Info does.
+    fn open_app_page(&mut self, package: &str) -> Result<(), String>;
     /// Writes a line to the log.
     fn log(&mut self, line: &str);
 }
@@ -256,8 +270,20 @@ impl<P: Platform> Manager<P> {
                     self.hidden.insert(task_id);
                 }
             }
-            // The macOS windows offer no Android items in their menu, so none is chosen.
-            FromHost::MenuChosen { .. } => {}
+            // An Android entry of a window's Window menu: Android opens its page, or DSA's
+            // settings open the app's.
+            FromHost::MenuChosen { task_id, action } => {
+                match self.hosts.menu_chosen(task_id, action) {
+                    Some(MenuWork::Request(request)) => self.platform.request(request),
+                    Some(MenuWork::AppPage { package }) => {
+                        if let Err(why) = self.platform.open_app_page(&package) {
+                            self.platform
+                                .log(&format!("could not open the settings of {package}: {why}"));
+                        }
+                    }
+                    None => {}
+                }
+            }
         }
     }
 
@@ -357,6 +383,7 @@ mod tests {
         installed: Vec<String>,
         focused: bool,
         refuse_start: bool,
+        app_pages: Vec<String>,
     }
 
     impl Platform for Fake {
@@ -382,6 +409,10 @@ mod tests {
         }
         fn focused(&mut self, any: bool) {
             self.focused = any;
+        }
+        fn open_app_page(&mut self, package: &str) -> Result<(), String> {
+            self.app_pages.push(package.to_string());
+            Ok(())
         }
         fn log(&mut self, _line: &str) {}
     }
@@ -567,6 +598,97 @@ mod tests {
         assert!(manager.platform().focused);
         manager.handle(ManagerEvent::Gone { host: HOST }, Instant::now());
         assert!(!manager.platform().focused);
+    }
+
+    #[test]
+    fn fr22_the_window_menus_android_items_reach_android_and_the_settings() {
+        use dsa_host_core::compositor::window_hosts::MenuAction;
+        use dsa_host_core::tasks::AppSettingsPage;
+        let mut manager = with_window();
+        let chosen = |action| FromHost::MenuChosen { task_id: 7, action };
+        report(&mut manager, chosen(MenuAction::AspectRatio));
+        assert!(asked(
+            &manager,
+            &TaskRequest::OpenAppSettings {
+                package_name: PACKAGE.into(),
+                page: AppSettingsPage::AspectRatio,
+            }
+        ));
+        report(&mut manager, chosen(MenuAction::OpenByDefault));
+        assert!(asked(
+            &manager,
+            &TaskRequest::OpenAppSettings {
+                package_name: PACKAGE.into(),
+                page: AppSettingsPage::OpenByDefault,
+            }
+        ));
+        report(&mut manager, chosen(MenuAction::AppInfo));
+        assert_eq!(manager.platform().app_pages, vec![PACKAGE.to_string()]);
+        // The app does not support several windows, so its menu never offers New Window.
+        report(&mut manager, chosen(MenuAction::NewWindow));
+        assert!(!asked(
+            &manager,
+            &TaskRequest::NewWindow {
+                package_name: PACKAGE.into()
+            }
+        ));
+    }
+
+    #[test]
+    fn fr22_new_window_opens_another_task_of_an_app_with_several_windows() {
+        use dsa_host_core::compositor::window_hosts::MenuAction;
+        let mut manager = with_window();
+        let several = AppInfo {
+            multiple_windows: true,
+            ..app()
+        };
+        manager.handle(ManagerEvent::Task(TaskEvent::App(several)), Instant::now());
+        let offered = manager.platform().sent.iter().any(|(host, message)| {
+            *host == HOST && *message == ToHost::AppMenu { new_window: true }
+        });
+        assert!(offered);
+        let chosen = FromHost::MenuChosen {
+            task_id: 7,
+            action: MenuAction::NewWindow,
+        };
+        report(&mut manager, chosen);
+        assert!(asked(
+            &manager,
+            &TaskRequest::NewWindow {
+                package_name: PACKAGE.into()
+            }
+        ));
+    }
+
+    #[test]
+    fn fr22_app_info_opens_the_settings_apps_page_at_the_app() {
+        assert_eq!(
+            app_page_url(PACKAGE).as_deref(),
+            Some("dsa-settings://apps/com.example.notes")
+        );
+        assert_eq!(app_page_url("../evil"), None);
+        assert_eq!(app_page_url("notes"), None);
+    }
+
+    #[test]
+    fn fr22_the_windows_title_bar_band_reaches_the_guest() {
+        use dsa_host_core::compositor::caption::CaptionBand;
+        let mut manager = with_window();
+        let band = CaptionBand {
+            height: 56,
+            start_width: 154,
+            end_width: 0,
+        };
+        report(&mut manager, FromHost::Caption { task_id: 7, band });
+        assert!(asked(
+            &manager,
+            &TaskRequest::SetCaption {
+                task_id: 7,
+                height: 56,
+                start_width: 154,
+                end_width: 0,
+            }
+        ));
     }
 
     #[test]
