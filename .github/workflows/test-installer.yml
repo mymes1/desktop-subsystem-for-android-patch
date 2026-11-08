@@ -281,7 +281,13 @@ jobs:
           $identity = & $dsa settings set device.model "CI tablet" --json | ConvertFrom-Json
           if ($identity.effective.model -ne 'CI tablet') { throw "the service did not keep the device model" }
           $identity = & $dsa settings reset device --json | ConvertFrom-Json
-          if ($identity.effective.model -ne 'Desktop Subsystem for Android') { throw "resetting the device identity did not restore the default model" }
+          # The default model is the computer's when its firmware names one (a runner's VM
+          # names its own), and DSA's own only when it does not.
+          Write-Host "device model after the reset: $($identity.effective.model) (default $($identity.defaults.model), from $($identity.sources.model))"
+          if (-not $identity.defaults.model) { throw "the device identity has no default model" }
+          if ($identity.sources.model -eq 'dsa' -and $identity.defaults.model -ne 'Desktop Subsystem for Android') { throw "DSA's own default model is '$($identity.defaults.model)'" }
+          if ($identity.effective.model -ne $identity.defaults.model) { throw "resetting the device identity did not restore the default model: '$($identity.effective.model)', not '$($identity.defaults.model)'" }
+          if ($identity.chosen.model) { throw "the reset kept the chosen model '$($identity.chosen.model)'" }
           $memory = & $dsa memory --json
           if ($LASTEXITCODE -ne 0) { throw "dsa memory failed: $memory" }
           Write-Host $memory
