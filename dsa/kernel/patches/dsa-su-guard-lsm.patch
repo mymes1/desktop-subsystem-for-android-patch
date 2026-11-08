@@ -1,3 +1,30 @@
+diff --git a/include/linux/lsm_count.h b/include/linux/lsm_count.h
+index 16eb497..e94ddf1 100644
+--- a/include/linux/lsm_count.h
++++ b/include/linux/lsm_count.h
+@@ -102,6 +102,12 @@
+ #define IPE_ENABLED
+ #endif
+ 
++#if IS_ENABLED(CONFIG_DSA_SU_GUARD)
++#define DSA_SU_ENABLED 1,
++#else
++#define DSA_SU_ENABLED
++#endif
++
+ /*
+  *  There is a trailing comma that we need to be accounted for. This is done by
+  *  using a skipped argument in __COUNT_LSMS
+@@ -124,7 +130,8 @@
+ 		LANDLOCK_ENABLED	\
+ 		IMA_ENABLED		\
+ 		EVM_ENABLED		\
+-		IPE_ENABLED)
++		IPE_ENABLED		\
++		DSA_SU_ENABLED)
+ 
+ #else
+ 
 diff --git a/security/Kconfig b/security/Kconfig
 index 285f284..2d397f0 100644
 --- a/security/Kconfig
@@ -59,10 +86,10 @@ index 0000000..d6fd9ed
 +obj-$(CONFIG_DSA_SU_GUARD) += dsa_su.o
 diff --git a/security/dsa_su/dsa_su.c b/security/dsa_su/dsa_su.c
 new file mode 100644
-index 0000000..51d6d8d
+index 0000000..a331d5b
 --- /dev/null
 +++ b/security/dsa_su/dsa_su.c
-@@ -0,0 +1,308 @@
+@@ -0,0 +1,307 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * DSA su guard: the su binary exists only for the Android uids the host has
@@ -99,7 +126,6 @@ index 0000000..51d6d8d
 +#include <linux/module.h>
 +#include <linux/lsm_hooks.h>
 +#include <linux/security.h>
-+#include <linux/securityfs.h>
 +#include <linux/namei.h>
 +#include <linux/fs.h>
 +#include <linux/cred.h>

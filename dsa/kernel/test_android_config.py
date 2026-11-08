@@ -73,6 +73,17 @@ class AndroidKernelConfigTests(unittest.TestCase):
         self.assertIn("+\t*next = dsa_su_state;", patch)
         self.assertIn("+\t\tdsa_su_state = *next;", patch)
 
+    def test_fr35_the_su_guard_builds_against_the_pinned_kernel_and_has_an_lsm_slot(self):
+        # The pinned tree declares securityfs in <linux/security.h> and has no
+        # <linux/securityfs.h>. It sizes the LSM id list and every hook's static call slots
+        # by the modules lsm_count.h knows, and panics at boot on a module it does not count.
+        patch = (PATCHES / "dsa-su-guard-lsm.patch").read_text()
+        self.assertNotIn("linux/securityfs.h", patch)
+        self.assertIn("+#include <linux/security.h>", patch)
+        self.assertIn("+++ b/include/linux/lsm_count.h", patch)
+        self.assertIn("+#if IS_ENABLED(CONFIG_DSA_SU_GUARD)\n+#define DSA_SU_ENABLED 1,", patch)
+        self.assertIn("+\t\tDSA_SU_ENABLED)", patch)
+
     def test_fr35_the_su_guard_patch_hunks_count_their_lines(self):
         # git apply refuses a hunk whose header miscounts its lines.
         header = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
