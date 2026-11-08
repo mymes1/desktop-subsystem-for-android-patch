@@ -522,6 +522,15 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
     session.set_adb_advertise(crate::adb_discovery::advertiser());
     session.set_android_files_connect(dial(dsa_host_core::file_share::ANDROID_FILES_PORT));
     let session = Arc::new(session);
+    // The guest's display refreshes as fast as the Mac's fastest display, and at 60 Hz in Low
+    // Power Mode.
+    let watched = Arc::downgrade(&session);
+    if let Err(why) = thread::Builder::new()
+        .name("dsa-display-power".into())
+        .spawn(move || crate::display_power::follow(watched))
+    {
+        eprintln!("display: cannot follow Low Power Mode and the displays' refresh rate: {why}");
+    }
     Ok(match &shared.store {
         None => session as Arc<dyn UserAndroid>,
         Some(store) => Arc::new(UpdatingAndroid {

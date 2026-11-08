@@ -35,6 +35,7 @@ pub mod cmdline;
 pub mod compositor;
 pub mod computer_identity;
 pub mod devices;
+pub mod display_power;
 pub mod host_config;
 pub mod input;
 pub mod launchd;
