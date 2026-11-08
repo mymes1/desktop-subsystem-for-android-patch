@@ -6,8 +6,9 @@ use dsa_host_windows::network::{
     endpoint_document, endpoint_facts, endpoint_name, guid_from, host_has_ipv6, host_side_adapter,
     ids_from_enumeration, mac_bytes, moved_leftover, name_query, nat_ipv6_subnet,
     nat_network_document, nat_path_problem, network_facts, network_name, object_name,
-    remove_adapter_request, reusable, subnets_in_use, transparent_network_document, EndpointFacts,
-    HostAdapter, Ipv4Subnet, NatPath, NetworkMode, NetworkStatusFacts,
+    properties_query, remove_adapter_request, reusable, subnets_in_use,
+    transparent_network_document, EndpointFacts, HostAdapter, Ipv4Subnet, NatPath, NetworkMode,
+    NetworkStatusFacts,
 };
 use dsa_host_windows::vm::NetworkAdapter;
 use serde_json::Value;
@@ -335,4 +336,69 @@ fn fr28_the_host_reaches_the_guests_address_through_its_network_for_android() {
         ..nat_endpoint()
     };
     assert_eq!(nat_path_problem(&name, &no_address, &path(None)), None);
+}
+
+#[test]
+fn fr28_the_properties_are_asked_for_in_the_schema_the_documents_are_written_in() {
+    let query: Value = serde_json::from_str(&properties_query()).unwrap();
+    assert_eq!(query["SchemaVersion"]["Major"], 2);
+    assert_eq!(query["SchemaVersion"]["Minor"], 0);
+}
+
+#[test]
+fn fr28_a_network_described_in_the_schema_1_layout_is_used_again_when_it_is_of_the_kind_wanted() {
+    // Windows Server 2022 describes a network this way when the query names no schema.
+    let nat = network_facts(
+        r#"{"ActivityId":"x","Flags":11,"ID":"6d5a0d5a-0000-4d5a-8d5a-00000000e0e0",
+            "Name":"DSA x","Type":"ICS",
+            "Subnets":[{"AddressPrefix":"172.28.5.0/24","GatewayAddress":"172.28.5.1"}]}"#,
+    )
+    .unwrap();
+    assert_eq!(nat.subnets, vec![subnet("172.28.5.0/24")]);
+    assert!(reusable(&nat, NetworkMode::Nat, None));
+    let lan =
+        network_facts(r#"{"Name":"DSA x","Type":"Transparent","NetworkAdapterName":"Wi-Fi"}"#)
+            .unwrap();
+    assert!(reusable(&lan, NetworkMode::Advanced, Some("Wi-Fi")));
+    assert!(!reusable(&lan, NetworkMode::Advanced, Some("Ethernet")));
+}
+
+#[test]
+fn fr28_an_endpoint_described_in_the_schema_1_layout_gives_the_guests_address_and_route() {
+    let facts = endpoint_facts(
+        r#"{"ID":"x","Name":"DSA vm eth0","MacAddress":"00-15-5D-12-34-56",
+            "IPAddress":"172.28.5.2","PrefixLength":24,"GatewayAddress":"172.28.5.1",
+            "DNSServerList":"172.28.5.1, 192.0.2.53",
+            "IPv6Address":"fd5a:d5a:1:2::2","PrefixLengthV6":64}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        facts,
+        EndpointFacts {
+            addresses: vec![
+                "172.28.5.2".parse().unwrap(),
+                "fd5a:d5a:1:2::2".parse().unwrap(),
+            ],
+            dns_servers: vec!["172.28.5.1".parse().unwrap(), "192.0.2.53".parse().unwrap(),],
+            ..nat_endpoint()
+        }
+    );
+    let status = NetworkStatusFacts {
+        mode: NetworkMode::Nat,
+        endpoint: facts,
+        seen: vec![],
+        problem: None,
+    }
+    .to_status();
+    assert_eq!(status.addresses, vec!["172.28.5.2", "fd5a:d5a:1:2::2"]);
+    assert_eq!(status.gateway, "172.28.5.1");
+    assert_eq!(status.dns_servers, vec!["172.28.5.1", "192.0.2.53"]);
+
+    // An endpoint on the LAN has no address of its own in either layout.
+    let lan = endpoint_facts(
+        r#"{"MacAddress":"00-15-5D-12-34-57","IPAddress":"0.0.0.0","GatewayAddress":""}"#,
+    )
+    .unwrap();
+    assert!(lan.addresses.is_empty());
+    assert_eq!(lan.gateway, None);
 }

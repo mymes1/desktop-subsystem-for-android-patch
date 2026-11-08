@@ -32,7 +32,7 @@ use crate::network::{
     advanced_adapter, advanced_problem, all_query, choose_nat_subnet, endpoint_document,
     endpoint_facts, endpoint_name, guid_from, host_has_ipv6, ids_from_enumeration, mac_bytes,
     moved_leftover, name_query, nat_ipv6_subnet, nat_network_document, nat_path_problem,
-    network_facts, network_name, object_name, reusable, subnets_in_use,
+    network_facts, network_name, object_name, properties_query, reusable, subnets_in_use,
     transparent_network_document, EndpointFacts, HostAdapter, Ipv4Subnet, NatPath, NetworkMode,
     NetworkStatusFacts,
 };
@@ -182,7 +182,7 @@ fn network_properties(api: &Api, id: &Guid) -> Result<String, String> {
     // SAFETY: a live GUID and out pointers.
     let hresult = unsafe { (api.open_network)(guid_ptr(id), &mut handle, &mut record) };
     check("HcnOpenNetwork", hresult, record)?;
-    let query = wide("");
+    let query = wide(&properties_query());
     let (mut properties, mut record) = (std::ptr::null_mut(), std::ptr::null_mut());
     // SAFETY: a live handle, a NUL-terminated query and out pointers.
     let hresult =
@@ -200,7 +200,7 @@ fn endpoint_properties(api: &Api, id: &Guid) -> Result<String, String> {
     // SAFETY: a live GUID and out pointers.
     let hresult = unsafe { (api.open_endpoint)(guid_ptr(id), &mut handle, &mut record) };
     check("HcnOpenEndpoint", hresult, record)?;
-    let query = wide("");
+    let query = wide(&properties_query());
     let (mut properties, mut record) = (std::ptr::null_mut(), std::ptr::null_mut());
     // SAFETY: a live handle, a NUL-terminated query and out pointers.
     let hresult =
@@ -305,7 +305,7 @@ fn create_endpoint(
         )
     };
     check("HcnCreateEndpoint", hresult, record)?;
-    let query = wide("");
+    let query = wide(&properties_query());
     let (mut properties, mut record) = (std::ptr::null_mut(), std::ptr::null_mut());
     // SAFETY: a live handle, a NUL-terminated query and out pointers.
     let hresult =
@@ -314,9 +314,18 @@ fn create_endpoint(
     // SAFETY: closed once; the endpoint stays until it is deleted.
     unsafe { (api.close_endpoint)(handle) };
     check("HcnQueryEndpointProperties", hresult, record)?;
-    endpoint_facts(&properties).ok_or_else(|| {
+    let facts = endpoint_facts(&properties).ok_or_else(|| {
         format!("HCN described the new endpoint in a way DSA cannot read: {properties}")
-    })
+    })?;
+    if facts.addresses.is_empty() {
+        // Expected on the LAN, which gives the addresses; behind NAT HCN gives them, and the
+        // description shows where they are when they cannot be read.
+        eprintln!(
+            "network: HCN gave the new endpoint no address DSA can read: {}",
+            properties.trim()
+        );
+    }
+    Ok(facts)
 }
 
 /// The network a VM's adapter is connected to, made for that VM.
@@ -374,9 +383,28 @@ impl VmNetwork {
         let mut network_id = None;
         let mut nat_gateway = None;
         for existing in enumerate(api.enumerate_networks, "HcnEnumerateNetworks", &name)? {
-            let facts = network_properties(api, &existing)
+            let properties = network_properties(api, &existing);
+            let facts = properties
+                .as_ref()
                 .ok()
-                .and_then(|properties| network_facts(&properties));
+                .and_then(|properties| network_facts(properties));
+            if network_id.is_some()
+                || !facts
+                    .as_ref()
+                    .is_some_and(|f| reusable(f, mode, host_adapter.as_deref()))
+            {
+                // Said with what HCN described, so a Windows that describes it another way
+                // shows here rather than as a network made again at every start.
+                eprintln!(
+                    "network: the network {name} left from before is replaced, as it is not a \
+                     {} network DSA can use again: {}",
+                    mode.name(),
+                    match &properties {
+                        Ok(properties) => properties.trim(),
+                        Err(why) => why.as_str(),
+                    }
+                );
+            }
             if network_id.is_none()
                 && facts
                     .as_ref()
