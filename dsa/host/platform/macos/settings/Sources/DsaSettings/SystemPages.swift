@@ -247,6 +247,12 @@ struct UpdatesPage: View {
                     Task { await changeAsAdministrator(vm, ["settings", "set", "program-updates", vm.programUpdates ? "off" : "on"]) }
                 }
                 AdministratorSwitchRow(
+                    title: T("PrereleaseUpdatesCard.Header"), detail: T("PrereleaseUpdatesCard.Description"),
+                    isOn: vm.prereleaseUpdates, canChange: vm.canChangePrereleaseUpdates,
+                    needsAdministrator: vm.prereleaseUpdatesNeedAdministrator, set: { await vm.setPrereleaseUpdates($0) }) {
+                    Task { await changeAsAdministrator(vm, ["settings", "set", "prerelease-updates", vm.prereleaseUpdates ? "off" : "on"]) }
+                }
+                AdministratorSwitchRow(
                     title: T("ImageUpdatesCard.Header"), detail: T("ImageUpdatesCard.Description"),
                     isOn: vm.imageUpdates, canChange: vm.canChangeImageUpdates,
                     needsAdministrator: vm.imageUpdatesNeedAdministrator, set: { await vm.setImageUpdates($0) }) {

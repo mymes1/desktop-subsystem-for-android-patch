@@ -744,3 +744,53 @@ fn fr15_the_service_boots_the_newer_image_an_upgrade_bundled() {
     let updates = open_updates(&config, "test").unwrap().unwrap();
     assert_eq!(updates.store.state().unwrap().current.version, "17.0.0-5");
 }
+
+/// The package of a release made after the channels: one program list per channel, and the
+/// channel the installer was published on.
+const CHANNEL_PACKAGE: &str = r#"{
+  "first_image": {"version": "17.0.0-9", "android_major": 17, "build": 9},
+  "update": {
+    "list_url": "https://example.invalid/dsa/images.json",
+    "program_list_url": "https://example.invalid/dsa/program-stable.json",
+    "prerelease_program_list_url": "https://example.invalid/dsa/program-prerelease.json",
+    "channel": "prerelease",
+    "program_dir": "C:\\ProgramData\\DSA\\updates",
+    "trusted_keys": ["17cb79fb2b4120f2b1ec65e4198d6e08b28e813feb01e4a400839b85e18080ce"]
+  }
+}"#;
+
+#[test]
+fn fr15_an_upgrade_from_before_the_channels_reads_the_lists_of_both_channels() {
+    use dsa_host_core::update::program::ReleaseChannel;
+    use dsa_host_windows::host_config::InstalledPackage;
+    // Kept from an installation before the channels: one list, no channel.
+    let mut config = HostConfig::parse(SELF_UPDATING).unwrap();
+    assert_eq!(
+        config.installer_channel("0.1.9"),
+        ReleaseChannel::Prerelease
+    );
+    config.apply_package(&InstalledPackage::parse(CHANNEL_PACKAGE).unwrap());
+    let settings = config.program_settings("0.1.10").unwrap().unwrap();
+    assert_eq!(
+        settings.list_url.as_deref(),
+        Some("https://example.invalid/dsa/program-stable.json")
+    );
+    assert_eq!(
+        settings.prerelease_list_url.as_deref(),
+        Some("https://example.invalid/dsa/program-prerelease.json")
+    );
+    assert_eq!(settings.channel, ReleaseChannel::Prerelease);
+    assert!(config.program_updates_available());
+
+    // A stable installer of 1.0 says so; without a channel 1.0 counts as stable.
+    let stable = CHANNEL_PACKAGE.replace(r#""channel": "prerelease""#, r#""channel": "stable""#);
+    let mut config = HostConfig::parse(SELF_UPDATING).unwrap();
+    config.apply_package(&InstalledPackage::parse(&stable).unwrap());
+    assert_eq!(config.installer_channel("1.0.0"), ReleaseChannel::Stable);
+    assert_eq!(
+        HostConfig::parse(SELF_UPDATING)
+            .unwrap()
+            .installer_channel("1.0.0"),
+        ReleaseChannel::Stable
+    );
+}

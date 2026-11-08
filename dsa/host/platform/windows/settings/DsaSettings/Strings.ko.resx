@@ -298,6 +298,12 @@
   <data name="ProgramUpdatesCard.Description" xml:space="preserve">
     <value>서명된 새 버전의 DSA를 내려받고, 실행 중인 Android가 없을 때 설치합니다.</value>
   </data>
+  <data name="PrereleaseUpdatesCard.Header" xml:space="preserve">
+    <value>프리릴리스 버전 받기</value>
+  </data>
+  <data name="PrereleaseUpdatesCard.Description" xml:space="preserve">
+    <value>정식 버전과 함께 아직 다듬는 중인 버전도 설치합니다. 1.0 전에는 모든 릴리스가 프리릴리스입니다. 이 설정을 꺼도 DSA가 이전 버전으로 돌아가지 않으며, 설치된 버전보다 새 정식 버전이 나올 때까지 기다립니다.</value>
+  </data>
   <data name="ImageUpdatesCard.Header" xml:space="preserve">
     <value>Android 이미지 자동 업데이트</value>
   </data>

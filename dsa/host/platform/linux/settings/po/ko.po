@@ -762,6 +762,15 @@ msgstr "Android 이미지"
 msgid "This setting applies to every user of this computer, so changing it asks for an administrator's permission."
 msgstr "이 설정은 이 컴퓨터의 모든 사용자에게 적용되므로, 바꾸려면 관리자 권한을 묻습니다."
 
+msgid "Get pre-release versions"
+msgstr "프리릴리스 버전 받기"
+
+msgid "Also install versions that are still being finished, as well as stable releases. Every release before 1.0 is a pre-release. The package manager then reads DSA's pre-release repository. Turning this off never moves DSA back to an older version: it waits for a stable release newer than the one installed."
+msgstr "정식 버전과 함께 아직 다듬는 중인 버전도 설치합니다. 1.0 전에는 모든 릴리스가 프리릴리스입니다. 켜면 패키지 관리자가 DSA의 프리릴리스 저장소를 읽습니다. 이 설정을 꺼도 DSA가 이전 버전으로 돌아가지 않으며, 설치된 버전보다 새 정식 버전이 나올 때까지 기다립니다."
+
+msgid "This installation does not follow a release channel."
+msgstr "이 설치는 릴리스 채널을 따르지 않습니다."
+
 msgid "Update the Android image automatically"
 msgstr "Android 이미지 자동 업데이트"
 

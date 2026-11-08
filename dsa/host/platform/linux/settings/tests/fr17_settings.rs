@@ -57,6 +57,7 @@ fn settings_json() -> serde_json::Value {
     json!({
         "render_gpu": "display", "freeze": false, "clipboard": true,
         "program_updates": false, "image_updates": true,
+        "prerelease_updates": true, "update_channel_available": true,
         "image_updates_available": true, "version": "0.1.0",
         "log_dir": "/var/lib/dsa/logs", "android_version": "17.0.0-1",
         "developer_mode": false, "adb_port": 58526, "memory_limit_mb": 0,
@@ -754,4 +755,29 @@ fn fr11_a_bundle_refused_before_android_sees_it_says_its_reason() {
     ] {
         assert_ne!(view::install_reason(code), fallback, "{code}");
     }
+}
+
+#[test]
+fn fr15_the_release_channel_is_read_and_chosen_as_an_administrator() {
+    let fake = Fake::new(settings_json());
+    let elevated = Fake::new(settings_json());
+    let c = client(&fake, &elevated);
+    let settings = c.settings().unwrap();
+    assert!(settings.prerelease_updates);
+    assert!(settings.update_channel_available);
+    c.set_machine("prerelease-updates", false).unwrap();
+    assert_eq!(
+        elevated.calls(),
+        vec![line(&[
+            "settings",
+            "set",
+            "prerelease-updates",
+            "off",
+            "--json"
+        ])]
+    );
+    // A service from before the channels reports neither: stable, and nothing to choose.
+    let older = Settings::read(&json!({ "version": "0.1.0" }));
+    assert!(!older.prerelease_updates);
+    assert!(!older.update_channel_available);
 }

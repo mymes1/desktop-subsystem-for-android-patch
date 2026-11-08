@@ -62,6 +62,8 @@ public final class DsaService {
         s.programUpdates = json.bool("program_updates")
         s.imageUpdates = json.bool("image_updates")
         s.programUpdatesAvailable = json.bool("program_updates_available")
+        s.prereleaseUpdates = json.bool("prerelease_updates")
+        s.updateChannelAvailable = json.bool("update_channel_available")
         s.imageUpdatesAvailable = json.bool("image_updates_available")
         s.version = json.string("version")
         s.logDir = json.optionalString("log_dir")
@@ -130,6 +132,8 @@ public final class DsaService {
     }
     public func setProgramUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("program-updates", onOff(on)) }
     public func setImageUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("image-updates", onOff(on)) }
+    /// Chooses the release channel: on takes pre-releases as well as stable releases.
+    public func setPrereleaseUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("prerelease-updates", onOff(on)) }
     public func setInputTrace(_ on: Bool) async throws -> SettingsInfo { try await set("input-trace", onOff(on)) }
     public func setResizeTrace(_ on: Bool) async throws -> SettingsInfo { try await set("resize-trace", onOff(on)) }
     /// Sets the most memory the user's Android may grow to, in MiB; 0 is automatic.

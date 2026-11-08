@@ -28,6 +28,12 @@ public partial class UpdatesPage : Page
     private async void OnImageToggled(object sender, RoutedEventArgs e) =>
         await ViewModel.SetImageUpdatesAsync(ImageSwitch.IsChecked == true);
 
+    private async void OnPrereleaseToggled(object sender, RoutedEventArgs e) =>
+        await ViewModel.SetPrereleaseUpdatesAsync(PrereleaseSwitch.IsChecked == true);
+
+    private void OnPrereleaseAsAdministrator(object sender, RoutedEventArgs e) =>
+        ChangeAsAdministrator("prerelease-updates", !ViewModel.PrereleaseUpdates);
+
     private void OnProgramAsAdministrator(object sender, RoutedEventArgs e) =>
         ChangeAsAdministrator("program-updates", !ViewModel.ProgramUpdates);
 

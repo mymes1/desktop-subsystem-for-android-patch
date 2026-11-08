@@ -40,6 +40,24 @@
                                          IsEnabled="{Binding CanChangeProgramUpdates, Mode=OneWay}" Click="OnProgramToggled" />
                     </StackPanel>
                 </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Beaker24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{l:Text PrereleaseUpdatesCard.Header}" Style="{StaticResource CardTitle}" />
+                                <ui:SymbolIcon Symbol="Shield24" Margin="6,0,0,0" ToolTip="{l:Text AdminShield.ToolTip}" />
+                            </StackPanel>
+                            <TextBlock Text="{l:Text PrereleaseUpdatesCard.Description}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button Content="{l:Text ChangeAsAdmin.Content}" Icon="{ui:SymbolIcon Shield24}" Margin="0,0,12,0"
+                                   Visibility="{Binding PrereleaseUpdatesNeedAdministrator, Converter={StaticResource Visible}}"
+                                   Click="OnPrereleaseAsAdministrator" />
+                        <ui:ToggleSwitch x:Name="PrereleaseSwitch" IsChecked="{Binding PrereleaseUpdates, Mode=OneWay}"
+                                         IsEnabled="{Binding CanChangePrereleaseUpdates, Mode=OneWay}" Click="OnPrereleaseToggled" />
+                    </StackPanel>
+                </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowDownload24}">
                     <ui:CardControl.Header>
                         <StackPanel>

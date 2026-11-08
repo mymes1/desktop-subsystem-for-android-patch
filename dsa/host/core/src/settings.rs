@@ -6,17 +6,19 @@
 //! (whether adb reaches their Android) with the loopback port adb connects to and whether that
 //! port is attached to their adb server by itself, and file sharing
 //! (which of their host folders their Android shows in its shared storage). The others are the
-//! machine's, shared by every user: whether the service updates DSA itself, whether it
-//! downloads new Android images, and whether DSA's processes write the input trace and the
-//! per-stage resize trace to their logs.
+//! machine's, shared by every user: whether the service updates DSA itself, whether it takes
+//! pre-releases of DSA as well as stable releases, whether it downloads new Android images,
+//! and whether DSA's processes write the input trace and the per-stage resize trace to their
+//! logs.
 //!
 //! Clients read and change them through the local API only. The service keeps them in its
 //! own folder, which users cannot write to, so the values a client sees are the values the
 //! service acts on.
 //!
 //! ```text
-//! <dir>/machine.json          {"program_updates": true, "image_updates": true,
-//!                              "input_trace": false, "resize_trace": false}
+//! <dir>/machine.json          {"program_updates": true, "prerelease_updates": false,
+//!                              "image_updates": true, "input_trace": false,
+//!                              "resize_trace": false}
 //! <dir>/users/<user>.json     {"render_gpu": "display", "freeze": false, "clipboard": true,
 //!                              "links_in_android": false, "developer_mode": false,
 //!                              "adb_port": 58526, "adb_auto_connect": true,
@@ -37,6 +39,12 @@
 //! A missing file means the defaults. A user who has never saved settings starts from what
 //! the platform finds for them (on Windows, the render GPU in the window manager's own
 //! `compositor.json`), so a choice made before the settings app existed is kept.
+//!
+//! Whether pre-releases are taken starts from the installer that put DSA on the computer
+//! ([`FileSettings::with_first_channel`]): a pre-release installer takes pre-releases, a
+//! stable one does not. The service records that first value when it starts
+//! ([`FileSettings::keep_first_channel`]), so an upgrade, whichever installer it comes from,
+//! keeps what the computer had.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -47,6 +55,7 @@ use crate::app_windows::AppWindowSettings;
 use crate::arm_translation::{Package, Translator};
 use crate::file_share;
 use crate::gapps::GappsPackage;
+use crate::update::program::ReleaseChannel;
 
 /// The longest render GPU value accepted, in characters.
 const MAX_RENDER_GPU: usize = 128;
@@ -80,6 +89,9 @@ pub struct Settings {
     pub advanced_networking: bool,
     /// Whether the service updates DSA itself.
     pub program_updates: bool,
+    /// Whether DSA is updated to pre-releases as well as stable releases (the pre-release
+    /// channel). The machine's; it starts from the installer that was used.
+    pub prerelease_updates: bool,
     /// Whether the service downloads new Android images.
     pub image_updates: bool,
     /// Whether every DSA process writes the input trace to its log. The machine's; off by
@@ -118,6 +130,7 @@ impl Default for Settings {
             stop_without_asking: false,
             advanced_networking: false,
             program_updates: true,
+            prerelease_updates: false,
             image_updates: true,
             input_trace: false,
             resize_trace: false,
@@ -136,6 +149,10 @@ impl Default for Settings {
 pub struct MachineSettings {
     #[serde(default = "yes")]
     pub program_updates: bool,
+    /// The release channel: true takes pre-releases too. A file without it reads as the
+    /// channel of the installer that was used ([`FileSettings::with_first_channel`]).
+    #[serde(default)]
+    pub prerelease_updates: bool,
     #[serde(default = "yes")]
     pub image_updates: bool,
     #[serde(default)]
@@ -144,10 +161,18 @@ pub struct MachineSettings {
     pub resize_trace: bool,
 }
 
+impl MachineSettings {
+    /// The release channel DSA follows.
+    pub fn release_channel(&self) -> ReleaseChannel {
+        ReleaseChannel::from_prereleases(self.prerelease_updates)
+    }
+}
+
 impl Default for MachineSettings {
     fn default() -> MachineSettings {
         MachineSettings {
             program_updates: true,
+            prerelease_updates: false,
             image_updates: true,
             input_trace: false,
             resize_trace: false,
@@ -355,16 +380,44 @@ pub type PreviousRenderGpu = Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
 pub struct FileSettings {
     dir: PathBuf,
     previous_render_gpu: Option<PreviousRenderGpu>,
+    first_channel: ReleaseChannel,
     lock: Mutex<()>,
 }
+
+/// The key of [`MachineSettings::prerelease_updates`] in `machine.json`.
+const PRERELEASE_KEY: &str = "prerelease_updates";
 
 impl FileSettings {
     pub fn new(dir: impl Into<PathBuf>) -> FileSettings {
         FileSettings {
             dir: dir.into(),
             previous_render_gpu: None,
+            first_channel: ReleaseChannel::Stable,
             lock: Mutex::new(()),
         }
+    }
+
+    /// Starts a computer whose settings record no release channel yet on `channel`, the
+    /// channel of the installer that put DSA here. Stable unless this is called.
+    pub fn with_first_channel(mut self, channel: ReleaseChannel) -> FileSettings {
+        self.first_channel = channel;
+        self
+    }
+
+    /// Records the release channel in `machine.json` when it records none yet: the first
+    /// value, from [`with_first_channel`](Self::with_first_channel). From then on the file
+    /// keeps the channel through every upgrade, until a user changes it. Returns the channel
+    /// the computer follows.
+    pub fn keep_first_channel(&self) -> Result<ReleaseChannel, String> {
+        let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let path = self.machine_file();
+        let recorded = read_json::<serde_json::Value>(&path)?
+            .is_some_and(|value| value.get(PRERELEASE_KEY).is_some());
+        let machine = self.read_machine()?;
+        if !recorded {
+            write_json(&path, &machine)?;
+        }
+        Ok(machine.release_channel())
     }
 
     /// Starts a user who has never saved settings from the render GPU `previous` finds.
@@ -413,7 +466,22 @@ impl FileSettings {
     }
 
     fn read_machine(&self) -> Result<MachineSettings, String> {
-        read_json(&self.machine_file()).map(Option::unwrap_or_default)
+        let path = self.machine_file();
+        let first = MachineSettings {
+            prerelease_updates: self.first_channel.takes_prereleases(),
+            ..MachineSettings::default()
+        };
+        let Some(value) = read_json::<serde_json::Value>(&path)? else {
+            return Ok(first);
+        };
+        let recorded = value.get(PRERELEASE_KEY).is_some();
+        let mut machine: MachineSettings = serde_json::from_value(value)
+            .map_err(|e| format!("the settings in {} are not usable: {e}", path.display()))?;
+        if !recorded {
+            // Saved before the channel existed: the installer's channel, as on a new install.
+            machine.prerelease_updates = first.prerelease_updates;
+        }
+        Ok(machine)
     }
 
     fn read_user(&self, user: &str) -> Result<UserSettings, String> {
@@ -464,6 +532,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
         stop_without_asking: mine.stop_without_asking,
         advanced_networking: mine.advanced_networking,
         program_updates: machine.program_updates,
+        prerelease_updates: machine.prerelease_updates,
         image_updates: machine.image_updates,
         input_trace: machine.input_trace,
         resize_trace: machine.resize_trace,
@@ -483,6 +552,7 @@ fn combine(mine: UserSettings, machine: MachineSettings) -> Settings {
 fn machine_part(settings: &Settings) -> MachineSettings {
     MachineSettings {
         program_updates: settings.program_updates,
+        prerelease_updates: settings.prerelease_updates,
         image_updates: settings.image_updates,
         input_trace: settings.input_trace,
         resize_trace: settings.resize_trace,
@@ -519,7 +589,10 @@ impl SettingsStore for FileSettings {
         let _held = self.lock.lock().unwrap_or_else(|e| e.into_inner());
         self.read_machine().unwrap_or_else(|why| {
             eprintln!("settings: {why}; using the defaults");
-            MachineSettings::default()
+            MachineSettings {
+                prerelease_updates: self.first_channel.takes_prereleases(),
+                ..MachineSettings::default()
+            }
         })
     }
 
@@ -810,6 +883,7 @@ mod tests {
                     stop_without_asking: false,
                     advanced_networking: false,
                     program_updates: false,
+                    prerelease_updates: true,
                     image_updates: true,
                     input_trace: true,
                     resize_trace: false,
@@ -837,6 +911,7 @@ mod tests {
         assert!(theirs.clipboard);
         assert!(!theirs.program_updates);
         assert!(!again.machine().program_updates);
+        assert!(theirs.prerelease_updates, "the channel is the machine's");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1254,6 +1329,75 @@ mod tests {
         for gone in ["run_mode", "stop_after_secs", "keep_for_notifications"] {
             assert!(!kept.contains(gone), "{gone} is dropped: {kept}");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    #[test]
+    fn fr15_a_first_install_takes_the_channel_of_its_installer() {
+        for (installer, prereleases) in [
+            (ReleaseChannel::Prerelease, true),
+            (ReleaseChannel::Stable, false),
+        ] {
+            let dir = scratch(&format!("first-channel-{}", installer.as_str()));
+            let store = FileSettings::new(&dir).with_first_channel(installer);
+            assert_eq!(
+                store.get("uid:1000").unwrap().prerelease_updates,
+                prereleases
+            );
+            assert_eq!(store.keep_first_channel().unwrap(), installer);
+            // Recorded: the next installation's channel no longer decides.
+            let other = match installer {
+                ReleaseChannel::Stable => ReleaseChannel::Prerelease,
+                ReleaseChannel::Prerelease => ReleaseChannel::Stable,
+            };
+            let upgraded = FileSettings::new(&dir).with_first_channel(other);
+            assert_eq!(upgraded.keep_first_channel().unwrap(), installer);
+            assert_eq!(upgraded.machine().prerelease_updates, prereleases);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    #[test]
+    fn fr15_an_upgrade_keeps_the_channel_the_user_chose() {
+        let dir = scratch("chosen-channel");
+        let store = FileSettings::new(&dir).with_first_channel(ReleaseChannel::Prerelease);
+        store.keep_first_channel().unwrap();
+        store
+            .set(
+                "uid:1000",
+                &Settings {
+                    prerelease_updates: false,
+                    ..Settings::default()
+                },
+            )
+            .unwrap();
+        // A pre-release installer upgrades DSA: the stable channel the user chose stays.
+        let upgraded = FileSettings::new(&dir).with_first_channel(ReleaseChannel::Prerelease);
+        assert_eq!(
+            upgraded.keep_first_channel().unwrap(),
+            ReleaseChannel::Stable
+        );
+        assert!(!upgraded.get("uid:1001").unwrap().prerelease_updates);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fr15_settings_saved_before_channels_existed_take_the_installers_channel() {
+        let dir = scratch("old-machine-file");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("machine.json"),
+            r#"{"program_updates": false, "image_updates": true}"#,
+        )
+        .unwrap();
+        let store = FileSettings::new(&dir).with_first_channel(ReleaseChannel::Prerelease);
+        assert!(store.machine().prerelease_updates);
+        assert_eq!(
+            store.keep_first_channel().unwrap(),
+            ReleaseChannel::Prerelease
+        );
+        let text = std::fs::read_to_string(dir.join("machine.json")).unwrap();
+        assert!(text.contains("\"prerelease_updates\": true"), "{text}");
+        assert!(!store.machine().program_updates, "the other settings stay");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

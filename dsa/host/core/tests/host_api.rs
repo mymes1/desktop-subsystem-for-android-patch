@@ -713,3 +713,30 @@ fn fr31_a_service_that_cannot_reset_says_so() {
         other => panic!("expected the service to refuse, got {other:?}"),
     }
 }
+
+#[test]
+fn fr15_only_an_administrator_chooses_the_release_channel_and_every_user_sees_it() {
+    use dsa_host_core::host_api::ClientError;
+    use dsa_host_core::settings::{Settings, SettingsStore};
+    let (listener, connector) = local::pair();
+    let (_service, store) = settings_service(listener);
+    let prereleases = Settings {
+        prerelease_updates: true,
+        ..Settings::default()
+    };
+    let mut user =
+        HostApiClient::connect(&mut AsAdmin(connector.clone(), "alice", false), "a", WAIT).unwrap();
+    match user.set_settings(&prereleases) {
+        Err(ClientError::Service { detail, .. }) => {
+            assert!(detail.contains("pre-release updates"), "{detail}");
+        }
+        other => panic!("expected the service to refuse, got {other:?}"),
+    }
+    assert!(!store.machine().prerelease_updates);
+    let mut admin =
+        HostApiClient::connect(&mut AsAdmin(connector, "bob", true), "b", WAIT).unwrap();
+    let changed = admin.set_settings(&prereleases).unwrap();
+    assert!(changed.settings.prerelease_updates);
+    assert!(store.machine().prerelease_updates);
+    assert!(user.settings().unwrap().settings.prerelease_updates);
+}

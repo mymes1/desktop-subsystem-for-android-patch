@@ -27,7 +27,7 @@ one. They are marked "(admin)" below.
 | **Widgets** | Widgets on your desktop, and **Add to desktop** | `dsa widgets` |
 | **Display & GPU** | **Render GPU**, **Restart the window manager** | `render-gpu`, `dsa gpus` |
 | **Android** | The running version, **Version to use** (admin) | `dsa android version`, `dsa android use` |
-| **Updates** | **Update DSA automatically** (admin), **Update the Android image automatically** (admin), **Install now** | `program-updates`, `image-updates`, `dsa update` |
+| **Updates** | **Update DSA automatically** (admin), **Get pre-release versions** (admin), **Update the Android image automatically** (admin), **Install now** | `program-updates`, `prerelease-updates`, `image-updates`, `dsa update` |
 | **Device identity** | The manufacturer, model and build fingerprint Android reports to apps | `dsa settings device`, `device.<field>` |
 | **Network** | How Android reaches the network, its address, DNS servers and gateway, **Advanced networking** | `dsa network`, `advanced-networking` |
 | **Advanced** | Clipboard, files, web links, freeze when idle, reset, ARM apps, developer mode, traces (admin), log folders | see below |
@@ -69,6 +69,11 @@ one. They are marked "(admin)" below.
 - `shared-folders`: `all`, `none`, or names separated by commas, such as
   `Documents,Pictures`.
 - `adb-port`: a TCP port from 1 to 65535. The default is 58526.
+- `prerelease-updates`: `on` takes pre-releases as well as stable releases, `off` takes stable
+  releases only. It starts from the installer you used: a pre-release installer turns it on,
+  a stable one leaves it off, and upgrades keep your choice. Every release before 1.0 is a
+  pre-release. Turning it off never moves DSA back to an older version; DSA waits for a stable
+  release newer than the one installed.
 - `device.<field>`: `manufacturer`, `brand`, `model`, `device`, `name`, `characteristics`,
   `fingerprint`, or a part of the fingerprint such as `fingerprint.release`.
   `dsa settings reset device` puts every value back.

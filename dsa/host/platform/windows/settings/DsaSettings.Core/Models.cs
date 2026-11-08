@@ -50,7 +50,9 @@ public sealed record SettingsInfo(
     bool FileSharing = true,
     IReadOnlyList<string>? SharedFolders = null,
     bool AdbAutoConnect = true,
-    AdbAutoConnectState AdbAutoConnectState = AdbAutoConnectState.Off)
+    AdbAutoConnectState AdbAutoConnectState = AdbAutoConnectState.Off,
+    bool PrereleaseUpdates = false,
+    bool UpdateChannelAvailable = false)
 {
     /// <summary>The Windows folders that can be shared with Android, in the order the service
     /// keeps them.</summary>

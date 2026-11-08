@@ -6603,6 +6603,40 @@
         }
       }
     },
+    "PrereleaseUpdatesCard.Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Also install versions that are still being finished, as well as stable releases. Every release before 1.0 is a pre-release. Turning this off never moves DSA back to an older version: it waits for a stable release newer than the one installed."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정식 버전과 함께 아직 다듬는 중인 버전도 설치합니다. 1.0 전에는 모든 릴리스가 프리릴리스입니다. 이 설정을 꺼도 DSA가 이전 버전으로 돌아가지 않으며, 설치된 버전보다 새 정식 버전이 나올 때까지 기다립니다."
+          }
+        }
+      }
+    },
+    "PrereleaseUpdatesCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get pre-release versions"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프리릴리스 버전 받기"
+          }
+        }
+      }
+    },
     "ProgramUpdatesCard.Description": {
       "extractionState": "manual",
       "localizations": {

@@ -202,6 +202,11 @@ pub struct Settings {
     pub adb_auto_connect: bool,
     /// Where that stands, as the service last said.
     pub adb_auto_connect_state: AdbAutoConnectState,
+    /// Whether DSA takes pre-releases as well as stable releases: the pre-release channel.
+    /// The machine's; it starts from the package that was installed.
+    pub prerelease_updates: bool,
+    /// Whether this installation follows a release channel at all.
+    pub update_channel_available: bool,
 }
 
 /// Where attaching developer mode's port to the user's adb server stands.
@@ -276,6 +281,8 @@ impl Settings {
                 json,
                 "adb_auto_connect_state",
             )),
+            prerelease_updates: flag(json, "prerelease_updates", false),
+            update_channel_available: flag(json, "update_channel_available", false),
         }
     }
 
@@ -1125,7 +1132,8 @@ impl Client {
     }
 
     /// Changes a setting that applies to every user of the computer, which only an
-    /// administrator may: image updates, program updates and the traces.
+    /// administrator may: image updates, program updates, the release channel
+    /// (`prerelease-updates`) and the traces.
     pub fn set_machine(&self, name: &str, on: bool) -> Result<Settings, Failure> {
         Ok(Settings::read(&self.machine_json(&[
             "settings",

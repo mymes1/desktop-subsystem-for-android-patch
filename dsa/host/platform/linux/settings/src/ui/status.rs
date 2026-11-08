@@ -583,6 +583,32 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
         &tr("Shows the updates the system has for DSA and the other installed programs."),
     );
     program.add(&software);
+    // The release channel: which of DSA's package repositories the system reads.
+    let channel_switch: Rc<RefCell<Option<Switch>>> = Rc::default();
+    let switch = {
+        let (ctx, page, cell) = (ctx.clone(), page.clone(), channel_switch.clone());
+        Switch::new(
+            &tr("Get pre-release versions"),
+            &tr("Also install versions that are still being finished, as well as stable releases. Every release before 1.0 is a pre-release. The package manager then reads DSA's pre-release repository. Turning this off never moves DSA back to an older version: it waits for a stable release newer than the one installed."),
+            move |on| {
+                let page = page.clone();
+                let cell = cell.clone();
+                request(&ctx, move |c| c.set_machine("prerelease-updates", on), move |r| {
+                    page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+                    if let Some(switch) = cell.borrow().as_ref() {
+                        match r {
+                            Ok(settings) => switch.set(settings.prerelease_updates),
+                            Err(_) => switch.set(!on),
+                        }
+                    }
+                });
+            },
+        )
+    };
+    *channel_switch.borrow_mut() = Some(switch);
+    if let Some(switch) = channel_switch.borrow().as_ref() {
+        program.add(&switch.row);
+    }
     page.add(&program);
     {
         let ctx = ctx.clone();
@@ -638,6 +664,15 @@ pub fn updates(ctx: &Shared) -> gtk::Widget {
             |c| c.settings(),
             move |r| {
                 page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
+                if let (Ok(settings), Some(switch)) = (&r, channel_switch.borrow().as_ref()) {
+                    switch.set(settings.prerelease_updates);
+                    switch.row.set_sensitive(settings.update_channel_available);
+                    if !settings.update_channel_available {
+                        switch.row.set_subtitle(&tr(
+                            "This installation does not follow a release channel.",
+                        ));
+                    }
+                }
                 if let (Ok(settings), Some(switch)) = (r, image_switch.borrow().as_ref()) {
                     switch.set(settings.image_updates);
                     switch.row.set_sensitive(settings.image_updates_available);

@@ -298,6 +298,12 @@
   <data name="ProgramUpdatesCard.Description" xml:space="preserve">
     <value>Download signed new versions of DSA and install them when no Android is running.</value>
   </data>
+  <data name="PrereleaseUpdatesCard.Header" xml:space="preserve">
+    <value>Get pre-release versions</value>
+  </data>
+  <data name="PrereleaseUpdatesCard.Description" xml:space="preserve">
+    <value>Also install versions that are still being finished, as well as stable releases. Every release before 1.0 is a pre-release. Turning this off never moves DSA back to an older version: it waits for a stable release newer than the one installed.</value>
+  </data>
   <data name="ImageUpdatesCard.Header" xml:space="preserve">
     <value>Update the Android image automatically</value>
   </data>
