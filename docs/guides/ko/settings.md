@@ -24,7 +24,7 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
 | **백그라운드에서 실행 중** | 창 없이 실행 중인 앱: **열기**, **중지**, 중지 전에 물을지 여부 | `dsa background`, `stop-without-asking` |
 | **위젯** | 바탕 화면의 위젯, **바탕 화면에 추가** | `dsa widgets` |
 | **디스플레이 및 GPU** | **렌더링 GPU**, **창 관리자 다시 시작** | `render-gpu`, `dsa gpus` |
-| **기기 정보** | Android가 앱에 알리는 제조사, 모델, 빌드 지문 | `dsa settings device`, `device.<field>` |
+| **기기 정보** | 먼저 바꿀 수 없는 이 컴퓨터의 정보: 이름, 제조사와 모델, **복사**가 있는 **기기 사양**. 그다음 Android가 앱에 알리는 제조사, 모델, 빌드 지문 | `dsa settings device`, `device.<field>` |
 | **네트워크** | Android의 네트워크 연결 방식, 주소, DNS 서버, 게이트웨이, **고급 네트워킹**, **개발자 모드**(adb) | `dsa network`, `advanced-networking`, `developer-mode`, `adb-port`, `adb-auto-connect` |
 | **업데이트** | **Android**: 실행 중인 버전과 빌드, 따르는 버전, 진행률과 **지금 확인**(관리자)이 있는 Android 업데이트, **안드로이드 이미지 자동 업데이트**(관리자), **사용할 버전**(관리자). **DSA**: **DSA 자동 업데이트**(관리자), **프리릴리스 버전 받기**(관리자), **지금 설치** | `dsa android version`, `dsa android use`, `image-updates`, `program-updates`, `prerelease-updates`, `dsa update` |
 | **고급** | 클립보드, 파일, 웹 링크, 유휴 상태 일시 정지, 초기화, ARM 앱, 추적(관리자), 로그 폴더 | 아래 표 |

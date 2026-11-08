@@ -10,11 +10,58 @@ use crate::i18n::tr;
 use crate::model::{AdbAutoConnectState, Identity, Settings};
 use crate::view;
 
-/// The names and the build fingerprint Android reports to apps.
+/// This computer, as its firmware and system report it (its name, maker and model, then its
+/// specifications, which cannot be changed), and then the names and the build fingerprint
+/// Android reports to apps, which can.
 pub fn identity(ctx: &Shared) -> gtk::Widget {
     let page = Rc::new(Page::new());
+    // This computer: its name large, its maker and model under it, as GNOME's About shows the
+    // device.
+    let banner = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    banner.set_margin_bottom(6);
+    let computer_name = gtk::Label::builder()
+        .xalign(0.0)
+        .selectable(true)
+        .wrap(true)
+        .build();
+    computer_name.add_css_class("title-1");
+    let make_model = gtk::Label::builder()
+        .xalign(0.0)
+        .selectable(true)
+        .wrap(true)
+        .build();
+    make_model.add_css_class("dim-label");
+    banner.append(&computer_name);
+    banner.append(&make_model);
+    let banner_group = group("", None);
+    banner_group.add(&banner);
+    page.add(&banner_group);
+    let specs = group(
+        &tr("Device specifications"),
+        Some(&tr("These follow this computer and are read again each time Android starts, so a renamed computer is followed from the next start. Android's own Settings shows the device name and the chip; the model name is shown only here, as Android's Settings has no place for it.")),
+    );
+    let copy = gtk::Button::with_label(&tr("Copy"));
+    copy.add_css_class("flat");
+    specs.set_header_suffix(Some(&copy));
+    let spec_rows: Rc<Vec<(&'static str, adw::ActionRow)>> = Rc::new(
+        crate::model::ABOUT_KEYS
+            .iter()
+            .map(|key| {
+                let row = adw::ActionRow::builder()
+                    .title(view::identity_label(key))
+                    .subtitle_selectable(true)
+                    .use_markup(false)
+                    .build();
+                row.add_css_class("property");
+                specs.add(&row);
+                (*key, row)
+            })
+            .collect(),
+    );
+    page.add(&specs);
+
     let intro = group(
-        "",
+        &tr("What Android reports"),
         Some(&tr("The names and build fingerprint Android reports to apps. Leave a box empty to keep the value shown in it. Android reads these when it starts, so a change applies from its next start.")),
     );
     let warning = action_row(
@@ -61,22 +108,6 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
             .collect(),
     );
     page.add(&names);
-    // The values that follow the computer, which are shown and not chosen.
-    let computer = group(
-        &tr("From this computer"),
-        Some(&tr("These follow this computer and are read again each time Android starts, so a renamed computer is followed from the next start. Android's own Settings shows the device name and the chip; the model name is shown only here, as Android's Settings has no place for it.")),
-    );
-    let computer_rows: Rc<Vec<(&'static str, adw::ActionRow, gtk::Label)>> = Rc::new(
-        dsa_host_core::device_identity::COMPUTER_KEYS
-            .iter()
-            .map(|key| {
-                let (row, value) = value_row(&view::identity_label(key), "");
-                computer.add(&row);
-                (*key, row, value)
-            })
-            .collect(),
-    );
-    page.add(&computer);
     page.add(&print);
     let (preview_row, preview) = value_row(&tr("Fingerprint from the next start"), "");
     print.add(&preview_row);
@@ -138,24 +169,29 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
         entry.connect_changed(move |_| update_preview());
     }
     let show: Rc<dyn Fn(Result<Identity, crate::api::Failure>)> = {
-        let (page, entries, known, update_preview, origins, computer_rows) = (
+        let (page, entries, known, update_preview, origins, spec_rows) = (
             page.clone(),
             entries.clone(),
             known.clone(),
             update_preview.clone(),
             origins.clone(),
-            computer_rows.clone(),
+            spec_rows.clone(),
         );
+        let (computer_name, make_model) = (computer_name.clone(), make_model.clone());
         Rc::new(move |r: Result<Identity, crate::api::Failure>| {
             page.show_failure(&tr("The setting was not changed"), r.as_ref().err());
             let Ok(identity) = r else { return };
             for (key, origin) in origins.iter() {
                 origin.set_label(&view::origin_label(identity.origin(key)));
             }
-            for (key, row, value) in computer_rows.iter() {
-                value.set_label(&view::computer_value(identity.computer(key)));
-                row.set_subtitle(&view::origin_label(identity.origin(key)));
+            for (key, row) in spec_rows.iter() {
+                row.set_subtitle(&match identity.of_computer(key) {
+                    "" => tr("Not reported"),
+                    value => value.to_string(),
+                });
             }
+            computer_name.set_label(identity.of_computer("device_name"));
+            make_model.set_label(&identity.computer_make_model());
             for (key, entry) in entries.iter() {
                 entry.set_text(identity.chosen(key));
                 // The value Android reports shows where nothing is chosen.
@@ -174,6 +210,16 @@ pub fn identity(ctx: &Shared) -> gtk::Widget {
             update_preview();
         })
     };
+    // Copy puts every specification on the clipboard, a row per line.
+    {
+        let known = known.clone();
+        copy.connect_clicked(move |button| {
+            if let Some(identity) = known.borrow().as_ref() {
+                let text = identity.about_text(view::identity_label, &tr("Not reported"));
+                button.clipboard().set_text(&text);
+            }
+        });
+    }
     let restart_hint = {
         let (ctx, restart) = (ctx.clone(), restart.clone());
         Rc::new(move |saved: &str, saved_restart: &str| {

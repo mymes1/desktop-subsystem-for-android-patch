@@ -1774,4 +1774,16 @@
   <data name="AndroidCheckButton.Content" xml:space="preserve">
     <value>지금 확인</value>
   </data>
+  <data name="IdentitySpecsCard.Header" xml:space="preserve">
+    <value>기기 사양</value>
+  </data>
+  <data name="IdentityCopyButton.Content" xml:space="preserve">
+    <value>복사</value>
+  </data>
+  <data name="IdentityAndroidHeader.Text" xml:space="preserve">
+    <value>Android가 알리는 정보</value>
+  </data>
+  <data name="Identity_NotReported" xml:space="preserve">
+    <value>알 수 없음</value>
+  </data>
 </root>

@@ -169,4 +169,33 @@ public class DeviceIdentityViewModelTests
         Assert.True(vm.HasError);
         Assert.Contains("the model is 1 to 64 characters long", vm.Error);
     }
+
+    [Fact]
+    public async Task Fr17_the_page_opens_with_this_computer_read_only_and_copies_its_specifications()
+    {
+        // The computer reports its maker and model as Android's defaults; the user chose
+        // another model for Android, which is not the computer's.
+        const string report =
+            "{\"chosen\":{\"model\":\"My tablet\"}," +
+            "\"effective\":{\"manufacturer\":\"LENOVO\",\"model\":\"My tablet\",\"model_name\":\"ThinkPad X1\"," +
+            "\"device_name\":\"DESK-42\",\"soc_manufacturer\":\"Intel\",\"soc_model\":\"\"}," +
+            "\"defaults\":{\"manufacturer\":\"LENOVO\",\"model\":\"21KC\"}," +
+            "\"sources\":{\"manufacturer\":\"computer\",\"model\":\"computer\",\"model_name\":\"computer\"," +
+            "\"device_name\":\"computer\",\"soc_manufacturer\":\"computer\",\"soc_model\":\"dsa\"}}";
+        var cli = new FakeCli()
+            .Answer("settings device --json", report)
+            .Answer("status --json", "{\"state\":\"Stopped\",\"last_reason\":null,\"update_notice\":null,\"problem\":null}");
+        var vm = Model(cli);
+        await vm.LoadAsync();
+        Assert.Equal("DESK-42", vm.ComputerName);
+        Assert.Equal("LENOVO 21KC", vm.ComputerMakeModel);
+        Assert.Equal(DeviceIdentityViewModel.AboutKeys, vm.AboutRows.Select(r => r.Key));
+        Assert.Equal("21KC", vm.AboutRows.Single(r => r.Key == "model").Value);
+        Assert.Equal("Identity_NotReported", vm.AboutRows.Single(r => r.Key == "soc_model").Value);
+        var lines = vm.AboutText.Split(Environment.NewLine);
+        Assert.Equal(6, lines.Length);
+        Assert.Equal("Identity_device_name	DESK-42", lines[0]);
+        // The editable value stays the user's choice.
+        Assert.Equal("My tablet", vm.Field("model").Value);
+    }
 }

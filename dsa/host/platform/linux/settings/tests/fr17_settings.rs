@@ -826,3 +826,36 @@ fn fr14_check_now_chooses_the_version_already_followed_as_an_administrator() {
         vec![line(&["android", "use", "latest", "--json"])]
     );
 }
+
+#[test]
+fn fr17_the_identity_page_opens_with_this_computer_read_only_and_copies_its_specifications() {
+    // The computer reports its maker and model as Android's defaults; the model chosen for
+    // Android is not the computer's.
+    let identity = dsa_settings_linux::model::Identity::read(&json!({
+        "chosen": { "model": "My tablet" },
+        "effective": {
+            "manufacturer": "LENOVO", "model": "My tablet", "model_name": "ThinkPad X1",
+            "device_name": "DESK-42", "soc_manufacturer": "Intel", "soc_model": ""
+        },
+        "defaults": { "manufacturer": "LENOVO", "model": "21KC" },
+        "sources": {
+            "manufacturer": "computer", "model": "computer", "model_name": "computer",
+            "device_name": "computer", "soc_manufacturer": "computer", "soc_model": "dsa"
+        }
+    }));
+    assert_eq!(identity.of_computer("device_name"), "DESK-42");
+    assert_eq!(identity.of_computer("model"), "21KC");
+    assert_eq!(identity.computer_make_model(), "LENOVO 21KC");
+    assert_eq!(identity.of_computer("soc_model"), "");
+    let text = identity.about_text(|key| key.to_string(), "?");
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), dsa_settings_linux::model::ABOUT_KEYS.len());
+    assert_eq!(lines[0], "device_name	DESK-42");
+    assert_eq!(lines[5], "soc_model	?");
+    // A default that is DSA's own is not this computer's.
+    let dsa = dsa_settings_linux::model::Identity::read(&json!({
+        "chosen": {}, "effective": { "manufacturer": "thisisthepy" },
+        "defaults": { "manufacturer": "thisisthepy" }, "sources": { "manufacturer": "dsa" }
+    }));
+    assert_eq!(dsa.of_computer("manufacturer"), "");
+}

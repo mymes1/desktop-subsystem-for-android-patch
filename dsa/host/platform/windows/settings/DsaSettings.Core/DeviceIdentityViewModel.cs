@@ -95,6 +95,9 @@ public sealed class ComputerValue : ObservableObject
     }
 }
 
+/// <summary>One row of the computer's specifications: its name and its value.</summary>
+public sealed record AboutRow(string Key, string Label, string Value);
+
 /// <summary>The rules the service applies to each value, so the page can say what is wrong
 /// before anything is sent. The service checks again; what it refuses is shown as an
 /// error.</summary>
@@ -199,6 +202,25 @@ public sealed class DeviceIdentityViewModel : ObservableObject
 
     public ComputerValue Computer(string key) => ComputerValues.First(v => v.Key == key);
 
+    /// <summary>The computer's specifications, in the order the page lists them: its name, its
+    /// manufacturer and model, the model name and the chip. They come from the firmware and the
+    /// system and cannot be changed here.</summary>
+    public static readonly string[] AboutKeys =
+        { "device_name", "manufacturer", "model", "model_name", "soc_manufacturer", "soc_model" };
+
+    /// <summary>The computer's specifications as label and value rows.</summary>
+    public ObservableCollection<AboutRow> AboutRows { get; } = new();
+
+    /// <summary>The computer's name, shown large at the top of the page.</summary>
+    public string ComputerName { get; private set; } = "";
+
+    /// <summary>The computer's manufacturer and model, under its name.</summary>
+    public string ComputerMakeModel { get; private set; } = "";
+
+    /// <summary>What Copy puts on the clipboard: one row per line, label and value apart.</summary>
+    public string AboutText =>
+        string.Join(Environment.NewLine, AboutRows.Select(row => $"{row.Label}\t{row.Value}"));
+
     internal static string OriginText(ITextSource text, string origin) =>
         text.Get(origin == "computer" ? "Identity_FromComputer" : "Identity_FromDsa");
 
@@ -294,6 +316,23 @@ public sealed class DeviceIdentityViewModel : ObservableObject
         {
             value.Load(Text(report, "effective", value.Key), Origin(value.Key));
         }
+        // The computer's own value: what the system reports for the values that follow the
+        // computer, and for the manufacturer and model the default, when it came from the
+        // computer. A value the user chose for Android is not the computer's.
+        string OfComputer(string key) =>
+            ComputerKeys.Contains(key) ? Text(report, "effective", key)
+            : Origin(key) == "computer" ? Text(report, "defaults", key)
+            : "";
+        AboutRows.Clear();
+        foreach (var key in AboutKeys)
+        {
+            var value = OfComputer(key);
+            AboutRows.Add(new AboutRow(key, _text.Get($"Identity_{key}"),
+                value.Length > 0 ? value : _text.Get("Identity_NotReported")));
+        }
+        ComputerName = OfComputer("device_name");
+        ComputerMakeModel = string.Join(" ", new[] { OfComputer("manufacturer"), OfComputer("model") }
+            .Where(part => part.Length > 0));
         _loaded = true;
     }
 

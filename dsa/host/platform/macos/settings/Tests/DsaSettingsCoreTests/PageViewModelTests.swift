@@ -199,6 +199,20 @@ final class PageViewModelTests: XCTestCase {
         XCTAssertEqual(identity.field("model").placeholder, "Mac15,3")
     }
 
+    func test_fr17_the_identity_page_opens_with_this_mac_read_only_and_copies_its_specifications() async {
+        let cli = FakeCli()
+        cli.answer("settings device --json", #"{"chosen":{"model":"My tablet"},"effective":{"manufacturer":"Apple","model":"My tablet","model_name":"MacBook Pro","device_name":"BREW-MAC","soc_manufacturer":"Apple","soc_model":""},"defaults":{"manufacturer":"Apple","model":"Mac15,3"},"sources":{"manufacturer":"computer","model":"computer","model_name":"computer","device_name":"computer","soc_manufacturer":"computer","soc_model":"dsa"}}"#)
+        let identity = DeviceIdentityViewModel(service: DsaService(cli: cli), text: KeyText())
+        await identity.load()
+        XCTAssertEqual(identity.computerName, "BREW-MAC")
+        XCTAssertEqual(identity.computerMakeModel, "Apple Mac15,3")
+        XCTAssertEqual(identity.aboutValue("soc_model"), "Identity_NotReported")
+        let lines = identity.aboutText.split(separator: "\n")
+        XCTAssertEqual(lines.count, DeviceIdentityViewModel.aboutKeys.count)
+        XCTAssertEqual(lines.first, "Identity_device_name\tBREW-MAC")
+        XCTAssertEqual(identity.field("model").value, "My tablet")
+    }
+
     func test_fr17_moving_to_an_older_android_needs_the_data_erased() async {
         let cli = FakeCli()
         cli.answer("android version --json", #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16}"#)

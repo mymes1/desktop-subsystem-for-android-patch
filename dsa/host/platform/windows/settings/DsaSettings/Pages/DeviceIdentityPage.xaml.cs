@@ -27,4 +27,22 @@ public partial class DeviceIdentityPage : Page
     }
 
     private async void OnRestart(object sender, RoutedEventArgs e) => await ViewModel.RestartAsync();
+
+    /// <summary>Copies every specification as text, a row per line, and shows a check mark on
+    /// the button for a moment. The clipboard can be held by another program, and then the
+    /// button stays as it was.</summary>
+    private async void OnCopySpecs(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Windows.Clipboard.SetDataObject(ViewModel.AboutText, copy: true);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            return;
+        }
+        SpecsCopyButton.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Checkmark24 };
+        await System.Threading.Tasks.Task.Delay(1500);
+        SpecsCopyButton.Icon = null;
+    }
 }
