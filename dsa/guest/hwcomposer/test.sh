@@ -33,6 +33,10 @@ mkdir -p "$out"
 "$out/resize_trace_test"
 
 "$cxx" "${flags[@]}" -I"$here/tests" \
+    "$here/src/refresh_rates.cpp" "$here/tests/refresh_rates_test.cpp" -o "$out/refresh_rates_test"
+"$out/refresh_rates_test"
+
+"$cxx" "${flags[@]}" -I"$here/tests" \
     "$here/src/vsync_thread.cpp" "$here/tests/vsync_thread_test.cpp" -pthread -o "$out/vsync_thread_test"
 "$out/vsync_thread_test"
 
