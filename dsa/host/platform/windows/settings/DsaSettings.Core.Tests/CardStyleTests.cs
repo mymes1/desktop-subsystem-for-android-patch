@@ -54,7 +54,7 @@ public class CardStyleTests
         Assert.Equal("{TemplateBinding BorderBrush}", (string?)border.Attribute("BorderBrush"));
         Assert.Equal("{TemplateBinding BorderThickness}", (string?)border.Attribute("BorderThickness"));
         Assert.Equal("{StaticResource CardCornerRadius}", (string?)border.Attribute("CornerRadius"));
-        Assert.Equal("8", Resource("CardCornerRadius"));
+        Assert.Equal("4", Resource("CardCornerRadius"));
     }
 
     // A Semibold family name in the list also turns Korean into Bold, so both apps must replace
