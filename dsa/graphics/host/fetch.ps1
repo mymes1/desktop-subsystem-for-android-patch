@@ -48,8 +48,10 @@ git -C $GfxstreamDir clean -fdx
 # a renderer that asks for Vulkan only and cannot start it crashes instead of failing. Without 0015
 # a GPU reset, or one guest's command the renderer cannot carry out, ends the window manager and
 # every window with it; with it the guest's calls get VK_ERROR_DEVICE_LOST, the renderer makes
-# its device again, and a bad command ends only that guest's stream. A patch that does not apply
-# stops the fetch.
+# its device again, and a bad command ends only that guest's stream. Without 0016 a fence or
+# semaphore whose work finished but sat in a device's garbage for five seconds, because nothing
+# used that device meanwhile, is leaked and logged as pending for a negative time. A patch that
+# does not apply stops the fetch.
 $PatchDir = Join-Path $RepoRoot "dsa/graphics/patches"
 $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0004-*.patch") +
@@ -62,7 +64,8 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0012-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0013-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0014-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0015-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0015-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0016-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName

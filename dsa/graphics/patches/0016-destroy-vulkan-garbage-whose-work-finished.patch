@@ -1,0 +1,22 @@
+diff --git a/host/vulkan/DeviceOpTracker.cpp b/host/vulkan/DeviceOpTracker.cpp
+--- a/host/vulkan/DeviceOpTracker.cpp
++++ b/host/vulkan/DeviceOpTracker.cpp
+@@ -116,11 +116,14 @@ void DeviceOpTracker::PollAndProcessGarbage() {
+         for (auto it = mPendingGarbage.begin(); it != firstPendingIt; it++) {
+             PendingGarbage& pendingGarbage = *it;
+ 
+-            if (pendingGarbage.timepoint < old) {
+-                const auto difference = std::chrono::duration_cast<std::chrono::milliseconds>(
+-                    pendingGarbage.timepoint - now);
++            // Garbage is only looked at when the device is used, so an entry can be old because
++            // nothing used the device for a while, its work long finished. Only one whose work
++            // is still pending is leaked; the others are destroyed as usual.
++            if (pendingGarbage.timepoint < old && !IsDone(pendingGarbage.waitable)) {
++                const auto pending = std::chrono::duration_cast<std::chrono::milliseconds>(
++                    now - pendingGarbage.timepoint);
+                 WARN("VkDevice:%p had a waitable pending for %d milliseconds. Leaking object.",
+-                     mDevice, difference.count());
++                     mDevice, static_cast<int>(pending.count()));
+                 continue;
+             }
+ 

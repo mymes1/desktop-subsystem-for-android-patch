@@ -196,6 +196,18 @@ class HostGraphicsBuildTests(unittest.TestCase):
         self.assertIn("+    if (mDvk && mDevice != VK_NULL_HANDLE) {", patch)
         self.assertIn("+    if (mGvk && mInstance != VK_NULL_HANDLE) {", patch)
 
+    def test_nfr5_finished_vulkan_garbage_is_destroyed_not_leaked(self):
+        # The v0.1.9 renderer log said "had a waitable pending for -21043 milliseconds.
+        # Leaking object." for fences whose work had finished: garbage is looked at only when
+        # the device is used, and an entry older than five seconds was leaked whatever its
+        # state, its age printed with the sign turned round.
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0016", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0016-destroy-vulkan-garbage-whose-work-finished.patch").read_text(encoding="utf-8")
+        self.assertIn("+            if (pendingGarbage.timepoint < old && !IsDone(pendingGarbage.waitable)) {", patch)
+        self.assertIn("+                    now - pendingGarbage.timepoint);", patch)
+
     def test_pr3_renderer_on_macos_finds_moltenvk_without_being_told(self):
         # stream_renderer_init clears ANDROID_EMU_VK_ICD, and without portability enumeration
         # the loader hides MoltenVK: creating the instance failed with
