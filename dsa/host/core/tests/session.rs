@@ -5216,3 +5216,78 @@ fn fr35_turning_root_elevation_on_applies_from_the_next_start() {
     assert!(config.enabled);
     assert_eq!(config.apps[0].package, "com.example.ask");
 }
+
+/// The next su decision for the guest, past any other message.
+fn next_su_decision(daemon: &mut Box<dyn Connection>) -> dsa_protocol::control::SuDecision {
+    loop {
+        if let Body::SuDecision(decision) = next_body(daemon) {
+            return decision;
+        }
+    }
+}
+
+/// A prompt that approves every request it is shown.
+struct ApprovingPrompt;
+
+impl dsa_host_core::root_approval::ApprovalPrompt for ApprovingPrompt {
+    fn ask(
+        &self,
+        _request: &dsa_host_core::root_approval::ApprovalRequest,
+        _timeout: Duration,
+    ) -> dsa_host_core::root_approval::PromptAnswer {
+        dsa_host_core::root_approval::PromptAnswer::Approved
+    }
+}
+
+fn su_request(request_id: u64, package: &str) -> Body {
+    Body::SuRequest(dsa_protocol::control::SuRequest {
+        request_id,
+        package: package.into(),
+        uid: 10_200,
+        command: vec!["id".into()],
+        interactive: false,
+    })
+}
+
+#[test]
+fn fr35_a_su_request_from_the_guest_gets_the_hosts_decision_back() {
+    use dsa_host_core::root_approval::RootApproval;
+    use dsa_host_core::settings::{MachineSettings, MemorySettings, SettingsStore};
+    let (session, mut daemon, _launcher) = lifecycle_session(None);
+    let store = Arc::new(MemorySettings::default());
+    store
+        .set_machine(MachineSettings {
+            root_elevation: true,
+            ..Default::default()
+        })
+        .unwrap();
+    store.set_root_app("user", "com.ask.app", "ask").unwrap();
+    session.set_root_approval(Arc::new(RootApproval::new(
+        "user",
+        store,
+        Arc::new(ApprovingPrompt),
+        Arc::new(|_: &str| {}),
+    )));
+
+    send_body(&mut daemon, su_request(41, "com.ask.app"));
+    let approved = next_su_decision(&mut daemon);
+    assert_eq!(approved.request_id, 41);
+    assert!(approved.approved, "{approved:?}");
+
+    // An app that may not ask is refused with a reason, and nobody is asked.
+    send_body(&mut daemon, su_request(42, "com.not.allowed"));
+    let refused = next_su_decision(&mut daemon);
+    assert_eq!(refused.request_id, 42);
+    assert!(!refused.approved);
+    assert!(!refused.reason.is_empty());
+}
+
+#[test]
+fn fr35_a_host_that_cannot_ask_its_administrator_refuses_at_once() {
+    let (_session, mut daemon, _launcher) = lifecycle_session(None);
+    send_body(&mut daemon, su_request(7, "com.ask.app"));
+    let refused = next_su_decision(&mut daemon);
+    assert_eq!(refused.request_id, 7);
+    assert!(!refused.approved);
+    assert!(!refused.reason.is_empty());
+}

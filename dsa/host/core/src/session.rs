@@ -150,6 +150,7 @@ use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
 use crate::root_elevation::{AppLevel, Level};
+use crate::root_approval::RootApproval;
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
@@ -705,6 +706,9 @@ struct Shared {
     /// The user's root elevation settings, and whether the running boot started with the
     /// feature on.
     root_elevation: Mutex<RootElevationNow>,
+    /// Who decides the su calls of the guest's apps, once the platform says, with a way to
+    /// send each decision from the thread that waits for the administrator.
+    root_approval: Mutex<Option<(Arc<RootApproval>, Sender<Command>)>>,
 }
 
 /// The root elevation settings as the guest is told them.
@@ -1292,6 +1296,7 @@ impl Session {
             android_files_token: Mutex::new(None),
             device_name: Mutex::new(None),
             root_elevation: Mutex::new(RootElevationNow::default()),
+            root_approval: Mutex::new(None),
         });
         let freeze_delay = config.freeze_after.unwrap_or(DEFAULT_FREEZE_AFTER);
         let (commands, command_rx) = mpsc::channel();
@@ -2493,6 +2498,17 @@ impl Session {
     pub fn set_system_settings(&self, settings: SystemSettings) {
         let input = SystemInput::Settings(settings.checked());
         let _ = self.commands.send(Command::System(input));
+    }
+
+    /// Has `approval` decide the su calls of the guest's apps: the host's administrator prompt
+    /// and the host log. Without it, every su call is refused at once. Its policy starts again
+    /// at each start of Android, which clears every app's grace.
+    pub fn set_root_approval(&self, approval: Arc<RootApproval>) {
+        *self
+            .shared
+            .root_approval
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some((approval, self.commands.clone()));
     }
 
     /// Gives the guest's agent the device name `source` says each time it connects, which the
@@ -4371,6 +4387,48 @@ impl Worker {
         self.post_notice(native_abi::Notice::of_outcome(&outcome).notification(&app));
     }
 
+    /// Decides an app's su call on a thread of its own, since the host's administrator may
+    /// take up to a minute to answer, and sends the decision back to the guest's su relay. A
+    /// host that cannot ask an administrator refuses at once, so su does not wait for nothing.
+    fn su_request(&mut self, request: control::SuRequest) {
+        let approval = self
+            .shared
+            .root_approval
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let Some((approval, commands)) = approval else {
+            eprintln!(
+                "root: refused {}'s su call (request {}): this host cannot ask its \
+                 administrator",
+                request.package, request.request_id
+            );
+            self.send_body(Body::SuDecision(control::SuDecision {
+                request_id: request.request_id,
+                approved: false,
+                reason: "this computer cannot ask its administrator for root approval".to_string(),
+            }));
+            return;
+        };
+        let app = self.shared.installed_app(&request.package);
+        let shared = Arc::clone(&self.shared);
+        let request_id = request.request_id;
+        let spawned = thread::Builder::new()
+            .name("dsa-su-approval".into())
+            .spawn(move || {
+                let decision = approval.decide(&request, app.as_ref());
+                send_quietly(&shared, &commands, Body::SuDecision(decision));
+            });
+        if let Err(error) = spawned {
+            eprintln!("root: refused su request {request_id}: no thread to ask on: {error}");
+            self.send_body(Body::SuDecision(control::SuDecision {
+                request_id,
+                approved: false,
+                reason: "the computer could not ask its administrator".to_string(),
+            }));
+        }
+    }
+
     /// Takes a notification the guest posted or changed, and hands it to the watchers when its
     /// turn comes. One the same as what the watchers have is not handed again.
     fn guest_notification(&mut self, message: control::GuestNotification) {
@@ -5468,6 +5526,15 @@ impl Worker {
         });
         let started = Instant::now();
         self.started_at = started;
+        // A new boot of Android: the root policy is read again and no app keeps a grace.
+        if let Some((approval, _)) = &*self
+            .shared
+            .root_approval
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+        {
+            approval.restart();
+        }
         self.next_prerequisite_check = started + PREREQUISITE_POLL;
         let deadline = started + self.config.connect_timeout;
         loop {
@@ -6007,6 +6074,7 @@ impl Worker {
             Some(Body::LocationRequest(request)) => {
                 self.shared.set_location(Wanted::from_control(&request))
             }
+            Some(Body::SuRequest(request)) => self.su_request(request),
             Some(Body::ScreenState(_))
             | Some(Body::PowerState(_))
             | Some(Body::DisplayRefresh(_))
@@ -6067,6 +6135,8 @@ impl Worker {
             | Some(Body::LogDump(_))
             | Some(Body::CollectDiagnostics(_))
             | Some(Body::ClockProbe(_))
+            | Some(Body::RootElevationConfig(_))
+            | Some(Body::SuDecision(_))
             | Some(Body::AudioOutputOpen(_))
             | Some(Body::AudioOutputReady(_))
             | Some(Body::AudioPcm(_))
