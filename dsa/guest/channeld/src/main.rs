@@ -286,6 +286,23 @@ mod daemon {
     #[cfg(not(target_os = "android"))]
     fn switch_adb(_on: bool) {}
 
+    /// Has init start or stop the root elevation helper (`dsa-channeld.rc` runs
+    /// `dsa-channeld --su-relay` as root while the property is 1).
+    #[cfg(target_os = "android")]
+    fn switch_su_helper(on: bool) -> Result<(), String> {
+        set_property("vendor.dsa.root_elevation", if on { "1" } else { "0" })
+    }
+
+    /// Off Android there is no init to start the helper.
+    #[cfg(not(target_os = "android"))]
+    fn switch_su_helper(on: bool) -> Result<(), String> {
+        if on {
+            Err("this system has no elevation helper".into())
+        } else {
+            Ok(())
+        }
+    }
+
     /// Has init mount the host's folders the host shares and take the others away
     /// (`dsa-channeld.rc` runs `dsa-channeld --share-mount` as root when the property changes).
     #[cfg(target_os = "android")]
@@ -539,7 +556,10 @@ mod daemon {
         // Root elevation: the host's config drives the kernel's su guard, on connect and on
         // every change, and the host's decisions answer the su calls the relay holds.
         let su_relay = Arc::new(SuRelay::new());
-        let su_config = ConfigApplier::of_system(Arc::clone(&su_relay), |line| say!("{line}"));
+        let su_config =
+            ConfigApplier::of_system(Arc::clone(&su_relay), Box::new(switch_su_helper), |line| {
+                say!("{line}")
+            });
         // Until the host says otherwise, su exists for no app, whatever the image holds.
         su_config.hide_all();
         let router = Arc::new(

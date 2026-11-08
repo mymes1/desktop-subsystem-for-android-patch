@@ -13,8 +13,10 @@
 //!   lines the kernel's control file takes, keeps it as the relay's current config, and
 //!   refuses every waiting call whose app may no longer ask.
 //! - [`ConfigApplier::apply`] does that for each config the host sends (on connect and on
-//!   every change), names each app by its uid from the package list, and writes the lines to
-//!   the kernel's control file, so a change applies to the running Android at once.
+//!   every change), names each app by its uid from the package list, and has the guard
+//!   apply it, so a change applies to the running Android at once. On the guest that is
+//!   [`HelperGuard`]: the daemon runs as system, which the guard refuses, so the elevation
+//!   helper (root) writes the kernel's control file for it.
 //! - [`SuRelay::begin`] registers a waiting su call and returns the frame to send the host.
 //! - [`SuRelay::decide`] matches a host decision to its call.
 //! - [`SuRelay::expire`] fails a call that waited past [`ANSWER_TIMEOUT`].
@@ -279,6 +281,158 @@ pub trait GuardControl: Send + Sync {
     /// Writes `lines` to the guard in one write, which the kernel applies as one change: all
     /// of it, or (on an error) none of it. A watched path that does not exist is skipped.
     fn write(&self, lines: &[String]) -> std::io::Result<()>;
+
+    /// Applies `config`, whose commands for the guard are `lines`. A guard written directly
+    /// takes the lines; one that hands the config on to another process takes the config.
+    fn write_config(&self, config: &RootElevationConfig, lines: &[String]) -> std::io::Result<()> {
+        let _ = config;
+        self.write(lines)
+    }
+}
+
+/// The elevation helper's socket, on which the daemon hands it each config.
+pub const HELPER_SOCKET: &str = "/dev/socket/dsa_su_relay";
+
+/// How long the daemon waits for a helper it has just started to take the config.
+pub const HELPER_START_WAIT: Duration = Duration::from_secs(5);
+
+/// Starts (`true`) or stops (`false`) the elevation helper.
+pub type HelperSwitch = Box<dyn Fn(bool) -> Result<(), String> + Send + Sync>;
+
+/// The su guard as this guest drives it after boot: through the elevation helper
+/// (`dsa-channeld --su-relay`), which runs as root and is the only process the kernel and the
+/// policy let write the control file. The daemon runs as system, so it sends the helper each
+/// config, with the apps' uids filled in, as one `RootElevationConfig` control message per
+/// packet on [`HELPER_SOCKET`]; the helper writes [`control_lines`] of it in one write.
+///
+/// A config with root elevation on starts the helper first. One with it off is handed to the
+/// running helper, which hides su from every app at once, and then the helper is stopped. With
+/// no helper running, su is hidden already: init hides it at boot, and only the helper shows
+/// it to anyone.
+pub struct HelperGuard {
+    pub socket: PathBuf,
+    pub switch: HelperSwitch,
+    pub start_wait: Duration,
+}
+
+impl HelperGuard {
+    /// The guard for this guest, starting and stopping the helper with `switch`.
+    pub fn new(switch: HelperSwitch) -> HelperGuard {
+        HelperGuard {
+            socket: PathBuf::from(HELPER_SOCKET),
+            switch,
+            start_wait: HELPER_START_WAIT,
+        }
+    }
+
+    /// Sends `config` to the helper, trying again until `wait` has passed while its socket is
+    /// not there yet.
+    fn send(&self, config: &RootElevationConfig, wait: Duration) -> std::io::Result<()> {
+        let packet = encode(Body::RootElevationConfig(config.clone()));
+        let until = Instant::now() + wait;
+        loop {
+            match send_packet(&self.socket, &packet) {
+                Ok(()) => return Ok(()),
+                Err(error) if Instant::now() < until && not_listening(&error) => {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+}
+
+/// Whether `error` says nothing listens on the socket (yet).
+fn not_listening(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused
+    )
+}
+
+impl GuardControl for HelperGuard {
+    fn write(&self, _lines: &[String]) -> std::io::Result<()> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "the elevation helper takes the whole config, not the guard's lines",
+        ))
+    }
+
+    fn write_config(&self, config: &RootElevationConfig, _lines: &[String]) -> std::io::Result<()> {
+        if config.enabled {
+            (self.switch)(true).map_err(std::io::Error::other)?;
+            return self.send(config, self.start_wait);
+        }
+        let sent = match self.send(config, Duration::ZERO) {
+            Err(error) if not_listening(&error) => Ok(()),
+            other => other,
+        };
+        let stopped = (self.switch)(false).map_err(std::io::Error::other);
+        sent.and(stopped)
+    }
+}
+
+/// Sends `packet` as one packet on the seqpacket socket at `path`.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn send_packet(path: &std::path::Path, packet: &[u8]) -> std::io::Result<()> {
+    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+    use std::os::unix::ffi::OsStrExt;
+    let bytes = path.as_os_str().as_bytes();
+    // SAFETY: plain data, zero is its documented initial state.
+    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+    if bytes.len() >= address.sun_path.len() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "the helper's socket path is too long",
+        ));
+    }
+    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+    for (to, from) in address.sun_path.iter_mut().zip(bytes) {
+        *to = *from as libc::c_char;
+    }
+    // SAFETY: a plain socket call; the result is checked before use.
+    let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC, 0) };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: a descriptor just made and owned by nothing else.
+    let socket = unsafe { OwnedFd::from_raw_fd(fd) };
+    // SAFETY: the socket above and an address that outlives the call, with its own size.
+    let connected = unsafe {
+        libc::connect(
+            socket.as_raw_fd(),
+            (&address as *const libc::sockaddr_un).cast(),
+            std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t,
+        )
+    };
+    if connected != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: the connected socket and a buffer that outlives the call.
+    let sent = unsafe {
+        libc::send(
+            socket.as_raw_fd(),
+            packet.as_ptr().cast(),
+            packet.len(),
+            libc::MSG_NOSIGNAL,
+        )
+    };
+    if sent < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    if sent as usize != packet.len() {
+        return Err(std::io::Error::other("the helper took part of the config"));
+    }
+    Ok(())
+}
+
+/// Hosts without seqpacket sockets have no helper to reach.
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn send_packet(_path: &std::path::Path, _packet: &[u8]) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "this system has no elevation helper",
+    ))
 }
 
 /// The kernel's own control file.
@@ -333,14 +487,16 @@ impl ConfigApplier {
         }
     }
 
-    /// The applier for this guest: the kernel's control file and the package manager's list.
+    /// The applier for this guest: the su guard through the elevation helper, started and
+    /// stopped with `switch`, and the package manager's list.
     pub fn of_system(
         relay: Arc<SuRelay>,
+        switch: HelperSwitch,
         say: impl Fn(&str) + Send + Sync + 'static,
     ) -> ConfigApplier {
         ConfigApplier::new(
             relay,
-            Box::new(KernelGuard::default()),
+            Box::new(HelperGuard::new(switch)),
             Box::new(|| std::fs::read_to_string(PACKAGES_LIST).ok()),
             say,
         )
@@ -370,7 +526,7 @@ impl ConfigApplier {
             ));
         }
         let lines = self.relay.apply_config(&resolved);
-        match self.guard.write(&lines) {
+        match self.guard.write_config(&resolved, &lines) {
             Ok(()) => (self.say)(&format!(
                 "root elevation: {}, {} app(s) may ask for root",
                 if resolved.enabled { "on" } else { "off" },

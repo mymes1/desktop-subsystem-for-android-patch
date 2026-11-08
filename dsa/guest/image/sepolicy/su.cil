@@ -66,6 +66,12 @@
 (typeattributeset file_type (dsa_su_relay_socket))
 (allow dsa_channeld dsa_su_relay_socket (sock_file (write)))
 (allow dsa_channeld dsa_su (unix_stream_socket (connectto)))
+; The host names the apps by package; the daemon finds each one's uid in the package
+; manager's list (/data/system/packages.list) before it hands the config to the helper, which
+; writes the su guard. Reading the list is all the daemon gets: it never writes the guard, so
+; the guard keeps the helper as its only writer after boot.
+(allow dsa_channeld system_data_file (dir (search)))
+(allow dsa_channeld packages_list_file (file (read open getattr)))
 
 ; vendor.dsa.root_elevation (vendor_property_contexts): dsa-channeld sets it to 1 when the
 ; host's config turns root elevation on for this boot and to 0 when it is off, and

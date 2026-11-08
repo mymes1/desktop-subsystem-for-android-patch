@@ -5675,7 +5675,9 @@ class RootElevationImageTests(unittest.TestCase):
 
     def _relay_paths(self):
         """The su paths the daemon's su relay tells the kernel's su guard to watch."""
-        return re.findall(r'"path (/[^"]+)"', self.RELAY)
+        listed = re.search(r"pub const SU_PATHS: \[&str; \d+\] = \[([^\]]*)\]", self.RELAY)
+        self.assertIsNotNone(listed, "su_relay.rs no longer lists SU_PATHS")
+        return re.findall(r'"(/[^"]+)"', listed.group(1))
 
     def test_fr35_the_image_carries_root_elevations_policy_with_the_daemon(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
