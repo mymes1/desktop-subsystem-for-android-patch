@@ -788,6 +788,7 @@ jobs:
           done
 
       - name: Place a widget on the booted image
+        id: widget
         if: matrix.android == '17' && matrix.arch == 'x86_64'
         timeout-minutes: 12
         working-directory: dsa
@@ -828,8 +829,13 @@ jobs:
       # page's large title must open expanded in the tall window and fold when the list scrolls,
       # and open folded in the short one, and the rows of a Settings list must be grouped in
       # rounded cards on the screen.
+      # The boot checks run one after another on the same image, and each runs even when the
+      # one before it failed, so one failure does not hide the others; the job still fails.
       - name: Check Android's system screens on the booted image
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
+        id: screens
+        if: >-
+          !cancelled() && (success() || steps.widget.outcome == 'failure')
+          && matrix.android == '17' && matrix.arch == 'x86_64'
         timeout-minutes: 14
         working-directory: dsa
         run: |
@@ -871,14 +877,20 @@ jobs:
       # second of H.264 and AAC and decode each with every decoder the guest lists, and the
       # guest log must show no denial of a media service's shared memory.
       - name: Download the media probe
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
+        id: probe
+        if: >-
+          !cancelled()
+          && (success() || steps.widget.outcome == 'failure' || steps.screens.outcome == 'failure')
+          && matrix.android == '17' && matrix.arch == 'x86_64'
         uses: actions/download-artifact@v4
         with:
           name: guest-media-probe
           path: .scratch/media-probe
 
       - name: Play sound and run codecs in an app on the booted image
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
+        if: >-
+          !cancelled() && steps.probe.outcome == 'success'
+          && matrix.android == '17' && matrix.arch == 'x86_64'
         timeout-minutes: 14
         working-directory: dsa
         run: |
