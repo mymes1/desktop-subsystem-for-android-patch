@@ -154,4 +154,13 @@ public class TextInputStyleTests
             Assert.DoesNotContain(advanced.Descendants(), e => (string?)e.Attribute(X + "Name") == name);
         }
     }
+
+    [Fact]
+    public void Fr17_the_drag_and_drop_note_wraps_inside_a_card()
+    {
+        var page = File_(Path.Combine("Pages", "AdvancedPage.xaml"));
+        var note = page.Descendants(Wpf + "TextBlock").Single(e => (string?)e.Attribute("Text") == "{l:Text FilesNote.Text}");
+        Assert.Equal("{StaticResource CardDescription}", (string?)note.Attribute("Style"));
+        Assert.Contains(note.Ancestors(), e => e.Name == Ui + "CardControl");
+    }
 }

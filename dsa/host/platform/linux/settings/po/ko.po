@@ -891,6 +891,9 @@ msgstr "기본값은 꺼짐입니다. 켜면 Android가 이 컴퓨터의 네트�
 msgid "Files"
 msgstr "파일"
 
+msgid "Send files to Android apps"
+msgstr "Android 앱에 파일 보내기"
+
 msgid "To send a file to an Android app, drag it from the file manager onto the app's window. An APK you drop is installed."
 msgstr "Android 앱에 파일을 보내려면 파일 관리자에서 앱 창으로 끌어 놓습니다. 끌어 놓은 APK는 설치됩니다."
 

@@ -2993,6 +2993,23 @@
         }
       }
     },
+    "FilesDropCard.Header": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send files to Android apps"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android 앱에 파일 보내기"
+          }
+        }
+      }
+    },
     "FilesHeader.Text": {
       "extractionState": "manual",
       "localizations": {

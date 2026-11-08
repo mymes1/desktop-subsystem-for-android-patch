@@ -429,7 +429,9 @@ struct AdvancedPage: View {
                 LinkRow(title: T("AndroidFilesCard.Header"), detail: T("AndroidFilesCard.Description")) {
                     Task { await vm.openAndroidFiles() }
                 }
-                Text(T("FilesNote.Text")).font(.callout).foregroundStyle(.secondary)
+                // A row of its own, so the text wraps inside the form's width like the others.
+                RowLabel(title: T("FilesDropCard.Header"), detail: T("FilesNote.Text"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             Section {
                 SwitchRow(title: T("FreezeCard.Header"), detail: T("FreezeCard.Description"),

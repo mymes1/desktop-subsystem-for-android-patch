@@ -74,7 +74,15 @@
                         <TextBlock Text="{l:Text AndroidFilesCard.Description}" Style="{StaticResource CardDescription}" />
                     </StackPanel>
                 </ui:CardAction>
-                <TextBlock Text="{l:Text FilesNote.Text}" Style="{StaticResource Note}" />
+                <!-- A card of its own, so the text wraps inside the page's width like the others. -->
+                <ui:CardControl x:Name="FilesDropCard" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowUpload24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text FilesDropCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text FilesNote.Text}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                </ui:CardControl>
 
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Snooze24}">
                     <ui:CardControl.Header>

@@ -446,7 +446,7 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
     };
 
     // Files.
-    let files = group(&tr("Files"), Some(&tr("To send a file to an Android app, drag it from the file manager onto the app's window. An APK you drop is installed.")));
+    let files = group(&tr("Files"), None);
     let file_sharing = user_switch(
         "file-sharing",
         tr("Share folders with Android"),
@@ -487,6 +487,11 @@ pub fn advanced(ctx: &Shared) -> gtk::Widget {
         &tr("Opens Android's shared storage in the file manager: the files Android apps saved, such as photos and downloads. Android starts if it is not running. DSA Files in the app grid does the same."),
     );
     files.add(&android_files);
+    // A row of its own, so the text wraps inside the group like the other rows.
+    files.add(&action_row(
+        &tr("Send files to Android apps"),
+        &tr("To send a file to an Android app, drag it from the file manager onto the app's window. An APK you drop is installed."),
+    ));
     {
         let (ctx, page) = (ctx.clone(), page.clone());
         android_files.connect_activated(move |_| {
