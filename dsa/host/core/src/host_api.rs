@@ -237,6 +237,12 @@ pub trait UserAndroid: Send + Sync {
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         let _ = (on, folders);
     }
+    /// Sets the user's root elevation settings: the computer's switch and the apps with a
+    /// level other than off. The running Android is told at once (see
+    /// [`Session::set_root_elevation`]).
+    fn set_root_elevation(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
+        let _ = (on, apps);
+    }
     /// The address (a WebDAV URL on the loopback address) the host's file manager opens this
     /// Android's shared storage at. It starts this Android when it is stopped.
     fn android_files(&self) -> Result<String, String> {
@@ -700,6 +706,9 @@ impl UserAndroid for Session {
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         Session::share_folders(self, on, folders)
     }
+    fn set_root_elevation(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
+        Session::set_root_elevation(self, on, apps)
+    }
     fn android_files(&self) -> Result<String, String> {
         Session::android_files(self)
     }
@@ -896,6 +905,11 @@ pub trait UserAndroids: Send + Sync {
     /// Stops every user's Android and waits at most `timeout` for all of them. Returns the
     /// users whose Android had not stopped by then, with its state.
     fn stop_all(&self, timeout: Duration) -> Vec<(String, SessionState)>;
+    /// Every user's Android made so far, running or not, for a change to a setting of the
+    /// computer's that each of them follows.
+    fn existing(&self) -> Vec<(String, Arc<dyn UserAndroid>)> {
+        Vec::new()
+    }
 }
 
 /// The answer to a request to update DSA itself.
@@ -991,6 +1005,9 @@ where
     }
     fn stop_all(&self, timeout: Duration) -> Vec<(String, SessionState)> {
         stop_every(self.snapshot(), timeout)
+    }
+    fn existing(&self) -> Vec<(String, Arc<dyn UserAndroid>)> {
+        self.snapshot()
     }
 }
 
@@ -3195,9 +3212,13 @@ impl HostApiService {
         }
         match store.set_root_app(&peer.user, &set.package_name, level.code()) {
             Ok(()) => {
+                // The running Android follows the new level at once: the guest's su guard
+                // shows su to the app, or hides it, from this message on.
+                if let Ok(android) = self.androids.android(&peer.user) {
+                    crate::root_elevation::apply(android.as_ref(), store.as_ref(), &peer.user);
+                }
                 eprintln!(
-                    "local API: {} set the root level of {} to {} (su visibility applies from \
-                     the next start of Android; the host decides each call by this level now)",
+                    "local API: {} set the root level of {} to {}",
                     peer.user,
                     set.package_name,
                     level.code()
@@ -4833,14 +4854,28 @@ impl HostApiService {
                     on_off(settings.advanced_networking)
                 );
                 if settings.root_elevation != machine.root_elevation {
-                    // The feature is set up at boot (the kernel hook and the guest relay), so
-                    // a change applies from the next start of Android. The settings app says
-                    // so; nothing in the running Android changes now.
+                    // The switch is the computer's, so every user's Android follows it. The
+                    // feature is set up at boot (the kernel hook and the guest relay), so
+                    // turning it on applies from the next start of Android; turning it off
+                    // hides su from every app of a running Android at once.
+                    let mut users = self.androids.existing();
+                    if !users.iter().any(|(user, _)| *user == peer.user) {
+                        if let Ok(android) = self.androids.android(&peer.user) {
+                            users.push((peer.user.clone(), android));
+                        }
+                    }
+                    for (user, android) in &users {
+                        crate::root_elevation::apply(android.as_ref(), store.as_ref(), user);
+                    }
                     eprintln!(
-                        "local API: {} turned root elevation {} (it applies from the next \
-                         start of Android)",
+                        "local API: {} turned root elevation {} ({})",
                         peer.user,
-                        on_off(settings.root_elevation)
+                        on_off(settings.root_elevation),
+                        if settings.root_elevation {
+                            "it applies from the next start of Android"
+                        } else {
+                            "su is hidden from every app of a running Android now"
+                        }
                     );
                 }
                 let mut wire = settings_to_wire(&settings, &self.facts_now(facts));

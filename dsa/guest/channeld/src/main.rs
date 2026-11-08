@@ -46,6 +46,7 @@ mod daemon {
     };
     use dsa_guest_channeld::logd::{LogdSocket, LOGDR_SOCKET};
     use dsa_guest_channeld::router::{Peer, Router};
+    use dsa_guest_channeld::su_relay::{ConfigApplier, SuRelay};
     use dsa_guest_channeld::{ChannelEvent, Credentials, RetryPolicy};
     use dsa_guest_transport::vsock::{VsockConnector, VMADDR_CID_HOST};
     use dsa_protocol::auth::{secret_from_bootconfig, BOOTCONFIG_KEY};
@@ -535,6 +536,12 @@ mod daemon {
         let (to_host, from_guest) = mpsc::channel::<Vec<u8>>();
         // The host's game controllers become uinput gamepads, whose rumble goes to the host.
         let gamepads = Arc::new(GamepadDevices::new(Box::new(Uinput), to_host.clone()));
+        // Root elevation: the host's config drives the kernel's su guard, on connect and on
+        // every change, and the host's decisions answer the su calls the relay holds.
+        let su_relay = Arc::new(SuRelay::new());
+        let su_config = ConfigApplier::of_system(Arc::clone(&su_relay), |line| say!("{line}"));
+        // Until the host says otherwise, su exists for no app, whatever the image holds.
+        su_config.hide_all();
         let router = Arc::new(
             Router::new(to_host, check_agent)
                 .on_developer_mode(switch_adb)
@@ -548,7 +555,10 @@ mod daemon {
                     gapps::DIR,
                     GuestFacts::of_system(read_property),
                 )))
-                .on_gamepads(gamepads),
+                .on_gamepads(gamepads)
+                .on_root_elevation(Arc::clone(&su_relay), move |config| {
+                    su_config.apply(config);
+                }),
         );
         let (to_guest, from_host) = mpsc::channel::<Vec<u8>>();
         // The guest's log goes on a port of its own, past the same handshake as the control

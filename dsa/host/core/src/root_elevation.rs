@@ -25,6 +25,9 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use crate::host_api::UserAndroid;
+use crate::settings::SettingsStore;
+
 /// How long an approval lasts, per app. Linux sudo's `timestamp_timeout` default.
 pub const GRACE: Duration = Duration::from_secs(15 * 60);
 
@@ -262,6 +265,36 @@ impl Default for Policy {
     fn default() -> Policy {
         Policy::new()
     }
+}
+
+/// The computer's switch and `user`'s app levels as `store` keeps them. A level the store
+/// cannot read is left out (off), and a store that cannot list the apps gives none.
+pub fn stored(store: &dyn SettingsStore, user: &str) -> (bool, Vec<AppLevel>) {
+    let on = store.machine().root_elevation;
+    let apps = match store.root_apps(user) {
+        Ok(apps) => apps
+            .into_iter()
+            .filter_map(|app| {
+                Some(AppLevel {
+                    level: Level::from_code(&app.level)?,
+                    package: app.package,
+                })
+            })
+            .filter(|app| app.level != Level::Off)
+            .collect(),
+        Err(why) => {
+            eprintln!("root elevation: cannot read the app levels of {user}: {why}");
+            Vec::new()
+        }
+    };
+    (on, apps)
+}
+
+/// Gives `user`'s Android their root elevation settings as `store` keeps them: when the
+/// Android is made, and after every change to the switch or to an app's level.
+pub fn apply(android: &dyn UserAndroid, store: &dyn SettingsStore, user: &str) {
+    let (on, apps) = stored(store, user);
+    android.set_root_elevation(on, apps);
 }
 
 #[cfg(test)]

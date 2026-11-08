@@ -981,6 +981,8 @@ where
                         eprintln!("{factory_build}: developer mode for {sid}: {why}");
                     }
                 }
+                // Root elevation: the computer's switch, and the level of each of their apps.
+                dsa_host_core::root_elevation::apply(android.as_ref(), factory_store.as_ref(), sid);
             }
             Err(why) => eprintln!("{factory_build}: no Android for {sid}: {why}"),
         }

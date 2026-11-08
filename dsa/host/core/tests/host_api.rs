@@ -740,3 +740,102 @@ fn fr15_only_an_administrator_chooses_the_release_channel_and_every_user_sees_it
     assert!(store.machine().prerelease_updates);
     assert!(user.settings().unwrap().settings.prerelease_updates);
 }
+
+/// An Android that keeps the root elevation settings it is given.
+#[derive(Default)]
+struct RootRecorder {
+    given: std::sync::Mutex<Vec<(bool, Vec<dsa_host_core::root_elevation::AppLevel>)>>,
+}
+
+impl RootRecorder {
+    fn last(&self) -> Option<(bool, Vec<dsa_host_core::root_elevation::AppLevel>)> {
+        self.given.lock().unwrap().last().cloned()
+    }
+}
+
+impl UserAndroid for RootRecorder {
+    fn state(&self) -> SessionState {
+        SessionState::Active
+    }
+    fn last_reason(&self) -> Option<String> {
+        None
+    }
+    fn start(&self) {}
+    fn stop(&self) {}
+    fn pointer(&self, _: &PointerEvent) -> Result<(), TaskRequestError> {
+        Err(TaskRequestError::Failed("no input here".into()))
+    }
+    fn key(&self, _: &KeyEvent) -> Result<(), TaskRequestError> {
+        Err(TaskRequestError::Failed("no input here".into()))
+    }
+    fn ime(&self, _: &ImeEvent) -> Result<(), TaskRequestError> {
+        Err(TaskRequestError::Failed("no input here".into()))
+    }
+    fn share_clipboard(&self, _: bool) {}
+    fn host_clipboard(&self, _: String) {}
+    fn watch_clipboard(&self) -> Option<std::sync::mpsc::Receiver<String>> {
+        None
+    }
+    fn set_root_elevation(&self, on: bool, apps: Vec<dsa_host_core::root_elevation::AppLevel>) {
+        self.given.lock().unwrap().push((on, apps));
+    }
+}
+
+#[test]
+fn fr35_the_running_android_is_given_each_change_to_root_elevation() {
+    use dsa_host_core::host_api::{HostApiService, ServiceFacts};
+    use dsa_host_core::root_elevation::{AppLevel, Level};
+    use dsa_host_core::settings::Settings;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    let (listener, connector) = local::pair();
+    let store = Arc::new(dsa_host_core::settings::MemorySettings::default());
+    let made: Arc<Mutex<HashMap<String, Arc<RootRecorder>>>> = Arc::default();
+    let androids = {
+        let made = Arc::clone(&made);
+        Arc::new(PerUser::new(move |user: &str| {
+            let android = Arc::new(RootRecorder::default());
+            made.lock()
+                .unwrap()
+                .insert(user.to_string(), Arc::clone(&android));
+            Ok(android as Arc<dyn UserAndroid>)
+        }))
+    };
+    let service = HostApiService::new(androids, "test service")
+        .with_settings(store.clone(), ServiceFacts::default());
+    let _service = RunningService::start_service(Box::new(listener), service);
+    let android_of = |user: &str| made.lock().unwrap().get(user).cloned().unwrap();
+
+    // An administrator turns the feature on: their Android is given the switch.
+    let mut admin =
+        HostApiClient::connect(&mut AsAdmin(connector.clone(), "bob", true), "b", WAIT).unwrap();
+    admin
+        .set_settings(&Settings {
+            root_elevation: true,
+            ..Settings::default()
+        })
+        .unwrap();
+    assert_eq!(android_of("bob").last(), Some((true, Vec::new())));
+
+    // A user sets an app to ask: their running Android is given the new level at once.
+    let mut alice =
+        HostApiClient::connect(&mut AsAdmin(connector.clone(), "alice", false), "a", WAIT).unwrap();
+    let result = alice.set_app_root("com.example.root", "ask").unwrap();
+    assert_eq!(result.level, "ask");
+    let ask = vec![AppLevel {
+        package: "com.example.root".into(),
+        level: Level::Ask,
+    }];
+    assert_eq!(android_of("alice").last(), Some((true, ask.clone())));
+
+    // Set back to off, the app is no longer listed.
+    alice.set_app_root("com.example.root", "off").unwrap();
+    assert_eq!(android_of("alice").last(), Some((true, Vec::new())));
+    alice.set_app_root("com.example.root", "ask").unwrap();
+
+    // The administrator turns the feature off: every user's Android is told, not only theirs.
+    admin.set_settings(&Settings::default()).unwrap();
+    assert_eq!(android_of("alice").last(), Some((false, ask)));
+    assert_eq!(android_of("bob").last(), Some((false, Vec::new())));
+}

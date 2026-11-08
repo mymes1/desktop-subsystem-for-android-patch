@@ -668,6 +668,8 @@ pub fn serve(
         }
         let android = create_android(&factory, name)?;
         apply_settings(&android, factory.settings.get(name).ok(), &factory.build);
+        // Root elevation: the computer's switch, and the level of each of the user's apps.
+        dsa_host_core::root_elevation::apply(android.as_ref(), factory.settings.as_ref(), name);
         Ok(android)
     }));
     let facts = ServiceFacts {
