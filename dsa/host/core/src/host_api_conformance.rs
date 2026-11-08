@@ -1174,6 +1174,14 @@ macro_rules! host_api_conformance {
             $crate::host_api_conformance::watcher_receives_cursor(&mut || $make);
         }
         #[test]
+        fn fr6_a_watcher_hears_the_editor_focused_in_a_task() {
+            $crate::host_api_conformance::watcher_receives_editor(&mut || $make);
+        }
+        #[test]
+        fn fr6_the_input_methods_selection_and_reconversion_reach_the_callers_android() {
+            $crate::host_api_conformance::selection_reaches_the_caller(&mut || $make);
+        }
+        #[test]
         fn nfr5_a_client_that_streams_input_and_sends_a_request_is_disconnected() {
             $crate::host_api_conformance::input_stream_that_sends_a_request_is_disconnected(
                 &mut || $make,
@@ -1296,6 +1304,10 @@ macro_rules! host_api_conformance {
                 &mut || $make,
                 ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
             );
+        }
+        #[test]
+        fn fr5_touch_gestures_off_is_on_by_default_and_reports_what_the_window_manager_said() {
+            $crate::host_api_conformance::touch_gestures_report_reaches_the_settings(&mut || $make);
         }
         #[test]
         fn fr20_adb_auto_connect_is_on_by_default_reaches_the_callers_android_and_reports_its_state(
@@ -2106,6 +2118,64 @@ pub fn bad_text_input_is_dropped(make: MakeLocal<'_>) {
     input.send_ime(&good).expect("the event is sent");
     let android = androids.of(&user).unwrap();
     assert_eq!(text_given(&android, 1), vec![good]);
+}
+
+pub fn watcher_receives_editor(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    let mut stream = connect(&mut *connector).watch_tasks().expect("watching");
+    let android = androids.of(&user).unwrap();
+    android.publish(TaskEvent::Updated(sample_task(4, "Notes")));
+    let editor = TaskEvent::ImeEditor {
+        task_id: 4,
+        editor: crate::ime::ImeEditor {
+            kind: crate::ime::InputKind::Url,
+            text: "https://\u{d55c}".into(),
+            text_start: 100,
+            selection: (109, 109),
+            composition: Some((108, 109)),
+        },
+    };
+    android.publish(editor.clone());
+    assert_eq!(
+        next_event(&mut stream),
+        TaskEvent::Updated(sample_task(4, "Notes"))
+    );
+    assert_eq!(next_event(&mut stream), editor);
+}
+
+pub fn selection_reaches_the_caller(make: MakeLocal<'_>) {
+    let (listener, mut connector, user) = make();
+    let androids = Arc::new(FakeAndroids::default());
+    let _service = RunningService::start(listener, androids.clone());
+    connect(&mut *connector).start().unwrap();
+    let mut input = connect(&mut *connector)
+        .stream_input()
+        .expect("streaming input");
+    // Reconverting the first word: select it, make it the composition, compose over it.
+    let text = [
+        ImeEvent::SetSelection {
+            task_id: 4,
+            start: 0,
+            end: 1,
+        },
+        ImeEvent::SetComposingRegion {
+            task_id: 4,
+            start: 0,
+            end: 1,
+        },
+        ImeEvent::Composition {
+            task_id: 4,
+            text: "\u{6f22}".into(),
+            cursor: 1,
+        },
+    ];
+    for event in &text {
+        input.send_ime(event).expect("the event is sent");
+    }
+    let android = androids.of(&user).unwrap();
+    assert_eq!(text_given(&android, 3), text);
 }
 
 pub fn watcher_receives_cursor(make: MakeLocal<'_>) {
@@ -2960,6 +3030,49 @@ pub fn developer_mode_reaches_the_caller(make: MakeLocal<'_>) {
     assert_eq!(
         *androids.of(&user).unwrap().developer_mode.lock().unwrap(),
         vec![(true, 58526), (true, 5037), (false, 58526)]
+    );
+}
+
+pub fn touch_gestures_report_reaches_the_settings(make: MakeLocal<'_>) {
+    use crate::touch_gestures::TouchGesturesState;
+    let (listener, mut connector, user) = make();
+    let store = Arc::new(MemorySettings::default());
+    let androids = Arc::new(FakeAndroids::default());
+    let service =
+        HostApiService::new(androids, "test service").with_settings(store.clone(), facts());
+    let _service = RunningService::start_service(listener, service);
+    let mut client = connect(&mut *connector);
+    let fresh = client.settings().unwrap();
+    assert!(fresh.settings.touch_gestures_off, "on by default");
+    assert_eq!(fresh.touch_gestures, TouchGesturesState::Unknown);
+
+    client
+        .report_touch_gestures(&TouchGesturesState::Available)
+        .expect("the window manager's report");
+    assert_eq!(
+        client.settings().unwrap().touch_gestures,
+        TouchGesturesState::Available
+    );
+
+    let failed = TouchGesturesState::Failed("access is denied".into());
+    client.report_touch_gestures(&failed).unwrap();
+    // A client that turns the setting off still sees why it cannot be used.
+    let off = client
+        .set_settings(&Settings {
+            touch_gestures_off: false,
+            ..Settings::default()
+        })
+        .expect("turning the setting off");
+    assert!(!off.settings.touch_gestures_off);
+    assert_eq!(off.touch_gestures, failed);
+    assert!(!store.get(&user).unwrap().touch_gestures_off);
+
+    client
+        .report_touch_gestures(&TouchGesturesState::Unsupported)
+        .unwrap();
+    assert_eq!(
+        client.settings().unwrap().touch_gestures,
+        TouchGesturesState::Unsupported
     );
 }
 

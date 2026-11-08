@@ -69,6 +69,9 @@ therefore never depend on those documents; a comment may name them only as being
    person merges it. Never merge `release` or `main` back into `develop`: their history
    contains the deletion of the planning documents, and merging it replays that deletion as
    if someone intended it.
+   Releases follow the same line. A release run from `main` is the reviewed release; one
+   from `develop` is a development build. Below 1.0 both are pre-releases; from 1.0 only
+   `main` may publish to the stable channel. The release workflow refuses any other branch.
 2. **Start every branch and worktree from `develop`.** A worktree created from the default
    branch starts on `main`, which has neither the planning documents nor the recent work.
    Check with `git log --oneline -1` before touching anything. Merging `develop` in
@@ -333,7 +336,8 @@ Never introduce anything that violates these. If a task seems to require it, sto
   remoting. The dxg path is research, recorded in `docs/RESEARCH.md`, until the owner
   decides otherwise.
 - **The boundary is the HAL (D5).** The kernel, ART and the framework stay in the guest.
-  Devices move to the host as HAL services over RPC Binder. Never forward system calls.
+  Devices move to the host behind guest HAL services that send generated protocol
+  messages over vsock (hvsocket on Windows). Never forward system calls.
 - **The host is the shell (D6).** No launcher, no SystemUI, no keyboard app in the guest
   image. Text input goes through the host IME and the agent's `InputConnection`; never
   round-trip composition through a guest keyboard.

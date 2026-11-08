@@ -328,6 +328,15 @@ after two minutes. `"keep_window_manager": false` turns this off.
   is its own pointer. The window holds the mouse while a button is down, so a drag that
   leaves it still ends in the task. Input goes to the service on a connection of its own,
   which answers none of it, so a fast pointer is never held back.
+- Windows 11 keeps three or more fingers from every app while its three- and four-finger
+  touch gestures are on, and no public API turns them off for one app. So while a task
+  window is the active window, the window manager turns them off for the user (the
+  `touch-gestures-off` setting, on by default) and puts the user's own value back as soon
+  as another window is. The value is kept in `touch-gestures-original.txt` in the user's DSA
+  folder while the gestures are off, so a window manager that crashed puts it back when it
+  next starts. If Windows refuses the change (the action is one Settings uses but does not
+  document), the window manager leaves the gestures alone and the settings app says why.
+  Windows 10 and Windows Server 2022 have no such gestures and are left alone.
 - The keys pressed in the window that has the keyboard focus go to its task on the same
   connection, as Android key codes with their repeats and with Shift, Ctrl, Alt and the
   Windows key (each with its side) and the locks: the keys that type nothing or a control
@@ -337,11 +346,18 @@ after two minutes. `"keep_window_manager": false` turns this off.
 - Text goes to the task as text, on the same connection: what the Windows input method
   composes (the composing text with its cursor, which the Android editor shows underlined)
   and commits, and every character a key types without it, so any keyboard layout types what
-  its keys show. A key that types a character is never also sent as a key. The window takes
-  the input method through IMM32, which the text services framework serves every input
-  method to, the Microsoft Korean IME included. It hides the input method's own composition
-  window, since the Android editor shows the composition, and places the candidate list
-  below the cursor of the focused Android editor, which the agent reports.
+  its keys show. A key that types a character is never also sent as a key. The window is a
+  text services framework client: its document is the text of the focused Android editor
+  around the selection, which the agent describes with the kind of text the editor takes.
+  The input method reads that text to predict and to reconvert what was typed, and every
+  edit it makes there (a composition, a commit, a new selection, a word made the composition
+  again) reaches the Android editor. The Microsoft Korean IME composes there, the touch
+  keyboard takes its layout from the editor's input scope (password, number, PIN, phone,
+  email, URL, name, date, time, search), and dictation (Win+H), handwriting and the emoji
+  panel type into it. A password, and a view that takes no text (a game's), take keys
+  straight, with no input method composing. The Android editor shows the composition, so no
+  composition window is drawn, and the candidate list opens beside the cursor of the focused
+  Android editor, which the agent reports.
 - Without a GPU device, the windows still open and close with their tasks but stay
   empty, and the log says why.
 
