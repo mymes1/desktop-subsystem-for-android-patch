@@ -9,6 +9,9 @@
 //! what it shows of the apps: launcher entries and icons, notifications, the clipboard and
 //! dropped files.
 //!
+//! [`accessibility`] exports each task window's Android UI as an AT-SPI tree, with the title
+//! bar's buttons, for screen readers and other accessibility clients.
+//!
 //! The VM and the service:
 //! - [`crosvm`]: the VM as a crosvm command line (KVM, virtio disks, vhost-vsock, a balloon
 //!   with free page reporting, virtio-mem for growth, the network adapter, the device
@@ -26,6 +29,7 @@
 //! the window system, the buses, the devices and the VM build on Linux only, so the workspace
 //! builds everywhere.
 
+pub mod accessibility;
 #[cfg(target_os = "linux")]
 pub mod adb_discovery;
 pub mod compositor;
