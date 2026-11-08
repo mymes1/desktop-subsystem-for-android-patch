@@ -581,6 +581,17 @@ fn open_settings_at(
     wait: Duration,
 ) -> Result<u32, String> {
     let deadline = Instant::now() + wait;
+    // The tasks Settings had before it is stopped. The host can still list one of them for
+    // a moment after the force-stop removes it, so only a task that was not there before is
+    // the one this launch opens.
+    let before: Vec<i32> = api
+        .tasks()
+        .map_err(|why| format!("listing tasks: {why}"))?
+        .tasks
+        .into_iter()
+        .filter(|task| task.package_name == SETTINGS)
+        .map(|task| task.task_id)
+        .collect();
     let _ = adb.shell(&format!("am force-stop {SETTINGS}"));
     api.launch_app(SETTINGS)
         .map_err(|why| format!("opening Settings: {why}"))?;
@@ -589,7 +600,7 @@ fn open_settings_at(
         if let Some(task) = tasks
             .tasks
             .into_iter()
-            .find(|task| task.package_name == SETTINGS)
+            .find(|task| task.package_name == SETTINGS && !before.contains(&task.task_id))
         {
             break task;
         }

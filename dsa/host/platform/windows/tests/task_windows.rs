@@ -1667,7 +1667,9 @@ mod real_input {
         PEN_MASK_TILT_Y, POINTER_INPUT_TYPE, PT_PEN, PT_TOUCH, SWP_NOSIZE, TOUCH_MASK_CONTACTAREA,
         TOUCH_MASK_PRESSURE, WM_NCHITTEST,
     };
-    use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, SetForegroundWindow, SystemParametersInfoW,
+    };
 
     /// One contact of a synthetic pointer device's frame (`POINTER_TYPE_INFO`).
     #[repr(C)]
@@ -2052,6 +2054,39 @@ mod real_input {
         }
     }
 
+    /// What Windows 11's three- and four-finger touch gestures read, for a failure's
+    /// message. While they are on, Windows keeps three or more fingers from every app and
+    /// holds even one finger back until it lifts; the Installer test workflow turns them off.
+    /// winuser.h does not name the action: it is the one Settings changes them with, which
+    /// the workflow's script checks against the user's TouchGestureSetting.
+    fn touch_gestures() -> String {
+        const GET_TOUCH_GESTURES: u32 = 0x2030;
+        let mut value = 0u32;
+        // SAFETY: a get action that writes one 32-bit value into a local.
+        let read = unsafe {
+            SystemParametersInfoW(
+                GET_TOUCH_GESTURES,
+                0,
+                (&mut value as *mut u32).cast::<c_void>(),
+                0,
+            )
+        };
+        if read == 0 {
+            format!(
+                "Windows does not say whether its three- and four-finger touch gestures are on \
+                 ({})",
+                std::io::Error::last_os_error()
+            )
+        } else if value == 0 {
+            "Windows' three- and four-finger touch gestures are off".to_string()
+        } else {
+            format!(
+                "Windows' three- and four-finger touch gestures are on ({value}), so Windows \
+                 keeps three or more fingers from every app"
+            )
+        }
+    }
+
     fn count(events: &[PointerEvent], action: PointerAction) -> usize {
         events.iter().filter(|event| event.action == action).count()
     }
@@ -2077,8 +2112,9 @@ mod real_input {
         let (hwnd, origin) = window_on_top(&running, &wide);
         // Which window has the keyboard says, if fingers go missing, whether the task window
         // was the one in use when they landed.
+        let gestures = touch_gestures();
         eprintln!(
-            "ten fingers on {}; the foreground window is {}",
+            "ten fingers on {}; the foreground window is {}; {gestures}",
             describe_window(hwnd),
             describe_window(unsafe { GetForegroundWindow() })
         );
@@ -2100,7 +2136,7 @@ mod real_input {
             &running,
             before,
             PointerTool::Touch,
-            "ten fingers to lift",
+            &format!("ten fingers to lift ({gestures})"),
             |events| count(events, PointerAction::Up) + count(events, PointerAction::Cancel) >= 10,
         );
         assert_eq!(count(&events, PointerAction::Cancel), 0, "{events:?}");

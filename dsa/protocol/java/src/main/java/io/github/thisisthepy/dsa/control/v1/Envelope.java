@@ -66,6 +66,9 @@ public  final class Envelope extends
     GAPPS_STATE(404),
     GOOGLE_DEVICE_ID_QUERY(405),
     GOOGLE_DEVICE_ID(406),
+    ROOT_ELEVATION_CONFIG(408),
+    SU_REQUEST(409),
+    SU_DECISION(410),
     DEVICE_IDLE(42),
     HOST_MEMORY(43),
     HOST_SLEEP(44),
@@ -228,6 +231,9 @@ public  final class Envelope extends
         case 404: return GAPPS_STATE;
         case 405: return GOOGLE_DEVICE_ID_QUERY;
         case 406: return GOOGLE_DEVICE_ID;
+        case 408: return ROOT_ELEVATION_CONFIG;
+        case 409: return SU_REQUEST;
+        case 410: return SU_DECISION;
         case 42: return DEVICE_IDLE;
         case 43: return HOST_MEMORY;
         case 44: return HOST_SLEEP;
@@ -2645,6 +2651,156 @@ public  final class Envelope extends
    */
   private void clearGoogleDeviceId() {
     if (bodyCase_ == 406) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int ROOT_ELEVATION_CONFIG_FIELD_NUMBER = 408;
+  /**
+   * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+   */
+  @java.lang.Override
+  public boolean hasRootElevationConfig() {
+    return bodyCase_ == 408;
+  }
+  /**
+   * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.RootElevationConfig getRootElevationConfig() {
+    if (bodyCase_ == 408) {
+       return (io.github.thisisthepy.dsa.control.v1.RootElevationConfig) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.RootElevationConfig.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+   */
+  private void setRootElevationConfig(io.github.thisisthepy.dsa.control.v1.RootElevationConfig value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 408;
+  }
+  /**
+   * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+   */
+  private void mergeRootElevationConfig(io.github.thisisthepy.dsa.control.v1.RootElevationConfig value) {
+    value.getClass();
+  if (bodyCase_ == 408 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.RootElevationConfig.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.RootElevationConfig.newBuilder((io.github.thisisthepy.dsa.control.v1.RootElevationConfig) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 408;
+  }
+  /**
+   * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+   */
+  private void clearRootElevationConfig() {
+    if (bodyCase_ == 408) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SU_REQUEST_FIELD_NUMBER = 409;
+  /**
+   * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+   */
+  @java.lang.Override
+  public boolean hasSuRequest() {
+    return bodyCase_ == 409;
+  }
+  /**
+   * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SuRequest getSuRequest() {
+    if (bodyCase_ == 409) {
+       return (io.github.thisisthepy.dsa.control.v1.SuRequest) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SuRequest.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+   */
+  private void setSuRequest(io.github.thisisthepy.dsa.control.v1.SuRequest value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 409;
+  }
+  /**
+   * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+   */
+  private void mergeSuRequest(io.github.thisisthepy.dsa.control.v1.SuRequest value) {
+    value.getClass();
+  if (bodyCase_ == 409 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SuRequest.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SuRequest.newBuilder((io.github.thisisthepy.dsa.control.v1.SuRequest) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 409;
+  }
+  /**
+   * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+   */
+  private void clearSuRequest() {
+    if (bodyCase_ == 409) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SU_DECISION_FIELD_NUMBER = 410;
+  /**
+   * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+   */
+  @java.lang.Override
+  public boolean hasSuDecision() {
+    return bodyCase_ == 410;
+  }
+  /**
+   * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.SuDecision getSuDecision() {
+    if (bodyCase_ == 410) {
+       return (io.github.thisisthepy.dsa.control.v1.SuDecision) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.SuDecision.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+   */
+  private void setSuDecision(io.github.thisisthepy.dsa.control.v1.SuDecision value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 410;
+  }
+  /**
+   * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+   */
+  private void mergeSuDecision(io.github.thisisthepy.dsa.control.v1.SuDecision value) {
+    value.getClass();
+  if (bodyCase_ == 410 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.SuDecision.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.SuDecision.newBuilder((io.github.thisisthepy.dsa.control.v1.SuDecision) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 410;
+  }
+  /**
+   * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+   */
+  private void clearSuDecision() {
+    if (bodyCase_ == 410) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -10020,6 +10176,150 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+     */
+    @java.lang.Override
+    public boolean hasRootElevationConfig() {
+      return instance.hasRootElevationConfig();
+    }
+    /**
+     * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.RootElevationConfig getRootElevationConfig() {
+      return instance.getRootElevationConfig();
+    }
+    /**
+     * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+     */
+    public Builder setRootElevationConfig(io.github.thisisthepy.dsa.control.v1.RootElevationConfig value) {
+      copyOnWrite();
+      instance.setRootElevationConfig(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+     */
+    public Builder setRootElevationConfig(
+        io.github.thisisthepy.dsa.control.v1.RootElevationConfig.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRootElevationConfig(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+     */
+    public Builder mergeRootElevationConfig(io.github.thisisthepy.dsa.control.v1.RootElevationConfig value) {
+      copyOnWrite();
+      instance.mergeRootElevationConfig(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 408;</code>
+     */
+    public Builder clearRootElevationConfig() {
+      copyOnWrite();
+      instance.clearRootElevationConfig();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+     */
+    @java.lang.Override
+    public boolean hasSuRequest() {
+      return instance.hasSuRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SuRequest getSuRequest() {
+      return instance.getSuRequest();
+    }
+    /**
+     * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+     */
+    public Builder setSuRequest(io.github.thisisthepy.dsa.control.v1.SuRequest value) {
+      copyOnWrite();
+      instance.setSuRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+     */
+    public Builder setSuRequest(
+        io.github.thisisthepy.dsa.control.v1.SuRequest.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSuRequest(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+     */
+    public Builder mergeSuRequest(io.github.thisisthepy.dsa.control.v1.SuRequest value) {
+      copyOnWrite();
+      instance.mergeSuRequest(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SuRequest su_request = 409;</code>
+     */
+    public Builder clearSuRequest() {
+      copyOnWrite();
+      instance.clearSuRequest();
+      return this;
+    }
+
+    /**
+     * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+     */
+    @java.lang.Override
+    public boolean hasSuDecision() {
+      return instance.hasSuDecision();
+    }
+    /**
+     * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.SuDecision getSuDecision() {
+      return instance.getSuDecision();
+    }
+    /**
+     * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+     */
+    public Builder setSuDecision(io.github.thisisthepy.dsa.control.v1.SuDecision value) {
+      copyOnWrite();
+      instance.setSuDecision(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+     */
+    public Builder setSuDecision(
+        io.github.thisisthepy.dsa.control.v1.SuDecision.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSuDecision(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+     */
+    public Builder mergeSuDecision(io.github.thisisthepy.dsa.control.v1.SuDecision value) {
+      copyOnWrite();
+      instance.mergeSuDecision(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.SuDecision su_decision = 410;</code>
+     */
+    public Builder clearSuDecision() {
+      copyOnWrite();
+      instance.clearSuDecision();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>
      */
     @java.lang.Override
@@ -15032,9 +15332,12 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.GoogleDeviceIdQuery.class,
             io.github.thisisthepy.dsa.control.v1.GoogleDeviceId.class,
             io.github.thisisthepy.dsa.control.v1.DisplayRefresh.class,
+            io.github.thisisthepy.dsa.control.v1.RootElevationConfig.class,
+            io.github.thisisthepy.dsa.control.v1.SuRequest.class,
+            io.github.thisisthepy.dsa.control.v1.SuDecision.class,
           };
           java.lang.String info =
-              "\u0000\u0093\u0001\u0000\u0001\u0197\u0093\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u0096\u0001\u0000\u0001\u019a\u0096\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -15054,7 +15357,7 @@ public  final class Envelope extends
               "\u0157<\u0000\u0158<\u0000\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162" +
               "<\u0000\u0179<\u0000\u017c<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0190<\u0000" +
               "\u0191<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000\u0195<\u0000\u0196<\u0000\u0197" +
-              "<\u0000";
+              "<\u0000\u0198<\u0000\u0199<\u0000\u019a<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through
