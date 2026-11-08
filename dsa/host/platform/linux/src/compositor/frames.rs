@@ -30,17 +30,10 @@ impl Frame {
         if rgba.len() < len {
             return None;
         }
-        let mut pixels = vec![0u8; len];
-        for (to, from) in pixels.chunks_exact_mut(4).zip(rgba[..len].chunks_exact(4)) {
-            to[0] = from[2];
-            to[1] = from[1];
-            to[2] = from[0];
-            to[3] = 0xff;
-        }
         Some(Frame {
             width,
             height,
-            pixels,
+            pixels: rgba_to_xrgb(&rgba[..len]),
         })
     }
 
@@ -109,6 +102,51 @@ pub struct GpuImage {
     pub offset: u32,
     pub fourcc: u32,
     pub modifier: u64,
+}
+
+/// The linear layout's modifier, the only one the CPU can read as rows.
+pub const DRM_FORMAT_MOD_LINEAR: u64 = 0;
+/// The modifier of an image whose layout the driver chose without naming it.
+pub const DRM_FORMAT_MOD_INVALID: u64 = 0x00ff_ffff_ffff_ffff;
+
+/// The four-character code of a format, as DRM numbers it.
+pub const fn fourcc(code: &[u8; 4]) -> u32 {
+    (code[0] as u32) | ((code[1] as u32) << 8) | ((code[2] as u32) << 16) | ((code[3] as u32) << 24)
+}
+
+/// RGBA bytes as `XRGB8888` (blue, green, red, then an opaque byte, in memory).
+pub fn rgba_to_xrgb(rgba: &[u8]) -> Vec<u8> {
+    let mut pixels = Vec::with_capacity(rgba.len());
+    for from in rgba.chunks_exact(4) {
+        pixels.extend_from_slice(&[from[2], from[1], from[0], 0xff]);
+    }
+    pixels
+}
+
+/// The rows of a GPU frame the title bar's band fill samples, from the top: the middle of a
+/// `band` pixels high band and the row just under it. `None` when the frame, `height` rows,
+/// has nothing under the band or there is no band. Only these two rows are read back, so
+/// filling the band never reads a whole frame.
+pub fn band_probe_rows(band: u32, height: u32) -> Option<[u32; 2]> {
+    (band > 0 && band < height).then_some([band / 2, band])
+}
+
+/// The rows of a frame `height` rows high that a screenshot takes: every row under the title
+/// bar's `band`, from the top. Empty when nothing is under it.
+pub fn app_rows(band: u32, height: u32) -> std::ops::Range<u32> {
+    band.min(height)..height
+}
+
+/// `rows` as runs of rows next to each other: (first row, how many), in order.
+pub fn row_runs(rows: &[u32]) -> Vec<(u32, u32)> {
+    let mut runs: Vec<(u32, u32)> = Vec::new();
+    for &row in rows {
+        match runs.last_mut() {
+            Some((top, count)) if *top + *count == row => *count += 1,
+            _ => runs.push((row, 1)),
+        }
+    }
+    runs
 }
 
 /// What a display has to show next.
@@ -187,6 +225,38 @@ mod tests {
         assert!(matches!(&taken[&3], Shown::Pixels(frame) if frame.width == 2));
         assert!(matches!(taken[&7], Shown::Gpu(GpuFrame { slot: 1, .. })));
         assert!(frames.take().is_empty());
+    }
+
+    #[test]
+    fn fr22_a_gpu_frame_reads_back_only_the_rows_the_band_fill_samples() {
+        // A 32 px band over a 600 px frame: its middle row and the row under it.
+        assert_eq!(band_probe_rows(32, 600), Some([16, 32]));
+        assert_eq!(band_probe_rows(64, 1200), Some([32, 64]));
+        // No band (full screen), or nothing under it, reads nothing.
+        assert_eq!(band_probe_rows(0, 600), None);
+        assert_eq!(band_probe_rows(600, 600), None);
+        assert_eq!(band_probe_rows(32, 20), None);
+        // The two rows are read apart, the rows of a screenshot in one run.
+        assert_eq!(row_runs(&[16, 32]), vec![(16, 1), (32, 1)]);
+        assert_eq!(row_runs(&[32, 33, 34, 35]), vec![(32, 4)]);
+        assert_eq!(row_runs(&[1, 2, 5, 6, 7]), vec![(1, 2), (5, 3)]);
+        assert!(row_runs(&[]).is_empty());
+    }
+
+    #[test]
+    fn fr22_a_screenshot_of_a_gpu_frame_reads_every_row_under_the_band() {
+        assert_eq!(app_rows(32, 600), 32..600);
+        assert_eq!(app_rows(0, 600), 0..600);
+        assert!(app_rows(600, 600).is_empty());
+        assert!(app_rows(700, 600).is_empty());
+        let rows: Vec<u32> = app_rows(32, 40).collect();
+        assert_eq!(row_runs(&rows), vec![(32, 8)]);
+        // What the GPU reads comes as RGBA, and the windows take XRGB8888.
+        assert_eq!(
+            rgba_to_xrgb(&[0x11, 0x22, 0x33, 0x00]),
+            vec![0x33, 0x22, 0x11, 0xff]
+        );
+        assert_eq!(fourcc(b"XR24"), 0x3432_5258);
     }
 
     #[test]
