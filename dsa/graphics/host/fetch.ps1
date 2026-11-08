@@ -22,12 +22,16 @@ $AngleDir = Join-Path $ScratchPath "angle"
 $GfxstreamRevision = "d047a57228332d995d36600792fa9ccc26cf8ae6"
 $AemuRevision = "3ff20aed307f55bc4ae865373d07bf76c9efa43c"
 
-# 1. Fetch gfxstream
+# 1. Fetch gfxstream. A new checkout fetches the pinned commit alone: no build reads the
+# history, and all of it took a minute or more to download on every CI run.
+$GfxstreamDepth = @()
 if (-not (Test-Path "$GfxstreamDir/.git")) {
-    Write-Host "Cloning gfxstream..."
-    git clone https://android.googlesource.com/platform/hardware/google/gfxstream $GfxstreamDir
+    Write-Host "Fetching gfxstream..."
+    git init -q $GfxstreamDir
+    git -C $GfxstreamDir remote add origin https://android.googlesource.com/platform/hardware/google/gfxstream
+    $GfxstreamDepth = @("--depth", "1")
 }
-git -C $GfxstreamDir fetch --no-tags origin $GfxstreamRevision
+git -C $GfxstreamDir fetch @GfxstreamDepth --no-tags origin $GfxstreamRevision
 git -C $GfxstreamDir checkout --detach $GfxstreamRevision
 git -C $GfxstreamDir reset --hard $GfxstreamRevision
 git -C $GfxstreamDir clean -fdx
@@ -78,11 +82,14 @@ foreach ($Patch in $Patches) {
 }
 
 # 2. Fetch aemu
+$AemuDepth = @()
 if (-not (Test-Path "$AemuDir/.git")) {
-    Write-Host "Cloning aemu..."
-    git clone https://android.googlesource.com/platform/hardware/google/aemu $AemuDir
+    Write-Host "Fetching aemu..."
+    git init -q $AemuDir
+    git -C $AemuDir remote add origin https://android.googlesource.com/platform/hardware/google/aemu
+    $AemuDepth = @("--depth", "1")
 }
-git -C $AemuDir fetch --no-tags origin $AemuRevision
+git -C $AemuDir fetch @AemuDepth --no-tags origin $AemuRevision
 git -C $AemuDir checkout --detach $AemuRevision
 git -C $AemuDir reset --hard $AemuRevision
 git -C $AemuDir clean -fdx

@@ -77,13 +77,19 @@ case "$guest_arch" in
     x86_64) mesa_cpu=x86_64 ;;
     arm64) mesa_cpu=aarch64 ;;
 esac
+# A compiler launcher given to CMake (ccache in CI) wraps Mesa's compilers too: Meson takes
+# a cross file's compilers as they are written.
+wrap=""
+if [[ -n "${CMAKE_C_COMPILER_LAUNCHER:-}" ]]; then
+    wrap="'$CMAKE_C_COMPILER_LAUNCHER', "
+fi
 cat > "$mesa_build/android-$guest_arch.ini" <<CROSS
 [binaries]
 ar = '$llvm_bin/llvm-ar$exe'
 nm = '$llvm_bin/llvm-nm$exe'
 strip = '$llvm_bin/llvm-strip$exe'
-c = ['$llvm_bin/clang$exe', '--target=${android_triple}34']
-cpp = ['$llvm_bin/clang++$exe', '--target=${android_triple}34', '-fno-exceptions', '-fno-unwind-tables', '-fno-asynchronous-unwind-tables', '-static-libstdc++']
+c = [${wrap}'$llvm_bin/clang$exe', '--target=${android_triple}34']
+cpp = [${wrap}'$llvm_bin/clang++$exe', '--target=${android_triple}34', '-fno-exceptions', '-fno-unwind-tables', '-fno-asynchronous-unwind-tables', '-static-libstdc++']
 c_ld = 'lld'
 cpp_ld = 'lld'
 [host_machine]
