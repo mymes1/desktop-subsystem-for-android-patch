@@ -21,7 +21,10 @@ class HostGraphicsBuildTests(unittest.TestCase):
     def test_pr3_host_build_keeps_the_renderers_symbols_apart_from_the_dll(self):
         # A crash in the renderer or in the GPU driver it calls is only readable with them.
         script = BUILD_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase", script)
+        # A compile-time PDB without a compiler cache, debug information in each object
+        # under one; the linker writes the PDB from either.
+        self.assertIn('{ "Embedded" } else { "ProgramDatabase" }', script)
+        self.assertIn("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$DebugInformationFormat", script)
         self.assertIn("/DEBUG", script)
         self.assertIn("symbols/gfxstream_backend.pdb", script)
 
