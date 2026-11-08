@@ -74,7 +74,15 @@
                         <TextBlock Text="{l:Text AndroidFilesCard.Description}" Style="{StaticResource CardDescription}" />
                     </StackPanel>
                 </ui:CardAction>
-                <TextBlock Text="{l:Text FilesNote.Text}" Style="{StaticResource Note}" />
+                <!-- A card of its own, so the text wraps inside the page's width like the others. -->
+                <ui:CardControl x:Name="FilesDropCard" Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowUpload24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="{l:Text FilesDropCard.Header}" Style="{StaticResource CardTitle}" />
+                            <TextBlock Text="{l:Text FilesNote.Text}" Style="{StaticResource CardDescription}" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                </ui:CardControl>
 
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Snooze24}">
                     <ui:CardControl.Header>
@@ -243,58 +251,6 @@
                         </StackPanel>
                     </ui:CardControl.Header>
                     <ui:HyperlinkButton Content="{l:Text GappsRegisterLink.Content}" Click="OnOpenGappsRegistration" />
-                </ui:CardControl>
-
-                <TextBlock Text="{l:Text DeveloperHeader.Text}" Style="{StaticResource SectionHeader}" />
-                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon DeveloperBoard24}">
-                    <ui:CardControl.Header>
-                        <StackPanel>
-                            <TextBlock Text="{l:Text DeveloperModeCard.Header}" Style="{StaticResource CardTitle}" />
-                            <TextBlock Text="{l:Text DeveloperModeCard.Description}" Style="{StaticResource CardDescription}" />
-                        </StackPanel>
-                    </ui:CardControl.Header>
-                    <ui:ToggleSwitch x:Name="DeveloperModeSwitch" IsChecked="{Binding DeveloperMode, Mode=OneWay}"
-                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnDeveloperModeToggled" />
-                </ui:CardControl>
-                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon ArrowSync24}">
-                    <ui:CardControl.Header>
-                        <StackPanel>
-                            <TextBlock Text="{l:Text AdbAutoConnectCard.Header}" Style="{StaticResource CardTitle}" />
-                            <TextBlock Text="{l:Text AdbAutoConnectCard.Description}" Style="{StaticResource CardDescription}" />
-                            <TextBlock Text="{Binding AdbAutoConnectStateText, Mode=OneWay}"
-                                       Style="{StaticResource CardDescription}" Margin="0,4,0,0" />
-                        </StackPanel>
-                    </ui:CardControl.Header>
-                    <ui:ToggleSwitch x:Name="AdbAutoConnectSwitch" IsChecked="{Binding AdbAutoConnect, Mode=OneWay}"
-                                     IsEnabled="{Binding CanChange, Mode=OneWay}" Click="OnAdbAutoConnectToggled"
-                                     AutomationProperties.Name="{l:Text AdbAutoConnectCard.Header}" />
-                </ui:CardControl>
-                <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon PlugConnected24}">
-                    <ui:CardControl.Header>
-                        <StackPanel>
-                            <TextBlock Text="{l:Text AdbCard.Header}" Style="{StaticResource CardTitle}" />
-                            <TextBlock Text="{l:Text AdbCard.Description}" Style="{StaticResource CardDescription}" />
-                            <Border Style="{StaticResource CodeBlock}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="AdbCommand" Style="{StaticResource SelectableCode}" VerticalAlignment="Center"
-                                             Text="{Binding AdbConnect, Mode=OneWay}" />
-                                    <ui:Button x:Name="AdbCopyButton" Grid.Column="1" Margin="8,0,0,0" MinWidth="32" Width="32" Height="32" Padding="0"
-                                               Appearance="Transparent" Icon="{ui:SymbolIcon Copy24}" Click="OnCopyAdbCommand"
-                                               ToolTip="{l:Text CopyButton.ToolTip}" AutomationProperties.Name="{l:Text CopyButton.ToolTip}" />
-                                </Grid>
-                            </Border>
-                        </StackPanel>
-                    </ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="{l:Text AdbPortLabel.Text}" Style="{StaticResource CardTitle}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <ui:TextBox x:Name="AdbPortBox" Width="90" ClearButtonEnabled="False" Text="{Binding AdbPort, Mode=OneWay}"
-                                    IsEnabled="{Binding CanChange, Mode=OneWay}" LostFocus="OnAdbPortChanged"
-                                    KeyDown="OnAdbPortKeyDown" AutomationProperties.Name="{l:Text AdbPortLabel.Text}" />
-                    </StackPanel>
                 </ui:CardControl>
 
                 <TextBlock Text="{l:Text DiagnosticsHeader.Text}" Style="{StaticResource SectionHeader}" />

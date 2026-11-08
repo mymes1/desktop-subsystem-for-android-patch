@@ -27,6 +27,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # File and line tables only in the debug builds of the Rust code: backtraces still name
+  # the line, and the cached target folders stay a fraction of their full size.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
 jobs:
   # Which parts a pull request touches, so each job below runs only when its part changed.
   # A change to this workflow, or a run by hand, runs every job. A pull request that only
@@ -108,10 +113,14 @@ jobs:
           part 'dsa/(guest/sensors|protocol)/' sensors
           part 'dsa/(guest/camera|protocol)/' camera
 
+  # The repository rules, and the icons, from the master SVGs in dsa/brand/: they render,
+  # every shipped icon file is there, and each holds every size it must, both as committed
+  # and as rendered now. Each takes a minute or less on the same setup, so they share a
+  # runner; the icons are checked even when a repository rule failed.
   repository:
-    name: Check the repository rules
+    name: Check the repository rules and the brand icons
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,27 +136,18 @@ jobs:
           git config --global user.name "CI"
           ./scripts/check.sh
 
-  # The icons, from the master SVGs in dsa/brand/: they render, every shipped icon file is
-  # there, and each holds every size it must, both as committed and as rendered now.
-  brand:
-    name: Check the brand icons
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-
       - name: Check every shipped icon holds every size
+        if: ${{ !cancelled() }}
         run: uv run dsa/brand/check.py
 
       - name: Render every icon from the masters
+        if: ${{ !cancelled() }}
         run: |
           uv run dsa/brand/generate.py --out "$RUNNER_TEMP/brand"
           uv run dsa/brand/check.py --out "$RUNNER_TEMP/brand"
 
       - name: Keep the rendered icons
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: brand-icons
@@ -182,6 +182,14 @@ jobs:
 
       - name: Show the host target
         run: rustc -vV
+
+      # The dependencies come from this job's target folder of the last develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: rust-${{ matrix.os }}
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
 
       # The Linux settings app is a member of the workspace and links GTK 4 and libadwaita.
       # erofs-utils reads back the erofs images the host writes (the Google apps' image), the
@@ -279,22 +287,6 @@ jobs:
           sudo modprobe vsock_loopback
           cargo test -p dsa-guest-transport -p dsa-guest-channeld --features vsock-loopback-tests
 
-  unix-socket:
-    name: Test the local API and dsa over Unix sockets (macos-latest)
-    needs: changes
-    if: needs.changes.outputs.unix == 'true'
-    runs-on: macos-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: dsa
-    steps:
-      - uses: actions/checkout@v4
-
-      # Linux runs this in the job above; macOS reads the peer's user another way.
-      - name: Run the tests
-        run: cargo test --no-fail-fast -p dsa-transport -p dsa-host-unix -p dsa-cli -p dsa-host-linux
-
   # The Linux host's compositor in a real Wayland session: a headless compositor stands in
   # for the desktop. With no DSA service to reach, the compositor connects to the display,
   # takes the seat, says it is waiting for the service and keeps running, as it must on a
@@ -310,6 +302,14 @@ jobs:
         working-directory: dsa
     steps:
       - uses: actions/checkout@v4
+
+      # The dependencies come from this job's target folder of the last develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: linux-host
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
 
       - name: Install a headless Wayland compositor and libxkbcommon
         timeout-minutes: 20
@@ -390,6 +390,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The dependencies come from this job's target folder of the last develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: linux-settings
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
       - name: Install GTK 4, libadwaita, gettext and the desktop file checkers
         timeout-minutes: 20
         run: |
@@ -454,14 +462,17 @@ jobs:
             fi
           done
 
+  # Also the local API and dsa over Unix sockets as macOS reads a peer's user (Linux runs
+  # them in "Test the Rust code"). macOS runners are the scarcest, so both share one, each in
+  # steps that run when their part changed.
   macos-host:
-    name: Test the macOS host (macos-latest)
+    name: Test the macOS host and the local API over Unix sockets (macos-latest)
     needs: changes
-    if: needs.changes.outputs.macos == 'true'
+    if: needs.changes.outputs.macos == 'true' || needs.changes.outputs.unix == 'true'
     # macos-14 runners are no longer handed out: every job asking for one was cancelled
     # without ever starting.
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: dsa
@@ -471,28 +482,44 @@ jobs:
       - name: Show the host target
         run: rustc -vV
 
+      # The dependencies come from this job's target folder of the last develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: macos-host
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
+      - name: Run the local API and dsa tests over Unix sockets
+        if: needs.changes.outputs.unix == 'true'
+        run: cargo test --no-fail-fast -p dsa-transport -p dsa-host-unix -p dsa-cli -p dsa-host-linux
+
       # "Test the Rust code" fails on formatting already; here it must not hide what the
       # build and the tests say.
       - name: Check formatting
+        if: ${{ !cancelled() && needs.changes.outputs.macos == 'true' }}
         continue-on-error: true
         run: cargo fmt -p dsa-host-macos -p dsa-cli --check
 
       - name: Lint
+        if: ${{ !cancelled() && needs.changes.outputs.macos == 'true' }}
         run: cargo clippy -p dsa-host-macos -p dsa-cli --all-targets -- -D warnings
 
       - name: Run the tests
+        if: ${{ !cancelled() && needs.changes.outputs.macos == 'true' }}
         run: cargo test --no-fail-fast -p dsa-host-macos -p dsa-cli
 
       # The lock file as cargo resolved it here, for a change that adds dependencies on
       # a machine that cannot build the macOS host.
       - name: Keep the resolved lock file
-        if: always()
+        if: always() && needs.changes.outputs.macos == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: cargo-lock-macos
           path: dsa/Cargo.lock
 
       - name: Build and sign dsa-hostd
+        if: ${{ !cancelled() && needs.changes.outputs.macos == 'true' }}
         run: |
           cargo build --release -p dsa-host-macos --bin dsa-hostd
           codesign --force --sign - --options runtime \
@@ -505,6 +532,7 @@ jobs:
       # validates the VM made from it, which needs the entitlement and the device set the
       # host uses, without starting it.
       - name: Have the framework validate the VM
+        if: ${{ !cancelled() && needs.changes.outputs.macos == 'true' }}
         run: |
           image="$RUNNER_TEMP/image"
           mkdir -p "$image"
@@ -520,9 +548,11 @@ jobs:
       # The settings app (SwiftUI): its view models' tests against a fake dsa, then the app
       # as the package builds it, and the committed icon as iconutil reads it.
       - name: Test the settings app
+        if: ${{ !cancelled() && needs.changes.outputs.macos == 'true' }}
         run: swift test --package-path host/platform/macos/settings --scratch-path target/dsa-settings
 
       - name: Build the settings app
+        if: ${{ !cancelled() && needs.changes.outputs.macos == 'true' }}
         run: |
           swift build -c release --package-path host/platform/macos/settings --scratch-path target/dsa-settings
           bin="$(swift build -c release --package-path host/platform/macos/settings --scratch-path target/dsa-settings --show-bin-path)"
@@ -556,6 +586,14 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
+
+      # The dependencies come from this job's target folder of the last develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: linux-vm
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
 
       - name: Keep the VM programs between runs
         uses: actions/cache@v4
@@ -651,34 +689,6 @@ jobs:
       - name: Run the tests and build the agent
         run: ./gradlew --no-daemon testDebugUnitTest assembleRelease
 
-  # The host's APK reader against APKs the Android SDK's own tools make (aapt2, zipalign,
-  # apksigner), not only against the ones its unit tests write.
-  apk-reader:
-    name: Read APKs made by the Android SDK (ubuntu-latest)
-    needs: changes
-    if: needs.changes.outputs.apk == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Make the test APKs
-        run: .github/scripts/apk/make-test-apks.sh .scratch/test-apks
-
-      - name: Build dsa
-        working-directory: dsa
-        run: cargo build -q -p dsa-cli
-
-      - name: Read them with dsa apk-info
-        run: .github/scripts/apk/check-apk-info.sh dsa/target/debug/dsa .scratch/test-apks
-
-      - name: Keep the APKs and what dsa said of them
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-apks
-          path: .scratch/test-apks
-
   protocol:
     name: Check the generated protocol code (ubuntu-latest)
     needs: changes
@@ -696,6 +706,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             protobuf-compiler libprotobuf-dev libprotobuf-java default-jdk-headless g++
           protoc --version
+
+      # The dependencies come from this job's target folder of the last develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: protocol
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
 
       - name: Regenerate and compare with what is checked in
         working-directory: dsa
@@ -762,135 +780,105 @@ jobs:
       - name: Build the APK Installer
         run: dotnet publish DsaApkInstaller/DsaApkInstaller.csproj -c Release -r ${{ matrix.rid }} -o ../../../../target/settings-app
 
-  hwcomposer:
-    name: Test the guest hwcomposer's task rules (ubuntu-latest)
+  # The guest HALs' rules on the build machine, each against the generated protobuf-lite
+  # codec built with the 3.21 runtime Ubuntu 24.04 ships, and the host's APK reader against
+  # APKs the Android SDK's own tools make (aapt2, zipalign, apksigner), not only against the
+  # ones its unit tests write. Each takes a minute or less, so they share a runner. Each is
+  # a step of its own that runs when its part changed, also when a step before it failed,
+  # so a failure names its part and hides no other.
+  guest-rules:
+    name: Test the guest HALs' rules and read APKs made by the Android SDK (ubuntu-latest)
     needs: changes
-    if: needs.changes.outputs.hwcomposer == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      # The channel messages go through the generated protobuf-lite codec, built against the
-      # 3.21 runtime Ubuntu 24.04 ships.
       - name: Install the protobuf runtime
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
 
-      - name: Run the tests
+      - name: Test the guest hwcomposer's task rules
+        if: ${{ !cancelled() && needs.changes.outputs.hwcomposer == 'true' }}
         run: dsa/guest/hwcomposer/test.sh
 
-  audio:
-    name: Test the guest audio module (ubuntu-latest)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      # The audio port's messages go through the generated protobuf-lite codec, built
-      # against the 3.21 runtime Ubuntu 24.04 ships.
-      - name: Install the protobuf runtime
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
-
-      - name: Run the tests
+      # On every run, as when it had a job of its own.
+      - name: Test the guest audio module
+        if: ${{ !cancelled() }}
         run: dsa/guest/audio/test.sh
 
-  codec2:
-    name: Test the guest codec HAL's rules (ubuntu-latest)
-    needs: changes
-    if: needs.changes.outputs.codec2 == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      # The video port's messages go through the generated protobuf-lite codec, built against
-      # the 3.21 runtime Ubuntu 24.04 ships.
-      - name: Install the protobuf runtime
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
-
-      - name: Run the tests
+      - name: Test the guest codec HAL's rules
+        if: ${{ !cancelled() && needs.changes.outputs.codec2 == 'true' }}
         run: dsa/guest/codec2/test.sh
 
-  power-hal:
-    name: Test the guest power and health HALs' rules (ubuntu-latest)
-    needs: changes
-    if: needs.changes.outputs.power == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      # The channel messages go through the generated protobuf-lite codec, built against the
-      # 3.21 runtime Ubuntu 24.04 ships.
-      - name: Install the protobuf runtime
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
-
-      - name: Run the tests
+      - name: Test the guest power and health HALs' rules
+        if: ${{ !cancelled() && needs.changes.outputs.power == 'true' }}
         run: dsa/guest/power/test.sh
 
-  gnss-hal:
-    name: Test the guest GNSS HAL's rules (ubuntu-latest)
-    needs: changes
-    if: needs.changes.outputs.gnss == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      # The channel messages go through the generated protobuf-lite codec, built against the
-      # 3.21 runtime Ubuntu 24.04 ships.
-      - name: Install the protobuf runtime
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
-
-      - name: Run the tests
+      - name: Test the guest GNSS HAL's rules
+        if: ${{ !cancelled() && needs.changes.outputs.gnss == 'true' }}
         run: dsa/guest/gnss/test.sh
 
-  sensors:
-    name: Test the guest sensors HAL's rules (ubuntu-latest)
-    needs: changes
-    if: needs.changes.outputs.sensors == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      # The sensor port's messages go through the generated protobuf-lite codec, built against
-      # the 3.21 runtime Ubuntu 24.04 ships.
-      - name: Install the protobuf runtime
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
-
-      - name: Run the tests
+      - name: Test the guest sensors HAL's rules
+        if: ${{ !cancelled() && needs.changes.outputs.sensors == 'true' }}
         run: dsa/guest/sensors/test.sh
 
-  camera:
-    name: Test the guest camera HAL's rules (ubuntu-latest)
-    needs: changes
-    if: needs.changes.outputs.camera == 'true'
+      - name: Test the guest camera HAL's rules
+        if: ${{ !cancelled() && needs.changes.outputs.camera == 'true' }}
+        run: dsa/guest/camera/test.sh
+
+      # The dependencies of dsa come from this job's target folder of the last develop run.
+      - name: Keep the Rust build between runs
+        if: ${{ !cancelled() && needs.changes.outputs.apk == 'true' }}
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: guest-rules
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
+      - name: Make the test APKs
+        id: apks
+        if: ${{ !cancelled() && needs.changes.outputs.apk == 'true' }}
+        run: .github/scripts/apk/make-test-apks.sh .scratch/test-apks
+
+      - name: Build dsa
+        id: dsa
+        if: ${{ !cancelled() && needs.changes.outputs.apk == 'true' }}
+        working-directory: dsa
+        run: cargo build -q -p dsa-cli
+
+      - name: Read the APKs with dsa apk-info
+        if: ${{ !cancelled() && steps.apks.outcome == 'success' && steps.dsa.outcome == 'success' }}
+        run: .github/scripts/apk/check-apk-info.sh dsa/target/debug/dsa .scratch/test-apks
+
+      - name: Keep the APKs and what dsa said of them
+        if: always() && needs.changes.outputs.apk == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-apks
+          path: .scratch/test-apks
+
+  # Deletes the Actions caches no run restores any more: on develop every entry but the
+  # newest of its kind (its key without the trailing hashes), and the caches of other refs
+  # that are stale. Past 10 GB GitHub evicts the entries read least recently, and those are
+  # the large compiler caches of the builds that run least often, the slowest to build again.
+  caches:
+    name: Delete superseded and stale caches
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: read
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
-      # The camera port's messages go through the generated protobuf-lite codec, built
-      # against the 3.21 runtime Ubuntu 24.04 ships.
-      - name: Install the protobuf runtime
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libprotobuf-dev g++
-
-      - name: Run the tests
-        run: dsa/guest/camera/test.sh
+      - name: Delete the caches no run restores
+        run: .github/scripts/cache/prune.sh all
 
   # One check that always reports: it fails when any job failed or was cancelled, and passes
   # when every job passed or was skipped because its part did not change.
@@ -898,7 +886,7 @@ jobs:
     name: Report the test result
     if: always()
     needs:
-      [changes, repository, brand, rust, unix-socket, macos-host, linux-host, linux-settings, linux-vm, agent, apk-reader, protocol, settings-app, hwcomposer, codec2, power-hal, gnss-hal, sensors, camera]
+      [changes, repository, rust, macos-host, linux-host, linux-settings, linux-vm, agent, protocol, settings-app, guest-rules]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -22,12 +22,16 @@ $AngleDir = Join-Path $ScratchPath "angle"
 $GfxstreamRevision = "d047a57228332d995d36600792fa9ccc26cf8ae6"
 $AemuRevision = "3ff20aed307f55bc4ae865373d07bf76c9efa43c"
 
-# 1. Fetch gfxstream
+# 1. Fetch gfxstream. A new checkout fetches the pinned commit alone: no build reads the
+# history, and all of it took a minute or more to download on every CI run.
+$GfxstreamDepth = @()
 if (-not (Test-Path "$GfxstreamDir/.git")) {
-    Write-Host "Cloning gfxstream..."
-    git clone https://android.googlesource.com/platform/hardware/google/gfxstream $GfxstreamDir
+    Write-Host "Fetching gfxstream..."
+    git init -q $GfxstreamDir
+    git -C $GfxstreamDir remote add origin https://android.googlesource.com/platform/hardware/google/gfxstream
+    $GfxstreamDepth = @("--depth", "1")
 }
-git -C $GfxstreamDir fetch --no-tags origin $GfxstreamRevision
+git -C $GfxstreamDir fetch @GfxstreamDepth --no-tags origin $GfxstreamRevision
 git -C $GfxstreamDir checkout --detach $GfxstreamRevision
 git -C $GfxstreamDir reset --hard $GfxstreamRevision
 git -C $GfxstreamDir clean -fdx
@@ -48,8 +52,12 @@ git -C $GfxstreamDir clean -fdx
 # a renderer that asks for Vulkan only and cannot start it crashes instead of failing. Without 0015
 # a GPU reset, or one guest's command the renderer cannot carry out, ends the window manager and
 # every window with it; with it the guest's calls get VK_ERROR_DEVICE_LOST, the renderer makes
-# its device again, and a bad command ends only that guest's stream. A patch that does not apply
-# stops the fetch.
+# its device again, and a bad command ends only that guest's stream. Without 0016 a fence or
+# semaphore whose work finished but sat in a device's garbage for five seconds, because nothing
+# used that device meanwhile, is leaked and logged as pending for a negative time. Without 0017
+# every first use of a gralloc buffer is logged as an error, since each guest process opens a
+# shared ColorBuffer before it knows whether another made it. A patch that does not apply stops
+# the fetch.
 $PatchDir = Join-Path $RepoRoot "dsa/graphics/patches"
 $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0004-*.patch") +
@@ -62,7 +70,9 @@ $Patches = @(Get-ChildItem -Path $PatchDir -Filter "0001-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0012-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0013-*.patch") +
     @(Get-ChildItem -Path $PatchDir -Filter "0014-*.patch") +
-    @(Get-ChildItem -Path $PatchDir -Filter "0015-*.patch")
+    @(Get-ChildItem -Path $PatchDir -Filter "0015-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0016-*.patch") +
+    @(Get-ChildItem -Path $PatchDir -Filter "0017-*.patch")
 foreach ($Patch in $Patches) {
     Write-Host "Applying patch: $($Patch.Name)"
     git -C $GfxstreamDir apply --recount $Patch.FullName
@@ -72,11 +82,14 @@ foreach ($Patch in $Patches) {
 }
 
 # 2. Fetch aemu
+$AemuDepth = @()
 if (-not (Test-Path "$AemuDir/.git")) {
-    Write-Host "Cloning aemu..."
-    git clone https://android.googlesource.com/platform/hardware/google/aemu $AemuDir
+    Write-Host "Fetching aemu..."
+    git init -q $AemuDir
+    git -C $AemuDir remote add origin https://android.googlesource.com/platform/hardware/google/aemu
+    $AemuDepth = @("--depth", "1")
 }
-git -C $AemuDir fetch --no-tags origin $AemuRevision
+git -C $AemuDir fetch @AemuDepth --no-tags origin $AemuRevision
 git -C $AemuDir checkout --detach $AemuRevision
 git -C $AemuDir reset --hard $AemuRevision
 git -C $AemuDir clean -fdx

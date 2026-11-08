@@ -4,8 +4,9 @@
 
 It fails when the shell apps are still there, when the build is still debuggable, when adbd
 could start without developer mode, listen on TCP or ask for an authorisation, when an
-app is not signed with one of the keys in the key folder, when the framework overlay or the
-trace script is missing, when the agent is missing or not signed with the platform key, when
+app is not signed with one of the keys in the key folder, when a system screen overlay is
+missing or was built against another framework-res or another build of the app it overlays,
+when Settings' pages would open with their large title folded, when the trace script is missing, when the agent is missing or not signed with the platform key, when
 Settings still has the preferences or code that crash it without Bluetooth, when a list in
 Settings or Files that sets its own padding keeps no room below its last row, when a system
 app users open is not compiled for the guest's boot image and its own dex, when an app the
@@ -209,6 +210,15 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
                 if left:
                     problems.append(f"{name} still has {'; '.join(left)}, so the last row of its list "
                                     "sits on the window's bottom edge")
+    # Settings' pages take whether their large title opens expanded from the theme, which the
+    # Settings overlay sets by the window's height.
+    for name in names:
+        if name.endswith(make_image.SETTINGS_APK):
+            left = make_image.apk_edits_left(z.read(name),
+                                             theme_attributes=make_image.SETTINGS_TITLE_EXPANDED)
+            if left:
+                problems.append(f"{name} still has {'; '.join(left)}, so its pages open with the large "
+                                "title folded in every window")
     # The system apps users open, compiled when the image was made: each odex must be there,
     # made for the APK's own (edited, signed) dex and the guest's boot image, or ART drops it
     # and the app runs interpreted again.
@@ -240,6 +250,15 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if not re.search(r"\(allow\s+vendor_init\s+gpu_device\s+\(\s*chr_file\s*\([^)]*getattr", plat_sepolicy):
             problems.append("the SELinux policy does not let vendor_init check the gpu_device DRM cards, so "
                             "init's wait for /dev/dri/card0 times out and holds up boot")
+        # Shared memory is a memfd, labelled with its maker's tmpfs type. Every memfd the media
+        # services hand an app or each other must be usable on the other side, or the binder
+        # call that carries it fails: with SELinux enforcing, no app played a sound.
+        problems += make_image.memfd_sharing_problems(plat_sepolicy)
+        # The sensors HAL gets its event queue as a memfd of system_server's; refused, it has
+        # nowhere to write events and no app sees a sensor.
+        if "VENDOR/bin/hw/dsa-sensors" in names:
+            problems += make_image.memfd_sharing_problems(
+                plat_sepolicy, sharing=make_image.MEMFD_SHARING_SENSORS, to_apps=[])
 
     # One declaration of each HAL instance across the vendor manifest, its fragments and the
     # active vendor APEXes, and one for every instance a DSA service registers.
@@ -324,14 +343,10 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     # The network: eth0 shown as Wi-Fi, with its address and DNS servers from DHCP.
     problems.extend(make_image.network_problems(names, z.read, manifest["kernel_cmdline"]))
 
-    # The framework overlay, without which every list row shows a mouse press 100 ms late.
-    if "VENDOR/overlay/DsaFrameworkOverlay.apk" not in names:
-        problems.append("VENDOR/overlay/DsaFrameworkOverlay.apk is missing, so a press on a list row "
-                        "shows only after the 100 ms tap timeout")
-    if "VENDOR/overlay/DsaSettingsOverlay.apk" not in names:
-        problems.append("VENDOR/overlay/DsaSettingsOverlay.apk is missing, so Settings' back button shows "
-                        "its hover and ripple 8 dp left of its circle, and the last row of a Settings "
-                        "list sits on the window's bottom edge")
+    # The system screen overlays: the framework's (the tap timeout, the dialogs, toasts and
+    # colours), Settings', Files', PermissionController's, PackageInstaller's and the share
+    # sheet's, each built against this image's framework-res and the app it overlays.
+    problems += make_image.system_overlay_problems(names, z.read)
     if "SYSTEM/etc/init/dsa-trace.rc" not in names:
         problems.append("SYSTEM/etc/init/dsa-trace.rc is missing, so the input trace has no main thread timing")
 
@@ -494,6 +509,17 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if (name.startswith("VENDOR/etc/vintf/manifest/") and name != sensors_manifest
                 and b"<name>android.hardware.sensors</name>" in z.read(name)):
             problems.append(f"{name} declares a second sensors HAL, which fails the VINTF check")
+    # A sensors HAL installed as plain files beside DSA's (Android 17's Cuttlefish multi-HAL):
+    # init starts it, its sub-HAL cannot reach Cuttlefish's sensors control socket, and it
+    # aborts every five seconds, pushing everything else out of the log.
+    for name in sorted(names):
+        base = name.rsplit("/", 1)[-1]
+        if (name.startswith(("VENDOR/bin/hw/", "VENDOR/etc/init/", "VENDOR/lib/hw/", "VENDOR/lib64/hw/"))
+                and "sensors" in base.lower()
+                and name not in ("VENDOR/bin/hw/dsa-sensors", "VENDOR/etc/init/dsa-sensors.rc")):
+            problems.append(f"{name} is a second sensors HAL, which init starts and which aborts in a loop")
+        elif name.startswith("VENDOR/etc/sensors/") and base:
+            problems.append(f"{name} lists sub-HALs for a sensors multi-HAL the image must not have")
     # DSA's camera HAL: without it apps see Cuttlefish's emulated cameras, or none.
     if "VENDOR/bin/hw/dsa-camera" not in names:
         problems.append("VENDOR/bin/hw/dsa-camera is missing from the image")

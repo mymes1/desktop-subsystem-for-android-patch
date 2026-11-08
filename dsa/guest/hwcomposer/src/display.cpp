@@ -42,8 +42,7 @@ DisplayConfig DisplayConfig::fromProperties() {
     config.width = intProperty("ro.boot.dsa.display_width", config.width, 320, 16384);
     config.height = intProperty("ro.boot.dsa.display_height", config.height, 320, 16384);
     config.dpi = intProperty("ro.boot.dsa.display_dpi", config.dpi, 72, 960);
-    const int32_t hz = intProperty("ro.boot.dsa.display_refresh_rate", 60, 1, 240);
-    config.vsyncPeriodNanos = 1000000000 / hz;
+    config.refreshRateHz = intProperty("ro.boot.dsa.display_refresh_rate", 60, 1, 240);
     return config;
 }
 

@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 /// The pages, in the order the sidebar lists them, as the Windows app lists its own.
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case general, memory, apps, background, widgets, display, android, updates, identity, network, advanced, logs, about
+    case general, memory, apps, background, widgets, display, identity, network, updates, advanced, logs, about
 
     var id: String { rawValue }
 
@@ -17,7 +17,6 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .background: return "NavBackground.Content"
         case .widgets: return "NavWidgets.Content"
         case .display: return "NavDisplay.Content"
-        case .android: return "NavAndroid.Content"
         case .updates: return "NavUpdates.Content"
         case .identity: return "NavIdentity.Content"
         case .network: return "NavNetwork.Content"
@@ -36,7 +35,6 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .background: return ("play.fill", .orange)
         case .widgets: return ("rectangle.3.group", .indigo)
         case .display: return ("display", .blue)
-        case .android: return ("iphone", .green)
         case .updates: return ("arrow.triangle.2.circlepath", .gray)
         case .identity: return ("person.text.rectangle", .teal)
         case .network: return ("network", .blue)
@@ -48,7 +46,12 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     /// Picks the page from its name, as `--page <name>` gives it.
     static func named(_ name: String) -> SettingsPage? {
-        name == "device" ? .identity : SettingsPage(rawValue: name.lowercased())
+        switch name.lowercased() {
+        case "device": return .identity
+        // The Android page is part of Updates now; its old name still opens it.
+        case "android": return .updates
+        default: return SettingsPage(rawValue: name.lowercased())
+        }
     }
 }
 
@@ -131,6 +134,12 @@ struct SettingsWindow: View {
         // App Info in a task window's Window menu: the Apps page, searched for that app so its
         // row is the one in view.
         .onOpenURL { url in
+            // A click on DSA's notification about an update: the Updates page.
+            if AppPageLink.isUpdates(url) {
+                page = .updates
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
             guard let package = AppPageLink.package(of: url) else { return }
             page = .apps
             model.apps.search = package
@@ -146,8 +155,7 @@ struct SettingsWindow: View {
         case .background: BackgroundPage(vm: model.background)
         case .widgets: WidgetsPage(vm: model.widgets)
         case .display: DisplayPage(vm: model.settings)
-        case .android: AndroidPage(vm: model.android, settings: model.settings)
-        case .updates: UpdatesPage(vm: model.settings, general: model.general, service: model.service)
+        case .updates: UpdatesPage(vm: model.settings, android: model.android, general: model.general, service: model.service)
         case .identity: DeviceIdentityPage(vm: model.identity)
         case .network: NetworkPage(vm: model.settings)
         case .advanced: AdvancedPage(vm: model.settings, gapps: model.gapps)

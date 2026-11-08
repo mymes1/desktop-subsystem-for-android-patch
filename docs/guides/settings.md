@@ -26,12 +26,11 @@ one. They are marked "(admin)" below.
 | **Running in the background** | Apps running with no window: **Open**, **Stop**; whether to ask before stopping | `dsa background`, `stop-without-asking` |
 | **Widgets** | Widgets on your desktop, and **Add to desktop** | `dsa widgets` |
 | **Display & GPU** | **Render GPU**, **Restart the window manager** | `render-gpu`, `dsa gpus` |
-| **Android** | The running version, **Version to use** (admin) | `dsa android version`, `dsa android use` |
-| **Updates** | **Update DSA automatically** (admin), **Update the Android image automatically** (admin), **Install now** | `program-updates`, `image-updates`, `dsa update` |
-| **Device identity** | The manufacturer, model and build fingerprint Android reports to apps | `dsa settings device`, `device.<field>` |
-| **Network** | How Android reaches the network, its address, DNS servers and gateway, **Advanced networking** | `dsa network`, `advanced-networking` |
-| **Advanced** | Clipboard, files, web links, freeze when idle, reset, ARM apps, developer mode, traces (admin), log folders | see below |
-| **Android log** | Android's live log, **Save diagnostics** | `dsa logcat`, `dsa logs collect` |
+| **Device identity** | This computer first, read only: its name, maker and model, and **Device specifications** with **Copy**. Then the manufacturer, model and build fingerprint Android reports to apps | `dsa settings device`, `device.<field>` |
+| **Network** | How Android reaches the network, its address, DNS servers and gateway, **Advanced networking**, **Developer mode** (adb) | `dsa network`, `advanced-networking`, `developer-mode`, `adb-port`, `adb-auto-connect` |
+| **Updates** | **Android**: the running version and build, the version it follows, the Android update with its progress and **Check now** (admin), **Update the Android image automatically** (admin), **Version to use** (admin). **DSA**: **Update DSA automatically** (admin), **Get pre-release versions** (admin), **Install now** | `dsa android version`, `dsa android use`, `image-updates`, `program-updates`, `prerelease-updates`, `dsa update` |
+| **Advanced** | Clipboard, files, web links, freeze when idle, reset, ARM apps, traces (admin), log folders | see below |
+| **Logs** | Android's live log, **Save diagnostics** | `dsa logcat`, `dsa logs collect` |
 | **About** | Versions, licences, source code | |
 
 ## The Advanced page
@@ -47,7 +46,6 @@ one. They are marked "(admin)" below.
 | **Run apps built only for ARM** | | `arm-translation` |
 | **Google's ARM translator** (not on ARM64) | | `dsa arm-translation fetch google` |
 | **Use the default translator** (not on ARM64) | | `dsa arm-translation use-default` |
-| **Developer mode** | Off | `developer-mode`, `adb-port` |
 | **Input trace** (admin) | Off | `input-trace` |
 | **Resize trace** (admin) | Off | `resize-trace` |
 
@@ -69,6 +67,11 @@ one. They are marked "(admin)" below.
 - `shared-folders`: `all`, `none`, or names separated by commas, such as
   `Documents,Pictures`.
 - `adb-port`: a TCP port from 1 to 65535. The default is 58526.
+- `prerelease-updates`: `on` takes pre-releases as well as stable releases, `off` takes stable
+  releases only. It starts from the installer you used: a pre-release installer turns it on,
+  a stable one leaves it off, and upgrades keep your choice. Every release before 1.0 is a
+  pre-release. Turning it off never moves DSA back to an older version; DSA waits for a stable
+  release newer than the one installed.
 - `device.<field>`: `manufacturer`, `brand`, `model`, `device`, `name`, `characteristics`,
   `fingerprint`, or a part of the fingerprint such as `fingerprint.release`.
   `dsa settings reset device` puts every value back.

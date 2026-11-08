@@ -16,7 +16,8 @@ use dsa_host_core::input::{PointerAction, PointerEvent, PointerTool};
 use dsa_host_core::session::SessionState;
 use dsa_host_core::update::manifest;
 use dsa_host_core::update::program::{
-    self, ProgramDecision, ProgramError, ProgramManifest, SetupFile, Version, FORMAT,
+    self, ProgramDecision, ProgramError, ProgramManifest, ReleaseChannel, SetupFile, Version,
+    FORMAT,
 };
 use dsa_host_core::update::program_service::{
     CheckOutcome, ProgramInstaller, ProgramSettings, ProgramStatus, ProgramUpdates, RunningSetup,
@@ -28,6 +29,8 @@ use sha2::{Digest, Sha256};
 
 const LIST: &str = "mem://program.json";
 const SETUP_URL: &str = "mem://v0.1.1/setup-0.1.1.exe";
+/// The pre-release channel's list, beside [`LIST`], which is the stable channel's.
+const PRERELEASE_LIST: &str = "mem://program-prerelease.json";
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -73,6 +76,27 @@ impl MemoryFetch {
         );
         self.put(LIST, bytes);
         self.put(SETUP_URL, served.to_vec());
+    }
+    /// A signed list at `list_url` offering `version`, whose setup file is `served` at a URL
+    /// of its own.
+    fn publish_at(&self, list_url: &str, version: &str, served: &[u8]) {
+        let setup_url = format!("mem://v{version}/setup-{version}.exe");
+        let list = ProgramManifest {
+            format: FORMAT,
+            version: version.into(),
+            setup: SetupFile {
+                url: setup_url.clone(),
+                size: served.len() as u64,
+                sha256: hex(&Sha256::digest(served)),
+            },
+        };
+        let bytes = serde_json::to_vec(&list).unwrap();
+        self.put(
+            &format!("{list_url}.sig"),
+            hex(&project_key().sign(&bytes).to_bytes()).into(),
+        );
+        self.put(list_url, bytes);
+        self.put(&setup_url, served.to_vec());
     }
     fn count(&self, url: &str) -> usize {
         self.fetched
@@ -165,6 +189,8 @@ fn fresh_dir() -> PathBuf {
 fn settings(root: &Path, running: &str) -> ProgramSettings {
     ProgramSettings {
         list_url: Some(LIST.into()),
+        prerelease_list_url: None,
+        channel: ReleaseChannel::Stable,
         enabled: true,
         keys: trusted(),
         dir: root.join("updates"),
@@ -765,4 +791,432 @@ fn fr15_a_setup_file_still_in_use_after_the_update_is_removed_later() {
     stop.store(true, Ordering::Relaxed);
     runner.join().unwrap();
     assert!(!leftover.exists(), "the leftover setup file is removed");
+}
+
+/// Program updates that read both lists, on the channel `channel` holds.
+fn channel_service(
+    h: &Harness,
+    running: &str,
+    channel: &Arc<Mutex<ReleaseChannel>>,
+) -> (Arc<ProgramUpdates>, Arc<ProgramStatus>) {
+    let status = Arc::new(ProgramStatus::default());
+    let mut settings = settings(&h.root, running);
+    settings.prerelease_list_url = Some(PRERELEASE_LIST.into());
+    let updates = ProgramUpdates::new(
+        settings,
+        Box::new(h.fetch.clone()),
+        Box::new(h.installer.clone()),
+        h.androids.clone(),
+        Arc::clone(&status),
+        "test",
+    );
+    let followed = Arc::clone(channel);
+    updates.follow_channel(Box::new(move || *followed.lock().unwrap()));
+    (updates, status)
+}
+
+#[test]
+fn fr15_channels_are_named_stable_and_prerelease_and_below_1_0_every_release_is_a_prerelease() {
+    for channel in [ReleaseChannel::Stable, ReleaseChannel::Prerelease] {
+        assert_eq!(ReleaseChannel::parse(channel.as_str()).unwrap(), channel);
+    }
+    assert_eq!(
+        ReleaseChannel::parse("Pre-release").unwrap(),
+        ReleaseChannel::Prerelease
+    );
+    assert!(ReleaseChannel::parse("beta").is_err());
+    assert_eq!(
+        ReleaseChannel::of_version("0.1.9"),
+        ReleaseChannel::Prerelease
+    );
+    assert_eq!(
+        ReleaseChannel::of_version("0.99.99"),
+        ReleaseChannel::Prerelease
+    );
+    assert_eq!(ReleaseChannel::of_version("1.0.0"), ReleaseChannel::Stable);
+    assert_eq!(ReleaseChannel::of_version("1.2"), ReleaseChannel::Stable);
+}
+
+#[test]
+fn fr15_the_stable_channel_reads_the_stable_list_alone_and_the_prerelease_channel_the_higher() {
+    let stable = list_of("0.3.0", b"s");
+    let prerelease = list_of("0.4.0", b"p");
+    fn pick(
+        channel: ReleaseChannel,
+        stable: Option<&ProgramManifest>,
+        prerelease: Option<&ProgramManifest>,
+    ) -> Option<(ReleaseChannel, String)> {
+        program::choose(channel, stable, prerelease)
+            .map(|(from, list)| (from, list.version.clone()))
+    }
+    assert_eq!(
+        pick(ReleaseChannel::Stable, Some(&stable), Some(&prerelease)),
+        Some((ReleaseChannel::Stable, "0.3.0".to_string()))
+    );
+    assert_eq!(pick(ReleaseChannel::Stable, None, Some(&prerelease)), None);
+    assert_eq!(
+        pick(ReleaseChannel::Prerelease, Some(&stable), Some(&prerelease)),
+        Some((ReleaseChannel::Prerelease, "0.4.0".to_string()))
+    );
+    let newer_stable = list_of("0.5.0", b"s");
+    assert_eq!(
+        pick(
+            ReleaseChannel::Prerelease,
+            Some(&newer_stable),
+            Some(&prerelease)
+        ),
+        Some((ReleaseChannel::Stable, "0.5.0".to_string()))
+    );
+    let same = list_of("0.4.0", b"s");
+    assert_eq!(
+        pick(ReleaseChannel::Prerelease, Some(&same), Some(&prerelease)),
+        Some((ReleaseChannel::Stable, "0.4.0".to_string())),
+        "the same version from both lists counts as stable"
+    );
+    assert_eq!(
+        pick(ReleaseChannel::Prerelease, None, Some(&prerelease)),
+        Some((ReleaseChannel::Prerelease, "0.4.0".to_string()))
+    );
+}
+
+#[test]
+fn fr15_the_stable_channel_does_not_apply_a_version_only_the_prerelease_list_offers() {
+    let h = Harness::new();
+    h.fetch.publish_at(LIST, "0.1.1", b"stable 0.1.1");
+    h.fetch.publish_at(PRERELEASE_LIST, "0.2.0", b"pre 0.2.0");
+    let channel = Arc::new(Mutex::new(ReleaseChannel::Stable));
+    let (updates, _) = channel_service(&h, "0.1.0", &channel);
+    assert_eq!(
+        updates.check().unwrap(),
+        CheckOutcome::Downloaded("0.1.1".into())
+    );
+    assert_eq!(
+        h.fetch.count(PRERELEASE_LIST),
+        0,
+        "the stable channel never reads it"
+    );
+    assert_eq!(
+        updates.install_when_idle().unwrap().as_deref(),
+        Some("0.1.1")
+    );
+    assert_eq!(h.installer.runs.lock().unwrap()[0].2, b"stable 0.1.1");
+
+    // Only the pre-release list offers anything newer: nothing to do on the stable channel.
+    let h = Harness::new();
+    h.fetch.publish_at(PRERELEASE_LIST, "0.2.0", b"pre 0.2.0");
+    h.fetch.publish_at(LIST, "0.1.0", b"stable 0.1.0");
+    let (updates, _) = channel_service(&h, "0.1.0", &channel);
+    match updates.check().unwrap() {
+        CheckOutcome::NotNewer(why) => assert!(why.contains("stable channel"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+    assert!(updates.install_now().unwrap().installing.is_none());
+    assert_eq!(h.installer.runs(), 0);
+}
+
+#[test]
+fn fr15_the_prerelease_channel_applies_a_version_only_the_prerelease_list_offers() {
+    // Before 1.0 there is no stable list at all; the pre-release list alone is followed.
+    let h = Harness::new();
+    h.fetch.publish_at(PRERELEASE_LIST, "0.2.0", b"pre 0.2.0");
+    let channel = Arc::new(Mutex::new(ReleaseChannel::Prerelease));
+    let (updates, _) = channel_service(&h, "0.1.0", &channel);
+    assert_eq!(
+        updates.check().unwrap(),
+        CheckOutcome::Downloaded("0.2.0".into())
+    );
+    assert_eq!(
+        updates.install_when_idle().unwrap().as_deref(),
+        Some("0.2.0")
+    );
+    assert_eq!(h.installer.runs.lock().unwrap()[0].2, b"pre 0.2.0");
+}
+
+#[test]
+fn fr15_with_both_lists_the_prerelease_channel_applies_the_higher_version() {
+    for (stable, prerelease, wanted) in [("0.3.0", "0.2.0", "0.3.0"), ("0.3.0", "0.4.0", "0.4.0")] {
+        let h = Harness::new();
+        h.fetch.publish_at(LIST, stable, stable.as_bytes());
+        h.fetch
+            .publish_at(PRERELEASE_LIST, prerelease, prerelease.as_bytes());
+        let channel = Arc::new(Mutex::new(ReleaseChannel::Prerelease));
+        let (updates, _) = channel_service(&h, "0.1.0", &channel);
+        assert_eq!(
+            updates.check().unwrap(),
+            CheckOutcome::Downloaded(wanted.into())
+        );
+        updates.install_when_idle().unwrap();
+        assert_eq!(h.installer.runs.lock().unwrap()[0].2, wanted.as_bytes());
+    }
+}
+
+#[test]
+fn fr15_switching_from_prerelease_to_stable_keeps_the_version_until_stable_passes_it() {
+    // 0.4.0 came from the pre-release channel; the stable list is behind it.
+    let h = Harness::new();
+    h.fetch.publish_at(LIST, "0.3.0", b"stable 0.3.0");
+    h.fetch.publish_at(PRERELEASE_LIST, "0.4.0", b"pre 0.4.0");
+    let channel = Arc::new(Mutex::new(ReleaseChannel::Stable));
+    let (updates, _) = channel_service(&h, "0.4.0", &channel);
+    match updates.check().unwrap() {
+        CheckOutcome::NotNewer(why) => {
+            assert!(why.contains("never moved to a lower version"), "{why}")
+        }
+        other => panic!("{other:?}"),
+    }
+    let answer = updates.install_now().unwrap();
+    assert!(answer.installing.is_none(), "{}", answer.detail);
+    assert_eq!(h.installer.runs(), 0, "nothing lower is installed");
+
+    // The stable list passes it: that version is installed.
+    h.fetch.publish_at(LIST, "0.5.0", b"stable 0.5.0");
+    assert_eq!(
+        updates.check().unwrap(),
+        CheckOutcome::Downloaded("0.5.0".into())
+    );
+    assert_eq!(
+        updates.install_when_idle().unwrap().as_deref(),
+        Some("0.5.0")
+    );
+}
+
+#[test]
+fn fr15_a_prerelease_waiting_to_install_is_dropped_when_the_computer_moves_to_stable() {
+    let h = Harness::new();
+    h.fetch.publish_at(LIST, "0.1.0", b"stable 0.1.0");
+    h.fetch.publish_at(PRERELEASE_LIST, "0.2.0", b"pre 0.2.0");
+    let channel = Arc::new(Mutex::new(ReleaseChannel::Prerelease));
+    let (updates, _) = channel_service(&h, "0.1.0", &channel);
+    let alice = h.android_of("alice");
+    alice.start();
+    assert_eq!(
+        updates.check().unwrap(),
+        CheckOutcome::Downloaded("0.2.0".into())
+    );
+    assert_eq!(
+        updates.install_when_idle().unwrap(),
+        None,
+        "alice's Android runs"
+    );
+
+    *channel.lock().unwrap() = ReleaseChannel::Stable;
+    alice.stop();
+    assert_eq!(
+        updates.install_when_idle().unwrap(),
+        None,
+        "the stable channel does not take it"
+    );
+    assert!(matches!(
+        updates.check().unwrap(),
+        CheckOutcome::NotNewer(_)
+    ));
+    assert!(h.downloads().is_empty(), "{:?}", h.downloads());
+    assert!(updates.install_now().unwrap().installing.is_none());
+    assert_eq!(h.installer.runs(), 0);
+}
+
+#[test]
+fn fr15_on_the_prerelease_channel_a_list_that_cannot_be_read_does_not_stop_the_other() {
+    let h = Harness::new();
+    h.fetch.publish_at(PRERELEASE_LIST, "0.2.0", b"pre 0.2.0");
+    // The stable list is there but signed by someone else.
+    let bytes = serde_json::to_vec(&list_of("0.9.0", b"x")).unwrap();
+    let other = SigningKey::from_bytes(&[8; 32]);
+    h.fetch.put(
+        &format!("{LIST}.sig"),
+        hex(&other.sign(&bytes).to_bytes()).into(),
+    );
+    h.fetch.put(LIST, bytes);
+    let channel = Arc::new(Mutex::new(ReleaseChannel::Prerelease));
+    let (updates, _) = channel_service(&h, "0.1.0", &channel);
+    assert_eq!(
+        updates.check().unwrap(),
+        CheckOutcome::Downloaded("0.2.0".into())
+    );
+    // On the stable channel that list is the only one, so its fault is the answer.
+    *channel.lock().unwrap() = ReleaseChannel::Stable;
+    assert!(matches!(
+        updates.check(),
+        Err(ProgramError::BadSignature(_))
+    ));
+}
+
+/// Connects as `user`, as if the operating system had reported that user.
+struct DesktopOf(dsa_transport::local::MemoryLocalConnector, &'static str);
+
+impl dsa_transport::Connector for DesktopOf {
+    fn connect(
+        &mut self,
+        _: Duration,
+    ) -> Result<Box<dyn dsa_transport::Connection>, dsa_transport::TransportError> {
+        self.0.connect_as(dsa_transport::local::Peer {
+            user: self.1.into(),
+            administrator: false,
+        })
+    }
+}
+
+/// The local API of a service whose users' Android tell about the program updates of
+/// `status`, as the installed service wraps them.
+fn desktops(
+    status: &Arc<ProgramStatus>,
+) -> (
+    dsa_host_core::host_api_conformance::RunningService,
+    dsa_transport::local::MemoryLocalConnector,
+) {
+    let (listener, connector) = dsa_transport::local::pair();
+    let status = Arc::clone(status);
+    let androids = Arc::new(dsa_host_core::host_api::PerUser::new(move |_: &str| {
+        Ok(Arc::new(WithProgramStatus {
+            android: Arc::new(FakeAndroid::new()),
+            status: Arc::clone(&status),
+        }) as Arc<dyn UserAndroid>)
+    }));
+    let service =
+        dsa_host_core::host_api_conformance::RunningService::start(Box::new(listener), androids);
+    (service, connector)
+}
+
+/// What `user`'s desktop is given to show when it watches their notifications now, as a
+/// window manager does: each notification posted until the watch has been quiet a while.
+fn shown_on_desktop(
+    connector: &dsa_transport::local::MemoryLocalConnector,
+    user: &'static str,
+) -> Vec<dsa_host_core::notifications::Notification> {
+    use dsa_host_core::notifications::NotificationEvent;
+    let mut desktop = DesktopOf(connector.clone(), user);
+    let mut watch = dsa_host_core::host_api::HostApiClient::connect(
+        &mut desktop,
+        "desktop",
+        Duration::from_secs(10),
+    )
+    .unwrap()
+    .watch_notifications()
+    .unwrap();
+    let mut shown = Vec::new();
+    while let Some(event) = watch.next(Duration::from_millis(500)).unwrap() {
+        if let NotificationEvent::Posted(notification) = event {
+            shown.push(notification);
+        }
+    }
+    shown
+}
+
+fn keys(shown: &[dsa_host_core::notifications::Notification]) -> Vec<&str> {
+    shown.iter().map(|n| n.key.as_str()).collect()
+}
+
+#[test]
+fn fr15_each_desktop_is_told_once_that_an_update_waits_to_install() {
+    use dsa_host_core::native_abi::in_user_language;
+    let h = Harness::new();
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let (updates, status) = h.service("0.1.0");
+    let (_service, desktop) = desktops(&status);
+    assert!(shown_on_desktop(&desktop, "alice").is_empty());
+
+    updates.check().unwrap();
+    let shown = shown_on_desktop(&desktop, "alice");
+    assert_eq!(keys(&shown), ["dsa:update:program:ready:0.1.1"]);
+    let korean = in_user_language(shown[0].clone(), true);
+    assert_eq!(korean.title, "DSA 업데이트가 준비되었습니다");
+    assert!(korean.text.contains("DSA 0.1.1"), "{}", korean.text);
+    let english = in_user_language(shown[0].clone(), false);
+    assert_eq!(english.title, "DSA update ready");
+    assert!(
+        english
+            .text
+            .contains("installs when Android is not running"),
+        "{}",
+        english.text
+    );
+
+    // The same version again, from another check or another watch, is not shown again.
+    assert_eq!(
+        updates.check().unwrap(),
+        CheckOutcome::AlreadyDownloaded("0.1.1".into())
+    );
+    assert!(shown_on_desktop(&desktop, "alice").is_empty());
+    // Each user is told on their own desktop.
+    assert_eq!(
+        keys(&shown_on_desktop(&desktop, "bob")),
+        ["dsa:update:program:ready:0.1.1"]
+    );
+}
+
+#[test]
+fn fr15_after_an_update_the_desktop_is_told_the_new_version_once() {
+    use dsa_host_core::native_abi::in_user_language;
+    let h = Harness::new();
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let (old, _) = h.service("0.1.0");
+    old.install_now().unwrap();
+    drop(old);
+    // The service setup started is told before any desktop has connected to it.
+    let (_new, status) = h.service("0.1.1");
+    let (_service, desktop) = desktops(&status);
+    let shown = shown_on_desktop(&desktop, "alice");
+    assert_eq!(keys(&shown), ["dsa:update:program:applied:0.1.1"]);
+    let english = in_user_language(shown[0].clone(), false);
+    assert_eq!(english.title, "DSA updated");
+    assert_eq!(english.text, "DSA 0.1.1 is installed.");
+    assert_eq!(
+        in_user_language(shown[0].clone(), true).title,
+        "DSA를 업데이트했습니다"
+    );
+    assert!(shown_on_desktop(&desktop, "alice").is_empty());
+}
+
+#[test]
+fn fr15_a_failed_update_is_told_on_the_desktop_with_why_and_only_once() {
+    use dsa_host_core::native_abi::in_user_language;
+    let h = Harness::new();
+    h.fetch
+        .publish(&list_of("0.1.1", b"setup"), b"setup", &project_key());
+    let (old, _) = h.service("0.1.0");
+    old.install_now().unwrap();
+    drop(old);
+    // Setup failed and rolled back: the old version starts again.
+    let (again, status) = h.service("0.1.0");
+    let (_service, desktop) = desktops(&status);
+    let shown = shown_on_desktop(&desktop, "alice");
+    assert_eq!(keys(&shown), ["dsa:update:program:failed:0.1.1"]);
+    let english = in_user_language(shown[0].clone(), false);
+    assert_eq!(english.title, "DSA update failed");
+    assert!(
+        english.text.contains("previous version is still in use")
+            && english.text.contains("setup-0.1.1.log"),
+        "{}",
+        english.text
+    );
+    let korean = in_user_language(shown[0].clone(), true);
+    assert!(korean.text.contains("이유:"), "{}", korean.text);
+    // A check that finds the same failed version says nothing new.
+    assert!(matches!(
+        again.check().unwrap(),
+        CheckOutcome::FailedBefore(_)
+    ));
+    assert!(shown_on_desktop(&desktop, "alice").is_empty());
+}
+
+#[test]
+fn fr15_a_click_on_an_update_alert_does_not_reach_android() {
+    use dsa_host_core::notifications::NotificationAction;
+    let h = Harness::new();
+    let (_updates, status) = h.service("0.1.0");
+    let (_service, desktop) = desktops(&status);
+    let mut client = dsa_host_core::host_api::HostApiClient::connect(
+        &mut DesktopOf(desktop.clone(), "alice"),
+        "desktop",
+        Duration::from_secs(10),
+    )
+    .unwrap();
+    // Android is not even running; the click is the host's to act on, so it is taken.
+    client
+        .act_on_notification(&NotificationAction::Open {
+            key: "dsa:update:program:ready:0.1.1".into(),
+        })
+        .unwrap();
 }

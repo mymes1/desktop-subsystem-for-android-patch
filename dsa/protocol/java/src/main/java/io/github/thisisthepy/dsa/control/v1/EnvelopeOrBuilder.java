@@ -349,6 +349,17 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.PowerState getPowerState();
 
   /**
+   * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+   * @return Whether the displayRefresh field is set.
+   */
+  boolean hasDisplayRefresh();
+  /**
+   * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+   * @return The displayRefresh.
+   */
+  io.github.thisisthepy.dsa.control.v1.DisplayRefresh getDisplayRefresh();
+
+  /**
    * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
    * @return Whether the powerHint field is set.
    */

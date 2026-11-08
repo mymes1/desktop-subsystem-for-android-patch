@@ -1,7 +1,7 @@
 //! The computer's power as Windows reports it, for the guests' battery state.
 //!
 //! [`from_system_status`] reads the fields of Windows' `SYSTEM_POWER_STATUS`, and [`follow`]
-//! reads them every few seconds and hands each change to the service's [`PowerHub`], which
+//! reads them twice a second and hands each change to the service's [`PowerHub`], which
 //! tells every running Android. It also reads the computer's physical memory
 //! ([`read_memory`]) and tells the hub when the computer runs short of it, so every Android
 //! gives back what it can spare.
@@ -78,24 +78,25 @@ pub fn read_memory() -> Option<(u64, u64)> {
     Some((status.ullTotalPhys / 1024, status.ullAvailPhys / 1024))
 }
 
-/// How often [`follow`] reads the computer's power. Reading it is cheap, and a guest that
-/// hears of a change some seconds late behaves the same.
+/// How often [`follow`] reads the computer's memory. A guest that hears of a change some
+/// seconds late behaves the same.
 pub const POLL: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// Reads the computer's power every [`POLL`] until `stop` is set, and hands it to `hub`,
-/// which passes on only what changed.
+/// How often [`follow`] reads the computer's power. Energy saver lowers the guest display's
+/// refresh rate, which has to follow within a second; `GetSystemPowerStatus` only copies a
+/// few fields the kernel keeps, so reading it this often costs nothing that shows.
+pub const POWER_POLL: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Reads the computer's power every [`POWER_POLL`] and its memory every [`POLL`] until `stop`
+/// is set, and hands them to `hub`, which passes on only what changed.
 #[cfg(windows)]
 pub fn follow(
     hub: std::sync::Arc<dsa_host_core::power::PowerHub>,
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) {
     use std::sync::atomic::Ordering;
-    let step = std::time::Duration::from_millis(250);
     let mut pressure = dsa_host_core::power::MemoryPressure::new();
     while !stop.load(Ordering::Relaxed) {
-        if let Some(state) = read() {
-            hub.update(state);
-        }
         if let Some((total_kb, available_kb)) = read_memory() {
             let was_low = pressure.low();
             let low = pressure.update(total_kb, available_kb);
@@ -111,20 +112,17 @@ pub fn follow(
         }
         let mut waited = std::time::Duration::ZERO;
         while waited < POLL && !stop.load(Ordering::Relaxed) {
-            std::thread::sleep(step);
-            waited += step;
+            if let Some(state) = read() {
+                hub.update(state);
+            }
+            std::thread::sleep(POWER_POLL);
+            waited += POWER_POLL;
         }
     }
 }
 
-/// What a suspend or resume notification from Windows says.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SleepEvent {
-    /// The computer is about to sleep, hibernate or enter modern standby's sleep.
-    Sleeping,
-    /// The computer woke.
-    Woke,
-}
+/// What a suspend or resume notification from Windows says: the hosts' shared sleep events.
+pub use dsa_host_core::power::{SleepEvent, SLEEP_WAIT};
 
 /// `PBT_APMSUSPEND`.
 const PBT_APMSUSPEND: u32 = 0x4;
@@ -143,29 +141,10 @@ pub fn sleep_event(broadcast_type: u32) -> Option<SleepEvent> {
     }
 }
 
-/// How long the computer's sleep waits for the guests to put their data on disk. Windows
-/// gives a suspend notification only a short time.
-pub const SLEEP_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
-
 /// Hands `event` to `hub`: before the computer sleeps every Android writes its data, waited
 /// for at most [`SLEEP_WAIT`]; when it wakes every Android has its clock set.
 pub fn on_sleep_event(hub: &dsa_host_core::power::PowerHub, event: SleepEvent) {
-    match event {
-        SleepEvent::Sleeping => {
-            eprintln!("power: the computer is going to sleep");
-            if !hub.host_sleeping(SLEEP_WAIT) {
-                eprintln!(
-                    "power: an Android did not say its data was written within {} s; the \
-                     computer sleeps anyway",
-                    SLEEP_WAIT.as_secs()
-                );
-            }
-        }
-        SleepEvent::Woke => {
-            eprintln!("power: the computer woke");
-            hub.host_woke(std::time::SystemTime::now());
-        }
-    }
+    hub.on_sleep_event(event);
 }
 
 /// `DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS`.

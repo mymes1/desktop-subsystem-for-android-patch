@@ -19,6 +19,7 @@ on:
     paths:
       - "dsa/**"
       - ".github/workflows/test-installer.yml"
+      - ".github/scripts/installer/**"
   workflow_dispatch:
 
 concurrency:
@@ -80,6 +81,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The release build's dependencies come from this job's target folder of the last
+      # develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: installer-${{ matrix.version }}-${{ matrix.arch }}
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
       - name: Check that this is the machine the package is for
         run: |
           $native = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
@@ -134,11 +144,14 @@ jobs:
       # input, so they are ignored on a developer's machine and run here, where nobody uses
       # the desktop. The release build above already holds most of what they need.
       #
-      # With Windows' three- and four-finger touch gestures on (Settings, Bluetooth & devices,
-      # Touch), the shell can take contacts of three or more fingers for itself, and then no
-      # app sees them: on the x64 runners ten fingers reached the task window as three or
-      # none. They are turned off for the runner's user, as a user who wants such gestures in
-      # apps turns them off, and the shell is started again to read the setting.
+      # With Windows 11's three- and four-finger touch gestures on (Settings, Bluetooth &
+      # devices, Touch), Windows keeps three or more fingers from every app: on the Windows 11
+      # and Server 2025 runners not one of ten fingers reached the task window, while one finger
+      # did, held back until it lifted. Server 2022 has no such gestures and passed. The
+      # gestures are turned off for the runner's user, as a user who wants such gestures in
+      # apps turns them off. Writing the registry alone takes effect only at the next sign-in,
+      # so the script sets them the way Settings does and checks they are off; the shell is
+      # then started again so it reads the setting too.
       #
       # DSA_INPUT_TRACE makes each task window log every touch and pen contact that comes
       # down or up in it, so a run that loses fingers says whether Windows delivered them to
@@ -148,14 +161,42 @@ jobs:
         env:
           DSA_INPUT_TRACE: "1"
         run: |
-          Write-Host "touch gestures before: $((Get-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name TouchGestureSetting -ErrorAction SilentlyContinue).TouchGestureSetting)"
-          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name TouchGestureSetting -Value 0 -Type DWord
+          & ../.github/scripts/installer/touch-gestures-off.ps1
           Get-Process WWAHost, StartMenuExperienceHost -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "running before the tests: $($_.ProcessName) ($($_.Id)) '$($_.MainWindowTitle)'" }
           Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 5
           if (-not (Get-Process explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe; Start-Sleep -Seconds 5 }
           cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input
           if ($LASTEXITCODE -ne 0) { throw "touch or pen input on a task window did not reach its task" }
+
+      # The Android VM's network made through this machine's Host Compute Network, as the
+      # service makes it: the NAT network and its endpoint are removed when the VM stops,
+      # when its start fails and when the service lets go of it; a network left by a service
+      # that ended uncleanly is used again, and one left from moving the VM is removed. No
+      # guest boots here, so the routes are checked from the host's side: the guest's default
+      # route is an address of this computer on its adapter for the network (so the guest's
+      # traffic follows this computer's routes, a VPN's included), and this computer sends to
+      # the guest's address through that adapter. HCN needs the Host Network Service; a runner
+      # image without it says so in a warning.
+      - name: fr28_the_vms_network_is_removed_when_it_stops_and_the_host_reaches_the_guest
+        working-directory: dsa
+        run: |
+          $hns = Get-Service hns -ErrorAction SilentlyContinue
+          if (-not $hns) {
+            Write-Host "::warning::this runner has no Host Network Service, so the VM's network is not checked here"
+            exit 0
+          }
+          Write-Host "Host Network Service: $($hns.Status)"
+          cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test hcn_network -- --ignored --test-threads 1 --nocapture
+          if ($LASTEXITCODE -ne 0) { throw "the VM's network was not made, removed or routed as it must be" }
+          # Windows takes the host's adapter of a removed network away shortly after.
+          $deadline = (Get-Date).AddSeconds(20)
+          do {
+            $left = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue | Where-Object Name -like 'vEthernet (DSA dsa-test-fr28*'
+            if (-not $left) { break }
+            Start-Sleep -Seconds 2
+          } while ((Get-Date) -lt $deadline)
+          if ($left) { throw "host adapters of the test networks are left: $($left.Name -join ', ')" }
 
       # Nothing is installed yet, so setup.exe opens on its first screen. Pictures of it in
       # the light and the dark theme, of Change, and of the command line help.
@@ -391,6 +432,12 @@ jobs:
             Set-AppTheme
             Remove-Item Env:DSA_CLI
             Get-Process cmd, PING -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            # What the page asked the stand-in dsa, for a page that stayed empty.
+            $calls = "$env:RUNNER_TEMP\widgets-fixture\calls.txt"
+            if (Test-Path $calls) {
+              Write-Host "the page ran dsa with:"
+              Get-Content $calls | ForEach-Object { Write-Host "  $_" }
+            }
           }
 
       # The memory limit, the VM's size and the kernel's breakdown (Memory), freezing now
@@ -429,7 +476,7 @@ jobs:
             Remove-Item Env:DSA_CLI
           }
 
-      # The adb card sits below the fold of the Advanced page, so the page is scrolled to it.
+      # The adb card sits below the fold of the Network page, so the page is scrolled to it.
       # Each theme and language gets a picture at rest and one with the port box focused, and
       # the box's height is measured. The Network page's read-only values get a picture too.
       - name: fr17_text_boxes_and_selectable_values_match_winui
@@ -443,11 +490,11 @@ jobs:
                 Set-AppTheme -Dark:($theme -eq 'dark')
                 $app = Start-Process $exe -ArgumentList '--lang', $lang -PassThru
                 $window = Wait-ProcessWindow $app.Id 90
-                if (-not $window) { throw "DSA Settings showed no window for the Advanced page within 90 seconds" }
-                Open-SettingsPage $window 'advanced' $lang
+                if (-not $window) { throw "DSA Settings showed no window for the Network page within 90 seconds" }
+                Open-SettingsPage $window 'network' $lang
                 Start-Sleep -Seconds 5
                 $box = $window.FindFirst($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($Auto::AutomationIdProperty, 'AdbPortBox')))
-                if (-not $box) { throw "the Advanced page has no adb port box" }
+                if (-not $box) { throw "the Network page has no adb port box" }
                 $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
                 $viewer = $walker.GetParent($box)
                 while ($viewer -and -not $viewer.GetCurrentPropertyValue($Auto::IsScrollPatternAvailableProperty)) {
@@ -501,7 +548,7 @@ jobs:
           . .github/scripts/installer/setup-ui.ps1
           New-Item -ItemType Directory -Force screens | Out-Null
           $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
-          $pages = 'memory', 'apps', 'background', 'widgets', 'display', 'android', 'updates', 'device', 'network', 'advanced', 'logs', 'about', 'general'
+          $pages = 'memory', 'apps', 'background', 'widgets', 'display', 'device', 'network', 'updates', 'advanced', 'logs', 'about', 'general'
           foreach ($lang in 'en-US', 'ko-KR') {
             $app = Start-Process $exe -ArgumentList '--lang', $lang -PassThru
             $window = Wait-ProcessWindow $app.Id 90
@@ -587,7 +634,7 @@ jobs:
           New-Item -ItemType Directory -Force screens | Out-Null
           $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
           $name = [System.Windows.Automation.AutomationElement]::NameProperty
-          $items = 'General', 'Memory', 'Apps', 'Running in the background', 'Widgets', 'Display & GPU', 'Android', 'Updates', 'Device identity', 'Network', 'Advanced', 'Android log', 'About'
+          $items = 'General', 'Memory', 'Apps', 'Running in the background', 'Widgets', 'Display & GPU', 'Device identity', 'Network', 'Updates', 'Advanced', 'Logs', 'About'
 
           # The navigation item named $Text: the pane is on the left, so a page title of the
           # same name is not it.
@@ -944,15 +991,22 @@ jobs:
             Set-Content -Path "$bundle\BundleConfig.pb" -Value 'config' -NoNewline
             Compress-Archive -Force -Path "$bundle\BundleConfig.pb" -DestinationPath "$apks\store.zip"
             Copy-Item -Force "$apks\store.zip" "$apks\store.aab"
-            foreach ($case in @(
-                @{ File = 'split.xapk'; Like = 'split.xapk is a split APK bundle*not supported yet*' },
-                @{ File = 'store.aab'; Like = "store.aab is an Android App Bundle*cannot be installed directly*publisher*" })) {
-              $app = Open-Apk $case.File
-              Wait-SetupControl ResultTitle -Seconds 90 | Out-Null
-              Expect-Text ResultText $case.Like
-              Save-SetupScreen "$PWD\screens\apk-$theme-$($case.File -replace '\.', '-').png"
-              Close-Apk $app
-            }
+            # A split APK bundle installs: the window reads the app from its base APK and says
+            # how many of its APKs this PC takes.
+            $app = Open-Apk split.xapk
+            Wait-SetupControl InstallButton -Enabled -Seconds 90 | Out-Null
+            Expect-Text HeroTitle 'Install Notes[?]'
+            Expect-Text HeroPackage 'Package Name: com.example.notes'
+            Expect-Text SummaryTitle 'Split APK bundle'
+            Expect-Text SummaryText 'Notes comes as several APKs. The 1 this PC needs are installed together, * in all.'
+            Save-SetupScreen "$PWD\screens\apk-$theme-split-xapk.png"
+            Close-Apk $app
+            # An App Bundle does not: the window says why and what to get instead.
+            $app = Open-Apk store.aab
+            Wait-SetupControl ResultTitle -Seconds 90 | Out-Null
+            Expect-Text ResultText 'store.aab is an Android App Bundle.*cannot be installed as they are*Get the app as an APK*'
+            Save-SetupScreen "$PWD\screens\apk-$theme-store-aab.png"
+            Close-Apk $app
 
             $env:DSA_CLI = $fake
             # Installing starts Android, finds the app installed already, and shows both versions.
@@ -1710,6 +1764,12 @@ jobs:
         run: |
           $p = Start-Process 'dsa\target\installer\setup-test-0.0.9.exe' -Wait -PassThru -ArgumentList '/quiet', '/norestart', '/log', "$PWD\bundle-install.log", "InstallFolder=`"$env:BUNDLE_PROGRAM_DIR`"", "DataFolder=`"$env:BUNDLE_DATA_DIR`""
           if ($p.ExitCode -ne 0) { Get-Content bundle-install.log -Tail 80; throw "setup.exe /quiet failed ($($p.ExitCode))" }
+          # A release installed over a development build of the same version replaces every
+          # file: setup.exe runs the package with the "a" of REINSTALLMODE, not Burn's "muso",
+          # whose "o" keeps files of an equal version.
+          $applied = Select-String -Path bundle-install.log -Pattern 'Applying execute package: DsaPackage' | Select-Object -First 1
+          if (-not $applied) { throw "bundle-install.log does not say how the package was run" }
+          if ($applied.Line -notmatch 'REINSTALLMODE="[b-z]*a[b-z]*"') { throw "setup.exe ran the package without the a of REINSTALLMODE: $($applied.Line)" }
           $service = Get-Service DsaHost
           if ($service.Status -ne 'Running') { throw "DsaHost is $($service.Status)" }
           if (-not (Test-Path "$env:BUNDLE_PROGRAM_DIR\dsa.exe")) { throw "the program is not in the folder named on the command line" }
@@ -1830,6 +1890,15 @@ jobs:
       - name: Add the ARM64 Rust target
         run: rustup target add aarch64-pc-windows-msvc
 
+      # The release build's dependencies come from this job's target folder of the last
+      # develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: arm64-on-x64
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
       - name: Install WiX 5
         run: |
           dotnet tool install --global wix --version 5.0.2
@@ -1933,6 +2002,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      # The release build's dependencies come from this job's target folder of the last
+      # develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: real-installer-${{ matrix.arch }}
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
 
       - name: Install WiX 5
         run: |

@@ -42,3 +42,25 @@ fn fr4_a_record_that_is_not_text_is_no_record() {
     assert_eq!(recorded_display(&dir), None);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn fr10_battery_saver_caps_the_guest_refresh_rate_the_users_session_recorded() {
+    use dsa_host_core::guest_refresh::refresh_rate;
+    use dsa_host_windows::monitors::{recorded_refresh, write_refresh_record};
+    let dir = empty_dir("refresh");
+    assert_eq!(recorded_refresh(&dir), None);
+    write_refresh_record(&dir, 120).unwrap();
+    let hz = recorded_refresh(&dir).unwrap();
+    assert_eq!(hz, 120);
+    assert_eq!(refresh_rate(hz, true), 60);
+    assert_eq!(refresh_rate(hz, false), 120);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn fr10_a_monitor_at_the_hardwares_default_rate_has_no_known_rate() {
+    use dsa_host_windows::monitors::frequency_hz;
+    assert_eq!(frequency_hz(0), 0);
+    assert_eq!(frequency_hz(1), 0);
+    assert_eq!(frequency_hz(144), 144);
+}

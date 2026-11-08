@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Dsa.Settings.Core;
 
@@ -50,9 +51,10 @@ public enum AndroidMove
     Down,
 }
 
-/// <summary>The Android page: the version that runs (major, build, security patch) and the
-/// supported major versions to choose from.</summary>
-public sealed class AndroidVersionViewModel : ObservableObject
+/// <summary>The Android part of the Updates page: the version that runs (major, build,
+/// security patch), the version it follows, where its image update stands, and the supported
+/// major versions to choose from.</summary>
+public sealed partial class AndroidVersionViewModel : ObservableObject
 {
     private readonly IDsaCli _cli;
     private readonly ITextSource _text;
@@ -86,6 +88,63 @@ public sealed class AndroidVersionViewModel : ObservableObject
     public string? Error => _error;
     public bool HasError => _error is not null;
     public bool IsBusy => _busy;
+
+    /// <summary>The version the image updates follow: the newest supported one, or one major
+    /// version and its security updates.</summary>
+    public string ChannelText
+    {
+        get
+        {
+            if (_info is null)
+            {
+                return "";
+            }
+            if (_info.Channel == "latest")
+            {
+                var newest = _info.Supported.Count > 0 ? _info.Supported.Max() : _info.Major;
+                return string.Format(CultureInfo.CurrentCulture, _text.Get("Android_FollowsLatest"), newest);
+            }
+            return string.Format(CultureInfo.CurrentCulture, _text.Get("Android_FollowsMajor"), _info.Channel);
+        }
+    }
+
+    /// <summary>How far the image download has got, from the service's notice
+    /// ("downloading Android ...: 45% ..."), or null when nothing is downloading.</summary>
+    public int? DownloadPercent => DownloadPercentOf(_info?.Notice);
+
+    public bool IsDownloading => DownloadPercent is not null;
+
+    /// <summary>Where the Android image update stands, in one line: the download with its
+    /// progress, a version waiting for the next start, the service's last news, or that none is
+    /// waiting.</summary>
+    public string UpdateStatusText =>
+        _info is null ? ""
+        : IsDownloading || HasNotice ? Notice
+        : IsSwitching ? SwitchingText
+        : _text.Get("Android_UpToDate");
+
+    /// <summary>Whether the service can be asked to check for an Android image now.</summary>
+    public bool CanCheckNow => !_busy && _info is not null;
+
+    /// <summary>The dsa arguments that ask for a check now: choosing the version the service
+    /// already follows, which checks the signed image list at once and changes nothing else.</summary>
+    public string[] CheckArguments => new[] { "android", "use", _info?.Channel ?? "latest", "--json" };
+
+    /// <summary>The percentage in a download notice, or null.</summary>
+    public static int? DownloadPercentOf(string? notice)
+    {
+        if (notice is null)
+        {
+            return null;
+        }
+        var match = DownloadNotice().Match(notice);
+        return match.Success && int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var percent)
+            ? Math.Clamp(percent, 0, 100)
+            : null;
+    }
+
+    [GeneratedRegex(@"^downloading Android [^:]*: (\d+)%")]
+    private static partial Regex DownloadNotice();
 
     /// <summary>The choice the service keeps, or the one the user just picked.</summary>
     public int SelectedIndex
@@ -130,6 +189,40 @@ public sealed class AndroidVersionViewModel : ObservableObject
     public async Task LoadAsync()
     {
         await RunAsync(new[] { "android", "version", "--json" });
+    }
+
+    /// <summary>Reads the version again without showing the page as busy, for following a
+    /// download while the page is shown.</summary>
+    public async Task RefreshAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+        try
+        {
+            var result = await _cli.RunAsync(new[] { "android", "version", "--json" }).ConfigureAwait(true);
+            if (result.ExitCode == 0 && !_busy)
+            {
+                var picked = _selected;
+                Show(AndroidVersionInfo.Parse(result.Output));
+                if (picked >= 0 && picked < Choices.Count)
+                {
+                    _selected = picked;
+                }
+                ChangedAll();
+            }
+        }
+        catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException)
+        {
+            // The page keeps what it showed; the next refresh reads again.
+        }
+    }
+
+    /// <summary>Asks the service to check for an Android image now.</summary>
+    public async Task CheckNowAsync()
+    {
+        await RunAsync(CheckArguments);
     }
 
     /// <summary>Chooses <paramref name="choice"/>; <paramref name="eraseData"/> is the user's

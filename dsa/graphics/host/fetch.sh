@@ -19,12 +19,17 @@ patch_dir="$root/dsa/graphics/patches"
 gfxstream_revision="d047a57228332d995d36600792fa9ccc26cf8ae6"
 aemu_revision="3ff20aed307f55bc4ae865373d07bf76c9efa43c"
 
+# A new checkout fetches the pinned commit alone: no build reads the history, and all of it
+# took a minute or more to download on every CI run.
 checkout() {
     local remote="$1" dir="$2" revision="$3"
+    local depth=()
     if [[ ! -d "$dir/.git" ]]; then
-        git clone "$remote" "$dir"
+        git init -q "$dir"
+        git -C "$dir" remote add origin "$remote"
+        depth=(--depth 1)
     fi
-    git -C "$dir" fetch --no-tags origin "$revision"
+    git -C "$dir" fetch ${depth[@]+"${depth[@]}"} --no-tags origin "$revision"
     git -C "$dir" checkout --detach "$revision"
     git -C "$dir" reset --hard "$revision"
     git -C "$dir" clean -fdx
@@ -33,7 +38,7 @@ checkout() {
 checkout https://android.googlesource.com/platform/hardware/google/gfxstream \
     "$gfxstream_dir" "$gfxstream_revision"
 # The host patches, as fetch.ps1 lists them: 0002, 0003 and 0008 patch Mesa for the guest.
-for number in 0001 0004 0005 0006 0007 0009 0010 0011 0012 0013 0014 0015; do
+for number in 0001 0004 0005 0006 0007 0009 0010 0011 0012 0013 0014 0015 0016 0017; do
     for patch in "$patch_dir"/"$number"-*.patch; do
         echo "Applying patch: $(basename "$patch")"
         if ! git -C "$gfxstream_dir" apply --recount "$patch"; then

@@ -114,7 +114,7 @@ class DiagnosticsCollectorTest {
                 .map { it.getAttributeNS("http://schemas.android.com/apk/res/android", "name").ifEmpty { it.getAttribute("name") } }
                 .toSet()
         }
-        for (permission in listOf("android.permission.READ_LOGS", "android.permission.DUMP")) {
+        for (permission in listOf("android.permission.READ_LOGS", "android.permission.READ_DROPBOX_DATA", "android.permission.DUMP")) {
             assertTrue(permission in names("src/main/AndroidManifest.xml", "uses-permission"))
             assertTrue(permission in names("privapp-permissions-dsa-agent.xml", "permission"))
         }

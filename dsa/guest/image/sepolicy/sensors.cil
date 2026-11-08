@@ -6,3 +6,14 @@
 ; connection.
 
 (allow hal_sensors_server self (vsock_socket (create connect read write getattr setopt getopt shutdown)))
+
+; The framework's sensor service, in system_server, makes the HAL's event queue and its wake
+; lock queue as memfds (system_server_tmpfs) and hands them over in ISensors.initialize. The
+; platform's policy expects them on /dev/ashmem and has no rule for system_server's memfds,
+; so binder refused the call that carried them on every boot ("avc: denied { read write }
+; ... scontext=u:r:hal_sensors_default:s0 tcontext=u:object_r:system_server_tmpfs:s0"), the
+; HAL never got a queue to write events into and no app ever saw a sensor change. A direct
+; channel an app opens is a memfd of the app's (appdomain_tmpfs), which the platform lets the
+; HAL use only through Android 17's memfd_file class.
+(allow hal_sensors_server system_server_tmpfs (file (read write getattr map)))
+(allow hal_sensors_server appdomain_tmpfs (file (read write getattr map)))

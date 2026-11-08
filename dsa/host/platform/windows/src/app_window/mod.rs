@@ -243,7 +243,18 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
         let frame = match connection.recv(None) {
             Ok(frame) => frame,
             Err(TransportError::Timeout) => continue,
-            Err(TransportError::Closed) => break,
+            Err(TransportError::Closed) => {
+                // The window manager ends the connection when the app's last window closed,
+                // and when it stops; either way the windows close now.
+                note(
+                    log.as_deref(),
+                    &format!(
+                        "the window manager closed the connection; {} window(s) close",
+                        presenters.lock().unwrap_or_else(|e| e.into_inner()).len()
+                    ),
+                );
+                break;
+            }
             Err(error) => {
                 note(
                     log.as_deref(),
@@ -278,6 +289,10 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
                 _ => {}
             }
             if !ui.send(command) {
+                note(
+                    log.as_deref(),
+                    "the windows' thread has ended, so the program ends with its windows",
+                );
                 break;
             }
             continue;
@@ -358,7 +373,11 @@ pub fn run(mut setup: HostSetup) -> Result<(), String> {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .send(&presented);
-                if sent.is_err() {
+                if let Err(why) = sent {
+                    note(
+                        log.as_deref(),
+                        &format!("could not tell the window manager a frame was shown: {why}"),
+                    );
                     break;
                 }
             }

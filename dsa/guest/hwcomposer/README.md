@@ -122,6 +122,14 @@ long as the user's longest monitor when it starts the VM:
 | `androidboot.dsa.display_dpi` | 160 |
 | `androidboot.dsa.display_refresh_rate` | 60 |
 
+The display offers one configuration per refresh rate (60, 75, 90, 100, 120, 144, 165 and
+240 Hz, `src/refresh_rates.h`), all the same size and in one group, so SurfaceFlinger moves
+between them seamlessly. `display_refresh_rate` is only the rate it starts at. The host
+chooses the rate while Android runs: the user's fastest monitor, at most 60 Hz while the
+host's battery saver is on. It sends that rate to the agent (`DisplayRefresh`), which holds
+the framework's refresh rate range at it, and SurfaceFlinger then sets the matching
+configuration, whose period the vsync clock takes from its next tick.
+
 A window cannot be larger than this display. A task's ColorBuffers follow the task's own
 size in steps (`taskBufferSize`), so a large display costs nothing per window. Only the client
 target has the display's size, and only once SurfaceFlinger composes something itself.
@@ -163,5 +171,6 @@ composition paths (DRM, guest composition) do not apply to a VM without a displa
 | `src/host_renderer.*`, `src/host_stream.*` | renderControl over vsock to the host renderer |
 | `src/channel_client.*` | The binder client of `dsa-channeld` |
 | `src/composer*.*`, `src/display.*`, `src/vsync_thread.*`, `src/main.cpp` | The composer HAL SurfaceFlinger talks to |
+| `src/refresh_rates.*` | The display's refresh rates, one configuration each |
 | `dsa-hwcomposer.rc`, `dsa-hwcomposer.xml` | Its init service and VINTF declaration, installed by `make-image.py` |
 | `binder_ndk_platform_stub.c` | Link-time stand-ins for the platform's binder calls the NDK leaves out |

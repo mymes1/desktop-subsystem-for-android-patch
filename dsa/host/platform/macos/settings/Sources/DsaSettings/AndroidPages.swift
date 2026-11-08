@@ -266,13 +266,44 @@ struct IdentityFieldRow: View {
     }
 }
 
-/// Device identity: the names and build fingerprint Android reports to its apps.
+/// Device identity: this Mac as its firmware and system report it (its name, maker and model,
+/// then its specifications, which cannot be changed), and then the names and build
+/// fingerprint Android reports to its apps, which can.
 struct DeviceIdentityPage: View {
     @ObservedObject var vm: DeviceIdentityViewModel
 
     var body: some View {
         Form {
+            // This Mac, as System Settings' About shows it: the name large, the maker and model
+            // under it, then label and value rows.
             Section {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(vm.computerName).font(.title.weight(.semibold)).textSelection(.enabled)
+                    Text(vm.computerMakeModel).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            }
+            Section {
+                ForEach(DeviceIdentityViewModel.aboutKeys, id: \.self) { key in
+                    LabeledContent(vm.aboutLabel(key)) {
+                        Text(vm.aboutValue(key)).textSelection(.enabled)
+                    }
+                }
+            } header: {
+                HStack {
+                    Text(T("IdentitySpecsCard.Header"))
+                    Spacer()
+                    Button(T("IdentityCopyButton.Content")) {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(vm.aboutText, forType: .string)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            } footer: {
+                Text(T("IdentityComputerNote.Text")).font(.callout).foregroundStyle(.secondary)
+            }
+            Section(T("IdentityAndroidHeader.Text")) {
                 Text(T("IdentityIntro.Text")).font(.callout).foregroundStyle(.secondary)
                 Banner(kind: .warning, title: T("IdentityWarning.Title"), message: T("IdentityWarning.Message"))
             }
@@ -302,22 +333,6 @@ struct DeviceIdentityPage: View {
             Section(T("IdentityNamesHeader.Text")) {
                 ForEach(vm.names) { IdentityFieldRow(vm: vm, key: $0.key) }
             }
-            Section {
-                ForEach(vm.computerValues) { value in
-                    VStack(alignment: .leading, spacing: 4) {
-                        LabeledContent {
-                            Text(vm.shown(value)).textSelection(.enabled).foregroundStyle(.secondary)
-                        } label: {
-                            RowLabel(title: vm.label(value), detail: vm.detail(value))
-                        }
-                        Text(vm.originText(value.origin)).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text(T("IdentityComputerHeader.Text"))
-            } footer: {
-                Text(T("IdentityComputerNote.Text")).font(.callout).foregroundStyle(.secondary)
-            }
             Section(T("IdentityFingerprintHeader.Text")) {
                 LabeledContent(T("IdentityPreview.Text")) {
                     Text(vm.fingerprintPreview).font(.system(.body, design: .monospaced)).textSelection(.enabled)
@@ -331,9 +346,11 @@ struct DeviceIdentityPage: View {
     }
 }
 
-/// Network: how Android reaches the network now, and the advanced networking switch.
+/// Network: how Android reaches the network now, the advanced networking switch, and developer
+/// mode, through which adb on this Mac reaches Android.
 struct NetworkPage: View {
     @ObservedObject var vm: SettingsViewModel
+    @State private var adbPort = ""
 
     var body: some View {
         Form {
@@ -360,21 +377,47 @@ struct NetworkPage: View {
                     Banner(kind: .info, title: T("NetworkRestartBar.Title"), message: T("NetworkRestartBar.Message"))
                 }
             }
+            Section(T("DeveloperHeader.Text")) {
+                SwitchRow(title: T("DeveloperModeCard.Header"), detail: T("DeveloperModeCard.Description"),
+                          isOn: vm.developerMode, enabled: vm.canChange, set: { await vm.setDeveloperMode($0) })
+                SwitchRow(title: T("AdbAutoConnectCard.Header"), detail: T("AdbAutoConnectCard.Description"),
+                          isOn: vm.adbAutoConnect, enabled: vm.canChange, set: { await vm.setAdbAutoConnect($0) })
+                Text(vm.adbAutoConnectStateText).font(.callout).foregroundStyle(.secondary)
+                LabeledContent {
+                    Text(vm.adbConnect).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+                } label: {
+                    RowLabel(title: T("AdbCard.Header"), detail: T("AdbCard.Description"))
+                }
+                LabeledContent(T("AdbPortLabel.Text")) {
+                    TextField("", text: $adbPort)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 90)
+                        .onSubmit { Task { await vm.setAdbPort(adbPort) } }
+                        .disabled(!vm.canChange)
+                }
+            }
         }
         .settingsPage()
         .task {
             await vm.load()
+            adbPort = String(vm.adbPort)
             await vm.refreshNetwork()
+            // Where auto-connect stands changes by itself, so it is read again while the page
+            // is shown; the task ends when the page goes away.
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                await vm.pollAdbAutoConnect()
+            }
         }
+        .onChange(of: vm.adbPort) { port in adbPort = String(port) }
     }
 }
 
-/// Advanced: the clipboard, file sharing, links, freezing, resetting the data, ARM apps,
-/// developer mode, the traces, the logs and the command line.
+/// Advanced: the clipboard, file sharing, links, freezing, resetting the data, ARM apps, the
+/// traces, the logs and the command line.
 struct AdvancedPage: View {
     @ObservedObject var vm: SettingsViewModel
     @ObservedObject var gapps: GappsViewModel
-    @State private var adbPort = ""
 
     var body: some View {
         Form {
@@ -401,7 +444,9 @@ struct AdvancedPage: View {
                 LinkRow(title: T("AndroidFilesCard.Header"), detail: T("AndroidFilesCard.Description")) {
                     Task { await vm.openAndroidFiles() }
                 }
-                Text(T("FilesNote.Text")).font(.callout).foregroundStyle(.secondary)
+                // A row of its own, so the text wraps inside the form's width like the others.
+                RowLabel(title: T("FilesDropCard.Header"), detail: T("FilesNote.Text"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             Section {
                 SwitchRow(title: T("FreezeCard.Header"), detail: T("FreezeCard.Description"),
@@ -455,25 +500,6 @@ struct AdvancedPage: View {
                 }
             }
             GappsSection(vm: gapps)
-            Section(T("DeveloperHeader.Text")) {
-                SwitchRow(title: T("DeveloperModeCard.Header"), detail: T("DeveloperModeCard.Description"),
-                          isOn: vm.developerMode, enabled: vm.canChange, set: { await vm.setDeveloperMode($0) })
-                SwitchRow(title: T("AdbAutoConnectCard.Header"), detail: T("AdbAutoConnectCard.Description"),
-                          isOn: vm.adbAutoConnect, enabled: vm.canChange, set: { await vm.setAdbAutoConnect($0) })
-                Text(vm.adbAutoConnectStateText).font(.callout).foregroundStyle(.secondary)
-                LabeledContent {
-                    Text(vm.adbConnect).font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                } label: {
-                    RowLabel(title: T("AdbCard.Header"), detail: T("AdbCard.Description"))
-                }
-                LabeledContent(T("AdbPortLabel.Text")) {
-                    TextField("", text: $adbPort)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 90)
-                        .onSubmit { Task { await vm.setAdbPort(adbPort) } }
-                        .disabled(!vm.canChange)
-                }
-            }
             Section(T("DiagnosticsHeader.Text")) {
                 AdministratorSwitchRow(
                     title: T("InputTraceCard.Header"), detail: T("InputTraceCard.Description"), isOn: vm.inputTrace,
@@ -504,17 +530,7 @@ struct AdvancedPage: View {
             }
         }
         .settingsPage()
-        .task {
-            await vm.load()
-            adbPort = String(vm.adbPort)
-            // Where auto-connect stands changes by itself, so it is read again while the page
-            // is shown; the task ends when the page goes away.
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                await vm.pollAdbAutoConnect()
-            }
-        }
-        .onChange(of: vm.adbPort) { port in adbPort = String(port) }
+        .task { await vm.load() }
     }
 }
 

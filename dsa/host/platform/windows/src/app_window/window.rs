@@ -125,7 +125,8 @@ const WM_APP_FRAME_READY: u32 = WM_APP + 4;
 /// color in `wparam`, and `lparam` 0 when the band is left as the app draws it.
 const WM_APP_BAND_COLOUR: u32 = WM_APP + 5;
 
-/// The message window's timer, which reports windows left showing a frame of an older size.
+/// The message window's timer, which reports windows left showing a frame of an older size
+/// and takes the commands whose wake-up message could not be posted.
 const TICK_TIMER: usize = 1;
 const TICK_MILLIS: u32 = 200;
 
@@ -154,12 +155,19 @@ pub struct UiHandle {
 
 impl UiHandle {
     /// Hands `command` to the UI thread. Returns false once the UI thread has ended.
+    ///
+    /// Only the end of the UI thread ends the program. A wake-up that cannot be posted (the
+    /// UI thread's queue is full while it is busy, serving a UI Automation client, say) does
+    /// not: the command waits in the channel, and the UI thread's timer takes it within
+    /// `TICK_MILLIS`. Ending here would close every window of the app, and Android would
+    /// end their tasks.
     pub fn send(&self, command: ToHost) -> bool {
         if self.commands.send(command).is_err() {
             return false;
         }
         // SAFETY: posting to a window of another thread; a stale handle only fails.
-        unsafe { PostMessageW(self.message_window as HWND, WM_APP_COMMANDS, 0, 0) != 0 }
+        unsafe { PostMessageW(self.message_window as HWND, WM_APP_COMMANDS, 0, 0) };
+        true
     }
 
     /// Closes every window and ends the UI thread.
@@ -433,6 +441,12 @@ unsafe extern "system" fn message_window_proc(
         }
         WM_TIMER => {
             UI.with(|ui| {
+                // Commands whose wake-up could not be posted are taken here.
+                if let Ok(mut ui) = ui.try_borrow_mut() {
+                    if let Some(ui) = ui.as_mut() {
+                        ui.drain_commands();
+                    }
+                }
                 if let Ok(ui) = ui.try_borrow() {
                     if let Some(ui) = ui.as_ref() {
                         ui.tick();
@@ -1636,5 +1650,29 @@ impl Ui {
             );
         }
         self.open.insert(task_id, hwnd);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fr3_a_command_whose_wake_up_cannot_be_posted_does_not_end_the_windows() {
+        // A message window that cannot be posted to stands for a UI thread whose queue is
+        // full. The command still waits for the UI thread, and the program goes on, so the
+        // app's windows stay open and Android does not end their tasks.
+        let (commands, received) = std::sync::mpsc::channel();
+        let handle = UiHandle {
+            message_window: 1,
+            commands,
+            thread: None,
+        };
+        assert!(handle.send(ToHost::Close { task_id: 5 }));
+        assert_eq!(received.try_recv().ok(), Some(ToHost::Close { task_id: 5 }));
+
+        // Only a UI thread that has ended ends the program.
+        drop(received);
+        assert!(!handle.send(ToHost::Close { task_id: 5 }));
     }
 }

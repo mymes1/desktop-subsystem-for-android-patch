@@ -199,6 +199,20 @@ final class PageViewModelTests: XCTestCase {
         XCTAssertEqual(identity.field("model").placeholder, "Mac15,3")
     }
 
+    func test_fr17_the_identity_page_opens_with_this_mac_read_only_and_copies_its_specifications() async {
+        let cli = FakeCli()
+        cli.answer("settings device --json", #"{"chosen":{"model":"My tablet"},"effective":{"manufacturer":"Apple","model":"My tablet","model_name":"MacBook Pro","device_name":"BREW-MAC","soc_manufacturer":"Apple","soc_model":""},"defaults":{"manufacturer":"Apple","model":"Mac15,3"},"sources":{"manufacturer":"computer","model":"computer","model_name":"computer","device_name":"computer","soc_manufacturer":"computer","soc_model":"dsa"}}"#)
+        let identity = DeviceIdentityViewModel(service: DsaService(cli: cli), text: KeyText())
+        await identity.load()
+        XCTAssertEqual(identity.computerName, "BREW-MAC")
+        XCTAssertEqual(identity.computerMakeModel, "Apple Mac15,3")
+        XCTAssertEqual(identity.aboutValue("soc_model"), "Identity_NotReported")
+        let lines = identity.aboutText.split(separator: "\n")
+        XCTAssertEqual(lines.count, DeviceIdentityViewModel.aboutKeys.count)
+        XCTAssertEqual(lines.first, "Identity_device_name\tBREW-MAC")
+        XCTAssertEqual(identity.field("model").value, "My tablet")
+    }
+
     func test_fr17_moving_to_an_older_android_needs_the_data_erased() async {
         let cli = FakeCli()
         cli.answer("android version --json", #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16}"#)
@@ -213,6 +227,26 @@ final class PageViewModelTests: XCTestCase {
         XCTAssertEqual(AndroidVersionViewModel.useArguments(android.selected!, eraseData: true),
                        ["android", "use", "15", "--erase-data", "--json"])
         XCTAssertFalse(android.isSwitching)
+    }
+
+    func test_fr14_the_updates_page_shows_the_version_followed_the_download_and_checks_now() async {
+        let cli = FakeCli()
+        cli.answer("android version --json", #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16,"notice":"downloading Android 16.0.2: 45% (0.81 of 1.8 GB)"}"#)
+        let android = AndroidVersionViewModel(cli: cli, text: KeyText())
+        await android.load()
+        XCTAssertEqual(android.channelText, "Android_FollowsLatest")
+        XCTAssertEqual(android.downloadPercent, 45)
+        XCTAssertTrue(android.isDownloading)
+        XCTAssertTrue(android.updateStatusText.hasPrefix("downloading Android"))
+        XCTAssertNil(AndroidVersionViewModel.downloadPercent(of: "Android 16.0.2 is installed"))
+        XCTAssertTrue(android.canCheckNow)
+        XCTAssertEqual(android.checkArguments, ["android", "use", "latest", "--json"])
+        cli.answer("android use latest --json", #"{"version":"16.0.1","android_major":16,"channel":"latest","supported_majors":[15,16],"target_major":16}"#)
+        await android.checkNow()
+        XCTAssertNil(android.error)
+        XCTAssertTrue(cli.calls.contains(["android", "use", "latest", "--json"]))
+        XCTAssertFalse(android.isDownloading)
+        XCTAssertEqual(android.updateStatusText, "Android_UpToDate")
     }
 
     func test_fr17_log_page_filters_and_pauses() {

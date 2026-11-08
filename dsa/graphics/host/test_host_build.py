@@ -21,7 +21,10 @@ class HostGraphicsBuildTests(unittest.TestCase):
     def test_pr3_host_build_keeps_the_renderers_symbols_apart_from_the_dll(self):
         # A crash in the renderer or in the GPU driver it calls is only readable with them.
         script = BUILD_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=ProgramDatabase", script)
+        # A compile-time PDB without a compiler cache, debug information in each object
+        # under one; the linker writes the PDB from either.
+        self.assertIn('{ "Embedded" } else { "ProgramDatabase" }', script)
+        self.assertIn("CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=$DebugInformationFormat", script)
         self.assertIn("/DEBUG", script)
         self.assertIn("symbols/gfxstream_backend.pdb", script)
 
@@ -195,6 +198,30 @@ class HostGraphicsBuildTests(unittest.TestCase):
                  "0012-survive-a-host-without-a-vulkan-driver.patch").read_text(encoding="utf-8")
         self.assertIn("+    if (mDvk && mDevice != VK_NULL_HANDLE) {", patch)
         self.assertIn("+    if (mGvk && mInstance != VK_NULL_HANDLE) {", patch)
+
+    def test_nfr5_finished_vulkan_garbage_is_destroyed_not_leaked(self):
+        # The v0.1.9 renderer log said "had a waitable pending for -21043 milliseconds.
+        # Leaking object." for fences whose work had finished: garbage is looked at only when
+        # the device is used, and an entry older than five seconds was leaked whatever its
+        # state, its age printed with the sign turned round.
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0016", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0016-destroy-vulkan-garbage-whose-work-finished.patch").read_text(encoding="utf-8")
+        self.assertIn("+            if (pendingGarbage.timepoint < old && !IsDone(pendingGarbage.waitable)) {", patch)
+        self.assertIn("+                    now - pendingGarbage.timepoint);", patch)
+
+    def test_nfr5_a_shared_color_buffer_opened_before_it_is_made_is_not_an_error(self):
+        # Every guest process opens a gralloc buffer's shared ColorBuffer (top bit set) and
+        # creates it when the open fails, so the v0.1.9 log was full of "openColorBuffer cb
+        # handle -2147483645 not found" errors that were not errors.
+        for script in (FETCH_SCRIPT, HERE / "fetch.sh"):
+            self.assertIn("0017", script.read_text(encoding="utf-8"))
+        patch = (HERE.parent / "patches" /
+                 "0017-open-a-shared-color-buffer-without-an-error-when-it-is-new.patch").read_text(encoding="utf-8")
+        self.assertIn("+            if (!(p_colorbuffer & 0x80000000u)) {", patch)
+        header = (HERE.parent / "include" / "dsa_shared_color_buffer.h").read_text(encoding="utf-8")
+        self.assertIn("#define DSA_SHARED_COLOR_BUFFER_BIT 0x80000000u", header)
 
     def test_pr3_renderer_on_macos_finds_moltenvk_without_being_told(self):
         # stream_renderer_init clears ANDROID_EMU_VK_ICD, and without portability enumeration

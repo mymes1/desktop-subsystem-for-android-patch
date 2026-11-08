@@ -1412,6 +1412,15 @@ message Settings {
   // The caller's network as it stands now. Absent when the service cannot say. A client cannot
   // change it.
   NetworkStatus network = 20;
+  // Whether DSA is updated to pre-releases as well as stable releases (the pre-release
+  // channel). It applies to every user of the computer, so only an administrator may change
+  // it. A computer starts on the channel of the installer that put DSA on it and keeps it
+  // through upgrades; moving to the stable channel never installs a lower version.
+  bool prerelease_updates = 32;
+  // Whether this installation follows a release channel at all: the service updates DSA
+  // itself, or the package repository entries DSA's package registered follow the channel. A
+  // client cannot change it.
+  bool update_channel_available = 33;
   // A run mode setting (run_mode, a RunMode enum, stop_after_secs and keep_for_notifications)
   // was here and is gone: an idle Android stays in Doze. Its numbers and names are never
   // used again, so an older peer that still sends them is read without them. The enum name

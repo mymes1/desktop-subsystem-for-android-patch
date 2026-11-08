@@ -57,6 +57,7 @@ fn settings_json() -> serde_json::Value {
     json!({
         "render_gpu": "display", "freeze": false, "clipboard": true,
         "program_updates": false, "image_updates": true,
+        "prerelease_updates": true, "update_channel_available": true,
         "image_updates_available": true, "version": "0.1.0",
         "log_dir": "/var/lib/dsa/logs", "android_version": "17.0.0-1",
         "developer_mode": false, "adb_port": 58526, "memory_limit_mb": 0,
@@ -754,4 +755,107 @@ fn fr11_a_bundle_refused_before_android_sees_it_says_its_reason() {
     ] {
         assert_ne!(view::install_reason(code), fallback, "{code}");
     }
+}
+
+#[test]
+fn fr15_the_release_channel_is_read_and_chosen_as_an_administrator() {
+    let fake = Fake::new(settings_json());
+    let elevated = Fake::new(settings_json());
+    let c = client(&fake, &elevated);
+    let settings = c.settings().unwrap();
+    assert!(settings.prerelease_updates);
+    assert!(settings.update_channel_available);
+    c.set_machine("prerelease-updates", false).unwrap();
+    assert_eq!(
+        elevated.calls(),
+        vec![line(&[
+            "settings",
+            "set",
+            "prerelease-updates",
+            "off",
+            "--json"
+        ])]
+    );
+    // A service from before the channels reports neither: stable, and nothing to choose.
+    let older = Settings::read(&json!({ "version": "0.1.0" }));
+    assert!(!older.prerelease_updates);
+    assert!(!older.update_channel_available);
+}
+
+#[test]
+fn fr14_the_updates_page_shows_the_version_followed_and_the_download_with_its_progress() {
+    let read = |value: serde_json::Value| dsa_settings_linux::model::AndroidVersion::read(&value);
+    let downloading = read(json!({
+        "version": "17.0.0-1", "android_major": 17, "channel": "latest",
+        "supported_majors": [16, 17], "target_major": 17,
+        "notice": "downloading Android 17.0.0-2: 45% (0.81 of 1.8 GB)"
+    }));
+    assert!(view::android_channel_text(&downloading).contains("17"));
+    assert_eq!(
+        view::android_download_percent(downloading.notice.as_deref()),
+        Some(45)
+    );
+    assert!(view::android_update_text(&downloading).starts_with("downloading Android"));
+    assert_eq!(view::android_check_channel(&downloading), "latest");
+
+    let pinned = read(json!({
+        "version": "16.0.0-1", "android_major": 16, "channel": "16",
+        "supported_majors": [16, 17], "target_major": 16
+    }));
+    assert!(view::android_channel_text(&pinned).contains("16"));
+    assert_eq!(view::android_download_percent(None), None);
+    assert_eq!(
+        view::android_download_percent(Some("Android 17.0.0-2 is installed")),
+        None
+    );
+    assert!(view::android_update_text(&pinned).contains("No Android update"));
+    assert_eq!(view::android_check_channel(&pinned), "16");
+}
+
+#[test]
+fn fr14_check_now_chooses_the_version_already_followed_as_an_administrator() {
+    let fake = Fake::new(json!({}));
+    let elevated = Fake::new(json!({
+        "version": "17.0.0-1", "android_major": 17, "channel": "latest",
+        "supported_majors": [16, 17], "target_major": 17
+    }));
+    let c = client(&fake, &elevated);
+    c.use_android("latest", false).unwrap();
+    assert_eq!(
+        elevated.calls(),
+        vec![line(&["android", "use", "latest", "--json"])]
+    );
+}
+
+#[test]
+fn fr17_the_identity_page_opens_with_this_computer_read_only_and_copies_its_specifications() {
+    // The computer reports its maker and model as Android's defaults; the model chosen for
+    // Android is not the computer's.
+    let identity = dsa_settings_linux::model::Identity::read(&json!({
+        "chosen": { "model": "My tablet" },
+        "effective": {
+            "manufacturer": "LENOVO", "model": "My tablet", "model_name": "ThinkPad X1",
+            "device_name": "DESK-42", "soc_manufacturer": "Intel", "soc_model": ""
+        },
+        "defaults": { "manufacturer": "LENOVO", "model": "21KC" },
+        "sources": {
+            "manufacturer": "computer", "model": "computer", "model_name": "computer",
+            "device_name": "computer", "soc_manufacturer": "computer", "soc_model": "dsa"
+        }
+    }));
+    assert_eq!(identity.of_computer("device_name"), "DESK-42");
+    assert_eq!(identity.of_computer("model"), "21KC");
+    assert_eq!(identity.computer_make_model(), "LENOVO 21KC");
+    assert_eq!(identity.of_computer("soc_model"), "");
+    let text = identity.about_text(|key| key.to_string(), "?");
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), dsa_settings_linux::model::ABOUT_KEYS.len());
+    assert_eq!(lines[0], "device_name	DESK-42");
+    assert_eq!(lines[5], "soc_model	?");
+    // A default that is DSA's own is not this computer's.
+    let dsa = dsa_settings_linux::model::Identity::read(&json!({
+        "chosen": {}, "effective": { "manufacturer": "thisisthepy" },
+        "defaults": { "manufacturer": "thisisthepy" }, "sources": { "manufacturer": "dsa" }
+    }));
+    assert_eq!(dsa.of_computer("manufacturer"), "");
 }

@@ -78,6 +78,15 @@ jobs:
             --armor --export-secret-keys > .scratch/repo-secret.asc
           gpgconf --kill all
 
+      # The release build's dependencies come from this job's target folder of the last
+      # develop run.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: package-${{ matrix.arch }}
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
       - name: Build the host programs
         working-directory: dsa
         run: cargo build --release -p dsa-cli -p dsa-host-linux -p dsa-settings-linux
@@ -115,9 +124,15 @@ jobs:
           dsa/host/platform/linux/packaging/build-packages.sh \
             --bin-dir dsa/target/release --version "$version" --arch "${{ matrix.arch }}" \
             --placeholder-kernel --image-dir .scratch/stand-in-image --out .scratch/packages \
-            --repo-key .scratch/repo-key.asc --repo-url http://127.0.0.1:8080 \
+            --repo-key .scratch/repo-key.asc --repo-url http://127.0.0.1:8080 --channel stable \
             --vm-programs .scratch/vm-programs --licenses .scratch/licenses
           ls -l .scratch/packages
+          # A first installation writes the entry of the package's channel, and an upgrade
+          # keeps the channel the entry has: both channels' entries are in the scripts.
+          grep -q 'Suites: stable' .scratch/packages/deb/DEBIAN/postinst
+          grep -q 'Suites: prerelease' .scratch/packages/deb/DEBIAN/postinst
+          grep -q '/rpm-prerelease/' .scratch/packages/rpmbuild/SPECS/dsa.spec
+          grep -q '^channel=stable$' .scratch/packages/deb/DEBIAN/postinst
 
       - name: Check the package contents
         run: |
@@ -173,6 +188,7 @@ jobs:
           python3 -c "import json,sys; json.load(open('.scratch/packages/stage/etc/dsa/dsa-hostd.json'))"
 
       - name: Build the signed repositories
+        id: repos
         run: |
           DSA_REPO_GPG_KEY="$(cat .scratch/repo-secret.asc)" DSA_REPO_GPG_PASSPHRASE=throwaway \
             .github/scripts/release/build-linux-repo.sh \
@@ -184,6 +200,13 @@ jobs:
           ls .scratch/linux-repo/rpm/*/repodata/repomd.xml.asc
           gpgv --keyring "$PWD/.scratch/linux-repo/dsa-archive-keyring.gpg" \
             .scratch/linux-repo/apt/dists/stable/InRelease
+          # The pre-release channel carries the stable packages too.
+          test -f .scratch/linux-repo/apt/dists/prerelease/InRelease
+          gpgv --keyring "$PWD/.scratch/linux-repo/dsa-archive-keyring.gpg" \
+            .scratch/linux-repo/apt/dists/prerelease/InRelease
+          zgrep -q '^Package: desktop-subsystem-for-android$' \
+            .scratch/linux-repo/apt/dists/prerelease/main/binary-${{ matrix.arch }}/Packages.gz
+          ls .scratch/linux-repo/rpm-prerelease/*/repodata/repomd.xml.asc
 
       - name: Install the .deb, check it, and remove it
         run: |
@@ -198,9 +221,27 @@ jobs:
           ! grep -qi 'NO_PUBKEY\|not signed\|BADSIG\|127.0.0.1.*Err' .scratch/apt-update
           apt-cache policy desktop-subsystem-for-android | tee .scratch/apt-policy
           grep -q '127.0.0.1:8080/apt stable/main' .scratch/apt-policy
+          # Choosing pre-releases the way a user does, through the service, points the entry
+          # at the pre-release suite. Editing the entry by hand would not do: the service
+          # brings the entries back in line with its setting whenever it starts, and the
+          # package's scripts restart it on every upgrade.
+          if [ -d /run/systemd/system ] && systemctl is-enabled dsa-hostd.service >/dev/null 2>&1; then
+            for _ in $(seq 30); do
+              sudo dsa settings set prerelease-updates on && break
+              sleep 1
+            done
+            sudo dsa settings --json | grep -q '"prerelease_updates": *true'
+          else
+            sudo sed -i 's/^Suites: stable$/Suites: prerelease/' /etc/apt/sources.list.d/dsa.sources
+          fi
+          grep -qx 'Suites: prerelease' /etc/apt/sources.list.d/dsa.sources
+          sudo apt-get update 2>&1 | tee .scratch/apt-update-prerelease
+          ! grep -qi 'NO_PUBKEY\|not signed\|BADSIG\|127.0.0.1.*Err' .scratch/apt-update-prerelease
+          apt-cache policy desktop-subsystem-for-android | grep -q '127.0.0.1:8080/apt prerelease/main'
           # An upgrade keeps the entry; only a removal takes it away.
           sudo apt-get install -y --reinstall "./$(ls .scratch/packages/*.deb)"
           test -f /etc/apt/sources.list.d/dsa.sources
+          grep -qx 'Suites: prerelease' /etc/apt/sources.list.d/dsa.sources
           dsa --version || dsa --help || true
           test -x /usr/lib/dsa/bin/dsa-devices
           /usr/lib/dsa/bin/dsa-devices --version
@@ -233,31 +274,12 @@ jobs:
           path: .scratch/linux-repo
           include-hidden-files: true
 
-  rpm:
-    name: Install the .rpm (fedora, ${{ matrix.arch }})
-    needs: package
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-24.04, arch: amd64 }
-          - { os: ubuntu-24.04-arm, arch: arm64 }
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    container: fedora:41
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: linux-packages-${{ matrix.arch }}
-          path: packages
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: linux-repo-${{ matrix.arch }}
-          path: linux-repo
-
-      - name: Install the .rpm, check it, and remove it
+      # On Fedora, in a container on this runner: the packages and the repositories are
+      # already here, so no second runner downloads them again.
+      - name: Install the .rpm, check it, and remove it (fedora 41)
+        if: ${{ !cancelled() && steps.repos.outcome == 'success' }}
         run: |
+          cat > "$RUNNER_TEMP/rpm-check.sh" <<'SCRIPT'
           set -x
           dnf install -y python3
           (cd linux-repo && python3 -m http.server 8080 --bind 127.0.0.1 >/dev/null 2>&1 &)
@@ -275,6 +297,13 @@ jobs:
           grep -q 'digests signatures OK' rpm-check
           dnf -y reinstall --repo=dsa desktop-subsystem-for-android
           test -f /etc/yum.repos.d/dsa.repo
+          # Pointed at the pre-release repository, dnf reads it, and an upgrade keeps it. The
+          # container runs no service, so the package's scripts alone keep the channel here.
+          sed -i 's|/rpm/|/rpm-prerelease/|' /etc/yum.repos.d/dsa.repo
+          dnf -y makecache --repo=dsa
+          dnf -y --repo=dsa repoquery desktop-subsystem-for-android | grep -q desktop-subsystem-for-android
+          dnf -y reinstall --repo=dsa desktop-subsystem-for-android
+          grep -q '/rpm-prerelease/' /etc/yum.repos.d/dsa.repo
           /usr/lib/dsa/bin/dsa-devices --version
           /usr/lib/dsa/bin/crosvm version
           /usr/lib/dsa/bin/passt --version
@@ -285,4 +314,10 @@ jobs:
           test ! -e /usr/lib/dsa/bin/dsa
           test ! -e /etc/yum.repos.d/dsa.repo
           test ! -e /etc/pki/rpm-gpg/RPM-GPG-KEY-dsa
-
+          SCRIPT
+          # bash -e, the shell a run step in a fedora:41 job container has.
+          docker run --rm -w / \
+            -v "$PWD/.scratch/packages:/packages:ro" \
+            -v "$PWD/.scratch/linux-repo:/linux-repo:ro" \
+            -v "$RUNNER_TEMP/rpm-check.sh:/rpm-check.sh:ro" \
+            fedora:41 bash -e /rpm-check.sh

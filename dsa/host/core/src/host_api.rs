@@ -102,6 +102,7 @@ use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
     TaskRequest, TaskRequestError, TaskWatch,
 };
+use crate::update::alerts::{self as update_alerts, UpdateAlert};
 use crate::widgets::{
     self, MemoryWidgetPlacements, Placement, Widget, WidgetError, WidgetEvent, WidgetFrame,
     WidgetPlacements, WidgetProvider, WidgetSize,
@@ -140,6 +141,16 @@ pub trait UserAndroid: Send + Sync {
     /// News about the Android image for the user, if there is any.
     fn update_notice(&self) -> Option<String> {
         None
+    }
+    /// The update alerts `user`'s desktop has not shown yet: for the Android image and for
+    /// DSA, the latest news about each. The watch of `user`'s notifications carries them.
+    fn untold_update_alerts(&self, user: &str) -> Vec<UpdateAlert> {
+        let _ = user;
+        Vec::new()
+    }
+    /// `user`'s desktop was given `alert` to show, so it is not given it again.
+    fn update_alert_told(&self, user: &str, alert: &UpdateAlert) {
+        let _ = (user, alert);
     }
     /// The runtime ID of the VM (such as a GUID on Windows), if running.
     fn vm_id(&self) -> Option<String> {
@@ -1370,6 +1381,9 @@ pub struct ServiceFacts {
     pub log_dir: Option<String>,
     /// Whether this installation can update DSA itself.
     pub program_updates_available: bool,
+    /// Whether this installation follows a release channel: it updates DSA itself, or the
+    /// package repository entries its package registered follow the channel.
+    pub update_channel_available: bool,
     /// Whether this installation can download new Android images.
     pub image_updates_available: bool,
     /// The version of the Android image the next start boots, if the service knows it.
@@ -2722,15 +2736,16 @@ impl HostApiService {
     fn watch_notifications(&self, mut connection: Box<dyn Connection>, peer: &Peer, id: u64) {
         let watched = match self.androids.android(&peer.user) {
             Err(why) => Err(error(ErrorCode::Unavailable, why)),
-            Ok(android) => android.watch_notifications().ok_or_else(|| {
-                error(
+            Ok(android) => match android.watch_notifications() {
+                Some(watch) => Ok((android, watch)),
+                None => Err(error(
                     ErrorCode::Unavailable,
                     "this Android does not show its notifications on the host".into(),
-                )
-            }),
+                )),
+            },
         };
-        let watch = match watched {
-            Ok(watch) => watch,
+        let (android, watch) = match watched {
+            Ok(watched) => watched,
             Err(body) => {
                 let _ = send(
                     &mut *connection,
@@ -2750,6 +2765,15 @@ impl HostApiService {
             return;
         }
         loop {
+            // The news about updates this user's desktop has not shown yet: raised while it
+            // was not watching, or just now.
+            for alert in android.untold_update_alerts(&peer.user) {
+                let posted = NotificationEvent::Posted(alert.notification());
+                if send(&mut *connection, notification_to_wire(posted)).is_err() {
+                    return;
+                }
+                android.update_alert_told(&peer.user, &alert);
+            }
             loop {
                 match watch.try_recv() {
                     Ok(event) => {
@@ -3414,6 +3438,11 @@ impl HostApiService {
                 )
             }
         };
+        // An update alert is the host's alone: its desktop opens the update settings on a
+        // click, and Android has nothing to open or dismiss.
+        if update_alerts::is_update_key(action.key()) {
+            return response::Body::Done(types::Done {});
+        }
         let android = match self.androids.android(&peer.user) {
             Ok(android) => android,
             Err(why) => return error(ErrorCode::Unavailable, why),
@@ -4627,6 +4656,7 @@ impl HostApiService {
             links_in_android: wanted.links_in_android,
             memory_limit_mb: wanted.memory_limit_mb,
             program_updates: wanted.program_updates,
+            prerelease_updates: wanted.prerelease_updates,
             image_updates: wanted.image_updates,
             input_trace: wanted.input_trace,
             resize_trace: wanted.resize_trace,
@@ -4656,6 +4686,10 @@ impl HostApiService {
             (
                 "program updates",
                 wanted.program_updates != machine.program_updates,
+            ),
+            (
+                "pre-release updates",
+                wanted.prerelease_updates != machine.prerelease_updates,
             ),
             (
                 "image updates",
@@ -4703,15 +4737,18 @@ impl HostApiService {
                 }
                 eprintln!(
                     "local API: {} changed the settings: render GPU {}, freeze {}, clipboard \
-                     {}, links in Android {}, program updates {}, image updates {}, input \
-                     trace {}, resize trace {}, developer mode {} (adb port {}, auto-connect \
-                     {}), file sharing {} ({}), advanced networking {}",
+                     {}, links in Android {}, program updates {} ({} channel), image updates \
+                     {}, input trace {}, resize trace {}, developer mode {} (adb port {}, \
+                     auto-connect {}), file sharing {} ({}), advanced networking {}",
                     peer.user,
                     settings.render_gpu,
                     on_off(settings.freeze),
                     on_off(settings.clipboard),
                     on_off(settings.links_in_android),
                     on_off(settings.program_updates),
+                    crate::update::program::ReleaseChannel::from_prereleases(
+                        settings.prerelease_updates
+                    ),
                     on_off(settings.image_updates),
                     on_off(settings.input_trace),
                     on_off(settings.resize_trace),
@@ -4758,6 +4795,7 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         links_in_android: settings.links_in_android,
         memory_limit_mb: settings.memory_limit_mb,
         program_updates: settings.program_updates,
+        prerelease_updates: settings.prerelease_updates,
         image_updates: settings.image_updates,
         clipboard: settings.clipboard,
         stop_without_asking: settings.stop_without_asking,
@@ -4773,6 +4811,7 @@ fn settings_to_wire(settings: &Settings, facts: &ServiceFacts) -> types::Setting
         advanced_networking: settings.advanced_networking,
         network: None,
         program_updates_available: facts.program_updates_available,
+        update_channel_available: facts.update_channel_available,
         image_updates_available: facts.image_updates_available,
         version: facts.version.clone(),
         log_dir: facts.log_dir.clone().unwrap_or_default(),
@@ -4790,6 +4829,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             clipboard: settings.clipboard,
             stop_without_asking: settings.stop_without_asking,
             program_updates: settings.program_updates,
+            prerelease_updates: settings.prerelease_updates,
             image_updates: settings.image_updates,
             input_trace: settings.input_trace,
             resize_trace: settings.resize_trace,
@@ -4807,6 +4847,7 @@ fn settings_from_wire(settings: types::Settings) -> SettingsReport {
             version: settings.version,
             log_dir: Some(settings.log_dir).filter(|dir| !dir.is_empty()),
             program_updates_available: settings.program_updates_available,
+            update_channel_available: settings.update_channel_available,
             image_updates_available: settings.image_updates_available,
             android_version: Some(settings.android_version).filter(|v| !v.is_empty()),
         },

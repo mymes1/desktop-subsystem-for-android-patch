@@ -51,6 +51,7 @@ public  final class Envelope extends
     CLOCK_ANSWER(29),
     SCREEN_STATE(40),
     POWER_STATE(41),
+    DISPLAY_REFRESH(407),
     POWER_HINT(110),
     DEVELOPER_MODE(140),
     ARM_TRANSLATION_INSTALL(150),
@@ -212,6 +213,7 @@ public  final class Envelope extends
         case 29: return CLOCK_ANSWER;
         case 40: return SCREEN_STATE;
         case 41: return POWER_STATE;
+        case 407: return DISPLAY_REFRESH;
         case 110: return POWER_HINT;
         case 140: return DEVELOPER_MODE;
         case 150: return ARM_TRANSLATION_INSTALL;
@@ -1893,6 +1895,56 @@ public  final class Envelope extends
    */
   private void clearPowerState() {
     if (bodyCase_ == 41) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int DISPLAY_REFRESH_FIELD_NUMBER = 407;
+  /**
+   * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+   */
+  @java.lang.Override
+  public boolean hasDisplayRefresh() {
+    return bodyCase_ == 407;
+  }
+  /**
+   * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+   */
+  @java.lang.Override
+  public io.github.thisisthepy.dsa.control.v1.DisplayRefresh getDisplayRefresh() {
+    if (bodyCase_ == 407) {
+       return (io.github.thisisthepy.dsa.control.v1.DisplayRefresh) body_;
+    }
+    return io.github.thisisthepy.dsa.control.v1.DisplayRefresh.getDefaultInstance();
+  }
+  /**
+   * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+   */
+  private void setDisplayRefresh(io.github.thisisthepy.dsa.control.v1.DisplayRefresh value) {
+    value.getClass();
+  body_ = value;
+    bodyCase_ = 407;
+  }
+  /**
+   * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+   */
+  private void mergeDisplayRefresh(io.github.thisisthepy.dsa.control.v1.DisplayRefresh value) {
+    value.getClass();
+  if (bodyCase_ == 407 &&
+        body_ != io.github.thisisthepy.dsa.control.v1.DisplayRefresh.getDefaultInstance()) {
+      body_ = io.github.thisisthepy.dsa.control.v1.DisplayRefresh.newBuilder((io.github.thisisthepy.dsa.control.v1.DisplayRefresh) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 407;
+  }
+  /**
+   * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+   */
+  private void clearDisplayRefresh() {
+    if (bodyCase_ == 407) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -9248,6 +9300,54 @@ public  final class Envelope extends
     }
 
     /**
+     * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+     */
+    @java.lang.Override
+    public boolean hasDisplayRefresh() {
+      return instance.hasDisplayRefresh();
+    }
+    /**
+     * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+     */
+    @java.lang.Override
+    public io.github.thisisthepy.dsa.control.v1.DisplayRefresh getDisplayRefresh() {
+      return instance.getDisplayRefresh();
+    }
+    /**
+     * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+     */
+    public Builder setDisplayRefresh(io.github.thisisthepy.dsa.control.v1.DisplayRefresh value) {
+      copyOnWrite();
+      instance.setDisplayRefresh(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+     */
+    public Builder setDisplayRefresh(
+        io.github.thisisthepy.dsa.control.v1.DisplayRefresh.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDisplayRefresh(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+     */
+    public Builder mergeDisplayRefresh(io.github.thisisthepy.dsa.control.v1.DisplayRefresh value) {
+      copyOnWrite();
+      instance.mergeDisplayRefresh(value);
+      return this;
+    }
+    /**
+     * <code>.dsa.control.v1.DisplayRefresh display_refresh = 407;</code>
+     */
+    public Builder clearDisplayRefresh() {
+      copyOnWrite();
+      instance.clearDisplayRefresh();
+      return this;
+    }
+
+    /**
      * <code>.dsa.control.v1.PowerHint power_hint = 110;</code>
      */
     @java.lang.Override
@@ -14931,9 +15031,10 @@ public  final class Envelope extends
             io.github.thisisthepy.dsa.control.v1.GappsState.class,
             io.github.thisisthepy.dsa.control.v1.GoogleDeviceIdQuery.class,
             io.github.thisisthepy.dsa.control.v1.GoogleDeviceId.class,
+            io.github.thisisthepy.dsa.control.v1.DisplayRefresh.class,
           };
           java.lang.String info =
-              "\u0000\u0092\u0001\u0000\u0001\u0196\u0092\u0000\u0000\u0000\u0001<\u0000\u0002<" +
+              "\u0000\u0093\u0001\u0000\u0001\u0197\u0093\u0000\u0000\u0000\u0001<\u0000\u0002<" +
               "\u0000\u0003<\u0000\u0004<\u0000\u0005<\u0000\u0006<\u0000\u0007<\u0000\b<\u0000" +
               "\t<\u0000\n<\u0000\u000b<\u0000\f<\u0000\r<\u0000\u000f<\u0000\u0010<\u0000\u0011" +
               "<\u0000\u0012<\u0000\u0013<\u0000\u0014<\u0000\u0015<\u0000\u0016<\u0000\u0017<\u0000" +
@@ -14952,7 +15053,8 @@ public  final class Envelope extends
               "<\u0000\u010b<\u0000\u0122<\u0000\u0123<\u0000\u0154<\u0000\u0155<\u0000\u0156<\u0000" +
               "\u0157<\u0000\u0158<\u0000\u015e<\u0000\u015f<\u0000\u0160<\u0000\u0161<\u0000\u0162" +
               "<\u0000\u0179<\u0000\u017c<\u0000\u017d<\u0000\u017e<\u0000\u017f<\u0000\u0190<\u0000" +
-              "\u0191<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000\u0195<\u0000\u0196<\u0000";
+              "\u0191<\u0000\u0192<\u0000\u0193<\u0000\u0194<\u0000\u0195<\u0000\u0196<\u0000\u0197" +
+              "<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       // fall through

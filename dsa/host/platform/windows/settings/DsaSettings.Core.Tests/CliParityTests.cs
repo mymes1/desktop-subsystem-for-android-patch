@@ -157,4 +157,32 @@ public class CliParityTests
         Assert.False(vm.CanFreeze);
         Assert.Contains("freeze --json", cli.Calls);
     }
+    [Fact]
+    public async Task Fr15_the_release_channel_is_chosen_through_the_service_by_an_administrator()
+    {
+        var channels = Settings.Replace("\"program_updates_available\":true",
+            "\"program_updates_available\":true,\"update_channel_available\":true,\"prerelease_updates\":true");
+        var cli = new FakeCli()
+            .Answer("settings --json", channels)
+            .Fail("gpus --json", "dsa: no GPU list")
+            .Answer("settings set prerelease-updates off --json",
+                channels.Replace("\"prerelease_updates\":true", "\"prerelease_updates\":false"));
+        var vm = new SettingsViewModel(new DsaService(cli), new KeyText());
+        await vm.LoadAsync();
+        Assert.True(vm.PrereleaseUpdates, "a pre-release installation starts on the pre-release channel");
+        Assert.True(vm.UpdateChannelAvailable);
+        Assert.False(vm.CanChangePrereleaseUpdates);
+        Assert.True(vm.PrereleaseUpdatesNeedAdministrator);
+        vm.IsAdministrator = true;
+        Assert.True(vm.CanChangePrereleaseUpdates);
+        await vm.SetPrereleaseUpdatesAsync(false);
+        Assert.False(vm.PrereleaseUpdates);
+        Assert.Contains("settings set prerelease-updates off --json", cli.Calls);
+
+        // A service from before the channels says nothing: no channel to choose.
+        var older = new SettingsViewModel(new DsaService(Cli()), new KeyText()) { IsAdministrator = true };
+        await older.LoadAsync();
+        Assert.False(older.UpdateChannelAvailable);
+        Assert.False(older.CanChangePrereleaseUpdates);
+    }
 }

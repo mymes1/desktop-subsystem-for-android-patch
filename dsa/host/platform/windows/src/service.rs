@@ -42,7 +42,7 @@ use dsa_host_core::update::program_service::{
     ProgramStatus, ProgramUpdates, Timing, WithProgramStatus,
 };
 use dsa_host_core::update::service::{
-    check_reporting, next_image_check, CheckNow, Download, StoreVersions, UpdateNotices,
+    check_alerting, next_image_check, CheckNow, Download, StoreVersions, UpdateNotices,
     UpdatingAndroid,
 };
 use dsa_host_core::update::store::{ImageStore, Recovery};
@@ -483,6 +483,25 @@ pub fn create_user_android(
     if let Some(power) = power {
         power.attach(&session);
     }
+    // The guest's display refreshes as fast as the user's fastest monitor, which their session
+    // records; energy saver, which comes with the power, caps it at 60 Hz.
+    let (watched, owner) = (Arc::downgrade(&session), sid.to_string());
+    if let Err(error) = std::thread::Builder::new()
+        .name("dsa-monitor-refresh".into())
+        .spawn(move || {
+            dsa_host_core::guest_refresh::follow_monitors(
+                watched,
+                || {
+                    local_app_data(&owner)
+                        .ok()
+                        .and_then(|dir| crate::monitors::recorded_refresh(&dir))
+                },
+                dsa_host_core::guest_refresh::MONITOR_POLL,
+            )
+        })
+    {
+        eprintln!("{sid}: display: cannot follow the monitors' refresh rate: {error}");
+    }
     // The guest's power HAL: its hints set how hard Windows runs the guest's processors.
     let hints = session.watch_power_hints();
     let (watched, user_name) = (Arc::downgrade(&session), sid.to_string());
@@ -630,11 +649,12 @@ fn check_for_updates(
             }
             updates.notices.set(notice);
         };
-        match check_reporting(
+        match check_alerting(
             &updates.store,
             &WinHttpFetch::default(),
             &settings.list_url,
             &keys,
+            &updates.notices,
             &mut announce,
         ) {
             Ok(Some(notice)) => {
@@ -740,16 +760,32 @@ fn current_image_build(config: &HostConfig, images: Option<&ImageStore>) -> Opti
 }
 
 /// The settings in the service's own folder. A user who has never saved settings starts
-/// from the render GPU in their own `compositor.json`, if they chose one there.
-fn settings_store(config: &HostConfig) -> Arc<dyn SettingsStore> {
-    let dir = config.settings_dir();
-    Arc::new(
-        FileSettings::new(dir).with_previous_render_gpu(Box::new(|sid: &str| {
+/// from the render GPU in their own `compositor.json`, if they chose one there. A computer
+/// whose settings record no release channel yet is on the channel of the installer that put
+/// DSA here.
+fn file_settings(config: &HostConfig) -> FileSettings {
+    FileSettings::new(config.settings_dir())
+        .with_previous_render_gpu(Box::new(|sid: &str| {
             crate::profile::local_app_data(sid)
                 .ok()
                 .and_then(|dir| previous_render_gpu(&dir))
-        })),
-    )
+        }))
+        .with_first_channel(config.installer_channel(crate::VERSION))
+}
+
+fn settings_store(config: &HostConfig) -> Arc<dyn SettingsStore> {
+    Arc::new(file_settings(config))
+}
+
+/// [`settings_store`], with the release channel recorded first when the settings record none
+/// yet: the installer's, so that every later upgrade keeps it.
+fn service_settings_store(config: &HostConfig, build: &str) -> Arc<dyn SettingsStore> {
+    let store = file_settings(config);
+    match store.keep_first_channel() {
+        Ok(channel) => eprintln!("{build}: DSA follows the {channel} release channel"),
+        Err(why) => eprintln!("{build}: recording the release channel failed: {why}"),
+    }
+    Arc::new(store)
 }
 
 /// Logs the memory of every running user's Android every few minutes until `stop` is set:
@@ -809,7 +845,7 @@ where
     }
     prepare_machine_tmp(&config, build);
     let grace = Duration::from_secs(config.stop_timeout_secs + 15);
-    let store = settings_store(&config);
+    let store = service_settings_store(&config, build);
     let updates = match open_updates(&config, build) {
         Ok(updates) => updates,
         Err(error) => {
@@ -846,6 +882,7 @@ where
             .log_dir()
             .map(|dir| dir.to_string_lossy().into_owned()),
         program_updates_available: program.is_some() && config.program_updates_available(),
+        update_channel_available: program.is_some() && config.program_updates_available(),
         image_updates_available,
         android_version: config
             .bundled_image
@@ -1055,6 +1092,8 @@ where
         );
         let switch = Arc::clone(&store);
         updates.follow_switch(Box::new(move || switch.machine().program_updates));
+        let channel = Arc::clone(&store);
+        updates.follow_channel(Box::new(move || channel.machine().release_channel()));
         service = service.with_program_updates(updates.clone());
         let stop = Arc::clone(&stop);
         if let Err(error) = thread::Builder::new()

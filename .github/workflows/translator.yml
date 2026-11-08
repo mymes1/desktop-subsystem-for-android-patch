@@ -62,6 +62,10 @@ jobs:
     needs: versions
     runs-on: ubuntu-24.04
     timeout-minutes: 355
+    permissions:
+      contents: read
+      # Deletes the compiler caches the new one replaces.
+      actions: write
     strategy:
       fail-fast: false
       matrix:
@@ -144,6 +148,16 @@ jobs:
         with:
           path: /tmp/dsa-ccache
           key: translator-ccache-${{ matrix.android }}-${{ hashFiles('dsa/guest/arm-translation/digitalis-lock.json') }}-${{ github.run_id }}
+
+      # The entry just saved holds the one it was restored from and what this run added, so
+      # the older entries of this version and architecture are never restored again. Left in
+      # place they push the repository past its cache limit, and GitHub then evicts the
+      # caches read least recently, these among them.
+      - name: Delete the compiler caches it replaces
+        if: always() && steps.pins.outcome == 'success' && github.ref == 'refs/heads/develop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/cache/prune.sh superseded "translator-ccache-${{ matrix.android }}-" "translator-ccache-${{ matrix.android }}-${{ hashFiles('dsa/guest/arm-translation/digitalis-lock.json') }}-${{ github.run_id }}"
 
       - name: Make the package
         id: package

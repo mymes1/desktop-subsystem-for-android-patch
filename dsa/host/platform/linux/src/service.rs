@@ -34,7 +34,7 @@ use dsa_host_core::power::PowerHub;
 use dsa_host_core::session::{Session, SessionState};
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{
-    check_reporting, next_image_check, CheckNow, Download, StoreVersions, UpdateNotices,
+    check_alerting, next_image_check, CheckNow, Download, StoreVersions, UpdateNotices,
     UpdatingAndroid,
 };
 use dsa_host_core::update::store::{ImageStore, Recovery};
@@ -151,6 +151,37 @@ impl UserFiles {
 
 fn settings_store(config: &HostConfig) -> Arc<dyn SettingsStore> {
     Arc::new(FileSettings::new(config.settings_dir()))
+}
+
+/// The service's settings: a computer whose settings record no release channel yet starts on
+/// the channel of the repository entry the package wrote (else the one this version was
+/// published on), and records it now so upgrades keep it; from then on the entries follow
+/// the setting.
+fn service_settings_store(config: &HostConfig, build: &str) -> Arc<dyn SettingsStore> {
+    use crate::package_updates::{ChannelFollowingSettings, RepositoryEntries};
+    use dsa_host_core::update::program::ReleaseChannel;
+    let entries = RepositoryEntries::system();
+    let first = entries
+        .channel()
+        .unwrap_or_else(|| ReleaseChannel::of_version(crate::VERSION));
+    let files = FileSettings::new(config.settings_dir()).with_first_channel(first);
+    match files.keep_first_channel() {
+        Ok(channel) => eprintln!("{build}: DSA follows the {channel} release channel"),
+        Err(why) => eprintln!("{build}: recording the release channel failed: {why}"),
+    }
+    let store = ChannelFollowingSettings::new(Arc::new(files), entries);
+    match store.bring_entries_in_line() {
+        Ok(changed) => {
+            for path in changed {
+                eprintln!(
+                    "{build}: {} now follows the chosen release channel",
+                    path.display()
+                );
+            }
+        }
+        Err(why) => eprintln!("{build}: {why}"),
+    }
+    Arc::new(store)
 }
 
 /// The image folder the next boot starts from, and its version.
@@ -447,6 +478,25 @@ pub fn create_user_android(
     if let Some(power) = power {
         power.attach(&session);
     }
+    // The guest's display refreshes as fast as the user's fastest monitor, which their window
+    // manager records; the power saver profile, which comes with the power, caps it at 60 Hz.
+    let (watched, refresh_user) = (Arc::downgrade(&session), user.to_string());
+    if let Err(error) = thread::Builder::new()
+        .name("dsa-monitor-refresh".into())
+        .spawn(move || {
+            dsa_host_core::guest_refresh::follow_monitors(
+                watched,
+                || {
+                    UserFiles::of(&host_paths(), &refresh_user)
+                        .ok()
+                        .and_then(|files| crate::monitor_refresh::read_record(&files.run_dir))
+                },
+                dsa_host_core::guest_refresh::MONITOR_POLL,
+            )
+        })
+    {
+        eprintln!("{user}: display: cannot follow the monitors' refresh rate: {error}");
+    }
     // The guest's power HAL: its hints set how hard Linux runs the guest's processors.
     let hints = session.watch_power_hints();
     let (watched, hint_user) = (Arc::downgrade(&session), user.to_string());
@@ -567,11 +617,12 @@ fn check_for_updates(
             }
             updates.notices.set(notice);
         };
-        match check_reporting(
+        match check_alerting(
             &updates.store,
             &fetch,
             &settings.list_url,
             &keys,
+            &updates.notices,
             &mut announce,
         ) {
             Ok(Some(notice)) => {
@@ -668,7 +719,7 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
         );
     }
     let grace = Duration::from_secs(config.stop_timeout_secs + 15);
-    let store = settings_store(&config);
+    let store = service_settings_store(&config, build);
     let updates = match open_updates(&config, build) {
         Ok(updates) => updates,
         Err(error) => {
@@ -696,6 +747,8 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
         log_dir: None,
         // The system's package manager updates DSA itself; `dsa update` says so.
         program_updates_available: false,
+        // The release channel chooses which of DSA's package repositories the entries point at.
+        update_channel_available: true,
         image_updates_available: updates.is_some() && config.update.is_some(),
         android_version: config.first_image.as_ref().map(|i| i.version.clone()),
     };
@@ -844,12 +897,16 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
     if let Some(source) = android_version {
         service = service.with_android_version(source);
     }
-    // Google Play, for a user who asks: downloaded from LiteGapps and made ready in the
-    // service's own folder.
-    service = service.with_gapps(dsa_host_core::gapps::Source::new(
+    // Google Play, for a user who asks: downloaded from LiteGapps, or the mirror the
+    // configuration names, and made ready in the service's own folder.
+    let mut gapps = dsa_host_core::gapps::Source::new(
         Arc::new(crate::fetch::CurlFetch),
         config.settings_dir().with_file_name("gapps"),
-    ));
+    );
+    if let Some(project) = config.gapps_project.as_deref().filter(|p| !p.is_empty()) {
+        gapps = gapps.with_project(project);
+    }
+    service = service.with_gapps(gapps);
     if let Some(updates) = &updates {
         service = service.with_android_versions(Arc::new(StoreVersions {
             store: Arc::clone(&updates.store),

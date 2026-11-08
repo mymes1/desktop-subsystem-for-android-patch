@@ -280,6 +280,9 @@ class WidgetManager(
     /** Why the last start was refused, so each new reason is logged once. */
     private var refusal: String? = null
 
+    /** What the host asked before the widget host started, run in order once it has. */
+    private val held = mutableListOf<() -> Unit>()
+
     /**
      * Starts drawing the placed widgets; [post] runs work on the agent's thread. The agent
      * starts before the user's storage is unlocked, and Android keeps no widgets until then,
@@ -336,6 +339,29 @@ class WidgetManager(
         if ((waiting || missedConnection) && isConnected()) announce()
         missedConnection = false
         waiting = false
+        val asked = held.toList()
+        held.clear()
+        for (work in asked) work()
+    }
+
+    /**
+     * Runs [work] now when the widget host has started, or once it has. Android answers no
+     * widget call until the user's storage is unlocked ("User 0 must be unlocked for widgets
+     * to be available"), and the host can ask before then: Android reports its boot finished
+     * when it starts unlocking the user, not when the unlock is done. Answered at once, a
+     * request to place the clock was refused with "no app in Android offers the widget".
+     * The host waits for each answer with a timeout of its own, so a request held here is
+     * answered or given up, never lost.
+     */
+    private fun whenStarted(work: () -> Unit) {
+        if (started) {
+            work()
+        } else if (held.size >= MAX_HELD) {
+            log.warn("${held.size} widget requests wait for the user to be unlocked; answering this one now")
+            work()
+        } else {
+            held += work
+        }
     }
 
     private fun placed(): List<Int> = try {
@@ -437,10 +463,12 @@ class WidgetManager(
     /** Acts on the frame if it is about widgets. False for any other frame. */
     fun handle(envelope: Envelope): Boolean {
         when (envelope.bodyCase) {
-            Envelope.BodyCase.LIST_WIDGET_PROVIDERS -> listProviders(envelope.listWidgetProviders.requestId)
-            Envelope.BodyCase.ADD_WIDGET -> add(envelope.addWidget.requestId, envelope.addWidget.provider)
-            Envelope.BodyCase.REMOVE_WIDGET -> remove(envelope.removeWidget.widgetId)
-            Envelope.BodyCase.RESIZE_WIDGET -> resize(envelope.resizeWidget)
+            Envelope.BodyCase.LIST_WIDGET_PROVIDERS ->
+                whenStarted { listProviders(envelope.listWidgetProviders.requestId) }
+            Envelope.BodyCase.ADD_WIDGET ->
+                whenStarted { add(envelope.addWidget.requestId, envelope.addWidget.provider) }
+            Envelope.BodyCase.REMOVE_WIDGET -> whenStarted { remove(envelope.removeWidget.widgetId) }
+            Envelope.BodyCase.RESIZE_WIDGET -> whenStarted { resize(envelope.resizeWidget) }
             Envelope.BodyCase.WIDGET_POINTER -> pointer(envelope.widgetPointer)
             else -> return false
         }
@@ -638,5 +666,8 @@ class WidgetManager(
         const val MAX_PROVIDERS = 512
         const val MAX_WIDGETS = 64
         const val MAX_SIDE = 4096
+
+        /** How many requests wait for the widget host to start, at most. */
+        const val MAX_HELD = 64
     }
 }

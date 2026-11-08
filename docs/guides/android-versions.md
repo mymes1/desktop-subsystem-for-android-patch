@@ -6,8 +6,9 @@ one of them, so you can choose.
 
 ## See which version runs
 
-Open the **Android** page of DSA Settings. **Running now** shows the version, its build and
-its security patch level. Or run:
+Open the **Updates** page of DSA Settings. Under **Android** it shows the version, its build,
+its security patch level, the version it follows and where its update stands, with the
+download's progress. **Check now** asks the service to look for an update at once. Or run:
 
 ```
 dsa android version   # the version that runs, and the ones you can choose
@@ -18,7 +19,7 @@ dsa android version   # the version that runs, and the ones you can choose
 Every user of the PC runs the same Android version, so only an administrator can change
 it.
 
-1. Open the **Android** page of DSA Settings.
+1. Open the **Updates** page of DSA Settings.
 2. Under **Version to use**, pick a version, or **Always the newest**.
 3. Select **Change**, and approve the administrator prompt.
 

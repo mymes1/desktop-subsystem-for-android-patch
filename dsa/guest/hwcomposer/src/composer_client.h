@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -14,6 +15,7 @@
 #include <android/binder_ibinder_platform.h>
 
 #include "display.h"
+#include "refresh_rates.h"
 #include "task_composer.h"
 #include "vsync_thread.h"
 
@@ -128,10 +130,15 @@ class ComposerClient : public composer3::BnComposerClient {
                                std::vector<composer3::CommandResultPayload>* results);
     void present(int64_t displayId, std::vector<composer3::CommandResultPayload>* results);
     std::shared_ptr<composer3::IComposerCallback> callback();
+    // Makes `config` (a valid one) the display's, and its rate the vsync clock's.
+    void applyConfig(int32_t config);
 
     std::shared_ptr<TaskComposer> mTasks;
     std::mutex mMutex;
     Display mDisplay;
+    // The configuration, so the refresh rate, SurfaceFlinger last set. Read by the vsync
+    // thread too.
+    std::atomic<int32_t> mActiveConfig;
     // Read by the vsync thread too, which must not wait for a frame to be composed.
     std::mutex mCallbackMutex;
     std::shared_ptr<composer3::IComposerCallback> mCallback;

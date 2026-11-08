@@ -19,6 +19,8 @@ public partial class MainWindow : FluentWindow
         ["background"] = typeof(BackgroundPage),
         ["display"] = typeof(DisplayPage),
         ["updates"] = typeof(UpdatesPage),
+        // The Android page is part of Updates now; its old name still opens it.
+        ["android"] = typeof(UpdatesPage),
         ["network"] = typeof(NetworkPage),
         ["advanced"] = typeof(AdvancedPage),
         ["device"] = typeof(DeviceIdentityPage),

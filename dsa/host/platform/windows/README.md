@@ -148,15 +148,25 @@ up to date, from a second signed list that the same `trusted_keys` sign:
 ```json
 "update": {
   "list_url": "https://.../images.json",
-  "program_list_url": "https://.../program.json",
+  "program_list_url": "https://.../program-stable.json",
+  "prerelease_program_list_url": "https://.../program-prerelease.json",
+  "channel": "prerelease",
   "program_dir": "C:\\ProgramData\\DSA\\updates",
   "trusted_keys": ["<public key from dsa-release keygen>"]
 }
 ```
 
 - A minute after it starts and then every `check_interval_hours`, it reads the program
-  list and its signature (`program.json.sig`). The list names the newest version and its
+  list and its signature (`<list>.sig`). The list names the newest version and its
   `setup.exe`, with the file's size and SHA-256 (`dsa-release program` writes it).
+- There is one list per release channel. `program_list_url` is the stable list and
+  `prerelease_program_list_url` the pre-release list. A computer on the stable channel reads
+  the stable list only; one that takes pre-releases reads both and installs the higher
+  version. The channel is the machine setting `prerelease-updates` (`dsa settings`, or
+  Updates in DSA Settings, as an administrator). A computer starts on `channel`, the
+  channel its installer was published on (below 1.0 every release is a pre-release), and
+  upgrades keep the channel it has. Moving back to the stable channel never installs a
+  lower version: DSA waits until the stable list offers a newer one.
 - Only a newer version is installed; versions compare as numbers (0.1.10 is newer than
   0.1.9). The setup file is downloaded into `program_dir`, a folder only SYSTEM and
   Administrators can write to, and checked against the list when it arrives and again

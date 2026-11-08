@@ -13,11 +13,15 @@
 //! says a widget failed to draw or had no listener.
 #![cfg(target_os = "linux")]
 
+mod boot_check;
+
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+use boot_check::{lock, Process as Service, Watchdog};
 
 use dsa_host_core::apk_info::inflate::inflate;
 use dsa_host_core::guest_log::LogFilter;
@@ -34,6 +38,10 @@ const BUDGET: Duration = Duration::from_secs(570);
 const FIRST_FRAME: Duration = Duration::from_secs(60);
 /// A clock that shows minutes draws a new picture within this long.
 const NEXT_FRAME: Duration = Duration::from_secs(80);
+/// How long past its budget the test may run before it stops everything it started and
+/// ends: well inside the job step's 12 minutes, so the step never kills it with its VM still
+/// running.
+const OVERRUN: Duration = Duration::from_secs(45);
 
 fn scratch() -> PathBuf {
     // Short: the service's socket goes inside, and a socket's path has at most 107 bytes.
@@ -43,60 +51,20 @@ fn scratch() -> PathBuf {
     dir
 }
 
-/// The service, stopped (SIGTERM, then SIGKILL) when dropped, so a failing test leaves no VM.
-struct Service {
-    child: Child,
-    log: PathBuf,
-}
-
-impl Service {
-    fn start(dir: &Path, config: &Path) -> Service {
-        let log = dir.join("hostd.log");
-        let out = std::fs::File::create(&log).unwrap();
-        let child = Command::new(env!("CARGO_BIN_EXE_dsa-linux-hostd"))
-            .arg("--config")
-            .arg(config)
-            .stdin(Stdio::null())
-            .stdout(out.try_clone().unwrap())
-            .stderr(out)
-            .spawn()
-            .expect("starting dsa-linux-hostd");
-        Service { child, log }
-    }
-
-    fn log(&self) -> String {
-        std::fs::read_to_string(&self.log).unwrap_or_default()
-    }
-}
-
-impl Drop for Service {
-    fn drop(&mut self) {
-        // SAFETY: kill with a child's own process ID and a constant signal.
-        unsafe {
-            libc::kill(self.child.id() as libc::pid_t, libc::SIGTERM);
-        }
-        let deadline = Instant::now() + Duration::from_secs(60);
-        while Instant::now() < deadline {
-            if let Ok(Some(_)) = self.child.try_wait() {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(250));
-        }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
 /// Fails the test with what the service printed and the guest log's last lines.
-fn fail(why: String, service: &Service, log: &[String]) -> ! {
-    let _ = std::fs::write(service.log.with_file_name("guest.log"), log.join("\n"));
-    let tail = &log[log.len().saturating_sub(200)..];
+fn fail(why: String, service: &Service, log: &Mutex<Vec<String>>) -> ! {
+    // The lock is let go before the panic, so the thread that reads the guest log is not
+    // left with a poisoned lock and does not panic on top of this failure.
+    let tail = {
+        let log = lock(log);
+        let _ = std::fs::write(service.log.with_file_name("guest.log"), log.join("\n"));
+        log[log.len().saturating_sub(200)..].join("\n")
+    };
     let path = service.log.with_file_name("compositor.log");
     let compositor = std::fs::read_to_string(path).unwrap_or_default();
     panic!(
-        "{why}\n--- the service's output ---\n{}\n--- the window manager's output ---\n{compositor}\n--- the guest log's last lines ---\n{}",
+        "{why}\n--- the service's output ---\n{}\n--- the window manager's output ---\n{compositor}\n--- the guest log's last lines ---\n{tail}",
         service.log(),
-        tail.join("\n")
     )
 }
 
@@ -342,6 +310,7 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
     let kernel = std::env::var_os("DSA_WIDGET_TEST_KERNEL").map(PathBuf::from);
     let started = Instant::now();
     let deadline = started + BUDGET;
+    let _watchdog = Watchdog::start("the widget boot check", BUDGET + OVERRUN);
     let dir = scratch();
     let socket = dir.join("host.sock");
     let config = dir.join("dsa-hostd.json");
@@ -357,35 +326,27 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
         "data_disk_size_gb": 8,
     });
     std::fs::write(&config, settings.to_string()).unwrap();
-    let service = Service::start(&dir, &config);
+    let service = Service::spawn(
+        Command::new(env!("CARGO_BIN_EXE_dsa-linux-hostd"))
+            .arg("--config")
+            .arg(&config),
+        dir.join("hostd.log"),
+    );
     // Android's renderer (dsa-gfx) is started by the window manager, which shows Android in
     // the desktop session the job runs (a headless Wayland compositor): without it Android
     // never finishes booting.
-    let compositor_log = std::fs::File::create(dir.join("compositor.log")).unwrap();
-    let _compositor = Service {
-        child: Command::new(env!("CARGO_BIN_EXE_dsa-compositor"))
-            .env("DSA_SOCKET", &socket)
-            .stdin(Stdio::null())
-            .stdout(compositor_log.try_clone().unwrap())
-            .stderr(compositor_log)
-            .spawn()
-            .expect("starting dsa-compositor"),
-        log: dir.join("compositor.log"),
-    };
+    let _compositor = Service::spawn(
+        Command::new(env!("CARGO_BIN_EXE_dsa-compositor")).env("DSA_SOCKET", &socket),
+        dir.join("compositor.log"),
+    );
     // The user's devices for Android (sound, sensors, location), as the desktop session runs
     // them.
-    let devices_log = std::fs::File::create(dir.join("devices.log")).unwrap();
-    let _devices = Service {
-        child: Command::new(env!("CARGO_BIN_EXE_dsa-devices"))
+    let _devices = Service::spawn(
+        Command::new(env!("CARGO_BIN_EXE_dsa-devices"))
             .arg("--socket")
-            .arg(&socket)
-            .stdin(Stdio::null())
-            .stdout(devices_log.try_clone().unwrap())
-            .stderr(devices_log)
-            .spawn()
-            .expect("starting dsa-devices"),
-        log: dir.join("devices.log"),
-    };
+            .arg(&socket),
+        dir.join("devices.log"),
+    );
     let mut first = client(&socket, Duration::from_secs(30));
     // The guest log, read from the start of the boot: Android sends it only while something
     // reads it, and a boot that fails says why in it.
@@ -400,7 +361,7 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
             loop {
                 match reader.next(Duration::from_secs(5)) {
                     Ok(Some(batch)) => {
-                        let mut log = log.lock().unwrap();
+                        let mut log = lock(&log);
                         for entry in batch.entries {
                             log.push(entry.threadtime());
                         }
@@ -419,7 +380,7 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
         fail(
             format!("Android did not become ready: {why}"),
             &service,
-            &log.lock().unwrap(),
+            &log,
         );
     }
     eprintln!(
@@ -433,11 +394,7 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
     let mut placer = client(&socket, Duration::from_secs(10));
     let widget = match placer.add_widget(CLOCK, Duration::from_secs(120)) {
         Ok(widget) => widget,
-        Err(why) => fail(
-            format!("placing {CLOCK} failed: {why}"),
-            &service,
-            &log.lock().unwrap(),
-        ),
+        Err(why) => fail(format!("placing {CLOCK} failed: {why}"), &service, &log),
     };
     let id = widget.widget_id;
     eprintln!("placed widget {id} {} s after the start", placed.as_secs());
@@ -459,7 +416,7 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
                     NEXT_FRAME.as_secs()
                 )
             };
-            fail(why, &service, &log.lock().unwrap());
+            fail(why, &service, &log);
         }
         match watch.next(until - now) {
             Ok(Some(WidgetEvent::Frame(frame))) if frame.widget_id == id => {
@@ -470,7 +427,7 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
                             frame.width, frame.height
                         ),
                         &service,
-                        &log.lock().unwrap(),
+                        &log,
                     );
                 }
                 if let Some(why) = opaque_everywhere(&frame) {
@@ -481,7 +438,7 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
                             frame.width, frame.height
                         ),
                         &service,
-                        &log.lock().unwrap(),
+                        &log,
                     );
                 }
                 if pictures.last().is_some_and(|last| last.png == frame.png) {
@@ -504,14 +461,14 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
             Err(why) => fail(
                 format!("the watch on the widgets ended: {why}"),
                 &service,
-                &log.lock().unwrap(),
+                &log,
             ),
         }
     }
 
     // Records take a moment to come from the guest.
     std::thread::sleep(Duration::from_secs(3));
-    let lines = log.lock().unwrap().clone();
+    let lines = lock(&log).clone();
     let bad: Vec<&String> = lines
         .iter()
         .filter(|line| drawing_failed(line) || line.contains("null listener"))
@@ -521,7 +478,7 @@ fn fr12_a_placed_clock_widget_draws_on_the_real_image_and_ticks() {
         fail(
             format!("the guest log says the widget failed:\n{}", bad.join("\n")),
             &service,
-            &lines,
+            &log,
         );
     }
     let _ = first.stop();

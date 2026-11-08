@@ -14,6 +14,7 @@ use serde::Deserialize;
 
 use crate::update::manifest;
 use crate::update::policy::InstalledImage;
+use crate::update::program::ReleaseChannel;
 
 /// The VM's memory when the configuration names none and the user set no limit, in MiB.
 pub const DEFAULT_MEMORY_MB: u32 = 3072;
@@ -95,10 +96,21 @@ pub struct UpdateSettings {
     /// How long a new image may take to finish its first boot before it is undone.
     #[serde(default = "default_boot_timeout_secs")]
     pub boot_timeout_secs: u64,
-    /// The signed program list, for updating DSA itself. Its signature is at the same URL
-    /// plus `.sig`, and the same keys may sign it. Without it DSA is not updated.
+    /// The signed program list of the stable channel, for updating DSA itself. Its signature
+    /// is at the same URL plus `.sig`, and the same keys may sign it. Without it (and without
+    /// `prerelease_program_list_url`) DSA is not updated.
     #[serde(default)]
     pub program_list_url: Option<String>,
+    /// The signed program list of the pre-release channel, which a computer that takes
+    /// pre-releases reads beside the stable one. A configuration written before the channels
+    /// existed has none, and its `program_list_url` is then the only list.
+    #[serde(default)]
+    pub prerelease_program_list_url: Option<String>,
+    /// The channel the installer was published on: `stable` or `prerelease`. A computer
+    /// whose settings record no channel yet starts on it. Without it the version decides:
+    /// below 1.0 every release is a pre-release.
+    #[serde(default)]
+    pub channel: Option<ReleaseChannel>,
     /// False turns updating DSA itself off; the program list is then never fetched.
     #[serde(default = "default_true")]
     pub program: bool,
@@ -113,6 +125,18 @@ impl UpdateSettings {
             .iter()
             .map(|key| manifest::parse_key(key).map_err(|e| HostConfigError(e.to_string())))
             .collect()
+    }
+
+    /// The channel of the installer that put version `running` here: the one the
+    /// configuration names, else the one the version was published on.
+    pub fn installer_channel(&self, running: &str) -> ReleaseChannel {
+        self.channel
+            .unwrap_or_else(|| ReleaseChannel::of_version(running))
+    }
+
+    /// Whether this configuration names any program list.
+    pub fn has_program_list(&self) -> bool {
+        self.program_list_url.is_some() || self.prerelease_program_list_url.is_some()
     }
 }
 
@@ -155,7 +179,7 @@ pub fn check_image_sources(
             return Err(HostConfigError("update needs images_dir".into()));
         }
         update.keys()?;
-        if update.program_list_url.is_some() && update.program_dir.is_none() {
+        if update.has_program_list() && update.program_dir.is_none() {
             return Err(HostConfigError(
                 "program_list_url needs program_dir, the folder setup files are \
                  downloaded to"

@@ -25,10 +25,11 @@ use dsa_host_core::diagnostics::HostFile;
 use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::host_api::{HostApiService, PerUser, ServiceFacts, UserAndroid};
+use dsa_host_core::power::PowerHub;
 use dsa_host_core::session::Session;
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{
-    check_reporting, next_image_check, CheckNow, StoreVersions, UpdateNotices, UpdatingAndroid,
+    check_alerting, next_image_check, CheckNow, StoreVersions, UpdateNotices, UpdatingAndroid,
 };
 use dsa_host_core::update::store::{ImageStore, Recovery};
 use dsa_host_core::window_manager::{WindowManagerHost, WindowManagerKeeper};
@@ -414,7 +415,14 @@ fn check_for_updates(
             }
             notices.set(download.notice());
         };
-        match check_reporting(&store, &CurlFetch, &update.list_url, &keys, &mut announce) {
+        match check_alerting(
+            &store,
+            &CurlFetch,
+            &update.list_url,
+            &keys,
+            &notices,
+            &mut announce,
+        ) {
             Ok(Some(notice)) => {
                 eprintln!("{build}: {notice}");
                 notices.set(notice);
@@ -440,6 +448,8 @@ struct Shared {
     notices: Arc<UpdateNotices>,
     settings: Arc<dyn SettingsStore>,
     process: VmProcess,
+    /// The Mac's power and sleep, handed to the user's Android.
+    power: Arc<PowerHub>,
     stop: Arc<AtomicBool>,
 }
 
@@ -522,6 +532,17 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
     session.set_adb_advertise(crate::adb_discovery::advertiser());
     session.set_android_files_connect(dial(dsa_host_core::file_share::ANDROID_FILES_PORT));
     let session = Arc::new(session);
+    // The guest's battery follows the Mac's, and its data is on disk before the Mac sleeps.
+    shared.power.attach(&session);
+    // The guest's display refreshes as fast as the Mac's fastest display, and at 60 Hz in Low
+    // Power Mode, which comes with the power.
+    let watched = Arc::downgrade(&session);
+    if let Err(why) = thread::Builder::new()
+        .name("dsa-display-power".into())
+        .spawn(move || crate::display_power::follow(watched))
+    {
+        eprintln!("display: cannot follow the displays' refresh rate: {why}");
+    }
     Ok(match &shared.store {
         None => session as Arc<dyn UserAndroid>,
         Some(store) => Arc::new(UpdatingAndroid {
@@ -609,7 +630,15 @@ pub fn serve(
             "{build}: this Mac reports no support for virtual machines; Android cannot start"
         );
     }
-    let settings: Arc<dyn SettingsStore> = Arc::new(FileSettings::new(config.settings_dir(&user)));
+    // A computer whose settings record no release channel yet starts on the one this version
+    // was published on, and keeps it through upgrades.
+    let files = FileSettings::new(config.settings_dir(&user)).with_first_channel(
+        dsa_host_core::update::program::ReleaseChannel::of_version(crate::VERSION),
+    );
+    if let Err(why) = files.keep_first_channel() {
+        eprintln!("{build}: recording the release channel failed: {why}");
+    }
+    let settings: Arc<dyn SettingsStore> = Arc::new(files);
     let store = open_store(&config, build);
     let notices = Arc::new(UpdateNotices::default());
     let check_now = Arc::new(CheckNow::default());
@@ -631,6 +660,11 @@ pub fn serve(
         }
     }
     let process = VmProcess::default();
+    // The Mac's battery, Low Power Mode and sleep, for every Android this agent runs.
+    let power = Arc::new(PowerHub::new());
+    if let Err(why) = crate::power::watch(Arc::clone(&power), Arc::clone(&stop)) {
+        eprintln!("{build}: {why}");
+    }
     let shared = Arc::new(Shared {
         config: config.clone(),
         user: user.clone(),
@@ -639,6 +673,7 @@ pub fn serve(
         notices,
         settings: Arc::clone(&settings),
         process: process.clone(),
+        power,
         stop: Arc::clone(&stop),
     });
     let me = local_user();
@@ -657,6 +692,8 @@ pub fn serve(
         version: crate::VERSION.into(),
         log_dir: Some(user.logs().to_string_lossy().into_owned()),
         program_updates_available: false,
+        // No updater of its own here, so no release channel to follow.
+        update_channel_available: false,
         image_updates_available: store.is_some() && config.update.is_some(),
         android_version: config.first_image.as_ref().map(|i| i.version.clone()),
     };

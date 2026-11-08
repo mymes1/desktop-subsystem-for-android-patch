@@ -612,6 +612,15 @@ message PowerState {
   bool power_saver = 5;
 }
 
+// Host to guest: the refresh rate the guest's display runs at, in hertz. It is the user's
+// fastest monitor, lowered to one of the rates the guest's display offers, and at most 60
+// while the host's battery saver is on (a monitor at 60 Hz or slower is never changed). The
+// agent holds the display at this rate, which takes effect at once, without restarting
+// Android. Sent when the agent connects, once the host knows the monitors, and on each change.
+message DisplayRefresh {
+  uint32 hz = 1;
+}
+
 // Guest to host, from the control daemon: how much memory the guest has and how hard it
 // works to find more. The host grows the VM's memory by hot-adding it when the guest runs
 // short, and gives it back when the guest no longer needs it. Sent every few seconds while
@@ -2250,6 +2259,7 @@ message Envelope {
     ClockAnswer clock_answer = 29;
     ScreenState screen_state = 40;
     PowerState power_state = 41;
+    DisplayRefresh display_refresh = 407;
     PowerHint power_hint = 110;
     DeveloperMode developer_mode = 140;
     ArmTranslationInstall arm_translation_install = 150;
