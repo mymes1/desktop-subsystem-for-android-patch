@@ -940,6 +940,64 @@ pub struct GoogleDeviceId {
     #[prost(string, tag = "1")]
     pub id: ::prost::alloc::string::String,
 }
+/// One app's root elevation level, with the Android uid the kernel keys su visibility on.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct RootApp {
+    #[prost(string, tag = "1")]
+    pub package: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "2")]
+    pub uid: u32,
+    #[prost(enumeration = "RootLevel", tag = "3")]
+    pub level: i32,
+}
+/// Host to guest, to the control daemon: the whole root elevation state for this boot. The
+/// host sends it once the agent has connected (so uids are known) and whenever the feature or
+/// an app's level changes. The daemon tells the kernel which uids may see su (the ask and
+/// remember apps) while `enabled`; with `enabled` false the daemon clears the kernel allowlist
+/// and stops the su relay, so su exists for no app. The whole feature applies from a boot: the
+/// host does not send this with `enabled` true unless the boot was started with it on.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RootElevationConfig {
+    #[prost(bool, tag = "1")]
+    pub enabled: bool,
+    #[prost(message, repeated, tag = "2")]
+    pub apps: ::prost::alloc::vec::Vec<RootApp>,
+}
+/// Guest to host, from the control daemon's su relay: an app called su and wants to run a
+/// command as uid 0. The host decides by the app's level: a remember app within its grace is
+/// approved at once, an ask app (or a remember app past its grace) brings up the host's
+/// administrator approval under that app's window program. Answered with SuDecision.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SuRequest {
+    /// Pairs the request with its SuDecision; unique while the daemon runs.
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    /// The calling app's package, which the host shows in the approval and writes to the log.
+    #[prost(string, tag = "2")]
+    pub package: ::prost::alloc::string::String,
+    /// The calling app's Android uid.
+    #[prost(uint32, tag = "3")]
+    pub uid: u32,
+    /// The command after `su -c`, or after a `su` with a command on standard input, split as a
+    /// shell would; empty for an interactive shell (`su` with a pty).
+    #[prost(string, repeated, tag = "4")]
+    pub command: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// True when su has a controlling terminal (an interactive shell or `su -` with a pty).
+    #[prost(bool, tag = "5")]
+    pub interactive: bool,
+}
+/// Host to guest, to the control daemon's su relay: whether a SuRequest may run as uid 0.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SuDecision {
+    #[prost(uint64, tag = "1")]
+    pub request_id: u64,
+    #[prost(bool, tag = "2")]
+    pub approved: bool,
+    /// Why it was refused, in words the person can act on, for su to print and the log to keep;
+    /// empty when approved.
+    #[prost(string, tag = "3")]
+    pub reason: ::prost::alloc::string::String,
+}
 /// Guest to host, from the agent: a notification an app posted, or a new version of one it
 /// posted before under the same key, which replaces it. Only notifications a person would see
 /// come: not the ongoing notice of a foreground service, and not a group's summary, whose
@@ -2452,7 +2510,7 @@ pub struct GamepadRumble {
 pub struct Envelope {
     #[prost(
         oneof = "envelope::Body",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 377, 19, 408, 409, 410, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 40, 41, 407, 110, 140, 150, 151, 152, 153, 154, 400, 401, 402, 403, 404, 405, 406, 411, 412, 413, 42, 43, 44, 45, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 30, 50, 51, 52, 53, 54, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 80, 81, 82, 83, 100, 101, 102, 103, 104, 105, 120, 121, 122, 123, 124, 125, 126, 127, 130, 131, 132, 133, 134, 135, 136, 220, 221, 222, 223, 141, 200, 201, 202, 240, 241, 242, 260, 261, 262, 263, 264, 265, 266, 267, 155, 340, 383, 341, 342, 343, 344, 290, 291, 350, 351, 352, 353, 354, 380, 381, 382"
     )]
     pub body: ::core::option::Option<envelope::Body>,
 }
@@ -2558,6 +2616,12 @@ pub mod envelope {
         GoogleDeviceIdQuery(super::GoogleDeviceIdQuery),
         #[prost(message, tag = "406")]
         GoogleDeviceId(super::GoogleDeviceId),
+        #[prost(message, tag = "411")]
+        RootElevationConfig(super::RootElevationConfig),
+        #[prost(message, tag = "412")]
+        SuRequest(super::SuRequest),
+        #[prost(message, tag = "413")]
+        SuDecision(super::SuDecision),
         #[prost(message, tag = "42")]
         DeviceIdle(super::DeviceIdle),
         #[prost(message, tag = "43")]
@@ -3335,6 +3399,39 @@ impl LocationAccess {
             "LOCATION_ACCESS_ALLOWED" => Some(Self::Allowed),
             "LOCATION_ACCESS_DENIED" => Some(Self::Denied),
             "LOCATION_ACCESS_UNAVAILABLE" => Some(Self::Unavailable),
+            _ => None,
+        }
+    }
+}
+/// How far an app may elevate to root, as the user set it on the host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum RootLevel {
+    /// The app cannot ask: su does not exist for it.
+    Off = 0,
+    /// The app may ask; each su call waits for the host's administrator approval.
+    Ask = 1,
+    /// The host approves the app's su calls without asking, within the grace.
+    Remember = 2,
+}
+impl RootLevel {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Off => "ROOT_LEVEL_OFF",
+            Self::Ask => "ROOT_LEVEL_ASK",
+            Self::Remember => "ROOT_LEVEL_REMEMBER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "ROOT_LEVEL_OFF" => Some(Self::Off),
+            "ROOT_LEVEL_ASK" => Some(Self::Ask),
+            "ROOT_LEVEL_REMEMBER" => Some(Self::Remember),
             _ => None,
         }
     }
