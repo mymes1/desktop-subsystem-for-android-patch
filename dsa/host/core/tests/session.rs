@@ -5077,3 +5077,142 @@ fn fr31_a_session_is_never_stopped_for_idle_time_after_the_last_window_closes() 
         "and nothing froze it"
     );
 }
+
+fn root_app(
+    package: &str,
+    level: dsa_host_core::root_elevation::Level,
+) -> dsa_host_core::root_elevation::AppLevel {
+    dsa_host_core::root_elevation::AppLevel {
+        package: package.into(),
+        level,
+    }
+}
+
+/// The next root elevation config the guest is sent, passing over everything else.
+fn next_root_config(agent: &mut Box<dyn Connection>) -> dsa_protocol::control::RootElevationConfig {
+    let deadline = std::time::Instant::now() + WAIT;
+    loop {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the guest was sent no root elevation config"
+        );
+        if let Body::RootElevationConfig(config) = next_body(agent) {
+            return config;
+        }
+    }
+}
+
+/// Fails if the guest is sent a root elevation config within a short while.
+fn no_root_config(agent: &mut Box<dyn Connection>) {
+    let until = std::time::Instant::now() + Duration::from_millis(300);
+    while let Some(left) = until.checked_duration_since(std::time::Instant::now()) {
+        match agent.recv(Some(left)) {
+            Ok(frame) => {
+                if let Ok(Envelope {
+                    body: Some(Body::RootElevationConfig(config)),
+                }) = dsa_protocol::decode(&frame)
+                {
+                    panic!("the guest was sent {config:?}");
+                }
+            }
+            Err(TransportError::Timeout) => return,
+            Err(error) => panic!("the channel broke: {error}"),
+        }
+    }
+}
+
+#[test]
+fn fr35_the_root_elevation_config_is_sent_once_the_agent_connects() {
+    use dsa_host_core::root_elevation::Level;
+    use dsa_protocol::control::RootLevel;
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.set_root_elevation(
+        true,
+        vec![
+            root_app("com.example.ask", Level::Ask),
+            root_app("com.example.off", Level::Off),
+            root_app("com.example.keep", Level::Remember),
+        ],
+    );
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    let config = next_root_config(&mut agent);
+    assert!(config.enabled);
+    // By package, as the host knows them, in package order; off apps are not listed, and
+    // the guest fills in each uid.
+    let apps: Vec<(String, u32, RootLevel)> = config
+        .apps
+        .iter()
+        .map(|app| (app.package.clone(), app.uid, app.level()))
+        .collect();
+    assert_eq!(
+        apps,
+        vec![
+            ("com.example.ask".to_string(), 0, RootLevel::Ask),
+            ("com.example.keep".to_string(), 0, RootLevel::Remember),
+        ]
+    );
+
+    // An agent that connects again (the framework restarted) has it sent again.
+    report_boot(&mut agent, true, false);
+    thread::sleep(Duration::from_millis(50));
+    report_boot(&mut agent, true, true);
+    assert!(next_root_config(&mut agent).enabled);
+}
+
+#[test]
+fn fr35_a_change_is_sent_to_the_running_android_at_once() {
+    use dsa_host_core::root_elevation::Level;
+    use dsa_protocol::control::RootLevel;
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.set_root_elevation(true, vec![root_app("com.example.ask", Level::Ask)]);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    next_root_config(&mut agent);
+
+    // A level changes: the running Android is told, with no restart.
+    session.set_root_elevation(true, vec![root_app("com.example.ask", Level::Remember)]);
+    let config = next_root_config(&mut agent);
+    assert!(config.enabled);
+    assert_eq!(config.apps.len(), 1);
+    assert_eq!(config.apps[0].level(), RootLevel::Remember);
+
+    // The same settings again send nothing.
+    session.set_root_elevation(true, vec![root_app("com.example.ask", Level::Remember)]);
+    no_root_config(&mut agent);
+
+    // The app set to off is no longer listed.
+    session.set_root_elevation(true, Vec::new());
+    assert!(next_root_config(&mut agent).apps.is_empty());
+
+    // The switch turned off: the running Android hides su from every app at once.
+    session.set_root_elevation(false, vec![root_app("com.example.ask", Level::Ask)]);
+    assert!(!next_root_config(&mut agent).enabled);
+}
+
+#[test]
+fn fr35_turning_root_elevation_on_applies_from_the_next_start() {
+    use dsa_host_core::root_elevation::Level;
+    let launcher = FakeLauncher::default();
+    let (session, mut connector) = session_with(launcher.clone(), WAIT);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    assert!(session.wait_for(SessionState::Active, WAIT));
+    // A boot that started with the feature off is told nothing: its daemon hides su from
+    // every app on its own, and keeps it hidden until the next start.
+    no_root_config(&mut agent);
+    session.set_root_elevation(true, vec![root_app("com.example.ask", Level::Ask)]);
+    no_root_config(&mut agent);
+
+    session.stop();
+    assert!(session.wait_for(SessionState::Stopped, WAIT));
+    drop(agent);
+    session.start();
+    let mut agent = connect_agent(&mut connector, &launcher);
+    let config = next_root_config(&mut agent);
+    assert!(config.enabled);
+    assert_eq!(config.apps[0].package, "com.example.ask");
+}

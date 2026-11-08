@@ -960,6 +960,9 @@ impl UserAndroid for WithProgramStatus {
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         self.android.share_folders(on, folders)
     }
+    fn set_root_elevation(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
+        self.android.set_root_elevation(on, apps)
+    }
     fn android_files(&self) -> Result<String, String> {
         self.android.android_files()
     }

@@ -819,6 +819,12 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
                         eprintln!("{user}: developer mode: {why}");
                     }
                 }
+                // Root elevation: the computer's switch, and the level of each of their apps.
+                dsa_host_core::root_elevation::apply(
+                    android.as_ref(),
+                    factory_store.as_ref(),
+                    user,
+                );
             }
             Err(why) => eprintln!("{user}: no Android: {why}"),
         }

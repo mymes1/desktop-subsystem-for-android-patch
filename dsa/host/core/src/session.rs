@@ -149,6 +149,7 @@ use crate::notifications::{self, Notification, NotificationAction, NotificationE
 use crate::power::PowerState;
 use crate::power_hints::PowerHint;
 use crate::print::{self, PrintEvent, PrintJob, PrintOutcome};
+use crate::root_elevation::{AppLevel, Level};
 use crate::system_settings::SystemSettings;
 use crate::tasks::{
     AppInfo, AppSettingsPage, Bounds, StatusBarAppearance, Task, TaskEvent, TaskOrientation,
@@ -701,6 +702,53 @@ struct Shared {
     android_files_token: Mutex<Option<String>>,
     /// Says the device name the guest's agent is given each time it connects.
     device_name: Mutex<Option<DeviceNameSource>>,
+    /// The user's root elevation settings, and whether the running boot started with the
+    /// feature on.
+    root_elevation: Mutex<RootElevationNow>,
+}
+
+/// The root elevation settings as the guest is told them.
+#[derive(Debug, Clone, Default)]
+struct RootElevationNow {
+    /// The computer's switch, as it stands now.
+    on: bool,
+    /// The apps with a level other than off.
+    apps: Vec<AppLevel>,
+    /// The switch as it stood when the running boot started; `None` while no boot runs. The
+    /// kernel's su guard and the relay are set up at boot, so a boot that started with the
+    /// feature off keeps it off until the next start, and is told nothing.
+    boot_on: Option<bool>,
+    /// What the running boot was last told, so an unchanged config is not sent again.
+    sent: Option<control::RootElevationConfig>,
+}
+
+impl RootElevationNow {
+    /// What the running boot's daemon is told now: `None` when the boot started with the
+    /// feature off, or no boot runs. Turning the switch off applies at once (su is hidden from
+    /// every app); turning it on applies from the next start.
+    fn config(&self) -> Option<control::RootElevationConfig> {
+        if self.boot_on != Some(true) {
+            return None;
+        }
+        Some(control::RootElevationConfig {
+            enabled: self.on,
+            apps: self
+                .apps
+                .iter()
+                .map(|app| control::RootApp {
+                    package: app.package.clone(),
+                    // The guest knows each package's uid; the host does not.
+                    uid: 0,
+                    level: match app.level {
+                        Level::Off => control::RootLevel::Off,
+                        Level::Ask => control::RootLevel::Ask,
+                        Level::Remember => control::RootLevel::Remember,
+                    }
+                    .into(),
+                })
+                .collect(),
+        })
+    }
 }
 
 /// Opens a stream to the guest's adbd in the VM with the given runtime ID: the platform's
@@ -817,6 +865,35 @@ impl Shared {
                 Vec::new()
             },
         }))
+    }
+
+    /// The root elevation config the running boot's daemon has yet to be told: `None` when
+    /// it has been told this one already, or is told nothing (see [`RootElevationNow`]).
+    /// `again` forgets what was sent, for a daemon or an agent that connected anew.
+    fn root_elevation_body(&self, again: bool) -> Option<Body> {
+        let mut now = self
+            .root_elevation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if again {
+            now.sent = None;
+        }
+        let config = now.config()?;
+        if now.sent.as_ref() == Some(&config) {
+            return None;
+        }
+        now.sent = Some(config.clone());
+        Some(Body::RootElevationConfig(config))
+    }
+
+    /// Notes whether a boot runs, and with the switch as it stands as that boot's.
+    fn root_elevation_boot(&self, running: bool) {
+        let mut now = self
+            .root_elevation
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        now.boot_on = running.then_some(now.on);
+        now.sent = None;
     }
 
     /// What the guest's daemon is told to serve its shared storage, while the host shows it.
@@ -1214,6 +1291,7 @@ impl Session {
             share_server: Mutex::new(None),
             android_files_token: Mutex::new(None),
             device_name: Mutex::new(None),
+            root_elevation: Mutex::new(RootElevationNow::default()),
         });
         let freeze_delay = config.freeze_after.unwrap_or(DEFAULT_FREEZE_AFTER);
         let (commands, command_rx) = mpsc::channel();
@@ -1467,6 +1545,30 @@ impl Session {
             if let Some(body) = self.shared.file_sharing_body() {
                 send_quietly(&self.shared, &self.commands, body);
             }
+        }
+    }
+
+    /// Sets the user's root elevation settings: the computer's switch and the apps with a
+    /// level other than off. The running Android is told at once, so a changed level applies
+    /// without a restart; so does turning the switch off. Turning it on applies from the next
+    /// start of Android, as the kernel's su guard and the relay are set up at boot. Each boot
+    /// is told again once its agent connects.
+    pub fn set_root_elevation(&self, on: bool, apps: Vec<AppLevel>) {
+        {
+            let mut now = self
+                .shared
+                .root_elevation
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            now.on = on;
+            now.apps = apps
+                .into_iter()
+                .filter(|app| app.level != Level::Off)
+                .collect();
+            now.apps.sort_by(|a, b| a.package.cmp(&b.package));
+        }
+        if let Some(body) = self.shared.root_elevation_body(false) {
+            send_quietly(&self.shared, &self.commands, body);
         }
     }
 
@@ -5124,6 +5226,11 @@ impl Worker {
                     on: false,
                 }));
             }
+            // With the agent there, the package manager knows every app's uid, so the daemon
+            // can set up the kernel's su guard for the user's root elevation settings.
+            if let Some(body) = self.shared.root_elevation_body(true) {
+                self.send_body(body);
+            }
         } else {
             self.agent_lost_at = Some(now);
             // The tasks are what the agent reported, and the agent goes when Android's framework
@@ -5334,6 +5441,8 @@ impl Worker {
                 return;
             }
         };
+        // The boot takes the root elevation switch as it stands now.
+        self.shared.root_elevation_boot(true);
         let started = self.launcher.start(&secret);
         *self
             .shared
@@ -6064,6 +6173,7 @@ impl Worker {
             .boot_secret
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = None;
+        self.shared.root_elevation_boot(false);
         match self.launcher.stop(self.config.stop_timeout) {
             Ok(()) => {
                 let reason = reason(self.launcher.as_mut());
