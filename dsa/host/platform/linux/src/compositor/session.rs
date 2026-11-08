@@ -9,7 +9,7 @@
 //! guest, a crashed or missing renderer is reported and waited out; nothing of it ends the
 //! compositor, and the windows keep their last frame meanwhile.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -34,6 +34,8 @@ use super::frames::{LatestFrames, Shown};
 use super::gfxstream::{self, FrameSink};
 use super::wayland::{Desktop, Event, Events, Wake};
 use super::window_menu::{app_page_arguments, menu_work, reads_korean_in};
+use crate::accessibility::objects::{window_facts, TitleCommand, WindowFacts};
+use crate::accessibility::watch::{ApiConnect, Shared as Accessibility};
 use crate::input::evdev::EvdevGamepads;
 use crate::renderer::client::RendererClient;
 use crate::shell::dbus::{Notifier, Signal};
@@ -150,6 +152,8 @@ enum Message {
         client: HostApiClient,
         serial: u32,
     },
+    /// An accessibility client activated a title bar button.
+    TitleBar(TitleCommand),
 }
 
 /// What the main thread asks of the service.
@@ -487,6 +491,22 @@ fn start_renderer(
     client
 }
 
+/// Starts the windows' AT-SPI provider: their trees are watched through the service, and the
+/// title bar buttons a client activates are carried out on the main thread.
+fn start_accessibility(to_main: ToMain) -> Arc<Accessibility> {
+    let connect: ApiConnect = Arc::new(|| Box::new(connector()) as Box<dyn Connector>);
+    let to_main = Mutex::new(to_main);
+    crate::accessibility::start(
+        connect,
+        Arc::new(move |command: TitleCommand| {
+            if let Ok(to_main) = to_main.lock() {
+                to_main.send(Message::TitleBar(command));
+            }
+        }),
+        Arc::new(log),
+    )
+}
+
 /// The main thread's state.
 struct Main {
     desktop: Desktop,
@@ -506,6 +526,10 @@ struct Main {
     focused: Option<i32>,
     /// Where the threads that ask about drags hand their offers.
     to_main: ToMain,
+    /// Each window's AT-SPI tree, for screen readers.
+    accessibility: Arc<Accessibility>,
+    /// What each window last told its accessibility tree of itself.
+    accessible: HashMap<i32, WindowFacts>,
 }
 
 impl Main {
@@ -589,6 +613,10 @@ impl Main {
                 .desktop
                 .state
                 .start_drag_out(task_id, offer, client, serial),
+            Message::TitleBar(command) => self
+                .desktop
+                .state
+                .title_bar_action(command.task_id, command.action),
         }
     }
 
@@ -760,6 +788,35 @@ impl Main {
         let requests = self.windows.reconfigures(now);
         self.requests(requests);
         self.desktop.tick(now);
+        self.sync_accessibility();
+    }
+
+    /// Tells the accessibility tree what each window shows of itself, while the provider is
+    /// on the accessibility bus. Off it nothing is kept, so a session without a screen reader
+    /// does no work for it.
+    fn sync_accessibility(&mut self) {
+        if !self.accessibility.connected() {
+            for (task_id, _) in self.accessible.drain() {
+                self.accessibility.close(task_id);
+            }
+            return;
+        }
+        let windows = &self.desktop.state.windows;
+        let accessibility = &self.accessibility;
+        self.accessible.retain(|task_id, _| {
+            let open = windows.contains_key(task_id);
+            if !open {
+                accessibility.close(*task_id);
+            }
+            open
+        });
+        for (task_id, window) in windows {
+            let facts = window_facts(&window.model, &window.title_bar);
+            if self.accessible.get(task_id) != Some(&facts) {
+                accessibility.sync(*task_id, facts.clone());
+                self.accessible.insert(*task_id, facts);
+            }
+        }
     }
 }
 
@@ -795,6 +852,7 @@ pub fn run() -> Result<(), String> {
         .takes_gpu_frames()
         .then(|| Arc::new(Mutex::new(Vec::new())));
     let _renderer = start_renderer(frames.clone(), images.clone(), waker);
+    let accessibility = start_accessibility(to_main.clone());
 
     let mut main = Main {
         desktop,
@@ -811,6 +869,8 @@ pub fn run() -> Result<(), String> {
         guest_clipboard: None,
         focused: None,
         to_main,
+        accessibility,
+        accessible: HashMap::new(),
     };
     if let Ok(mut client) = connect() {
         if let Ok(settings) = client.app_window_settings() {
