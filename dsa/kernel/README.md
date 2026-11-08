@@ -65,8 +65,11 @@ in probe order, which changes when the host attaches another disk.
   allowed. For any other task a lookup, stat, access, open or exec of a watched su inode
   returns `ENOENT`. The host's control daemon drives it through
   `/sys/kernel/security/dsa_su/control`: it names the su inode to watch, the uids that may
-  see it, and whether the guard is on. It is off until the host turns it on, so a guest with
-  root elevation off is as it was. Built in, because the image ships no kernel modules.
+  see it, and whether they may (enabled) or nobody may (disabled). The daemon has it hide su
+  from every app when it starts, so a guest with root elevation off has no su for any app.
+  One write is one change, and a watched path the image does not have is skipped. The module
+  is listed in `CONFIG_LSM`, before `selinux`, or it would never initialise. Built in,
+  because the image ships no kernel modules.
 - **What Android's userspace expects:** wake locks, dma-buf heaps for graphics buffers,
   utilisation clamps, uinput and evdev, file-based encryption and fs-verity, erofs and f2fs,
   dm-crypt, quotas, and the eBPF and netfilter pieces netd uses.
