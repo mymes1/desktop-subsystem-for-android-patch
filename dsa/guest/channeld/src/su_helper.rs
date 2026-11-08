@@ -19,11 +19,21 @@ const SYSTEM_UID: u32 = 1000;
 const MAX_CALLS: usize = 32;
 
 fn reserve_call(active: &AtomicUsize) -> bool {
-    active
-        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
-            (n < MAX_CALLS).then_some(n + 1)
-        })
-        .is_ok()
+    // A compare-exchange loop rather than `fetch_update`, which newer toolchains deprecate,
+    // or its replacement `try_update`, which is newer than the crates' minimum Rust version.
+    let mut current = active.load(Ordering::Acquire);
+    while current < MAX_CALLS {
+        match active.compare_exchange_weak(
+            current,
+            current + 1,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => return true,
+            Err(actual) => current = actual,
+        }
+    }
+    false
 }
 
 #[derive(Default)]
