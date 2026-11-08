@@ -446,6 +446,47 @@ class WidgetManagerTest {
     }
 
     @Test
+    fun fr12_a_widget_asked_for_before_the_user_is_unlocked_is_placed_once_the_user_is() {
+        // Android reports its boot finished before the user's storage is unlocked, and the
+        // host may ask for the gallery and a widget in between. Until the unlock Android
+        // offers no widget, so an answer then would refuse the widget.
+        var unlocked = false
+        var readyCallback: (() -> Unit)? = null
+        val waiting = object : WidgetPlatform by platform {
+            override fun whenReady(ready: () -> Unit) {
+                if (unlocked) ready() else readyCallback = ready
+            }
+            override fun providers(): List<WidgetInfo> {
+                check(unlocked) { "User 0 must be unlocked for widgets to be available" }
+                return platform.providers()
+            }
+        }
+        platform.offered += clock()
+        val manager = WidgetManager(waiting, store, { frame -> sent += decode(frame); true }, log, { connected })
+        manager.start { it() }
+        manager.connected()
+        manager.handle(Envelope.newBuilder().setListWidgetProviders(ListWidgetProviders.newBuilder().setRequestId(4)).build())
+        manager.handle(
+            Envelope.newBuilder()
+                .setAddWidget(AddWidget.newBuilder().setRequestId(8).setProvider("com.example.clock/.ClockWidget"))
+                .build(),
+        )
+        assertTrue("nothing is answered while the user is locked", sent.isEmpty())
+        assertTrue(platform.bound.isEmpty())
+
+        unlocked = true
+        readyCallback!!()
+        val gallery = sent.first { it.bodyCase == Envelope.BodyCase.WIDGET_PROVIDERS }.widgetProviders
+        assertEquals(4, gallery.requestId)
+        assertEquals(listOf("com.example.clock/.ClockWidget"), gallery.providersList.map { it.provider })
+        val added = sent.single { it.bodyCase == Envelope.BodyCase.WIDGET_ADDED }.widgetAdded
+        assertEquals(8, added.requestId)
+        assertEquals("", added.error)
+        assertEquals(1, added.widgetId)
+        assertEquals(mapOf(1 to "com.example.clock/.ClockWidget"), platform.bound.toMap())
+    }
+
+    @Test
     fun fr12_placed_widgets_listen_and_draw_again_after_the_agent_restarts() {
         // Widgets 2 and 3 were placed before the agent or Android restarted. Android kept the
         // IDs; the agent kept a size for 2 only. The new process has no views yet.

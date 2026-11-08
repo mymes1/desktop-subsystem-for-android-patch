@@ -30,6 +30,9 @@ on:
       - "dsa/guest/media-probe/**"
       - "dsa/host/platform/linux/tests/widgets.rs"
       - "dsa/host/platform/linux/tests/media.rs"
+      - "dsa/host/platform/linux/tests/system_screens.rs"
+      - "dsa/host/platform/linux/tests/boot_check/**"
+      - ".github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
       - ".github/workflows/test-image.yml"
       - "scripts/tests/image-graphics-workflow.test.sh"
       - "scripts/tests/image-audio-workflow.test.sh"
@@ -751,6 +754,7 @@ jobs:
         timeout-minutes: 12
         working-directory: dsa
         run: |
+          bash "$GITHUB_WORKSPACE/.github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
           # The service finds the user's session in /run/user/<uid>, as on a desktop.
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           sudo mkdir -p "$XDG_RUNTIME_DIR"
@@ -797,6 +801,8 @@ jobs:
         timeout-minutes: 14
         working-directory: dsa
         run: |
+          # What an earlier check that timed out left running holds the VM's vsock ports.
+          bash "$GITHUB_WORKSPACE/.github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           sudo mkdir -p "$XDG_RUNTIME_DIR"
           sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"
@@ -852,6 +858,8 @@ jobs:
         timeout-minutes: 14
         working-directory: dsa
         run: |
+          # What an earlier check that timed out left running holds the VM's vsock ports.
+          bash "$GITHUB_WORKSPACE/.github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           sudo mkdir -p "$XDG_RUNTIME_DIR"
           sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"

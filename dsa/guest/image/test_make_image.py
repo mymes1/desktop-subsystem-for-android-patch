@@ -3098,8 +3098,20 @@ class TouchLatencyTests(unittest.TestCase):
     def test_fr22_the_system_menus_aspect_ratio_takes_effect(self):
         # Settings stores the user's choice either way; the window manager applies it only
         # while the framework's flag is on, and Android's default leaves it off.
-        self.assertEqual(make_image.FRAMEWORK_OVERLAY_BOOLEANS,
-                         {"config_appCompatUserAppAspectRatioSettingsIsEnabled": True})
+        self.assertIs(
+            make_image.FRAMEWORK_OVERLAY_BOOLEANS["config_appCompatUserAppAspectRatioSettingsIsEnabled"], True)
+
+    def test_nfr4_the_boot_does_not_wait_for_a_wallpaper_the_image_cannot_draw(self):
+        # The default wallpaper is SystemUI's, and SystemUI is removed: a window manager
+        # that waits for a wallpaper at boot waits its whole 30 s boot timeout.
+        self.assertIn("SystemUI", make_image.SHELL_APPS)
+        self.assertIs(make_image.FRAMEWORK_OVERLAY_BOOLEANS["config_checkWallpaperAtBoot"], False)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_image.framework_overlay_sources(root / "src")
+            values = (root / "src/res/values/dsa.xml").read_text()
+        self.assertIn('<bool name="config_checkWallpaperAtBoot">false</bool>', values)
+        self.assertIn("bool/config_checkWallpaperAtBoot", make_image.framework_overlaid())
 
     def test_fr5_an_existing_overlay_label_is_not_specified_twice(self):
         existing = "/(vendor|system/vendor)/overlay(/.*)? u:object_r:vendor_overlay_file:s0\n"
