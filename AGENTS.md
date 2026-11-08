@@ -85,7 +85,15 @@ therefore never depend on those documents; a comment may name them only as being
    working pulls the files out from under it.
 7. **Work branches are named `feat/<topic>`.**
 8. **Merge with `gh pr merge --delete-branch`**, then remove the local branch and its
-   worktree.
+   worktree. Do not trust the command's exit status for the cleanup: when `develop` is
+   checked out in another worktree, `gh` fails while switching the local checkout and skips
+   deleting the remote branch, even though the merge went through. So after every merge:
+   1. Check the pull request is merged: `gh pr view <number> --json state` says `MERGED`.
+   2. Delete the remote branch yourself: `git push origin --delete <branch>`, and confirm
+      with `git ls-remote --heads origin <branch>` that nothing is left.
+   3. Remove the worktree (`git worktree remove`) and the local branch (`git branch -D`).
+      If Windows refuses because a file is still open, leave the folder, and remove it once
+      the shell or process holding it has moved out.
 9. **Only `main`, `develop` and `release` stay on the remote.** A branch merged into
    `develop` is deleted; its commits are in `develop`, so nothing is kept for it.
 10. **Integrate on `develop` without waiting for CI.** Feature branches go into `develop` as soon as
