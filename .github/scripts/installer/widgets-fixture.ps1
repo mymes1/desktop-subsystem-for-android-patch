@@ -2,8 +2,9 @@
 # test has no real Android image, so nothing in it offers a widget; this answers
 # `dsa widgets list --json` with three widgets (one with a preview, one that asks to be set up,
 # one with no picture at all, which shows the stand-in icon) and one placed widget, answers
-# `dsa widgets watch --json` with the placed widget and then waits, and hands every other
-# command to the real dsa.exe. Dot-source it, then:
+# `dsa widgets watch --json` with the placed widget and then waits, writes every command to
+# calls.txt beside itself, and hands every other command to the real dsa.exe. Dot-source it,
+# then:
 #
 #   $fake = New-WidgetsFixture "$env:RUNNER_TEMP\widgets" "$env:PROGRAM_DIR\dsa.exe"
 #   $env:DSA_CLI = $fake
@@ -61,8 +62,10 @@ function New-WidgetsFixture([string]$Dir, [string]$RealDsa) {
     $list | ConvertTo-Json -Depth 5 -Compress | Set-Content -Encoding ascii "$Dir\widgets.json"
     [ordered]@{ event = 'widgets'; widgets = @($placed) } | ConvertTo-Json -Depth 5 -Compress |
         Set-Content -Encoding ascii "$Dir\watch.json"
+    Remove-Item "$Dir\calls.txt" -ErrorAction SilentlyContinue
     $cmd = @"
 @echo off
+echo %* >>"%~dp0calls.txt"
 if "%~1 %~2"=="widgets list" (
   type "%~dp0widgets.json"
   exit /b 0

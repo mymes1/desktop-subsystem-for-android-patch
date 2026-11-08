@@ -342,7 +342,7 @@ pub fn android_channel_text(info: &AndroidVersion) -> String {
 /// How far an image download has got, from the service's notice ("downloading Android
 /// ...: 45% ..."), or `None` when nothing is downloading.
 pub fn android_download_percent(notice: Option<&str>) -> Option<u8> {
-    let rest = notice?.strip_prefix("downloading Android ")?;
+    let rest = notice?.strip_prefix("downloading Android ")?; // not translated
     let (_, after) = rest.split_once(": ")?;
     let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
     if digits.is_empty() || !after[digits.len()..].starts_with('%') {

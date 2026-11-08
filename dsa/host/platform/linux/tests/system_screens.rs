@@ -90,16 +90,25 @@ impl Drop for Service {
 
 /// Fails the test with what the service printed and the guest log's last lines.
 fn fail(why: String, service: &Service, log: &Mutex<Vec<String>>) -> ! {
-    let log = log.lock().unwrap();
-    let _ = std::fs::write(service.log.with_file_name("guest.log"), log.join("\n"));
-    let tail = &log[log.len().saturating_sub(200)..];
+    // The lock is let go before the panic, so the thread that reads the guest log is not
+    // left with a poisoned lock and does not panic on top of this failure.
+    let tail = {
+        let log = lock(log);
+        let _ = std::fs::write(service.log.with_file_name("guest.log"), log.join("\n"));
+        log[log.len().saturating_sub(200)..].join("\n")
+    };
     let compositor =
         std::fs::read_to_string(service.log.with_file_name("compositor.log")).unwrap_or_default();
     panic!(
-        "{why}\n--- the service's output ---\n{}\n--- the window manager's output ---\n{compositor}\n--- the guest log's last lines ---\n{}",
+        "{why}\n--- the service's output ---\n{}\n--- the window manager's output ---\n{compositor}\n--- the guest log's last lines ---\n{tail}",
         service.log(),
-        tail.join("\n")
     )
+}
+
+/// The guest log's lines, also after a thread panicked while it held them.
+fn lock(log: &Mutex<Vec<String>>) -> std::sync::MutexGuard<'_, Vec<String>> {
+    log.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn client(socket: &Path, wait: Duration) -> HostApiClient {
@@ -242,6 +251,29 @@ fn large_title(nodes: &[Node]) -> Result<Option<Rect>, String> {
         .filter(|node| node.class.ends_with("TextView") && !node.text.is_empty())
         .map(|node| node.bounds)
         .find(|bounds| bounds.bottom <= below && bounds.height() > 0 && bounds.height() >= least))
+}
+
+/// Whether a picture is nothing but zeros: a capture that never received the screen, since
+/// a drawn screen is opaque.
+fn empty_picture(pixels: &[u8]) -> bool {
+    pixels.iter().all(|&byte| byte == 0)
+}
+
+/// The newest whole frame of `screenrecord --output-format=raw-frames`, which writes each
+/// frame as `width` x `height` RGB pixels and nothing between them, as opaque RGBA. `None`
+/// when not even one whole frame came.
+fn newest_raw_frame(frames: &[u8], width: usize, height: usize) -> Option<Vec<u8>> {
+    let size = width * height * 3;
+    if size == 0 || frames.len() < size {
+        return None;
+    }
+    let start = (frames.len() / size - 1) * size;
+    Some(
+        frames[start..start + size]
+            .chunks_exact(3)
+            .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
+            .collect(),
+    )
 }
 
 /// The pixel at (x, y) of an RGBA picture `width` wide.
@@ -474,11 +506,62 @@ impl Adb {
     }
 
     /// The screen, kept in `dir` as `name.png`, as `(width, RGBA pixels)`.
+    ///
+    /// `screencap` maps SurfaceFlinger's capture for the CPU, and in the guest a buffer the
+    /// GPU drew can map as nothing but zeros. Then the screen is read again from a
+    /// `screenrecord` frame, which the GPU reads back itself (`glReadPixels`), and that
+    /// picture is kept as `name-record.png`.
     fn screen(&self, dir: &Path, name: &str) -> Result<(usize, Vec<u8>), String> {
         let png = self.run(&["exec-out", "screencap", "-p"])?;
         let _ = std::fs::write(dir.join(format!("{name}.png")), &png);
-        let (width, _, _, pixels) = decode_png(&png)?;
-        Ok((width, pixels))
+        let (width, height, _, pixels) = decode_png(&png)?;
+        if !empty_picture(&pixels) {
+            return Ok((width, pixels));
+        }
+        eprintln!(
+            "screencap gave an empty picture of {name} ({width}x{height}); reading a screenrecord frame instead"
+        );
+        let size = format!("{width}x{height}");
+        let frames = self.run(&[
+            "exec-out",
+            "screenrecord",
+            "--output-format=raw-frames",
+            "--size",
+            size.as_str(),
+            "--time-limit",
+            "3",
+            "-",
+        ])?;
+        let pixels = newest_raw_frame(&frames, width, height).ok_or_else(|| {
+            format!(
+                "screencap gave an empty picture of {name}, and screenrecord gave {} bytes, not a whole {size} frame",
+                frames.len()
+            )
+        })?;
+        let picture = dsa_host_linux::shell::png::Rgba {
+            width: width as u32,
+            height: height as u32,
+            pixels,
+        };
+        let _ = std::fs::write(
+            dir.join(format!("{name}-record.png")),
+            dsa_host_linux::shell::png::encode(&picture, false),
+        );
+        if empty_picture(&picture.pixels) {
+            return Err(format!(
+                "both screencap and screenrecord gave an empty picture of {name}"
+            ));
+        }
+        Ok((width, picture.pixels))
+    }
+
+    /// The overlays that apply to Settings and their state, kept in `dir` as `overlays.log`.
+    fn settings_overlays(&self, dir: &Path) -> String {
+        let listed = self
+            .shell(&format!("cmd overlay list {SETTINGS}"))
+            .unwrap_or_else(|why| why);
+        let _ = std::fs::write(dir.join("overlays.log"), &listed);
+        listed
     }
 }
 
@@ -632,6 +715,21 @@ fn fr34_the_card_check_tells_rounded_cards_from_square_rows() {
 }
 
 #[test]
+fn fr34_an_empty_capture_is_read_again_from_the_newest_whole_screenrecord_frame() {
+    // A capture that never received the screen is all zeros; a drawn screen is opaque.
+    assert!(empty_picture(&[0; 16]));
+    assert!(!empty_picture(&[0, 0, 0, 255]));
+    // Two 2x1 RGB frames and part of a third: the second is the newest whole one.
+    let frames = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+    assert_eq!(
+        newest_raw_frame(&frames, 2, 1),
+        Some(vec![7, 8, 9, 255, 10, 11, 12, 255])
+    );
+    assert_eq!(newest_raw_frame(&frames[..5], 2, 1), None);
+    assert_eq!(newest_raw_frame(&frames, 0, 1), None);
+}
+
+#[test]
 fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_rounded_cards() {
     let (Some(crosvm), Some(image)) = (
         std::env::var_os("DSA_CROSVM").map(PathBuf::from),
@@ -691,7 +789,7 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
             loop {
                 match reader.next(Duration::from_secs(5)) {
                     Ok(Some(batch)) => {
-                        let mut log = log.lock().unwrap();
+                        let mut log = lock(&log);
                         for entry in batch.entries {
                             log.push(entry.threadtime());
                         }
@@ -740,6 +838,10 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
         );
     }
 
+    // Each check that fails is noted and the others still run, so one failure does not hide
+    // the next; the test fails at the end with all of them.
+    let mut failures: Vec<String> = Vec::new();
+
     // A tall window: the home page opens with its large title, which folds as the list scrolls.
     let wait = Duration::from_secs(60);
     let height = match open_settings_at(&mut api, &adb, TALL_DP, wait) {
@@ -757,46 +859,42 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
         .dump(&dir, "home-tall")
         .unwrap_or_else(|why| fail(why, &service, &log));
     let _ = adb.screen(&dir, "home-tall");
-    let title = match large_title(&tall) {
-        Ok(Some(title)) => title,
-        Ok(None) => fail(
-            format!("Settings opened in a window {height} dp tall without its large title"),
-            &service,
-            &log,
-        ),
-        Err(why) => fail(why, &service, &log),
-    };
-    eprintln!("the large title is at {title:?} in a window {height} dp tall");
-    let scroll = by_id(&tall, "main_content_scrollable_container")
-        .map(|(_, node)| node.bounds)
-        .unwrap_or_else(|| {
-            fail(
-                "the dump has no home page list (main_content_scrollable_container)".into(),
-                &service,
-                &log,
-            )
-        });
-    let x = (scroll.left + scroll.right) / 2;
-    if let Err(why) = adb.shell(&format!(
-        "input swipe {x} {} {x} {} 600",
-        scroll.bottom - 20,
-        scroll.top + 20
-    )) {
-        fail(why, &service, &log);
+    match large_title(&tall) {
+        Ok(Some(title)) => {
+            eprintln!("the large title is at {title:?} in a window {height} dp tall")
+        }
+        Ok(None) => failures.push(format!(
+            "Settings opened in a window {height} dp tall without its large title"
+        )),
+        Err(why) => failures.push(why),
     }
-    std::thread::sleep(Duration::from_secs(2));
-    let scrolled = adb
-        .dump(&dir, "home-tall-scrolled")
-        .unwrap_or_else(|why| fail(why, &service, &log));
-    let _ = adb.screen(&dir, "home-tall-scrolled");
-    match large_title(&scrolled) {
-        Ok(None) => {}
-        Ok(Some(still)) => fail(
-            format!("the large title stayed at {still:?} when the list scrolled"),
-            &service,
-            &log,
-        ),
-        Err(why) => fail(why, &service, &log),
+    match by_id(&tall, "main_content_scrollable_container").map(|(_, node)| node.bounds) {
+        Some(scroll) => {
+            let x = (scroll.left + scroll.right) / 2;
+            match adb.shell(&format!(
+                "input swipe {x} {} {x} {} 600",
+                scroll.bottom - 20,
+                scroll.top + 20
+            )) {
+                Ok(_) => {
+                    std::thread::sleep(Duration::from_secs(2));
+                    let scrolled = adb
+                        .dump(&dir, "home-tall-scrolled")
+                        .unwrap_or_else(|why| fail(why, &service, &log));
+                    let _ = adb.screen(&dir, "home-tall-scrolled");
+                    match large_title(&scrolled) {
+                        Ok(None) => {}
+                        Ok(Some(still)) => failures.push(format!(
+                            "the large title stayed at {still:?} when the list scrolled"
+                        )),
+                        Err(why) => failures.push(why),
+                    }
+                }
+                Err(why) => failures.push(format!("scrolling the home page: {why}")),
+            }
+        }
+        None => failures
+            .push("the dump has no home page list (main_content_scrollable_container)".into()),
     }
 
     // A Settings list, in the same window: its rows are grouped in rounded cards.
@@ -804,14 +902,21 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
         fail(why, &service, &log);
     }
     std::thread::sleep(Duration::from_secs(5));
+    let overlays = adb.settings_overlays(&dir);
+    eprintln!("the overlays on Settings:\n{}", overlays.trim_end());
     let page = adb
         .dump(&dir, "display")
         .unwrap_or_else(|why| fail(why, &service, &log));
-    let (width, pixels) = adb
-        .screen(&dir, "display")
-        .unwrap_or_else(|why| fail(why, &service, &log));
-    if let Err(why) = rounded_cards(&page, &pixels, width) {
-        fail(format!("Settings' display page: {why}"), &service, &log);
+    match adb.screen(&dir, "display") {
+        Ok((width, pixels)) => {
+            if let Err(why) = rounded_cards(&page, &pixels, width) {
+                failures.push(format!(
+                    "Settings' display page: {why}\nthe overlays on Settings:\n{}",
+                    overlays.trim_end()
+                ));
+            }
+        }
+        Err(why) => failures.push(format!("reading Settings' display page: {why}")),
     }
 
     // A short window: the home page opens folded.
@@ -820,26 +925,25 @@ fn fr34_settings_opens_with_a_large_title_that_folds_and_lists_its_rows_in_round
         Err(why) => fail(why, &service, &log),
     };
     if height >= 600 {
-        fail(
-            format!("Settings' window is {height} dp tall, not the {SHORT_DP} dp asked for"),
-            &service,
-            &log,
-        );
-    }
-    let short = adb
-        .dump(&dir, "home-short")
-        .unwrap_or_else(|why| fail(why, &service, &log));
-    let _ = adb.screen(&dir, "home-short");
-    match large_title(&short) {
-        Ok(None) => {}
-        Ok(Some(title)) => fail(
-            format!(
+        failures.push(format!(
+            "Settings' window is {height} dp tall, not the {SHORT_DP} dp asked for"
+        ));
+    } else {
+        let short = adb
+            .dump(&dir, "home-short")
+            .unwrap_or_else(|why| fail(why, &service, &log));
+        let _ = adb.screen(&dir, "home-short");
+        match large_title(&short) {
+            Ok(None) => {}
+            Ok(Some(title)) => failures.push(format!(
                 "Settings opened in a window {height} dp tall with its large title at {title:?}"
-            ),
-            &service,
-            &log,
-        ),
-        Err(why) => fail(why, &service, &log),
+            )),
+            Err(why) => failures.push(why),
+        }
+    }
+
+    if !failures.is_empty() {
+        fail(failures.join("\n\n"), &service, &log);
     }
 
     let _ = api.stop();

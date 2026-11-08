@@ -211,9 +211,20 @@ jobs:
           ! grep -qi 'NO_PUBKEY\|not signed\|BADSIG\|127.0.0.1.*Err' .scratch/apt-update
           apt-cache policy desktop-subsystem-for-android | tee .scratch/apt-policy
           grep -q '127.0.0.1:8080/apt stable/main' .scratch/apt-policy
-          # The entry pointed at the pre-release suite (as the service does when the user
-          # chooses pre-releases) reads that suite, and an upgrade keeps the channel.
-          sudo sed -i 's/^Suites: stable$/Suites: prerelease/' /etc/apt/sources.list.d/dsa.sources
+          # Choosing pre-releases the way a user does, through the service, points the entry
+          # at the pre-release suite. Editing the entry by hand would not do: the service
+          # brings the entries back in line with its setting whenever it starts, and the
+          # package's scripts restart it on every upgrade.
+          if [ -d /run/systemd/system ] && systemctl is-enabled dsa-hostd.service >/dev/null 2>&1; then
+            for _ in $(seq 30); do
+              sudo dsa settings set prerelease-updates on && break
+              sleep 1
+            done
+            sudo dsa settings --json | grep -q '"prerelease_updates": *true'
+          else
+            sudo sed -i 's/^Suites: stable$/Suites: prerelease/' /etc/apt/sources.list.d/dsa.sources
+          fi
+          grep -qx 'Suites: prerelease' /etc/apt/sources.list.d/dsa.sources
           sudo apt-get update 2>&1 | tee .scratch/apt-update-prerelease
           ! grep -qi 'NO_PUBKEY\|not signed\|BADSIG\|127.0.0.1.*Err' .scratch/apt-update-prerelease
           apt-cache policy desktop-subsystem-for-android | grep -q '127.0.0.1:8080/apt prerelease/main'
@@ -295,7 +306,8 @@ jobs:
           grep -q 'digests signatures OK' rpm-check
           dnf -y reinstall --repo=dsa desktop-subsystem-for-android
           test -f /etc/yum.repos.d/dsa.repo
-          # Pointed at the pre-release repository, dnf reads it, and an upgrade keeps it.
+          # Pointed at the pre-release repository, dnf reads it, and an upgrade keeps it. The
+          # container runs no service, so the package's scripts alone keep the channel here.
           sed -i 's|/rpm/|/rpm-prerelease/|' /etc/yum.repos.d/dsa.repo
           dnf -y makecache --repo=dsa
           dnf -y --repo=dsa repoquery desktop-subsystem-for-android | grep -q desktop-subsystem-for-android

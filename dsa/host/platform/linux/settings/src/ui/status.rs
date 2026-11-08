@@ -538,7 +538,11 @@ fn android_groups(ctx: &Shared, page: &Rc<Page>, image: &adw::PreferencesGroup) 
             };
             let channel = view::android_check_channel(&version);
             let show = show.clone();
-            request(&ctx, move |c| c.use_android(&channel, false), move |r| show(r));
+            request(
+                &ctx,
+                move |c| c.use_android(&channel, false),
+                move |r| show(r),
+            );
         });
     }
     {
@@ -609,12 +613,16 @@ fn android_groups(ctx: &Shared, page: &Rc<Page>, image: &adw::PreferencesGroup) 
             }
             asking.set(true);
             let (show, asking) = (show.clone(), asking.clone());
-            request(&ctx, |c| c.android_version(), move |r| {
-                asking.set(false);
-                if r.is_ok() {
-                    show(r);
-                }
-            });
+            request(
+                &ctx,
+                |c| c.android_version(),
+                move |r| {
+                    asking.set(false);
+                    if r.is_ok() {
+                        show(r);
+                    }
+                },
+            );
             gtk::glib::ControlFlow::Continue
         });
     }

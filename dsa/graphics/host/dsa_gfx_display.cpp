@@ -16,6 +16,7 @@
  * guest wait and never shows a stale frame after a newer one. */
 
 #include "dsa_gfx_backend.h"
+#include "dsa_frame_crop.h"
 #include "dsa_gfx_display.h"
 
 #include <algorithm>
@@ -1387,17 +1388,33 @@ bool present_iosurface(PixelPresenter& presenter, uint32_t display_id, const Pen
 
 #endif /* __APPLE__ */
 
+/* Reads the frame back to memory. The frame fills the top-left corner of a ColorBuffer the
+ * size of the display, and Vulkan reads back only a whole ColorBuffer (a part of one fails
+ * with "unhandled subrect" and leaves nothing), so the whole buffer is read and the frame's
+ * rows are kept from it (dsa_frame_crop.h). */
 void present_pixels(PixelPresenter& presenter, uint32_t display_id, const PendingFrame& frame) {
     FrameBuffer* fb = FrameBuffer::getFB();
-    if (!fb || !presenter.pixels_cb || frame.width == 0 || frame.height == 0 ||
-        frame.width > kMaxSide || frame.height > kMaxSide) {
+    if (!fb || !presenter.pixels_cb) {
         return;
     }
-    const uint64_t size = uint64_t(frame.width) * frame.height * 4;
+    auto keep_alive = fb->findColorBuffer(frame.color_buffer);
+    if (!keep_alive) {
+        return;
+    }
+    const uint32_t buffer_width = keep_alive->getWidth();
+    const uint32_t buffer_height = keep_alive->getHeight();
+    if (buffer_width == 0 || buffer_height == 0 || buffer_width > kMaxSide ||
+        buffer_height > kMaxSide) {
+        return;
+    }
+    const dsa::FrameSize shown =
+        dsa::frame_in_buffer(buffer_width, buffer_height, frame.width, frame.height);
+    const uint64_t size = uint64_t(buffer_width) * buffer_height * 4;
     presenter.buffer.resize(size);
-    fb->readColorBuffer(frame.color_buffer, 0, 0, int(frame.width), int(frame.height), kGlRgba,
-                        kGlUnsignedByte, presenter.buffer.data(), size);
-    presenter.pixels_cb(presenter.context, display_id, frame.width, frame.height,
+    fb->readColorBuffer(frame.color_buffer, 0, 0, int(buffer_width), int(buffer_height),
+                        kGlRgba, kGlUnsignedByte, presenter.buffer.data(), size);
+    dsa::keep_top_left(presenter.buffer.data(), buffer_width, shown.width, shown.height);
+    presenter.pixels_cb(presenter.context, display_id, shown.width, shown.height,
                         presenter.buffer.data());
 }
 
