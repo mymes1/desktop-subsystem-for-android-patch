@@ -185,25 +185,38 @@ fn fr28_the_host_reaches_the_guests_address_and_the_guest_routes_through_the_hos
             .nat_path()
             .expect("a NAT network has a way through the host");
         eprintln!("the way between the host and the guest: {path:?}");
-        assert_eq!(
-            nat_path_problem(network.name(), &network.status().endpoint, &path),
-            None
+        let endpoint = network.status().endpoint;
+        assert_eq!(nat_path_problem(network.name(), &endpoint, &path), None);
+        // HCN names no address for the guest: the endpoint asks for DHCP, and the guest takes
+        // its address from the network's DHCP server when it brings eth0 up. No guest boots
+        // here, so there is none yet.
+        assert!(
+            endpoint.dhcp,
+            "the endpoint on a NAT network takes its address by DHCP"
         );
     }
-    let guest: Ipv4Addr = status
-        .addresses
-        .iter()
-        .filter_map(|a| a.parse::<IpAddr>().ok())
-        .find_map(|a| match a {
-            IpAddr::V4(v4) => Some(v4),
-            IpAddr::V6(_) => None,
-        })
-        .expect("HCN gives the guest an IPv4 address");
+    assert!(
+        !status
+            .addresses
+            .iter()
+            .filter_map(|a| a.parse::<IpAddr>().ok())
+            .any(|a| a.is_ipv4()),
+        "no guest has taken an address, yet the status shows {:?}",
+        status.addresses
+    );
     let gateway: Ipv4Addr = status
         .gateway
         .parse()
         .expect("the guest has a default route");
+    // The address after the gateway, on the network's /24: one the DHCP server can give the
+    // guest, and so routed as the guest's address is.
+    let guest = Ipv4Addr::from(u32::from(gateway) + 1);
     let own = host_side_adapter(&network_name(vm));
+    assert_eq!(
+        status.dns_servers,
+        vec![gateway.to_string()],
+        "the guest resolves through the gateway's DNS proxy"
+    );
 
     // The guest's default route is the host itself, on its adapter for the network: the host
     // forwards what the guest sends, through the routes it has.
@@ -211,7 +224,7 @@ fn fr28_the_host_reaches_the_guests_address_and_the_guest_routes_through_the_hos
         host_holds(gateway),
         "the gateway {gateway} is not this computer's"
     );
-    // The host sends to the guest's address through that adapter, not its default route.
+    // The host sends to the guest's addresses through that adapter, not its default route.
     assert_eq!(
         host_route_to(guest).as_deref(),
         Some(own.as_str()),
