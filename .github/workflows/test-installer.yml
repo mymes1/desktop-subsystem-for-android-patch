@@ -391,6 +391,12 @@ jobs:
             Set-AppTheme
             Remove-Item Env:DSA_CLI
             Get-Process cmd, PING -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            # What the page asked the stand-in dsa, for a page that stayed empty.
+            $calls = "$env:RUNNER_TEMP\widgets-fixture\calls.txt"
+            if (Test-Path $calls) {
+              Write-Host "the page ran dsa with:"
+              Get-Content $calls | ForEach-Object { Write-Host "  $_" }
+            }
           }
 
       # The memory limit, the VM's size and the kernel's breakdown (Memory), freezing now

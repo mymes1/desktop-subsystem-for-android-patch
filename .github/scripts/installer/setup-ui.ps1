@@ -183,6 +183,21 @@ function Assert-RowsShown($Window, [string[]]$Labels, [int]$MinVisible = 1, [int
     } while ((Get-Date) -lt $deadline)
     $all = $Window.FindAll($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($Auto::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)))
     Write-Host "text on the page: $(($all | ForEach-Object { $_.Current.Name }) -join ' | ')"
+    # The control view leaves out text a control draws in its own template, such as an error
+    # bar's message, which says why a list stayed empty; the raw view has it.
+    $raw = New-Object System.Windows.Automation.CacheRequest
+    $raw.TreeFilter = [System.Windows.Automation.Automation]::RawViewCondition
+    $raw.Add($Auto::NameProperty)
+    $active = $raw.Activate()
+    try {
+        $texts = $Window.FindAll($Scope::Descendants, (New-Object System.Windows.Automation.PropertyCondition($Auto::ControlTypeProperty, [System.Windows.Automation.ControlType]::Text)))
+        Write-Host "text on the page, raw view: $(($texts | ForEach-Object { $_.Cached.Name } | Where-Object { $_ }) -join ' | ')"
+    } finally {
+        $active.Dispose()
+    }
+    if (Test-Path screens) {
+        Save-WindowScreen $Window (Join-Path $PWD "screens\rows-missing-$(Get-Date -Format HHmmss).png")
+    }
     foreach ($label in $Labels) {
         foreach ($text in (Find-RowTexts $Window $label)) {
             Write-Host "'$label': $($text.Current.BoundingRectangle) offscreen=$($text.Current.IsOffscreen)"
