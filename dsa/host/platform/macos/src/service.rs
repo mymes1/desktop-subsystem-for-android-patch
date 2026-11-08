@@ -26,6 +26,7 @@ use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::host_api::{HostApiService, PerUser, ServiceFacts, UserAndroid};
 use dsa_host_core::power::PowerHub;
+use dsa_host_core::root_approval::RootApproval;
 use dsa_host_core::session::Session;
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{
@@ -531,6 +532,18 @@ fn create_android(shared: &Shared, name: &str) -> Result<Arc<dyn UserAndroid>, S
     session.set_adb_server(crate::adb_discovery::adb_server());
     session.set_adb_advertise(crate::adb_discovery::advertiser());
     session.set_android_files_connect(dial(dsa_host_core::file_share::ANDROID_FILES_PORT));
+    // An app's root request that needs the administrator is asked through macOS's own
+    // administrator dialog, by the levels in the user's settings.
+    let prompt = Arc::new(crate::root_approval::AuthorizationPrompt::new(
+        crate::root_approval::SecurityAuthorization,
+        shared.user.boot_dir().join("prompt-icons"),
+    ));
+    session.set_root_approval(Arc::new(RootApproval::new(
+        name,
+        Arc::clone(&shared.settings),
+        prompt,
+        dsa_host_core::root_approval::service_log(),
+    )));
     let session = Arc::new(session);
     // The guest's battery follows the Mac's, and its data is on disk before the Mac sleeps.
     shared.power.attach(&session);
@@ -686,6 +699,8 @@ pub fn serve(
         }
         let android = create_android(&factory, name)?;
         apply_settings(&android, factory.settings.get(name).ok(), &factory.build);
+        // Root elevation: the computer's switch, and the level of each of the user's apps.
+        dsa_host_core::root_elevation::apply(android.as_ref(), factory.settings.as_ref(), name);
         Ok(android)
     }));
     let facts = ServiceFacts {

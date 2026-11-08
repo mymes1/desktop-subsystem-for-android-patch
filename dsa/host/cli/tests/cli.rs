@@ -3125,3 +3125,41 @@ fn fr15_dsa_settings_chooses_whether_to_take_prereleases() {
     assert_eq!(json["prerelease_updates"], true);
     assert_eq!(json["update_channel_available"], true);
 }
+
+#[test]
+fn fr35_the_settings_apps_read_root_elevation_and_each_apps_level() {
+    use dsa_host_core::host_api::{ServiceFacts, SettingsReport};
+    let report = SettingsReport {
+        settings: dsa_host_core::settings::Settings {
+            root_elevation: true,
+            ..Default::default()
+        },
+        facts: ServiceFacts::default(),
+        network: None,
+        adb_auto_connect_state: Default::default(),
+        touch_gestures: Default::default(),
+    };
+    assert_eq!(dsa_cli::settings_json(&report)["root_elevation"], true);
+    let line = dsa_cli::describe_settings(&report)
+        .lines()
+        .find(|line| line.starts_with("Root elevation:"))
+        .expect("a root elevation line")
+        .to_string();
+    assert!(line.contains("on"), "{line}");
+    assert!(line.contains("next start of Android"), "{line}");
+
+    for level in ["off", "ask", "remember", "unavailable"] {
+        let app = dsa_host_core::tasks::AppInfo {
+            package_name: "com.example.backup".into(),
+            root: level.into(),
+            ..Default::default()
+        };
+        assert_eq!(dsa_cli::app_json(&app, false)["root"], level);
+        let described = dsa_cli::describe_app(&app);
+        let root = described
+            .lines()
+            .find(|line| line.starts_with("Root: "))
+            .expect("a root line");
+        assert!(root.starts_with(&format!("Root: {level}")), "{root}");
+    }
+}

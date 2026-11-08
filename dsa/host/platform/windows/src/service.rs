@@ -468,6 +468,15 @@ pub fn create_user_android(
         Arc::new(PerformanceCounterClock),
         Arc::new(move |line: &str| eprintln!("{user_name}: {line}")),
     )));
+    // An app's su call is decided by the user's settings, and asked of the computer's
+    // administrator through UAC under the app's own name and icon; each decision goes to this
+    // log.
+    session.set_root_approval(Arc::new(dsa_host_core::root_approval::RootApproval::new(
+        sid,
+        settings_store(config),
+        Arc::new(crate::root_approval::UacPrompt::new(sid)),
+        dsa_host_core::root_approval::service_log(),
+    )));
     let session = Arc::new(session);
     {
         let (watched, user_name) = (Arc::downgrade(&session), sid.to_string());
@@ -982,6 +991,8 @@ where
                         eprintln!("{factory_build}: developer mode for {sid}: {why}");
                     }
                 }
+                // Root elevation: the computer's switch, and the level of each of their apps.
+                dsa_host_core::root_elevation::apply(android.as_ref(), factory_store.as_ref(), sid);
             }
             Err(why) => eprintln!("{factory_build}: no Android for {sid}: {why}"),
         }

@@ -31,6 +31,7 @@ use dsa_host_core::host_config::DEFAULT_MEMORY_MB;
 use dsa_host_core::host_paths::HostPaths;
 use dsa_host_core::memory::{summary_lines, HostMemory, LOG_INTERVAL};
 use dsa_host_core::power::PowerHub;
+use dsa_host_core::root_approval::RootApproval;
 use dsa_host_core::session::{Session, SessionState};
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{
@@ -465,6 +466,35 @@ pub fn create_user_android(
         Arc::new(MonotonicClock),
         Arc::new(move |line: &str| eprintln!("{line_user}: {line}")),
     )));
+    // An app's root request that needs the administrator is asked through polkit, in the
+    // user's desktop session, by the levels in the user's settings; in a boot check that
+    // names a private folder approver, it is asked through that folder instead.
+    let prompt: Option<Arc<dyn dsa_host_core::root_approval::ApprovalPrompt>> = match config
+        .test_root_approver()
+        .map_err(|e| e.to_string())?
+    {
+        Some(folder) => Some(Arc::new(folder)),
+        None => match crate::root_approval::SystemBusAuthority::connect() {
+            Ok(authority) => Some(Arc::new(
+                crate::root_approval::PolkitPrompt::new(authority, uid).with_home(&account.home),
+            )),
+            Err(why) => {
+                eprintln!(
+                    "{user}: root: polkit cannot be reached, so every root request is refused: {why}"
+                );
+                None
+            }
+        },
+    };
+    if let Some(prompt) = prompt {
+        let log_user = user.to_string();
+        session.set_root_approval(Arc::new(RootApproval::new(
+            user,
+            Arc::clone(&store),
+            prompt,
+            Arc::new(move |line: &str| eprintln!("{log_user}: {line}")),
+        )));
+    }
     let session = Arc::new(session);
     {
         let watched = Arc::downgrade(&session);
@@ -820,6 +850,12 @@ pub fn serve(config: HostConfig, build: &str, stop: Arc<AtomicBool>) -> Result<(
                         eprintln!("{user}: developer mode: {why}");
                     }
                 }
+                // Root elevation: the computer's switch, and the level of each of their apps.
+                dsa_host_core::root_elevation::apply(
+                    android.as_ref(),
+                    factory_store.as_ref(),
+                    user,
+                );
             }
             Err(why) => eprintln!("{user}: no Android: {why}"),
         }
@@ -1000,5 +1036,65 @@ mod tests {
         assert!(!guest_traces_input(
             "androidboot.hardware.dsa_input_trace=0"
         ));
+    }
+
+    #[test]
+    fn fr35_the_test_approver_uses_real_settings_and_clears_grace_on_a_new_boot() {
+        use dsa_host_core::root_approval::{
+            ApprovalPrompt, FolderApprover, RootApproval, ANSWER_FILE, REQUESTS_FILE,
+        };
+        use dsa_host_core::settings::MemorySettings;
+        use dsa_protocol::control::SuRequest;
+
+        let dir = std::env::temp_dir().join(format!("dsa-test-approver-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(ANSWER_FILE), "allow\n").unwrap();
+
+        let store: Arc<dyn SettingsStore> = Arc::new(MemorySettings::default());
+        let mut machine = store.machine();
+        machine.root_elevation = true;
+        store.set_machine(machine).unwrap();
+        store.set_root_app("uid:0", "com.termux", "ask").unwrap();
+
+        let prompt: Arc<dyn ApprovalPrompt> = Arc::new(FolderApprover::new(&dir));
+        let approval =
+            RootApproval::new("uid:0", Arc::clone(&store), prompt, Arc::new(|_: &str| {}));
+
+        let call = |request_id: u64| {
+            approval.decide(
+                &SuRequest {
+                    request_id,
+                    package: "com.termux".into(),
+                    uid: 10_142,
+                    command: vec!["id".into()],
+                    interactive: false,
+                },
+                None,
+            )
+        };
+        assert!(call(1).approved);
+        assert!(call(2).approved);
+        assert_eq!(
+            std::fs::read_to_string(dir.join(REQUESTS_FILE))
+                .unwrap()
+                .lines()
+                .count(),
+            1,
+            "the second su call within grace does not prompt again"
+        );
+
+        approval.restart();
+        assert!(call(3).approved);
+        assert_eq!(
+            std::fs::read_to_string(dir.join(REQUESTS_FILE))
+                .unwrap()
+                .lines()
+                .count(),
+            2,
+            "restarting clears the grace and prompts again"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

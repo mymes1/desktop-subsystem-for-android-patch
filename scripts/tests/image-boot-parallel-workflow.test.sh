@@ -21,6 +21,7 @@ check() { # test, timeout, artifact, check name
 check widgets 12 widget-boot-logs "Place a widget on the booted image"
 check system_screens 14 system-screens-captures "Check Android's system screens on the booted image"
 check media 14 media-check-logs "Play sound and run codecs in an app on the booted image"
+check media 23 root-check-logs "Approve and refuse root for an app on the booted image"
 check overlays 16 overlay-check-logs "Lay the ARM translator and Google Play over the booted system"
 check graphics 28 graphics-check-results "Run the Vulkan CTS subset and the graphics test apps on the booted image"
 grep -Fq 'timeout-minutes: ${{ matrix.timeout }}' <<<"$boot"
@@ -34,6 +35,10 @@ grep -Eq 'needs: \[boot-image, boot-checks(, [a-z-]+)*\]' <<<"$boot"
 grep -Fq 'steps: &image-steps' "$workflow"
 grep -Fq 'steps: *image-steps' <<<"$(job boot-image)"
 grep -Fq 'android: ["17"]' <<<"$(job boot-image)"
+# The boot checks boot the kernel built from the same commit, so a kernel change (the su
+# guard among them) is checked before it ships.
+grep -Eq 'needs: \[([a-z-]+, )*boot-kernel(, [a-z-]+)*\]' <<<"$boot"
+grep -Fq 'uses: ./.github/actions/guest-kernel' <<<"$(job boot-kernel)"
 grep -Fq 'exclude:' <<<"$(job image)"
 
 # Each boot runner gets what the image job's runner had: KVM and vhost-vsock, the VM programs
@@ -42,7 +47,7 @@ grep -Fq 'exclude:' <<<"$(job image)"
 for needed in 'sudo modprobe vhost_vsock' 'name: boot-check-vm-programs' '/etc/apparmor.d/dsa-vm' \
     'weston libxkbcommon0 mesa-vulkan-drivers libvulkan1 dbus-daemon' 'dbus-daemon --session' \
     'weston --backend=headless' 'DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"' \
-    'name: boot-check-programs' 'name: boot-image' 'needs.boot-image.outputs.kernel'; do
+    'name: boot-check-programs' 'name: boot-image' 'name: boot-kernel'; do
   grep -Fq -- "$needed" <<<"$boot" || { echo "the boot checks lack: $needed"; exit 1; }
 done
 # The programs go back to the paths the checks were built to start them from.

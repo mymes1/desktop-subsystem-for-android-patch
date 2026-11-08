@@ -1801,4 +1801,73 @@
   <data name="Identity_NotReported" xml:space="preserve">
     <value>알 수 없음</value>
   </data>
+  <data name="AppsRoot.Name" xml:space="preserve">
+    <value>루트 권한</value>
+  </data>
+  <data name="Apps_Root_off" xml:space="preserve">
+    <value>루트: 요청 불가</value>
+  </data>
+  <data name="Apps_Root_ask" xml:space="preserve">
+    <value>루트: 요청할 때 묻기</value>
+  </data>
+  <data name="Apps_Root_remember" xml:space="preserve">
+    <value>루트: 기억(묻지 않음)</value>
+  </data>
+  <data name="Apps_RootTip_unavailable" xml:space="preserve">
+    <value>이 PC에서 루트 권한이 꺼져 있습니다. 관리자가 고급 페이지에서 켭니다.</value>
+  </data>
+  <data name="Apps_RootTip_unknown" xml:space="preserve">
+    <value>DSA 서비스가 이 앱의 루트 수준을 알려 주지 않습니다. DSA를 업데이트하면 여기서 고를 수 있습니다.</value>
+  </data>
+  <data name="Apps_RootNotChanged" xml:space="preserve">
+    <value>{0}의 루트 수준을 바꾸지 않았습니다: {1}</value>
+  </data>
+  <data name="Apps_RootSet_off" xml:space="preserve">
+    <value>이제 {0}은(는) 루트를 쓸 수 없습니다. Android가 다음에 시작할 때부터 이 앱에게 su가 보이지 않습니다.</value>
+  </data>
+  <data name="Apps_RootSet_ask" xml:space="preserve">
+    <value>이제 {0}이(가) su를 부를 때마다 이 PC의 관리자에게 승인을 받습니다. 전에 su가 보이지 않았다면 Android가 다음에 시작할 때부터 보입니다.</value>
+  </data>
+  <data name="Apps_RootSet_remember" xml:space="preserve">
+    <value>이제 {0}은(는) 묻지 않고 su를 씁니다. 전에 su가 보이지 않았다면 Android가 다음에 시작할 때부터 보입니다.</value>
+  </data>
+  <data name="AppsRootOffBar.Title" xml:space="preserve">
+    <value>루트 권한이 꺼져 있습니다</value>
+  </data>
+  <data name="AppsRootOffBar.Message" xml:space="preserve">
+    <value>어떤 앱도 su를 쓸 수 없습니다. 이 PC의 관리자가 고급 페이지에서 루트 권한을 켜면, 여기서 앱마다 수준을 고를 수 있습니다.</value>
+  </data>
+  <data name="AppsRootNote.Text" xml:space="preserve">
+    <value>루트 권한: 요청 불가는 앱에게 su를 보이지 않게 합니다. 요청할 때 묻기는 요청마다 앱 이름이 적힌 관리자 승인 창을 띄우고, 승인한 뒤 15분 동안은 다시 묻지 않습니다. 기억은 묻지 않고 승인하므로, 이 수준을 고르려면 관리자 승인이 필요합니다.</value>
+  </data>
+  <data name="RootHeader.Text" xml:space="preserve">
+    <value>루트 권한</value>
+  </data>
+  <data name="RootElevationCard.Header" xml:space="preserve">
+    <value>Android 앱의 루트 권한 요청 허용</value>
+  </data>
+  <data name="RootElevationCard.Description" xml:space="preserve">
+    <value>앱 페이지에서 허용한 앱은 이 PC의 관리자가 승인하면 루트로 명령을 실행할 수 있습니다. sudo와 같은 방식입니다. 기본은 끔입니다. Android 이미지, 빌드 속성, SELinux는 그대로입니다.</value>
+  </data>
+  <data name="RootElevationAdminReason.Text" xml:space="preserve">
+    <value>이 PC의 모든 사용자에게 적용되므로 관리자만 바꿀 수 있습니다. 관리자 권한으로 변경을 누르면 Windows가 허용할지 묻습니다.</value>
+  </data>
+  <data name="RootElevationRestartBar.Title" xml:space="preserve">
+    <value>적용하려면 Android를 다시 시작하세요</value>
+  </data>
+  <data name="RootElevationRestartBar.Message" xml:space="preserve">
+    <value>루트 권한 설정은 Android가 다음에 시작할 때 적용됩니다. 일반 페이지에서 Android를 중지한 뒤 앱을 여세요.</value>
+  </data>
+  <data name="RootLogCard.Header" xml:space="preserve">
+    <value>요청이 기록되는 곳</value>
+  </data>
+  <data name="RootElevation_LogAt" xml:space="preserve">
+    <value>요청마다 앱, 시각, 승인 여부, 실행한 명령이 서비스 로그에 남습니다: {0}</value>
+  </data>
+  <data name="RootElevation_LogUnknown" xml:space="preserve">
+    <value>요청마다 앱, 시각, 승인 여부, 실행한 명령이 서비스 로그에 남습니다.</value>
+  </data>
+  <data name="RootNote.Text" xml:space="preserve">
+    <value>앱마다의 수준은 앱 페이지에서 고릅니다. 사용자마다 자기 Android의 앱을 정합니다.</value>
+  </data>
 </root>

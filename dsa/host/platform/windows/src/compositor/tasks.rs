@@ -81,7 +81,7 @@ pub fn watch(
         while !stop.load(Ordering::Relaxed) {
             match stream.next(POLL) {
                 Ok(Some(event)) => {
-                    if !deliver(ManagerEvent::Task(event)) {
+                    if !deliver(ManagerEvent::Task(Box::new(event))) {
                         return;
                     }
                 }

@@ -36,8 +36,8 @@ pub fn app_page_url(package: &str) -> Option<String> {
 pub enum ManagerEvent {
     /// A new watch began; these are the guest's tasks now.
     Sync(Vec<TaskEvent>),
-    /// A change to the guest's tasks.
-    Task(TaskEvent),
+    /// A change to the guest's tasks. Boxed, as an app's event carries its icons.
+    Task(Box<TaskEvent>),
     /// The service cannot be reached, so the guest's tasks are unknown.
     Lost,
     /// The request to end a task whose window the user closed did not reach the guest.
@@ -312,7 +312,7 @@ impl<P: Platform> Manager<P> {
         for action in actions {
             match action {
                 HostAction::Start { package, app } => {
-                    if let Err(why) = self.platform.start_host(&package, app.as_ref()) {
+                    if let Err(why) = self.platform.start_host(&package, app.as_deref()) {
                         let line = format!("could not start {package}'s window program: {why}");
                         self.platform.log(&line);
                         self.hosts.start_failed(&package);
@@ -448,8 +448,11 @@ mod tests {
     fn with_window() -> Manager<Fake> {
         let now = Instant::now();
         let mut manager = Manager::new(Fake::default());
-        manager.handle(ManagerEvent::Task(TaskEvent::App(app())), now);
-        manager.handle(ManagerEvent::Task(TaskEvent::Updated(task(7))), now);
+        manager.handle(ManagerEvent::Task(Box::new(TaskEvent::App(app()))), now);
+        manager.handle(
+            ManagerEvent::Task(Box::new(TaskEvent::Updated(task(7)))),
+            now,
+        );
         let attached = ManagerEvent::Attached {
             host: HOST,
             package: PACKAGE.into(),
@@ -460,7 +463,7 @@ mod tests {
             task_id: 7,
             display_id: 3,
         };
-        manager.handle(ManagerEvent::Task(frames), now);
+        manager.handle(ManagerEvent::Task(Box::new(frames)), now);
         manager
     }
 
@@ -573,8 +576,11 @@ mod tests {
             ..Fake::default()
         };
         let mut manager = Manager::new(fake);
-        manager.handle(ManagerEvent::Task(TaskEvent::App(app())), now);
-        manager.handle(ManagerEvent::Task(TaskEvent::Updated(task(7))), now);
+        manager.handle(ManagerEvent::Task(Box::new(TaskEvent::App(app()))), now);
+        manager.handle(
+            ManagerEvent::Task(Box::new(TaskEvent::Updated(task(7)))),
+            now,
+        );
         assert!(manager.platform().started.is_empty());
         assert!(manager.platform().routes.is_empty());
     }
@@ -583,7 +589,7 @@ mod tests {
     fn fr7_the_installed_apps_reach_the_app_bundles() {
         let mut manager = Manager::new(Fake::default());
         let installed = TaskEvent::Installed(vec![app()]);
-        manager.handle(ManagerEvent::Task(installed), Instant::now());
+        manager.handle(ManagerEvent::Task(Box::new(installed)), Instant::now());
         assert_eq!(manager.platform().installed, vec![PACKAGE.to_string()]);
     }
 
@@ -642,7 +648,10 @@ mod tests {
             multiple_windows: true,
             ..app()
         };
-        manager.handle(ManagerEvent::Task(TaskEvent::App(several)), Instant::now());
+        manager.handle(
+            ManagerEvent::Task(Box::new(TaskEvent::App(several))),
+            Instant::now(),
+        );
         let offered = manager.platform().sent.iter().any(|(host, message)| {
             *host == HOST && *message == ToHost::AppMenu { new_window: true }
         });

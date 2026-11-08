@@ -1138,6 +1138,11 @@ message AppInfo {
   bytes caption_icon_png = 14;
   // Whether the app supports several windows at once, so its windows offer New window.
   bool multiple_windows = 15;
+  // How far the app may elevate to root: "off" (the default, su does not exist
+  // for it), "ask" (each su call waits for the host's administrator approval) or "remember"
+  // (approved without asking, within the grace). "unavailable" when root elevation is off for
+  // the whole computer, so the level cannot be set. Set it with SetAppRoot.
+  string root = 16;
 }
 
 // Installs an app of the caller's Android again from the APKs it has there, with its native
@@ -1180,6 +1185,40 @@ message RunAsArmResult {
   string message = 3;
   // Whether the app's native code runs as arm64-v8a now.
   bool on = 4;
+}
+
+// Sets how far one app may elevate to root. `level` is "off", "ask" or
+// "remember". Moving an app to "remember" needs the host's administrator approval, as turning
+// the whole feature on does; the service refuses a caller who is not an administrator with
+// ERROR_CODE_NOT_PERMITTED. A change clears that app's grace. The answer is AppRootResult.
+message SetAppRoot {
+  string package_name = 1;
+  string level = 2;
+}
+
+// How a SetAppRoot went.
+enum AppRootStatus {
+  APP_ROOT_STATUS_UNSPECIFIED = 0;
+  // The app's level is set as asked.
+  APP_ROOT_STATUS_SUCCESS = 1;
+  // Root elevation is off for the whole computer, so no app level can be set.
+  APP_ROOT_STATUS_FEATURE_OFF = 2;
+  // The caller is not an administrator, and the change needs one ("remember").
+  APP_ROOT_STATUS_NOT_PERMITTED = 3;
+  // `level` was not "off", "ask" or "remember".
+  APP_ROOT_STATUS_INVALID_LEVEL = 4;
+  // Anything else. The message says what.
+  APP_ROOT_STATUS_OTHER = 5;
+}
+
+// The answer to SetAppRoot.
+message AppRootResult {
+  string package_name = 1;
+  AppRootStatus status = 2;
+  // The app's level as it stands now: "off", "ask" or "remember".
+  string level = 3;
+  // Words a person can act on, for the log and the settings app.
+  string message = 4;
 }
 
 // The apps installed in the caller's Android that a launcher lists. The list is kept while
@@ -1500,6 +1539,12 @@ message Settings {
   // Why the host refused, in words, while touch_gestures_state is "failed". A client cannot
   // change it.
   string touch_gestures_problem = 36;
+  // Whether apps in the caller's Android may elevate to root through the host's administrator
+  // approval. Off by default. It applies to every user of the computer, so only
+  // an administrator may change it, and it takes effect from the next start of Android. With
+  // it off, su exists for no app and the per-app levels do nothing. A client sends back the
+  // value it read.
+  bool root_elevation = 37;
   // A run mode setting (run_mode, a RunMode enum, stop_after_secs and keep_for_notifications)
   // was here and is gone: an idle Android stays in Doze. Its numbers and names are never
   // used again, so an older peer that still sends them is read without them. The enum name
@@ -2076,6 +2121,7 @@ message Request {
     GetGapps get_gapps = 401;
     RemoveGapps remove_gapps = 402;
     SetRunAsArm set_run_as_arm = 340;
+    SetAppRoot set_app_root = 341;
     ReportTouchGestures report_touch_gestures = 350;
   }
 }
@@ -2109,6 +2155,7 @@ message Response {
     Gapps gapps = 400;
     GappsProgress gapps_progress = 401;
     RunAsArmResult run_as_arm_result = 340;
+    AppRootResult app_root_result = 341;
   }
 }
 

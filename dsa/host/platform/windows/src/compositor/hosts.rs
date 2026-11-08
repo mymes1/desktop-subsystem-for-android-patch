@@ -94,8 +94,8 @@ fn open_app_page(package: &str) -> Result<(), String> {
 pub enum ManagerEvent {
     /// A new watch began; these are the guest's tasks now.
     Sync(Vec<TaskEvent>),
-    /// A change to the guest's tasks.
-    Task(TaskEvent),
+    /// A change to the guest's tasks. Boxed, as an app's event carries its icons.
+    Task(Box<TaskEvent>),
     /// The service cannot be reached, so the guest's tasks are unknown.
     Lost,
     /// The request to end a task whose window the user closed did not reach the guest.
@@ -765,7 +765,7 @@ impl Manager {
                 self.change(changes, now);
             }
             ManagerEvent::Task(event) => {
-                if let TaskEvent::App(app) = &event {
+                if let TaskEvent::App(app) = &*event {
                     let actions = self.hosts.app(app, now);
                     self.carry_out(actions);
                 }
@@ -960,7 +960,7 @@ impl Manager {
         for action in actions {
             match action {
                 HostAction::Start { package, app } => {
-                    if let Err(why) = self.setup.launcher.start(&package, app.as_ref()) {
+                    if let Err(why) = self.setup.launcher.start(&package, app.as_deref()) {
                         self.log(&format!(
                             "could not start {package}'s window program: {why}"
                         ));

@@ -11,9 +11,13 @@ struct AppsPage: View {
         Form {
             Section {
                 Text(T("AppsIntro.Text")).font(.callout).foregroundStyle(.secondary)
+                Text(T("AppsRootNote.Text")).font(.callout).foregroundStyle(.secondary)
             }
             BannerSection(shown: vm.error != nil, kind: .error, title: T("AppsErrorBar.Title"), message: vm.error ?? "")
             BannerSection(shown: vm.message != nil, kind: .success, title: T("AppsDoneBar.Title"), message: vm.message ?? "")
+            // Each app's root level is chosen below once root access is on for this Mac.
+            BannerSection(shown: vm.rootUnavailable, kind: .info, title: T("AppsRootOffBar.Title"),
+                          message: T("AppsRootOffBar.Message"))
             Section {
                 LinkRow(title: T("AppsManageCard.Title"), detail: T("AppsManageCard.Description"), enabled: !vm.isBusy) {
                     Task { await vm.manage() }
@@ -108,6 +112,22 @@ struct AppRowView: View {
                 if let tip = row.runAsArmTip {
                     Text(tip).font(.callout).foregroundStyle(.secondary)
                 }
+                // How far the app may use root: not at all, asking an administrator each time,
+                // or without asking.
+                Picker(T("AppsRoot.Name"), selection: Binding(
+                    get: { row.rootIndex },
+                    set: { index in Task { await vm.setRoot(row.package, index) } })) {
+                    if row.rootIndex < 0 {
+                        Text(T("AppsRoot.Name")).tag(-1)
+                    }
+                    ForEach(Array(vm.rootChoices.enumerated()), id: \.offset) { item in
+                        Text(item.element.label).tag(item.offset)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 260)
+                .disabled(!row.canChangeRoot || vm.isBusy)
+                .help(row.rootTip ?? T("AppsRootNote.Text"))
                 Spacer()
             }
         }
@@ -500,6 +520,25 @@ struct AdvancedPage: View {
                 }
             }
             GappsSection(vm: gapps)
+            Section(T("RootHeader.Text")) {
+                AdministratorSwitchRow(
+                    title: T("RootElevationCard.Header"), detail: T("RootElevationCard.Description"),
+                    isOn: vm.rootElevation, canChange: vm.canChangeRootElevation,
+                    needsAdministrator: vm.rootElevationNeedsAdministrator, set: { await vm.setRootElevation($0) }) {
+                    Task { await changeAsAdministrator(vm, ["settings", "set", "root-elevation", vm.rootElevation ? "off" : "on"]) }
+                }
+                // Why the switch does not move for this user.
+                if vm.rootElevationNeedsAdministrator {
+                    Text(T("RootElevationAdminReason.Text")).font(.callout).foregroundStyle(.secondary)
+                }
+                if vm.rootElevationRestartNeeded {
+                    Banner(kind: .info, title: T("RootElevationRestartBar.Title"), message: T("RootElevationRestartBar.Message"))
+                }
+                LinkRow(title: T("RootLogCard.Header"), detail: vm.rootElevationLog) {
+                    Shell.open(folder: Shell.serviceLogFolder(vm.logDir))
+                }
+                Text(T("RootNote.Text")).font(.callout).foregroundStyle(.secondary)
+            }
             Section(T("DiagnosticsHeader.Text")) {
                 AdministratorSwitchRow(
                     title: T("InputTraceCard.Header"), detail: T("InputTraceCard.Description"), isOn: vm.inputTrace,

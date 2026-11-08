@@ -547,6 +547,39 @@ public interface EnvelopeOrBuilder extends
   io.github.thisisthepy.dsa.control.v1.GoogleDeviceId getGoogleDeviceId();
 
   /**
+   * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 411;</code>
+   * @return Whether the rootElevationConfig field is set.
+   */
+  boolean hasRootElevationConfig();
+  /**
+   * <code>.dsa.control.v1.RootElevationConfig root_elevation_config = 411;</code>
+   * @return The rootElevationConfig.
+   */
+  io.github.thisisthepy.dsa.control.v1.RootElevationConfig getRootElevationConfig();
+
+  /**
+   * <code>.dsa.control.v1.SuRequest su_request = 412;</code>
+   * @return Whether the suRequest field is set.
+   */
+  boolean hasSuRequest();
+  /**
+   * <code>.dsa.control.v1.SuRequest su_request = 412;</code>
+   * @return The suRequest.
+   */
+  io.github.thisisthepy.dsa.control.v1.SuRequest getSuRequest();
+
+  /**
+   * <code>.dsa.control.v1.SuDecision su_decision = 413;</code>
+   * @return Whether the suDecision field is set.
+   */
+  boolean hasSuDecision();
+  /**
+   * <code>.dsa.control.v1.SuDecision su_decision = 413;</code>
+   * @return The suDecision.
+   */
+  io.github.thisisthepy.dsa.control.v1.SuDecision getSuDecision();
+
+  /**
    * <code>.dsa.control.v1.DeviceIdle device_idle = 42;</code>
    * @return Whether the deviceIdle field is set.
    */

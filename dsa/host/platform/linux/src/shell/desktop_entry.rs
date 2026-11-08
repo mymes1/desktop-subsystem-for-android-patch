@@ -135,6 +135,10 @@ pub struct Folders {
     pub applications: PathBuf,
     /// The folder the icons are kept in.
     pub icons: PathBuf,
+    /// `$XDG_DATA_HOME/icons/hicolor`: the user's part of the theme every icon theme falls
+    /// back to, where each app's icon is also kept by its name ([`icon_name`]), for what
+    /// takes an icon by name rather than by path, such as polkit's dialog.
+    pub theme_icons: PathBuf,
 }
 
 impl Folders {
@@ -146,6 +150,7 @@ impl Folders {
         Some(Folders {
             applications: data.join("applications"),
             icons: data.join("dsa/icons"),
+            theme_icons: data.join("icons/hicolor"),
         })
     }
 
@@ -173,6 +178,7 @@ pub fn sync(folders: &Folders, apps: &[AppInfo], program: &Path) -> io::Result<u
         } else {
             let path = folders.icons.join(format!("{}.png", app.package_name));
             write_if_changed(&path, &app.icon_png)?;
+            write_theme_icon(&folders.theme_icons, &app.package_name, &app.icon_png)?;
             Some(path)
         };
         let text = entry(app, program, icon.as_deref());
@@ -198,10 +204,61 @@ pub fn sync(folders: &Folders, apps: &[AppInfo], program: &Path) -> io::Result<u
             if !apps.iter().any(|app| app.package_name == package) {
                 let _ = fs::remove_file(&path);
                 let _ = fs::remove_file(folders.icons.join(format!("{package}.png")));
+                for size in THEME_SIZES {
+                    let _ = fs::remove_file(theme_icon_path(&folders.theme_icons, package, size));
+                }
             }
         }
     }
     Ok(written)
+}
+
+/// The icon theme's sizes, as hicolor's own `index.theme` lists its `apps` folders. A theme
+/// reads only the folders its index lists, so an icon goes in the one nearest its size.
+pub const THEME_SIZES: [u32; 13] = [16, 22, 24, 32, 36, 48, 64, 72, 96, 128, 192, 256, 512];
+
+/// The icon theme name of the app's icon: the same as its entry's ID.
+pub fn icon_name(package: &str) -> String {
+    app_id(package)
+}
+
+/// Where the app's icon is kept in the theme folder `theme` at `size`.
+pub fn theme_icon_path(theme: &Path, package: &str, size: u32) -> PathBuf {
+    theme
+        .join(format!("{size}x{size}"))
+        .join("apps")
+        .join(format!("{}.png", icon_name(package)))
+}
+
+/// The theme size nearest a PNG image's width, read from its header; 256 when the header
+/// cannot be read.
+pub fn theme_size(png: &[u8]) -> u32 {
+    let width = png
+        .get(16..20)
+        .filter(|_| png.starts_with(b"\x89PNG\r\n\x1a\n"))
+        .map(|bytes| u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]));
+    let Some(width) = width.filter(|width| *width > 0) else {
+        return 256;
+    };
+    THEME_SIZES
+        .into_iter()
+        .min_by_key(|size| size.abs_diff(width))
+        .unwrap_or(256)
+}
+
+/// Keeps the app's icon in the theme folder `theme`, at the size nearest its own, and in no
+/// other size.
+fn write_theme_icon(theme: &Path, package: &str, png: &[u8]) -> io::Result<()> {
+    let size = theme_size(png);
+    let path = theme_icon_path(theme, package, size);
+    if let Some(folder) = path.parent() {
+        fs::create_dir_all(folder)?;
+    }
+    write_if_changed(&path, png)?;
+    for other in THEME_SIZES.into_iter().filter(|other| *other != size) {
+        let _ = fs::remove_file(theme_icon_path(theme, package, other));
+    }
+    Ok(())
 }
 
 /// Writes `content` to `path` unless it already holds it, through a file beside it so a
@@ -279,10 +336,45 @@ mod tests {
         );
         let folders = Folders::of_user(Some(PathBuf::from("/data")), None).unwrap();
         assert_eq!(folders.icons, PathBuf::from("/data/dsa/icons"));
+        assert_eq!(folders.theme_icons, PathBuf::from("/data/icons/hicolor"));
         assert_eq!(
             Folders::of_user(Some(PathBuf::from("relative")), None),
             None,
             "a relative XDG_DATA_HOME is ignored, as the spec says"
         );
+    }
+
+    /// A PNG header for an image `width` pixels wide, enough for [`theme_size`].
+    fn png_of_width(width: u32) -> Vec<u8> {
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+        png.extend_from_slice(&width.to_be_bytes());
+        png.extend_from_slice(&width.to_be_bytes());
+        png
+    }
+
+    #[test]
+    fn fr35_each_apps_icon_is_also_in_the_icon_theme_by_its_name() {
+        assert_eq!(icon_name("com.example.d"), "dsa-com.example.d");
+        assert_eq!(theme_size(&png_of_width(192)), 192);
+        assert_eq!(theme_size(&png_of_width(200)), 192);
+        assert_eq!(theme_size(&png_of_width(1000)), 512);
+        assert_eq!(theme_size(b"not a png"), 256);
+
+        let root = std::env::temp_dir().join(format!("dsa-theme-icons-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let folders = Folders::of_user(Some(root.clone()), None).unwrap();
+        let mut notes = app("com.example.d", "Notes");
+        notes.icon_png = png_of_width(96);
+        sync(&folders, &[notes], Path::new("/x")).unwrap();
+        let themed = theme_icon_path(&folders.theme_icons, "com.example.d", 96);
+        assert_eq!(
+            themed,
+            root.join("icons/hicolor/96x96/apps/dsa-com.example.d.png")
+        );
+        assert!(themed.is_file());
+        // Gone with the app.
+        sync(&folders, &[], Path::new("/x")).unwrap();
+        assert!(!themed.exists());
+        let _ = fs::remove_dir_all(&root);
     }
 }

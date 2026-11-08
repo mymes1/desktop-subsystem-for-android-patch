@@ -1182,6 +1182,12 @@ pub struct AppInfo {
     /// Whether the app supports several windows at once, so its windows offer New window.
     #[prost(bool, tag = "15")]
     pub multiple_windows: bool,
+    /// How far the app may elevate to root: "off" (the default, su does not exist
+    /// for it), "ask" (each su call waits for the host's administrator approval) or "remember"
+    /// (approved without asking, within the grace). "unavailable" when root elevation is off for
+    /// the whole computer, so the level cannot be set. Set it with SetAppRoot.
+    #[prost(string, tag = "16")]
+    pub root: ::prost::alloc::string::String,
 }
 /// Installs an app of the caller's Android again from the APKs it has there, with its native
 /// code for arm64-v8a (`on`, run through the ARM translator) or for x86_64. Android must be
@@ -1211,6 +1217,31 @@ pub struct RunAsArmResult {
     /// Whether the app's native code runs as arm64-v8a now.
     #[prost(bool, tag = "4")]
     pub on: bool,
+}
+/// Sets how far one app may elevate to root. `level` is "off", "ask" or
+/// "remember". Moving an app to "remember" needs the host's administrator approval, as turning
+/// the whole feature on does; the service refuses a caller who is not an administrator with
+/// ERROR_CODE_NOT_PERMITTED. A change clears that app's grace. The answer is AppRootResult.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct SetAppRoot {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub level: ::prost::alloc::string::String,
+}
+/// The answer to SetAppRoot.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AppRootResult {
+    #[prost(string, tag = "1")]
+    pub package_name: ::prost::alloc::string::String,
+    #[prost(enumeration = "AppRootStatus", tag = "2")]
+    pub status: i32,
+    /// The app's level as it stands now: "off", "ask" or "remember".
+    #[prost(string, tag = "3")]
+    pub level: ::prost::alloc::string::String,
+    /// Words a person can act on, for the log and the settings app.
+    #[prost(string, tag = "4")]
+    pub message: ::prost::alloc::string::String,
 }
 /// The apps installed in the caller's Android that a launcher lists. The list is kept while
 /// the Android is stopped, because its apps stay installed.
@@ -1640,6 +1671,13 @@ pub struct Settings {
     /// change it.
     #[prost(string, tag = "36")]
     pub touch_gestures_problem: ::prost::alloc::string::String,
+    /// Whether apps in the caller's Android may elevate to root through the host's administrator
+    /// approval. Off by default. It applies to every user of the computer, so only
+    /// an administrator may change it, and it takes effect from the next start of Android. With
+    /// it off, su exists for no app and the per-app levels do nothing. A client sends back the
+    /// value it read.
+    #[prost(bool, tag = "37")]
+    pub root_elevation: bool,
 }
 /// How the caller's Android reaches the network.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -2249,7 +2287,7 @@ pub struct Request {
     pub id: u64,
     #[prost(
         oneof = "request::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 400, 401, 402, 340, 350"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 25, 26, 22, 23, 24, 27, 29, 30, 31, 32, 33, 34, 28, 35, 36, 39, 38, 45, 70, 71, 37, 120, 121, 200, 72, 73, 74, 80, 81, 41, 42, 43, 44, 300, 301, 302, 303, 90, 310, 320, 321, 322, 330, 331, 400, 401, 402, 340, 341, 350"
     )]
     pub body: ::core::option::Option<request::Body>,
 }
@@ -2389,6 +2427,8 @@ pub mod request {
         RemoveGapps(super::RemoveGapps),
         #[prost(message, tag = "340")]
         SetRunAsArm(super::SetRunAsArm),
+        #[prost(message, tag = "341")]
+        SetAppRoot(super::SetAppRoot),
         #[prost(message, tag = "350")]
         ReportTouchGestures(super::ReportTouchGestures),
     }
@@ -2399,7 +2439,7 @@ pub struct Response {
     pub id: u64,
     #[prost(
         oneof = "response::Body",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 400, 401, 340"
+        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 80, 17, 18, 300, 90, 320, 321, 330, 400, 401, 340, 341"
     )]
     pub body: ::core::option::Option<response::Body>,
 }
@@ -2459,6 +2499,8 @@ pub mod response {
         GappsProgress(super::GappsProgress),
         #[prost(message, tag = "340")]
         RunAsArmResult(super::RunAsArmResult),
+        #[prost(message, tag = "341")]
+        AppRootResult(super::AppRootResult),
     }
 }
 /// The one message type on the wire. Each frame carries exactly one.
@@ -3353,6 +3395,50 @@ impl RunAsArmStatus {
             "RUN_AS_ARM_STATUS_NO_LIBRARIES" => Some(Self::NoLibraries),
             "RUN_AS_ARM_STATUS_TRANSLATION_OFF" => Some(Self::TranslationOff),
             "RUN_AS_ARM_STATUS_OTHER" => Some(Self::Other),
+            _ => None,
+        }
+    }
+}
+/// How a SetAppRoot went.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum AppRootStatus {
+    Unspecified = 0,
+    /// The app's level is set as asked.
+    Success = 1,
+    /// Root elevation is off for the whole computer, so no app level can be set.
+    FeatureOff = 2,
+    /// The caller is not an administrator, and the change needs one ("remember").
+    NotPermitted = 3,
+    /// `level` was not "off", "ask" or "remember".
+    InvalidLevel = 4,
+    /// Anything else. The message says what.
+    Other = 5,
+}
+impl AppRootStatus {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "APP_ROOT_STATUS_UNSPECIFIED",
+            Self::Success => "APP_ROOT_STATUS_SUCCESS",
+            Self::FeatureOff => "APP_ROOT_STATUS_FEATURE_OFF",
+            Self::NotPermitted => "APP_ROOT_STATUS_NOT_PERMITTED",
+            Self::InvalidLevel => "APP_ROOT_STATUS_INVALID_LEVEL",
+            Self::Other => "APP_ROOT_STATUS_OTHER",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "APP_ROOT_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
+            "APP_ROOT_STATUS_SUCCESS" => Some(Self::Success),
+            "APP_ROOT_STATUS_FEATURE_OFF" => Some(Self::FeatureOff),
+            "APP_ROOT_STATUS_NOT_PERMITTED" => Some(Self::NotPermitted),
+            "APP_ROOT_STATUS_INVALID_LEVEL" => Some(Self::InvalidLevel),
+            "APP_ROOT_STATUS_OTHER" => Some(Self::Other),
             _ => None,
         }
     }
