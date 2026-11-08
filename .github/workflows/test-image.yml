@@ -31,6 +31,7 @@ on:
       - "dsa/host/platform/linux/tests/widgets.rs"
       - "dsa/host/platform/linux/tests/media.rs"
       - "dsa/host/platform/linux/tests/system_screens.rs"
+      - "dsa/host/platform/linux/tests/graphics.rs"
       - "dsa/host/platform/linux/tests/overlays.rs"
       - "dsa/host/platform/linux/tests/boot_check/**"
       - ".github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
@@ -461,9 +462,40 @@ jobs:
           path: .scratch/media-probe/dsa-media-probe.apk
           if-no-files-found: error
 
+  # Android's NDK samples hello-gl2 (OpenGL ES) and hello-vulkan, at a pinned commit, which
+  # the graphics check below installs on the booted image and opens in task windows.
+  graphics-test-apps:
+    name: Build the graphics test apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up a JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "cmake;4.1.0"
+
+      - name: Build the OpenGL ES and Vulkan test apps
+        run: bash dsa/graphics/verify/build-test-apps.sh .scratch/graphics-test-apps
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: graphics-test-apps
+          path: |
+            .scratch/graphics-test-apps/hello-gl2.apk
+            .scratch/graphics-test-apps/hello-vulkan.apk
+          if-no-files-found: error
+
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }}, ${{ matrix.arch }})
-    needs: [guest-programs, agent]
+    needs: [guest-programs, agent, graphics-test-apps]
     runs-on: ubuntu-latest
     # Android 17 on x86_64 also boots the image and checks a widget, below.
     timeout-minutes: ${{ matrix.android == '17' && matrix.arch == 'x86_64' && 140 || 60 }}
@@ -765,7 +797,7 @@ jobs:
       - name: Build the widget boot check
         if: matrix.android == '17' && matrix.arch == 'x86_64'
         working-directory: dsa
-        run: cargo test -p dsa-host-linux --test widgets --test system_screens --test media --test overlays --no-run && cargo build -p dsa-host-linux --bin dsa-compositor
+        run: cargo test -p dsa-host-linux --test widgets --test system_screens --test media --test graphics --test overlays --no-run && cargo build -p dsa-host-linux --bin dsa-compositor
 
       # Android's renderer runs in the window manager (dsa-compositor), which needs a desktop
       # session: a headless Wayland compositor stands in for it, with Mesa's software Vulkan
@@ -934,6 +966,7 @@ jobs:
       # neither boot may init log a failed command of the overlay scripts or a denial of a
       # mount.
       - name: Lay the ARM translator and Google Play over the booted system
+        id: overlays
         if: >-
           !cancelled()
           && (success() || steps.widget.outcome == 'failure' || steps.screens.outcome == 'failure' || steps.media.outcome == 'failure')
@@ -971,4 +1004,83 @@ jobs:
           path: |
             /tmp/overlays-test-*/*.log
             /tmp/overlays-test-*/*.txt
+          if-no-files-found: ignore
+
+      # The same image booted once more, with the host renderer on the software Vulkan driver
+      # installed above: hello-gl2 (OpenGL ES through ANGLE) and hello-vulkan are installed
+      # through the local API and opened in task windows, whose pictures must show each app's
+      # triangle on its fading grey background, and the fixed Vulkan CTS subset runs, each
+      # case with its own result. The two share one boot; the CTS takes most of the step.
+      - name: Download the graphics test apps
+        id: graphics-apps
+        if: >-
+          !cancelled()
+          && (success() || steps.widget.outcome == 'failure' || steps.screens.outcome == 'failure' || steps.media.outcome == 'failure' || steps.overlays.outcome == 'failure')
+          && matrix.android == '17' && matrix.arch == 'x86_64'
+        uses: actions/download-artifact@v4
+        with:
+          name: graphics-test-apps
+          path: .scratch/graphics-test-apps
+
+      # Only the CTS APK, which verify.py pins by size and checksum; the mustpass lists it
+      # reads are small and fetched again, so a new pin never meets an old list.
+      - name: Keep the Vulkan CTS between runs
+        if: >-
+          !cancelled() && steps.graphics-apps.outcome == 'success'
+          && matrix.android == '17' && matrix.arch == 'x86_64'
+        uses: actions/cache@v4
+        with:
+          path: .scratch/graphics-verify/com.drawelements.deqp.apk
+          key: vk-cts-apk-${{ hashFiles('dsa/graphics/verify/verify.py') }}
+          restore-keys: vk-cts-apk-
+
+      - name: Fetch the Vulkan CTS and expand the subset
+        id: cts-fetch
+        if: >-
+          !cancelled() && steps.graphics-apps.outcome == 'success'
+          && matrix.android == '17' && matrix.arch == 'x86_64'
+        run: uv run dsa/graphics/verify/verify.py fetch-cts
+
+      - name: Run the Vulkan CTS subset and the graphics test apps on the booted image
+        if: >-
+          !cancelled() && steps.cts-fetch.outcome == 'success'
+          && matrix.android == '17' && matrix.arch == 'x86_64'
+        timeout-minutes: 28
+        working-directory: dsa
+        run: |
+          # What an earlier check that timed out left running holds the VM's vsock ports.
+          bash "$GITHUB_WORKSPACE/.github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+          sudo mkdir -p "$XDG_RUNTIME_DIR"
+          sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"
+          chmod 0700 "$XDG_RUNTIME_DIR"
+          export GFXSTREAM_BACKEND_PATH=/usr/lib/dsa/bin/libgfxstream_backend.so
+          if [[ ! -S "$XDG_RUNTIME_DIR/bus" ]]; then
+            dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --fork
+          fi
+          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+          if [[ ! -S "$XDG_RUNTIME_DIR/wayland-dsa" ]]; then
+            weston --backend=headless --socket=wayland-dsa --idle-time=0 --width=1920 --height=1080 &
+            for _ in $(seq 50); do
+              [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
+              sleep 0.2
+            done
+          fi
+          export WAYLAND_DISPLAY=wayland-dsa
+          # Lavapipe is the only Vulkan driver on the runner; naming it keeps it so.
+          icd="$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -n 1)"
+          export VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd"
+          export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
+          export DSA_GRAPHICS_TEST_APPS="$GITHUB_WORKSPACE/.scratch/graphics-test-apps"
+          cargo test -p dsa-host-linux --test graphics -- --nocapture --test-threads 1
+
+      - name: Keep the graphics check's results
+        if: always() && matrix.android == '17' && matrix.arch == 'x86_64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: graphics-check-results
+          path: |
+            /tmp/graphics-test-*/cts/
+            /tmp/graphics-test-*/*.png
+            /tmp/graphics-test-*/*.log
           if-no-files-found: ignore

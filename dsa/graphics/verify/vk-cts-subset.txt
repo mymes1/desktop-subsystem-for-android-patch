@@ -18,3 +18,10 @@ dEQP-VK.synchronization.basic.fence.*
 dEQP-VK.synchronization.smoke.*
 dEQP-VK.wsi.android.surface.*
 dEQP-VK.wsi.android.swapchain.create.min_image_count
+
+# Cases that cannot pass when the host renderer runs on software Vulkan (Mesa Lavapipe), as on
+# CI's runners, which have no GPU. One per line, as `lavapipe: <pattern>  # <the reason>`; a
+# line without a reason is refused. They still run there and their results are kept; only
+# their failure is excused, and only with `verify.py cts --software-vulkan`. On a GPU every
+# case of the subset must pass. None is known yet: a case goes here only once a CI run on
+# Lavapipe has shown it fail, with what Lavapipe lacks for it.
