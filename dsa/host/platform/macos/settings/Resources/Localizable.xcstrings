@@ -5181,13 +5181,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Android log"
+            "value": "Logs"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Android 로그"
+            "value": "로그"
           }
         }
       }
@@ -6133,13 +6133,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Android log"
+            "value": "Logs"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Android 로그"
+            "value": "로그"
           }
         }
       }

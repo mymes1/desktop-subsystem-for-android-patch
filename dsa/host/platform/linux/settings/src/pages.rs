@@ -50,7 +50,7 @@ impl Page {
             Page::Identity => "Device identity",
             Page::Network => "Network",
             Page::Advanced => "Advanced",
-            Page::Logs => "Android log",
+            Page::Logs => "Logs",
             Page::About => "About",
         }
     }
@@ -123,5 +123,13 @@ mod tests {
         assert_eq!(app_of(&args(&["--app", "../evil"])), None);
         assert_eq!(app_of(&args(&["--app", "notes"])), None);
         assert_eq!(app_of(&args(&["--page", "apps"])), None);
+    }
+
+    #[test]
+    fn fr17_the_log_page_is_called_logs_and_sits_directly_above_about() {
+        assert_eq!(Page::Logs.title(), "Logs");
+        let logs = Page::ALL.iter().position(|p| *p == Page::Logs).unwrap();
+        assert_eq!(Page::ALL[logs + 1], Page::About);
+        assert_eq!(Page::ALL.last(), Some(&Page::About));
     }
 }

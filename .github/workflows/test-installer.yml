@@ -587,7 +587,7 @@ jobs:
           New-Item -ItemType Directory -Force screens | Out-Null
           $exe = "$env:PROGRAM_DIR\settings\DsaSettings.exe"
           $name = [System.Windows.Automation.AutomationElement]::NameProperty
-          $items = 'General', 'Memory', 'Apps', 'Running in the background', 'Widgets', 'Display & GPU', 'Android', 'Updates', 'Device identity', 'Network', 'Advanced', 'Android log', 'About'
+          $items = 'General', 'Memory', 'Apps', 'Running in the background', 'Widgets', 'Display & GPU', 'Android', 'Updates', 'Device identity', 'Network', 'Advanced', 'Logs', 'About'
 
           # The navigation item named $Text: the pane is on the left, so a page title of the
           # same name is not it.

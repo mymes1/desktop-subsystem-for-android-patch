@@ -1037,10 +1037,10 @@
     <value>Launch when ready</value>
   </data>
   <data name="NavLogs.Content" xml:space="preserve">
-    <value>Android log</value>
+    <value>Logs</value>
   </data>
   <data name="LogsTitle.Text" xml:space="preserve">
-    <value>Android log</value>
+    <value>Logs</value>
   </data>
   <data name="LogsNote.Text" xml:space="preserve">
     <value>Android sends its log only while this page is open, and nothing is written to disk. Save diagnostics gathers what a problem report needs into one zip file.</value>

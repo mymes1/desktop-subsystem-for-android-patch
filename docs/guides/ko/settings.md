@@ -29,7 +29,7 @@ dsa settings set <name> <value>     # 하나를 바꿉니다. 스위치는 on이
 | **기기 정보** | Android가 앱에 알리는 제조사, 모델, 빌드 지문 | `dsa settings device`, `device.<field>` |
 | **네트워크** | Android의 네트워크 연결 방식, 주소, DNS 서버, 게이트웨이, **고급 네트워킹** | `dsa network`, `advanced-networking` |
 | **고급** | 클립보드, 파일, 웹 링크, 유휴 상태 일시 정지, 초기화, ARM 앱, 개발자 모드, 추적(관리자), 로그 폴더 | 아래 표 |
-| **Android 로그** | Android 실시간 로그, **진단 정보 저장** | `dsa logcat`, `dsa logs collect` |
+| **로그** | Android 실시간 로그, **진단 정보 저장** | `dsa logcat`, `dsa logs collect` |
 | **정보** | 버전, 라이선스, 소스 코드 | |
 
 ## 고급 페이지

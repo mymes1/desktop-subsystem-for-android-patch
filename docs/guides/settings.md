@@ -31,7 +31,7 @@ one. They are marked "(admin)" below.
 | **Device identity** | The manufacturer, model and build fingerprint Android reports to apps | `dsa settings device`, `device.<field>` |
 | **Network** | How Android reaches the network, its address, DNS servers and gateway, **Advanced networking** | `dsa network`, `advanced-networking` |
 | **Advanced** | Clipboard, files, web links, freeze when idle, reset, ARM apps, developer mode, traces (admin), log folders | see below |
-| **Android log** | Android's live log, **Save diagnostics** | `dsa logcat`, `dsa logs collect` |
+| **Logs** | Android's live log, **Save diagnostics** | `dsa logcat`, `dsa logs collect` |
 | **About** | Versions, licences, source code | |
 
 ## The Advanced page

@@ -1037,10 +1037,10 @@
     <value>준비되면 실행</value>
   </data>
   <data name="NavLogs.Content" xml:space="preserve">
-    <value>Android 로그</value>
+    <value>로그</value>
   </data>
   <data name="LogsTitle.Text" xml:space="preserve">
-    <value>Android 로그</value>
+    <value>로그</value>
   </data>
   <data name="LogsNote.Text" xml:space="preserve">
     <value>이 화면이 열려 있는 동안에만 Android가 로그를 보내고, 디스크에는 아무것도 쓰지 않습니다. 진단 정보 저장은 문제를 알릴 때 필요한 것을 zip 파일 하나로 모읍니다.</value>
