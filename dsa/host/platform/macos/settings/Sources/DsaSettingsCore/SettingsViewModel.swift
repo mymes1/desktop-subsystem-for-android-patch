@@ -38,6 +38,9 @@ public final class SettingsViewModel: ObservableObject {
     /// Whether the app runs as an administrator (root). The settings that apply to every
     /// user are taken only from one; the pages offer to change them as an administrator.
     @Published public var isAdministrator = false
+    /// Root elevation as the app first read it, to tell when a change waits for the next start
+    /// of Android.
+    private var rootElevationAtStart: Bool?
 
     public init(service: DsaService, text: TextSource) {
         self.service = service
@@ -225,6 +228,36 @@ public final class SettingsViewModel: ObservableObject {
     public var canChangeTraces: Bool { canChange && isAdministrator }
     public var tracesNeedAdministrator: Bool { canChange && !isAdministrator }
 
+    // MARK: Root access
+
+    /// Whether apps in Android may ask for root through an administrator's approval. Off by
+    /// default.
+    public var rootElevation: Bool { settings?.rootElevation ?? false }
+    /// The switch moves only for an administrator: it applies to every user of this Mac.
+    public var canChangeRootElevation: Bool { canChange && isAdministrator }
+    /// Whether the switch can be changed only as an administrator, so the page says why it
+    /// does not move and offers to change it as one.
+    public var rootElevationNeedsAdministrator: Bool { canChange && !isAdministrator }
+    /// Whether the switch differs from what it was when the app first read it. The change
+    /// applies from the next start of Android, which the page says.
+    public var rootElevationRestartNeeded: Bool {
+        loaded && rootElevationAtStart.map { $0 != rootElevation } == true
+    }
+    /// Where each request and its result is recorded: the service log.
+    public var rootElevationLog: String {
+        if let dir = settings?.logDir, !dir.isEmpty {
+            return text.format("RootElevation_LogAt", dir)
+        }
+        return text.get("RootElevation_LogUnknown")
+    }
+
+    public func setRootElevation(_ on: Bool) async {
+        if on == rootElevation && loaded {
+            return
+        }
+        await change { try await service.setRootElevation(on) }
+    }
+
     // MARK: Network
 
     /// The network as last read: from `dsa network` after a refresh, else with the settings.
@@ -282,7 +315,9 @@ public final class SettingsViewModel: ObservableObject {
         isBusy = true
         error = nil
         do {
-            settings = try await work()
+            let read = try await work()
+            rootElevationAtStart = rootElevationAtStart ?? read.rootElevation
+            settings = read
         } catch {
             // The values stay as the service last reported them, so a switch moves back.
             self.error = Format.problem(text, error)

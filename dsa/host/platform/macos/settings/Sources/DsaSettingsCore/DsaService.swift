@@ -84,6 +84,7 @@ public final class DsaService {
         s.sharedFolders = json["shared_folders"].isArray ? json.strings("shared_folders") : nil
         s.adbAutoConnect = json.bool("adb_auto_connect", missing: true)
         s.adbAutoConnectState = AdbAutoConnectState.read(json.optionalString("adb_auto_connect_state"))
+        s.rootElevation = json.bool("root_elevation")
         return s
     }
 
@@ -136,6 +137,9 @@ public final class DsaService {
     public func setPrereleaseUpdates(_ on: Bool) async throws -> SettingsInfo { try await set("prerelease-updates", onOff(on)) }
     public func setInputTrace(_ on: Bool) async throws -> SettingsInfo { try await set("input-trace", onOff(on)) }
     public func setResizeTrace(_ on: Bool) async throws -> SettingsInfo { try await set("resize-trace", onOff(on)) }
+    /// Lets apps in Android ask for root through an administrator's approval, or not. Only an
+    /// administrator changes it; it applies from the next start of Android.
+    public func setRootElevation(_ on: Bool) async throws -> SettingsInfo { try await set("root-elevation", onOff(on)) }
     /// Sets the most memory the user's Android may grow to, in MiB; 0 is automatic.
     public func setMemoryLimit(_ mb: Int) async throws -> SettingsInfo { try await set("memory-limit", mb == 0 ? "auto" : String(mb)) }
 

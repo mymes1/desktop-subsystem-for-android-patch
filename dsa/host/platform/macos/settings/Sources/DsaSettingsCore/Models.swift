@@ -138,6 +138,9 @@ public struct SettingsInfo: Equatable, Sendable {
     public var adbAutoConnect = true
     /// Where that stands, as the service last said.
     public var adbAutoConnectState: AdbAutoConnectState = .off
+    /// Whether apps in Android may ask for root through an administrator's approval. The
+    /// computer's setting, off by default; it applies from the next start of Android.
+    public var rootElevation = false
 
     public init() {}
 
