@@ -65,9 +65,11 @@
     <!--
       Reading the system's dropbox (tombstones, ANR traces, crashes, the boot before's kernel
       log) for the diagnostics the host gathers on request; DUMP and PACKAGE_USAGE_STATS above
-      are needed for it too.
+      are needed for it too. Since Android 11 the dropbox also asks for READ_DROPBOX_DATA, and
+      refuses the whole read without it, so a bundle had no tombstones.
     -->
     <uses-permission android:name="android.permission.READ_LOGS" />
+    <uses-permission android:name="android.permission.READ_DROPBOX_DATA" />
     <!-- Installing the APKs the host sends, without asking the user to confirm each one. -->
     <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
     <!--
