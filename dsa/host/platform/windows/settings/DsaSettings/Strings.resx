@@ -1801,4 +1801,73 @@
   <data name="Identity_NotReported" xml:space="preserve">
     <value>Not reported</value>
   </data>
+  <data name="AppsRoot.Name" xml:space="preserve">
+    <value>Root access</value>
+  </data>
+  <data name="Apps_Root_off" xml:space="preserve">
+    <value>Root: not allowed</value>
+  </data>
+  <data name="Apps_Root_ask" xml:space="preserve">
+    <value>Root: ask each time</value>
+  </data>
+  <data name="Apps_Root_remember" xml:space="preserve">
+    <value>Root: remember (no asking)</value>
+  </data>
+  <data name="Apps_RootTip_unavailable" xml:space="preserve">
+    <value>Root access is off for this PC. An administrator turns it on in Advanced.</value>
+  </data>
+  <data name="Apps_RootTip_unknown" xml:space="preserve">
+    <value>The DSA service does not report this app's root level. Update DSA to choose it here.</value>
+  </data>
+  <data name="Apps_RootNotChanged" xml:space="preserve">
+    <value>The root level of {0} was not changed: {1}</value>
+  </data>
+  <data name="Apps_RootSet_off" xml:space="preserve">
+    <value>{0} cannot use root any more. su disappears for it from the next start of Android.</value>
+  </data>
+  <data name="Apps_RootSet_ask" xml:space="preserve">
+    <value>{0} now asks an administrator of this PC each time it uses su. If it could not see su before, it sees it from the next start of Android.</value>
+  </data>
+  <data name="Apps_RootSet_remember" xml:space="preserve">
+    <value>{0} now uses su without asking. If it could not see su before, it sees it from the next start of Android.</value>
+  </data>
+  <data name="AppsRootOffBar.Title" xml:space="preserve">
+    <value>Root access is off</value>
+  </data>
+  <data name="AppsRootOffBar.Message" xml:space="preserve">
+    <value>No app can use su. An administrator of this PC can turn root access on in Advanced, and then you choose each app's level here.</value>
+  </data>
+  <data name="AppsRootNote.Text" xml:space="preserve">
+    <value>Root access: Not allowed hides su from the app. Ask each time shows an administrator prompt with the app's name for each request, and after an approval the app is not asked again for 15 minutes. Remember approves without asking, so choosing it needs an administrator's approval.</value>
+  </data>
+  <data name="RootHeader.Text" xml:space="preserve">
+    <value>Root access</value>
+  </data>
+  <data name="RootElevationCard.Header" xml:space="preserve">
+    <value>Let Android apps ask for root</value>
+  </data>
+  <data name="RootElevationCard.Description" xml:space="preserve">
+    <value>An app you allow on the Apps page can run commands as root once an administrator of this PC approves, as sudo does. Off by default. The Android image, its build properties and SELinux stay as they are.</value>
+  </data>
+  <data name="RootElevationAdminReason.Text" xml:space="preserve">
+    <value>Only an administrator can change this, because it applies to every user of this PC. Use Change as administrator, and Windows asks for permission.</value>
+  </data>
+  <data name="RootElevationRestartBar.Title" xml:space="preserve">
+    <value>Restart Android to apply</value>
+  </data>
+  <data name="RootElevationRestartBar.Message" xml:space="preserve">
+    <value>Root access changes from the next start of Android. Stop Android on the General page, then open an app.</value>
+  </data>
+  <data name="RootLogCard.Header" xml:space="preserve">
+    <value>Where requests are recorded</value>
+  </data>
+  <data name="RootElevation_LogAt" xml:space="preserve">
+    <value>Each request is kept in the service log with the app, the time, whether it was approved and the command: {0}</value>
+  </data>
+  <data name="RootElevation_LogUnknown" xml:space="preserve">
+    <value>Each request is kept in the service log with the app, the time, whether it was approved and the command.</value>
+  </data>
+  <data name="RootNote.Text" xml:space="preserve">
+    <value>Choose each app's level on the Apps page. Each user chooses for the apps in their own Android.</value>
+  </data>
 </root>

@@ -613,6 +613,12 @@ impl UserAndroid for UpdatingAndroid {
     fn share_folders(&self, on: bool, folders: Vec<String>) {
         UserAndroid::share_folders(&*self.session, on, folders)
     }
+    fn set_root_elevation_config(&self, on: bool, apps: Vec<crate::root_elevation::AppLevel>) {
+        UserAndroid::set_root_elevation_config(&*self.session, on, apps)
+    }
+    fn approve_keep_root(&self, package: &str) -> Result<(), String> {
+        UserAndroid::approve_keep_root(&*self.session, package)
+    }
     fn android_files(&self) -> Result<String, String> {
         UserAndroid::android_files(&*self.session)
     }

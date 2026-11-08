@@ -55,7 +55,8 @@ public sealed record SettingsInfo(
     bool UpdateChannelAvailable = false,
     bool TouchGesturesOff = true,
     TouchGesturesState TouchGesturesState = TouchGesturesState.Unknown,
-    string? TouchGesturesProblem = null)
+    string? TouchGesturesProblem = null,
+    bool RootElevation = false)
 {
     /// <summary>The Windows folders that can be shared with Android, in the order the service
     /// keeps them.</summary>

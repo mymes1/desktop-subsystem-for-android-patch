@@ -171,7 +171,10 @@ pub fn installed_in(event: &ManagerEvent) -> Option<Vec<AppInfo>> {
             TaskEvent::Installed(apps) => Some(apps.clone()),
             _ => None,
         }),
-        ManagerEvent::Task(TaskEvent::Installed(apps)) => Some(apps.clone()),
+        ManagerEvent::Task(event) => match &**event {
+            TaskEvent::Installed(apps) => Some(apps.clone()),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -1287,7 +1290,7 @@ fn note_tasks(idle: &Mutex<IdleTrim>, event: &ManagerEvent) {
     let now = Instant::now();
     match event {
         ManagerEvent::Sync(events) => idle.sync(events, now),
-        ManagerEvent::Task(event) => idle.task_event(Some(event), now),
+        ManagerEvent::Task(event) => idle.task_event(Some(event.as_ref()), now),
         ManagerEvent::Lost => idle.task_event(None, now),
         _ => {}
     }

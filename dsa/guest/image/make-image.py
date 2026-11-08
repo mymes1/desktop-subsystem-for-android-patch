@@ -3123,6 +3123,26 @@ SHARES_PROPERTY = "vendor.dsa.shares"
 SHARES_PROPERTY_CONTEXT = f"{SHARES_PROPERTY} u:object_r:dsa_shares_prop:s0 exact string"
 FILES_PROPERTY = "vendor.dsa.files"
 FILES_PROPERTY_CONTEXT = f"{FILES_PROPERTY} u:object_r:dsa_files_prop:s0 exact string"
+# dsa-channeld sets this to 1 when the host's config turns root elevation on for this boot and
+# to 0 when it is off; dsa-channeld.rc starts and stops the elevation helper to match (su.cil).
+ROOT_ELEVATION_PROPERTY = "vendor.dsa.root_elevation"
+ROOT_ELEVATION_PROPERTY_CONTEXT = f"{ROOT_ELEVATION_PROPERTY} u:object_r:dsa_root_elevation_prop:s0 exact bool"
+# Root elevation's su client. It is a system file, where an app's PATH and the kernel's su
+# guard look for su, labelled with a type of its own so the policy lets apps run that file
+# alone (su.cil). The label goes in only with the daemon, whose policy declares the type.
+PLAT_FILE_CONTEXTS = "SYSTEM/etc/selinux/plat_file_contexts"
+SU_CLIENT_BINARY = "SYSTEM/bin/su"
+SU_CLIENT_PATH = "/system/bin/su"
+SU_CLIENT_CONTEXT = f"{SU_CLIENT_PATH} u:object_r:dsa_su_exec:s0"
+# The elevation helper: the daemon's program in a mode of its own, and the sockets init makes
+# in /dev/socket when it starts it. su connects on the first, dsa-channeld on the second.
+SU_HELPER_SERVICE = "service dsa_su /vendor/bin/dsa-channeld --su-relay"
+SU_SOCKET = "/dev/socket/dsa_su"
+SU_RELAY_SOCKET = "/dev/socket/dsa_su_relay"
+SU_SOCKET_CONTEXTS = [
+    (r"/dev/socket/dsa_su ", r"/dev/socket/dsa_su u:object_r:dsa_su_socket:s0"),
+    (r"/dev/socket/dsa_su_relay ", r"/dev/socket/dsa_su_relay u:object_r:dsa_su_relay_socket:s0"),
+]
 # Features the VM lacks; SystemConfig drops them wherever else they are declared.
 UNAVAILABLE_FEATURES = "VENDOR/etc/permissions/dsa-unavailable-features.xml"
 
@@ -3509,6 +3529,8 @@ def update_vendor_file_contexts(fc_text, channeld=False, hwcomposer=False, power
     ]
     if channeld:
         entries.append((r"/vendor/bin/dsa-channeld", CHANNELD_CONTEXT))
+        # The elevation helper's sockets: init gives a socket file the label its path has here.
+        entries += SU_SOCKET_CONTEXTS
     if hwcomposer:
         entries.append((r"/vendor/bin/hw/dsa-hwcomposer", HWCOMPOSER_CONTEXT))
     if power:
@@ -3563,6 +3585,16 @@ def update_vendor_property_contexts(text):
         lines.append(SHARES_PROPERTY_CONTEXT)
     if not any(line.split()[:1] == [FILES_PROPERTY] for line in lines):
         lines.append(FILES_PROPERTY_CONTEXT)
+    if not any(line.split()[:1] == [ROOT_ELEVATION_PROPERTY] for line in lines):
+        lines.append(ROOT_ELEVATION_PROPERTY_CONTEXT)
+    return "\n".join(lines) + "\n"
+
+
+def update_plat_file_contexts(fc_text):
+    """Labels the su client dsa_su_exec in plat_file_contexts. A line the build already has
+    for the same path goes: a second specification for it would conflict."""
+    lines = [line for line in fc_text.splitlines() if line.split()[:1] != [SU_CLIENT_PATH]]
+    lines.append(SU_CLIENT_CONTEXT)
     return "\n".join(lines) + "\n"
 
 
@@ -3670,6 +3702,101 @@ KERNEL_POLICY = HERE / "sepolicy/kernel.cil"
 ARM_TRANSLATION_POLICY = HERE / "sepolicy/arm-translation.cil"
 GAPPS_POLICY = HERE / "sepolicy/gapps.cil"
 GPU_RESET_POLICY = HERE / "sepolicy/gpu-reset.cil"
+SU_POLICY = HERE / "sepolicy/su.cil"
+
+# What root elevation needs of the policy, each with what goes wrong without it.
+ROOT_ELEVATION_RULES = {
+    "(allow untrusted_app_all dsa_su_exec (file (read open getattr map execute execute_no_trans)))":
+        "apps cannot run the su client",
+    "(allow untrusted_app_all dsa_su_socket (sock_file (write)))":
+        "apps cannot reach the elevation helper's socket",
+    "(allow untrusted_app_all dsa_su (unix_stream_socket (connectto)))":
+        "apps cannot connect to the elevation helper",
+    "(typeattributeset mlstrustedsubject (dsa_su))":
+        "the elevation helper is not mlstrustedsubject, so an app, which runs at an MLS level of its own, "
+        "cannot connect to it",
+    "(typeattributeset mlstrustedobject (dsa_su_socket))":
+        "the elevation helper's socket is not mlstrustedobject, so an app cannot write it",
+    "(allow dsa_channeld dsa_su (unix_stream_socket (connectto)))":
+        "dsa-channeld cannot reach the elevation helper, so no su call reaches the host",
+    "(allow dsa_channeld dsa_root_elevation_prop (property_service (set)))":
+        "dsa-channeld cannot start the elevation helper",
+    '(genfscon securityfs "/dsa_su" (u object_r dsa_su_control_file ((s0) (s0))))':
+        "the su guard's control file is not labelled, so nothing may write it",
+    "(allow init dsa_su_control_file (file (write open getattr)))":
+        "init cannot hide su at boot, so every app sees it",
+    "(allow dsa_su dsa_su_control_file (file (write open getattr)))":
+        "the elevation helper cannot tell the su guard which apps may see su",
+    "(typetransition dsa_su shell_exec process dsa_su_root)":
+        "an approved command does not run in the root domain",
+}
+
+
+def root_elevation_policy_problems(plat_sepolicy_text):
+    """Returns what is wrong with root elevation's policy in a platform policy that has the
+    daemon: a rule of ROOT_ELEVATION_RULES it lacks, or a domain other than the one it
+    belongs to that may enter the root domain, write the su guard or start the helper."""
+    problems = [f"the SELinux policy lacks {rule}: {why}"
+                for rule, why in ROOT_ELEVATION_RULES.items() if rule not in plat_sepolicy_text]
+    # The approved command's domain is permissive, so the helper alone may lead into it.
+    entries = re.findall(r"\(typetransition\s+(\S+)\s+\S+\s+process\s+dsa_su_root\s*\)", plat_sepolicy_text)
+    entries += re.findall(r"\(allow\s+(\S+)\s+dsa_su_root\s+\(\s*process\s+\([^)]*\b(?:dyn)?transition\b",
+                          plat_sepolicy_text)
+    for source in sorted(set(entries) - {"dsa_su"}):
+        problems.append(f"{source} may enter dsa_su_root, the approved command's root domain, which only the "
+                        "elevation helper may")
+    writers = re.findall(r"\(allow\s+(\S+)\s+dsa_su_control_file\s+\(\s*file\s+\([^)]*\b(?:write|append)\b",
+                         plat_sepolicy_text)
+    for subject in sorted(set(writers) - {"init", "dsa_su"}):
+        problems.append(f"{subject} may write the su guard, which decides which apps see su")
+    setters = re.findall(r"\(allow\s+(\S+)\s+dsa_root_elevation_prop\s+\(\s*property_service\s+\([^)]*\bset\b",
+                         plat_sepolicy_text)
+    for subject in sorted(set(setters) - {"dsa_channeld"}):
+        problems.append(f"{subject} may start the elevation helper, which only dsa-channeld may")
+    return problems
+
+
+def root_elevation_problems(names, read):
+    """Returns what an image with the daemon lacks for root elevation: its policy
+    (root_elevation_policy_problems), the su client's label in the file contexts the system
+    image is built from, the property that starts the helper, and the init script that hides su
+    at boot and runs the helper with its sockets."""
+    problems = []
+    if SU_CLIENT_BINARY not in names:
+        problems.append(f"{SU_CLIENT_BINARY} is missing, so apps that may elevate find no su client")
+    if "SYSTEM/etc/selinux/plat_sepolicy.cil" in names:
+        problems += root_elevation_policy_problems(read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
+    if "META/file_contexts.bin" in names and b"dsa_su_exec" not in read("META/file_contexts.bin"):
+        problems.append(f"META/file_contexts.bin does not label {SU_CLIENT_PATH} dsa_su_exec, so the system "
+                        "image leaves the su client a file apps may not run")
+    if PLAT_FILE_CONTEXTS in names and SU_CLIENT_CONTEXT not in read(PLAT_FILE_CONTEXTS).decode().splitlines():
+        problems.append(f"{PLAT_FILE_CONTEXTS} does not label {SU_CLIENT_PATH} dsa_su_exec, so a restorecon "
+                        "gives the su client another label")
+    if VENDOR_PROPERTY_CONTEXTS in names and ROOT_ELEVATION_PROPERTY_CONTEXT not in read(
+            VENDOR_PROPERTY_CONTEXTS).decode().splitlines():
+        problems.append(f"vendor_property_contexts does not give {ROOT_ELEVATION_PROPERTY} its type, so "
+                        "dsa-channeld cannot start the elevation helper")
+    rc = read(CHANNELD_RC).decode() if CHANNELD_RC in names else ""
+    for line, why in [
+        (SU_HELPER_SERVICE, "init never starts the elevation helper"),
+        ("seclabel u:r:dsa_su:s0", "the elevation helper does not run in its own domain"),
+        ("socket dsa_su stream 0666 root root", "su has no socket to reach the helper on"),
+        ("socket dsa_su_relay seqpacket 0660 root system", "dsa-channeld has no socket to reach the helper on"),
+        ("mount securityfs securityfs /sys/kernel/security nodev noexec nosuid",
+         "the su guard's control file is not there to write"),
+        ('write /sys/kernel/security/dsa_su/control "path /system/bin/su"', "su is not hidden at boot"),
+        ("write /sys/kernel/security/dsa_su/control enable", "su is not hidden at boot"),
+    ]:
+        if line not in rc.splitlines() and f"    {line}" not in rc.splitlines():
+            problems.append(f"{CHANNELD_RC} lacks \"{line}\", so {why}")
+    contexts = (read("VENDOR/etc/selinux/vendor_file_contexts").decode().splitlines()
+                if "VENDOR/etc/selinux/vendor_file_contexts" in names else [])
+    for _, context in SU_SOCKET_CONTEXTS:
+        if context not in contexts:
+            problems.append(f"vendor_file_contexts lacks \"{context}\", so init makes the socket with a label "
+                            "its clients may not write")
+    return problems
+
 
 # Shared memory is a memfd in the guest (memory.cil), labelled with the tmpfs type of the
 # domain that made it. Each pair is a domain and a type of memfd it must be able to map, read
@@ -3886,7 +4013,7 @@ def recompile_precompiled_sepolicy(otatools, cil_map, vendor_version, genfs_vers
 def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=None, channeld=None,
            agent=None, hwcomposer=None, framework_overlay=None, settings_overlay=None, power_hal=None,
            codec2=None, audio=None, gnss_hal=None,
-           sensors=None, camera=None, arm_translation=None, framework=None, overlays=None):
+           sensors=None, camera=None, arm_translation=None, framework=None, overlays=None, su_client=None):
     """Copies target_files, removing the shell apps and the published kernel modules,
     switching to a user build and adding the Hyper-V mount table, the control channel
     daemon when `channeld` names one, the agent when `agent` names its APK, DSA's
@@ -3908,6 +4035,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
     graphics_payload = Path(graphics_library).read_bytes() if graphics_library else None
     vulkan_payload = Path(vulkan_driver).read_bytes() if vulkan_driver else None
     channeld_payload = Path(channeld).read_bytes() if channeld else None
+    su_payload = Path(su_client).read_bytes() if su_client else None
+    if su_payload is not None and channeld_payload is None:
+        raise ValueError("the su client requires the control channel daemon")
     agent_payload = Path(agent).read_bytes() if agent else None
     hwcomposer_payload = Path(hwcomposer).read_bytes() if hwcomposer else None
     overlay_payload = Path(framework_overlay).read_bytes() if framework_overlay else None
@@ -4007,6 +4137,9 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                 plat_patched += "\n" + CHANNELD_POLICY.read_text()
                 # The daemon's file sharing jobs, which name its program's label.
                 plat_patched += "\n" + FILES_POLICY.read_text()
+                # Root elevation: the su client, and the elevation helper, which is the
+                # daemon's program in a mode of its own, with its sockets.
+                plat_patched += "\n" + SU_POLICY.read_text()
             if has_power:
                 # The power and health HALs reach the daemon.
                 plat_patched += "\n" + POWER_POLICY.read_text()
@@ -4060,6 +4193,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
         file_contexts = []
         for name in PARTITION_FILE_CONTEXTS:
             text = zin.read(name).decode() if name in names else ""
+            if name == PLAT_FILE_CONTEXTS and channeld_payload is not None:
+                text = update_plat_file_contexts(text)
             if name == "VENDOR/etc/selinux/vendor_file_contexts":
                 text = update_vendor_file_contexts(text, channeld_payload is not None, has_hwcomposer,
                                                    has_power, codec2=has_codec2, audio=has_audio, gnss=has_gnss, sensors=has_sensors, camera=has_camera)
@@ -4079,6 +4214,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     if not removed(apk, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)}
         for info in zin.infolist():
             name = info.filename
+            if name == SU_CLIENT_BINARY and su_payload is not None:
+                continue
             if (removed(name, has_hwcomposer, has_power, has_gnss, has_sensors, has_camera)
                     or name in removed_variants):
                 if name.endswith((".apk", ".apex", ".capex")):
@@ -4164,11 +4301,17 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                     for overlay_name in design_payloads:
                         data += overlay_apkcerts(overlay_name).encode() + b"\n"
                 elif name == SYSTEM_FS_CONFIG:
+                    if su_payload is not None:
+                        lines = [line for line in data.decode().splitlines()
+                                 if line.split()[:1] != ["system/bin/su"]]
+                        data = ("\n".join(lines) + "\n").encode()
                     data = add_filesystem_config(data.decode(),
                                                  TRACE_FS_CONFIG + ARM_TRANSLATION_FS_CONFIG
                                                  + (ARM_TRANSLATION_DEFAULT_FS_CONFIG
                                                     if default_translator is not None else [])
-                                                 + GAPPS_FS_CONFIG).encode()
+                                                 + GAPPS_FS_CONFIG
+                                                 + (["system/bin/su 0 0 755 capabilities=0x0"]
+                                                    if su_payload is not None else [])).encode()
                 elif name == SYSTEM_EXT_FS_CONFIG and agent_payload is not None:
                     data = add_filesystem_config(data.decode(), AGENT_FS_CONFIG).encode()
                 elif name in FSTAB_DIRS.values():
@@ -4191,6 +4334,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
                         for overlay_name in design_payloads:
                             text = add_filesystem_config(text, overlay_fs_config(overlay_name))
                     data = text.encode()
+                elif name == PLAT_FILE_CONTEXTS and channeld_payload is not None:
+                    data = update_plat_file_contexts(data.decode()).encode()
                 elif name in ("VENDOR/etc/selinux/vendor_file_contexts", "META/vendor_file_contexts"):
                     data = update_vendor_file_contexts(data.decode(), channeld_payload is not None,
                                                        has_hwcomposer, has_power, codec2=has_codec2,
@@ -4236,6 +4381,8 @@ def modify(source, dest, graphics_library=None, vulkan_driver=None, otatools=Non
             zout.writestr(CHANNELD_BINARY, channeld_payload)
             zout.writestr(CHANNELD_RC, (HERE / "dsa-channeld.rc").read_bytes())
             zout.writestr(CHANNEL_MANIFEST, (HERE / "dsa-channel-manifest.xml").read_bytes())
+        if su_payload is not None:
+            zout.writestr(SU_CLIENT_BINARY, su_payload)
         if has_codec2:
             for name, payload in codec2_payloads.items():
                 zout.writestr(name, payload)
@@ -4379,6 +4526,7 @@ ARCHES = {
 DEFAULT_ARCH = "x86_64"
 # The binaries DSA builds for the guest, where the image keeps them.
 DSA_GUEST_BINARIES = [
+    SU_CLIENT_BINARY,
     "VENDOR/bin/dsa-channeld",
     "VENDOR/bin/hw/dsa-hwcomposer",
     "VENDOR/bin/hw/dsa-codec2",
@@ -5255,6 +5403,8 @@ def main():
                         help="a vulkan.ranchu.so built for the selected guest")
     parser.add_argument("--channeld", type=Path,
                         help="the guest's control channel daemon (dsa-channeld) built for the guest")
+    parser.add_argument("--su-client", type=Path,
+                        help="the guest's unprivileged su client built for the guest")
     parser.add_argument("--hwcomposer", type=Path,
                         help="DSA's composer HAL (dsa-hwcomposer) built for the guest; it replaces "
                              "Cuttlefish's, and sends the host each task's frames")
@@ -5362,7 +5512,7 @@ def main():
            framework_overlay=framework_overlay, settings_overlay=settings_overlay, power_hal=args.power_hal,
            codec2=args.codec2, audio=args.audio, gnss_hal=args.gnss_hal,
            sensors=args.sensors, camera=args.camera, arm_translation=args.arm_translation,
-           framework=framework_payloads, overlays=design_overlays)
+           framework=framework_payloads, overlays=design_overlays, su_client=args.su_client)
 
     signed = work / "signed.zip"
     # It runs where AOSP's certificates sit at the paths apkcerts.txt names, so every path

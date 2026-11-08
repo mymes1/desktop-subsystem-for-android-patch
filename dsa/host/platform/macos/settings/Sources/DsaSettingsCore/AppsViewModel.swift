@@ -28,6 +28,34 @@ public struct RunAsArmReport: Equatable, Sendable {
     public var on: Bool
 }
 
+
+/// How far an app may use root: su does not exist for it (`off`), each su call waits for an
+/// administrator's approval (`ask`), or su is approved without asking (`remember`). The order
+/// is the order the Apps page lists them.
+public enum RootLevel: String, CaseIterable, Sendable {
+    case off, ask, remember
+
+    /// The level dsa named, or nil for `unavailable` (root elevation is off for the Mac) and
+    /// for a dsa that does not say.
+    public static func read(_ code: String) -> RootLevel? { RootLevel(rawValue: code) }
+
+    /// Where the level is among the choices the Apps page offers.
+    public var index: Int { RootLevel.allCases.firstIndex(of: self) ?? 0 }
+}
+
+/// How a change of an app's root level went: whether it was set, the level the app has now,
+/// and the service's words when it was not set.
+public struct RootReport: Equatable, Sendable {
+    public var done: Bool
+    public var level: String
+    public var message: String
+}
+
+/// A root level the Apps page offers: what the list shows, and the level.
+public struct RootChoice: Equatable, Hashable, Sendable {
+    public var label: String
+    public var level: RootLevel
+}
 /// One app installed in Android, as `dsa apps list` reports it.
 public struct InstalledAppInfo: Equatable, Sendable {
     public var package, label, versionName: String
@@ -37,6 +65,10 @@ public struct InstalledAppInfo: Equatable, Sendable {
     public var appBytes, dataBytes, cacheBytes: UInt64
     public var iconPng: Data
     public var runAsArm: RunAsArmSwitch = .unknown
+    /// How far the app may use root, as dsa says it: `off`, `ask` or `remember`, or
+    /// `unavailable` while root elevation is off for the Mac. Empty from a dsa that does not
+    /// say.
+    public var root = ""
 
     public var totalBytes: UInt64 { appBytes + dataBytes + cacheBytes }
 }
@@ -101,7 +133,7 @@ public final class AppsService {
             versionCode: app.int64("version_code"), firstInstallMs: app.uint("first_install_time_ms"),
             lastUpdateMs: app.uint("last_update_time_ms"), systemApp: app.bool("system_app"),
             appBytes: app.uint("app_bytes"), dataBytes: app.uint("data_bytes"), cacheBytes: app.uint("cache_bytes"),
-            iconPng: app.base64("icon_png"), runAsArm: readRunAsArm(app))
+            iconPng: app.base64("icon_png"), runAsArm: readRunAsArm(app), root: app.string("root"))
     }
 
     /// Every app installed in Android, with its size read again; Android is started first when
@@ -174,6 +206,23 @@ public final class AppsService {
                               message: json.string("message"), on: json.bool("on"))
     }
 
+    /// Sets how far `package` may use root. A refusal by the service (root elevation off for
+    /// the Mac, or `remember` without an administrator's approval) is a report with its words;
+    /// anything else is a `DsaError`.
+    public func setRoot(_ package: String, _ level: RootLevel) async throws -> RootReport {
+        let result = try await service.cli.run(["apps", "root", package, level.rawValue, "--json"])
+        if result.exitCode != 0 {
+            let detail = DsaError.detail(of: result)
+            let prefix = "not changed: \(package): "
+            if detail.hasPrefix(prefix) {
+                return RootReport(done: false, level: "", message: String(detail.dropFirst(prefix.count)))
+            }
+            throw DsaError.failure(result)
+        }
+        let json = try Json.parse(result.output)
+        return RootReport(done: true, level: json.string("level"), message: "")
+    }
+
     /// Uninstalls `package`. A refusal by Android is a report with its reason; anything else
     /// that kept the request from Android is a `DsaError`.
     public func uninstall(_ package: String) async throws -> UninstallReport {
@@ -204,6 +253,11 @@ public struct AppRow: Equatable, Identifiable, Sendable {
     public var runAsArm = false
     public var canRunAsArm = false
     public var runAsArmTip: String?
+    /// Where the app's root level is among `rootChoices`; -1 when it cannot be chosen, and
+    /// then why, in the user's language.
+    public var rootIndex = -1
+    public var canChangeRoot = false
+    public var rootTip: String?
 
     public var id: String { package }
 }
@@ -322,12 +376,50 @@ public final class AppsViewModel: ObservableObject {
             uninstallTip: app.systemApp ? text.get("Apps_SystemTip") : nil,
             resizable: !window.fixedSize, startSizeIndex: startSizeIndex(window),
             runAsArm: app.runAsArm.on, canRunAsArm: app.runAsArm.available,
-            runAsArmTip: runAsArmTip(app.runAsArm))
+            runAsArmTip: runAsArmTip(app.runAsArm),
+            rootIndex: RootLevel.read(app.root)?.index ?? -1, canChangeRoot: RootLevel.read(app.root) != nil,
+            rootTip: rootTip(app.root))
     }
 
     /// Why the "Run as ARM" switch cannot be changed, in the user's language; nil when it can.
     public func runAsArmTip(_ arm: RunAsArmSwitch) -> String? {
         arm.available ? nil : text.get("Apps_RunAsArm_\(arm.reason.isEmpty ? "unknown" : arm.reason)")
+    }
+
+    /// The root levels the page offers, in the order of `RootLevel`.
+    public var rootChoices: [RootChoice] {
+        RootLevel.allCases.map { RootChoice(label: text.get("Apps_Root_\($0.rawValue)"), level: $0) }
+    }
+
+    /// Whether root elevation is off for the Mac, so no app's level can be chosen and the page
+    /// says where to turn it on.
+    public var rootUnavailable: Bool { apps?.contains { $0.root == "unavailable" } ?? false }
+
+    /// Why an app's root level cannot be chosen, in the user's language; nil when it can.
+    public func rootTip(_ root: String) -> String? {
+        RootLevel.read(root) != nil ? nil : text.get(root == "unavailable" ? "Apps_RootTip_unavailable" : "Apps_RootTip_unknown")
+    }
+
+    /// Sets how far the app may use root: the level at `index` of `rootChoices`. `remember`
+    /// needs an administrator's approval, which the service asks for; a refusal is the page's
+    /// error with the service's words.
+    public func setRoot(_ package: String, _ index: Int) async {
+        guard RootLevel.allCases.indices.contains(index) else {
+            return
+        }
+        let level = RootLevel.allCases[index]
+        if let current = apps?.first(where: { $0.package == package }), RootLevel.read(current.root) == level {
+            return
+        }
+        await run(reload: true) {
+            let label = labelOf(package)
+            let report = try await service.setRoot(package, level)
+            if !report.done {
+                throw RefusedByAndroid(message: text.format("Apps_RootNotChanged", label, report.message))
+            }
+            let now = RootLevel.read(report.level) ?? level
+            return text.format("Apps_RootSet_\(now.rawValue)", label)
+        }
     }
 
     /// The name an app goes by on the page.

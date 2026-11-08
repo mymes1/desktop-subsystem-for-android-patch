@@ -2197,11 +2197,14 @@ class GuestMemoryTests(unittest.TestCase):
             for name, data in (extra or {}).items():
                 archive.writestr(name, data)
         daemon = None
+        client = None
         if channeld:
             daemon = root / "dsa-channeld"
             daemon.write_bytes(b"daemon")
+            client = root / "su"
+            client.write_bytes(b"client")
         modified = root / "modified.zip"
-        make_image.modify(source, modified, channeld=daemon)
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
         return zipfile.ZipFile(modified)
 
     # The rules on the memfd types the published Android 16 and 17 policies already carry.
@@ -2428,6 +2431,7 @@ class GuestMemoryTests(unittest.TestCase):
             + make_image.ADB_PROPERTY_CONTEXT + "\n"
             + make_image.SHARES_PROPERTY_CONTEXT + "\n"
             + make_image.FILES_PROPERTY_CONTEXT + "\n"
+            + make_image.ROOT_ELEVATION_PROPERTY_CONTEXT + "\n"
         )
         self.assertEqual(make_image.update_vendor_property_contexts(all_of_them), all_of_them)
 
@@ -5805,6 +5809,249 @@ class FrameworkImageTests(unittest.TestCase):
             self.assertTrue(any("never hear of a GPU reset" in p for p in problems), problems)
             # An image without a framework has nothing to check.
             self.assertEqual(make_image.check_framework({"arch": "x86_64"}, [], None), [])
+
+
+class RootElevationImageTests(unittest.TestCase):
+    """The guest image's side of root elevation: the su client's label, the elevation helper's
+    domain and sockets, and the su guard that hides su from every app the host did not allow."""
+
+    HERE = Path(__file__).parent
+    POLICY = (Path(__file__).parent / "sepolicy" / "su.cil").read_text()
+    RELAY = (Path(__file__).parents[1] / "channeld" / "src" / "su_relay.rs").read_text()
+
+    def _modify(self, root, channeld=True, plat_file_contexts="/system/bin/sh u:object_r:shell_exec:s0\n"):
+        source = root / "target-files.zip"
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+            archive.writestr("SYSTEM/etc/selinux/plat_file_contexts", plat_file_contexts)
+            archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+            archive.writestr("META/file_contexts.bin", b"\x8a\xff\x7c\xf9 compiled")
+            archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+        daemon = None
+        client = None
+        if channeld:
+            daemon = root / "dsa-channeld"
+            daemon.write_bytes(b"daemon")
+            client = root / "su"
+            client.write_bytes(b"client")
+        modified = root / "modified.zip"
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
+        return zipfile.ZipFile(modified)
+
+    def _rules(self, text):
+        """(kind, source, target, class, permissions) of every allow, dontaudit and
+        typetransition rule in `text`, comments aside."""
+        rules = []
+        for line in text.splitlines():
+            line = line.strip()
+            m = re.match(r"\((allow|dontaudit)\s+(\S+)\s+(\S+)\s+\((\S+)\s+\(([^)]*)\)\)\)$", line)
+            if m:
+                rules.append((m.group(1), m.group(2), m.group(3), m.group(4), set(m.group(5).split())))
+            m = re.match(r"\(typetransition\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\)$", line)
+            if m:
+                rules.append(("typetransition", m.group(1), m.group(2), m.group(3), {m.group(4)}))
+        return rules
+
+    def _relay_paths(self):
+        """The su paths the daemon's su relay tells the kernel's su guard to watch."""
+        listed = re.search(r"pub const SU_PATHS: \[&str; \d+\] = \[([^\]]*)\]", self.RELAY)
+        self.assertIsNotNone(listed, "su_relay.rs no longer lists SU_PATHS")
+        return re.findall(r'"(/[^"]+)"', listed.group(1))
+
+    def test_fr35_the_image_carries_root_elevations_policy_with_the_daemon(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            names = archive.namelist()
+            self.assertEqual(make_image.root_elevation_problems(names, archive.read), [])
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            for domain in ["dsa_su", "dsa_su_root"]:
+                self.assertIn(f"(typeattributeset domain ({domain}))", policy)
+            plat_contexts = archive.read("SYSTEM/etc/selinux/plat_file_contexts").decode().splitlines()
+            self.assertIn("/system/bin/sh u:object_r:shell_exec:s0", plat_contexts)
+            self.assertIn("/system/bin/su u:object_r:dsa_su_exec:s0", plat_contexts)
+            # The system image is labelled from file_contexts.bin, not from plat_file_contexts.
+            self.assertIn("/system/bin/su u:object_r:dsa_su_exec:s0",
+                          archive.read("META/file_contexts.bin").decode().splitlines())
+            self.assertIn("vendor.dsa.root_elevation u:object_r:dsa_root_elevation_prop:s0 exact bool",
+                          archive.read("VENDOR/etc/selinux/vendor_property_contexts").decode().splitlines())
+
+    def test_fr35_without_the_daemon_the_image_has_no_root_elevation(self):
+        # The su client's type is declared with the daemon's policy; a label naming it in an
+        # image without that policy would fail to load.
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp), channeld=False) as archive:
+            policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
+            self.assertNotIn("dsa_su", policy)
+            self.assertNotIn("dsa_su_exec", archive.read("SYSTEM/etc/selinux/plat_file_contexts").decode())
+
+    def test_fr35_the_su_clients_label_replaces_one_the_build_already_has(self):
+        # Two specifications for one path conflict, so the build's own line goes.
+        text = make_image.update_plat_file_contexts(
+            "/system/bin/sh u:object_r:shell_exec:s0\n/system/bin/su u:object_r:su_exec:s0\n")
+        self.assertEqual(text.splitlines(), ["/system/bin/sh u:object_r:shell_exec:s0",
+                                             "/system/bin/su u:object_r:dsa_su_exec:s0"])
+        # AOSP's own su keeps its label, which apps may not run.
+        kept = make_image.update_plat_file_contexts("/system/xbin/su u:object_r:su_exec:s0\n")
+        self.assertIn("/system/xbin/su u:object_r:su_exec:s0", kept.splitlines())
+
+    def test_fr35_the_su_client_is_where_the_su_guard_watches(self):
+        # The guard hides only the inodes the relay names; a client anywhere else would be
+        # visible to every app.
+        self.assertIn(make_image.SU_CLIENT_PATH, self._relay_paths())
+
+    def test_fr35_the_image_installs_the_unprivileged_su_client(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/bin/su", b"old su")
+                archive.writestr("META/filesystem_config.txt", "system/bin/su 0 0 6755 capabilities=0x0\n")
+            daemon = root / "dsa-channeld"
+            client = root / "su"
+            daemon.write_bytes(b"daemon")
+            client.write_bytes(b"unprivileged client")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, channeld=daemon, su_client=client)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(archive.read("SYSTEM/bin/su"), b"unprivileged client")
+                self.assertEqual(archive.namelist().count("SYSTEM/bin/su"), 1)
+                config = archive.read("META/filesystem_config.txt").decode().splitlines()
+                self.assertIn("system/bin/su 0 0 755 capabilities=0x0", config)
+                self.assertNotIn("system/bin/su 0 0 6755 capabilities=0x0", config)
+
+    def test_fr35_an_app_not_allowed_sees_no_su_from_boot(self):
+        # The guard does nothing until something writes it, and the helper runs only while root
+        # elevation is on. init hides every su the image can have on its own, before zygote
+        # starts and after the system scripts have laid the ARM translation overlay over
+        # /system/bin, so the guard watches the inode apps look up.
+        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        start = rc.index("on post-fs-data\n")
+        block = rc[start:rc.index("\n\n", start)].splitlines()
+        self.assertEqual(block[1].strip(), "mount securityfs securityfs /sys/kernel/security nodev noexec nosuid")
+        system_paths = [path for path in self._relay_paths() if path.startswith("/system/")]
+        self.assertTrue(system_paths)
+        writes = [line.strip() for line in block[2:]]
+        for path in system_paths:
+            self.assertIn(f'write /sys/kernel/security/dsa_su/control "path {path}"', writes)
+        # Enabled last: with no uid allowed, every task gets ENOENT for the watched paths.
+        self.assertEqual(writes[-1], "write /sys/kernel/security/dsa_su/control enable")
+        self.assertNotIn("allow", " ".join(writes))
+
+    def test_fr35_the_helper_runs_only_while_root_elevation_is_on(self):
+        rc = (self.HERE / "dsa-channeld.rc").read_text()
+        start = rc.index(make_image.SU_HELPER_SERVICE)
+        service = rc[start:rc.index("\n\n", start)].splitlines()
+        options = [line.strip() for line in service[1:]]
+        self.assertIn("user root", options)
+        self.assertIn("seclabel u:r:dsa_su:s0", options)
+        self.assertIn("disabled", options)
+        # The sockets carry the helper's own context (init's default), which apps and the daemon
+        # may connect to; their files take the labels vendor_file_contexts gives their paths.
+        self.assertIn("socket dsa_su stream 0666 root root", options)
+        self.assertIn("socket dsa_su_relay seqpacket 0660 root system", options)
+        contexts = make_image.update_vendor_file_contexts("", channeld=True).splitlines()
+        self.assertIn("/dev/socket/dsa_su u:object_r:dsa_su_socket:s0", contexts)
+        self.assertIn("/dev/socket/dsa_su_relay u:object_r:dsa_su_relay_socket:s0", contexts)
+        self.assertNotIn("dsa_su", make_image.update_vendor_file_contexts("", channeld=False))
+        self.assertEqual(Path(make_image.SU_SOCKET).name, "dsa_su")
+        self.assertEqual(Path(make_image.SU_RELAY_SOCKET).name, "dsa_su_relay")
+        self.assertIn("on property:vendor.dsa.root_elevation=1\n    start dsa_su", rc)
+        self.assertIn("on property:vendor.dsa.root_elevation=0\n    stop dsa_su", rc)
+        # Nothing else starts it.
+        self.assertEqual(rc.count("start dsa_su\n"), 1)
+
+    def test_fr35_apps_reach_the_helper_only_through_its_socket(self):
+        apps = {"appdomain", "untrusted_app_all", "untrusted_app", "platform_app", "priv_app", "system_app"}
+        granted = {(target, cls, frozenset(perms)) for kind, source, target, cls, perms in self._rules(self.POLICY)
+                   if kind == "allow" and source in apps}
+        self.assertEqual(granted, {
+            # Running the su client, in the app's own domain.
+            ("dsa_su_exec", "file", frozenset({"read", "open", "getattr", "map", "execute", "execute_no_trans"})),
+            # Its socket, and the helper behind it.
+            ("dsa_su_socket", "sock_file", frozenset({"write"})),
+            ("dsa_su", "unix_stream_socket", frozenset({"connectto"})),
+        })
+        # No app changes domain by running su: it gains nothing by itself.
+        for kind, source, target, cls, perms in self._rules(self.POLICY):
+            if kind == "typetransition":
+                self.assertNotIn(source, apps)
+
+    def test_fr35_only_the_helper_enters_the_root_domain(self):
+        rules = self._rules(self.POLICY)
+        entries = {source for kind, source, target, cls, perms in rules
+                   if (kind == "typetransition" and perms == {"dsa_su_root"})
+                   or (kind == "allow" and target == "dsa_su_root" and cls == "process"
+                       and perms & {"transition", "dyntransition"})}
+        self.assertEqual(entries, {"dsa_su"})
+        # Only through a shell, which runs the approved command.
+        self.assertIn(("typetransition", "dsa_su", "shell_exec", "process", {"dsa_su_root"}), rules)
+        self.assertIn("(typepermissive dsa_su_root)", self.POLICY)
+        # The helper itself stays enforcing.
+        self.assertNotIn("(typepermissive dsa_su)", self.POLICY)
+
+    def test_fr35_only_init_and_the_helper_write_the_su_guard(self):
+        writers = {source for kind, source, target, cls, perms in self._rules(self.POLICY)
+                   if kind == "allow" and target == "dsa_su_control_file" and cls == "file"
+                   and perms & {"write", "append"}}
+        self.assertEqual(writers, {"init", "dsa_su"})
+        self.assertIn('(genfscon securityfs "/dsa_su" (u object_r dsa_su_control_file ((s0) (s0))))', self.POLICY)
+
+    def test_fr35_only_the_daemon_reaches_the_helpers_link_to_the_host(self):
+        rules = self._rules(self.POLICY)
+        relay = {source for kind, source, target, cls, perms in rules
+                 if kind == "allow" and target == "dsa_su_relay_socket"}
+        self.assertEqual(relay, {"dsa_channeld"})
+        setters = {source for kind, source, target, cls, perms in rules
+                   if kind == "allow" and target == "dsa_root_elevation_prop" and cls == "property_service"}
+        self.assertEqual(setters, {"dsa_channeld"})
+
+    def test_fr35_the_helper_holds_no_part_of_the_control_channel(self):
+        # The host's decision reaches the helper only through the daemon: the helper may not
+        # read the boot's secret or open a socket to the host itself.
+        for kind, source, target, cls, perms in self._rules(self.POLICY):
+            if kind == "allow" and source == "dsa_su":
+                self.assertNotEqual(cls, "vsock_socket")
+                self.assertNotEqual(target, "proc_bootconfig")
+                self.assertNotIn("dsa_channel_service", target)
+
+    def test_fr35_check_image_finds_what_root_elevation_lacks(self):
+        with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
+            files = {name: archive.read(name) for name in archive.namelist()}
+        policy = files["SYSTEM/etc/selinux/plat_sepolicy.cil"].decode()
+        # A rule gone, another domain let into the root domain, another writer of the guard.
+        files["SYSTEM/etc/selinux/plat_sepolicy.cil"] = (
+            policy.replace("(allow untrusted_app_all dsa_su (unix_stream_socket (connectto)))\n", "")
+            + "(typetransition untrusted_app shell_exec process dsa_su_root)\n"
+            + "(allow dsa_channeld dsa_su_control_file (file (write open)))\n"
+            + "(allow system_server dsa_root_elevation_prop (property_service (set)))\n"
+        ).encode()
+        files["META/file_contexts.bin"] = b"/system/bin/sh u:object_r:shell_exec:s0\n"
+        del files["SYSTEM/bin/su"]
+        rc = files[make_image.CHANNELD_RC].decode()
+        files[make_image.CHANNELD_RC] = rc.replace("    seclabel u:r:dsa_su:s0\n", "").encode()
+        problems = make_image.root_elevation_problems(list(files), files.__getitem__)
+        expected = [
+            "SYSTEM/bin/su is missing",
+            "apps cannot connect to the elevation helper",
+            "untrusted_app may enter dsa_su_root",
+            "dsa_channeld may write the su guard",
+            "system_server may start the elevation helper",
+            "META/file_contexts.bin does not label /system/bin/su dsa_su_exec",
+            'lacks "seclabel u:r:dsa_su:s0"',
+        ]
+        for text in expected:
+            self.assertTrue(any(text in p for p in problems), (text, problems))
+        self.assertEqual(len(problems), len(expected), problems)
+
+    def test_fr35_the_policy_has_only_rules_the_tests_can_read(self):
+        # Every statement is one the checks above parse, so none slips past them.
+        for line in self.POLICY.splitlines():
+            line = line.strip()
+            if not line or line.startswith(";"):
+                continue
+            self.assertTrue(
+                re.match(r"\((type|roletype|typeattributeset|typepermissive|genfscon)\s", line)
+                or self._rules(line),
+                line,
+            )
 
 
 if __name__ == "__main__":

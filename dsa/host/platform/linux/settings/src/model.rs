@@ -207,6 +207,9 @@ pub struct Settings {
     pub prerelease_updates: bool,
     /// Whether this installation follows a release channel at all.
     pub update_channel_available: bool,
+    /// Whether apps in Android may ask for root through an administrator's approval. The
+    /// machine's, off by default; it applies from the next start of Android.
+    pub root_elevation: bool,
 }
 
 /// Where attaching developer mode's port to the user's adb server stands.
@@ -283,6 +286,7 @@ impl Settings {
             )),
             prerelease_updates: flag(json, "prerelease_updates", false),
             update_channel_available: flag(json, "update_channel_available", false),
+            root_elevation: flag(json, "root_elevation", false),
         }
     }
 
@@ -434,6 +438,9 @@ pub struct App {
     pub icon_png: Vec<u8>,
     /// The app's "Run as ARM" switch.
     pub run_as_arm: RunAsArm,
+    /// How far the app may use root: `off`, `ask` or `remember`, or `unavailable` while root
+    /// elevation is off for the computer. Empty from a `dsa` that does not say.
+    pub root: String,
 }
 
 /// The "Run as ARM" switch of an app, as `dsa apps list` reports it.
@@ -477,6 +484,7 @@ impl App {
                 .max(number(json, "app_bytes") + number(json, "data_bytes")),
             icon_png: base64_decode(json["icon_png"].as_str().unwrap_or_default()),
             run_as_arm: RunAsArm::read(&json["run_as_arm"]),
+            root: text(json, "root"),
         }
     }
 }
@@ -1341,6 +1349,36 @@ impl Client {
                 detail: text(&json, "message"),
             }),
             Err(failure) => Outcome::refusal(&failure).ok_or(failure),
+        }
+    }
+
+    /// Sets how far an app may use root: `off`, `ask` or `remember`. A refusal by the service
+    /// (root elevation off for the computer, or `remember` without an administrator's
+    /// approval) is an outcome with the service's words.
+    pub fn set_app_root(&self, package: &str, level: &str) -> Result<Outcome, Failure> {
+        match self.json(&["apps", "root", package, level]) {
+            Ok(json) => Ok(Outcome {
+                done: true,
+                status: text(&json, "level"),
+                package: Some(package.to_string()),
+                detail: String::new(),
+            }),
+            Err(failure) => {
+                let refused = failure
+                    .detail
+                    .strip_prefix("not changed: ")
+                    .and_then(|rest| rest.strip_prefix(package))
+                    .and_then(|rest| rest.strip_prefix(": "));
+                match refused {
+                    Some(why) => Ok(Outcome {
+                        done: false,
+                        status: "refused".into(),
+                        package: Some(package.to_string()),
+                        detail: why.to_string(),
+                    }),
+                    None => Err(failure),
+                }
+            }
         }
     }
 

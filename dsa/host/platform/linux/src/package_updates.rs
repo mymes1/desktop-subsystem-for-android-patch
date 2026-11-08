@@ -22,7 +22,7 @@ use dsa_host_core::app_windows::AppWindowSettings;
 use dsa_host_core::arm_translation::{Package, Translator};
 use dsa_host_core::gapps::GappsPackage;
 use dsa_host_core::host_api::{ProgramUpdate, UpdateProgram};
-use dsa_host_core::settings::{MachineSettings, Settings, SettingsStore};
+use dsa_host_core::settings::{MachineSettings, RootApp, Settings, SettingsStore};
 use dsa_host_core::update::program::ReleaseChannel;
 
 /// What `dsa update` and the settings say about updating DSA on Linux.
@@ -278,6 +278,12 @@ impl SettingsStore for ChannelFollowingSettings {
     }
     fn set_gapps(&self, user: &str, package: Option<&GappsPackage>) -> Result<(), String> {
         self.inner.set_gapps(user, package)
+    }
+    fn root_apps(&self, user: &str) -> Result<Vec<RootApp>, String> {
+        self.inner.root_apps(user)
+    }
+    fn set_root_app(&self, user: &str, package: &str, level: &str) -> Result<(), String> {
+        self.inner.set_root_app(user, package, level)
     }
 }
 

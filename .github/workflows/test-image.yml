@@ -4,10 +4,10 @@
 # disk template and ramdisk match image.json. Each run signs with a throwaway key set; a
 # release signs with the project's keys.
 #
-# The Android 17 x86_64 image is then booted by four boot checks at once, each on a runner of
-# its own. That image is kept in the Actions cache, keyed on everything that decides it, so a
-# run whose inputs did not change takes it from there instead of making it again; the check
-# runs on it all the same.
+# The Android 17 x86_64 image is then booted by six boot checks at once, each on a runner of
+# its own, with the guest kernel built from the same commit. That image is kept in the Actions
+# cache, keyed on everything that decides it, so a run whose inputs did not change takes it
+# from there instead of making it again; the checks run on it all the same.
 
 name: Image test
 
@@ -209,7 +209,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: guest-channeld${{ matrix.arch == 'arm64' && '-arm64' || '' }}
-          path: .scratch/channeld/dsa-channeld
+          path: |
+            .scratch/channeld/dsa-channeld
+            .scratch/channeld/su
           if-no-files-found: error
 
       # aidl comes from the runner's Android SDK build-tools.
@@ -794,6 +796,7 @@ jobs:
           args=(--major "${{ matrix.android }}" --arch ${{ matrix.arch }} --keys .scratch/image-keys)
           args+=(--graphics-dir .scratch/guest-graphics --graphics-library .scratch/guest-graphics/libOpenglSystemCommon.so)
           args+=(--channeld .scratch/channeld/dsa-channeld)
+          args+=(--su-client .scratch/channeld/su)
           args+=(--hwcomposer .scratch/hwcomposer/dsa-hwcomposer)
           args+=(--codec2 .scratch/codec2/dsa-codec2)
           args+=(--audio .scratch/audio/dsa-audio)
@@ -871,8 +874,8 @@ jobs:
             dsa/target/image/*/initrd.img
           if-no-files-found: error
 
-      # What the boot checks boot: the image as a host installs it (no signed build inputs)
-      # and the newest published kernel, because this workflow does not build the kernel.
+      # What the boot checks boot: the image as a host installs it (no signed build inputs),
+      # with the kernel the boot-kernel job builds from the same commit.
       - name: Keep the image for the boot checks
         if: env.BOOT_IMAGE == 'true'
         uses: actions/upload-artifact@v4
@@ -885,17 +888,6 @@ jobs:
           compression-level: 1
           retention-days: 1
           if-no-files-found: error
-
-      - name: Find the newest published kernel
-        id: kernel
-        if: env.BOOT_IMAGE == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="$(gh release list -R "${{ github.repository }}" -L 50 --json tagName -q '[.[] | select(.tagName | startswith("android-17") and (endswith("-arm64") | not))][0].tagName')"
-          test -n "$tag" || { echo "no published x86_64 Android 17 image release"; exit 1; }
-          echo "kernel release: $tag"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       # The partition images in the signed build are what the system disk already holds, and
       # nothing reads them after the disk is made (the check above does not), so the cache
@@ -946,9 +938,45 @@ jobs:
     env:
       CACHE_IMAGE: "true"
       BOOT_IMAGE: "true"
-    outputs:
-      kernel: ${{ steps.kernel.outputs.tag }}
     steps: *image-steps
+
+  # The kernel the boot checks boot, built from this commit's dsa/kernel/ rather than taken
+  # from the newest release, so the checks run on the kernel this change ships (the su guard
+  # included). The build runs beside the image's and is cached on its inputs, so a run whose
+  # kernel inputs did not change takes it from the cache in about a minute.
+  boot-kernel:
+    name: Build the guest kernel for the boot checks (x86_64)
+    if: github.event_name != 'workflow_dispatch' || inputs.android == '17' || inputs.android == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      # Deletes the cached kernel a new one replaces.
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the guest kernel
+        uses: ./.github/actions/guest-kernel
+        with:
+          arch: x86_64
+          out: ${{ github.workspace }}/.scratch/kernel-boot
+          save: ${{ github.ref == 'refs/heads/develop' }}
+          token: ${{ github.token }}
+
+      # build.sh names the kernel bzImage-<release>; the boot checks take it as bzImage.
+      - name: Name the kernel bzImage
+        run: |
+          kernel="$(ls .scratch/kernel-boot/bzImage-*)"
+          cp "$kernel" .scratch/kernel-boot/bzImage
+
+      - name: Keep the kernel for the boot checks
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-kernel
+          path: .scratch/kernel-boot/bzImage
+          retention-days: 1
+          if-no-files-found: error
 
   # The image booted under crosvm by the service, once per check, each on a runner of its own
   # and all at once. Each check runs even when another failed, so one failure does not hide
@@ -970,6 +998,13 @@ jobs:
   # every decoder the guest lists, and the guest log must show no denial of a media service's
   # shared memory.
   #
+  # root: the same probe, SELinux enforcing, three boots. With root elevation on and the probe
+  # set to ask, su is visible to it; a refused call fails once and the approval request names
+  # the app, its icon and the command; an unanswered call times out after about a minute; an
+  # approved one runs as uid 0, and the next call within the grace runs without asking again.
+  # With root elevation off, su is absent at every path for every way of looking and the
+  # helper is not running. The kernel's su guard is in the kernel the boot-kernel job built.
+  #
   # overlays: SELinux enforcing, two boots. First with the image's default ARM translator: the
   # package must be mounted and laid over /system, and binfmt_misc mounted with the package's
   # rules in place. Then with a small Google apps build, installed through the local API from a
@@ -984,7 +1019,7 @@ jobs:
   # takes most of the step.
   boot-check:
     name: ${{ matrix.check }} (ubuntu-latest, Android 17, x86_64)
-    needs: [boot-image, boot-checks, graphics-test-apps]
+    needs: [boot-image, boot-checks, graphics-test-apps, boot-kernel]
     runs-on: ubuntu-latest
     timeout-minutes: 50
     strategy:
@@ -1017,9 +1052,20 @@ jobs:
             timeout: 14
             keep: Keep the media check's logs
             artifact: media-check-logs
+            # The root check boots on a runner of its own, below.
+            filter: --skip fr35_an_app_needs_approval_and_su_is_hidden_when_disabled
             logs: |
-              /tmp/media-test-*/*.log
-              /tmp/media-test-*/*.txt
+              .scratch/media-*/*.log
+              .scratch/media-*/*.txt
+          - check: Approve and refuse root for an app on the booted image
+            test: media
+            timeout: 23
+            keep: Keep the root check's logs
+            artifact: root-check-logs
+            filter: fr35_
+            logs: |
+              .scratch/root-*/*.log
+              .scratch/root-*/*.txt
           - check: Run the Vulkan CTS subset and the graphics test apps on the booted image
             test: graphics
             timeout: 28
@@ -1069,15 +1115,16 @@ jobs:
           name: boot-image
           path: .scratch/boot-image
 
-      - name: Download the newest published kernel
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Download the kernel built from this commit
+        uses: actions/download-artifact@v4
+        with:
+          name: boot-kernel
+          path: .scratch/boot-kernel
+
+      - name: Select the boot check image and kernel
         run: |
-          tag="${{ needs.boot-image.outputs.kernel }}"
-          test -n "$tag" || { echo "the image job named no kernel release"; exit 1; }
-          echo "kernel release: $tag"
-          gh release download "$tag" -R "${{ github.repository }}" -p bzImage -D "$RUNNER_TEMP"
-          echo "DSA_WIDGET_TEST_KERNEL=$RUNNER_TEMP/bzImage" >> "$GITHUB_ENV"
+          test -f .scratch/boot-kernel/bzImage || { echo "the boot-kernel job left no bzImage"; exit 1; }
+          echo "DSA_WIDGET_TEST_KERNEL=$PWD/.scratch/boot-kernel/bzImage" >> "$GITHUB_ENV"
           image="$(ls -d "$PWD"/.scratch/boot-image/*/ | head -1)"
           test -f "$image/system.vhdx" || { echo "the downloaded image has no system.vhdx"; exit 1; }
           ls -l "$image"
@@ -1185,7 +1232,7 @@ jobs:
             export DSA_GRAPHICS_TEST_APPS="$GITHUB_WORKSPACE/.scratch/graphics-test-apps"
           fi
           set -o pipefail
-          "$GITHUB_WORKSPACE/.scratch/boot-checks/tests/${{ matrix.test }}" --nocapture --test-threads 1 2>&1 |
+          "$GITHUB_WORKSPACE/.scratch/boot-checks/tests/${{ matrix.test }}" --nocapture --test-threads 1 ${{ matrix.filter }} 2>&1 |
             tee "$RUNNER_TEMP/check.log"
           if grep -q 'skipped: DSA_' "$RUNNER_TEMP/check.log"; then
             echo "::error::the ${{ matrix.test }} boot check found nothing to boot and skipped"

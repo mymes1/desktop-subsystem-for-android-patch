@@ -63,7 +63,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y rpm desktop-file-utils gnupg dpkg-dev apt-utils createrepo-c appstream \
-            libgtk-4-dev libadwaita-1-dev gettext
+            libgtk-4-dev libadwaita-1-dev gettext libxml2-utils
 
       # A key made for this run only. The real one is a repository secret that only the
       # release workflow reads.
@@ -151,6 +151,7 @@ jobs:
               /etc/dsa/dsa-hostd.json /usr/lib/dsa/vm/image/image.json \
               /usr/lib/dsa/bin/crosvm /usr/lib/dsa/bin/passt /usr/lib/dsa/bin/libgfxstream_backend.so \
               /etc/apparmor.d/dsa-vm \
+              /usr/share/polkit-1/actions/io.github.thisisthepy.DSA.policy \
               /usr/share/doc/desktop-subsystem-for-android/crosvm-crates.txt \
               /usr/share/doc/desktop-subsystem-for-android/passt-source.tar.gz \
               /usr/share/doc/desktop-subsystem-for-android/licenses/crosvm-crates.txt \
@@ -185,6 +186,9 @@ jobs:
           for desktop in dsa/host/platform/linux/packaging/desktop/*.desktop; do
             desktop-file-validate "$desktop"
           done
+          # The polkit action is well formed, as polkit drops a file it cannot read.
+          xmllint --noout \
+            .scratch/packages/stage/usr/share/polkit-1/actions/io.github.thisisthepy.DSA.policy
           python3 -c "import json,sys; json.load(open('.scratch/packages/stage/etc/dsa/dsa-hostd.json'))"
 
       - name: Build the signed repositories
@@ -247,6 +251,10 @@ jobs:
           /usr/lib/dsa/bin/dsa-devices --version
           /usr/lib/dsa/bin/crosvm version
           /usr/lib/dsa/bin/passt --version
+          # polkit reads the action the package installed, where the runner has polkit.
+          if command -v pkaction >/dev/null; then
+            pkaction --action-id io.github.thisisthepy.DSA.root-elevation --verbose
+          fi
           ! dpkg-deb --field "$(ls .scratch/packages/*.deb)" Depends | grep -qi qemu
           systemd-analyze verify /usr/lib/systemd/user/dsa-devices.service
           if [ -f /usr/lib/systemd/system/dsa-hostd.service ]; then

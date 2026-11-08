@@ -20,7 +20,7 @@
 //! dsa gpus
 //! dsa widgets [list | add <provider> | remove <id> | watch]
 //! dsa apps [list | info <package> | uninstall <package> | settings [<package>] |
-//!     run-as-arm <package> on|off [--erase-data]]
+//!     run-as-arm <package> on|off [--erase-data] | root <package> off|ask|remember]
 //! dsa background [list | open <package> | stop <package>]
 //! dsa app-window [<package> [--fixed-size on|off] [--start-size <width>x<height>|auto] | <package> reset]
 //! dsa logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...]
@@ -146,6 +146,13 @@
 //! `system-app`, `no-libraries`, `translation-off` or `other`. With `--json` it prints
 //! `package`, `status`, `on` and `message`.
 //!
+//! `dsa apps root <package> off|ask|remember` sets how far an app may elevate to root: `off`
+//! (su does not exist for it), `ask` (each su call waits for the computer's administrator
+//! approval) or `remember` (approved without asking, within a 15 minute grace). It needs
+//! `dsa settings set root-elevation on` first, and moving an app to `remember` needs an
+//! administrator. With `--json` it prints `package` and `level`. The level applies to su's
+//! visibility from the next start of Android.
+//!
 //! `dsa background list` (or `dsa background`) lists the apps that keep running in Android
 //! with no window because they run a foreground service (music playback, a download, a VPN),
 //! each with the notification the service keeps shown, and the active media sessions. It does
@@ -202,6 +209,9 @@
 //! Windows 11's three- and four-finger touch gestures off while a DSA app window is in front,
 //! so apps get every finger, and puts the user's own value back when another window comes to
 //! the front; `dsa settings` says whether the window manager can do it on this computer.
+//! `root-elevation` (off by default, the computer's, so an administrator changes it) lets apps
+//! elevate to root through the computer's administrator approval, from the next start of
+//! Android; `dsa apps root <package>` then sets each app's level.
 //! `dsa settings set <name> <value>` changes one;
 //! the switches take `on` or `off`. `dsa memory` shows how much memory the user's Android
 //! takes, on the host and inside Android. `dsa network` shows how the user's Android reaches
@@ -325,7 +335,7 @@ pub const USAGE: &str = "usage: dsa <status | start | stop | freeze | update | \
      network | gpus | \
      widgets [list | add <provider> | remove <id> | watch] | \
      apps [list | info <package> | uninstall <package> | settings [<package>] | \
-     run-as-arm <package> on|off [--erase-data]] | \
+     run-as-arm <package> on|off [--erase-data] | root <package> off|ask|remember] | \
      background [list | open <package> | stop <package>] | \
      app-window [<package> [--fixed-size on|off] [--start-size <w>x<h>|auto] | <package> reset] | \
      logcat [-d] [-b <buffers>] [<tag>[:<priority>] ...] | logs collect -o <file.zip> | \
@@ -461,6 +471,8 @@ pub enum AppsAction {
     Settings(Option<String>),
     /// Install one app again with its ARM code (`true`) or its x86_64 code.
     RunAsArm(String, bool),
+    /// Set how far one app may elevate to root: the package and "off", "ask" or "remember".
+    Root(String, String),
 }
 
 /// What `dsa widgets` does.
@@ -518,6 +530,7 @@ pub enum Change {
     SharedFolders(Vec<String>),
     AdvancedNetworking(bool),
     TouchGesturesOff(bool),
+    RootElevation(bool),
 }
 
 impl Change {
@@ -540,6 +553,7 @@ impl Change {
             "image-updates" => switch().map(Change::ImageUpdates),
             "input-trace" => switch().map(Change::InputTrace),
             "resize-trace" => switch().map(Change::ResizeTrace),
+            "root-elevation" => switch().map(Change::RootElevation),
             "memory-limit" => parse_memory_limit(value).map(Change::MemoryLimit),
             "developer-mode" => switch().map(Change::DeveloperMode),
             "adb-auto-connect" => switch().map(Change::AdbAutoConnect),
@@ -558,7 +572,7 @@ impl Change {
             _ => Err(format!(
                 "there is no setting {name:?}; the settings are render-gpu, freeze, \
                  clipboard, links-in-android, program-updates, prerelease-updates, \
-                 image-updates, input-trace, resize-trace, memory-limit, developer-mode, adb-port, adb-auto-connect, \
+                 image-updates, input-trace, resize-trace, root-elevation, memory-limit, developer-mode, adb-port, adb-auto-connect, \
                  arm-translation, stop-without-asking, file-sharing, shared-folders, \
                  advanced-networking, touch-gestures-off and device.<field>"
             )),
@@ -881,6 +895,28 @@ pub fn parse(args: &[String]) -> Result<Invocation, String> {
                     _ => return Err(usage.to_string()),
                 };
                 apps = Some(AppsAction::RunAsArm(package.clone(), on));
+            }
+            "root" if command == Some(Command::Apps) && apps.is_none() => {
+                let usage = "dsa apps root needs the app's package and off, ask or remember, \
+                             such as dsa apps root com.example.backup ask";
+                let package = args.next().ok_or_else(|| usage.to_string())?;
+                if !is_package_name(package) {
+                    return Err(format!(
+                        "{package:?} is not a package name; dsa apps list shows them, such as \
+                         com.example.notes"
+                    ));
+                }
+                let level = match args
+                    .next()
+                    .map(|value| value.to_ascii_lowercase())
+                    .as_deref()
+                {
+                    Some("off") => "off",
+                    Some("ask") => "ask",
+                    Some("remember") => "remember",
+                    _ => return Err(usage.to_string()),
+                };
+                apps = Some(AppsAction::Root(package.clone(), level.to_string()));
             }
             name if command == Some(Command::Apps)
                 && apps == Some(AppsAction::Settings(None))
@@ -1515,6 +1551,7 @@ pub fn app_json(app: &AppInfo, icon: bool) -> Value {
         "total_bytes": app.total_bytes(),
         "primary_abi": app.primary_abi,
         "native_abis": app.native_libraries.abis().collect::<Vec<_>>(),
+        "root": app.root,
     });
     if icon {
         value["icon_png"] = Value::String(base64(&app.icon_png));
@@ -1610,8 +1647,20 @@ pub fn describe_app(app: &AppInfo) -> String {
                 app.primary_abi.clone()
             }
         ),
+        format!("Root: {}", describe_root_level(&app.root)),
     ]
     .join("\n")
+}
+
+/// An app's root elevation level as `dsa apps info` says it.
+fn describe_root_level(level: &str) -> &'static str {
+    match level {
+        "off" => "off (su does not exist for it; dsa apps root changes it)",
+        "ask" => "ask (each su call waits for an administrator's approval)",
+        "remember" => "remember (approved without asking)",
+        "unavailable" => "unavailable (root elevation is off for this computer)",
+        _ => "unknown (the service did not say)",
+    }
 }
 
 /// Whether the caller's running Android translates ARM code: its ABI list holds arm64-v8a.
@@ -1738,6 +1787,31 @@ fn apps(
                     Some(package) => format!("Opening the settings of {package}"),
                     None => "Opening the list of apps".into(),
                 }
+            })
+        }
+        AppsAction::Root(package, level) => {
+            let result = client
+                .set_app_root(&package, &level)
+                .map_err(|e| e.to_string())?;
+            let ok = result.status() == dsa_host_core::host_api::AppRootStatus::Success;
+            if !ok {
+                return Err(format!(
+                    "not changed: {package}: {}",
+                    if result.message.is_empty() {
+                        "the service refused the change".to_string()
+                    } else {
+                        result.message.clone()
+                    }
+                ));
+            }
+            Ok(if invocation.json {
+                json!({
+                    "package": result.package_name,
+                    "level": result.level,
+                })
+                .to_string()
+            } else {
+                format!("{package} may use root: {}", result.level)
             })
         }
     }
@@ -1951,6 +2025,7 @@ pub fn settings_json(report: &SettingsReport) -> Value {
         "image_updates": report.settings.image_updates,
         "input_trace": report.settings.input_trace,
         "resize_trace": report.settings.resize_trace,
+        "root_elevation": report.settings.root_elevation,
         "memory_limit_mb": report.settings.memory_limit_mb,
         "developer_mode": report.settings.developer_mode,
         "adb_port": report.settings.adb_port,
@@ -2248,6 +2323,10 @@ pub fn describe_settings(report: &SettingsReport) -> String {
         format!("Input trace: {}", on_off(settings.input_trace)),
         format!("Resize trace: {}", on_off(settings.resize_trace)),
         format!(
+            "Root elevation: {} (the computer's; it applies from the next start of Android)",
+            on_off(settings.root_elevation)
+        ),
+        format!(
             "Memory limit: {}",
             match settings.memory_limit_mb {
                 0 => "automatic".to_string(),
@@ -2519,6 +2598,7 @@ fn settings(invocation: &Invocation, client: &mut HostApiClient) -> Result<Strin
             Change::SharedFolders(folders) => wanted.shared_folders = folders.clone(),
             Change::AdvancedNetworking(on) => wanted.advanced_networking = *on,
             Change::TouchGesturesOff(on) => wanted.touch_gestures_off = *on,
+            Change::RootElevation(on) => wanted.root_elevation = *on,
         }
         report = client.set_settings(&wanted).map_err(|e| e.to_string())?;
     }
