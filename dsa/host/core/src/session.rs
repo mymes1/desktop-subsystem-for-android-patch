@@ -5029,7 +5029,13 @@ impl Worker {
             }
         } else {
             self.agent_lost_at = Some(now);
-            eprintln!("lifecycle: the agent is gone");
+            // The tasks are what the agent reported, and the agent goes when Android's framework
+            // restarts, which ends every app's task with it. Their windows close rather than
+            // keep a last frame nothing answers, and a task number the new framework hands out
+            // again is a new task. Tasks that outlived an agent alone are reported again by the
+            // next one, and their windows open again.
+            self.shared.clear_tasks();
+            eprintln!("lifecycle: the agent is gone; the tasks it reported have ended");
         }
     }
 
