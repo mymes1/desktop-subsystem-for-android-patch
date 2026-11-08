@@ -81,6 +81,7 @@ add_executable(dsa-hwcomposer
     src/frame_pipeline.cpp
     src/host_renderer.cpp
     src/host_stream.cpp
+    src/refresh_rates.cpp
     src/resize_trace.cpp
     src/task_composer.cpp
     src/task_layout.cpp

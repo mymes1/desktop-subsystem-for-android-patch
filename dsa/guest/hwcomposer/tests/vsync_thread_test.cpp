@@ -163,4 +163,17 @@ TEST(fr5_vsync_on_start_runs_on_the_vsync_thread_before_any_tick) {
     vsync.setEnabled(false);
 }
 
+TEST(fr10_battery_saver_caps_the_guest_refresh_rate_by_slowing_the_vsync_clock) {
+    // 120 Hz, then 60 Hz under the host's battery saver, then 120 Hz again: the clock
+    // follows without being made anew. A period that is no period changes nothing.
+    VsyncThread vsync(8333333, [](int64_t) {});
+    EXPECT_EQ(vsync.period(), 8333333);
+    vsync.setPeriod(16666666);
+    EXPECT_EQ(vsync.period(), 16666666);
+    vsync.setPeriod(0);
+    EXPECT_EQ(vsync.period(), 16666666);
+    vsync.setPeriod(8333333);
+    EXPECT_EQ(vsync.period(), 8333333);
+}
+
 int main() { return dsa::test::runAll(); }

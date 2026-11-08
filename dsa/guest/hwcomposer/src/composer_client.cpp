@@ -36,9 +36,9 @@ using composer3::CommandResultPayload;
 
 namespace {
 
-// The one display SurfaceFlinger sees, and its one configuration.
+// The one display SurfaceFlinger sees. Its configurations are its refresh rates
+// (refresh_rates.h).
 constexpr int64_t kDisplayId = 0;
-constexpr int32_t kConfigId = 0;
 
 ndk::ScopedAStatus error(int32_t code) { return ndk::ScopedAStatus::fromServiceSpecificError(code); }
 
@@ -59,14 +59,15 @@ void addError(std::vector<CommandResultPayload>* results, int32_t index, int32_t
 }  // namespace
 
 ComposerClient::ComposerClient(std::shared_ptr<TaskComposer> tasks, const DisplayConfig& config)
-    : mTasks(std::move(tasks)), mDisplay(config) {
+    : mTasks(std::move(tasks)), mDisplay(config), mActiveConfig(configForRate(config.refreshRateHz)) {
     // The vsync thread touches only mCallbackMutex, never mMutex, so a present that waits on
-    // the host never holds a tick back. onVsync is a oneway call.
+    // the host never holds a tick back. onVsync is a oneway call. Each tick carries the
+    // period it was made at, which is how SurfaceFlinger sees a change of rate take effect.
     mVsync = std::make_unique<VsyncThread>(
-        config.vsyncPeriodNanos,
+        vsyncPeriodOf(mActiveConfig.load()),
         [this](int64_t timestamp) {
             if (auto cb = callback()) {
-                cb->onVsync(kDisplayId, timestamp, mDisplay.config().vsyncPeriodNanos);
+                cb->onVsync(kDisplayId, timestamp, vsyncPeriodOf(mActiveConfig.load()));
             }
         },
         [] { raiseToDisplayPriority("vsync"); });
@@ -212,7 +213,7 @@ void ComposerClient::present(int64_t displayId, std::vector<CommandResultPayload
 
 ndk::ScopedAStatus ComposerClient::getActiveConfig(int64_t display, int32_t* config) {
     CHECK_DISPLAY(display);
-    *config = kConfigId;
+    *config = mActiveConfig.load();
     return ndk::ScopedAStatus::ok();
 }
 
@@ -235,7 +236,7 @@ ndk::ScopedAStatus ComposerClient::getDisplayAttribute(int64_t display, int32_t 
                                                        composer3::DisplayAttribute attribute,
                                                        int32_t* value) {
     CHECK_DISPLAY(display);
-    if (config != kConfigId) {
+    if (!isRefreshConfig(config)) {
         return error(composer3::IComposerClient::EX_BAD_CONFIG);
     }
     const DisplayConfig& c = mDisplay.config();
@@ -247,7 +248,7 @@ ndk::ScopedAStatus ComposerClient::getDisplayAttribute(int64_t display, int32_t 
             *value = c.height;
             break;
         case composer3::DisplayAttribute::VSYNC_PERIOD:
-            *value = c.vsyncPeriodNanos;
+            *value = vsyncPeriodOf(config);
             break;
         case composer3::DisplayAttribute::DPI_X:
         case composer3::DisplayAttribute::DPI_Y:
@@ -272,7 +273,10 @@ ndk::ScopedAStatus ComposerClient::getDisplayCapabilities(int64_t display,
 
 ndk::ScopedAStatus ComposerClient::getDisplayConfigs(int64_t display, std::vector<int32_t>* configs) {
     CHECK_DISPLAY(display);
-    *configs = {kConfigId};
+    configs->clear();
+    for (int32_t config = 0; config < kRefreshConfigCount; ++config) {
+        configs->push_back(config);
+    }
     return ndk::ScopedAStatus::ok();
 }
 
@@ -280,15 +284,19 @@ ndk::ScopedAStatus ComposerClient::getDisplayConfigurations(
     int64_t display, int32_t, std::vector<composer3::DisplayConfiguration>* configs) {
     CHECK_DISPLAY(display);
     const DisplayConfig& c = mDisplay.config();
-    composer3::DisplayConfiguration config;
-    config.configId = kConfigId;
-    config.width = c.width;
-    config.height = c.height;
-    config.dpi = composer3::DisplayConfiguration::Dpi{static_cast<float>(c.dpi),
-                                                      static_cast<float>(c.dpi)};
-    config.configGroup = 0;
-    config.vsyncPeriod = c.vsyncPeriodNanos;
-    *configs = {config};
+    configs->clear();
+    for (int32_t id = 0; id < kRefreshConfigCount; ++id) {
+        composer3::DisplayConfiguration config;
+        config.configId = id;
+        config.width = c.width;
+        config.height = c.height;
+        config.dpi = composer3::DisplayConfiguration::Dpi{static_cast<float>(c.dpi),
+                                                          static_cast<float>(c.dpi)};
+        // One group: every rate is the same display, so switching between them is seamless.
+        config.configGroup = 0;
+        config.vsyncPeriod = vsyncPeriodOf(id);
+        configs->push_back(config);
+    }
     return ndk::ScopedAStatus::ok();
 }
 
@@ -313,7 +321,7 @@ ndk::ScopedAStatus ComposerClient::getDisplayName(int64_t display, std::string* 
 
 ndk::ScopedAStatus ComposerClient::getDisplayVsyncPeriod(int64_t display, int32_t* period) {
     CHECK_DISPLAY(display);
-    *period = mDisplay.config().vsyncPeriodNanos;
+    *period = vsyncPeriodOf(mActiveConfig.load());
     return ndk::ScopedAStatus::ok();
 }
 
@@ -390,19 +398,32 @@ ndk::ScopedAStatus ComposerClient::getDisplayDecorationSupport(
 
 ndk::ScopedAStatus ComposerClient::setActiveConfig(int64_t display, int32_t config) {
     CHECK_DISPLAY(display);
-    if (config != kConfigId) {
+    if (!isRefreshConfig(config)) {
         return error(composer3::IComposerClient::EX_BAD_CONFIG);
     }
+    applyConfig(config);
     return ndk::ScopedAStatus::ok();
+}
+
+void ComposerClient::applyConfig(int32_t config) {
+    const int32_t previous = mActiveConfig.exchange(config);
+    if (previous == config) {
+        return;
+    }
+    // The clock has no hardware behind it, so the new rate starts with the next tick.
+    mVsync->setPeriod(vsyncPeriodOf(config));
+    HWC_LOGI("the display refreshes at %d Hz (was %d Hz)", refreshRateOf(config),
+             refreshRateOf(previous));
 }
 
 ndk::ScopedAStatus ComposerClient::setActiveConfigWithConstraints(
     int64_t display, int32_t config, const composer3::VsyncPeriodChangeConstraints& constraints,
     composer3::VsyncPeriodChangeTimeline* timeline) {
     CHECK_DISPLAY(display);
-    if (config != kConfigId) {
+    if (!isRefreshConfig(config)) {
         return error(composer3::IComposerClient::EX_BAD_CONFIG);
     }
+    applyConfig(config);
     timeline->newVsyncAppliedTimeNanos = constraints.desiredTimeNanos;
     timeline->refreshRequired = false;
     timeline->refreshTimeNanos = 0;

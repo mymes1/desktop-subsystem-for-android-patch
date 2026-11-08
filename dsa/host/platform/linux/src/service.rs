@@ -478,6 +478,25 @@ pub fn create_user_android(
     if let Some(power) = power {
         power.attach(&session);
     }
+    // The guest's display refreshes as fast as the user's fastest monitor, which their window
+    // manager records; the power saver profile, which comes with the power, caps it at 60 Hz.
+    let (watched, refresh_user) = (Arc::downgrade(&session), user.to_string());
+    if let Err(error) = thread::Builder::new()
+        .name("dsa-monitor-refresh".into())
+        .spawn(move || {
+            dsa_host_core::guest_refresh::follow_monitors(
+                watched,
+                || {
+                    UserFiles::of(&host_paths(), &refresh_user)
+                        .ok()
+                        .and_then(|files| crate::monitor_refresh::read_record(&files.run_dir))
+                },
+                dsa_host_core::guest_refresh::MONITOR_POLL,
+            )
+        })
+    {
+        eprintln!("{user}: display: cannot follow the monitors' refresh rate: {error}");
+    }
     // The guest's power HAL: its hints set how hard Linux runs the guest's processors.
     let hints = session.watch_power_hints();
     let (watched, hint_user) = (Arc::downgrade(&session), user.to_string());

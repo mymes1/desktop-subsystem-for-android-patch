@@ -152,6 +152,10 @@ pub struct State {
     pub(crate) text_input: Option<ZwpTextInputV3>,
     /// Each output's scale and size in pixels.
     pub(crate) outputs: HashMap<u32, (i32, (i32, i32))>,
+    /// Each output's current refresh rate, in millihertz.
+    pub(crate) output_refresh: HashMap<u32, i32>,
+    /// Records the fastest output's rate for the service, which sets the guest display's.
+    pub(crate) refresh_recorder: crate::monitor_refresh::RefreshRecorder,
     pub(crate) windows: BTreeMap<i32, Window>,
     pub(crate) seat_state: seat::SeatState,
     pub(crate) data_state: data::DataState,
@@ -255,6 +259,10 @@ impl Desktop {
             data_device: None,
             text_input: None,
             outputs: HashMap::new(),
+            output_refresh: HashMap::new(),
+            refresh_recorder: crate::monitor_refresh::RefreshRecorder::new(
+                dsa_host_unix::paths::current_user_tmp(dsa_host_unix::paths::Layout::Linux).ok(),
+            ),
             windows: BTreeMap::new(),
             seat_state: seat::SeatState::default(),
             data_state: data::DataState::default(),
@@ -380,6 +388,9 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for State {
             }
             wl_registry::Event::GlobalRemove { name } => {
                 state.outputs.remove(&name);
+                if state.output_refresh.remove(&name).is_some() {
+                    state.record_refresh();
+                }
             }
             _ => {}
         }
@@ -402,9 +413,24 @@ impl Dispatch<wl_output::WlOutput, u32> for State {
                 flags: wayland_client::WEnum::Value(flags),
                 width,
                 height,
-                ..
-            } if flags.contains(wl_output::Mode::Current) => entry.1 = (width, height),
+                refresh,
+            } if flags.contains(wl_output::Mode::Current) => {
+                entry.1 = (width, height);
+                if state.output_refresh.insert(*name, refresh) != Some(refresh) {
+                    state.record_refresh();
+                }
+            }
             _ => {}
+        }
+    }
+}
+
+impl State {
+    /// Records the fastest output's refresh rate for the service.
+    fn record_refresh(&mut self) {
+        let rates: Vec<i32> = self.output_refresh.values().copied().collect();
+        if let Err(why) = self.refresh_recorder.record(rates) {
+            crate::compositor::session::log(&why);
         }
     }
 }

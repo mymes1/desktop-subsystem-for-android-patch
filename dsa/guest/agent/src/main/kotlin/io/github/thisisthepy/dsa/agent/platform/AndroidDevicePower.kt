@@ -10,6 +10,7 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.os.ResultReceiver
 import android.os.SystemClock
+import android.provider.Settings
 import io.github.thisisthepy.dsa.agent.Log
 import io.github.thisisthepy.dsa.agent.power.Battery
 import io.github.thisisthepy.dsa.agent.power.BatteryStatus
@@ -111,6 +112,30 @@ class AndroidDevicePower(private val context: Context, private val log: Log) : D
     }
 
     /**
+     * Sets the lowest and highest refresh rate the framework may choose (the settings the
+     * "smooth display" switch of a phone writes) both to [hz]. The display manager follows
+     * them at once and has SurfaceFlinger switch the display to the hwcomposer's configuration
+     * at that rate. They are hidden system settings, which WRITE_SECURE_SETTINGS lets the
+     * agent write.
+     */
+    override fun setRefreshRate(hz: Int) {
+        val resolver = context.contentResolver
+        val rate = hz.toFloat()
+        // Each step keeps the lowest at or below the highest: going down the lowest moves
+        // first, going up the highest.
+        if (rate < currentRate(resolver, MIN_REFRESH_RATE)) {
+            Settings.System.putFloat(resolver, MIN_REFRESH_RATE, rate)
+            Settings.System.putFloat(resolver, PEAK_REFRESH_RATE, rate)
+        } else {
+            Settings.System.putFloat(resolver, PEAK_REFRESH_RATE, rate)
+            Settings.System.putFloat(resolver, MIN_REFRESH_RATE, rate)
+        }
+    }
+
+    private fun currentRate(resolver: android.content.ContentResolver, name: String): Float =
+        Settings.System.getFloat(resolver, name, 0f)
+
+    /**
      * Sets the guest's wall clock through the alarm manager (SET_TIME), which also moves the
      * kernel's clock and tells apps the time changed, so their alarms are right again.
      */
@@ -179,5 +204,8 @@ class AndroidDevicePower(private val context: Context, private val log: Log) : D
         const val WAKE_DETAILS = "io.github.thisisthepy.dsa.agent:window shown"
         const val RESULT_WAIT_MILLIS = 2000L
         const val IDLE_WAIT_MILLIS = 3000L
+        // Settings.System.MIN_REFRESH_RATE and PEAK_REFRESH_RATE, hidden from the SDK.
+        const val MIN_REFRESH_RATE = "min_refresh_rate"
+        const val PEAK_REFRESH_RATE = "peak_refresh_rate"
     }
 }

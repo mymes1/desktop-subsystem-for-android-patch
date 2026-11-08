@@ -60,6 +60,12 @@ void VsyncThread::setEnabled(bool enabled) {
     mWake.notify_all();
 }
 
+void VsyncThread::setPeriod(int32_t periodNanos) {
+    if (periodNanos > 0) {
+        mPeriodNanos.store(periodNanos);
+    }
+}
+
 void VsyncThread::run() {
     if (mOnStart) {
         mOnStart();
@@ -76,7 +82,7 @@ void VsyncThread::run() {
             }
         }
         // On the period's grid, skipping whatever was missed while disabled or descheduled.
-        const int64_t next = nextVsyncAfter(last, nowNanos(), mPeriodNanos);
+        const int64_t next = nextVsyncAfter(last, nowNanos(), mPeriodNanos.load());
         sleepUntil(next);
         last = next;
         bool enabled;

@@ -78,3 +78,14 @@ fn fr10_the_service_can_follow_this_computers_sleep() {
     let watch = dsa_host_windows::power::watch_sleep(hub).expect("the registration");
     drop(watch);
 }
+
+#[test]
+fn fr10_energy_saver_is_read_often_enough_to_cap_the_refresh_rate_within_a_second() {
+    use dsa_host_core::guest_refresh::refresh_rate;
+    use dsa_host_windows::power::POWER_POLL;
+    assert!(POWER_POLL < std::time::Duration::from_secs(1));
+    let saver = from_system_status(1, 128, 255, 1).power_saver;
+    assert_eq!(refresh_rate(120, saver), 60);
+    let saver = from_system_status(1, 128, 255, 0).power_saver;
+    assert_eq!(refresh_rate(120, saver), 120);
+}

@@ -10,6 +10,7 @@ import io.github.thisisthepy.dsa.agent.FakeScheduler
 import io.github.thisisthepy.dsa.agent.FakeTasks
 import io.github.thisisthepy.dsa.agent.FakeWindowing
 import io.github.thisisthepy.dsa.agent.RecordingLog
+import io.github.thisisthepy.dsa.control.v1.DisplayRefresh
 import io.github.thisisthepy.dsa.control.v1.Envelope
 import io.github.thisisthepy.dsa.control.v1.HostMemory
 import io.github.thisisthepy.dsa.control.v1.HostSleep
@@ -74,6 +75,12 @@ class FakePower : DevicePower {
 
     override fun setPowerSaver(on: Boolean) {
         saver = on
+    }
+
+    val refreshRates = mutableListOf<Int>()
+
+    override fun setRefreshRate(hz: Int) {
+        refreshRates += hz
     }
 
     /** The device leaves deep idle for a maintenance window, or enters it again. */
@@ -232,6 +239,26 @@ class LifecycleTest {
 
         assertEquals(listOf(Battery(acOnline = false, present = true, percent = 57, charging = false)), power.batteries)
         assertEquals(true, power.saver)
+    }
+
+    @Test
+    fun fr10_battery_saver_caps_the_guest_refresh_rate() {
+        started()
+        fun refresh(hz: Int) {
+            daemon.deliver(
+                Envelope.newBuilder().setDisplayRefresh(DisplayRefresh.newBuilder().setHz(hz)).build().toByteArray(),
+            )
+            scheduler.runDue()
+        }
+
+        // A 120 Hz monitor, its battery saver on, then off: the display follows each rate.
+        refresh(120)
+        refresh(60)
+        refresh(120)
+        // A rate of 0 says nothing.
+        refresh(0)
+
+        assertEquals(listOf(120, 60, 120), power.refreshRates)
     }
 
     @Test

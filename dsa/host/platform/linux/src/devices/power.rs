@@ -64,7 +64,18 @@ pub fn from_upower(
     }
 }
 
+/// Whether power-profiles-daemon's active profile is its battery saver.
+pub fn is_power_saver_profile(profile: &str) -> bool {
+    profile == "power-saver"
+}
+
+/// Whether the power saver profile is on, from power-profiles-daemon under either of its bus
+/// names. False where it does not run.
 fn power_saver(system: &Connection) -> bool {
+    active_profile(system).is_some_and(|profile| is_power_saver_profile(&profile))
+}
+
+fn active_profile(system: &Connection) -> Option<String> {
     for (service, path, interface) in [
         (
             "org.freedesktop.UPower.PowerProfiles",
@@ -80,11 +91,11 @@ fn power_saver(system: &Connection) -> bool {
         let profile = proxy(system, service, path.into(), interface)
             .ok()
             .and_then(|p| p.get_property::<String>("ActiveProfile").ok());
-        if let Some(profile) = profile {
-            return profile == "power-saver";
+        if profile.is_some() {
+            return profile;
         }
     }
-    false
+    None
 }
 
 fn read_upower(system: &Connection) -> Option<PowerState> {
@@ -161,12 +172,16 @@ pub fn parse_meminfo(text: &str) -> Option<(u64, u64)> {
     Some((field("MemTotal:")?, field("MemAvailable:")?))
 }
 
-/// Reads the computer's power and memory every [`POLL`] until `stop` is set, and hands them
-/// to `hub`, which passes on only what changed.
+/// How often [`follow`] reads the power saver profile. It lowers the guest display's refresh
+/// rate, which has to follow within a second; it is one property read on the system bus.
+pub const SAVER_POLL: Duration = Duration::from_millis(500);
+
+/// Reads the computer's power and memory every [`POLL`], and the power saver profile every
+/// [`SAVER_POLL`], until `stop` is set, and hands them to `hub`, which passes on only what
+/// changed.
 pub fn follow(hub: Arc<PowerHub>, stop: Arc<AtomicBool>) {
     let system = Connection::system().ok();
     let mut pressure = MemoryPressure::new();
-    let step = Duration::from_millis(250);
     while !stop.load(Ordering::Relaxed) {
         let state = system
             .as_ref()
@@ -191,8 +206,14 @@ pub fn follow(hub: Arc<PowerHub>, stop: Arc<AtomicBool>) {
         }
         let mut waited = Duration::ZERO;
         while waited < POLL && !stop.load(Ordering::Relaxed) {
-            thread::sleep(step);
-            waited += step;
+            thread::sleep(SAVER_POLL);
+            waited += SAVER_POLL;
+            if let Some(system) = &system {
+                hub.update(PowerState {
+                    power_saver: power_saver(system),
+                    ..state
+                });
+            }
         }
     }
 }
@@ -272,6 +293,20 @@ mod tests {
         let full = from_upower(false, true, 99.6, STATE_FULLY_CHARGED, false);
         assert_eq!(full.battery_percent, 100);
         assert!(!full.charging);
+    }
+
+    #[test]
+    fn fr10_battery_saver_caps_the_guest_refresh_rate_with_the_power_saver_profile() {
+        use dsa_host_core::guest_refresh::refresh_rate;
+        assert!(is_power_saver_profile("power-saver"));
+        assert!(!is_power_saver_profile("balanced"));
+        assert!(!is_power_saver_profile("performance"));
+        let saver = from_upower(false, false, 0.0, 0, is_power_saver_profile("power-saver"));
+        assert_eq!(refresh_rate(120, saver.power_saver), 60);
+        let balanced = from_upower(false, false, 0.0, 0, is_power_saver_profile("balanced"));
+        assert_eq!(refresh_rate(120, balanced.power_saver), 120);
+        // Read often enough that the cap follows within a second.
+        assert!(SAVER_POLL < Duration::from_secs(1));
     }
 
     #[test]

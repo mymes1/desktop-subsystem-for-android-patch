@@ -60,6 +60,12 @@ interface DevicePower {
     /** Turns battery saver on or off. */
     fun setPowerSaver(on: Boolean)
 
+    /**
+     * Holds the display at [hz]: the framework's refresh rate range becomes that one rate, so
+     * the display switches to it at once, without a restart.
+     */
+    fun setRefreshRate(hz: Int)
+
     /** Sets the device's wall clock to [unixTimeMillis], in milliseconds since the Unix epoch. */
     fun setTime(unixTimeMillis: Long)
 
@@ -75,6 +81,7 @@ interface DevicePower {
             override fun listenIdle(onChange: () -> Unit) = Unit
             override fun setBattery(battery: Battery) = Unit
             override fun setPowerSaver(on: Boolean) = Unit
+            override fun setRefreshRate(hz: Int) = Unit
             override fun setTime(unixTimeMillis: Long) = Unit
         }
     }
