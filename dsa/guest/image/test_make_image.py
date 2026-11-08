@@ -33,8 +33,9 @@ class ImageLayoutTests(unittest.TestCase):
         self.assertRegex(cil, r"\(allow dsa_channeld pstorefs \(file \([^)]*\bunlink\b")
 
     # The SELinux type and class of every kernel file dsa-channeld opens, as the guest's kernel
-    # labels it. A path the daemon opens that is not listed here fails the test below, so a
-    # new read cannot ship without its rule (the refused /proc/vmstat read went unnoticed).
+    # labels it, and the permission an open asks of it when that is not read (dir: search). A
+    # path the daemon opens that is not listed here fails the test below, so a new read cannot
+    # ship without its rule (the refused /proc/vmstat read went unnoticed).
     CHANNELD_KERNEL_PATHS = {
         "/proc/bootconfig": [("proc_bootconfig", "file")],
         "/sys/fs/pstore": [("pstorefs", "dir"), ("pstorefs", "file")],
@@ -44,13 +45,35 @@ class ImageLayoutTests(unittest.TestCase):
         # The process listing and each app process's /proc/<pid>/cmdline.
         "/proc": [("proc", "dir"), ("appdomain", "dir"), ("appdomain", "file")],
         "/proc/{}/cmdline": [("appdomain", "file")],
+        # The kernel's su guard on securityfs, which only the elevation helper writes.
+        "/sys/kernel/security/dsa_su/control": [
+            ("securityfs", "dir"),
+            ("dsa_su_control_file", "dir"),
+            ("dsa_su_control_file", "file", "write"),
+        ],
     }
+    # Kernel files a source names for a domain that never opens them. su_relay.rs is the
+    # daemon's, and its KernelGuard writes the su guard only where a test points it at a file
+    # of its own: on the guest the daemon hands each config to the elevation helper
+    # (HelperGuard), because the guard refuses the daemon, which runs as system.
+    CHANNELD_KERNEL_NAMED_NOT_OPENED = {("su_relay.rs", "/sys/kernel/security/dsa_su/control")}
     # The modes init runs the same binary in, each in a domain of its own.
     CHANNELD_SOURCE_DOMAINS = {
         "share_mount.rs": ("dsa_sharemount", "files.cil"),
         "android_files.rs": ("dsa_files", "files.cil"),
         "webdav.rs": ("dsa_files", "files.cil"),
+        # The elevation helper (dsa-channeld --su-relay) and the commands it starts.
+        "su_helper.rs": ("dsa_su", "su.cil"),
+        "su_process.rs": ("dsa_su", "su.cil"),
     }
+    # The policy files the image installs together with the daemon, so a rule for one of its
+    # domains may live in any of them (the daemon's root elevation rules are in su.cil).
+    CHANNELD_POLICY_FILES = ("channeld.cil", "files.cil", "su.cil")
+
+    @classmethod
+    def _daemon_policy(cls, here):
+        """Every rule the image installs with the daemon, as one text."""
+        return "\n".join((here / "sepolicy" / name).read_text() for name in cls.CHANNELD_POLICY_FILES)
 
     def test_nfr2_every_kernel_file_channeld_opens_has_an_allow_rule(self):
         here = Path(__file__).parent
@@ -61,13 +84,15 @@ class ImageLayoutTests(unittest.TestCase):
             domain, policy_file = self.CHANNELD_SOURCE_DOMAINS.get(
                 source.name, ("dsa_channeld", "channeld.cil")
             )
-            policy = (here / "sepolicy" / policy_file).read_text()
+            policy = self._daemon_policy(here)
             for number, line in enumerate(source.read_text().splitlines(), 1):
                 if line.strip().startswith("//"):
                     continue
                 for path in literal.findall(line):
                     if path.startswith("/proc/self/"):
                         # A process's own /proc entries are every domain's to read.
+                        continue
+                    if (source.name, path) in self.CHANNELD_KERNEL_NAMED_NOT_OPENED:
                         continue
                     where = f"{source.name}:{number} opens {path}"
                     self.assertIn(
@@ -77,8 +102,8 @@ class ImageLayoutTests(unittest.TestCase):
                         f"and an allow rule for {domain} to sepolicy/{policy_file}",
                     )
                     found += 1
-                    for target, cls in self.CHANNELD_KERNEL_PATHS[path]:
-                        perm = "search" if cls == "dir" else "read"
+                    for target, cls, *asked in self.CHANNELD_KERNEL_PATHS[path]:
+                        perm = asked[0] if asked else "search" if cls == "dir" else "read"
                         self.assertRegex(
                             policy,
                             rf"\(allow\s+{domain}\s+{target}\s+\(\s*{cls}\s+\([^)]*\b{perm}\b",
@@ -94,6 +119,8 @@ class ImageLayoutTests(unittest.TestCase):
         "/data/media/0": ["system_data_root_file", "media_userdir_file", "media_rw_data_file"],
         "/data/vendor/dsa/arm-translation": ["system_data_root_file", "vendor_data_file"],
         "/data/vendor/dsa/gapps": ["system_data_root_file", "vendor_data_file"],
+        # The package manager's list, where root elevation finds each named app's uid.
+        "/data/system/packages.list": ["system_data_root_file", "system_data_file"],
     }
     # Paths the daemon names but never opens, so no folder on their way needs a rule. The
     # Google apps mount point is only compared with the mount points /proc/self/mounts lists.
@@ -164,7 +191,7 @@ class ImageLayoutTests(unittest.TestCase):
             domain, policy_file = self.CHANNELD_SOURCE_DOMAINS.get(
                 source.name, ("dsa_channeld", "channeld.cil")
             )
-            policy = (here / "sepolicy" / policy_file).read_text()
+            policy = self._daemon_policy(here)
             for number, line in self._production_lines(source):
                 for path in literal.findall(line):
                     if path in self.CHANNELD_NAMED_NOT_OPENED:
