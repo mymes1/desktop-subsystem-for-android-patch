@@ -25,8 +25,8 @@ use dsa_host_core::diagnostics::HostFile;
 use dsa_host_core::guest_display::{display_or_smallest, with_display_size};
 use dsa_host_core::handshake::ControlHandshake;
 use dsa_host_core::host_api::{HostApiService, PerUser, ServiceFacts, UserAndroid};
-use dsa_host_core::root_approval::RootApproval;
 use dsa_host_core::power::PowerHub;
+use dsa_host_core::root_approval::RootApproval;
 use dsa_host_core::session::Session;
 use dsa_host_core::settings::{FileSettings, SettingsStore};
 use dsa_host_core::update::service::{

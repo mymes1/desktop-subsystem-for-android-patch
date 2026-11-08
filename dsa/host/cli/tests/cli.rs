@@ -3137,6 +3137,7 @@ fn fr35_the_settings_apps_read_root_elevation_and_each_apps_level() {
         facts: ServiceFacts::default(),
         network: None,
         adb_auto_connect_state: Default::default(),
+        touch_gestures: Default::default(),
     };
     assert_eq!(dsa_cli::settings_json(&report)["root_elevation"], true);
     let line = dsa_cli::describe_settings(&report)
