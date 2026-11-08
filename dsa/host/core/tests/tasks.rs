@@ -257,6 +257,63 @@ fn nfr5_a_guest_that_dies_closes_every_task_a_client_watches() {
     }
 }
 
+fn agent_connected(agent: &mut Box<dyn Connection>, connected: bool) {
+    send(
+        agent,
+        Body::GuestBoot(control::GuestBoot {
+            boot_completed: true,
+            agent_connected: connected,
+        }),
+    );
+}
+
+#[test]
+fn fr3_the_tasks_end_when_the_agent_that_reported_them_is_gone() {
+    // Android's framework restarted (a crash of SurfaceFlinger or system_server): the agent
+    // went with it and so did every app's task. Their windows must close, not keep showing a
+    // last frame that no click reaches.
+    let mut setup = setup();
+    let mut stream = client(&mut setup.api).watch_tasks().expect("watching");
+    send(&mut setup.agent, updated(4, "Settings"));
+    send(&mut setup.agent, updated(6, "Settings"));
+    for _ in 0..2 {
+        stream.next(WAIT).unwrap().expect("a task");
+    }
+
+    agent_connected(&mut setup.agent, false);
+    let mut removed: Vec<TaskEvent> = (0..2)
+        .map(|_| {
+            stream
+                .next(WAIT)
+                .unwrap()
+                .expect("the end of a task in time")
+        })
+        .collect();
+    removed.sort_by_key(|event| event.task_id());
+    assert_eq!(
+        removed,
+        vec![
+            TaskEvent::Removed { task_id: 4 },
+            TaskEvent::Removed { task_id: 6 },
+        ]
+    );
+    assert!(client(&mut setup.api)
+        .watch_tasks()
+        .expect("watching again")
+        .current()
+        .tasks
+        .is_empty());
+
+    // The new framework's agent reports what runs now; a task number it hands out again is
+    // a new task with a window of its own.
+    agent_connected(&mut setup.agent, true);
+    send(&mut setup.agent, updated(6, "Clock"));
+    assert_eq!(
+        stream.next(WAIT).unwrap(),
+        Some(TaskEvent::Updated(task(6, "Clock")))
+    );
+}
+
 fn installed_app(package: &str, label: &str) -> AppInfo {
     AppInfo {
         package_name: package.into(),

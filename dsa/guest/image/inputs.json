@@ -1,5 +1,5 @@
 {
-  "comment": "The published AOSP build inputs each guest image is made from, pinned by build number and SHA-256, one entry per Android major and guest architecture (x86_64, or arm64 with no 32-bit ARM). Change a build number (and the hashes) to move to a newer build. Raise revision (and the version suffix) to publish a remade image of the same build.",
+  "comment": "The published AOSP build inputs each guest image is made from, pinned by build number and SHA-256, one entry per Android major and guest architecture (x86_64, or arm64 with no 32-bit ARM). Change a build number (and the hashes) to move to a newer build. Each image the release workflow makes gets the next revision no release has (make-image.py --next-revision); revision and the version suffix here are the lowest it uses, and what a local make-image.py run names its image.",
   "images": [
     {
       "android_major": 17,

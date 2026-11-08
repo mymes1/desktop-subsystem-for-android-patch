@@ -1,0 +1,18 @@
+diff --git a/host/FrameBuffer.cpp b/host/FrameBuffer.cpp
+--- a/host/FrameBuffer.cpp
++++ b/host/FrameBuffer.cpp
+@@ -1290,8 +1290,12 @@ int FrameBuffer::openColorBuffer(HandleType p_colorbuffer) {
+         AutoLock colorBuffermapLock(m_colorBufferMapLock);
+         c = m_colorbuffers.find(p_colorbuffer);
+         if (c == m_colorbuffers.end()) {
+-            // bad colorbuffer handle
+-            ERR("FB: openColorBuffer cb handle %d not found", p_colorbuffer);
++            // A DSA guest process opens a shared ColorBuffer (the handle's top bit set) before
++            // it knows whether another process made it, and creates it when the open fails, so
++            // that is not an error. Any other handle is.
++            if (!(p_colorbuffer & 0x80000000u)) {
++                ERR("FB: openColorBuffer cb handle %d not found", p_colorbuffer);
++            }
+             return -1;
+         }
+         c->second.refcount++;

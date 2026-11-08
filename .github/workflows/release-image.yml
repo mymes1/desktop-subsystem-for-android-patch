@@ -759,9 +759,22 @@ jobs:
         run: |
           uv run dsa/graphics/check-guest-driver.py --executable .scratch/gnss-hal/dsa-gnss .scratch/aosp-inputs/*/*target_files*.zip
 
+      # Every image this workflow makes is new content (this commit's programs, framework and
+      # translator), so it gets a revision no release has: one past the highest published for
+      # its build and architecture. Reusing a version replaced a published image's files under
+      # the hosts that already had it, and they never saw it as an update.
+      - name: Choose the image revision
+        id: revision
+        run: |
+          gh api --paginate "repos/${{ github.repository }}/releases?per_page=100" --jq '.[].tag_name' > "$RUNNER_TEMP/tags.txt"
+          revision="$(uv run dsa/guest/image/make-image.py --major ${{ matrix.android }} --arch ${{ matrix.arch }} --next-revision < "$RUNNER_TEMP/tags.txt")"
+          echo "the image is revision $revision"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
       - name: Make the image
         run: >
           uv run dsa/guest/image/make-image.py --major ${{ matrix.android }} --arch ${{ matrix.arch }}
+          --revision ${{ steps.revision.outputs.revision }}
           --keys .scratch/image-keys --kernel .scratch/kernel-out/${{ env.KERNEL }}
           --graphics-dir .scratch/guest-graphics
           --channeld .scratch/channeld/dsa-channeld
@@ -802,13 +815,15 @@ jobs:
           if [ -n "$translator" ]; then
             files+=("$dir/$translator")
           fi
+          # A published image is never replaced; the revision step chose a version no release
+          # has.
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" "${files[@]}" --clobber
-          else
-            gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" \
-              --title "Android image $version" \
-              --notes "Android image $version for Desktop Subsystem for Android. The service downloads it through the signed list in the release \"images\"."
+            echo "::error::$tag is already published; an image is never published twice under one version"
+            exit 1
           fi
+          gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" \
+            --title "Android image $version" \
+            --notes "Android image $version for Desktop Subsystem for Android. The service downloads it through the signed list in the release \"images\"."
           echo "dir=$dir" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
