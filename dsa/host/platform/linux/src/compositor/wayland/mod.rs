@@ -1,14 +1,17 @@
 //! The Wayland client: one `xdg_toplevel` per Android task, and the seat's input.
 //!
 //! Each task window is a toplevel with the app's `app_id` (its launcher entry) and title. It
-//! shows the task's frames one to one in shared memory buffers, with the title bar's buttons
-//! drawn over the app's top inset as on Windows, and asks the desktop for client-side
-//! decorations so no second title bar stacks above it. What the user does goes out as
-//! [`Event`]s: reports for the window rules, input for the guest, the desktop's clipboard
-//! and dropped files.
+//! shows the task's frames one to one in shared memory buffers, with the title bar drawn over
+//! the app's top inset as on Windows (the app's icon or a back arrow, its name and the caption
+//! buttons), and asks the desktop for client-side decorations so no second title bar stacks
+//! above it. The icon's cell and a right click on the title bar open the window's menu, a
+//! popup with the window's and Android's items. What the user does goes out as [`Event`]s:
+//! reports for the window rules, input for the guest, the desktop's clipboard and dropped
+//! files.
 
 mod data;
 mod gpu;
+mod menu;
 pub mod pip;
 mod seat;
 mod shm;
@@ -60,7 +63,7 @@ use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLay
 
 use crate::input::xkb::Keyboard;
 
-pub use window::Window;
+pub use window::{AppLook, Window};
 
 /// What the windows report, for the session to act on.
 #[derive(Debug, Clone)]
@@ -151,6 +154,14 @@ pub struct State {
     /// The serial of the user's last input, which moving a window or setting the clipboard
     /// needs.
     pub(crate) serial: u32,
+    /// What each app's windows show of it, by package, for the windows that open later.
+    pub(crate) app_looks: HashMap<String, AppLook>,
+    /// Text for the title bars' names and the window menu; `None` without Pango.
+    pub(crate) text: Option<crate::compositor::text::Text>,
+    /// The window menu while it is open.
+    pub(crate) menu: Option<menu::Menu>,
+    /// Whether the session reads Korean, for the window menu's words.
+    pub(crate) korean: bool,
 }
 
 /// The connection to the desktop and everything shown on it.
@@ -203,6 +214,15 @@ impl Desktop {
             }
         }
         let xkb = Keyboard::new().ok();
+        let text = match crate::compositor::text::Text::load() {
+            Ok(text) => Some(text),
+            Err(why) => {
+                crate::compositor::session::log(&format!(
+                    "title bars show no names, and windows use the desktop's window menu: {why}"
+                ));
+                None
+            }
+        };
         let mut state = State {
             qh: qh.clone(),
             connection: connection.clone(),
@@ -234,6 +254,12 @@ impl Desktop {
             xkb,
             events,
             serial: 0,
+            app_looks: HashMap::new(),
+            text,
+            menu: None,
+            korean: crate::compositor::window_menu::reads_korean_in(|name| {
+                std::env::var(name).ok()
+            }),
         };
         if let Some(seat) = seat {
             state.seat_ready(seat);
