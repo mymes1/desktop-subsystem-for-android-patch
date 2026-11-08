@@ -133,9 +133,19 @@ jobs:
       # a finger on the title bar's minimize button minimizes the window. They move the real
       # input, so they are ignored on a developer's machine and run here, where nobody uses
       # the desktop. The release build above already holds most of what they need.
+      #
+      # With Windows' three- and four-finger touch gestures on (Settings, Bluetooth & devices,
+      # Touch), the shell can take contacts of three or more fingers for itself, and then no
+      # app sees them: on the x64 runners ten fingers reached the task window as three or
+      # none. They are turned off for the runner's user, as a user who wants such gestures in
+      # apps turns them off, and the shell is started again to read the setting.
       - name: fr5_real_fingers_and_a_pen_reach_a_task_window_as_touch_and_a_pen
         working-directory: dsa
         run: |
+          Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name TouchGestureSetting -Value 0 -Type DWord
+          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 5
+          if (-not (Get-Process explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe; Start-Sleep -Seconds 5 }
           cargo test --release --target $env:RUST_TARGET -p dsa-host-windows --test task_windows -- --ignored --test-threads 1 --nocapture real_input
           if ($LASTEXITCODE -ne 0) { throw "touch or pen input on a task window did not reach its task" }
 

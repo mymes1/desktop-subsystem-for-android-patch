@@ -814,9 +814,13 @@ pub mod fixture {
         sha1::hex(&hasher.finish())
     }
 
+    /// The revision [`write_repository`] offers its images at: above every decoy's.
+    pub const NEWEST_REVISION: u32 = 20;
+
     /// Writes a repository into `folder`: a list offering `zip` for each API level in `apis`
     /// (as `x86_64-<api>.zip`), among the decoys, with `sha1` (or the archive's own) as its
-    /// checksum.
+    /// checksum. Each is offered at [`NEWEST_REVISION`], so it is the image taken for its API
+    /// level even where a decoy offers the same level.
     pub fn write_repository(
         folder: &Path,
         zip: &[u8],
@@ -831,7 +835,7 @@ pub mod fixture {
             offers.push(Offer {
                 size: zip.len() as u64,
                 sha1: sha1.unwrap_or(&own),
-                ..offer(api, 7, name)
+                ..offer(api, NEWEST_REVISION, name)
             });
             fs::write(folder.join(name), zip)?;
         }

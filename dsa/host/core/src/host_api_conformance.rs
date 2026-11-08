@@ -1068,7 +1068,8 @@ impl Drop for RunningService {
     }
 }
 
-/// Generates one `#[test]` per check, named after the requirement it defends.
+/// Generates one `#[test]` per check, named after the requirement it defends. It is used from
+/// an integration test, whose `CARGO_TARGET_TMPDIR` holds the files a check writes.
 ///
 /// ```text
 /// dsa_host_core::host_api_conformance!(memory_local_pair());
@@ -1284,11 +1285,17 @@ macro_rules! host_api_conformance {
         }
         #[test]
         fn fr32_google_play_is_installed_reported_and_removed() {
-            $crate::host_api_conformance::gapps_reach_the_caller(&mut || $make);
+            $crate::host_api_conformance::gapps_reach_the_caller(
+                &mut || $make,
+                ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
+            );
         }
         #[test]
         fn fr32_a_build_that_is_refused_leaves_the_settings_as_they_were() {
-            $crate::host_api_conformance::refused_gapps_leave_nothing(&mut || $make);
+            $crate::host_api_conformance::refused_gapps_leave_nothing(
+                &mut || $make,
+                ::std::path::Path::new(env!("CARGO_TARGET_TMPDIR")),
+            );
         }
         #[test]
         fn fr20_adb_auto_connect_is_on_by_default_reaches_the_callers_android_and_reports_its_state(
@@ -3176,14 +3183,16 @@ fn md5_of(data: &[u8]) -> String {
     gapps::md5::hex(&md5.finish())
 }
 
-/// A service with settings in memory and Google Play served from `lite`.
+/// A service with settings in memory and Google Play served from `lite`, downloading into a
+/// folder of its own in `scratch`.
 fn gapps_service(
     androids: Arc<FakeAndroids>,
     store: Arc<MemorySettings>,
     lite: FakeLiteGapps,
     name: &str,
+    scratch: &std::path::Path,
 ) -> HostApiService {
-    let work = std::env::temp_dir().join(format!(
+    let work = scratch.join(format!(
         "dsa-conformance-gapps-{name}-{}",
         std::process::id()
     ));
@@ -3193,13 +3202,13 @@ fn gapps_service(
         .with_gapps(source)
 }
 
-pub fn gapps_reach_the_caller(make: MakeLocal<'_>) {
+pub fn gapps_reach_the_caller(make: MakeLocal<'_>, scratch: &std::path::Path) {
     let (listener, mut connector, user) = make();
     let store = Arc::new(MemorySettings::default());
     let androids = Arc::new(FakeAndroids::default());
     let zip = gapps::package::fixture::sample();
     let lite = FakeLiteGapps::new(&zip, &md5_of(&zip));
-    let service = gapps_service(androids.clone(), store.clone(), lite, "reach");
+    let service = gapps_service(androids.clone(), store.clone(), lite, "reach", scratch);
     let _service = RunningService::start_service(listener, service);
     let mut client = connect(&mut *connector);
     let none = client.gapps().expect("asking where Google Play stands");
@@ -3254,14 +3263,14 @@ pub fn gapps_reach_the_caller(make: MakeLocal<'_>) {
     assert_eq!(store.gapps(&user).unwrap(), None);
 }
 
-pub fn refused_gapps_leave_nothing(make: MakeLocal<'_>) {
+pub fn refused_gapps_leave_nothing(make: MakeLocal<'_>, scratch: &std::path::Path) {
     let (listener, mut connector, user) = make();
     let store = Arc::new(MemorySettings::default());
     let androids = Arc::new(FakeAndroids::default());
     let zip = gapps::package::fixture::sample();
     // The file host publishes another digest than the download has.
     let lite = FakeLiteGapps::new(&zip, "00000000000000000000000000000000");
-    let service = gapps_service(androids.clone(), store.clone(), lite, "refused");
+    let service = gapps_service(androids.clone(), store.clone(), lite, "refused", scratch);
     let _service = RunningService::start_service(listener, service);
     connect(&mut *connector).start().unwrap();
     match connect(&mut *connector).install_gapps(&mut |_| {}) {
