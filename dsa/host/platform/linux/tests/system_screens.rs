@@ -691,8 +691,8 @@ fn open_settings_at(
         let task = tasks
             .tasks
             .iter()
-            .find(|task| Some(task.task_id) == task_id && new(*task))
-            .or_else(|| tasks.tasks.iter().find(|task| new(*task)));
+            .find(|task| Some(task.task_id) == task_id && new(task))
+            .or_else(|| tasks.tasks.iter().find(|task| new(task)));
         let Some(task) = task else {
             if Instant::now() >= deadline {
                 return Err(match task_id {
