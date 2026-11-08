@@ -28,21 +28,31 @@ rustup target add "$target"
 linker_var="CARGO_TARGET_$(tr 'a-z-' 'A-Z_' <<<"$target")_LINKER"
 export "$linker_var=$bin/$target$api-clang"
 export CARGO_PROFILE_RELEASE_STRIP=symbols
-(cd "$here/../.." && cargo build --release --locked -p dsa-guest-channeld --bin dsa-channeld --target "$target")
+(cd "$here/../.." && cargo build --release --locked -p dsa-guest-channeld --bin dsa-channeld --bin su --target "$target")
 
 mkdir -p "$out"
 cp "$here/../../target/$target/release/dsa-channeld" "$out/dsa-channeld"
+cp "$here/../../target/$target/release/su" "$out/su"
 
 readelf="$bin/llvm-readelf"
 # Read whole first: grep -q stops at the first match, and llvm-readelf exits 74 when the pipe it
 # is still writing to closes.
 grep -Fq "$machine" <<<"$("$readelf" -h "$out/dsa-channeld")"
+grep -Fq "$machine" <<<"$("$readelf" -h "$out/su")"
 grep -Fq '/system/bin/linker64' <<<"$("$readelf" -l "$out/dsa-channeld")"
+grep -Fq '/system/bin/linker64' <<<"$("$readelf" -l "$out/su")"
 needed="$("$readelf" -d "$out/dsa-channeld" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | sort | tr '\n' ' ')"
 for lib in $needed; do
     case "$lib" in
         libc.so|libdl.so|libm.so) ;;
         *) echo "dsa-channeld needs $lib, which a vendor process cannot load" >&2; exit 1 ;;
+    esac
+done
+su_needed="$("$readelf" -d "$out/su" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | sort | tr '\n' ' ')"
+for lib in $su_needed; do
+    case "$lib" in
+        libc.so|libdl.so|libm.so) ;;
+        *) echo "su needs $lib, which an app cannot load" >&2; exit 1 ;;
     esac
 done
 # Android is its own target_os; code gated on Linux alone leaves only the stub that refuses

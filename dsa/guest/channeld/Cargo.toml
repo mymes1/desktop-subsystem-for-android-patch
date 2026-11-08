@@ -15,6 +15,10 @@ vsock-loopback-tests = []
 name = "dsa-channeld"
 path = "src/main.rs"
 
+[[bin]]
+name = "su"
+path = "src/su.rs"
+
 [dependencies]
 dsa-transport.workspace = true
 dsa-protocol.workspace = true

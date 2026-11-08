@@ -196,7 +196,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: guest-channeld${{ matrix.arch == 'arm64' && '-arm64' || '' }}
-          path: .scratch/channeld/dsa-channeld
+          path: |
+            .scratch/channeld/dsa-channeld
+            .scratch/channeld/su
           if-no-files-found: error
 
       # aidl comes from the runner's Android SDK build-tools.
@@ -632,6 +634,7 @@ jobs:
           args=(--major "${{ matrix.android }}" --arch ${{ matrix.arch }} --keys .scratch/image-keys)
           args+=(--graphics-dir .scratch/guest-graphics --graphics-library .scratch/guest-graphics/libOpenglSystemCommon.so)
           args+=(--channeld .scratch/channeld/dsa-channeld)
+          args+=(--su-client .scratch/channeld/su)
           args+=(--hwcomposer .scratch/hwcomposer/dsa-hwcomposer)
           args+=(--codec2 .scratch/codec2/dsa-codec2)
           args+=(--audio .scratch/audio/dsa-audio)

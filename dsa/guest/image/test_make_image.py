@@ -2197,11 +2197,14 @@ class GuestMemoryTests(unittest.TestCase):
             for name, data in (extra or {}).items():
                 archive.writestr(name, data)
         daemon = None
+        client = None
         if channeld:
             daemon = root / "dsa-channeld"
             daemon.write_bytes(b"daemon")
+            client = root / "su"
+            client.write_bytes(b"client")
         modified = root / "modified.zip"
-        make_image.modify(source, modified, channeld=daemon)
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
         return zipfile.ZipFile(modified)
 
     # The rules on the memfd types the published Android 16 and 17 policies already carry.
@@ -5652,11 +5655,14 @@ class RootElevationImageTests(unittest.TestCase):
             archive.writestr("META/file_contexts.bin", b"\x8a\xff\x7c\xf9 compiled")
             archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
         daemon = None
+        client = None
         if channeld:
             daemon = root / "dsa-channeld"
             daemon.write_bytes(b"daemon")
+            client = root / "su"
+            client.write_bytes(b"client")
         modified = root / "modified.zip"
-        make_image.modify(source, modified, channeld=daemon)
+        make_image.modify(source, modified, channeld=daemon, su_client=client)
         return zipfile.ZipFile(modified)
 
     def _rules(self, text):
@@ -5717,6 +5723,26 @@ class RootElevationImageTests(unittest.TestCase):
         # The guard hides only the inodes the relay names; a client anywhere else would be
         # visible to every app.
         self.assertIn(make_image.SU_CLIENT_PATH, self._relay_paths())
+
+    def test_fr35_the_image_installs_the_unprivileged_su_client(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.zip"
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/bin/su", b"old su")
+                archive.writestr("META/filesystem_config.txt", "system/bin/su 0 0 6755 capabilities=0x0\n")
+            daemon = root / "dsa-channeld"
+            client = root / "su"
+            daemon.write_bytes(b"daemon")
+            client.write_bytes(b"unprivileged client")
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, channeld=daemon, su_client=client)
+            with zipfile.ZipFile(modified) as archive:
+                self.assertEqual(archive.read("SYSTEM/bin/su"), b"unprivileged client")
+                self.assertEqual(archive.namelist().count("SYSTEM/bin/su"), 1)
+                config = archive.read("META/filesystem_config.txt").decode().splitlines()
+                self.assertIn("system/bin/su 0 0 755 capabilities=0x0", config)
+                self.assertNotIn("system/bin/su 0 0 6755 capabilities=0x0", config)
 
     def test_fr35_an_app_not_allowed_sees_no_su_from_boot(self):
         # The guard does nothing until something writes it, and the helper runs only while root
@@ -5825,10 +5851,12 @@ class RootElevationImageTests(unittest.TestCase):
             + "(allow system_server dsa_root_elevation_prop (property_service (set)))\n"
         ).encode()
         files["META/file_contexts.bin"] = b"/system/bin/sh u:object_r:shell_exec:s0\n"
+        del files["SYSTEM/bin/su"]
         rc = files[make_image.CHANNELD_RC].decode()
         files[make_image.CHANNELD_RC] = rc.replace("    seclabel u:r:dsa_su:s0\n", "").encode()
         problems = make_image.root_elevation_problems(list(files), files.__getitem__)
         expected = [
+            "SYSTEM/bin/su is missing",
             "apps cannot connect to the elevation helper",
             "untrusted_app may enter dsa_su_root",
             "dsa_channeld may write the su guard",
