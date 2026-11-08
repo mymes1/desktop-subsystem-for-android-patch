@@ -36,6 +36,7 @@ on:
       - "dsa/host/platform/linux/tests/widgets.rs"
       - "dsa/host/platform/linux/tests/media.rs"
       - "dsa/host/platform/linux/tests/system_screens.rs"
+      - "dsa/host/platform/linux/tests/graphics.rs"
       - "dsa/host/platform/linux/tests/overlays.rs"
       - "dsa/host/platform/linux/tests/boot_check/**"
       - ".github/scripts/linux-vm/**"
@@ -472,7 +473,7 @@ jobs:
 
   # What the boot checks below run, built once on a runner of its own while the guest programs
   # and the images are made: the VM programs (crosvm, passt and gfxstream's renderer), and the
-  # Linux host's programs with the four boot check binaries. The boot checks take them as
+  # Linux host's programs with the five boot check binaries. The boot checks take them as
   # artifacts and need no Rust build of their own.
   boot-checks:
     name: Build the boot checks
@@ -517,7 +518,7 @@ jobs:
       - name: Build the widget boot check
         working-directory: dsa
         run: |
-          cargo test -p dsa-host-linux --test widgets --test system_screens --test media --test overlays --no-run \
+          cargo test -p dsa-host-linux --test widgets --test system_screens --test media --test graphics --test overlays --no-run \
             --message-format=json-render-diagnostics > "$RUNNER_TEMP/boot-checks.json"
           cargo build -p dsa-host-linux --bin dsa-compositor --message-format=json-render-diagnostics >> "$RUNNER_TEMP/boot-checks.json"
           out="$GITHUB_WORKSPACE/.scratch/boot-checks"
@@ -532,7 +533,7 @@ jobs:
           while IFS=$'\t' read -r name executable; do
             cp "$executable" "$out/bin/$name"
           done < "$out/bin/programs.tsv"
-          for check in widgets system_screens media overlays; do
+          for check in widgets system_screens media graphics overlays; do
             test -x "$out/tests/$check" || { echo "cargo built no $check boot check"; exit 1; }
           done
           for program in dsa-linux-hostd dsa-compositor dsa-devices dsa-gfx; do
@@ -547,6 +548,37 @@ jobs:
           name: boot-check-programs
           path: .scratch/boot-checks
           retention-days: 1
+          if-no-files-found: error
+
+  # Android's NDK samples hello-gl2 (OpenGL ES) and hello-vulkan, at a pinned commit, which
+  # the graphics check below installs on the booted image and opens in task windows.
+  graphics-test-apps:
+    name: Build the graphics test apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up a JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "cmake;4.1.0"
+
+      - name: Build the OpenGL ES and Vulkan test apps
+        run: bash dsa/graphics/verify/build-test-apps.sh .scratch/graphics-test-apps
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: graphics-test-apps
+          path: |
+            .scratch/graphics-test-apps/hello-gl2.apk
+            .scratch/graphics-test-apps/hello-vulkan.apk
           if-no-files-found: error
 
   # The images. Android 17 on x86_64 is made by the boot-image job below with the same steps,
@@ -944,11 +976,17 @@ jobs:
   # mirror in the check's folder: after Android starts again the image must be mounted and laid
   # over /product and /system_ext. In neither boot may init log a failed command of the
   # overlay scripts or a denial of a mount.
+  #
+  # graphics: the host renderer on Mesa's software Vulkan driver. hello-gl2 (OpenGL ES through
+  # ANGLE) and hello-vulkan are installed through the local API and opened in task windows,
+  # whose pictures must show each app's triangle on its fading grey background, and the fixed
+  # Vulkan CTS subset runs, each case with its own result. The two share one boot; the CTS
+  # takes most of the step.
   boot-check:
     name: ${{ matrix.check }} (ubuntu-latest, Android 17, x86_64)
-    needs: [boot-image, boot-checks]
+    needs: [boot-image, boot-checks, graphics-test-apps]
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -982,6 +1020,15 @@ jobs:
             logs: |
               /tmp/media-test-*/*.log
               /tmp/media-test-*/*.txt
+          - check: Run the Vulkan CTS subset and the graphics test apps on the booted image
+            test: graphics
+            timeout: 28
+            keep: Keep the graphics check's results
+            artifact: graphics-check-results
+            logs: |
+              /tmp/graphics-test-*/cts/
+              /tmp/graphics-test-*/*.png
+              /tmp/graphics-test-*/*.log
           - check: Lay the ARM translator and Google Play over the booted system
             test: overlays
             timeout: 16
@@ -1066,6 +1113,32 @@ jobs:
           name: guest-media-probe
           path: .scratch/media-probe
 
+      - name: Download the graphics test apps
+        if: matrix.test == 'graphics'
+        uses: actions/download-artifact@v4
+        with:
+          name: graphics-test-apps
+          path: .scratch/graphics-test-apps
+
+      # verify.py fetches and runs the Vulkan CTS through uv.
+      - name: Set up uv
+        if: matrix.test == 'graphics'
+        uses: astral-sh/setup-uv@v5
+
+      # Only the CTS APK, which verify.py pins by size and checksum; the mustpass lists it
+      # reads are small and fetched again, so a new pin never meets an old list.
+      - name: Keep the Vulkan CTS between runs
+        if: matrix.test == 'graphics'
+        uses: actions/cache@v4
+        with:
+          path: .scratch/graphics-verify/com.drawelements.deqp.apk
+          key: vk-cts-apk-${{ hashFiles('dsa/graphics/verify/verify.py') }}
+          restore-keys: vk-cts-apk-
+
+      - name: Fetch the Vulkan CTS and expand the subset
+        if: matrix.test == 'graphics'
+        run: uv run dsa/graphics/verify/verify.py fetch-cts
+
       # Android's renderer runs in the window manager (dsa-compositor), which needs a desktop
       # session: a headless Wayland compositor stands in for it, with Mesa's software Vulkan
       # driver in place of a GPU.
@@ -1104,6 +1177,12 @@ jobs:
           export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
           if [[ "${{ matrix.test }}" == media ]]; then
             export DSA_MEDIA_PROBE="$GITHUB_WORKSPACE/.scratch/media-probe/dsa-media-probe.apk"
+          fi
+          if [[ "${{ matrix.test }}" == graphics ]]; then
+            # Lavapipe is the only Vulkan driver on the runner; naming it keeps it so.
+            icd="$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -n 1)"
+            export VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd"
+            export DSA_GRAPHICS_TEST_APPS="$GITHUB_WORKSPACE/.scratch/graphics-test-apps"
           fi
           set -o pipefail
           "$GITHUB_WORKSPACE/.scratch/boot-checks/tests/${{ matrix.test }}" --nocapture --test-threads 1 2>&1 |

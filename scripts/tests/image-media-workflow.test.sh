@@ -11,7 +11,7 @@ grep -Fq 'check: Play sound and run codecs in an app on the booted image' "$work
 grep -Fq 'test: media' "$workflow"
 grep -Fq 'artifact: media-check-logs' "$workflow"
 grep -Eq -- '--test media( --test [a-z_]+)* --no-run' "$workflow"
-# The image waits for the job that builds the agent and the media probe.
-grep -Fq 'needs: [guest-programs, agent]' "$workflow"
+# The image waits for the job that builds the agent and the media probe, among others.
+grep -Eq 'needs: \[guest-programs, agent(, [a-z-]+)*\]' "$workflow"
 grep -Fq 'name: Build the guest agent and the media probe' "$workflow"
 echo "image media workflow: ok"

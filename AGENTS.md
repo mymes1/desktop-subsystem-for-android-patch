@@ -69,6 +69,9 @@ therefore never depend on those documents; a comment may name them only as being
    person merges it. Never merge `release` or `main` back into `develop`: their history
    contains the deletion of the planning documents, and merging it replays that deletion as
    if someone intended it.
+   Releases follow the same line. A release run from `main` is the reviewed release; one
+   from `develop` is a development build. Below 1.0 both are pre-releases; from 1.0 only
+   `main` may publish to the stable channel. The release workflow refuses any other branch.
 2. **Start every branch and worktree from `develop`.** A worktree created from the default
    branch starts on `main`, which has neither the planning documents nor the recent work.
    Check with `git log --oneline -1` before touching anything. Merging `develop` in
