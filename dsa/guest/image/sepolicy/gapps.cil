@@ -8,6 +8,15 @@
 (allow init loop_device (blk_file (read open ioctl getattr)))
 (allow init tmpfs (dir (mounton)))
 (allow init system_file (dir (mounton)))
-(allow init labeledfs (filesystem (mount relabelfrom)))
-(allow init system_file (filesystem (relabelto associate)))
-(allow system_file labeledfs (filesystem (associate)))
+; A context= mount is checked against the type it names as well as against the filesystem's
+; own (labeledfs): the kernel relabels the superblock from labeledfs to system_file
+; (relabelfrom labeledfs, relabelto system_file), relabels the root from the superblock's new
+; type (relabelfrom system_file, and system_file associates with itself), and only then checks
+; the mount against that type. system_file is a file type, not an fs_type, so the platform's
+; neverallows on filesystem relabelling do not reach it.
+(allow init labeledfs (filesystem (relabelfrom)))
+(allow init system_file (filesystem (mount relabelfrom relabelto)))
+(allow system_file system_file (filesystem (associate)))
+; overlayfs reads the lower layer's filesystem attributes when init lays it over /product
+; and /system_ext.
+(allow init system_file (filesystem (getattr)))

@@ -11,9 +11,17 @@
 (allow init tmpfs (dir (mounton)))
 (allow init system_file (dir (mounton)))
 (allow init system_lib_file (dir (mounton)))
-(allow init labeledfs (filesystem (mount relabelfrom)))
-(allow init system_lib_file (filesystem (relabelto associate)))
-(allow system_lib_file labeledfs (filesystem (associate)))
+; A context= mount is checked against the type it names as well as against the filesystem's
+; own (labeledfs): the kernel relabels the superblock from labeledfs to system_lib_file
+; (relabelfrom labeledfs, relabelto system_lib_file), relabels the root from the superblock's
+; new type (relabelfrom system_lib_file, and system_lib_file associates with itself), and only
+; then checks the mount against that type. system_lib_file is a file type, not an fs_type, so
+; the platform's neverallows on filesystem relabelling do not reach it.
+(allow init labeledfs (filesystem (relabelfrom)))
+(allow init system_lib_file (filesystem (mount relabelfrom relabelto)))
+(allow system_lib_file system_lib_file (filesystem (associate)))
+; overlayfs reads the lower layer's filesystem attributes when init lays it over /system.
+(allow init system_lib_file (filesystem (getattr)))
 (allow init proc (dir (mounton)))
 (allow init binfmt_miscfs (filesystem (mount)))
 (allow init binfmt_miscfs (file (write open getattr)))
