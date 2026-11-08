@@ -959,15 +959,22 @@ jobs:
             Set-Content -Path "$bundle\BundleConfig.pb" -Value 'config' -NoNewline
             Compress-Archive -Force -Path "$bundle\BundleConfig.pb" -DestinationPath "$apks\store.zip"
             Copy-Item -Force "$apks\store.zip" "$apks\store.aab"
-            foreach ($case in @(
-                @{ File = 'split.xapk'; Like = 'split.xapk is a split APK bundle*not supported yet*' },
-                @{ File = 'store.aab'; Like = "store.aab is an Android App Bundle*cannot be installed directly*publisher*" })) {
-              $app = Open-Apk $case.File
-              Wait-SetupControl ResultTitle -Seconds 90 | Out-Null
-              Expect-Text ResultText $case.Like
-              Save-SetupScreen "$PWD\screens\apk-$theme-$($case.File -replace '\.', '-').png"
-              Close-Apk $app
-            }
+            # A split APK bundle installs: the window reads the app from its base APK and says
+            # how many of its APKs this PC takes.
+            $app = Open-Apk split.xapk
+            Wait-SetupControl InstallButton -Enabled -Seconds 90 | Out-Null
+            Expect-Text HeroTitle 'Install Notes[?]'
+            Expect-Text HeroPackage 'Package Name: com.example.notes'
+            Expect-Text SummaryTitle 'Split APK bundle'
+            Expect-Text SummaryText 'Notes comes as several APKs. The 1 this PC needs are installed together, * in all.'
+            Save-SetupScreen "$PWD\screens\apk-$theme-split-xapk.png"
+            Close-Apk $app
+            # An App Bundle does not: the window says why and what to get instead.
+            $app = Open-Apk store.aab
+            Wait-SetupControl ResultTitle -Seconds 90 | Out-Null
+            Expect-Text ResultText 'store.aab is an Android App Bundle.*cannot be installed as they are*Get the app as an APK*'
+            Save-SetupScreen "$PWD\screens\apk-$theme-store-aab.png"
+            Close-Apk $app
 
             $env:DSA_CLI = $fake
             # Installing starts Android, finds the app installed already, and shows both versions.
