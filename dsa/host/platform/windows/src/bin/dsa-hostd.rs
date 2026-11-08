@@ -14,6 +14,16 @@
 //!                                  installer runs it before it replaces the files)
 //! dsa-hostd start-window-managers  starts the window manager beside this program for every
 //!                                  signed-in user (the installer runs it at the end)
+//! dsa-hostd hold-service           keeps the service from being started (the installer
+//!                                  runs it before it stops the service)
+//! dsa-hostd release-service [--start]
+//!                                  lets the service start again and stops one started from
+//!                                  the old files (the installer runs it once the new files
+//!                                  are in place; with --start, when it rolls back)
+//! dsa-hostd restart-service        waits for the service to stop, ends the programs left
+//!                                  from the old files, and starts the service and the window
+//!                                  managers again (the service runs it to restart into files
+//!                                  setup replaced under it)
 //! ```
 //!
 //! Without a mode it starts one VM, waits for the guest's channel daemon to connect and
@@ -77,7 +87,9 @@ mod windows_host {
     const USAGE: &str = "usage: dsa-hostd [serve | service] <config.json> | \
                          dsa-hostd remove-images <folder> | dsa-hostd remove-updates <folder> | \
                          dsa-hostd remove-machine-data <folder> | dsa-hostd remove-user-data | \
-                         dsa-hostd stop-programs <folder> | dsa-hostd start-window-managers";
+                         dsa-hostd stop-programs <folder> | dsa-hostd start-window-managers | \
+                         dsa-hostd hold-service | dsa-hostd release-service [--start] | \
+                         dsa-hostd restart-service";
 
     fn build() -> String {
         format!("dsa-hostd {}", dsa_host_windows::VERSION)
@@ -162,9 +174,87 @@ mod windows_host {
                 }
                 Ok(())
             }
+            [mode] if mode == "hold-service" => hold_service(),
+            [mode] if mode == "release-service" => release_service(false),
+            [mode, start] if mode == "release-service" && start == "--start" => {
+                release_service(true)
+            }
+            [mode] if mode == "restart-service" => restart_service(),
             [path] if path != "serve" && path != "service" => one_vm(read_config(path)?),
             _ => Err(USAGE.into()),
         }
+    }
+
+    /// The service the installer registers.
+    const SERVICE: &str = "DsaHost";
+    /// How long stopping the service may take: every user's Android stops first.
+    const SERVICE_STOP_WAIT: Duration = Duration::from_secs(300);
+
+    /// Before setup stops the service to replace it: holds it so nothing starts it again
+    /// meanwhile. The `dsa` command starts a stopped service when a client cannot reach it,
+    /// and the settings app runs it every few seconds, so the old service came back the moment
+    /// setup stopped it and kept its files in use.
+    fn hold_service() -> Result<(), String> {
+        match scm::set_start_type(SERVICE, scm::StartType::Disabled) {
+            Ok(()) => Ok(()),
+            // A first installation has no service yet.
+            Err(why) => {
+                eprintln!("{why}");
+                Ok(())
+            }
+        }
+    }
+
+    /// Once setup has put the new files in place (or, with `start`, when setup is rolled
+    /// back): the service starts with Windows again. A service that is running now was
+    /// started from the old files after setup stopped it, so it is stopped, for setup to start
+    /// the new one; with `start` the service is started here, as setup's rollback cannot while
+    /// it is held.
+    fn release_service(start: bool) -> Result<(), String> {
+        if let Err(why) = scm::set_start_type(SERVICE, scm::StartType::Automatic) {
+            eprintln!("{why}");
+            return Ok(());
+        }
+        if start {
+            if let Err(why) = scm::WindowsServiceStarter::new(SERVICE, SERVICE_STOP_WAIT).start() {
+                eprintln!("{why}");
+            }
+            return Ok(());
+        }
+        match scm::stop_and_wait(SERVICE, SERVICE_STOP_WAIT) {
+            Ok(true) => eprintln!(
+                "the service was running from the old files while setup replaced them; it was \
+                 stopped, so the new one starts"
+            ),
+            Ok(false) => {}
+            Err(why) => eprintln!("{why}"),
+        }
+        Ok(())
+    }
+
+    /// Restarts the service into the program files installed now, as a service that setup
+    /// installed past asks once it has stopped: waits for it to stop, ends every DSA program
+    /// still running from the old files in every session (the window managers, their
+    /// renderers, the app windows, the settings app; each speaks the old local API and would
+    /// be refused), starts the service, and starts every signed-in user's window manager from
+    /// the new files.
+    fn restart_service() -> Result<(), String> {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let folder = exe
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .ok_or("this program is in no folder")?;
+        scm::wait_until_stopped(SERVICE, SERVICE_STOP_WAIT)?;
+        for why in dsa_host_windows::installer_actions::stop_dsa_programs(&folder) {
+            eprintln!("{why}");
+        }
+        scm::WindowsServiceStarter::new(SERVICE, Duration::from_secs(60)).start()?;
+        for why in
+            dsa_host_windows::window_manager::start_for_signed_in_users(&folder.join("dsa-wm.exe"))
+        {
+            eprintln!("{why}");
+        }
+        Ok(())
     }
 
     /// Removes, for every user with a profile, the Start menu shortcuts, files and registry

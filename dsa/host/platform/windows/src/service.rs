@@ -1093,10 +1093,19 @@ where
             .as_ref()
             .map(|update| update.check_interval_hours.max(1))
             .unwrap_or(24);
+        // Setup replaces this program's file; the service reads its version from there and
+        // restarts into it when it is newer than this process.
+        let installer = match std::env::current_exe() {
+            Ok(program) => SetupInstaller::for_service(program, Arc::clone(&stop)),
+            Err(error) => {
+                eprintln!("{build}: this service cannot find its own program file: {error}");
+                SetupInstaller::default()
+            }
+        };
         let updates = ProgramUpdates::new(
             settings,
             Box::new(UrlFetch::default()),
-            Box::new(SetupInstaller),
+            Box::new(installer),
             androids.clone(),
             program_status,
             build,
