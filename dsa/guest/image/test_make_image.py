@@ -5246,6 +5246,14 @@ class ArmTranslationImageTests(unittest.TestCase):
                     self.assertNotIn(source, fs_types, f"{name}: {source} associate {target}")
                     self.assertNotEqual(target, "proc", name)
 
+    def test_fr25_fr32_init_may_read_the_mounted_images_attributes_to_lay_them_over(self):
+        # overlayfs asks for the lower layer's filesystem attributes when init mounts it over
+        # /system, /product and /system_ext; without getattr the image mounts and is then never
+        # laid over (seen on the booted image as "denied { getattr } ... tclass=filesystem").
+        for name, label in (("arm-translation.cil", "system_lib_file"), ("gapps.cil", "system_file")):
+            text = (Path(make_image.__file__).parent / "sepolicy" / name).read_text()
+            self.assertIn(("init", label, "filesystem", "getattr"), self._allowed(text), name)
+
     def test_fr25_the_product_props_import_the_bridge_only_when_the_host_turns_it_on(self):
         with tempfile.TemporaryDirectory() as tmp, self._modify(Path(tmp)) as archive:
             product = archive.read("PRODUCT/etc/build.prop").decode().splitlines()
@@ -5464,6 +5472,8 @@ class ArmTranslationImageTests(unittest.TestCase):
             policy = archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode()
             self.assertIn("(allow init system_file (filesystem (mount relabelfrom relabelto)))", policy)
             self.assertIn("(allow system_file system_file (filesystem (associate)))", policy)
+            # overlayfs reads the mounted image's filesystem attributes as its lower layer.
+            self.assertIn("(allow init system_file (filesystem (getattr)))", policy)
 
     def test_fr32_x86_64_stays_the_first_abi_when_arm_translation_is_on(self):
         on = (Path(make_image.__file__).with_name("arm-translation-on.prop")).read_text().splitlines()
