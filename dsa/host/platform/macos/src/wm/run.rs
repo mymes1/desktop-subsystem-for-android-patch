@@ -179,6 +179,24 @@ impl Platform for MacPlatform {
             });
     }
 
+    fn open_app_page(&mut self, package: &str) -> Result<(), String> {
+        // Through the settings app's URL scheme, which reaches it whether it runs already
+        // (in the menu bar) or has to start; arguments would reach only a new copy.
+        let url = super::manager::app_page_url(package)
+            .ok_or_else(|| format!("{package} is not a package name"))?;
+        let mut child = std::process::Command::new("/usr/bin/open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("could not open {url}: {e}"))?;
+        // Waited for apart from the manager, so it leaves no zombie and holds nothing up.
+        let _ = thread::Builder::new()
+            .name("dsa-wm-app-page".into())
+            .spawn(move || {
+                let _ = child.wait();
+            });
+        Ok(())
+    }
+
     fn log(&mut self, line: &str) {
         log(line);
     }
