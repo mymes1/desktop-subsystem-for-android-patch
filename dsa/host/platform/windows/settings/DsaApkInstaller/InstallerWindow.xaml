@@ -12,6 +12,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:local="clr-namespace:Dsa.ApkInstaller"
+    xmlns:rows="clr-namespace:Dsa.Settings"
     Width="600"
     Height="580"
     MinWidth="480"
@@ -106,9 +107,9 @@
                     <ScrollViewer x:Name="DetailsScroller" VerticalScrollBarVisibility="Auto" Focusable="False"
                                   AutomationProperties.AutomationId="DetailsScroller">
                         <StackPanel Margin="0,0,16,8">
-                            <ItemsControl x:Name="PermissionPreview" Focusable="False"
+                            <rows:RowList x:Name="PermissionPreview" Focusable="False"
                                           AutomationProperties.AutomationId="PermissionPreview">
-                                <ItemsControl.ItemTemplate>
+                                <rows:RowList.ItemTemplate>
                                     <DataTemplate>
                                         <Grid>
                                             <Grid.ColumnDefinitions>
@@ -122,11 +123,11 @@
                                                        TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                                         </Grid>
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <ItemsControl x:Name="PermissionList" Focusable="False"
+                                </rows:RowList.ItemTemplate>
+                            </rows:RowList>
+                            <rows:RowList x:Name="PermissionList" Focusable="False"
                                           AutomationProperties.AutomationId="PermissionList">
-                                <ItemsControl.ItemTemplate>
+                                <rows:RowList.ItemTemplate>
                                     <DataTemplate>
                                         <Grid Margin="0,0,0,8">
                                             <Grid.ColumnDefinitions>
@@ -155,8 +156,8 @@
                                             </DataTrigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </rows:RowList.ItemTemplate>
+                            </rows:RowList>
 
                             <!-- More and Less: one link, a button to the keyboard, and an expand
                                  and collapse control to UI Automation. -->
@@ -165,9 +166,9 @@
 
                             <StackPanel x:Name="ExpandedPanel" Margin="0,12,0,0"
                                         AutomationProperties.AutomationId="ExpandedPanel">
-                                <ItemsControl x:Name="FactList" Focusable="False"
+                                <rows:RowList x:Name="FactList" Focusable="False"
                                               AutomationProperties.AutomationId="FactList">
-                                    <ItemsControl.ItemTemplate>
+                                    <rows:RowList.ItemTemplate>
                                         <DataTemplate>
                                             <Grid Margin="0,0,0,6">
                                                 <Grid.ColumnDefinitions>
@@ -178,8 +179,8 @@
                                                 <TextBlock Grid.Column="1" Text="{Binding Value}" Style="{StaticResource BodyText}" />
                                             </Grid>
                                         </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                    </rows:RowList.ItemTemplate>
+                                </rows:RowList>
 
                                 <TextBlock x:Name="TrademarkText" Style="{StaticResource CaptionText}" Margin="0,8,0,0"
                                            AutomationProperties.AutomationId="TrademarkText" />

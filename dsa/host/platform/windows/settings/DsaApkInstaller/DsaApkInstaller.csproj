@@ -43,6 +43,13 @@
     <EmbeddedResource Include="..\DsaSettings\Strings.resx" Link="Strings.resx" />
   </ItemGroup>
 
+  <!-- The settings app's row list. The permissions and the details are lists of rows, and a
+       plain ItemsControl hides each row from UI Automation behind a generic data item, so a
+       screen reader reads none of them. One source keeps both apps' lists readable alike. -->
+  <ItemGroup>
+    <Compile Include="..\DsaSettings\RowList.cs" Link="RowList.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <Resource Include="Assets\apk-installer.png" />
     <Resource Include="Assets\apk-installer.ico" />
