@@ -1626,6 +1626,73 @@ class ImageLayoutTests(unittest.TestCase):
                 self.assertIn("(allow hal_sensors_server self (vsock_socket",
                               archive.read("SYSTEM/etc/selinux/plat_sepolicy.cil").decode())
 
+    def test_fr26_the_sensors_hal_removes_a_plain_file_multihal(self):
+        # Android 17's Cuttlefish installs its sensors multi-HAL as plain vendor files. Left
+        # beside DSA's HAL, init starts it and it aborts every five seconds because its
+        # sub-HAL finds no Cuttlefish sensors control socket.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "target-files.zip"
+            sensors = root / "dsa-sensors"
+            sensors.write_bytes(b"\x7fELF sensors")
+            multihal = [
+                "VENDOR/bin/hw/android.hardware.sensors-service.multihal",
+                "VENDOR/etc/init/android.hardware.sensors-service-multihal.rc",
+                "VENDOR/etc/sensors/hals.conf",
+                "VENDOR/lib64/hw/android.hardware.sensors@2.1-impl.cuttlefish.so",
+            ]
+            kept = [
+                "VENDOR/lib64/android.hardware.sensors-V3-ndk.so",
+                "VENDOR/lib64/android.hardware.sensors@2.1.so",
+                "VENDOR/bin/hw/android.hardware.gnss-service.example",
+            ]
+            with zipfile.ZipFile(source, "w") as archive:
+                archive.writestr("SYSTEM/etc/selinux/plat_sepolicy.cil", "(type init)\n")
+                archive.writestr("META/vendor_filesystem_config.txt", "vendor/bin/sh 0 2000 755 capabilities=0x0\n")
+                archive.writestr("VENDOR/etc/selinux/vendor_file_contexts", "/vendor/bin/sh u:object_r:vendor_shell_exec:s0\n")
+                for name in multihal + kept:
+                    archive.writestr(name, b"x")
+
+            modified = root / "modified.zip"
+            make_image.modify(source, modified, sensors=sensors)
+
+            with zipfile.ZipFile(modified) as archive:
+                names = set(archive.namelist())
+                for name in multihal:
+                    self.assertNotIn(name, names)
+                for name in kept:
+                    self.assertIn(name, names)
+                self.assertIn("VENDOR/bin/hw/dsa-sensors", names)
+                self.assertIn("VENDOR/etc/init/dsa-sensors.rc", names)
+
+    def test_fr26_check_image_rejects_a_second_sensors_service(self):
+        check_script = Path(__file__).with_name("check-image.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            img_dir = root / "image"
+            img_dir.mkdir()
+            keys_dir = root / "keys"
+            keys_dir.mkdir()
+            (keys_dir / "test.x509.pem").write_text("-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n")
+            (img_dir / "image.json").write_text(json.dumps({"files": {}, "kernel_cmdline": "console=ttyS0"}))
+            (img_dir / "initrd.img").write_bytes(gzip.compress(b""))
+            with zipfile.ZipFile(img_dir / "signed-target_files.zip", "w") as archive:
+                archive.writestr("SYSTEM/build.prop", "ro.debuggable=0\n")
+                archive.writestr("META/apkcerts.txt", "")
+                archive.writestr("VENDOR/bin/hw/dsa-sensors", b"x")
+                archive.writestr("VENDOR/etc/init/dsa-sensors.rc", "service vendor.dsa-sensors\n")
+                archive.writestr("VENDOR/bin/hw/android.hardware.sensors-service.multihal", b"x")
+                archive.writestr("VENDOR/etc/sensors/hals.conf", "x\n")
+            proc = subprocess.run(
+                [sys.executable, str(check_script), str(img_dir), str(keys_dir)],
+                capture_output=True,
+                text=True,
+            )
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("VENDOR/bin/hw/android.hardware.sensors-service.multihal is a second sensors HAL", proc.stdout)
+        self.assertIn("VENDOR/etc/sensors/hals.conf lists sub-HALs", proc.stdout)
+        self.assertNotIn("VENDOR/bin/hw/dsa-sensors is a second", proc.stdout)
+
     def test_fr26_without_the_sensors_hal_cuttlefishs_stays(self):
         self.assertNotIn("com.google.cf.sensors", make_image.removed_apexes())
         self.assertFalse(make_image.removed("VENDOR/apex/com.google.cf.sensors.apex"))
@@ -3580,6 +3647,34 @@ class CompiledSystemAppTests(unittest.TestCase):
         ]:
             problems = make_image.compiled_app_problems(self._image(apk, odex, vdex))
             self.assertTrue(any(words in p for p in problems), (words, problems))
+
+    def test_fr14_a_remade_image_gets_a_revision_no_release_has(self):
+        # The v0.1.9 image release rebuilt the images under 17.0.0-16373615-9 and replaced that
+        # release's files: a host that had -9 saw no update, and its hashes changed under it.
+        spec = {"version": "17.0.0-16373615-9", "build_id": "16373615", "revision": 9}
+        arm = dict(spec, version="17.0.0-16373615-9-arm64")
+        tags = ["android-17.0.0-16373615-9", "android-17.0.0-16373615-8",
+                "android-17.0.0-16373615-12-arm64", "android-16.0.0-15581820-30", "v0.1.9"]
+        self.assertEqual(make_image.next_revision(spec, tags), 10)
+        self.assertEqual(make_image.next_revision(arm, tags), 13)
+        # Nothing published yet: inputs.json's revision.
+        self.assertEqual(make_image.next_revision(spec, []), 9)
+        self.assertEqual(make_image.revised(spec, 10)["version"], "17.0.0-16373615-10")
+        self.assertEqual(make_image.revised(spec, 10)["revision"], 10)
+        self.assertEqual(make_image.revised(arm, 13)["version"], "17.0.0-16373615-13-arm64")
+        with self.assertRaises(ValueError):
+            make_image.revised(spec, 8)
+        # The build number is the AOSP build times 100 plus the revision, so 100 is refused.
+        with self.assertRaises(ValueError):
+            make_image.revised(spec, 100)
+        with self.assertRaises(ValueError):
+            make_image.next_revision(spec, ["android-17.0.0-16373615-99"])
+
+    def test_fr14_the_release_publishes_each_image_under_a_new_revision(self):
+        workflow = (Path(make_image.__file__).resolve().parents[3] / ".github/workflows/release-image.yml").read_text()
+        self.assertIn("make-image.py --major ${{ matrix.android }} --arch ${{ matrix.arch }} --next-revision", workflow)
+        self.assertIn("--revision ${{ steps.revision.outputs.revision }}", workflow)
+        self.assertNotIn('gh release upload "$tag"', workflow)
 
     def test_fr5_inputs_pin_the_build_dexpreopt_tools(self):
         inputs = json.loads((Path(make_image.__file__).parent / "inputs.json").read_text())

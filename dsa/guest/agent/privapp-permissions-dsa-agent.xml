@@ -25,6 +25,7 @@
         <permission name="android.permission.DUMP" />
         <permission name="android.permission.PACKAGE_USAGE_STATS" />
         <permission name="android.permission.READ_LOGS" />
+        <permission name="android.permission.READ_DROPBOX_DATA" />
         <permission name="android.permission.INSTALL_PACKAGES" />
         <permission name="android.permission.DELETE_PACKAGES" />
         <permission name="android.permission.MANAGE_ROLE_HOLDERS" />
