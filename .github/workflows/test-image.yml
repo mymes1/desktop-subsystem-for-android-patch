@@ -39,6 +39,7 @@ on:
       - "scripts/tests/image-audio-workflow.test.sh"
       - "scripts/tests/image-media-workflow.test.sh"
       - "scripts/tests/image-boot-overlays-workflow.test.sh"
+      - "scripts/tests/image-boot-check-image-dir.test.sh"
       - "dsa/host/platform/linux/src/config.rs"
   workflow_dispatch:
     inputs:
@@ -744,7 +745,12 @@ jobs:
           echo "kernel release: $tag"
           gh release download "$tag" -R "${{ github.repository }}" -p bzImage -D "$RUNNER_TEMP"
           echo "DSA_WIDGET_TEST_KERNEL=$RUNNER_TEMP/bzImage" >> "$GITHUB_ENV"
-          image="$(ls -d "$PWD"/dsa/target/image/*/ | head -1)"
+          # Out of Cargo's target folder before the Rust build is restored: when the cache
+          # restored is not an exact match (a changed Cargo.toml), rust-cache cleans that
+          # folder and deletes every file in it that is not Cargo's, the image's disks too.
+          mkdir -p .scratch/boot-image
+          mv dsa/target/image/*/ .scratch/boot-image/
+          image="$(ls -d "$PWD"/.scratch/boot-image/*/ | head -1)"
           ls -l "$image"
           echo "DSA_WIDGET_TEST_IMAGE=$image" >> "$GITHUB_ENV"
 
