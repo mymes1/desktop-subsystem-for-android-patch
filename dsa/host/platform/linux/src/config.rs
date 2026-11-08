@@ -21,6 +21,7 @@ use dsa_host_core::host_config::{
     default_doze_delay_secs, default_log_port, default_processors, default_ready_timeout_secs,
     default_stop_timeout_secs, default_true, UpdateSettings,
 };
+use dsa_host_core::root_approval::FolderApprover;
 use dsa_host_core::session::SessionConfig;
 use dsa_host_core::update::policy::InstalledImage;
 use serde::Deserialize;
@@ -131,6 +132,58 @@ pub struct HostConfig {
     /// the service starts none.
     #[serde(default)]
     pub window_manager: Option<Vec<String>>,
+    /// For the image's boot checks only: a folder that answers the root elevation prompts in
+    /// place of the administrator's polkit prompt ([`FolderApprover`]). Whoever can write it
+    /// approves root for every app, so the service takes it only when it is a folder of the
+    /// service's own user that no one else may write. A package never sets it.
+    #[serde(default, deserialize_with = "optional_path")]
+    pub test_root_approver: Option<PathBuf>,
+}
+
+/// Whether `dir` is a folder of the service's own user that no one else may write, as a
+/// test approver's folder must be.
+#[cfg(unix)]
+fn test_approver_folder_is_private(dir: &Path) -> Result<PathBuf, ConfigError> {
+    use std::os::unix::fs::MetadataExt as _;
+    let resolved = std::fs::canonicalize(dir).map_err(|e| {
+        ConfigError(format!(
+            "test_root_approver names {}, which cannot be read: {e}",
+            dir.display()
+        ))
+    })?;
+    let meta = std::fs::metadata(&resolved).map_err(|e| ConfigError(e.to_string()))?;
+    // SAFETY: geteuid has no preconditions.
+    let me = unsafe { libc::geteuid() };
+    if !meta.is_dir() || meta.uid() != me || meta.mode() & 0o022 != 0 {
+        return Err(ConfigError(format!(
+            "test_root_approver names {}, which is not a folder of this service's user that \
+             no one else may write; whoever can write it approves root for every app",
+            dir.display()
+        )));
+    }
+    // A private directory can still be replaced when someone else controls a parent.
+    // Sticky directories such as /tmp are safe when their owner is root or this user.
+    for parent in resolved.ancestors().skip(1) {
+        let meta = std::fs::metadata(parent).map_err(|e| ConfigError(e.to_string()))?;
+        if !meta.is_dir()
+            || (meta.uid() != 0 && meta.uid() != me)
+            || (meta.mode() & 0o022 != 0 && meta.mode() & 0o1000 == 0)
+        {
+            return Err(ConfigError(format!(
+                "test_root_approver has an unsafe parent {}; another user could replace it",
+                parent.display()
+            )));
+        }
+    }
+    Ok(resolved)
+}
+
+#[cfg(not(unix))]
+fn test_approver_folder_is_private(dir: &Path) -> Result<PathBuf, ConfigError> {
+    Err(ConfigError(format!(
+        "test_root_approver names {}, and test approvers are only taken on Linux",
+        dir.display()
+    )))
 }
 
 /// Why a configuration file cannot be used.
@@ -191,6 +244,18 @@ impl HostConfig {
 
     pub fn logs_dir(&self) -> PathBuf {
         self.machine_dir.join("logs")
+    }
+
+    /// The approver the configuration names for tests in place of the administrator's
+    /// prompt, if any: `Ok(None)` when it names none, and an error when the folder it names
+    /// is not one only the service's user may write, so a configuration that would let
+    /// someone else approve root is refused rather than used.
+    pub fn test_root_approver(&self) -> Result<Option<FolderApprover>, ConfigError> {
+        let Some(dir) = &self.test_root_approver else {
+            return Ok(None);
+        };
+        let resolved = test_approver_folder_is_private(dir)?;
+        Ok(Some(FolderApprover::new(&resolved)))
     }
 
     pub fn session_config(&self) -> SessionConfig {
@@ -281,5 +346,44 @@ mod tests {
         );
         assert_eq!(config.vm_name, "dsa-android");
         assert!(config.first_image.is_none());
+    }
+
+    #[test]
+    fn fr35_a_test_approver_is_taken_only_from_a_folder_no_one_else_may_write() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let dir = manifest
+            .ancestors()
+            .nth(4)
+            .unwrap()
+            .join(".scratch")
+            .join(format!("dsa-test-approver-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let json = |approver: &Path| {
+            serde_json::json!({ "image_dir": "/var/lib/dsa/image", "test_root_approver": approver })
+                .to_string()
+        };
+        // None named: the administrator's prompt.
+        let none = HostConfig::parse(r#"{ "image_dir": "/var/lib/dsa/image" }"#).unwrap();
+        assert!(none.test_root_approver().unwrap().is_none());
+
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let private = HostConfig::parse(&json(&dir)).unwrap();
+        assert_eq!(private.test_root_approver().unwrap().unwrap().dir(), dir);
+
+        // A folder others may write would let them approve root.
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+        let open = HostConfig::parse(&json(&dir)).unwrap();
+        assert!(open.test_root_approver().is_err());
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let child = dir.join("private");
+        std::fs::create_dir(&child).unwrap();
+        std::fs::set_permissions(&child, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o777)).unwrap();
+        let replaceable = HostConfig::parse(&json(&child)).unwrap();
+        assert!(replaceable.test_root_approver().is_err());
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
