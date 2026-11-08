@@ -299,6 +299,10 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
     if "META/file_contexts.bin" in names and b"dsa_channeld_exec" not in z.read("META/file_contexts.bin"):
         problems.append("META/file_contexts.bin does not label dsa-channeld, so the vendor image leaves it "
                         "vendor_file and init refuses to start it")
+    # Root elevation: the su client apps run, the elevation helper only it reaches, and the su
+    # guard that hides su from every app the host did not allow.
+    if "VENDOR/bin/dsa-channeld" in names:
+        problems += make_image.root_elevation_problems(names, z.read)
 
     # The binder service the agent and the hwcomposer reach the daemon through.
     # servicemanager refuses it unless the vendor manifest declares it, and checks who may
