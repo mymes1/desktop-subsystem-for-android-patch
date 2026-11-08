@@ -36,6 +36,15 @@ impl Page {
         Page::About,
     ];
 
+    /// The pages of the sidebar's last group, which ends the list, as the Windows app keeps
+    /// them in its pane's footer: Logs directly above About.
+    pub const FOOTER: [Page; 2] = [Page::Logs, Page::About];
+
+    /// Whether the sidebar starts its last group at this page, under a separator.
+    pub fn starts_footer(self) -> bool {
+        self == Page::FOOTER[0]
+    }
+
     /// The page's title, in English; the sidebar shows it through gettext.
     pub fn title(self) -> &'static str {
         match self {
@@ -140,5 +149,23 @@ mod tests {
         let logs = Page::ALL.iter().position(|p| *p == Page::Logs).unwrap();
         assert_eq!(Page::ALL[logs + 1], Page::About);
         assert_eq!(Page::ALL.last(), Some(&Page::About));
+    }
+
+    #[test]
+    fn fr17_logs_and_about_end_the_sidebar_as_its_own_group() {
+        assert_eq!(Page::FOOTER, [Page::Logs, Page::About]);
+        assert_eq!(
+            Page::ALL[Page::ALL.len() - Page::FOOTER.len()..],
+            Page::FOOTER
+        );
+        let starts: Vec<Page> = Page::ALL
+            .into_iter()
+            .filter(|p| p.starts_footer())
+            .collect();
+        assert_eq!(starts, vec![Page::Logs]);
+        assert_eq!(
+            Page::ALL[Page::ALL.len() - Page::FOOTER.len() - 1],
+            Page::Advanced
+        );
     }
 }

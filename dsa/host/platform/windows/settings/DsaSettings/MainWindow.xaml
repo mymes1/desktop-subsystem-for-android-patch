@@ -236,10 +236,11 @@
                                        Icon="{ui:SymbolIcon ArrowSync24}" />
                 <l:PaneItem Content="{l:Text NavAdvanced.Content}" TargetPageType="{x:Type pages:AdvancedPage}"
                                        Icon="{ui:SymbolIcon Settings24}" />
+            </ui:NavigationView.MenuItems>
+            <!-- Logs sits directly above About at the foot of the pane. -->
+            <ui:NavigationView.FooterMenuItems>
                 <l:PaneItem Content="{l:Text NavLogs.Content}" TargetPageType="{x:Type pages:LogsPage}"
                                        Icon="{ui:SymbolIcon DocumentText24}" />
-            </ui:NavigationView.MenuItems>
-            <ui:NavigationView.FooterMenuItems>
                 <l:PaneItem Content="{l:Text NavAbout.Content}" TargetPageType="{x:Type pages:AboutPage}"
                                        Icon="{ui:SymbolIcon Info24}" />
             </ui:NavigationView.FooterMenuItems>
