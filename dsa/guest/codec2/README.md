@@ -31,6 +31,15 @@ The image sets `debug.stagefright.c2-poolmask` to keep the framework's codec buf
 buffer pools: the HAL takes its input as handles. Output to a surface keeps its pool, which
 reaches the HAL as the surface's allocator.
 
+As the device's default store, it is the store every process that uses a codec asks how to
+allocate linear memory: the input of every decoder, the software ones included, and the
+output of audio decoders. It answers as the platform's own store does (`dmabuf-usage`: the
+`system` heap, no flags; `ion-usage`: any heap). A store that says it knows those parameters
+must also answer them, because the framework then asks it for each allocation and fails the
+allocation when it refuses: before the store answered, every `MediaCodec.start()` in an app
+failed with NO_MEMORY. The image workflow's boot check decodes H.264 and AAC with every
+decoder in an ordinary app (`dsa/host/platform/linux/tests/media.rs`).
+
 ## Building and testing
 
 - `build.sh [scratch] [out]` fetches the pinned sources and builds `dsa-codec2` with the NDK.

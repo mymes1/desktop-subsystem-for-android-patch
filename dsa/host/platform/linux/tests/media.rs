@@ -1,13 +1,21 @@
-//! Sound in an ordinary app on the real image, end to end, with SELinux enforcing: the service
-//! boots the image under crosvm, the test installs the media probe (`dsa/guest/media-probe/`)
-//! through adb (developer mode) and runs its instrumentation, which plays sound in the app's
-//! own process.
+//! Sound and codecs in an ordinary app on the real image, end to end, with SELinux enforcing:
+//! the service boots the image under crosvm, the test installs the media probe
+//! (`dsa/guest/media-probe/`) through adb (developer mode) and runs its instrumentation, which
+//! plays sound and encodes and decodes H.264 and AAC in the app's own process.
 //!
 //! An app runs in the untrusted app domain at an MLS level of its own, and its sound goes
 //! through memory it shares with the audio server: a streaming track's control block, which
 //! the audio server makes, and a static track's buffer, which the app makes. When the guest's
 //! policy refused either, `AudioTrack` failed with "Could not get control block" and no app
 //! played a sound, while the platform's own sounds, made at the services' level, still played.
+//!
+//! Every codec's input buffers are memory the framework allocates in the app's process, the
+//! way the device's default codec store says to allocate it. When DSA's store (dsa-codec2)
+//! answered that it knew how and then refused to say, every `MediaCodec.start()` failed with
+//! NO_MEMORY, the software codecs' too, whatever SELinux's mode. The probe decodes with every
+//! decoder the guest lists for each type, so a host that offers its GPU's decoder has that one
+//! checked as well.
+//!
 //! The test also reads the guest's log for a denial of a media service's shared memory.
 //!
 //! Runs when CI gives it what it needs: `DSA_CROSVM` names the crosvm to run,
@@ -34,6 +42,11 @@ const PROBE_RUNNER: &str = "io.github.thisisthepy.dsa.mediaprobe/.MediaProbe";
 const TRACK_INITIALIZED: i64 = 1;
 /// The tone the probe plays: a second at 48 kHz.
 const TONE_FRAMES: i64 = 48_000;
+/// The guest's own decoders, which every image has.
+const SOFTWARE_DECODERS: &[(&str, &str)] = &[
+    ("avc", "c2.android.avc.decoder"),
+    ("aac", "c2.android.aac.decoder"),
+];
 /// The memfd types of the media services: a denial naming one means an app or a service could
 /// not use memory another process shared with it.
 const SHARED_MEMORY_TYPES: &[&str] = &[
@@ -44,6 +57,8 @@ const SHARED_MEMORY_TYPES: &[&str] = &[
     "appdomain_tmpfs",
     // The sensors HAL's event queue, which system_server makes.
     "system_server_tmpfs",
+    // The codec services' buffer pool queues.
+    "dsa_codec2_tmpfs",
 ];
 /// The whole test, boot included, stays under twelve minutes.
 const BUDGET: Duration = Duration::from_secs(690);
@@ -274,6 +289,61 @@ fn audio_problems(results: &BTreeMap<String, String>) -> Vec<String> {
     problems
 }
 
+/// What is wrong with the probe's decode results: each stream must be encoded, the guest's
+/// software decoder must be among the decoders, and every decoder must start and give back at
+/// least half of what went in (pictures for H.264, sample frames for AAC).
+fn decode_problems(results: &BTreeMap<String, String>) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (stream, software) in SOFTWARE_DECODERS {
+        if let Some(error) = results.get(&format!("encode.{stream}.error")) {
+            problems.push(format!("the {stream} encoder failed: {error}"));
+            continue;
+        }
+        let wanted = if *stream == "avc" {
+            match number(results, "encode.avc.units") {
+                Ok(units) if units > 0 => (units + 1) / 2,
+                Ok(_) => {
+                    problems.push("the H.264 encoder gave no pictures".into());
+                    continue;
+                }
+                Err(why) => {
+                    problems.push(why);
+                    continue;
+                }
+            }
+        } else {
+            TONE_FRAMES / 2
+        };
+        let Some(decoders) = results.get(&format!("decode.{stream}.decoders")) else {
+            problems.push(format!("the probe decoded no {stream} stream"));
+            continue;
+        };
+        let decoders: Vec<&str> = decoders
+            .split(',')
+            .filter(|name| !name.is_empty())
+            .collect();
+        if !decoders.contains(software) {
+            problems.push(format!(
+                "the guest lists no {software} among its decoders ({decoders:?})"
+            ));
+        }
+        for decoder in decoders {
+            if let Some(error) = results.get(&format!("decode.{decoder}.error")) {
+                problems.push(format!("{decoder} failed: {error}"));
+                continue;
+            }
+            match number(results, &format!("decode.{decoder}.out")) {
+                Ok(out) if out >= wanted => {}
+                Ok(out) => problems.push(format!(
+                    "{decoder} gave back {out} of the {wanted} it should have"
+                )),
+                Err(why) => problems.push(why),
+            }
+        }
+    }
+    problems
+}
+
 #[test]
 fn pr4_the_probes_results_are_read_from_the_instrumentation_output() {
     let out = "INSTRUMENTATION_RESULT: audio.stream.state=1\r\n\
@@ -330,6 +400,54 @@ fn pr4_a_track_that_could_not_get_its_control_block_is_a_failure() {
 }
 
 #[test]
+fn pr4_a_decoder_that_could_not_start_is_a_failure() {
+    let good: BTreeMap<String, String> = [
+        ("encode.avc.units", "30"),
+        (
+            "decode.avc.decoders",
+            "c2.dsa.avc.decoder,c2.android.avc.decoder",
+        ),
+        ("decode.c2.dsa.avc.decoder.out", "30"),
+        ("decode.c2.android.avc.decoder.out", "30"),
+        ("encode.aac.units", "48"),
+        ("decode.aac.decoders", "c2.android.aac.decoder"),
+        ("decode.c2.android.aac.decoder.out", "47104"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+    assert!(
+        decode_problems(&good).is_empty(),
+        "{:?}",
+        decode_problems(&good)
+    );
+
+    // What every app saw: start() failed with NO_MEMORY, the software decoders' too.
+    let mut refused = good.clone();
+    refused.remove("decode.c2.android.avc.decoder.out");
+    refused.insert(
+        "decode.c2.android.avc.decoder.error".into(),
+        "android.media.MediaCodec$CodecException: Error 0xfffffff4".into(),
+    );
+    let problems = decode_problems(&refused);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].starts_with("c2.android.avc.decoder failed"));
+
+    // A decoder that started but gave nothing back.
+    let mut empty = good.clone();
+    empty.insert("decode.c2.dsa.avc.decoder.out".into(), "0".into());
+    assert_eq!(decode_problems(&empty).len(), 1);
+
+    // An encoder that failed leaves nothing to decode.
+    let mut no_encoder = good;
+    no_encoder.insert(
+        "encode.aac.error".into(),
+        "java.io.IOException: no encoder".into(),
+    );
+    assert_eq!(decode_problems(&no_encoder).len(), 1);
+}
+
+#[test]
 fn pr4_a_denial_of_a_media_services_shared_memory_is_found_in_the_log() {
     let log = "11-08 12:00:01.554  4650  4650 I auditd  : type=1400 audit(0.0:30): avc:  denied  { read write } for  comm=\"binder:772_3\" path=\"/memfd:AudioFlinger::Client (deleted)\" dev=\"tmpfs\" ino=120 scontext=u:r:untrusted_app:s0:c149,c256,c512,c768 tcontext=u:object_r:audioserver_tmpfs:s0 tclass=file permissive=0\n\
                11-08 12:00:02.000  4650  4650 I auditd  : type=1400 audit(0.0:31): avc:  denied  { read } for  comm=\"uiautomator\" scontext=u:r:shell:s0 tcontext=u:object_r:qemu_sf_lcd_density_prop:s0 tclass=file permissive=0\n\
@@ -342,13 +460,12 @@ fn pr4_a_denial_of_a_media_services_shared_memory_is_found_in_the_log() {
 #[test]
 fn fr26_the_sensors_hal_refused_its_event_queue_is_found_in_the_log() {
     // What every boot logged before the sensors HAL could use system_server's memfds.
-    let log = "11-08 11:53:18.987   772   772 I auditd  : type=1400 audit(0.0:8): avc:  denied  { read write } for  comm=\"system-server-i\" path=2F6D656D66643A4D6573736167655175657565202864656C6574656429 dev=\"tmpfs\" ino=2073 scontext=u:r:hal_sensors_default:s0 tcontext=u:object_r:system_server_tmpfs:s0 tclass=file permissive=0
-";
+    let log = "11-08 11:53:18.987   772   772 I auditd  : type=1400 audit(0.0:8): avc:  denied  { read write } for  comm=\"system-server-i\" path=2F6D656D66643A4D6573736167655175657565202864656C6574656429 dev=\"tmpfs\" ino=2073 scontext=u:r:hal_sensors_default:s0 tcontext=u:object_r:system_server_tmpfs:s0 tclass=file permissive=0\n";
     assert_eq!(denials(log, SHARED_MEMORY_TYPES).len(), 1);
 }
 
 #[test]
-fn pr4_an_app_plays_sound_with_selinux_enforcing() {
+fn pr4_an_app_plays_sound_and_decodes_h264_and_aac_with_selinux_enforcing() {
     let (Some(crosvm), Some(image), Some(probe)) = (
         std::env::var_os("DSA_CROSVM").map(PathBuf::from),
         std::env::var_os("DSA_WIDGET_TEST_IMAGE").map(PathBuf::from),
@@ -488,6 +605,13 @@ fn pr4_an_app_plays_sound_with_selinux_enforcing() {
         Ok(results) => {
             eprintln!("audio: {results:?}");
             problems.extend(audio_problems(&results));
+        }
+        Err(why) => problems.push(why),
+    }
+    match adb.probe(&dir, "decode") {
+        Ok(results) => {
+            eprintln!("decode: {results:?}");
+            problems.extend(decode_problems(&results));
         }
         Err(why) => problems.push(why),
     }

@@ -3596,12 +3596,15 @@ MEMFD_SHARING = [
     # The audio HAL's end of audioserver's and system_server's queues.
     ("hal_audio_server", "audioserver_tmpfs"),
     ("hal_audio_server", "system_server_tmpfs"),
+    # The codec services' buffer pool queues, in every codec client.
+    ("hal_codec2_client", "dsa_codec2_tmpfs"),
+    ("hal_codec2_server", "dsa_codec2_tmpfs"),
 ]
 # The memfd types that reach apps. An app runs at an MLS level of its own, above the s0 the
 # services run at, and may write a file below its level only when the file's type is
 # mlstrustedobject; no allow rule lifts that constraint.
 MEMFD_TO_APPS = ["audioserver_tmpfs", "mediaextractor_tmpfs", "mediaserver_tmpfs", "cameraserver_tmpfs",
-                 "system_server_tmpfs"]
+                 "system_server_tmpfs", "dsa_codec2_tmpfs"]
 MEMFD_PERMS = {"read", "write", "getattr", "map"}
 # The sensors HAL's, when the image has DSA's (sensors.cil): the event queue and the wake lock
 # queue the framework's sensor service makes and hands it in ISensors.initialize, and an app's

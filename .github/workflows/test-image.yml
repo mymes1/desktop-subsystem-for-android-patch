@@ -867,8 +867,9 @@ jobs:
 
       # The same image booted again with SELinux enforcing, and an ordinary app (the media
       # probe) installed through adb: in its own process it must play sound through a
-      # streaming and a static track, which share memory with the audio server, and the guest
-      # log must show no denial of a media service's shared memory.
+      # streaming and a static track, which share memory with the audio server, and encode a
+      # second of H.264 and AAC and decode each with every decoder the guest lists, and the
+      # guest log must show no denial of a media service's shared memory.
       - name: Download the media probe
         if: matrix.android == '17' && matrix.arch == 'x86_64'
         uses: actions/download-artifact@v4
@@ -876,7 +877,7 @@ jobs:
           name: guest-media-probe
           path: .scratch/media-probe
 
-      - name: Play sound in an app on the booted image
+      - name: Play sound and run codecs in an app on the booted image
         if: matrix.android == '17' && matrix.arch == 'x86_64'
         timeout-minutes: 14
         working-directory: dsa

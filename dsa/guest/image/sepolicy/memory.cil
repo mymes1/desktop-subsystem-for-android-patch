@@ -106,3 +106,19 @@
 (allow mediaextractor mediatranscoding_tmpfs (file (read write getattr map)))
 (allow audioserver appdomain_tmpfs (file (read write getattr map)))
 (allow audioserver system_server_tmpfs (file (read write getattr map)))
+
+; The codec services' memfds reach every codec client, apps included: the queues of the buffer
+; pool connection between a codec and its client, which the codec service makes and the
+; client maps. The software codecs (mediaswcodec) and DSA's codec HAL (mediacodec) have no tmpfs
+; type of their own, so their memfds were plain tmpfs, which no client may map and an app may
+; not write at its MLS level. They get one type, as Android 17 lets apps use hal_codec2's
+; memfd_file objects, and it is mlstrustedobject for the apps.
+(type dsa_codec2_tmpfs)
+(roletype object_r dsa_codec2_tmpfs)
+(typeattributeset file_type (dsa_codec2_tmpfs))
+(typeattributeset mlstrustedobject (dsa_codec2_tmpfs))
+(typetransition mediaswcodec tmpfs file dsa_codec2_tmpfs)
+(typetransition mediacodec tmpfs file dsa_codec2_tmpfs)
+(allow hal_codec2_server dsa_codec2_tmpfs (file (ioctl read write getattr map)))
+(allowx hal_codec2_server dsa_codec2_tmpfs (ioctl file ((range 0x7701 0x770b))))
+(allow hal_codec2_client dsa_codec2_tmpfs (file (read write getattr map)))
