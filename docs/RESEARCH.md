@@ -1837,3 +1837,42 @@ Windows의 Hyper-V VM 대신 USB로 연결한 폰의 AVF(Android Virtualization 
 - 이 PC에서 아무것도 실행하지 않았다. 특히 `CLOSE_ALL_DIALOGS` 동작이 주입한 Escape에도 오는지, `MANAGE_KEY_GESTURES`가 플랫폼 서명 앱에 실제로 주어지는지, 제외 영역 리스너가 앱 창의 제외 영역을 이 디스플레이에서 보고하는지는 설치한 이미지에서 확인해야 한다.
 - Ctrl과 Alt가 붙은 Backspace를 조합키가 없을 때만 처리하는 앱(`hasNoModifiers`를 보는 게임 등)은 그 Backspace를 쓰지 않아 뒤로 가기가 된다. 실제 앱에서 이런 경우가 있는지 확인해야 한다.
 - Chrome이 제외 영역으로 탭을 알리는지는 Chromium 소스나 실제 실행으로 확인해야 한다(FR-22의 수동 확인).
+
+## R23. 시스템 화면 디자인을 정적 오버레이로 바꿀 수 있는 곳과 없는 곳 (FR-34, INTENT D27)
+
+### 확인한 자료
+- 빌드 15581820(Android 16)과 16373615(Android 17)의 `manifest_<build_id>.xml`이 고정한 커밋. `frameworks/base`는 `45034f06`과 `94b4c163`(`framework-lock.json`과 같다), `packages/apps/Settings`는 `f6ec09af`와 `213829fb`, `packages/apps/DocumentsUI`는 `ca994547`과 `4568ed0b`, `packages/modules/Permission`은 `e86c3ce1`과 `1093eca7`, `packages/modules/IntentResolver`는 `a2ebe651`과 `514e2233`, `external/roboto-fonts`는 `064c5ab9`와 `48287c08`.
+- 읽은 파일: SettingsLib의 `CollapsingToolbarBaseActivity`(레이아웃, `values-v31/dimens.xml`, `values-v36/styles_expressive.xml`, `CollapsingToolbarDelegate.java`)와 `SettingsTheme`(`drawable-v36/settingslib_round_background*.xml`, `values-v36/dimens.xml`, `values-v34/colors.xml`, `themes_expressive.xml`, `SettingsPreferenceGroupAdapter.kt`, `SettingsBasePreferenceFragment.kt`), Settings의 `settings_homepage_container.xml`, `search_bar.xml`, `SettingsHomepageActivity.java`, `AndroidManifest.xml`, 프레임워크의 `core/res/res/values`(`colors.xml`, `config.xml`, `styles_device_defaults.xml`, `styles_material.xml`, `strings.xml`, `public-final.xml`)와 `alert_dialog_button_bar_material.xml`, `transient_notification.xml`, `toast_frame.xml`, `libs/androidfw`의 `AssetManager2.cpp`, `LoadedArsc.cpp`, `Idmap.cpp`, `ResourceTypes.cpp`, 각 앱의 `overlayable.xml`, PackageInstaller의 `styles.xml`, IntentResolver의 `styles.xml`, `dimens.xml`, `bottomsheet_background.xml`, `chooser_grid_scrollable_preview.xml`.
+- R20에서 받은 APK의 `aapt2 dump resources` 출력(`.scratch/list-bottom-margin/a17/res17.txt`는 Settings 17, `apks/PackageInstaller_res.txt`는 PackageInstaller 16)과 APK 목록.
+
+### 방법
+- 각 파일을 고정 커밋에서 `?format=TEXT`로 받아 `.scratch/system-ui/`에 두고 16과 17을 비교했다. 오버레이가 바꾸는 리소스의 이름과 구성(qualifier)을 소스와 덤프에서 맞춰 보았다. 이 PC에서는 이미지를 만들거나 실행하지 않았다.
+
+### 찾은 것
+- **오버레이 값이 쓰이는 조건**: `AssetManager2::FindEntry`는 오버레이 값의 구성이 대상 값의 구성과 같거나 더 나을 때만 오버레이 값을 쓴다. SettingsLib의 그림과 값은 `-v36`, `-v31` 폴더에 있다. Settings 17은 minSdk 때문에 덤프의 구성이 `()`로 나오지만 16은 확인하지 못했다. 그래서 오버레이도 같은 `-v36`, `-v31` 폴더에 둔다. 이전 Settings 오버레이의 뒤로 아이콘은 `drawable`에 있었으므로, 대상이 `v36`으로 남은 빌드에서는 밝은 테마에서 쓰이지 않았을 수 있다. 같은 이유로 `drawable-v36`으로 옮겼다.
+- **오버레이 안의 참조**: 오버레이 패키지는 동적 패키지로 올라간다(`LoadedArsc.cpp`의 `PROPERTY_OVERLAY | PROPERTY_DYNAMIC`). 그래서 리소스 맵에 없는 오버레이 자신의 리소스(검색 아이콘 등)는 오버레이 안에서 풀린다. 리소스 맵에 있는 id와 속성은 `OverlayDynamicRefTable`이 대상의 id로 바꾸고, `ResXMLParser::getAttributeNameResID`도 이 표를 거치므로 오버레이 레이아웃의 `app:` 속성 이름도 대상의 속성이 된다. 리소스 맵이 없는 프레임워크 오버레이는 이름으로만 맞추므로, 그 레이아웃은 프레임워크의 id를 `@*android:id/...`로 직접 쓴다.
+- **큰 제목**: SettingsLib의 펼침형 툴바 레이아웃 두 개(`settingslib_expressive_collapsing_toolbar_content_layout`, `settingslib_expressive_support_toolbar_layout`)는 레이아웃 안에서 `app:expanded="false"`라고 쓴다. 16과 17이 같다. 그래서 하위 화면은 큰 제목을 접은 채 연다. 이 속성은 스타일이나 값이 아니고, 레이아웃이 SettingsLib의 다른 레이아웃을 `include`하므로 오버레이로 바꾸려면 그 레이아웃들까지 대신해야 한다. 툴바 높이는 `settingslib_toolbar_layout_height`(179 dp, `values-v31`)이고 툴바는 `?attr/actionBarSize`(AppCompat의 56 dp, 가로 창 48 dp)다.
+- **설정 첫 화면**: `settings_homepage_container`에는 제목이 없고 앱 바에 검색창만 있다. 16과 17이 같다. `SettingsHomepageActivity`는 `screenSize`를 스스로 처리하므로 창 크기가 바뀌어도 레이아웃을 다시 만들지 않는다. 코드가 id로 찾는 뷰는 `app_bar_container`, `search_action_bar`, `search_bar_title`, `suggestion_content`, `contextual_cards_content`, `main_content`, `homepage_container`, `main_content_scrollable_container`, `settings_homepage_container`다.
+- **카드**: SettingsLib의 그룹 배경은 바깥 모서리를 `settingslib_preference_corner_radius`(20 dp)로, 안쪽 모서리를 4 dp로 둥글게 하고, `MarginItemDecoration`이 행 아래에 2 dp(`settingslib_expressive_space_extrasmall1`)를 둔다. 그 2 dp 값은 다른 여백에도 쓰이므로 바꾸지 않았다.
+- **색**: SettingsLib과 Material 3 앱의 색은 프레임워크의 `system_*_light`, `system_*_dark` 값으로 간다. DSA 게스트에는 SystemUI의 테마 서비스가 없으므로 이 기본값이 모든 앱의 색이다. 오버레이가 바꾸는 이름은 모두 16과 17의 `colors.xml`에 있다.
+- **겹쳐 쓸 수 있는 것**: DocumentsUI, PermissionController, IntentResolver는 `<overlayable>`을 선언한다. DocumentsUI는 `force_material3`과 몇 가지 색과 글꼴 이름만, PermissionController는 대화상자 스타일과 설정 값만, IntentResolver는 몇 가지 크기와 색만 연다. PermissionController의 목록 배경(SettingsLib의 `settingslib_round_background*`)은 열려 있지 않다. Settings와 PackageInstaller는 선언하지 않는다. 공유 시트의 제목은 프레임워크의 `TextAppearance.DeviceDefault.WindowTitle`이고 시트의 모서리는 `config_bottomDialogCornerRadius`(16 dp)다.
+- **토스트**: Android 11부터 R 이상을 대상으로 하는 앱의 글자 토스트는 `NotificationManagerService`가 `StatusBarManagerService.showToast`로 SystemUI에 그리게 한다. DSA 게스트에는 SystemUI가 없으므로 이 토스트는 어디에도 그려지지 않는다(소스로 확인, 기기에서 확인하지 않음). 앱이 스스로 그리는 토스트(Q 이하 대상, `transient_notification`)만 오버레이가 바꿀 수 있다.
+- **글꼴**: 이미지의 `sans-serif`는 `external/roboto-fonts`의 Roboto(가변 글꼴, 3.005)이고, 저장소의 NOTICE는 Apache-2.0이다. 17의 저장소에는 `MODULE_LICENSE_OFL`도 있다. 굵기 700은 `textStyle="bold"`로 쓸 수 있다.
+
+### 결정
+- 오버레이 여섯 개를 `/vendor/overlay`에 정적으로 둔다: 프레임워크(색, 대화상자와 시트의 모서리, 나란한 버튼, 토스트, 굵은 제목), Settings(카드, 큰 제목, 첫 화면), DocumentsUI(`force_material3`), PermissionController(권한 대화상자의 굵은 제목), PackageInstaller(굵은 제목), IntentResolver(공유 시트의 제목 크기). 모두 이미지의 framework-res로 만들고, 만들기 전에 대상 앱의 리소스 표에 바꿀 이름이 다 있는지 확인한다. 두 리소스 표의 SHA-256을 오버레이의 `assets/dsa-overlay.json`에 남기고, `check-image.py`가 이미지의 표와 비교한다. 서명이 바꾸지 않는 것은 APK가 아니라 리소스 표이므로 표의 해시를 쓴다.
+- 오버레이로 안 되는 것은 앱 안에서 고친다. Settings.apk의 컴파일된 툴바 레이아웃 두 개는 `expanded`를 테마 값(`?attr/expanded`)으로 바꾼다. 앱 바의 테마 오버레이 `SettingsLibTheme.CollapsingToolbar.Expressive`(Material 테마 위의 빈 스타일)를 Settings 오버레이가 `values-v36`에서는 거짓, `values-h600dp-v36`에서는 참으로 대신한다. 그래서 낮은 창은 처음부터 접히고 높은 창은 펼쳐 연다. 툴바 영역을 툴바와 같은 높이로 줄이는 방법은 쓰지 않았다. Material의 `CollapsingToolbarLayout`은 펼침 비율을 `|offset| / (높이 - 최소 높이)`로 구하므로 두 값이 같으면 0으로 나누게 된다. 첫 화면은 `layout-h600dp` 레이아웃에만 큰 제목을 둔다. PermissionController.apk의 컴파일된 그룹 배경은 Settings 카드와 같은 모서리(바깥 26 dp, 안쪽 0)로 바꾼다.
+- 오버레이가 대상의 리소스를 이름으로 가리키려면 그 리소스를 리소스 맵에 넣어야 하고, 그러면 대상의 값을 대신하게 된다. 그래서 Material 테마(`Theme.MaterialComponents.DayNight`)는 시계(`-watch`)에서만 맞는 대역으로 맵에 넣는다. 오버레이에 맞는 구성이 없으면 `FindEntry`가 대상의 값을 그대로 쓰므로, 참조는 Settings의 스타일로 풀린다.
+- 행 사이의 2 dp는 그대로 두고 안쪽 모서리를 각지게 해서, 그 틈이 카드 안의 구분선이 되게 한다.
+- 수용 기준 2와 3은 이미지 테스트의 Android 17 x86_64 부팅 확인에서 본다(`dsa/host/platform/linux/tests/system_screens.rs`). 개발자 모드의 adb로 `uiautomator dump`와 `screencap`을 읽는다.
+
+### 대가와 남은 것
+- 첫 화면은 창 크기가 바뀌어도 레이아웃을 다시 만들지 않으므로, 600 dp를 넘나들게 크기를 바꾼 창은 화면을 다시 열 때까지 처음의 상태를 지킨다.
+- DocumentsUI의 레이아웃은 겹쳐 쓸 수 없으므로 파일 선택기에는 큰 제목 영역이 없다. 색과 Material 3의 둥근 모양만 바뀐다. 큰 제목을 넣으려면 DocumentsUI의 레이아웃 코드를 고쳐야 한다.
+- PermissionController는 앱 바의 테마 오버레이를 `<overlayable>`에 열지 않아, 권한 화면은 SettingsLib대로 큰 제목을 접은 채 연다. 높은 창에서 펼쳐 열려면 그 앱의 레이아웃이나 코드를 고쳐야 한다.
+- 소유자에게 따로 보고할 것: SystemUI가 없는 게스트에서는 앱의 글자 토스트가 보이지 않는다. 호스트 알림 등으로 보여 주는 것은 새 요구사항이다.
+
+### 확인하지 못한 것
+- 이미지를 만들거나 부팅하지 않았다. aapt2가 오버레이를 받아들이는지, idmap2가 각 오버레이를 받아들이는지(`adb shell cmd overlay list`), 오버레이 레이아웃의 `app:` 속성이 실제로 Settings의 속성으로 읽히는지, 컴파일된 레이아웃을 고친 Settings와 PermissionController가 그대로 뜨는지는 develop의 이미지 테스트가 처음 확인한다.
+- Android 16 Settings의 덤프는 없었다. 16의 이름은 소스로만 확인했고, 이미지 빌드가 대상 리소스 표로 다시 확인한다.
+- 밝은 테마와 어두운 테마에서 Settings, 파일 선택기, 권한 대화상자가 같은 규칙을 따르는지는 수동 확인이다(FR-34의 네 번째 수용 기준).
