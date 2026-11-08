@@ -621,6 +621,7 @@ fn serve_host(
         return;
     };
     let link = Arc::new(HostLink::new(id, sender, attach.process_id));
+    let package = attach.package_name.clone();
     let attached = ManagerEvent::Attached {
         link: Arc::clone(&link),
         package: attach.package_name,
@@ -633,7 +634,18 @@ fn serve_host(
         let frame = match connection.recv(Some(Duration::from_millis(200))) {
             Ok(frame) => frame,
             Err(TransportError::Timeout) => continue,
-            Err(_) => break,
+            Err(error) => {
+                // Its windows close with it, and Android ends their tasks, so the log says
+                // why.
+                note(
+                    logger.as_deref(),
+                    &format!(
+                        "{package}'s window program (process {}) is gone: {error}",
+                        attach.process_id
+                    ),
+                );
+                break;
+            }
         };
         let Ok(envelope) = decode(&frame) else {
             note(
@@ -791,7 +803,14 @@ impl Manager {
             }
             ManagerEvent::Gone { host } => {
                 self.links.remove(&host);
-                for task_id in self.hosts.detached(host) {
+                let tasks = self.hosts.detached(host);
+                if !tasks.is_empty() {
+                    self.log(&format!(
+                        "a window program ended with task windows {tasks:?} open; they close, \
+                         and Android ends their tasks"
+                    ));
+                }
+                for task_id in tasks {
                     self.drop_remote(task_id);
                     // Ending an app's window program closes its windows, as ending any
                     // program does: Android ends their tasks.
