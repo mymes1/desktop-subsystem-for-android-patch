@@ -6,21 +6,28 @@
 
     uv run dsa/graphics/verify/verify.py check-subset
     uv run dsa/graphics/verify/verify.py fetch
-    uv run dsa/graphics/verify/verify.py cts      [--serial S]
+    uv run dsa/graphics/verify/verify.py fetch-cts
+    uv run dsa/graphics/verify/verify.py cts      [--serial S] [--software-vulkan] [--results DIR]
     uv run dsa/graphics/verify/verify.py apps     [--serial S] [--yes]
     uv run dsa/graphics/verify/verify.py measure  [--serial S] [--seconds 30]
 
 check-subset needs only the network: it checks that every pattern in vk-cts-subset.txt
-still names cases of the pinned CTS and writes the expanded case list. The other commands
-need an installed DSA with developer mode on (dsa settings set developer-mode on), on the
-Windows machine whose GPU renders the task windows: they connect adb to 127.0.0.1:58526
-themselves. Downloads go to .scratch/graphics-verify/.
+still names cases of the pinned CTS and writes the expanded case list. fetch-cts does that
+and downloads the Vulkan CTS APK, without the test apps. The other commands need a running
+DSA with developer mode on (dsa settings set developer-mode on): they connect adb to
+127.0.0.1:58526 themselves, with the adb that DSA_ADB names or the one on the path.
+Downloads go to .scratch/graphics-verify/.
+
+`cts --software-vulkan` is for a host renderer on software Vulkan (Lavapipe), as in CI: the
+cases the subset file lists under `lavapipe:` still run and are reported, but a failure of
+one of them does not fail the run. `--results DIR` keeps each case's result there.
 """
 
 import argparse
 import fnmatch
 import io
 import json
+import os
 import re
 import shutil
 import statistics
@@ -62,22 +69,53 @@ class App:
 
 
 GLES_APP = App("gles", "hello-gl2.apk", "com.android.gl2jni", ".GL2JNIActivity",
-               "a green triangle on a background that fades between grays")
+               "a green triangle, point up, in the middle of a background that fades between grays")
 VULKAN_APP = App("vulkan", "hello-vulkan.apk", "com.android.hellovk", ".VulkanActivity",
-                 "a triangle with red, green and blue corners on a dark background")
+                 "a dark red triangle, point up, in the middle of a background that fades between grays")
 APPS = (GLES_APP, VULKAN_APP)
 
 
 # ---------------------------------------------------------------- the Vulkan CTS subset
 
+SOFTWARE_VULKAN = "lavapipe:"
+
+
 def read_patterns(text):
-    """The patterns of a subset file: one per line, without comments and blank lines."""
-    patterns = []
-    for line in text.splitlines():
-        line = line.split("#", 1)[0].strip()
-        if line:
+    """The patterns of a subset file: one per line, without comments and blank lines. The
+    `lavapipe:` lines are not patterns of the subset; read_software_exceptions reads them."""
+    return read_subset(text)[0]
+
+
+def read_software_exceptions(text):
+    """The cases that cannot pass on software Vulkan, as `{pattern: reason}`."""
+    return read_subset(text)[1]
+
+
+def read_subset(text):
+    """The patterns of a subset file, and its `lavapipe: <pattern>  # <reason>` lines as
+    `{pattern: reason}`. An exception without a reason is refused, so none is kept unexplained."""
+    patterns, exceptions = [], {}
+    for number, raw in enumerate(text.splitlines(), 1):
+        line, _, comment = raw.partition("#")
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith(SOFTWARE_VULKAN):
+            pattern = line[len(SOFTWARE_VULKAN):].strip()
+            reason = comment.strip()
+            if not pattern or not reason:
+                raise ValueError(f"line {number}: a {SOFTWARE_VULKAN} line names a pattern and says "
+                                 f"why after '#': {raw.strip()!r}")
+            exceptions[pattern] = reason
+        else:
             patterns.append(line)
-    return patterns
+    return patterns, exceptions
+
+
+def excused(case, exceptions):
+    """Why `case` may fail on software Vulkan, or None when it must pass."""
+    return next((reason for pattern, reason in exceptions.items()
+                 if fnmatch.fnmatchcase(case, pattern)), None)
 
 
 def mustpass_files(patterns):
@@ -305,7 +343,7 @@ def open_cts():
 
 def caselist(write_to=None):
     """Checks the subset against the pinned CTS and returns the cases it selects."""
-    patterns = read_patterns(SUBSET.read_text(encoding="utf-8"))
+    patterns, exceptions = read_subset(SUBSET.read_text(encoding="utf-8"))
     cache = WORK / "mustpass"
     cache.mkdir(parents=True, exist_ok=True)
     archive = None
@@ -319,6 +357,10 @@ def caselist(write_to=None):
     selected, unmatched = expand_subset(patterns, cases)
     if unmatched:
         raise SystemExit("these subset patterns match no case of the pinned CTS:\n  " + "\n  ".join(unmatched))
+    _, stray = expand_subset(list(exceptions), selected)
+    if stray:
+        raise SystemExit(f"these {SOFTWARE_VULKAN} patterns match no case of the subset:\n  "
+                         + "\n  ".join(stray))
     if write_to:
         write_to.write_text("\n".join(selected) + "\n", encoding="utf-8")
     return selected
@@ -378,20 +420,27 @@ def connect_command(serial):
     return None
 
 
+def adb_program():
+    """The adb to run: the one DSA_ADB names, as the boot checks take it, or adb on the path."""
+    return os.environ.get("DSA_ADB") or "adb"
+
+
 class Adb:
     def __init__(self, serial=None):
-        if not shutil.which("adb"):
-            raise SystemExit("adb is not on PATH (Android SDK platform-tools)")
+        program = adb_program()
+        if not shutil.which(program):
+            raise SystemExit(f"{program} is not there (Android SDK platform-tools); DSA_ADB can name one")
         serial = serial or DEFAULT_SERIAL
         connect = connect_command(serial)
         if connect:
+            connect[0] = program
             result = subprocess.run(connect, capture_output=True, text=True, encoding="utf-8", errors="replace")
             said = (result.stdout + result.stderr).strip()
             if result.returncode != 0 or "connected" not in said or "cannot" in said or "failed" in said:
                 raise SystemExit(
                     f"adb cannot connect to {serial} ({said}). Start Android and turn developer mode "
                     "on (dsa settings set developer-mode on); dsa settings shows the adb port.")
-        self.base = ["adb", "-s", serial]
+        self.base = [program, "-s", serial]
 
     def run(self, *args, check=True):
         result = subprocess.run(self.base + list(args), capture_output=True, text=True,
@@ -424,6 +473,45 @@ def check_stack(stack):
     return problems
 
 
+PASSING = ("Pass", "NotSupported", "QualityWarning", "CompatibilityWarning")
+
+
+def cts_report(cases, results, exceptions, software_vulkan):
+    """Each case's outcome, in case order: its status ("NotRun" when the log does not have
+    it), whether it passed, and, for a case that did not, why that is excused on software
+    Vulkan (None when it is not)."""
+    report = []
+    for case in cases:
+        status = results.statuses.get(case, "NotRun")
+        passed = status in PASSING
+        reason = excused(case, exceptions) if software_vulkan and not passed else None
+        report.append({"case": case, "status": status, "passed": passed, "excused": reason})
+    return report
+
+
+def report_lines(report):
+    """One line per case: PASS, FAIL or EXCUSED, the status, the case, and an excuse's reason."""
+    lines = []
+    for entry in report:
+        verdict = "PASS" if entry["passed"] else ("EXCUSED" if entry["excused"] else "FAIL")
+        line = f"{verdict:8} {entry['status']:20} {entry['case']}"
+        if entry["excused"]:
+            line += f"  ({entry['excused']})"
+        lines.append(line)
+    return lines
+
+
+def write_cts_results(out, report, stack, problems, log, logcat):
+    """The per-case results as JSON and as text, the dEQP log and the CTS's logcat, in `out`."""
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "vk-cts-results.json").write_text(json.dumps(
+        {"graphics": stack, "stack_problems": problems, "cases": report}, indent=2), encoding="utf-8")
+    (out / "vk-cts-results.txt").write_text("\n".join(report_lines(report)) + "\n", encoding="utf-8")
+    (out / "vk-cts-logcat.txt").write_text(logcat, encoding="utf-8")
+    if log.exists():
+        shutil.copyfile(log, out / log.name)
+
+
 def run_cts(args):
     adb = Adb(args.serial)
     stack = graphics_stack(adb)
@@ -431,8 +519,13 @@ def run_cts(args):
     WORK.mkdir(parents=True, exist_ok=True)
     cases_file = WORK / "vk-cts-subset.cases.txt"
     cases = caselist(cases_file)
+    exceptions = read_software_exceptions(SUBSET.read_text(encoding="utf-8"))
     apk = fetch_deqp()
     adb.run("install", "-r", "-g", str(apk))
+    # The log goes to shared storage, which the CTS writes with the storage permissions that
+    # -g granted; newer Android also wants all-files access, which the shell can allow.
+    adb.shell(f"appops set {DEQP_PACKAGE} MANAGE_EXTERNAL_STORAGE allow", check=False)
+    adb.shell("logcat -c", check=False)
     remote_cases, remote_log = "/sdcard/dsa-vk-cases.txt", "/sdcard/dsa-vk-results.qpa"
     adb.run("push", str(cases_file), remote_cases)
     adb.shell(f"rm -f {remote_log}", check=False)
@@ -451,20 +544,32 @@ def run_cts(args):
             results = parse_qpa(local_log.read_text(encoding="utf-8", errors="replace"))
         if results.session_complete or not running:
             break
-    missing = [case for case in cases if case not in results.statuses]
-    failed = results.failed()
+    adb.shell(f"am force-stop {DEQP_PACKAGE}", check=False)
+    logcat = adb.shell("logcat -d -v threadtime", check=False)
+    report = cts_report(cases, results, exceptions, args.software_vulkan)
+    problems = check_stack(stack)
     counts = {}
-    for status in results.statuses.values():
-        counts[status] = counts.get(status, 0) + 1
-    print(json.dumps({"cases": len(cases), "statuses": counts, "log": str(local_log)}, indent=2))
-    for case, status in sorted(failed.items()):
-        print(f"  {status:12} {case}")
-    for case in missing:
-        print(f"  {'NotRun':12} {case}")
-    ok = not failed and not missing and not check_stack(stack)
-    for problem in check_stack(stack):
+    for entry in report:
+        counts[entry["status"]] = counts.get(entry["status"], 0) + 1
+    print(json.dumps({"cases": len(cases), "statuses": counts, "session_complete": results.session_complete,
+                      "log": str(local_log)}, indent=2))
+    for line in report_lines(report):
+        if not line.startswith("PASS"):
+            print("  " + line)
+    if args.results:
+        write_cts_results(Path(args.results), report, stack, problems, local_log, logcat)
+        print(f"each case's result is in {args.results}")
+    if not results.statuses:
+        print("  the CTS wrote no result; its log lines:")
+        for line in logcat.splitlines():
+            if "dEQP" in line or DEQP_PACKAGE in line:
+                print("    " + line)
+    for problem in problems:
         print("  " + problem)
-    print("Vulkan CTS subset: " + ("passed" if ok else "FAILED"))
+    failed = [entry for entry in report if not entry["passed"] and not entry["excused"]]
+    ok = not failed and not problems
+    print(f"Vulkan CTS subset: {len(report) - len(failed)} of {len(report)} cases passed or excused; "
+          + ("passed" if ok else "FAILED"))
     return 0 if ok else 1
 
 
@@ -595,12 +700,18 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("check-subset", help="check the Vulkan CTS subset against the pinned CTS")
     fetch = sub.add_parser("fetch", help="download the Vulkan CTS APK and the test apps")
+    sub.add_parser("fetch-cts", help="download the Vulkan CTS APK and write the expanded case list")
     for name in ("cts", "apps", "measure"):
         command = sub.add_parser(name)
         command.add_argument("--serial", help=f"the adb serial of the DSA guest (default {DEFAULT_SERIAL}, "
                              "developer mode's loopback port)")
         if name == "cts":
             command.add_argument("--timeout", type=int, default=1800)
+            command.add_argument("--software-vulkan", action="store_true",
+                                 help="the host renderer runs on software Vulkan (Lavapipe): the subset's "
+                                 "lavapipe: cases may fail, for the reason the subset file gives")
+            command.add_argument("--results", help="a folder for each case's result (JSON and text), "
+                                 "the dEQP log and the guest log")
     for command in (fetch, sub.choices["apps"], sub.choices["measure"]):
         command.add_argument("--run", type=int, help="the 'Graphics test' run to take the test apps from")
     sub.choices["apps"].add_argument("--yes", action="store_true", help="skip the questions about what each window shows")
@@ -611,6 +722,12 @@ def main(argv=None):
         WORK.mkdir(parents=True, exist_ok=True)
         cases = caselist(WORK / "vk-cts-subset.cases.txt")
         print(f"the subset selects {len(cases)} cases of the pinned CTS")
+        return 0
+    if args.command == "fetch-cts":
+        WORK.mkdir(parents=True, exist_ok=True)
+        cases = caselist(WORK / "vk-cts-subset.cases.txt")
+        print(f"the subset selects {len(cases)} cases of the pinned CTS")
+        print(fetch_deqp())
         return 0
     if args.command == "fetch":
         WORK.mkdir(parents=True, exist_ok=True)

@@ -8,7 +8,9 @@
 #
 # It runs when the guidebook changes on main (the release sync brings it there), by hand, and
 # from "Linux repository release" after the packages of a version are attached to its
-# release. The repositories need these repository secrets; without them the site carries the
+# release. Like every release it publishes only from main or develop
+# (.github/scripts/release/release-branch-channel.sh); on any other branch or a tag it fails
+# before building anything. The repositories need these repository secrets; without them the site carries the
 # guidebook alone:
 #   DSA_REPO_GPG_KEY          the ASCII-armored secret GPG key that signs the repositories
 #   DSA_REPO_GPG_PASSPHRASE   its passphrase, if it has one
@@ -46,6 +48,13 @@ jobs:
       HAS_REPO_KEY: ${{ secrets.DSA_REPO_GPG_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
+
+      # The site carries the package repositories, so it is published only from main or
+      # develop, like every release; a run on another branch or a tag fails here.
+      - name: Check the branch
+        env:
+          REF: ${{ github.ref }}
+        run: .github/scripts/release/release-branch-channel.sh "$REF"
 
       - name: Lay out the guidebook
         run: |

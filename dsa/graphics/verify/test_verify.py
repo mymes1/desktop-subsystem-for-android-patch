@@ -27,6 +27,27 @@ class SubsetTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verify.mustpass_files(["dEQP-GLES2.info.vendor"])
 
+    def test_pr3_lavapipe_exceptions_are_not_patterns_and_keep_their_reason(self):
+        text = ("dEQP-VK.api.smoke.*\n"
+                "lavapipe: dEQP-VK.api.smoke.triangle  # Lavapipe draws it one pixel off\n")
+        patterns, exceptions = verify.read_subset(text)
+        self.assertEqual(patterns, ["dEQP-VK.api.smoke.*"])
+        self.assertEqual(exceptions, {"dEQP-VK.api.smoke.triangle": "Lavapipe draws it one pixel off"})
+        self.assertEqual(verify.excused("dEQP-VK.api.smoke.triangle", exceptions), "Lavapipe draws it one pixel off")
+        self.assertIsNone(verify.excused("dEQP-VK.api.smoke.create_shader", exceptions))
+
+    def test_pr3_a_lavapipe_exception_without_a_reason_is_refused(self):
+        with self.assertRaises(ValueError):
+            verify.read_subset("lavapipe: dEQP-VK.api.smoke.triangle\n")
+        with self.assertRaises(ValueError):
+            verify.read_subset("lavapipe:   # a reason for nothing\n")
+
+    def test_pr3_every_lavapipe_exception_in_the_subset_file_has_a_reason(self):
+        _, exceptions = verify.read_subset(verify.SUBSET.read_text(encoding="utf-8"))
+        for pattern, reason in exceptions.items():
+            self.assertTrue(pattern.startswith("dEQP-VK."), pattern)
+            self.assertTrue(reason, pattern)
+
     def test_pr3_a_pattern_that_matches_no_case_is_reported(self):
         cases = ["dEQP-VK.info.build", "dEQP-VK.api.smoke.triangle", "dEQP-VK.api.smoke.create_shader"]
         selected, unmatched = verify.expand_subset(
@@ -71,6 +92,44 @@ class QpaTests(unittest.TestCase):
 
     def test_pr3_a_finished_session_is_recognised(self):
         self.assertTrue(verify.parse_qpa("#beginSession\n#endSession\n").session_complete)
+
+    def test_pr3_the_report_has_each_case_and_a_case_that_never_ran_fails(self):
+        cases = ["dEQP-VK.info.build", "dEQP-VK.wsi.android.surface.query_formats",
+                 "dEQP-VK.api.smoke.triangle", "dEQP-VK.synchronization.smoke.fences"]
+        report = verify.cts_report(cases, verify.parse_qpa(QPA), {}, False)
+        self.assertEqual([entry["case"] for entry in report], cases)
+        self.assertEqual([entry["status"] for entry in report], ["Pass", "NotSupported", "Fail", "NotRun"])
+        self.assertEqual([entry["passed"] for entry in report], [True, True, False, False])
+        lines = verify.report_lines(report)
+        self.assertTrue(lines[0].startswith("PASS"))
+        self.assertTrue(lines[2].startswith("FAIL"))
+        self.assertTrue(lines[3].startswith("FAIL"))
+
+    def test_pr3_a_lavapipe_exception_excuses_a_failure_only_on_software_vulkan(self):
+        exceptions = {"dEQP-VK.api.smoke.*": "Lavapipe cannot"}
+        cases = ["dEQP-VK.info.build", "dEQP-VK.api.smoke.triangle"]
+        on_lavapipe = verify.cts_report(cases, verify.parse_qpa(QPA), exceptions, True)
+        self.assertEqual(on_lavapipe[1]["excused"], "Lavapipe cannot")
+        self.assertIsNone(on_lavapipe[0]["excused"])
+        self.assertTrue(verify.report_lines(on_lavapipe)[1].startswith("EXCUSED"))
+        on_a_gpu = verify.cts_report(cases, verify.parse_qpa(QPA), exceptions, False)
+        self.assertIsNone(on_a_gpu[1]["excused"])
+
+    def test_pr3_the_results_folder_holds_json_text_and_the_log(self):
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder) / "results"
+            log = Path(folder) / "vk-cts-results.qpa"
+            log.write_text(QPA, encoding="utf-8")
+            report = verify.cts_report(["dEQP-VK.info.build"], verify.parse_qpa(QPA), {}, True)
+            verify.write_cts_results(out, report, {"ro.hardware.egl": "angle"}, [], log, "logcat")
+            saved = json.loads((out / "vk-cts-results.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["cases"][0]["status"], "Pass")
+            self.assertIn("dEQP-VK.info.build", (out / "vk-cts-results.txt").read_text(encoding="utf-8"))
+            self.assertTrue((out / "vk-cts-results.qpa").exists())
+            self.assertEqual((out / "vk-cts-logcat.txt").read_text(encoding="utf-8"), "logcat")
 
 
 class StackTests(unittest.TestCase):
@@ -129,6 +188,15 @@ class AdbTests(unittest.TestCase):
         self.assertEqual(verify.DEFAULT_SERIAL, "127.0.0.1:58526")
         self.assertEqual(verify.connect_command("127.0.0.1:58526"), ["adb", "connect", "127.0.0.1:58526"])
         self.assertIsNone(verify.connect_command("emulator-5554"))
+
+    def test_pr3_the_adb_the_boot_checks_name_is_used(self):
+        import os
+        from unittest import mock
+
+        with mock.patch.dict(os.environ, {"DSA_ADB": "/opt/platform-tools/adb"}):
+            self.assertEqual(verify.adb_program(), "/opt/platform-tools/adb")
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(verify.adb_program(), "adb")
 
 
 if __name__ == "__main__":

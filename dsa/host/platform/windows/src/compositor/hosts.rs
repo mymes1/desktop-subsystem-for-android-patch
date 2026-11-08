@@ -1003,6 +1003,7 @@ impl Manager {
                         | ToHost::Resize { .. }
                         | ToHost::TaskSize { .. }
                         | ToHost::ImeCursor { .. }
+                        | ToHost::ImeEditor { .. }
                         | ToHost::CaptionTone { .. }
                         | ToHost::CaptionMode { .. }
                         | ToHost::CaptionBack { .. }

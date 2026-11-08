@@ -258,6 +258,12 @@ impl State {
                     window.limits();
                 }
             }
+            WindowChange::ImeEditor { task_id, editor } => {
+                if let Some(window) = self.windows.get_mut(task_id) {
+                    window.ime.describe(editor.clone());
+                }
+                self.describe_editor(*task_id);
+            }
             WindowChange::ImeCursor { task_id, cursor } => {
                 if let Some(window) = self.windows.get_mut(task_id) {
                     window.ime_cursor = Some(*cursor);

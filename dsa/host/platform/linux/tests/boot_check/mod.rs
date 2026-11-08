@@ -11,6 +11,8 @@
 //! process and leaves the groups behind.
 #![allow(dead_code)] // Each check uses only part of this.
 
+pub mod adb;
+
 use std::io::Read;
 use std::os::unix::process::CommandExt as _;
 use std::path::PathBuf;

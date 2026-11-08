@@ -45,9 +45,9 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
-      # Every pattern must still name cases of the pinned CTS. Running the cases needs a
-      # booted DSA guest on a Windows machine with Hyper-V and a GPU, which a hosted runner
-      # does not have; dsa/graphics/verify/README.md says how to run them there.
+      # Every pattern must still name cases of the pinned CTS. The Image test runs the cases,
+      # and these apps in task windows, on its booted image with the renderer on Lavapipe;
+      # dsa/graphics/verify/README.md says how to run them on a PC's GPU.
       - name: Check the Vulkan CTS subset against the pinned CTS
         run: uv run dsa/graphics/verify/verify.py check-subset
 
