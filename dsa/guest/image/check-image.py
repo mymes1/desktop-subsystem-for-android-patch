@@ -250,6 +250,10 @@ with zipfile.ZipFile(image / "signed-target_files.zip") as z:
         if not re.search(r"\(allow\s+vendor_init\s+gpu_device\s+\(\s*chr_file\s*\([^)]*getattr", plat_sepolicy):
             problems.append("the SELinux policy does not let vendor_init check the gpu_device DRM cards, so "
                             "init's wait for /dev/dri/card0 times out and holds up boot")
+        # Shared memory is a memfd, labelled with its maker's tmpfs type. Every memfd the media
+        # services hand an app or each other must be usable on the other side, or the binder
+        # call that carries it fails: with SELinux enforcing, no app played a sound.
+        problems += make_image.memfd_sharing_problems(plat_sepolicy)
 
     # One declaration of each HAL instance across the vendor manifest, its fragments and the
     # active vendor APEXes, and one for every instance a DSA service registers.

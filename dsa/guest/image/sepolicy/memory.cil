@@ -75,3 +75,34 @@
 (allow hal_audio_server audioserver_tmpfs (file (read write getattr map)))
 (allow hal_audio_server system_server_tmpfs (file (read write getattr map)))
 (allow mediaswcodec system_server_tmpfs (file (read write getattr map)))
+
+; The media services' memfds reach apps. An audio track's or a recording's control block is a
+; memfd audioserver makes, labelled audioserver_tmpfs; the buffers of a remote media extractor,
+; of the media player service and of the camera service are memfds labelled
+; mediaextractor_tmpfs, mediaserver_tmpfs and cameraserver_tmpfs. Android's own policy expects
+; them on /dev/ashmem, which every domain may use, so it never gave them the rules a memfd
+; needs once it crosses to another process (Android 17 gives them only for its memfd_file
+; class, which DSA's guest does not use):
+;
+; - An app runs at its own MLS level (s0 and its user's and app's categories) and the services
+;   at s0, and a file below the subject's level may be written only when its type is
+;   mlstrustedobject. Binder checks read and write on every memfd it carries, so the reply
+;   that carried an audio track's control block failed, AudioTrack reported "Could not get
+;   control block" (NO_INIT) and no app played a sound while SELinux was enforcing. An allow
+;   rule cannot lift a constraint, which is why allowing the apps the files did not help.
+;   system_server_tmpfs is mlstrustedobject for the same reason.
+; - The type rules follow the ones Android 17 gives the memfd_file class: apps may use the
+;   extractor's, the player service's and the camera service's memfds, the player service the
+;   extractor's and audioserver's, system_server audioserver's, the extractor the transcoding
+;   service's, and audioserver an app's and system_server's (the shared buffer of a static
+;   track, as SoundPool and the click sounds use).
+(typeattributeset mlstrustedobject (audioserver_tmpfs mediaextractor_tmpfs mediaserver_tmpfs cameraserver_tmpfs))
+(allow appdomain mediaextractor_tmpfs (file (read write getattr map)))
+(allow appdomain mediaserver_tmpfs (file (read write getattr map)))
+(allow appdomain cameraserver_tmpfs (file (read write getattr map)))
+(allow mediaserver mediaextractor_tmpfs (file (read write getattr map)))
+(allow mediaserver audioserver_tmpfs (file (read write getattr map)))
+(allow system_server audioserver_tmpfs (file (read write getattr map)))
+(allow mediaextractor mediatranscoding_tmpfs (file (read write getattr map)))
+(allow audioserver appdomain_tmpfs (file (read write getattr map)))
+(allow audioserver system_server_tmpfs (file (read write getattr map)))
