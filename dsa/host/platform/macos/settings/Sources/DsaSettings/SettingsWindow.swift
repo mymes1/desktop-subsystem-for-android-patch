@@ -9,6 +9,13 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// The pages in the sidebar's last group, as the Windows app keeps them in its pane's
+    /// footer: Logs directly above About.
+    static let footer: [SettingsPage] = [.logs, .about]
+
+    /// The pages above that group.
+    static var main: [SettingsPage] { allCases.filter { !footer.contains($0) } }
+
     var titleKey: String {
         switch self {
         case .general: return "NavGeneral.Content"
@@ -94,12 +101,14 @@ struct SettingsWindow: View {
         NavigationSplitView {
             List(selection: $page) {
                 Section {
-                    ForEach(SettingsPage.allCases.filter { $0 != .about }) { page in
+                    ForEach(SettingsPage.main) { page in
                         SidebarLabel(page: page).tag(page)
                     }
                 }
                 Section {
-                    SidebarLabel(page: .about).tag(SettingsPage.about)
+                    ForEach(SettingsPage.footer) { page in
+                        SidebarLabel(page: page).tag(page)
+                    }
                 }
             }
             .listStyle(.sidebar)

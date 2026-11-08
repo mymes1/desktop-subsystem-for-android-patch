@@ -366,7 +366,7 @@ jobs:
           # Each picture is of one fresh start, on the page its pane item opens through UI Automation.
           foreach ($theme in 'light', 'dark') {
             Set-AppTheme -Dark:($theme -eq 'dark')
-            foreach ($page in 'general', 'memory', 'display', 'updates', 'advanced', 'device', 'about', 'logs') {
+            foreach ($page in 'general', 'memory', 'display', 'updates', 'advanced', 'device', 'logs', 'about') {
               $app = Start-Process $exe -PassThru
               $window = Wait-ProcessWindow $app.Id 90
               if (-not $window) {
@@ -552,7 +552,7 @@ jobs:
             Set-AppTheme
           }
 
-      # Every item of the navigation pane, the footer's About too, is a list item named by its
+      # Every item of the navigation pane, the footer's Logs and About too, is a list item named by its
       # label that UI Automation can select, as Narrator does, and selecting it opens its page:
       # the item reports itself selected and the page's title shows beside the pane. Invoking
       # an item opens its page as well.
@@ -816,7 +816,7 @@ jobs:
             [Dsa.Input]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)   # left up
             Start-Sleep -Seconds 1
             Set-Foreground $window
-            # About sits in the pane's footer, and Tab may visit the pane toggle and the page
+            # Logs and About sit in the pane's footer, and Tab may visit the pane toggle and the page
             # before it, so the presses go on until every item was in view (at most 40).
             for ($i = 0; $i -lt 40; $i++) {
               [System.Windows.Forms.SendKeys]::SendWait('{TAB}')

@@ -165,7 +165,7 @@ public class TextInputStyleTests
     }
 
     [Fact]
-    public void Fr17_updates_holds_android_and_sits_above_advanced_and_logs_above_about()
+    public void Fr17_updates_holds_android_and_sits_above_advanced_and_logs_sits_directly_above_about_in_the_footer()
     {
         var window = File_("MainWindow.xaml");
         var menu = window.Descendants(Ui + "NavigationView.MenuItems").Single().Elements()
@@ -174,11 +174,12 @@ public class TextInputStyleTests
         Assert.Equal(new[]
         {
             "NavGeneral", "NavMemory", "NavApps", "NavBackground", "NavWidgets", "NavDisplay",
-            "NavIdentity", "NavNetwork", "NavUpdates", "NavAdvanced", "NavLogs",
+            "NavIdentity", "NavNetwork", "NavUpdates", "NavAdvanced",
         }, menu);
+        // Logs is not in the main list: it sits at the foot of the pane, directly above About.
         var footer = window.Descendants(Ui + "NavigationView.FooterMenuItems").Single().Elements()
             .Select(e => (string?)e.Attribute("Content")).ToList();
-        Assert.Equal(new[] { "{l:Text NavAbout.Content}" }, footer);
+        Assert.Equal(new[] { "{l:Text NavLogs.Content}", "{l:Text NavAbout.Content}" }, footer);
         var updates = File_(Path.Combine("Pages", "UpdatesPage.xaml"));
         foreach (var name in new[] { "Choice", "CheckNowButton", "ImageSwitch", "ProgramSwitch", "PrereleaseSwitch", "UpdateNowButton" })
         {
