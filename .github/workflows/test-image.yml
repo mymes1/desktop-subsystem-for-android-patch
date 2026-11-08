@@ -3,6 +3,11 @@
 # with AOSP's test keys, the agent is there and signed with the platform key, and the user
 # disk template and ramdisk match image.json. Each run signs with a throwaway key set; a
 # release signs with the project's keys.
+#
+# The Android 17 x86_64 image is then booted by four boot checks at once, each on a runner of
+# its own. That image is kept in the Actions cache, keyed on everything that decides it, so a
+# run whose inputs did not change takes it from there instead of making it again; the check
+# runs on it all the same.
 
 name: Image test
 
@@ -34,13 +39,16 @@ on:
       - "dsa/host/platform/linux/tests/graphics.rs"
       - "dsa/host/platform/linux/tests/overlays.rs"
       - "dsa/host/platform/linux/tests/boot_check/**"
-      - ".github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
+      - ".github/scripts/linux-vm/**"
+      - ".github/scripts/cache/prune.sh"
       - ".github/workflows/test-image.yml"
       - "scripts/tests/image-graphics-workflow.test.sh"
       - "scripts/tests/image-audio-workflow.test.sh"
       - "scripts/tests/image-media-workflow.test.sh"
       - "scripts/tests/image-boot-overlays-workflow.test.sh"
       - "scripts/tests/image-boot-check-image-dir.test.sh"
+      - "scripts/tests/image-cache-workflow.test.sh"
+      - "scripts/tests/image-boot-parallel-workflow.test.sh"
       - "dsa/host/platform/linux/src/config.rs"
   workflow_dispatch:
     inputs:
@@ -462,6 +470,86 @@ jobs:
           path: .scratch/media-probe/dsa-media-probe.apk
           if-no-files-found: error
 
+
+  # What the boot checks below run, built once on a runner of its own while the guest programs
+  # and the images are made: the VM programs (crosvm, passt and gfxstream's renderer), and the
+  # Linux host's programs with the five boot check binaries. The boot checks take them as
+  # artifacts and need no Rust build of their own.
+  boot-checks:
+    name: Build the boot checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Keep the VM programs between runs
+        uses: actions/cache@v4
+        with:
+          path: .scratch/vm-programs
+          key: linux-vm-programs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsa/host/platform/linux/crosvm/**', 'dsa/graphics/host/**', 'dsa/graphics/patches/**', '.github/scripts/linux-vm/**') }}
+
+      - name: Build crosvm, passt and gfxstream's renderer
+        run: bash .github/scripts/linux-vm/build-vm-programs.sh .scratch/vm-programs
+
+      - name: Keep the VM programs
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-check-vm-programs
+          path: |
+            .scratch/vm-programs/crosvm
+            .scratch/vm-programs/passt
+            .scratch/vm-programs/libgfxstream_backend.so
+          retention-days: 1
+          if-no-files-found: error
+
+      # No image is anywhere near this job: when the cache restored is not an exact match (a
+      # changed Cargo.toml), rust-cache cleans Cargo's target folder and deletes every file in
+      # it that is not Cargo's.
+      - name: Keep the Rust build between runs
+        uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: dsa -> target
+          key: image-boot-check
+          save-if: ${{ github.ref == 'refs/heads/develop' }}
+
+      # The checks start the host's programs by the paths Cargo built them at
+      # (CARGO_BIN_EXE_<name>), so each program is listed with that path and put back there on
+      # the runner that boots.
+      - name: Build the widget boot check
+        working-directory: dsa
+        run: |
+          cargo test -p dsa-host-linux --test widgets --test system_screens --test media --test graphics --test overlays --no-run \
+            --message-format=json-render-diagnostics > "$RUNNER_TEMP/boot-checks.json"
+          cargo build -p dsa-host-linux --bin dsa-compositor --message-format=json-render-diagnostics >> "$RUNNER_TEMP/boot-checks.json"
+          out="$GITHUB_WORKSPACE/.scratch/boot-checks"
+          mkdir -p "$out/tests" "$out/bin"
+          jq -r 'select(.reason == "compiler-artifact" and .executable != null and (.target.kind | index("test")) and .profile.test)
+                 | "\(.target.name)\t\(.executable)"' "$RUNNER_TEMP/boot-checks.json" | sort -u |
+            while IFS=$'\t' read -r name executable; do
+              cp "$executable" "$out/tests/$name"
+            done
+          jq -r 'select(.reason == "compiler-artifact" and .executable != null and (.target.kind | index("bin")))
+                 | "\(.target.name)\t\(.executable)"' "$RUNNER_TEMP/boot-checks.json" | sort -u > "$out/bin/programs.tsv"
+          while IFS=$'\t' read -r name executable; do
+            cp "$executable" "$out/bin/$name"
+          done < "$out/bin/programs.tsv"
+          for check in widgets system_screens media graphics overlays; do
+            test -x "$out/tests/$check" || { echo "cargo built no $check boot check"; exit 1; }
+          done
+          for program in dsa-linux-hostd dsa-compositor dsa-devices dsa-gfx; do
+            grep -q "^$program"$'\t' "$out/bin/programs.tsv" || { echo "cargo built no $program"; exit 1; }
+          done
+          ls -l "$out/tests" "$out/bin"
+          cat "$out/bin/programs.tsv"
+
+      - name: Keep the boot checks
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-check-programs
+          path: .scratch/boot-checks
+          retention-days: 1
+          if-no-files-found: error
+
   # Android's NDK samples hello-gl2 (OpenGL ES) and hello-vulkan, at a pinned commit, which
   # the graphics check below installs on the booted image and opens in task windows.
   graphics-test-apps:
@@ -493,12 +581,13 @@ jobs:
             .scratch/graphics-test-apps/hello-vulkan.apk
           if-no-files-found: error
 
+  # The images. Android 17 on x86_64 is made by the boot-image job below with the same steps,
+  # because the boot checks wait for that one image only, not for the whole matrix.
   image:
     name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }}, ${{ matrix.arch }})
-    needs: [guest-programs, agent, graphics-test-apps]
+    needs: [guest-programs, agent]
     runs-on: ubuntu-latest
-    # Android 17 on x86_64 also boots the image and checks a widget, below.
-    timeout-minutes: ${{ matrix.android == '17' && matrix.arch == 'x86_64' && 140 || 60 }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -507,25 +596,33 @@ jobs:
         android: ${{ fromJSON(github.event_name == 'workflow_dispatch' && (inputs.android == 'all' && '["17", "16"]' || format('["{0}"]', inputs.android)) || '["17", "16"]') }}
         # ARM64 Windows hosts boot the arm64 image, which is 64-bit only.
         arch: [x86_64, arm64]
-    steps:
+        exclude:
+          - android: "17"
+            arch: x86_64
+    env:
+      # Whether a checked image is kept in the Actions cache for the next run with the same
+      # inputs. One image is about 3 GB there; the four would not fit in the repository's
+      # 10 GB with the other caches, so only the one the boot checks wait for is kept.
+      CACHE_IMAGE: "false"
+      # Whether the image is handed to the boot checks.
+      BOOT_IMAGE: "false"
+    steps: &image-steps
       - uses: actions/checkout@v4
 
       # The inputs and the images take about 20 GB; the runner has less free by default.
       - name: Make room
         run: |
-          # aapt2, which builds the system screen overlays, and adb, which reads the booted
-          # image's screens, are in the SDK this step deletes.
+          # aapt2, which builds the system screen overlays, is in the SDK this step deletes.
           tools=$(ls -d /usr/local/lib/android/sdk/build-tools/* | sort -V | tail -1)
           mkdir -p .scratch
           cp -r "$tools" .scratch/build-tools
-          cp -r /usr/local/lib/android/sdk/platform-tools .scratch/platform-tools
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
 
       - name: Install the disk tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gdisk qemu-utils
+          sudo apt-get install -y --no-install-recommends gdisk qemu-utils zip
 
       - name: Fetch the pinned inputs
         run: dsa/guest/image/fetch.sh ${{ matrix.android }} ${{ matrix.arch }}
@@ -536,9 +633,6 @@ jobs:
         run: |
           unzip -l .scratch/aosp-inputs/*/*target_files*.zip | \
             grep -Ei 'graphics|gralloc|mapper|opengl|vulkan|goldfish|ranchu|drm'
-
-      - name: Make a throwaway key set
-        run: dsa/guest/image/make-keys.sh .scratch/image-keys
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
@@ -687,7 +781,15 @@ jobs:
           echo "::error::no published x86_64 Android 17 image release carries arm-translation.zip"
           exit 1
 
-      - name: Make the image
+      # Everything that decides the image names its cache entry: the pinned AOSP build
+      # (inputs.json), make-image.py and every file beside it (they name the image's build
+      # tag too), the files it lays into the image from the rest of dsa/guest, the framework
+      # lock, the guest programs and the agent built above, the default ARM translator, the
+      # arguments the image is made with, and the tools that make it. The key set is not an
+      # input: each run makes a throwaway one, so the one an image was signed with is kept with
+      # it, and the check below reads that one.
+      - name: Name the image's inputs
+        id: image-key
         run: |
           args=(--major "${{ matrix.android }}" --arch ${{ matrix.arch }} --keys .scratch/image-keys)
           args+=(--graphics-dir .scratch/guest-graphics --graphics-library .scratch/guest-graphics/libOpenglSystemCommon.so)
@@ -702,8 +804,50 @@ jobs:
           args+=(--agent .scratch/agent/DsaAgent.apk)
           args+=(--aapt2 .scratch/build-tools/aapt2)
           args+=(${{ steps.translator.outputs.args }})
+          printf '%s\n' "${args[@]}" > .scratch/image-args
+          programs=(.scratch/guest-graphics .scratch/channeld .scratch/hwcomposer .scratch/codec2 .scratch/audio
+                    .scratch/sensors .scratch/camera .scratch/power-hal .scratch/gnss-hal .scratch/agent
+                    .scratch/build-tools/aapt2)
+          [[ -d .scratch/arm-translation ]] && programs+=(.scratch/arm-translation)
+          {
+            echo "runner: $ImageOS"
+            sed 's/^/argument: /' .scratch/image-args
+            find "${programs[@]}" -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+            sgdisk --version | head -1
+            qemu-img --version | head -1
+          } | tee "$RUNNER_TEMP/image-inputs.txt"
+          inputs="$(sha256sum < "$RUNNER_TEMP/image-inputs.txt" | cut -c1-16)"
+          prefix="guest-image-android-${{ matrix.android }}-${{ matrix.arch }}-"
+          key="$prefix${{ hashFiles('dsa/android-versions.json', 'dsa/guest/image/**', 'dsa/guest/framework/**', 'dsa/guest/*/*.rc', 'dsa/guest/*/*.xml', '!dsa/guest/**/__pycache__/**') }}-$inputs"
+          echo "the image's key: $key"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+
+      - name: Take the image made from the same inputs
+        id: image-cache
+        if: env.CACHE_IMAGE == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            dsa/target/image
+            .scratch/image-keys
+          key: ${{ steps.image-key.outputs.key }}
+
+      - name: Use the image from the cache
+        if: steps.image-cache.outputs.cache-hit == 'true'
+        run: ls -l dsa/target/image/*/ .scratch/image-keys
+
+      - name: Make a throwaway key set
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        run: dsa/guest/image/make-keys.sh .scratch/image-keys
+
+      - name: Make the image
+        if: steps.image-cache.outputs.cache-hit != 'true'
+        run: |
+          mapfile -t args < .scratch/image-args
           uv run dsa/guest/image/make-image.py "${args[@]}"
 
+      # Runs on every image, the one from the cache too.
       - name: Check the image
         run: uv run dsa/guest/image/check-image.py dsa/target/image/*/ .scratch/image-keys
 
@@ -727,32 +871,184 @@ jobs:
             dsa/target/image/*/initrd.img
           if-no-files-found: error
 
-      # The image just made, booted under crosvm by the service, with the digital clock widget
-      # placed through the local API: its pictures must reach the client, show something and
-      # change as the clock ticks, and the guest log must not say a widget failed to draw. One
-      # combination is enough, and the runner's KVM is x86_64. The kernel is the newest
-      # published one, because this workflow does not build the kernel.
-      - name: Free the image inputs for the boot check
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
-        run: |
-          rm -rf .scratch/aosp-inputs
-          df -h /
-
-      - name: Keep the VM programs between runs
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
-        uses: actions/cache@v4
+      # What the boot checks boot: the image as a host installs it (no signed build inputs)
+      # and the newest published kernel, because this workflow does not build the kernel.
+      - name: Keep the image for the boot checks
+        if: env.BOOT_IMAGE == 'true'
+        uses: actions/upload-artifact@v4
         with:
-          path: .scratch/vm-programs
-          key: linux-vm-programs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dsa/host/platform/linux/crosvm/**', 'dsa/graphics/host/**', 'dsa/graphics/patches/**', '.github/scripts/linux-vm/**') }}
+          name: boot-image
+          path: |
+            dsa/target/image/
+            !dsa/target/image/*/signed-target_files.zip
+          # The disks are compressed already; the time goes to the boot checks instead.
+          compression-level: 1
+          retention-days: 1
+          if-no-files-found: error
 
-      - name: Build crosvm, passt and gfxstream's renderer
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
-        run: bash .github/scripts/linux-vm/build-vm-programs.sh .scratch/vm-programs
+      - name: Find the newest published kernel
+        id: kernel
+        if: env.BOOT_IMAGE == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh release list -R "${{ github.repository }}" -L 50 --json tagName -q '[.[] | select(.tagName | startswith("android-17") and (endswith("-arm64") | not))][0].tagName')"
+          test -n "$tag" || { echo "no published x86_64 Android 17 image release"; exit 1; }
+          echo "kernel release: $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # The partition images in the signed build are what the system disk already holds, and
+      # nothing reads them after the disk is made (the check above does not), so the cache
+      # keeps the build without them: about 3 GB for the image instead of about 5 GB.
+      - name: Leave out the partition images the system disk holds
+        if: >-
+          env.CACHE_IMAGE == 'true' && steps.image-cache.outputs.cache-hit != 'true'
+          && github.ref == 'refs/heads/develop'
+        run: |
+          zip -d dsa/target/image/*/signed-target_files.zip 'IMAGES/*' >/dev/null || test $? -eq 12
+          ls -l dsa/target/image/*/
+
+      - name: Keep the image for the next run with the same inputs
+        if: >-
+          env.CACHE_IMAGE == 'true' && steps.image-cache.outputs.cache-hit != 'true'
+          && github.ref == 'refs/heads/develop'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            dsa/target/image
+            .scratch/image-keys
+          key: ${{ steps.image-key.outputs.key }}
+
+      - name: Delete the image it replaces from the cache
+        if: >-
+          env.CACHE_IMAGE == 'true' && steps.image-cache.outputs.cache-hit != 'true'
+          && github.ref == 'refs/heads/develop'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/cache/prune.sh superseded "${{ steps.image-key.outputs.prefix }}" "${{ steps.image-key.outputs.key }}"
+
+  # Android 17 on x86_64: made and checked with the image job's steps, kept in the cache, and
+  # handed to the boot checks. One combination is enough to boot, and the runner's KVM is x86_64.
+  boot-image:
+    name: Make and check the guest image (ubuntu-latest, Android ${{ matrix.android }}, ${{ matrix.arch }})
+    needs: [guest-programs, agent]
+    if: github.event_name != 'workflow_dispatch' || inputs.android == '17' || inputs.android == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      # Deletes the cached image a new one replaces.
+      actions: write
+    strategy:
+      matrix:
+        android: ["17"]
+        arch: [x86_64]
+    env:
+      CACHE_IMAGE: "true"
+      BOOT_IMAGE: "true"
+    outputs:
+      kernel: ${{ steps.kernel.outputs.tag }}
+    steps: *image-steps
+
+  # The image booted under crosvm by the service, once per check, each on a runner of its own
+  # and all at once. Each check runs even when another failed, so one failure does not hide
+  # the others; the workflow still fails.
+  #
+  # widgets: the digital clock widget placed through the local API. Its pictures must reach the
+  # client, show something and change as the clock ticks, and the guest log must not say a
+  # widget failed to draw.
+  #
+  # system_screens: Settings opened in a window 800 dp tall and one 520 dp tall and read
+  # through adb in developer mode: its view hierarchy and the screen. The home page's large
+  # title must open expanded in the tall window and fold when the list scrolls, and open folded
+  # in the short one, and the rows of a Settings list must be grouped in rounded cards on the
+  # screen.
+  #
+  # media: SELinux enforcing, and an ordinary app (the media probe) installed through adb. In
+  # its own process it must play sound through a streaming and a static track, which share
+  # memory with the audio server, and encode a second of H.264 and AAC and decode each with
+  # every decoder the guest lists, and the guest log must show no denial of a media service's
+  # shared memory.
+  #
+  # overlays: SELinux enforcing, two boots. First with the image's default ARM translator: the
+  # package must be mounted and laid over /system, and binfmt_misc mounted with the package's
+  # rules in place. Then with a small Google apps build, installed through the local API from a
+  # mirror in the check's folder: after Android starts again the image must be mounted and laid
+  # over /product and /system_ext. In neither boot may init log a failed command of the
+  # overlay scripts or a denial of a mount.
+  #
+  # graphics: the host renderer on Mesa's software Vulkan driver. hello-gl2 (OpenGL ES through
+  # ANGLE) and hello-vulkan are installed through the local API and opened in task windows,
+  # whose pictures must show each app's triangle on its fading grey background, and the fixed
+  # Vulkan CTS subset runs, each case with its own result. The two share one boot; the CTS
+  # takes most of the step.
+  boot-check:
+    name: ${{ matrix.check }} (ubuntu-latest, Android 17, x86_64)
+    needs: [boot-image, boot-checks, graphics-test-apps]
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: Place a widget on the booted image
+            test: widgets
+            timeout: 12
+            keep: Keep the widget boot check's logs
+            artifact: widget-boot-logs
+            logs: |
+              /tmp/widget-test-*/hostd.log
+              /tmp/widget-test-*/compositor.log
+              /tmp/widget-test-*/devices.log
+              /tmp/widget-test-*/guest.log
+              /tmp/widget-test-*/first.png
+              ~/.local/share/dsa/**/*.log
+          - check: Check Android's system screens on the booted image
+            test: system_screens
+            timeout: 14
+            keep: Keep the system screens' captures
+            artifact: system-screens-captures
+            logs: |
+              /tmp/screens-test-*/*.png
+              /tmp/screens-test-*/*.xml
+              /tmp/screens-test-*/*.log
+          - check: Play sound and run codecs in an app on the booted image
+            test: media
+            timeout: 14
+            keep: Keep the media check's logs
+            artifact: media-check-logs
+            logs: |
+              /tmp/media-test-*/*.log
+              /tmp/media-test-*/*.txt
+          - check: Run the Vulkan CTS subset and the graphics test apps on the booted image
+            test: graphics
+            timeout: 28
+            keep: Keep the graphics check's results
+            artifact: graphics-check-results
+            logs: |
+              /tmp/graphics-test-*/cts/
+              /tmp/graphics-test-*/*.png
+              /tmp/graphics-test-*/*.log
+          - check: Lay the ARM translator and Google Play over the booted system
+            test: overlays
+            timeout: 16
+            keep: Keep the overlay check's logs
+            artifact: overlay-check-logs
+            logs: |
+              /tmp/overlays-test-*/*.log
+              /tmp/overlays-test-*/*.txt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the VM programs
+        uses: actions/download-artifact@v4
+        with:
+          name: boot-check-vm-programs
+          path: .scratch/vm-programs
 
       # Where the package puts them, so the package's AppArmor profile lets crosvm and passt
       # make their sandboxes' user namespaces, as on an installed system.
       - name: Install the VM programs as the package does
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
         run: |
           sudo install -d /usr/lib/dsa/bin
           sudo install -m 0755 .scratch/vm-programs/crosvm .scratch/vm-programs/passt .scratch/vm-programs/libgfxstream_backend.so /usr/lib/dsa/bin/
@@ -761,49 +1057,92 @@ jobs:
           echo "DSA_CROSVM=/usr/lib/dsa/bin/crosvm" >> "$GITHUB_ENV"
 
       - name: Load KVM and vhost-vsock
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
         run: |
           sudo modprobe vhost_vsock
           sudo chmod 666 /dev/kvm /dev/vhost-vsock
           ls -l /dev/kvm /dev/vhost-vsock
 
+      # Out of Cargo's target folder: the image is never kept where rust-cache cleans.
+      - name: Download the image
+        uses: actions/download-artifact@v4
+        with:
+          name: boot-image
+          path: .scratch/boot-image
+
       - name: Download the newest published kernel
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="$(gh release list -R "${{ github.repository }}" -L 50 --json tagName -q '[.[] | select(.tagName | startswith("android-17") and (endswith("-arm64") | not))][0].tagName')"
-          test -n "$tag" || { echo "no published x86_64 Android 17 image release"; exit 1; }
+          tag="${{ needs.boot-image.outputs.kernel }}"
+          test -n "$tag" || { echo "the image job named no kernel release"; exit 1; }
           echo "kernel release: $tag"
           gh release download "$tag" -R "${{ github.repository }}" -p bzImage -D "$RUNNER_TEMP"
           echo "DSA_WIDGET_TEST_KERNEL=$RUNNER_TEMP/bzImage" >> "$GITHUB_ENV"
-          # Out of Cargo's target folder before the Rust build is restored: when the cache
-          # restored is not an exact match (a changed Cargo.toml), rust-cache cleans that
-          # folder and deletes every file in it that is not Cargo's, the image's disks too.
-          mkdir -p .scratch/boot-image
-          mv dsa/target/image/*/ .scratch/boot-image/
           image="$(ls -d "$PWD"/.scratch/boot-image/*/ | head -1)"
+          test -f "$image/system.vhdx" || { echo "the downloaded image has no system.vhdx"; exit 1; }
           ls -l "$image"
           echo "DSA_WIDGET_TEST_IMAGE=$image" >> "$GITHUB_ENV"
 
-      - name: Keep the Rust build between runs
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
-        uses: Swatinem/rust-cache@v2.9.3
+      # The host's programs go back to the paths the check was built to start them from.
+      - name: Download the boot checks
+        uses: actions/download-artifact@v4
         with:
-          workspaces: dsa -> target
-          key: image-boot-check
-          save-if: ${{ github.ref == 'refs/heads/develop' }}
+          name: boot-check-programs
+          path: .scratch/boot-checks
 
-      - name: Build the widget boot check
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
-        working-directory: dsa
-        run: cargo test -p dsa-host-linux --test widgets --test system_screens --test media --test graphics --test overlays --no-run && cargo build -p dsa-host-linux --bin dsa-compositor
+      - name: Install the boot checks
+        run: |
+          chmod +x .scratch/boot-checks/tests/* .scratch/boot-checks/bin/*
+          while IFS=$'\t' read -r name executable; do
+            mkdir -p "$(dirname "$executable")"
+            cp .scratch/boot-checks/bin/"$name" "$executable"
+            echo "$name: $executable"
+          done < .scratch/boot-checks/bin/programs.tsv
+
+      # adb reads the booted image's screens and installs the media probe.
+      - name: Find adb
+        run: |
+          mkdir -p .scratch
+          cp -r "${ANDROID_HOME:-/usr/local/lib/android/sdk}/platform-tools" .scratch/platform-tools
+          .scratch/platform-tools/adb version
+
+      - name: Download the media probe
+        if: matrix.test == 'media'
+        uses: actions/download-artifact@v4
+        with:
+          name: guest-media-probe
+          path: .scratch/media-probe
+
+      - name: Download the graphics test apps
+        if: matrix.test == 'graphics'
+        uses: actions/download-artifact@v4
+        with:
+          name: graphics-test-apps
+          path: .scratch/graphics-test-apps
+
+      # verify.py fetches and runs the Vulkan CTS through uv.
+      - name: Set up uv
+        if: matrix.test == 'graphics'
+        uses: astral-sh/setup-uv@v5
+
+      # Only the CTS APK, which verify.py pins by size and checksum; the mustpass lists it
+      # reads are small and fetched again, so a new pin never meets an old list.
+      - name: Keep the Vulkan CTS between runs
+        if: matrix.test == 'graphics'
+        uses: actions/cache@v4
+        with:
+          path: .scratch/graphics-verify/com.drawelements.deqp.apk
+          key: vk-cts-apk-${{ hashFiles('dsa/graphics/verify/verify.py') }}
+          restore-keys: vk-cts-apk-
+
+      - name: Fetch the Vulkan CTS and expand the subset
+        if: matrix.test == 'graphics'
+        run: uv run dsa/graphics/verify/verify.py fetch-cts
 
       # Android's renderer runs in the window manager (dsa-compositor), which needs a desktop
       # session: a headless Wayland compositor stands in for it, with Mesa's software Vulkan
       # driver in place of a GPU.
       - name: Install a headless Wayland compositor and a software Vulkan driver
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
         timeout-minutes: 20
         run: |
           echo 'man-db man-db/auto-update boolean false' | sudo debconf-set-selections
@@ -814,13 +1153,12 @@ jobs:
             test "$try" -lt 3 || exit 1
           done
 
-      - name: Place a widget on the booted image
-        id: widget
-        if: matrix.android == '17' && matrix.arch == 'x86_64'
-        timeout-minutes: 12
-        working-directory: dsa
+      # Cargo runs a check from its package's folder, so the check runs from there too. A check
+      # that finds no crosvm or image says it was skipped and passes; here that is a failure.
+      - name: ${{ matrix.check }}
+        timeout-minutes: ${{ matrix.timeout }}
+        working-directory: dsa/host/platform/linux
         run: |
-          bash "$GITHUB_WORKSPACE/.github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
           # The service finds the user's session in /run/user/<uid>, as on a desktop.
           export XDG_RUNTIME_DIR="/run/user/$(id -u)"
           sudo mkdir -p "$XDG_RUNTIME_DIR"
@@ -836,251 +1174,28 @@ jobs:
             sleep 0.2
           done
           export WAYLAND_DISPLAY=wayland-dsa
-          cargo test -p dsa-host-linux --test widgets -- --nocapture --test-threads 1
-
-      - name: Keep the widget boot check's logs
-        if: always() && matrix.android == '17' && matrix.arch == 'x86_64'
-        uses: actions/upload-artifact@v4
-        with:
-          name: widget-boot-logs
-          path: |
-            /tmp/widget-test-*/hostd.log
-            /tmp/widget-test-*/compositor.log
-            /tmp/widget-test-*/devices.log
-            /tmp/widget-test-*/guest.log
-            /tmp/widget-test-*/first.png
-            ~/.local/share/dsa/**/*.log
-          if-no-files-found: ignore
-
-      # The same image booted again, with Settings opened in a window 800 dp tall and one 520 dp
-      # tall and read through adb in developer mode: its view hierarchy and the screen. The home
-      # page's large title must open expanded in the tall window and fold when the list scrolls,
-      # and open folded in the short one, and the rows of a Settings list must be grouped in
-      # rounded cards on the screen.
-      # The boot checks run one after another on the same image, and each runs even when the
-      # one before it failed, so one failure does not hide the others; the job still fails.
-      - name: Check Android's system screens on the booted image
-        id: screens
-        if: >-
-          !cancelled() && (success() || steps.widget.outcome == 'failure')
-          && matrix.android == '17' && matrix.arch == 'x86_64'
-        timeout-minutes: 14
-        working-directory: dsa
-        run: |
-          # What an earlier check that timed out left running holds the VM's vsock ports.
-          bash "$GITHUB_WORKSPACE/.github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
-          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-          sudo mkdir -p "$XDG_RUNTIME_DIR"
-          sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"
-          chmod 0700 "$XDG_RUNTIME_DIR"
-          export GFXSTREAM_BACKEND_PATH=/usr/lib/dsa/bin/libgfxstream_backend.so
-          # The session bus and the headless compositor the widget check started, or new ones.
-          if [[ ! -S "$XDG_RUNTIME_DIR/bus" ]]; then
-            dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --fork
-          fi
-          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
-          if [[ ! -S "$XDG_RUNTIME_DIR/wayland-dsa" ]]; then
-            weston --backend=headless --socket=wayland-dsa --idle-time=0 --width=1920 --height=1080 &
-            for _ in $(seq 50); do
-              [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
-              sleep 0.2
-            done
-          fi
-          export WAYLAND_DISPLAY=wayland-dsa
           export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
-          cargo test -p dsa-host-linux --test system_screens -- --nocapture --test-threads 1
+          if [[ "${{ matrix.test }}" == media ]]; then
+            export DSA_MEDIA_PROBE="$GITHUB_WORKSPACE/.scratch/media-probe/dsa-media-probe.apk"
+          fi
+          if [[ "${{ matrix.test }}" == graphics ]]; then
+            # Lavapipe is the only Vulkan driver on the runner; naming it keeps it so.
+            icd="$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -n 1)"
+            export VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd"
+            export DSA_GRAPHICS_TEST_APPS="$GITHUB_WORKSPACE/.scratch/graphics-test-apps"
+          fi
+          set -o pipefail
+          "$GITHUB_WORKSPACE/.scratch/boot-checks/tests/${{ matrix.test }}" --nocapture --test-threads 1 2>&1 |
+            tee "$RUNNER_TEMP/check.log"
+          if grep -q 'skipped: DSA_' "$RUNNER_TEMP/check.log"; then
+            echo "::error::the ${{ matrix.test }} boot check found nothing to boot and skipped"
+            exit 1
+          fi
 
-      - name: Keep the system screens' captures
-        if: always() && matrix.android == '17' && matrix.arch == 'x86_64'
+      - name: ${{ matrix.keep }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: system-screens-captures
-          path: |
-            /tmp/screens-test-*/*.png
-            /tmp/screens-test-*/*.xml
-            /tmp/screens-test-*/*.log
-          if-no-files-found: ignore
-
-      # The same image booted again with SELinux enforcing, and an ordinary app (the media
-      # probe) installed through adb: in its own process it must play sound through a
-      # streaming and a static track, which share memory with the audio server, and encode a
-      # second of H.264 and AAC and decode each with every decoder the guest lists, and the
-      # guest log must show no denial of a media service's shared memory.
-      - name: Download the media probe
-        id: probe
-        if: >-
-          !cancelled()
-          && (success() || steps.widget.outcome == 'failure' || steps.screens.outcome == 'failure')
-          && matrix.android == '17' && matrix.arch == 'x86_64'
-        uses: actions/download-artifact@v4
-        with:
-          name: guest-media-probe
-          path: .scratch/media-probe
-
-      - name: Play sound and run codecs in an app on the booted image
-        id: media
-        if: >-
-          !cancelled() && steps.probe.outcome == 'success'
-          && matrix.android == '17' && matrix.arch == 'x86_64'
-        timeout-minutes: 14
-        working-directory: dsa
-        run: |
-          # What an earlier check that timed out left running holds the VM's vsock ports.
-          bash "$GITHUB_WORKSPACE/.github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
-          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-          sudo mkdir -p "$XDG_RUNTIME_DIR"
-          sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"
-          chmod 0700 "$XDG_RUNTIME_DIR"
-          export GFXSTREAM_BACKEND_PATH=/usr/lib/dsa/bin/libgfxstream_backend.so
-          if [[ ! -S "$XDG_RUNTIME_DIR/bus" ]]; then
-            dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --fork
-          fi
-          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
-          if [[ ! -S "$XDG_RUNTIME_DIR/wayland-dsa" ]]; then
-            weston --backend=headless --socket=wayland-dsa --idle-time=0 --width=1920 --height=1080 &
-            for _ in $(seq 50); do
-              [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
-              sleep 0.2
-            done
-          fi
-          export WAYLAND_DISPLAY=wayland-dsa
-          export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
-          export DSA_MEDIA_PROBE="$GITHUB_WORKSPACE/.scratch/media-probe/dsa-media-probe.apk"
-          cargo test -p dsa-host-linux --test media -- --nocapture --test-threads 1
-
-      - name: Keep the media check's logs
-        if: always() && matrix.android == '17' && matrix.arch == 'x86_64'
-        uses: actions/upload-artifact@v4
-        with:
-          name: media-check-logs
-          path: |
-            /tmp/media-test-*/*.log
-            /tmp/media-test-*/*.txt
-          if-no-files-found: ignore
-
-      # The same image booted again with SELinux enforcing, twice. First with its default ARM
-      # translator: the package must be mounted and laid over /system, and binfmt_misc
-      # mounted with the package's rules in place. Then with a small Google apps build,
-      # installed through the local API from a mirror in the check's folder: after Android
-      # starts again the image must be mounted and laid over /product and /system_ext. In
-      # neither boot may init log a failed command of the overlay scripts or a denial of a
-      # mount.
-      - name: Lay the ARM translator and Google Play over the booted system
-        id: overlays
-        if: >-
-          !cancelled()
-          && (success() || steps.widget.outcome == 'failure' || steps.screens.outcome == 'failure' || steps.media.outcome == 'failure')
-          && matrix.android == '17' && matrix.arch == 'x86_64'
-        timeout-minutes: 16
-        working-directory: dsa
-        run: |
-          # What an earlier check that timed out left running holds the VM's vsock ports.
-          bash "$GITHUB_WORKSPACE/.github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
-          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-          sudo mkdir -p "$XDG_RUNTIME_DIR"
-          sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"
-          chmod 0700 "$XDG_RUNTIME_DIR"
-          export GFXSTREAM_BACKEND_PATH=/usr/lib/dsa/bin/libgfxstream_backend.so
-          if [[ ! -S "$XDG_RUNTIME_DIR/bus" ]]; then
-            dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --fork
-          fi
-          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
-          if [[ ! -S "$XDG_RUNTIME_DIR/wayland-dsa" ]]; then
-            weston --backend=headless --socket=wayland-dsa --idle-time=0 --width=1920 --height=1080 &
-            for _ in $(seq 50); do
-              [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
-              sleep 0.2
-            done
-          fi
-          export WAYLAND_DISPLAY=wayland-dsa
-          export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
-          cargo test -p dsa-host-linux --test overlays -- --nocapture --test-threads 1
-
-      - name: Keep the overlay check's logs
-        if: always() && matrix.android == '17' && matrix.arch == 'x86_64'
-        uses: actions/upload-artifact@v4
-        with:
-          name: overlay-check-logs
-          path: |
-            /tmp/overlays-test-*/*.log
-            /tmp/overlays-test-*/*.txt
-          if-no-files-found: ignore
-
-      # The same image booted once more, with the host renderer on the software Vulkan driver
-      # installed above: hello-gl2 (OpenGL ES through ANGLE) and hello-vulkan are installed
-      # through the local API and opened in task windows, whose pictures must show each app's
-      # triangle on its fading grey background, and the fixed Vulkan CTS subset runs, each
-      # case with its own result. The two share one boot; the CTS takes most of the step.
-      - name: Download the graphics test apps
-        id: graphics-apps
-        if: >-
-          !cancelled()
-          && (success() || steps.widget.outcome == 'failure' || steps.screens.outcome == 'failure' || steps.media.outcome == 'failure' || steps.overlays.outcome == 'failure')
-          && matrix.android == '17' && matrix.arch == 'x86_64'
-        uses: actions/download-artifact@v4
-        with:
-          name: graphics-test-apps
-          path: .scratch/graphics-test-apps
-
-      # Only the CTS APK, which verify.py pins by size and checksum; the mustpass lists it
-      # reads are small and fetched again, so a new pin never meets an old list.
-      - name: Keep the Vulkan CTS between runs
-        if: >-
-          !cancelled() && steps.graphics-apps.outcome == 'success'
-          && matrix.android == '17' && matrix.arch == 'x86_64'
-        uses: actions/cache@v4
-        with:
-          path: .scratch/graphics-verify/com.drawelements.deqp.apk
-          key: vk-cts-apk-${{ hashFiles('dsa/graphics/verify/verify.py') }}
-          restore-keys: vk-cts-apk-
-
-      - name: Fetch the Vulkan CTS and expand the subset
-        id: cts-fetch
-        if: >-
-          !cancelled() && steps.graphics-apps.outcome == 'success'
-          && matrix.android == '17' && matrix.arch == 'x86_64'
-        run: uv run dsa/graphics/verify/verify.py fetch-cts
-
-      - name: Run the Vulkan CTS subset and the graphics test apps on the booted image
-        if: >-
-          !cancelled() && steps.cts-fetch.outcome == 'success'
-          && matrix.android == '17' && matrix.arch == 'x86_64'
-        timeout-minutes: 28
-        working-directory: dsa
-        run: |
-          # What an earlier check that timed out left running holds the VM's vsock ports.
-          bash "$GITHUB_WORKSPACE/.github/scripts/linux-vm-test/stop-boot-check-leftovers.sh"
-          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
-          sudo mkdir -p "$XDG_RUNTIME_DIR"
-          sudo chown "$(id -u):$(id -g)" "$XDG_RUNTIME_DIR"
-          chmod 0700 "$XDG_RUNTIME_DIR"
-          export GFXSTREAM_BACKEND_PATH=/usr/lib/dsa/bin/libgfxstream_backend.so
-          if [[ ! -S "$XDG_RUNTIME_DIR/bus" ]]; then
-            dbus-daemon --session --address="unix:path=$XDG_RUNTIME_DIR/bus" --fork
-          fi
-          export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
-          if [[ ! -S "$XDG_RUNTIME_DIR/wayland-dsa" ]]; then
-            weston --backend=headless --socket=wayland-dsa --idle-time=0 --width=1920 --height=1080 &
-            for _ in $(seq 50); do
-              [[ -S "$XDG_RUNTIME_DIR/wayland-dsa" ]] && break
-              sleep 0.2
-            done
-          fi
-          export WAYLAND_DISPLAY=wayland-dsa
-          # Lavapipe is the only Vulkan driver on the runner; naming it keeps it so.
-          icd="$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -n 1)"
-          export VK_ICD_FILENAMES="$icd" VK_DRIVER_FILES="$icd"
-          export DSA_ADB="$GITHUB_WORKSPACE/.scratch/platform-tools/adb"
-          export DSA_GRAPHICS_TEST_APPS="$GITHUB_WORKSPACE/.scratch/graphics-test-apps"
-          cargo test -p dsa-host-linux --test graphics -- --nocapture --test-threads 1
-
-      - name: Keep the graphics check's results
-        if: always() && matrix.android == '17' && matrix.arch == 'x86_64'
-        uses: actions/upload-artifact@v4
-        with:
-          name: graphics-check-results
-          path: |
-            /tmp/graphics-test-*/cts/
-            /tmp/graphics-test-*/*.png
-            /tmp/graphics-test-*/*.log
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.logs }}
           if-no-files-found: ignore
