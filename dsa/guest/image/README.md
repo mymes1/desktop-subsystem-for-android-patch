@@ -141,7 +141,11 @@ aapt2 from the Android SDK's build-tools for the system screen overlays.
     dialog's bold title), PackageInstaller (bold titles) and the share sheet (its headline).
   - Each overlay is built with aapt2 against the image's own framework-res, and checked
     against the app it overlays before it is built: an overlay that would replace a resource
-    the app does not have stops the image. It records the SHA-256 of the two resource tables
+    the app does not have stops the image. Every overlay's references into the framework are
+    checked against that framework-res before any is built: one that names a resource it
+    lacks, or a private one other than through `@*android:`, stops the image with all of
+    them listed, since aapt2 links an overlay only to the framework's public resources and
+    would stop at the first. It records the SHA-256 of the two resource tables
     in `assets/dsa-overlay.json`; `check-image.py` fails an image with an overlay missing, or
     one built against another framework-res or another build of its app.
   - What no overlay can reach is edited in the app. SettingsLib's toolbar layouts start the

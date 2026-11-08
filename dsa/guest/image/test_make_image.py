@@ -4279,16 +4279,21 @@ def string_pool(strings):
     return header + b"".join(struct.pack("<I", offset) for offset in offsets) + data
 
 
-def resource_table(resources, layout="full"):
-    """A compiled resource table of package 0x7f with `resources` ({type: [name]}), one type
-    chunk per type in the default configuration. `layout` is how aapt2 lays the entries out:
-    "full" (32-bit offsets, with one empty entry), "compact" (16-bit offsets and compact
-    entries, with one empty entry) or "sparse" (index and offset pairs)."""
+def resource_table(resources, layout="full", public=()):
+    """A compiled resource table of package 0x7f with `resources` ({type: [name]}), one spec
+    chunk and one type chunk per type in the default configuration, with the resources
+    `public` names ("type/name") public. `layout` is how aapt2 lays the entries out: "full"
+    (32-bit offsets, with one empty entry), "compact" (16-bit offsets and compact entries,
+    with one empty entry) or "sparse" (index and offset pairs)."""
     types = list(resources)
     keys = [name for names in resources.values() for name in names]
     type_pool, key_pool = string_pool(types), string_pool(keys)
     chunks = b""
     for type_id, type_name in enumerate(types, 1):
+        spec = b"".join(struct.pack("<I", make_image.ARSC_SPEC_PUBLIC if f"{type_name}/{name}" in public else 0)
+                        for name in resources[type_name])
+        spec_body = struct.pack("<BBHI", type_id, 0, 0, len(resources[type_name])) + spec
+        chunks += struct.pack("<HHI", make_image.ARSC_TYPE_SPEC, 16, 8 + len(spec_body)) + spec_body
         entries, offsets = b"", []
         for name in resources[type_name]:
             offsets.append(len(entries))
@@ -4322,13 +4327,68 @@ def resource_table(resources, layout="full"):
     return struct.pack("<HHII", 0x0002, 12, 12 + len(globals_pool) + len(package), 1) + globals_pool + package
 
 
-def table_of(names):
-    """A resource table that defines exactly `names` ("type/name")."""
+def table_of(names, public=()):
+    """A resource table that defines exactly `names` ("type/name"), with those `public`
+    names public."""
     resources = {}
     for name in names:
         kind, entry = name.split("/", 1)
         resources.setdefault(kind, []).append(entry)
-    return resource_table(resources)
+    return resource_table(resources, public=public)
+
+
+# Every framework resource the system screen overlays name, as checked in the framework-res
+# of the Android 16 (15581820) and Android 17 (16373615) images: public in both, or (named
+# @*android:) there in both. A name the overlays start to use is checked the same way before
+# it goes here; aapt2 refuses to link an overlay that names a private one as public, as
+# colorSurface was.
+FRAMEWORK_PUBLIC_CHECKED = {
+    "attr/accessibilityHeading", "attr/animateLayoutChanges", "attr/autoMirrored", "attr/background",
+    "attr/bottomLeftRadius", "attr/bottomRightRadius", "attr/buttonBarNegativeButtonStyle",
+    "attr/buttonBarNeutralButtonStyle", "attr/buttonBarPositiveButtonStyle", "attr/buttonBarStyle",
+    "attr/clickable", "attr/clipToOutline", "attr/clipToPadding", "attr/color", "attr/colorBackground",
+    "attr/colorControlHighlight", "attr/elevation", "attr/ellipsize", "attr/end", "attr/fillColor",
+    "attr/fillViewport", "attr/focusable", "attr/focusedByDefault", "attr/fontFamily", "attr/foreground",
+    "attr/gravity", "attr/hasCode", "attr/height", "attr/id", "attr/importantForAccessibility",
+    "attr/isStatic", "attr/keyboardNavigationCluster", "attr/layoutDirection", "attr/layout_height",
+    "attr/layout_marginEnd", "attr/layout_marginStart", "attr/layout_marginTop", "attr/layout_weight",
+    "attr/layout_width", "attr/listPreferredItemPaddingEnd", "attr/listPreferredItemPaddingStart",
+    "attr/maxLines", "attr/maxWidth", "attr/minHeight", "attr/minSdkVersion", "attr/orientation",
+    "attr/paddingBottom", "attr/paddingEnd", "attr/paddingStart", "attr/paddingTop", "attr/pathData",
+    "attr/priority", "attr/radius", "attr/resourcesMap", "attr/scrollIndicators",
+    "attr/scrollbarAlwaysDrawVerticalTrack", "attr/selectableItemBackground", "attr/shape", "attr/src",
+    "attr/start", "attr/strokeColor", "attr/strokeLineCap", "attr/strokeWidth", "attr/targetPackage",
+    "attr/targetSdkVersion", "attr/text", "attr/textAppearance", "attr/textColor", "attr/textColorPrimary",
+    "attr/textColorSecondary", "attr/textSize", "attr/textStyle", "attr/tint", "attr/topLeftRadius",
+    "attr/topRightRadius", "attr/touchscreenBlocksFocus", "attr/viewportHeight", "attr/viewportWidth",
+    "attr/visibility", "attr/width", "color/white", "id/button1", "id/button2", "id/button3", "id/message",
+    "string/search_go", "style/TextAppearance.DeviceDefault.Headline",
+}
+FRAMEWORK_PRIVATE_CHECKED = {
+    "color/system_on_surface_dark", "color/system_on_surface_light", "color/system_on_surface_variant_dark",
+    "color/system_on_surface_variant_light", "color/system_surface_bright_dark",
+    "color/system_surface_bright_light", "color/system_surface_container_highest_dark",
+    "color/system_surface_container_highest_light", "dimen/toast_elevation", "dimen/toast_width",
+    "drawable/toast_frame", "id/buttonPanel", "id/spacer", "string/global_action_settings",
+    "style/TextAppearance.Material.DialogWindowTitle", "style/TextAppearance.Material.Widget.ActionBar.Title",
+    "style/TextAppearance.Material.WindowTitle", "style/TextAppearance.Toast",
+}
+
+
+def overlay_framework_references(apk, home_padding=False):
+    """What the sources of the system screen overlay file `apk` name of the framework (see
+    make_image.framework_references)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        make_image.system_overlay_sources(Path(tmp), apk, home_padding)
+        return make_image.framework_references(tmp)
+
+
+def linkable_framework_table(home_padding=False, overlaid=()):
+    """A framework-res table every system screen overlay links against: everything they name
+    there, public, and `overlaid` ("type/name")."""
+    named = {name for apk in make_image.SYSTEM_OVERLAY_FILES
+             for name, _ in overlay_framework_references(apk, home_padding).values()}
+    return table_of(sorted(named | set(overlaid)), public=named)
 
 
 def apk_with_table(table, files=None):
@@ -4381,6 +4441,76 @@ class SystemScreenDesignTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             make_image.arsc_resource_names(b"\x03\x00\x08\x00\x08\x00\x00\x00")
 
+    def test_fr34_a_resource_table_says_which_resources_are_public(self):
+        # framework-res keeps its private attributes in a type of their own, so the public
+        # ones keep their ids; a reference names them attr/ all the same.
+        resources = {"attr": ["colorBackground"], "^attr-private": ["colorSurface"],
+                     "color": ["white", "system_surface_bright_light"]}
+        public = {"attr/colorBackground", "color/white"}
+        wanted = {"attr/colorBackground": True, "attr/colorSurface": False, "color/white": True,
+                  "color/system_surface_bright_light": False}
+        for layout in ("full", "compact", "sparse"):
+            self.assertEqual(make_image.arsc_resources(resource_table(resources, layout, public)), wanted, layout)
+
+    def test_fr34_an_overlay_may_name_only_what_framework_res_has_and_shows_it(self):
+        framework = table_of(
+            ["attr/colorBackground", "attr/colorSurface", "attr/color", "attr/hiddenAttribute",
+             "color/hidden", "color/white"],
+            public={"attr/colorBackground", "attr/color", "color/white"})
+        with tempfile.TemporaryDirectory() as tmp:
+            res = Path(tmp) / "res/drawable"
+            res.mkdir(parents=True)
+            (res / "a.xml").write_text(
+                f'<shape {make_image.ANDROID_XMLNS} android:hiddenAttribute="1">\n'
+                '    <solid android:color="?android:attr/colorSurface" />\n'
+                '    <stroke android:color="@android:color/hidden" />\n'
+                '    <solid android:color="@*android:dimen/gone" />\n'
+                '    <fine android:color="?android:attr/colorBackground" />\n'
+                '    <fine android:color="@*android:color/hidden" />\n'
+                '    <fine android:color="@android:color/white" />\n'
+                '</shape>\n')
+            (Path(tmp) / "res/values").mkdir()
+            (Path(tmp) / "res/values/styles.xml").write_text(
+                '<resources><style name="A"><item name="android:hiddenStyleItem">1</item></style></resources>\n')
+            problems = make_image.framework_reference_problems(tmp, framework)
+        self.assertEqual(len(problems), 5, problems)
+        for text in ("android:hiddenAttribute", "?android:attr/colorSurface", "@android:color/hidden",
+                     "@*android:dimen/gone", "android:hiddenStyleItem"):
+            self.assertTrue(any(problem.startswith(text + " ") for problem in problems), (text, problems))
+
+    def test_fr34_the_overlays_name_only_framework_resources_checked_in_android_16_and_17(self):
+        # The image's build links each overlay against its framework-res and stops at the first
+        # resource that is missing or private; this catches one before an image is made.
+        for home_padding in (False, True):
+            for apk in make_image.SYSTEM_OVERLAY_FILES:
+                for text, (name, needs_public) in overlay_framework_references(apk, home_padding).items():
+                    checked = FRAMEWORK_PUBLIC_CHECKED | (set() if needs_public else FRAMEWORK_PRIVATE_CHECKED)
+                    self.assertIn(name, checked,
+                                  f"{apk} names {text}, which no one checked is "
+                                  f"{'public' if needs_public else 'there'} in the framework-res of "
+                                  "Android 16 and 17")
+
+    def test_fr34_every_overlay_s_framework_references_are_checked_before_any_is_linked(self):
+        tables = {apk: table_of(make_image.overlaid_resources(apk)) for apk in make_image.SYSTEM_OVERLAY_FILES}
+        named = {name for apk in make_image.SYSTEM_OVERLAY_FILES
+                 for name, _ in overlay_framework_references(apk).values()}
+        overlaid = make_image.overlaid_resources("DsaFrameworkOverlay.apk")
+        # The cards' highlight is gone and the primary text colour is private.
+        tables["DsaFrameworkOverlay.apk"] = table_of(
+            sorted((named | set(overlaid)) - {"attr/colorControlHighlight"}),
+            public=named - {"attr/textColorPrimary"})
+        with tempfile.TemporaryDirectory() as tmp, patch.object(make_image, "run") as run:
+            with self.assertRaises(ValueError) as raised:
+                make_image.build_system_overlays(Path("/sdk/aapt2"), Path(tmp) / "framework-res.apk",
+                                                 Path(tmp), tables)
+            run.assert_not_called()
+        message = str(raised.exception)
+        self.assertIn("DsaSettingsOverlay.apk: ?android:attr/colorControlHighlight names "
+                      "attr/colorControlHighlight, which this image's framework-res does not have", message)
+        self.assertIn("DsaPackageInstallerOverlay.apk: ?android:attr/textColorPrimary", message)
+        self.assertIn("DsaSettingsOverlay.apk: ?android:attr/textColorPrimary", message)
+        self.assertIn("keeps private", message)
+
     def test_fr34_every_target_package_has_an_overlay(self):
         targets = {overlay["target"] for overlay in make_image.SYSTEM_OVERLAYS}
         self.assertEqual(targets, {"android", "com.android.settings", "com.android.documentsui",
@@ -4407,6 +4537,8 @@ class SystemScreenDesignTests(unittest.TestCase):
         home_padding = True
         tables = {apk: table_of(make_image.overlaid_resources(apk, home_padding))
                   for apk in make_image.SYSTEM_OVERLAY_FILES}
+        tables["DsaFrameworkOverlay.apk"] = linkable_framework_table(
+            home_padding, make_image.overlaid_resources("DsaFrameworkOverlay.apk"))
         with tempfile.TemporaryDirectory() as tmp, patch.object(make_image, "run") as run:
             root = Path(tmp)
             framework, settings, others = make_image.build_system_overlays(
@@ -4428,6 +4560,8 @@ class SystemScreenDesignTests(unittest.TestCase):
 
     def test_fr34_an_overlay_written_for_another_build_of_its_app_stops_the_image(self):
         tables = {apk: table_of(make_image.overlaid_resources(apk)) for apk in make_image.SYSTEM_OVERLAY_FILES}
+        tables["DsaFrameworkOverlay.apk"] = linkable_framework_table(
+            overlaid=make_image.overlaid_resources("DsaFrameworkOverlay.apk"))
         tables["DsaSettingsOverlay.apk"] = table_of(
             [name for name in make_image.overlaid_resources("DsaSettingsOverlay.apk")
              if name != "style/SettingsLibTheme.CollapsingToolbar.Expressive"])
