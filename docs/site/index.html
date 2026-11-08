@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Desktop Subsystem for Android (DSA) runs Android in its own VM and shows each Android app as a real window on your PC. Open source, Apache-2.0.">
+<title>Desktop Subsystem for Android</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@112..125,500..700&family=Tektur:wght@500;700;800&family=Orbit&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Structure follows animejs.com: fixed header, a fixed stage in the middle of the screen
+   that changes with each chapter, light chapters with a line-drawn machine, feature
+   chapters with a colour each, a code card and a scroll scrubber at the lower right. */
+:root{
+  --bg:#252423; --bg-light:#d9d6d2; --fg:#f6f4f2; --fg2:#cccac8; --mut:#85827e; --mut2:#5b5855;
+  --line:#3b3936; --card:#2c2a28; --card2:#323030; --ink:#252423; --ink2:#4a4745; --ink-mut:#706d6a;
+  --red:#ff4b4b; --orange:#ff7d36; --yellow:#ffcc2a; --lime:#b7ff54; --green:#8dff55; --turq:#2ef0c3; --blue:#4b9bff; --purple:#a77bff; --salmon:#ffb38a;
+  --c:var(--red);
+  --f-head:"Saira","IBM Plex Sans KR","Segoe UI",system-ui,sans-serif;
+  --f-ko:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  --f-mono:"IBM Plex Mono","IBM Plex Sans KR",ui-monospace,Consolas,monospace;
+  --hdr:56px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 15px/1.5 var(--f-head);font-stretch:118%;word-break:keep-all;overflow-wrap:break-word;-webkit-font-smoothing:antialiased}
+body.is-light{color:var(--ink);--red:#d44343;--orange:#d0602a;--yellow:#b8860b;--lime:#5f8f1f;--green:#3a8f3a;--turq:#1f8f74;--blue:#2f74c0;--purple:#6f55c4}
+:lang(ko) body, [lang="ko"]{font-family:var(--f-ko);font-stretch:100%}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,p{margin:0}
+ul{margin:0;padding:0;list-style:none}
+[hidden]{display:none!important}
+html[data-lang="en"] [lang="ko"], html[data-lang="ko"] [lang="en"]{display:none!important}
+.mono{font-family:var(--f-mono);font-stretch:100%}
+
+/* header */
+#site-header{position:fixed;inset:0 0 auto;z-index:20;height:calc(var(--hdr) + env(safe-area-inset-top,0px));padding-top:env(safe-area-inset-top,0px);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;font:500 11px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--fg2);transition:color .5s}
+body.is-light #site-header{color:var(--ink2)}
+#site-header{--hb:37,36,35;background:linear-gradient(rgba(var(--hb),.94) 55%,rgba(var(--hb),0));border-bottom:1px solid transparent;transition:color .5s,border-color .5s,transform .4s,opacity .4s}
+#site-header.away{transform:translateY(-100%);opacity:0;pointer-events:none}
+body.paper #site-header{color:#5d5a56;border-bottom-color:#b3b0ab;background:rgb(var(--hb))}
+body.paper .logo a{color:#1b1a19;font-family:"Tektur",var(--f-head);font-stretch:100%}
+body.paper .ui-select{border-color:#b3b0ab}
+body.paper #site-menu a:hover{color:#1b1a19}
+body.paper .btn-red{background:#f0661c;color:#1b1a19}
+.logo{display:flex;align-items:center;gap:10px;min-width:0}
+.logo a{display:flex;align-items:baseline;gap:6px;font:700 17px/1 var(--f-head);font-stretch:125%;letter-spacing:-.01em;text-transform:none;color:var(--fg)}
+body.is-light .logo a{color:var(--ink)}
+.logo a i{font-style:normal;color:var(--red);font-size:10px;transform:translateY(-7px)}
+.ui-select{position:relative;border:1px solid var(--line);border-radius:4px;padding:5px 22px 5px 8px;font:inherit;color:inherit;background:transparent;appearance:none;cursor:pointer;text-transform:uppercase;letter-spacing:.08em}
+body.is-light .ui-select{border-color:#b9b5b0}
+.sel-wrap{position:relative;display:inline-flex}
+.sel-wrap::after{content:"";position:absolute;right:8px;top:50%;width:5px;height:5px;border:solid currentColor;border-width:0 1px 1px 0;transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.ui-select option{background:var(--card);color:var(--fg)}
+#site-menu ul{display:flex;gap:4px;align-items:center}
+#site-menu a{display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:4px;transition:background-color .2s,color .2s}
+#site-menu a:hover{background:rgba(127,127,127,.14);color:var(--fg)}
+body.is-light #site-menu a:hover{color:var(--ink)}
+#site-menu svg{width:13px;height:13px}
+.hdr-right{display:flex;justify-content:flex-end}
+.btn-red{display:flex;align-items:center;gap:7px;padding:8px 11px;border-radius:4px;background:rgba(255,75,75,.16);color:var(--red)}
+.btn-red:hover{background:rgba(255,75,75,.26)}
+.btn-red svg{width:12px;height:12px}
+
+/* fixed stage */
+#engine{position:fixed;inset:0;z-index:0;pointer-events:none}
+#gl,#css3d{position:absolute;inset:0}
+#gl canvas{display:block}
+#lines{position:absolute;inset:0;width:100%;height:100%;fill:var(--ink2);stroke:var(--ink2);stroke-width:.8;pointer-events:none}
+#lines polyline{fill:none}
+#lines .callout polyline{stroke:var(--c);stroke-width:1.2}
+#lines .callout circle{fill:var(--c);stroke:none}
+#lines .callout text{fill:var(--c);stroke:none;font:500 12px/1 var(--f-mono);letter-spacing:.04em}
+@media (max-width:860px){#lines .callout{display:none}}
+#labels{position:absolute;inset:0;font:400 11px/1 var(--f-mono);letter-spacing:.02em;color:var(--ink2);transition:opacity .5s}
+#labels ul{position:absolute;display:grid;gap:5px}
+#labels .lab-r{right:max(32px,env(safe-area-inset-right,0px));top:calc(var(--hdr) + 72px);text-align:right}
+#labels .lab-l{left:max(32px,env(safe-area-inset-left,0px));bottom:max(96px,calc(env(safe-area-inset-bottom,0px) + 72px))}
+#labels li{white-space:nowrap}
+
+/* layout */
+.layout-container{padding-left:max(32px,env(safe-area-inset-left,0px));padding-right:max(32px,env(safe-area-inset-right,0px))}
+main{position:relative;z-index:2}
+section{position:relative}
+.section{min-height:100vh;display:flex;align-items:center;padding-block:calc(var(--hdr) + 32px) 64px}
+.section-text{max-width:min(430px,34vw);display:grid;gap:14px}
+.spacer{height:100vh}
+h2{font:600 clamp(30px,3.3vw,46px)/1.02 var(--f-head);font-stretch:118%;letter-spacing:-.012em;text-wrap:balance}
+[lang="ko"] h2, h2[lang="ko"], h2 [lang="ko"]{font-family:var(--f-ko);letter-spacing:-.03em;line-height:1.12}
+.section-text p{font-size:15px;line-height:1.5;color:var(--fg2);max-width:30ch}
+body.is-light .section-text p{color:var(--ink2)}
+.section-text p[lang="ko"]{max-width:26em}
+
+/* the opening, in the machined-frame look: hairline column rules, a meta row, the stencil
+   title with orange corner squares, then the lede and the two buttons */
+.v3{--p-cell:#efeeeb;--p-fg:#1b1a19;--p-mut:#5d5a56;--p-line:#b3b0ab;--p-accent:#f0661c;color:var(--p-fg);font:400 14.5px/1.7 var(--f-mono);font-stretch:100%;
+  padding-top:calc(var(--hdr) + env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.v3-frame{max-width:1440px;margin:0 auto;min-height:calc(100vh - var(--hdr));border-left:1px solid var(--p-line);border-right:1px solid var(--p-line);
+  background-image:linear-gradient(to right,var(--p-line) 1px,transparent 1px);background-size:25% 100%;background-position:-1px 0;display:grid;grid-template-rows:auto auto 1fr}
+.v3-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--p-line);position:relative}
+.v3-row:last-child{border-bottom:0}
+.v3-cell{padding:22px 24px;min-width:0;position:relative}
+.v3-cell.span2{grid-column:span 2}
+.v3-meta .v3-cell{padding-block:14px;display:flex;align-items:center}
+.v3-meta .v3-cell:first-child{padding-left:60px}
+.v3-cross{position:absolute;left:-1px;top:-1px;width:44px;height:44px;border:1px solid var(--p-line);color:var(--p-fg)}
+.v3-cross svg{width:100%;height:100%;display:block}
+.v3-label{font:500 12px/1.2 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--p-mut)}
+.v3-label b{color:var(--p-fg);font-weight:500}
+.v3-title{grid-column:1/-1;padding:44px 0 26px;overflow:hidden}
+.v3-sq{position:absolute;width:10px;height:10px;background:var(--p-accent)}
+.v3-sq.a{left:20px;top:20px}.v3-sq.b{right:20px;top:20px}.v3-sq.c{left:20px;bottom:22px}.v3-sq.d{right:20px;bottom:22px}
+.v3 h1{margin:0;font-weight:inherit}
+.v3-big{display:block;font:800 clamp(44px,10.6vw,152px)/.86 "Tektur","Orbit",var(--f-head);font-stretch:100%;letter-spacing:-.01em;text-transform:uppercase;white-space:nowrap;padding-left:clamp(12px,2.2vw,30px)}
+.v3-big.second{color:transparent;-webkit-text-stroke:1.5px var(--p-fg)}
+.v3-sub{display:flex;gap:28px;align-items:center;padding:22px 0 0 44px;font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+.v3-sub .v3-tm{color:var(--p-mut)}
+.v3-copy{display:grid;gap:26px;align-content:start;padding-block:32px}
+.v3-lede{font-size:15.5px;line-height:1.75;max-width:34em}
+.v3-lede[lang="ko"]{font-family:var(--f-ko);font-size:16.5px}
+.v3-cta{display:flex;flex-wrap:wrap;gap:12px}
+.v3-btn{display:inline-flex;align-items:center;gap:10px;padding:13px 22px;font:500 13px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+.v3-btn.primary{background:var(--p-accent);color:var(--p-fg)}
+.v3-btn.primary:hover{filter:brightness(1.06)}
+.v3-btn.ghost{color:var(--p-fg);box-shadow:inset 0 0 0 1px var(--p-line)}
+.v3-btn.ghost:hover{box-shadow:inset 0 0 0 1px var(--p-fg)}
+.v3-note{font-size:12px;color:var(--p-mut);letter-spacing:.02em}
+
+/* light chapters */
+.section-light .section{align-items:flex-start;padding-top:calc(var(--hdr) + 40px)}
+.section-light h2{font-size:clamp(28px,2.6vw,38px)}
+
+/* features */
+.feature .section-text-heading{display:grid;gap:12px}
+.feature h2{color:var(--c)}
+.feature-links{display:grid;gap:9px;margin-top:22px;padding-top:22px;border-top:1px solid var(--line);max-width:200px}
+.feature-links a{display:flex;align-items:center;gap:10px;font:500 10.5px/1.2 var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--fg2)}
+.feature-links a:hover{color:var(--c)}
+body.is-light .feature-links{border-top-color:#b3b0ab}
+body.is-light .feature-links a{color:var(--ink2)}
+body.is-light .feature-links svg{color:var(--ink-mut)}
+.feature-links svg{width:11px;height:11px;flex:none;color:var(--mut)}
+.feature:nth-child(3n+1) .section{align-items:flex-start}
+.feature:nth-child(3n+2) .section{align-items:flex-end}
+.feature:nth-child(3n) .section{align-items:center}
+.feature .section-text{max-width:min(330px,28vw)}
+
+/* open source */
+.boxed{display:inline-grid;gap:8px;justify-items:center;padding:12px;border-radius:6px;background:var(--card);font:400 11px/1.2 var(--f-mono);color:var(--fg2);width:max-content;margin-top:8px}
+.boxed svg{width:58px;height:58px;color:var(--fg2)}
+.boxed:hover{background:var(--card2)}
+
+/* get started */
+/* sub nav: code card and scrubber */
+.sub-nav.off{opacity:0;pointer-events:none;transform:translateY(12px)}
+.sub-nav{transition:opacity .4s,transform .4s;position:fixed;right:max(32px,env(safe-area-inset-right,0px));bottom:max(32px,env(safe-area-inset-bottom,0px));z-index:6;width:min(336px,calc(100vw - 64px));display:grid;gap:8px}
+.card{position:relative;background:var(--card);border-radius:6px;padding:14px 16px;font:400 11.5px/1.55 var(--f-mono);color:var(--fg2);opacity:0;transform:translateY(8px);transition:opacity .35s,transform .35s;pointer-events:none;display:none}
+.card.on{opacity:1;transform:none;pointer-events:auto}
+.card.shown{display:block}
+.card pre{margin:0;white-space:pre-wrap;font:inherit}
+.card .cmd{color:#7fb3ff}.card .arg{color:#b7ff54}.card .cm{color:var(--mut)}.card .pr{color:var(--mut2);user-select:none}
+.card .copy{position:absolute;right:10px;top:10px;all:unset;position:absolute;right:10px;top:10px;cursor:pointer;color:var(--mut)}
+.card .copy:hover{color:var(--fg)}
+.card .copy svg{width:12px;height:12px}
+.card h3{font:600 13px/1 var(--f-head);font-stretch:112%;color:var(--fg);display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.card h3 small{font:400 11px var(--f-mono);color:var(--fg2)}
+.stack{display:flex;height:6px;border-radius:3px;overflow:hidden;gap:2px;margin-bottom:10px}
+.stack i{display:block;height:100%}
+.legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px 10px;font-size:10px}
+.legend li{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.legend b{width:6px;height:6px;border-radius:50%;flex:none}
+.card .fine{margin-top:8px;font-size:10px;color:var(--mut)}
+.scrubber{position:relative;height:22px;border-radius:5px;background:var(--card);cursor:pointer;overflow:hidden;pointer-events:auto}
+.scrubber .ticks{position:absolute;inset:6px 8px;background:repeating-linear-gradient(90deg,var(--mut2) 0 1px,transparent 1px 7.4px);opacity:.75}
+.scrubber .cursor{position:absolute;top:4px;bottom:4px;width:2px;left:8px;background:var(--red);box-shadow:0 0 6px var(--red)}
+.scrubber .ghost{background:var(--fg2);box-shadow:none;opacity:0;transition:opacity .2s}
+.scrubber:hover .ghost{opacity:.5}
+
+.tm-float{position:fixed;left:max(32px,env(safe-area-inset-left,0px));bottom:max(24px,env(safe-area-inset-bottom,0px));z-index:7;margin:0;font:400 10.5px/1.4 var(--f-mono);letter-spacing:.02em;color:currentColor;opacity:.62;pointer-events:none;max-width:calc(100vw - 420px);transition:color .5s}
+body #site-footer{padding-bottom:max(104px,env(safe-area-inset-bottom,0px))}
+@media (max-width:860px){.tm-float{left:16px;bottom:max(8px,env(safe-area-inset-bottom,0px));max-width:calc(100vw - 32px);font-size:9.5px}}
+
+/* footer */
+#site-footer{position:relative;z-index:2;padding-block:72px max(40px,env(safe-area-inset-bottom,0px));font:500 10.5px/1.6 var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:inherit;background:transparent}
+.footer-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:32px}
+.footer-row+.footer-row{margin-top:56px;align-items:end}
+#site-footer h6{margin:0 0 12px;font:inherit;color:var(--mut)}
+#site-footer li a:hover{color:var(--fg)}
+.footer-logo{font:700 20px/1 var(--f-head);font-stretch:125%;text-transform:none;letter-spacing:-.01em;color:inherit}
+.footer-logo i{font-style:normal;color:var(--red);font-size:11px;vertical-align:top}
+.fine-print{margin-top:8px;color:inherit;opacity:.62;text-transform:none;letter-spacing:.02em}
+
+@media (max-width:860px){
+  :root{--hdr:52px}
+  #site-menu{display:none}
+  #site-header{grid-template-columns:1fr auto}
+  .hdr-mid{display:none}
+  .layout-container{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  #engine{opacity:.5}
+  .feature .section-text{max-width:100%}
+  .section-text{max-width:100%}
+  .feature:nth-child(n) .section{align-items:flex-start}
+  .sub-nav{right:16px;left:16px;width:auto;bottom:max(64px,calc(env(safe-area-inset-bottom,0px) + 56px))}
+  .card{display:none!important}
+  .v3-row{grid-template-columns:minmax(0,1fr)}
+  .v3-cell.span2{grid-column:1/-1}
+  .v3-meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .v3-meta .v3-cell:nth-child(n+3){display:none}
+  .v3-frame{background-size:50% 100%}
+  .v3-sq{display:none}
+  .v3-sub{padding-left:16px;gap:18px;flex-wrap:wrap}
+  .footer-row{grid-template-columns:minmax(0,1fr)}
+  #labels{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header id="site-header">
+  <div class="logo">
+    <a href="#intro" aria-label="Desktop Subsystem for Android">dsa<i>●</i></a>
+    <label class="sel-wrap"><select id="lang" class="ui-select" aria-label="Language"><option value="ko">KO</option><option value="en">EN</option></select></label>
+  </div>
+  <nav id="site-menu" class="hdr-mid" aria-label="Site">
+    <ul>
+      <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2.5" width="11" height="11" rx="1"/><path d="M5.5 2.5v11"/></svg><span lang="ko">문서</span><span lang="en">Docs</span></a></li>
+      <li><a href="#features"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx=".8"/><rect x="9" y="2.5" width="4.5" height="4.5" rx=".8"/><rect x="2.5" y="9" width="4.5" height="4.5" rx=".8"/><path d="M11.25 9v4.5M9 11.25h4.5"/></svg><span lang="ko">기능</span><span lang="en">Features</span></a></li>
+      <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android" target="_blank" rel="noopener" title="GitHub"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 .2a8 8 0 0 0-2.5 15.6c.4 0 .5-.2.5-.4v-1.5c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.3 1.9.9 2.4.7 0-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-4 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8a7.4 7.4 0 0 1 4 0c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9.1 2.1.5.6.8 1.3.8 2.1 0 3.1-1.9 3.8-3.6 4 .3.3.6.8.6 1.5v2.2c0 .2.1.5.6.4A8 8 0 0 0 8 .2z"/></svg></a></li>
+    </ul>
+  </nav>
+  <div class="hdr-right">
+  </div>
+</header>
+
+<div id="engine" aria-hidden="true">
+  <div id="gl"></div><div id="css3d"></div><svg id="lines"></svg>
+  <div id="labels" style="opacity:0">
+    <ul class="lab-r"><li data-a="0">kernel</li><li data-a="1">binder</li><li data-a="2">framework</li><li data-a="3">hwcomposer</li><li data-a="4">hal</li><li data-a="5">agent</li></ul>
+    <ul class="lab-l"><li data-a="6">hvsocket</li><li data-a="7">gfxstream</li><li data-a="8">dsa-gfx</li><li data-a="9">dsa-wm</li><li data-a="10">dsa-hostd</li></ul>
+  </div>
+</div>
+
+<main id="home">
+  <section id="intro" data-chapter="intro" data-label="HEADING">
+    <div class="v3">
+      <div class="v3-frame">
+        <div class="v3-row v3-meta">
+          <div class="v3-cell"><span class="v3-cross" aria-hidden="true"><svg viewBox="0 0 44 44"><path d="M10 10l24 24M34 10L10 34" stroke="currentColor" stroke-width="1.2"/><rect x="19" y="19" width="6" height="6" fill="currentColor"/></svg></span><span class="v3-label">v0.1.9 · Apache-2.0</span></div>
+          <div class="v3-cell"><span class="v3-label">Android <b>16</b> · <b>17</b></span></div>
+          <div class="v3-cell"></div>
+          <div class="v3-cell"></div>
+        </div>
+        <div class="v3-row">
+          <div class="v3-cell v3-title">
+            <span class="v3-sq a"></span><span class="v3-sq b"></span><span class="v3-sq c"></span><span class="v3-sq d"></span>
+            <h1 aria-label="Desktop Subsystem for Android"><span class="v3-big" aria-hidden="true">Desktop</span><span class="v3-big second" aria-hidden="true">Subsystem</span></h1>
+            <div class="v3-sub"><span>For Android<span class="v3-tm">™</span></span></div>
+          </div>
+        </div>
+        <div class="v3-row">
+          <div class="v3-cell span2 v3-copy">
+            <p class="v3-lede" lang="ko">DSA는 Android를 전용 가상 머신에서 통째로 실행하고, 앱 화면 하나하나를 PC의 진짜 창으로 띄웁니다. 작업 표시줄, 알림, 키보드 입력, 파일 끌어 놓기가 다른 데스크톱 앱과 똑같이 동작합니다.</p>
+            <p class="v3-lede" lang="en">DSA runs the whole of Android in a dedicated virtual machine and shows each app as a real window on your PC. The taskbar, notifications, keyboard input and file drag and drop work the way they do for any other desktop app.</p>
+            <div class="v3-cta">
+              <a class="v3-btn primary" href="https://github.com/thisisthepy/desktop-subsystem-for-android/releases" target="_blank" rel="noopener"><span lang="ko">설치 프로그램 받기</span><span lang="en">Get the installer</span></a>
+              <a class="v3-btn ghost" href="#toolbox"><span lang="ko">작동 방식</span><span lang="en">How it works</span></a>
+            </div>
+          </div>
+          <div class="v3-cell span2"></div>
+        </div>
+      </div>
+    </div>
+    <div class="spacer"></div><div class="spacer"></div>
+  </section>
+
+  <section id="toolbox" class="section-light" data-chapter="toolbox" data-label="TOOLBOX">
+    <div class="section layout-container">
+      <div class="section-text">
+        <h2 lang="ko">Android는 온전하게,<br>경계는 HAL에서</h2>
+        <h2 lang="en">Android stays whole.<br>The boundary is the HAL.</h2>
+        <p lang="ko">커널, ART, 프레임워크는 전용 VM 안에 그대로 두고, 화면과 장치만 PC로 옮깁니다.</p>
+        <p lang="en">The kernel, ART and the framework stay inside a dedicated VM. Only the display and the devices move to your PC.</p>
+      </div>
+    </div>
+    <div class="spacer"></div><div class="spacer"></div><div class="spacer"></div><div class="spacer"></div>
+  </section>
+
+  <section id="features" data-label="FEATURES">
+    <section class="feature" data-chapter="f0" data-c="red" data-demo="window">
+      <div class="section layout-container"><div class="section-text">
+        <div class="section-text-heading">
+          <h2 lang="ko">앱 하나, 창 하나</h2><h2 lang="en">One app, one window</h2>
+          <p lang="ko">작업마다 자기 아이콘과 이름을 가진 창이 생깁니다. 스냅, Alt+Tab, 작업 표시줄이 그대로 동작합니다.</p>
+          <p lang="en">Every task gets its own window with its own icon and name. Snap, Alt+Tab and the taskbar just work.</p>
+        </div>
+        <ul class="feature-links">
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">통합 제목 표시줄</span><span lang="en">Integrated title bar</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">스냅 레이아웃</span><span lang="en">Snap layouts</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">시작 메뉴와 작업 표시줄</span><span lang="en">Start menu and taskbar</span></a></li>
+        </ul>
+      </div></div>
+    </section>
+    <section class="feature" data-chapter="f1" data-c="orange" data-demo="gpu">
+      <div class="section layout-container"><div class="section-text">
+        <div class="section-text-heading">
+          <h2 lang="ko">그리기는 PC의 GPU가</h2><h2 lang="en">Your GPU does the drawing</h2>
+          <p lang="ko">앱의 OpenGL ES와 Vulkan 명령을 PC의 GPU가 실행하고, 렌더러는 따로 떨어진 프로세스에서 돕니다.</p>
+          <p lang="en">Your PC's GPU runs each app's OpenGL ES and Vulkan, and the renderer lives in a process of its own.</p>
+        </div>
+        <ul class="feature-links">
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg>ANGLE</a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">Vulkan 원격 실행</span><span lang="en">Vulkan remoting</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">GPU 리셋 복구</span><span lang="en">GPU reset recovery</span></a></li>
+        </ul>
+      </div></div>
+    </section>
+    <section class="feature left" data-chapter="f2" data-c="turq" data-demo="memory">
+      <div class="section layout-container"><div class="section-text">
+        <div class="section-text-heading">
+          <h2 lang="ko">쓰지 않는 메모리는 돌려줍니다</h2><h2 lang="en">Unused memory goes back</h2>
+          <p lang="ko">Android가 쉬는 동안 비어 있는 메모리는 바로 Windows로 돌아갑니다. 정해 둔 상한이 없습니다.</p>
+          <p lang="en">While Android rests, its free memory goes straight back to Windows. There is no fixed cap.</p>
+        </div>
+        <ul class="feature-links">
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">페이지 반환</span><span lang="en">Free page reporting</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">Doze 대기</span><span lang="en">Doze when idle</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">선택형 동결</span><span lang="en">Opt-in freeze</span></a></li>
+        </ul>
+      </div></div>
+    </section>
+    <section class="feature" data-chapter="f3" data-c="blue" data-demo="arm">
+      <div class="section layout-container"><div class="section-text">
+        <div class="section-text-heading">
+          <h2 lang="ko">ARM 앱도 그대로</h2><h2 lang="en">ARM apps too</h2>
+          <p lang="ko">x86 판이 있으면 그것을, 없을 때만 ARM 판을 번역해 실행합니다. 오픈 소스 번역기가 기본입니다.</p>
+          <p lang="en">The x86 build runs when there is one. Only ARM-only apps go through translation, with an open source translator by default.</p>
+        </div>
+        <ul class="feature-links">
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">x86 우선 실행</span><span lang="en">x86 first</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">기본 번역기</span><span lang="en">Default translator</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">번역기 교체</span><span lang="en">Swap the translator</span></a></li>
+        </ul>
+      </div></div>
+    </section>
+    <section class="feature left" data-chapter="f4" data-c="purple" data-demo="hal">
+      <div class="section layout-container"><div class="section-text">
+        <div class="section-text-heading">
+          <h2 lang="ko">장치는 HAL 단위로 PC에</h2><h2 lang="en">Devices live on the host</h2>
+          <p lang="ko">카메라, 오디오, 코덱은 HAL 서비스로 PC에서 돌고, Android는 시스템 호출을 넘기지 않습니다.</p>
+          <p lang="en">Camera, audio and codecs run on the PC as HAL services. Android never forwards a system call.</p>
+        </div>
+        <ul class="feature-links">
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg>RPC Binder</a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">호스트 코덱</span><span lang="en">Host codecs</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">카메라와 오디오</span><span lang="en">Camera and audio</span></a></li>
+        </ul>
+      </div></div>
+    </section>
+    <section class="feature" data-chapter="f5" data-c="lime" data-demo="drag">
+      <div class="section layout-container"><div class="section-text">
+        <div class="section-text-heading">
+          <h2 lang="ko">끌어 놓고, 붙여 넣고</h2><h2 lang="en">Drag, drop and paste</h2>
+          <p lang="ko">파일을 창에 끌어 놓고, 클립보드를 함께 씁니다. 가운데 공을 직접 끌어 보세요.</p>
+          <p lang="en">Drop files on a window and share the clipboard. Try dragging the ball in the middle.</p>
+        </div>
+        <ul class="feature-links">
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">파일 끌어 놓기</span><span lang="en">File drag and drop</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">클립보드 공유</span><span lang="en">Shared clipboard</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">APK 설치 관리자</span><span lang="en">APK Installer</span></a></li>
+        </ul>
+      </div></div>
+    </section>
+    <section class="feature left" data-chapter="f6" data-c="yellow" data-demo="clock">
+      <div class="section layout-container"><div class="section-text">
+        <div class="section-text-heading">
+          <h2 lang="ko">기다림 없이 바로</h2><h2 lang="en">Opens without the wait</h2>
+          <p lang="ko">마지막 창을 닫아도 Android는 꺼지지 않고 Doze로 쉽니다. 다음 앱은 부팅을 기다리지 않습니다.</p>
+          <p lang="en">Closing the last window puts Android into Doze instead of shutting it down, so the next app opens without a boot.</p>
+        </div>
+        <ul class="feature-links">
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">Doze 기본 대기</span><span lang="en">Doze by default</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">알림 전달</span><span lang="en">Notifications</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">바탕 화면 위젯</span><span lang="en">Desktop widgets</span></a></li>
+        </ul>
+      </div></div>
+    </section>
+    <section class="feature" data-chapter="f7" data-c="green" data-demo="hosts">
+      <div class="section layout-container"><div class="section-text">
+        <div class="section-text-heading">
+          <h2 lang="ko">같은 Android, 세 가지 호스트</h2><h2 lang="en">One Android, three hosts</h2>
+          <p lang="ko">Windows가 먼저이고, 프로토콜과 게스트는 Linux와 macOS에서도 같습니다.</p>
+          <p lang="en">Windows comes first. The protocol and the guest are the same on Linux and macOS.</p>
+        </div>
+        <ul class="feature-links">
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg>Windows 11</a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">Linux (개발 중)</span><span lang="en">Linux (in progress)</span></a></li>
+          <li><a href="https://github.com/thisisthepy/desktop-subsystem-for-android#readme" target="_blank" rel="noopener"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1 6h10M7 2l4 4-4 4"/></svg><span lang="ko">macOS (개발 중)</span><span lang="en">macOS (in progress)</span></a></li>
+        </ul>
+      </div></div>
+    </section>
+  </section>
+  <div class="spacer"></div>
+
+  <section id="modules" class="section-light" data-chapter="modules" data-label="MODULES">
+    <div class="section layout-container">
+      <div class="section-text">
+        <h2 lang="ko">상한 없이,<br>필요한 만큼만</h2>
+        <h2 lang="en">No fixed cap.<br>Only what it needs.</h2>
+        <p lang="ko">VM, 창 관리자, 렌더러, 앱 창이 각자 필요한 만큼만 씁니다.</p>
+        <p lang="en">The VM, the window manager, the renderer and each app window take only what they need.</p>
+      </div>
+    </div>
+    <div class="spacer"></div><div class="spacer"></div><div class="spacer"></div><div class="spacer"></div>
+  </section>
+
+  <section id="opensource" data-label="SPONSORS" data-chapter="opensource" data-c="red" data-demo="heart">
+    <div class="section layout-container">
+      <div class="section-text">
+        <h2 lang="ko">처음부터 끝까지 오픈 소스</h2>
+        <h2 lang="en">Open source, end to end</h2>
+        <p lang="ko">Apache-2.0으로 공개합니다. Microsoft WSA 바이너리도, Google 앱도 싣지 않습니다.</p>
+        <p lang="en">Published under Apache-2.0. No Microsoft WSA binary and no Google apps are shipped.</p>
+        <a class="boxed" href="https://github.com/thisisthepy/desktop-subsystem-for-android" target="_blank" rel="noopener"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-label="DSA for Linux"><rect x="5" y="5" width="54" height="51" rx="11"/><path d="M5 46v3a11 11 0 0 0 11 11h32a11 11 0 0 0 11-11v-3"/><g transform="translate(32 31) scale(.66) translate(-32 -32)"><path d="M22 14L16.5 5M42 14L47.5 5" vector-effect="non-scaling-stroke" stroke-width="2.2"/><path d="M13 12h38a9 9 0 0 1 9 9v28a9 9 0 0 1-9 9H13a9 9 0 0 1-9-9V21a9 9 0 0 1 9-9z" vector-effect="non-scaling-stroke"/><path d="M4 25h56" vector-effect="non-scaling-stroke"/><circle cx="40" cy="18.5" r="2.3" vector-effect="non-scaling-stroke"/><circle cx="48" cy="18.5" r="2.3" vector-effect="non-scaling-stroke"/><path d="M16 32h32a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H16a4 4 0 0 1-4-4V36a4 4 0 0 1 4-4z" vector-effect="non-scaling-stroke" stroke-dasharray="2 2"/></g></svg><span>thisisthepy / dsa</span></a>
+      </div>
+    </div>
+    <div class="spacer"></div>
+  </section>
+
+  <footer id="site-footer" class="layout-container">
+    <div class="footer-row">
+      <div><div class="footer-logo">dsa<i>●</i></div><div class="fine-print">© 2026 thisisthepy · Apache-2.0</div></div>
+    </div>
+  </footer>
+</main>
+
+<p class="tm-float">Desktop Subsystem for Android™. Android is a trademark of Google LLC.<br>DSA is not affiliated with Google or Microsoft.</p>
+
+<div class="sub-nav" id="sub-nav">
+  <div class="card" data-card="f0"><button class="copy" title="Copy"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"/></svg></button><pre><span class="cm"># 설치된 앱과 그 정보</span>
+<span class="pr">&gt; </span><span class="cmd">dsa</span> apps list
+<span class="pr">&gt; </span><span class="cmd">dsa</span> apps info <span class="arg">com.android.settings</span></pre></div>
+  <div class="card" data-card="f1"><button class="copy" title="Copy"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"/></svg></button><pre><span class="cm"># 세션과 렌더러 상태</span>
+<span class="pr">&gt; </span><span class="cmd">dsa</span> status</pre></div>
+  <div class="card" data-card="f2"><button class="copy" title="Copy"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"/></svg></button><pre><span class="cm"># 프로세스별 메모리</span>
+<span class="pr">&gt; </span><span class="cmd">dsa</span> memory</pre></div>
+  <div class="card" data-card="f3"><button class="copy" title="Copy"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"/></svg></button><pre><span class="cm"># 기본 번역기 설치</span>
+<span class="pr">&gt; </span><span class="cmd">dsa</span> arm-translation install
+<span class="cm"># Google 번역기로 바꾸기 (선택)</span>
+<span class="pr">&gt; </span><span class="cmd">dsa</span> arm-translation fetch <span class="arg">google</span></pre></div>
+  <div class="card" data-card="f4"><button class="copy" title="Copy"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"/></svg></button><pre><span class="cm"># 게스트 로그와 진단 묶음</span>
+<span class="pr">&gt; </span><span class="cmd">dsa</span> logcat
+<span class="pr">&gt; </span><span class="cmd">dsa</span> logs collect -o <span class="arg">diag.zip</span></pre></div>
+  <div class="card" data-card="f5"><button class="copy" title="Copy"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"/></svg></button><pre><span class="cm"># 설정 앱이 하는 일을 명령으로</span>
+<span class="pr">&gt; </span><span class="cmd">dsa</span> settings</pre></div>
+  <div class="card" data-card="f6"><button class="copy" title="Copy"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"/></svg></button><pre><span class="cm"># Active, Dozing 같은 세션 상태</span>
+<span class="pr">&gt; </span><span class="cmd">dsa</span> status</pre></div>
+  <div class="card" data-card="f7"><button class="copy" title="Copy"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="3.5" y="3.5" width="7" height="7" rx="1"/><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"/></svg></button><pre><span class="cm"># 게스트 Android 버전</span>
+<span class="pr">&gt; </span><span class="cmd">dsa</span> android version
+<span class="pr">&gt; </span><span class="cmd">dsa</span> android use <span class="arg">&lt;version&gt;</span></pre></div>
+  <div class="card" data-card="modules">
+    <h3><span lang="ko">앱 하나를 연 상태</span><span lang="en">One app open</span><small lang="ko">목표 ≤ 250 MiB</small><small lang="en">target ≤ 250 MiB</small></h3>
+    <div class="stack" id="mem-stack"></div>
+    <ul class="legend" id="mem-legend"></ul>
+    <p class="fine" lang="ko">DSA 호스트 프로세스 전체의 목표값입니다. 측정값이 아닙니다.</p>
+    <p class="fine" lang="en">The target for all DSA host processes, not a measurement.</p>
+  </div>
+  <div class="scrubber" id="scrubber" title="Scroll"><div class="ticks"></div><div class="cursor ghost" id="ghost"></div><div class="cursor" id="cursor"></div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/renderers/CSS3DRenderer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/animejs@4.5.0/dist/bundles/anime.umd.min.js"></script>
+<script>
+(function(){
+var A = window.anime || null;
+var root = document.documentElement;
+var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+var NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){var e=document.createElementNS(NS,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
+function css(name){return getComputedStyle(root).getPropertyValue('--'+name).trim()}
+
+/* language */
+var langSel = document.getElementById('lang');
+function setLang(l){root.setAttribute('data-lang',l);root.lang=l;langSel.value=l;try{localStorage.setItem('dsa-guide-lang',l)}catch(e){}}
+var saved=null;try{saved=localStorage.getItem('dsa-guide-lang')}catch(e){}
+setLang(saved || ((navigator.language||'ko').toLowerCase().indexOf('ko')===0?'ko':'en'));
+langSel.addEventListener('change',function(){setLang(langSel.value)});
+
+/* copy buttons */
+function copy(text, btn){var done=function(){btn.style.color='var(--lime)';setTimeout(function(){btn.style.color=''},900)};
+  try{navigator.clipboard.writeText(text).then(done,function(){})}catch(e){}}
+[].forEach.call(document.querySelectorAll('.card .copy'),function(b){b.addEventListener('click',function(){
+  var t=b.parentNode.querySelector('pre').textContent.split('\n').filter(function(l){return l.indexOf('> ')===0}).map(function(l){return l.slice(2)}).join('\n');copy(t,b)})});
+
+/* memory card */
+var mem=[['red','VM','VM'],['orange','창 관리자','Window manager'],['yellow','렌더러','Renderer'],['turq','앱 창','App window'],['blue','서비스','Service']];
+var stack=document.getElementById('mem-stack'),legend=document.getElementById('mem-legend');
+mem.forEach(function(m,i){var b=document.createElement('i');b.style.background='var(--'+m[0]+')';b.style.flex=String([5,2,2,1,1][i]);stack.appendChild(b);
+  var li=document.createElement('li');li.innerHTML='<b style="background:var(--'+m[0]+')"></b><span lang="ko">'+m[1]+'</span><span lang="en">'+m[2]+'</span>';legend.appendChild(li)});
+
+/* ---------- 3D engine: the same scene graph, camera and scroll timeline as animejs.com ---------- */
+var THREEOK = !!window.THREE;
+var glWrap=document.getElementById('gl'), cssWrap=document.getElementById('css3d');
+var linesSvg=document.getElementById('lines');
+var labelsEl=document.getElementById('labels'), labelItems=[].slice.call(labelsEl.querySelectorAll('li'));
+function clamp(v,a,b){return v<a?a:v>b?b:v}
+function hex(c){return new THREE.Color(c)}
+
+/* a proxy so anime.js can tween Three objects with x, y, z, rotateX/Y/Z in degrees, scale and scaleZ */
+function P3(o){var p={o:o};
+  ['x','y','z'].forEach(function(k){Object.defineProperty(p,k,{get:function(){return o.position[k]},set:function(v){o.position[k]=v},enumerable:true})});
+  [['rotateX','x'],['rotateY','y'],['rotateZ','z']].forEach(function(a){Object.defineProperty(p,a[0],{get:function(){return o.rotation[a[1]]*180/Math.PI},set:function(v){o.rotation[a[1]]=v*Math.PI/180},enumerable:true})});
+  Object.defineProperty(p,'scale',{get:function(){return o.scale.x},set:function(v){var s=Math.max(v,1e-4);o.scale.x=s;o.scale.y=s;o.scale.z=s*(p._sz||1)},enumerable:true});
+  Object.defineProperty(p,'scaleZ',{get:function(){return p._sz||1},set:function(v){p._sz=v;o.scale.z=o.scale.x*v},enumerable:true});
+  return p}
+
+var stage=null;
+if(THREEOK){try{stage=buildStage()}catch(e){console.error(e);stage=null}}
+
+function buildStage(){
+  var renderer=new THREE.WebGLRenderer({antialias:false,alpha:false});
+  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  glWrap.appendChild(renderer.domElement);
+  var scene=new THREE.Scene(); scene.background=new THREE.Color(0xffffff);
+  var fov=40, camera=new THREE.PerspectiveCamera(fov,1,1,1000); camera.position.z=120; camera.lookAt(0,0,0);
+  var cssRenderer=new THREE.CSS3DRenderer(); cssWrap.appendChild(cssRenderer.domElement);
+  var cssScene=new THREE.Scene();
+
+  /* scene group "Z" (moved by the scroll timeline), the machine root at scale 10, the CSS layer at scale .1 */
+  var Z=new THREE.Group(), root=new THREE.Group(), cssLayer=new THREE.Group();
+  root.scale.setScalar(10); root.position.z=-5; cssLayer.scale.setScalar(.1); cssLayer.position.z=25;
+  Z.add(root); scene.add(Z);
+  var Zc=new THREE.Group(); Zc.add(cssLayer); cssScene.add(Zc);   /* the CSS scene mirrors Z */
+  var lightDir=new THREE.Vector3(-200,135,-80).normalize();
+
+  /* first pass: object-space normals in rgb, a three-step light tone in alpha */
+  var mat=new THREE.ShaderMaterial({
+    uniforms:{lightDir:{value:lightDir}},
+    vertexShader:'varying vec3 vN; varying vec3 vWN; varying vec3 vView;\n'+
+      'void main(){ vN=normalize(normal); vWN=normalize(mat3(modelMatrix)*normal);\n'+
+      ' vec4 mv=modelViewMatrix*vec4(position,1.); vView=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }',
+    fragmentShader:'uniform vec3 lightDir; varying vec3 vN; varying vec3 vWN; varying vec3 vView;\n'+
+      'void main(){ vec3 n=normalize(vN); vec3 c=.5*(1.+n);\n'+
+      ' float l=dot(normalize(vWN), lightDir);\n'+
+      ' float t = l>.30 ? 1. : (l>-.25 ? .6 : .2);\n'+
+      ' gl_FragColor=vec4(min(c,vec3(.995)), t); }'
+  });
+  var rt=new THREE.WebGLRenderTarget(2,2,{minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter,format:THREE.RGBAFormat,type:THREE.UnsignedByteType});
+  /* second pass: edges from the normal colours, then toon colours from the tone */
+  var post=new THREE.ShaderMaterial({
+    uniforms:{tDiffuse:{value:rt.texture},resolution:{value:new THREE.Vector2(1,1)},threshold:{value:.035},thickness:{value:1},
+      outlineBlend:{value:.4},contourBlend:{value:.65},fade:{value:0},
+      backgroundColor:{value:hex('#252423')},outlineColor:{value:hex('#101010')},rimColor:{value:hex('#ffc7a8')},shadowColor:{value:hex('#212121')},worldColor1:{value:hex('#423d3d')}},
+    vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }',
+    fragmentShader:[
+      'uniform sampler2D tDiffuse; uniform vec2 resolution; uniform float threshold, thickness, outlineBlend, contourBlend, fade;',
+      'uniform vec3 backgroundColor, outlineColor, rimColor, shadowColor, worldColor1; varying vec2 vUv;',
+      'void main(){',
+      ' vec4 d=texture2D(tDiffuse,vUv); vec3 inC=d.rgb; float x=thickness/resolution.x, y=thickness/resolution.y;',
+      ' vec3 a=texture2D(tDiffuse,vUv-vec2(x,y)).rgb, b=texture2D(tDiffuse,vUv+vec2(x,y)).rgb, c=texture2D(tDiffuse,vUv+vec2(x,-y)).rgb, e=texture2D(tDiffuse,vUv+vec2(-x,y)).rgb;',
+      ' vec3 d0=b-a, d1=e-c; float edge=sqrt(dot(d0,d0)+dot(d1,d1)); float o= edge>threshold ? 1. : 0.;',
+      ' vec3 outC; vec3 paint=worldColor1;',
+      ' if(all(greaterThan(inC,vec3(.999)))){ outC=(1.-o)*backgroundColor + o*mix(outlineColor,backgroundColor,contourBlend); }',
+      ' else { if(d.a>=.95) paint=rimColor; else if(d.a<=.3) paint=shadowColor; vec3 line=mix(outlineColor,paint,outlineBlend); outC=(1.-o)*paint + o*line; }',
+      ' gl_FragColor=vec4(mix(backgroundColor,outC,fade),1.);',
+      '}'].join('\n'),
+    depthTest:false, depthWrite:false
+  });
+  var postScene=new THREE.Scene(), postCam=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+  postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),post));
+
+  /* ----- helpers for building parts from primitives ----- */
+  function mesh(geo,parent,o){var m=new THREE.Mesh(geo,mat);if(o){if(o.x!=null)m.position.x=o.x;if(o.y!=null)m.position.y=o.y;if(o.z!=null)m.position.z=o.z;if(o.rz!=null)m.rotation.z=o.rz;if(o.rx!=null)m.rotation.x=o.rx;if(o.s!=null)m.scale.setScalar(o.s)}parent.add(m);return m}
+  function extrude(shape,depth,seg){var g=new THREE.ExtrudeGeometry(shape,{depth:depth,bevelEnabled:false,curveSegments:seg||48});g.translate(0,0,-depth/2);return g}
+  function annulus(rO,rI,seg){var s=new THREE.Shape();s.absarc(0,0,rO,0,Math.PI*2,false);var h=new THREE.Path();h.absarc(0,0,rI,0,Math.PI*2,true);s.holes.push(h);return s}
+  function gear(rO,rI,teeth,depth,hole){var s=new THREE.Shape();var n=teeth*4;for(var i=0;i<=n;i++){var a=i/n*Math.PI*2, k=i%4, r=(k===1||k===2)?rO:rO-depth;var x=r*Math.cos(a),y=r*Math.sin(a);i?s.lineTo(x,y):s.moveTo(x,y)}
+    if(hole){var h=new THREE.Path();h.absarc(0,0,hole,0,Math.PI*2,true);s.holes.push(h)}return s}
+  function sector(rO,rI,a0,a1){var s=new THREE.Shape();s.absarc(0,0,rO,a0,a1,false);s.absarc(0,0,rI,a1,a0,true);s.closePath();return s}
+  function drum(r,h,seg){var g=new THREE.CylinderGeometry(r,r,h,seg||40,1,false);g.rotateX(Math.PI/2);return g}
+
+  /* ----- a flip-chip SoC package taken apart, down to the transistors (no model files).
+     Front (+z) to back: lid, thermal interface, silicon die (backside, with TSVs),
+     the CPU die floorplan, a FinFET close-up, the metal stack M1 to top metal,
+     copper pillars, micro-bumps and underfill, the package build-up layer, the core with
+     its inductor, the land-side capacitors, and the land grid array; frame pieces at three depths. ----- */
+  var W=2.0,H=2.0,R=.12, S=1.9, D=1.1;
+  function rrect(w,h,r,cx,cy){cx=cx||0;cy=cy||0;var s=new THREE.Shape(),x=cx-w/2,y=cy-h/2;
+    s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.absarc(x+w-r,y+r,r,-Math.PI/2,0,false);s.lineTo(x+w,y+h-r);s.absarc(x+w-r,y+h-r,r,0,Math.PI/2,false);
+    s.lineTo(x+r,y+h);s.absarc(x+r,y+h-r,r,Math.PI/2,Math.PI,false);s.lineTo(x,y+r);s.absarc(x+r,y+r,r,Math.PI,Math.PI*1.5,false);return s}
+  function circ(r,cx,cy){var p=new THREE.Path();p.absarc(cx,cy,r,0,Math.PI*2,true);return p}
+  function holes(s,list){list.forEach(function(h){s.holes.push(h)});return s}
+  function box(w,h,d,parent,o){return mesh(new THREE.BoxGeometry(w,h,d),parent,o)}
+  function frameCorner(i,t){var sx=(i===0||i===3)?1:-1, sy=i<2?1:-1, cx=sx*(W/2-R), cy=sy*(H/2-R);
+    var a0=sy>0?Math.PI/2:Math.PI*1.5, a1=sx>0?(sy>0?0:Math.PI*2):Math.PI, cw=sx*sy>0;
+    var s=new THREE.Shape();s.moveTo(0,sy*H/2);s.lineTo(cx,sy*H/2);s.absarc(cx,cy,R,a0,a1,cw);s.lineTo(sx*W/2,0);
+    s.lineTo(sx*(W/2-t),0);s.lineTo(sx*(W/2-t),cy);s.absarc(cx,cy,R-t,a1,a0,!cw);s.lineTo(0,sy*(H/2-t));s.closePath();return s}
+  /* the package substrate: square, with an orientation notch in the left and right edges */
+  function notched(){var h=S/2,n=.07,y0=.28,y1=.4,s=new THREE.Shape();
+    s.moveTo(-h,-h);s.lineTo(h,-h);s.lineTo(h,y0);s.lineTo(h-n,y0);s.lineTo(h-n,y1);s.lineTo(h,y1);s.lineTo(h,h);
+    s.lineTo(-h,h);s.lineTo(-h,y1);s.lineTo(-h+n,y1);s.lineTo(-h+n,y0);s.lineTo(-h,y0);s.closePath();return s}
+  function tri(x,y,a){var s=new THREE.Shape();s.moveTo(x,y);s.lineTo(x+a,y);s.lineTo(x,y+a);s.closePath();return s}
+  var pad=new THREE.BoxGeometry(.05,.05,.008), cap=new THREE.BoxGeometry(.03,.016,.016);
+
+  var M={}; ['animate','draggable','scroll','engine','scope','timer','stagger','spring','svg','timeline','waapi','renderer','case01','case02','case02Back'].forEach(function(k){M[k]=new THREE.Group();root.add(M[k])});
+  var Pz={renderer:2.7,waapi:2.45,timeline:2.2,timer:1.98,svg:1.78,stagger:1.52,spring:1.08,animate:.72,draggable:.05,scroll:-.55,engine:-1.3,scope:-1.81,case01:1.8,case02:.35,case02Back:-1.78};
+  for(var k in Pz)M[k].position.z=Pz[k];
+  M.renderer.scale.setScalar(.98);
+
+  /* integrated heat spreader: a raised plateau on a skirt with four wings, laser markings, a 2D code, the pin-1 mark */
+  mesh(extrude(rrect(1.62,1.62,.1),.035,48),M.renderer);
+  mesh(extrude(rrect(1.3,1.3,.07),.05,48),M.renderer,{z:.04});
+  mesh(extrude(holes(rrect(1.62,1.62,.1),[rrect(1.5,1.5,.06)]),.1,48),M.renderer,{z:-.065});
+  [[0,.86,.34,.12],[0,-.86,.34,.12],[.86,0,.12,.34],[-.86,0,.12,.34]].forEach(function(w){mesh(extrude(rrect(w[2],w[3],.04,w[0],w[1]),.03,16),M.renderer,{z:-.003})});
+  [[.62,.32],[.44,.25],[.52,.18],[.3,.11]].forEach(function(l,i){box(l[0],.022,.006,M.renderer,{x:-.5+l[0]/2,y:l[1],z:.068})});
+  [[.34,-.3],[.22,-.37]].forEach(function(l){box(l[0],.018,.006,M.renderer,{x:-.5+l[0]/2,y:l[1],z:.068})});
+  var dm=[0x9f,0x83,0xb5,0xa9,0xc7,0x95,0xe3,0xff];for(var r=0;r<8;r++)for(var c=0;c<8;c++)if(dm[r]>>c&1)box(.024,.024,.006,M.renderer,{x:.3+c*.028,y:-.5+r*.028,z:.068});
+  mesh(extrude(tri(-.6,-.6,.09),.008,4),M.renderer,{z:.068});
+  /* thermal interface material */
+  mesh(extrude(rrect(D+.04,D+.04,.04),.02,32),M.waapi);
+  /* silicon die, backside up (flip chip), with eight through-silicon vias that slide in and out */
+  mesh(extrude(rrect(D,D,.015),.1,16),M.timeline);
+  var pegs=[];[[-.42,.42],[0,.46],[.42,.42],[.46,0],[.42,-.42],[0,-.46],[-.42,-.42],[-.46,0]].forEach(function(p){var g=new THREE.Group();g.position.set(p[0],p[1],-.1);M.timeline.add(g);
+    mesh(drum(.022,.26,10),g); pegs.push(P3(g))});
+  /* the device layer as a CPU die: eight cores in two rows, each with its L2, the L3 slices
+     and the ring bus between them, the memory controller and DDR PHY on top, I/O and PCIe below */
+  mesh(extrude(rrect(D,D,.015),.012,16),M.timer);
+  var cores=[];
+  for(var i=0;i<8;i++){var cx=-.375+(i%4)*.25, up=i<4, sy=up?1:-1;
+    var core=box(.22,.17,.05,M.timer,{x:cx,y:sy*.33,z:.031});
+    box(.1,.06,.012,core,{x:-.04,y:sy*.03,z:.031}); box(.05,.05,.012,core,{x:.07,y:-sy*.04,z:.031});   /* execution and FP blocks */
+    box(.22,.07,.035,M.timer,{x:cx,y:sy*.18,z:.023});                                                  /* L2 */
+    box(.22,.05,.03,M.timer,{x:cx,y:sy*.06,z:.021});                                                   /* L3 slice */
+    cores.push(P3(core))}
+  mesh(extrude(holes(rrect(1.02,.06,.02),[rrect(.98,.03,.01)]),.025,16),M.timer,{z:.02});              /* ring bus */
+  box(.6,.05,.025,M.timer,{x:-.12,y:.5,z:.019}); box(.28,.05,.03,M.timer,{x:.36,y:.5,z:.021});         /* DDR PHY, memory controller */
+  box(.7,.05,.025,M.timer,{x:.12,y:-.5,z:.019}); box(.2,.05,.03,M.timer,{x:-.4,y:-.5,z:.021});         /* PCIe and I/O, system agent */
+  /* FinFET close-up over a core: fins, gates wrapped over them, contacts (the gates switch) */
+  var fin=new THREE.Group();fin.position.set(-.375,.33,0);M.svg.add(fin);
+  box(.5,.4,.03,fin,{z:-.04});
+  for(var i=0;i<6;i++)box(.022,.36,.07,fin,{x:-.175+i*.07,z:.01});
+  var gates=[];for(var i=0;i<3;i++)gates.push(P3(box(.46,.04,.12,fin,{y:-.12+i*.12,z:.03})));
+  for(var i=0;i<4;i++)for(var j=0;j<2;j++)mesh(drum(.014,.08,8),fin,{x:-.14+j*.28,y:-.18+i*.12,z:.07});
+  var svgDrum=null;
+  /* the metal stack, M1 (thin, dense) nearest the transistors to the thick top metal; wires alternate direction */
+  var plates=[];[[19,.016,.02],[13,.026,.026],[9,.042,.034],[6,.07,.045]].forEach(function(L,i){
+    var p=box(D,D,.006,M.stagger,{z:-.1*i+.06});
+    for(var j=0;j<L[0];j++){var o=(j-(L[0]-1)/2)*(D-.1)/(L[0]-1);
+      if(i%2===0)box(D-.06,L[1],L[2],p,{y:o,z:L[2]/2}); else box(L[1],D-.06,L[2],p,{x:o,z:L[2]/2})}
+    plates.push(P3(p))});
+  /* redistribution layer with copper pillars */
+  var springGear=new THREE.Group();M.spring.add(springGear);
+  mesh(extrude(rrect(D,D,.015),.01,16),M.spring,{z:-.06});
+  for(var i=0;i<36;i++)mesh(drum(.032,.1,12),springGear,{x:(i%6-2.5)*.17,y:(Math.floor(i/6)-2.5)*.17});
+  /* micro-bumps in underfill; one row ripples */
+  mesh(extrude(holes(rrect(D+.12,D+.12,.05),[rrect(D-.04,D-.04,.03)]),.05,24),M.animate);
+  for(var i=0;i<100;i++){var bx=i%10,by=Math.floor(i/10);if(by===2)continue;mesh(drum(.03,.05,10),M.animate,{x:(bx-4.5)*.1,y:(by-4.5)*.1})}
+  var arcG=new THREE.Group();arcG.position.set(0,(2-4.5)*.1,0);M.animate.add(arcG);
+  var easeMeshes=[];for(var i=0;i<13;i++){var hold=new THREE.Group();hold.position.x=(i-6)*.077;arcG.add(hold);easeMeshes.push(P3(mesh(drum(.026,.05,10),hold)))}
+  /* package substrate, top: fan-out traces from the die, the rows of capacitors round the lid, the pin-1 triangle */
+  mesh(extrude(notched(),.03,32),M.draggable);
+  for(var i=0;i<32;i++){var a=i/32*Math.PI*2,g=new THREE.Group();g.rotation.z=a;M.draggable.add(g);box(.2,.014,.012,g,{x:.66,z:.02})}
+  for(var sd=0;sd<4;sd++)for(var j=0;j<12;j++){var o=-.6+j*.11, m=new THREE.Mesh(cap,mat);
+    m.position.set(sd===0?o:sd===1?o:sd===2?.875:-.875, sd===0?.875:sd===1?-.875:o, .025);if(sd>1)m.rotation.z=Math.PI/2;M.draggable.add(m)}
+  mesh(extrude(tri(-.92,-.92,.12),.008,4),M.draggable,{z:.016});
+  /* substrate core: plated through-holes and the inductor of the on-package regulator (it turns) */
+  var core=[];for(var i=0;i<64;i++){var gx=i%8,gy=Math.floor(i/8);if(gx>1&&gx<6&&gy>1&&gy<6)continue;core.push(circ(.03,(gx-3.5)*.21,(gy-3.5)*.21))}
+  mesh(extrude(holes(notched(),core),.12,24),M.scroll);
+  var spiral=[];for(var i=0;i<=500;i++){var t=i/500,a=t*Math.PI*2*5,r=.1+.3*t;spiral.push(new THREE.Vector3(r*Math.cos(a),r*Math.sin(a),0))}
+  var scrollDrum=mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(spiral),700,.012,5,false),M.scroll,{z:.075});
+  /* land side: bottom build-up with the decoupling capacitors that sit in the middle of the pad field */
+  mesh(extrude(notched(),.03,32),M.engine);
+  for(var i=0;i<20;i++)box(.07,.035,.035,M.engine,{x:((i%5)-2)*.1,y:(Math.floor(i/5)-1.5)*.1,z:-.03});
+  /* the land grid array: flat contact pads in rows, the middle left clear for the capacitors */
+  mesh(extrude(notched(),.03,32),M.scope);
+  for(var i=0;i<400;i++){var gx=i%20,gy=Math.floor(i/20);if(gx>5&&gx<14&&gy>5&&gy<14)continue;var m=new THREE.Mesh(pad,mat);m.position.set((gx-9.5)*.085,(gy-9.5)*.085,-.019);M.scope.add(m)}
+  mesh(extrude(tri(.82,-.92,.1),.008,4),M.scope,{z:-.019,s:1});
+  /* the frame: stiffener and mold pieces at three depths that fly apart */
+  var case01=[],case02F=[],case02B=[],ventsF=[],ventsB=[];
+  for(var i=0;i<4;i++){var g=new THREE.Group();M.case01.add(g);if(i!==1)mesh(extrude(frameCorner(i,.07),.1,24),g);case01.push(P3(g))}
+  for(var i=0;i<4;i++){var g=new THREE.Group(),h=new THREE.Group();M.case02.add(g);M.case02Back.add(h);
+    if(i!==3){mesh(extrude(frameCorner(i,.09),.16,24),g);mesh(extrude(frameCorner(i,.06),.08,24),h)}
+    case02F.push(P3(g));case02B.push(P3(h))}
+  /* loose dies cut from the wafer, around the package; they swirl when it comes apart */
+  for(var i=0;i<15;i++){var a=i/15*Math.PI*2;[[M.case02,ventsF],[M.case02Back,ventsB]].forEach(function(t){var g=new THREE.Group();g.rotation.z=a;t[0].add(g);box(.1,.1,.025,g,{x:1.55});t[1].push(P3(g))})}
+
+  /* continuous motion, independent of the scroll */
+  var loops=[];
+  if(A&&!still){
+    loops.push(A.createTimeline({loop:true}).add(easeMeshes,{z:[{to:'+=.05',ease:'inQuad',duration:500},{to:'-=.05',ease:'outQuad',duration:1000}],ease:'inOutQuad'},A.stagger(200)));
+    loops.push(A.animate(P3(scrollDrum),{rotateZ:-360,ease:'linear',duration:32000,loop:true}));
+    loops.push(A.createTimeline({loop:true}).add(cores,{z:[{to:'+=.05',ease:'out(3)',duration:240},{to:'-=.05',ease:'outElastic(.2, 1)',duration:760}]},A.stagger(160,{grid:[4,2],from:'first'})));
+    loops.push(A.animate(P3(springGear),{z:[{to:.04,duration:220,ease:'out(3)'},{to:0,duration:700,ease:'outElastic(.3, .8)'}],loop:true,loopDelay:1600}));
+    loops.push(A.createTimeline().add(plates,{z:[{to:'+=.08',ease:'inOut(2)',duration:1000},{to:'-=.08',ease:'inOut(2)',duration:800}],loop:true},A.stagger(200,{from:'last'})));
+    loops.push(A.createTimeline({loop:true}).add(gates,{z:[{to:'+=.03',ease:'out(2)',duration:160},{to:'-=.03',ease:'in(2)',duration:160}]},A.stagger(120)));
+    loops.push(A.createTimeline().add(pegs,{z:[{to:'+=.15',ease:'inOut(2)',duration:1000},{to:'-=.15',ease:'inOut(2)',duration:800}],loop:true},A.stagger(200,{from:'last'})));
+  }
+
+  /* ----- the master timeline (values and labels as on animejs.com, desktop) ----- */
+  var Zp=P3(Z), rootP=P3(root), cssP=P3(cssLayer);
+  var PX={}, mod=function(k){return PX[k]||(PX[k]=P3(M[k]))};
+  var ui={ring:1,labels:0,heading:1};
+  /* The story of the page: DSA brings Android to the desktop by putting host and VM pieces
+     together. So the package starts as far apart as it goes (layers fanned out to both sides,
+     the frame flown off), each feature chapter brings one piece back into the stack, and the
+     modules chapter closes it into one part. */
+  A.utils.set(Zp,{x:0,z:52,rotateX:0,rotateY:0});
+  var OPEN={x:52,y:-18,z:-70};
+  /* each feature chapter, in page order, with the part that stands for it, where that part
+     waits in the opening, and the name its callout shows */
+  var PAIR=[
+    {k:'timer',  at:[-2.5, 1.0],ko:'CPU 다이 · 코어마다 제 구역',en:'CPU die · a block for every core'},           /* one app, one window */
+    {k:'stagger',at:[ 2.5, 1.0],ko:'금속 배선층 · 명령이 지나는 길',en:'Metal layers · where commands travel'},      /* the GPU draws */
+    {k:'engine', at:[-2.5,-1.0],ko:'커패시터 · 빌려 쓰고 돌려줌',en:'Capacitors · borrow, then give back'},          /* memory goes back */
+    {k:'svg',    at:[ 2.5,-1.0],ko:'FinFET · 명령이 실제로 도는 곳',en:'FinFET · where instructions run'},          /* ARM apps */
+    {k:'spring', at:[-3.9, 0.0],ko:'재배선층 · 신호를 바깥으로',en:'Redistribution layer · signals out to the host'}, /* devices on the host */
+    {k:'animate',at:[ 3.9, 0.0],ko:'마이크로 범프 · 두 세계의 접점',en:'Micro-bumps · where two worlds touch'},      /* drag, drop, paste */
+    {k:'waapi',  at:[ 0.0, 2.6],ko:'열전도 소재 · 쉬는 동안 식힘',en:'Thermal interface · cools while it rests'},   /* opens without the wait */
+    {k:'scope',  at:[ 0.0,-2.6],ko:'LGA 패드 · 어느 보드에나 같은 접점',en:'Land grid · the same contacts on any board'}]; /* three hosts */
+  var PAIRED=PAIR.map(function(p){return mod(p.k)});
+  var LAYERS=Object.keys(Pz);
+  var tl=A.createTimeline({autoplay:false,defaults:{ease:'inOut(3)'}})
+    .label('INTRO')
+    .add(post.uniforms.fade,{value:[0,1],duration:2200,ease:'inOut(2)'},'INTRO+=200')
+    .add(Zp,{x:OPEN.x,y:OPEN.y,z:OPEN.z,rotateX:45,rotateY:-55,duration:700,ease:'out(3)'},'INTRO')
+    .label('INTRO_CASE','INTRO+=60')
+    .add(case01,{rotateZ:[180,0],duration:300},'INTRO')
+    .add(mod('renderer'),{rotateZ:-360,duration:300},'INTRO')
+    .add(case02B[0],{x:-8,y:8,scale:0,duration:300},'INTRO_CASE+=100')
+    .add(case02B[1],{x:8,y:-8,scale:0,duration:300},'INTRO_CASE+=100')
+    .add(case02B[2],{x:-8,y:-8,scale:{to:0,duration:50},duration:300},'INTRO_CASE+=100')
+    .add(case02F[0],{x:-8,y:8,scale:0,duration:300},'INTRO_CASE')
+    .add(case02F[1],{x:8,y:-8,scale:0,duration:300},'INTRO_CASE')
+    .add(case02F[2],{x:-8,y:-8,scale:{to:0,duration:50},duration:300},'INTRO_CASE')
+    .add(case01[0],{x:-8,y:8,scale:0,duration:300},'INTRO_CASE+=50')
+    .add(case01[2],{x:8,y:-8,scale:0,duration:300},'INTRO_CASE+=50')
+    .add(case01[3],{x:-8,y:-8,scale:{to:0,duration:50},duration:300},'INTRO_CASE+=50')
+    .add(mod('renderer'),{z:3.25,duration:300},'INTRO_CASE')
+    .add(mod('waapi'),{z:2.75,duration:300},'INTRO_CASE+=50')
+    .add(mod('scope'),{z:-2.4,duration:300},'INTRO_CASE+=50')
+    .add(ventsB.concat(ventsF),{rotateZ:-200,duration:300,delay:A.stagger(2,{from:'last'})},'INTRO_CASE+=50')
+    .add(PAIRED,{x:function(e,i){return PAIR[i].at[0]},y:function(e,i){return PAIR[i].at[1]},duration:700,ease:'out(3)'},'INTRO')
+    .label('INTRO_END','INTRO+=2400')
+    /* the opening scrolls away: the spread package comes to the middle, the labels appear */
+    .label('HEADING')
+    .add(Zp,{x:0,y:0,z:14,rotateY:-35,duration:900,ease:'inOut(2)'},'HEADING')
+    .add(ui,{labels:1,duration:250,ease:'out(3)'},'HEADING+=700')
+    .label('HEADING_END','HEADING+=1000')
+    .label('TOOLBOX','HEADING_END')
+    .add(Zp,{x:14,z:16,rotateX:28,rotateY:20,duration:1000},'TOOLBOX')
+    .add(ui,{labels:0,duration:250},'TOOLBOX+=250')
+    .label('TOOLBOX_END','TOOLBOX+=1000')
+    /* each feature brings a piece home, and the gaps between the layers close a little */
+    .label('FEATURES','TOOLBOX_END')
+    .add(Zp,{x:16,rotateY:-40,rotateX:35,z:18,duration:2400,ease:'linear'},'FEATURES')
+    /* chapter i is centred at FEATURES + i*300; its part lands just as it arrives */
+    .add(PAIRED,{x:0,y:1.35,duration:240},A.stagger(300,{start:'FEATURES-=160'}))
+    /* it hovers over the stack while its chapter is read, then slots in as the next one comes */
+    .add(PAIRED,{y:0,duration:200},A.stagger(300,{start:'FEATURES+=120'}))
+    .add(LAYERS.map(mod),{z:function(e,i){return Pz[LAYERS[i]]*.6},duration:2400,ease:'inOut(2)'},'FEATURES')
+    .label('FEATURES_END','FEATURES+=2400')
+    /* modules: the frame comes back and the package closes into one part */
+    .label('MODULES','FEATURES_END')
+    .label('MODULES_CASE','MODULES+=500')
+    .add(LAYERS.map(mod),{z:function(e,i){return Pz[LAYERS[i]]*.2},duration:1500,ease:'inOut(2)'},'MODULES')
+    .add(case02B.slice(0,3),{x:0,y:0,z:.7,scale:{to:1,duration:100},scaleZ:{to:.5125,duration:100},ease:'out(3)'},'MODULES_CASE+=200')
+    .add(case02F.slice(0,3),{x:0,y:0,z:0,scale:{to:1,duration:100},scaleZ:{to:.5125,duration:100},ease:'out(3)'},'MODULES_CASE+=100')
+    .add([case01[0],case01[2],case01[3]],{x:0,y:0,z:-.6,scale:{to:1,duration:100},scaleZ:{to:.5125,duration:100},ease:'out(3)'},'MODULES_CASE')
+    .add(ventsB.concat(ventsF),{rotateZ:0,ease:'out(3)',delay:A.stagger(10,{from:'last'})},'MODULES_CASE')
+    .add(Zp,{x:12,rotateY:-25,rotateX:22,z:20,duration:2200,ease:'inOut(2)'},'MODULES')
+    .label('MODULES_END','MODULES+=2200')
+    .label('SPONSORS','MODULES_END').label('SPONSORS_END','MODULES_END')
+    ;
+  tl.seek(0);
+
+  function resize(){var w=innerWidth,h=innerHeight,pr=renderer.getPixelRatio();
+    renderer.setSize(w,h); cssRenderer.setSize(w,h);
+    camera.aspect=w/h; camera.fov=fov*((h>=1000?h:1000)/1000); camera.updateProjectionMatrix();
+    rt.setSize(Math.floor(w*pr),Math.floor(h*pr)); post.uniforms.resolution.value.set(w*pr,h*pr)}
+  resize(); addEventListener('resize',resize);
+  var dark={bg:hex('#252423'),ol:hex('#101010'),rim:hex('#ffc7a8'),sh:hex('#212121'),w1:hex('#423d3d'),ob:.4,cb:.65};
+  var light={bg:hex('#DAD5D0'),ol:hex('#000000'),rim:hex('#DAD5D0'),sh:hex('#DAD5D0'),w1:hex('#DAD5D0'),ob:.35,cb:.35};
+  var paper={bg:hex('#e6e5e2'),ol:hex('#1b1a19'),rim:hex('#e6e5e2'),sh:hex('#d6d4cf'),w1:hex('#e6e5e2'),ob:.3,cb:.4};
+  var tc=new THREE.Color();
+  var U=post.uniforms;
+  function mix3(key,t,k){tc.copy(dark[key]).lerp(light[key],t);return paper[key].clone().lerp(tc,k)}
+  function applyTheme(t,k){U.backgroundColor.value.copy(mix3('bg',t,k));U.outlineColor.value.copy(mix3('ol',t,k));U.rimColor.value.copy(mix3('rim',t,k));
+    U.shadowColor.value.copy(mix3('sh',t,k));U.worldColor1.value.copy(mix3('w1',t,k));
+    var ob=dark.ob+(light.ob-dark.ob)*t, cb=dark.cb+(light.cb-dark.cb)*t;U.outlineBlend.value=paper.ob+(ob-paper.ob)*k;U.contourBlend.value=paper.cb+(cb-paper.cb)*k}
+  var v3=new THREE.Vector3();
+  function project(obj,side){v3.set(side*.45,0,0);obj.localToWorld(v3);v3.project(camera);return [(v3.x*.5+.5)*innerWidth,(-v3.y*.5+.5)*innerHeight]}
+  var anchorMods=['engine','scope','scroll','draggable','animate','timer','spring','svg','stagger','timeline','waapi'];
+  function render(themeK,openK){
+    applyTheme(themeK,openK);
+    Zc.position.copy(Z.position); Zc.rotation.copy(Z.rotation); Zc.scale.copy(Z.scale);
+    labelsEl.style.opacity=String(ui.labels);
+    renderer.setRenderTarget(rt); renderer.setClearColor(0xffffff,1); renderer.clear(); renderer.render(scene,camera);
+    renderer.setRenderTarget(null); renderer.render(postScene,postCam);
+    cssRenderer.render(cssScene,camera);
+    /* leader lines from the labels to their parts */
+    var html='';
+    if(ui.labels>.01){Z.updateMatrixWorld(true);labelItems.forEach(function(li,i){var right=li.parentNode.classList.contains('lab-r');var pt=project(M[anchorMods[i]],right?1:-1);var rc=li.getBoundingClientRect();
+      var lx=right?rc.left-8:rc.right+8, ly=rc.top+rc.height/2, bx=right?lx-24-i*14:lx+24+(i-6)*14;
+      html+='<polyline points="'+lx+','+ly+' '+bx+','+ly+' '+pt[0].toFixed(1)+','+pt[1].toFixed(1)+'"/><circle cx="'+pt[0].toFixed(1)+'" cy="'+pt[1].toFixed(1)+'" r="2"/>'})}
+    var fm=/^f(\d)$/.exec(active||''), co=false;
+    if(fm&&ui.labels<.01){var sec=document.querySelector('[data-chapter="'+active+'"]');var hs=[].filter.call(sec.querySelectorAll('h2'),function(h){return h.offsetParent!==null});
+      if(hs[0]){var rc=hs[0].getBoundingClientRect();if(rc.bottom>40&&rc.top<innerHeight-40){var P=PAIR[+fm[1]];Z.updateMatrixWorld(true);v3.set(0,0,0);M[P.k].localToWorld(v3);v3.project(camera);
+        var px=(v3.x*.5+.5)*innerWidth, py=(-v3.y*.5+.5)*innerHeight, rg=document.createRange();rg.selectNodeContents(hs[0]);var tr=rg.getBoundingClientRect(), lx=tr.right+18, ly=rc.top+Math.min(rc.height,48)*.5;
+        html+='<g class="callout"><polyline points="'+lx+','+ly+' '+(lx+36)+','+ly+' '+px.toFixed(1)+','+py.toFixed(1)+'"/><circle cx="'+px.toFixed(1)+'" cy="'+py.toFixed(1)+'" r="3.5"/><text x="'+lx.toFixed(1)+'" y="'+(ly-12).toFixed(1)+'">'+P[root.lang==='en'?'en':'ko']+'</text></g>';co=true}}}
+    linesSvg.innerHTML=html; linesSvg.style.opacity=String(co?1:ui.labels);
+  }
+  return {tl:tl,render:render,loops:loops};
+}
+
+/* ---------- scroll: each labelled section scrubs its part of the timeline ---------- */
+var chapters=[].slice.call(document.querySelectorAll('[data-chapter]'));
+var labelled=[].slice.call(document.querySelectorAll('[data-label]'));
+var cursor=document.getElementById('cursor'), ghost=document.getElementById('ghost'), scrub=document.getElementById('scrubber');
+var cards=[].slice.call(document.querySelectorAll('.card'));
+var active=null, activeDemo=null;
+function setCard(id){cards.forEach(function(c){var on=c.getAttribute('data-card')===id;if(on){c.classList.add('shown');requestAnimationFrame(function(){c.classList.add('on')})}else{c.classList.remove('on');c.classList.remove('shown')}})}
+function chapterAt(){var mid=innerHeight*.5, best=null;chapters.forEach(function(s){var r=s.getBoundingClientRect();if(r.top<=mid&&r.bottom>mid)best=s});return best}
+var targetTime=0, curTime=0, introPlaying=true, lightOn=false, themeK=0, openK=0;
+/* one colour story: paper at the top, darkening steadily until the package is assembled at the end of the modules chapter */
+var PAL={paper:[230,229,226],dark:[37,36,35],light:[217,214,210],pfg:[27,26,25],dfg:[246,244,242],lfg:[37,36,35]};
+function mixc(a,b,t){return [0,1,2].map(function(i){return Math.round(a[i]+(b[i]-a[i])*t)})}
+function paint(){var bg=mixc(PAL.paper,PAL.dark,openK), fg=openK<.5?PAL.lfg:PAL.dfg;
+  var b='rgb('+bg.join(',')+')';document.body.style.backgroundColor=b;root.style.backgroundColor=b;document.body.style.color='rgb('+fg.join(',')+')';
+  document.getElementById('site-header').style.setProperty('--hb',bg.join(','));document.body.classList.toggle('paper',openK<.08);document.body.classList.toggle('is-light',openK<.5)}
+function timeForScroll(){if(!stage)return 0;var L=stage.tl.labels, y=scrollY, t=0;
+  for(var i=0;i<labelled.length;i++){var s=labelled[i], top=s.offsetTop, h=s.offsetHeight, name=s.getAttribute('data-label');
+    if(y>=top){var maxY=document.documentElement.scrollHeight-innerHeight;var p=clamp((y-top)/Math.max(1,Math.min(h,maxY-top)),0,1);t=L[name]+p*(L[name+'_END']-L[name])}}
+  return Math.max(t, introPlaying?curTime:L.INTRO_END)}
+function isLight(){var r;var tb=document.getElementById('toolbox').getBoundingClientRect(), md=document.getElementById('modules').getBoundingClientRect();
+  return (tb.top<=innerHeight*.3 && tb.bottom>innerHeight*.1) || (md.top<=innerHeight*.1 && md.bottom>innerHeight*.75)}
+function onScroll(){
+  var max=document.documentElement.scrollHeight-innerHeight, p=max>0?scrollY/max:0;
+  cursor.style.left='calc(8px + '+(p*100).toFixed(3)+'% - '+(p*18).toFixed(2)+'px)';
+  if(scrollY>8 && introPlaying){introPlaying=false}
+  var ch=chapterAt(); if(!ch&&active)return; var id=ch?ch.getAttribute('data-chapter'):'intro';
+  var c=ch&&ch.getAttribute('data-c'); document.body.style.setProperty('--c', c?'var(--'+c+')':'var(--red)');
+  lightOn=false;
+  var ft=document.getElementById('site-footer').getBoundingClientRect();
+  document.getElementById('site-header').classList.toggle('away', ft.top<innerHeight-24);
+  document.getElementById('sub-nav').classList.toggle('off', scrollY<=innerHeight*.35 || ft.top<innerHeight-40);
+  var fi = id.charAt(0)==='f' && id.length===2 ? +id.charAt(1) : -1;
+  if(id!==active){active=id;
+    setCard(fi>=0?'f'+fi:(id==='modules'?'modules':null));
+  }
+}
+addEventListener('scroll',onScroll,{passive:true});addEventListener('resize',onScroll);
+function scrubTo(e){var r=scrub.getBoundingClientRect();var t=clamp((e.clientX-r.left-8)/(r.width-16),0,1);scrollTo({top:t*(document.documentElement.scrollHeight-innerHeight),behavior:'smooth'})}
+scrub.addEventListener('click',scrubTo);
+scrub.addEventListener('mousemove',function(e){var r=scrub.getBoundingClientRect();ghost.style.left=clamp(e.clientX-r.left,8,r.width-10)+'px'});
+
+/* the intro plays by itself for four seconds, then the scroll takes over (smoothed like onScroll sync .9) */
+var t0=performance.now(), last=t0;
+function frame(now){var dt=Math.min(.05,(now-last)/1000);last=now;
+  var md=document.getElementById('modules'), endY=Math.max(1,md.offsetTop+md.offsetHeight-innerHeight);
+  var startY=md.offsetTop+(endY-md.offsetTop)*.45;
+  var ok=clamp((scrollY-startY)/Math.max(1,endY-startY),0,1); ok=ok*ok*(3-2*ok); openK+=(ok-openK)*(1-Math.pow(.8,dt*60)); paint();
+  if(stage){var L=stage.tl.labels;
+    if(introPlaying){curTime=Math.min(L.INTRO_END,(now-t0)/4000*L.INTRO_END);if(curTime>=L.INTRO_END)introPlaying=false}
+    targetTime=timeForScroll();
+    if(!introPlaying){var k=1-Math.pow(.9,dt*60);curTime+=(targetTime-curTime)*k;if(Math.abs(targetTime-curTime)<.5)curTime=targetTime}
+    stage.tl.seek(curTime); stage.render(themeK,openK)}
+  requestAnimationFrame(frame)}
+onScroll(); requestAnimationFrame(frame);
+
+
+/* intro type */
+if(A&&!still){try{var sp=A.splitText('#intro h1',{chars:true});A.animate(sp.chars,{y:['.4em',0],opacity:[0,1],duration:800,ease:'outExpo',delay:A.stagger(18)})}catch(e){}}
+})();
+</script>
+</body>
+</html>
