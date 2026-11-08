@@ -9,7 +9,9 @@ grep -Fq 'name: Download the default ARM translator' "$workflow"
 grep -Fq 'echo "args=--arm-translation .scratch/arm-translation" >> "$GITHUB_OUTPUT"' "$workflow"
 grep -Fq 'args+=(${{ steps.translator.outputs.args }})' "$workflow"
 grep -Fq -- '--test overlays --no-run' "$workflow"
-grep -Fq 'cargo test -p dsa-host-linux --test overlays -- --nocapture --test-threads 1' "$workflow"
+grep -Fq 'check: Lay the ARM translator and Google Play over the booted system' "$workflow"
+grep -Fq 'test: overlays' "$workflow"
+grep -Fq 'artifact: overlay-check-logs' "$workflow"
 grep -Fq '"dsa/host/platform/linux/tests/overlays.rs"' "$workflow"
 # The translator is downloaded before the image is made, so the image carries it.
 download=$(grep -n 'name: Download the default ARM translator' "$workflow" | head -1 | cut -d: -f1)
