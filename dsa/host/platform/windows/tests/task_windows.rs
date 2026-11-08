@@ -1871,12 +1871,16 @@ mod real_input {
     }
 
     /// The shell's programs whose windows open over every other window: the Start menu,
-    /// search, and the notification and quick settings panes.
+    /// search, the notification and quick settings panes, and WWAHost, in which Windows
+    /// shows its full-screen first-run pages ("Let's finish setting up your device"). On
+    /// the ARM64 runner such a page covers the whole screen from sign-in, and Escape does
+    /// not close it.
     const SHELL_POPUPS: &[&str] = &[
         "StartMenuExperienceHost.exe",
         "SearchHost.exe",
         "SearchApp.exe",
         "ShellExperienceHost.exe",
+        "WWAHost.exe",
     ];
 
     /// Brings `hwnd` to the front as a user would: Escape closes a Start menu or a search
@@ -1949,7 +1953,7 @@ mod real_input {
         (process_id, program)
     }
 
-    /// A window's handle, class and program, for a failure's message.
+    /// A window's handle, class, title and program, for a failure's message.
     fn describe_window(hwnd: HWND) -> String {
         if hwnd.is_null() {
             return "no window".to_string();
@@ -1957,8 +1961,10 @@ mod real_input {
         let mut class = [0u16; 128];
         let length = unsafe { GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32) };
         let class = String::from_utf16_lossy(&class[..length.max(0) as usize]);
-        let (process_id, program) = program_of(unsafe { GetAncestor(hwnd, GA_ROOT) });
-        format!("{hwnd:?} of class {class:?} of {program} ({process_id})")
+        let root = unsafe { GetAncestor(hwnd, GA_ROOT) };
+        let (process_id, program) = program_of(root);
+        let caption = title(root as isize);
+        format!("{hwnd:?} of class {class:?} titled {caption:?} of {program} ({process_id})")
     }
 
     fn on_screen(origin: POINT, (x, y): (i32, i32)) -> POINT {
@@ -1975,11 +1981,23 @@ mod real_input {
         what: &str,
         done: impl Fn(&[PointerEvent]) -> bool,
     ) -> Vec<PointerEvent> {
+        given_after(running, 0, tool, what, done)
+    }
+
+    /// As [`given`], from the `skip`th event the fake Android was given on.
+    fn given_after(
+        running: &Running,
+        skip: usize,
+        tool: PointerTool,
+        what: &str,
+        done: impl Fn(&[PointerEvent]) -> bool,
+    ) -> Vec<PointerEvent> {
         let deadline = Instant::now() + WAIT;
         loop {
             let all: Vec<PointerEvent> = running.android.pointers.lock().unwrap().clone();
             let events: Vec<PointerEvent> = all
                 .iter()
+                .skip(skip)
                 .filter(|event| event.tool == tool)
                 .copied()
                 .collect();
@@ -1992,6 +2010,45 @@ mod real_input {
                 "timed out waiting for {what}; the task was given: {all:?}"
             );
             thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    /// Taps one finger at `at` (a screen point) until the task gets the tap, and returns how
+    /// many events the task had been given by then.
+    ///
+    /// Windows can ignore touch while and just after a pen is in range ("Ignore touch input
+    /// when I'm using my pen"), and the pen test runs just before this one. A tap that comes
+    /// through says touch reaches the window at all, so what goes missing after it is down
+    /// to the number of fingers; a tap that never comes through says touch as a whole is
+    /// held back.
+    fn one_finger_reaches(running: &Running, at: POINT) -> usize {
+        let deadline = Instant::now() + WAIT;
+        let mut taps = 0u32;
+        loop {
+            let start = running.android.pointers.lock().unwrap().len();
+            {
+                let finger_device = Device::new(PT_TOUCH, 1);
+                finger_device.inject(&[finger(0, DOWN, at)]);
+                finger_device.inject(&[finger(0, LIFTED, at)]);
+            }
+            taps += 1;
+            let tap_deadline = (Instant::now() + Duration::from_secs(2)).min(deadline);
+            while Instant::now() < tap_deadline {
+                let all: Vec<PointerEvent> = running.android.pointers.lock().unwrap().clone();
+                if all[start..].iter().any(|event| {
+                    event.tool == PointerTool::Touch && event.action == PointerAction::Up
+                }) {
+                    eprintln!("one finger reached the task after {taps} taps");
+                    return all.len();
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+            let all: Vec<PointerEvent> = running.android.pointers.lock().unwrap().clone();
+            assert!(
+                Instant::now() < deadline,
+                "not even one finger reached the task window in {taps} taps, so Windows holds \
+                 touch back as a whole; the task was given: {all:?}"
+            );
         }
     }
 
@@ -2025,6 +2082,7 @@ mod real_input {
             describe_window(hwnd),
             describe_window(unsafe { GetForegroundWindow() })
         );
+        let before = one_finger_reaches(&running, on_screen(origin, at(0, 0)));
 
         let fingers = Device::new(PT_TOUCH, 10);
         let frame = |flags: u32, spread: i32| -> Vec<PointerTypeInfo> {
@@ -2038,8 +2096,9 @@ mod real_input {
         }
         fingers.inject(&frame(LIFTED, 6));
 
-        let events = given(
+        let events = given_after(
             &running,
+            before,
             PointerTool::Touch,
             "ten fingers to lift",
             |events| count(events, PointerAction::Up) + count(events, PointerAction::Cancel) >= 10,
@@ -2167,6 +2226,33 @@ mod real_input {
             |events| count(events, PointerAction::Up) >= 1,
         );
         assert_eq!(count(&eraser, PointerAction::Down), 1, "{eraser:?}");
+        // The pen goes out of range at the end, and the task hears it go. While Windows
+        // holds a pen in range it can ignore touch ("Ignore touch input when I'm using my
+        // pen"), so a pen left in range would keep every finger after it from every window.
+        let deadline = Instant::now() + WAIT;
+        loop {
+            let all: Vec<PointerEvent> = running.android.pointers.lock().unwrap().clone();
+            let pen_like =
+                |event: &PointerEvent| matches!(event.tool, PointerTool::Pen | PointerTool::Eraser);
+            let left = all
+                .iter()
+                .rposition(|event| {
+                    event.tool == PointerTool::Eraser && event.action == PointerAction::Up
+                })
+                .is_some_and(|up| {
+                    all[up + 1..]
+                        .iter()
+                        .any(|event| pen_like(event) && event.action == PointerAction::HoverExit)
+                });
+            if left {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for the pen to leave range; the task was given: {all:?}"
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
     }
 
     #[test]

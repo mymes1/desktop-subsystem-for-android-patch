@@ -206,8 +206,32 @@ jobs:
 
       # On Windows this includes the transport suite over real Hyper-V sockets (host to
       # host through the loopback partition).
+      #
+      # The Windows, macOS and Linux hosts each have programs of the same names (dsa-hostd,
+      # dsa-wm, dsa-gfx, dsa-app-window, dsa-devices), and the hosts not for this runner's
+      # system build them as stand-ins that only say where they run. In one target folder
+      # they would write the same files, and whichever links last wins: on the ARM64 runner
+      # the Windows tests ran the macOS stand-in of dsa-app-window, which has no name or
+      # icon and opens no window. So this runner's own host is tested with the rest of the
+      # workspace, and each other host in a target folder of its own.
       - name: Run the tests
-        run: cargo test --workspace
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Windows) native=dsa-host-windows ;;
+            Linux) native=dsa-host-linux ;;
+            macOS) native=dsa-host-macos ;;
+          esac
+          others=()
+          for host in dsa-host-windows dsa-host-macos dsa-host-linux; do
+            if [ "$host" != "$native" ]; then others+=("$host"); fi
+          done
+          excluded=()
+          for host in "${others[@]}"; do excluded+=(--exclude "$host"); done
+          cargo test --workspace "${excluded[@]}"
+          for host in "${others[@]}"; do
+            cargo test -p "$host" --target-dir "target/other-hosts/$host"
+          done
 
       # Pictures of the top of a light and a dark app window as the task window draws its
       # title bar, kept with the run.
