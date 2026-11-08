@@ -59,8 +59,8 @@
                                        Click="OnCopySpecs" />
                         </Grid>
                     </ui:CardExpander.Header>
-                    <ItemsControl x:Name="SpecsRows" ItemsSource="{Binding AboutRows, Mode=OneWay}" Grid.IsSharedSizeScope="True">
-                        <ItemsControl.ItemTemplate>
+                    <l:RowList x:Name="SpecsRows" ItemsSource="{Binding AboutRows, Mode=OneWay}" Grid.IsSharedSizeScope="True">
+                        <l:RowList.ItemTemplate>
                             <DataTemplate>
                                 <Grid Margin="0,0,0,6">
                                     <Grid.ColumnDefinitions>
@@ -73,8 +73,8 @@
                                              TextWrapping="Wrap" AutomationProperties.Name="{Binding Label}" />
                                 </Grid>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                        </l:RowList.ItemTemplate>
+                    </l:RowList>
                 </ui:CardExpander>
                 <TextBlock Text="{l:Text IdentityComputerNote.Text}" Style="{StaticResource Note}" />
 
@@ -102,7 +102,7 @@
                 </StackPanel>
 
                 <TextBlock Text="{l:Text IdentityNamesHeader.Text}" Style="{StaticResource SectionHeader}" />
-                <ItemsControl ItemsSource="{Binding Names, Mode=OneWay}" ItemTemplate="{StaticResource FieldCard}" />
+                <l:RowList ItemsSource="{Binding Names, Mode=OneWay}" ItemTemplate="{StaticResource FieldCard}" />
 
                 <TextBlock Text="{l:Text IdentityFingerprintHeader.Text}" Style="{StaticResource SectionHeader}" />
                 <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Fingerprint24}">
@@ -114,7 +114,7 @@
                         </StackPanel>
                     </ui:CardControl.Header>
                 </ui:CardControl>
-                <ItemsControl ItemsSource="{Binding FingerprintParts, Mode=OneWay}" ItemTemplate="{StaticResource FieldCard}" />
+                <l:RowList ItemsSource="{Binding FingerprintParts, Mode=OneWay}" ItemTemplate="{StaticResource FieldCard}" />
                 <ContentControl Content="{Binding WholeFingerprint, Mode=OneWay}" ContentTemplate="{StaticResource FieldCard}" />
             </StackPanel>
         </ScrollViewer>

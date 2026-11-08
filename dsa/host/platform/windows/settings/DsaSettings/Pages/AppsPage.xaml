@@ -52,8 +52,8 @@
                            Visibility="{Binding HasNoApps, Converter={StaticResource Visible}}" />
                 <TextBlock Text="{l:Text AppsNoMatch.Text}" Style="{StaticResource Note}"
                            Visibility="{Binding HasNoMatches, Converter={StaticResource Visible}}" />
-                <ItemsControl x:Name="AppList" ItemsSource="{Binding Rows, Mode=OneWay}">
-                    <ItemsControl.ItemTemplate>
+                <l:RowList x:Name="AppList" ItemsSource="{Binding Rows, Mode=OneWay}">
+                    <l:RowList.ItemTemplate>
                         <DataTemplate>
                             <!-- Two lines rather than a settings card: the actions together are
                                  wider than the page, and a card's header takes only the width its
@@ -144,8 +144,8 @@
                                 </Grid>
                             </Border>
                         </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    </l:RowList.ItemTemplate>
+                </l:RowList>
             </StackPanel>
         </ScrollViewer>
     </Grid>

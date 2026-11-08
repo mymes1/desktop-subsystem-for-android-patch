@@ -85,7 +85,7 @@
                     </ui:CardControl.Header>
                     <TextBlock Text="{Binding HostTotal, Mode=OneWay}" Style="{StaticResource SubtitleText}" />
                 </ui:CardControl>
-                <ItemsControl ItemsSource="{Binding HostRows, Mode=OneWay}" ItemTemplate="{StaticResource MemoryRow}" />
+                <l:RowList ItemsSource="{Binding HostRows, Mode=OneWay}" ItemTemplate="{StaticResource MemoryRow}" />
                 <TextBlock Text="{l:Text MemoryHostNone.Text}" Style="{StaticResource Note}"
                            Visibility="{Binding HostNotRunning, Converter={StaticResource Visible}}" />
 
@@ -111,13 +111,13 @@
                             <ProgressBar Value="{Binding GuestUsedPercent, Mode=OneWay}" Maximum="100" Margin="0,6,0,0" />
                         </StackPanel>
                     </ui:CardControl>
-                    <ItemsControl ItemsSource="{Binding GuestRows, Mode=OneWay}" ItemTemplate="{StaticResource MemoryRow}" />
+                    <l:RowList ItemsSource="{Binding GuestRows, Mode=OneWay}" ItemTemplate="{StaticResource MemoryRow}" />
                     <StackPanel Visibility="{Binding KernelReported, Converter={StaticResource Visible}}">
                         <TextBlock Text="{l:Text MemoryKernelHeader.Text}" Style="{StaticResource SectionHeader}" />
-                        <ItemsControl ItemsSource="{Binding KernelRows, Mode=OneWay}" ItemTemplate="{StaticResource MemoryRow}" />
+                        <l:RowList ItemsSource="{Binding KernelRows, Mode=OneWay}" ItemTemplate="{StaticResource MemoryRow}" />
                     </StackPanel>
                     <TextBlock Text="{l:Text MemoryTopHeader.Text}" Style="{StaticResource SectionHeader}" />
-                    <ItemsControl ItemsSource="{Binding GuestProcessRows, Mode=OneWay}" ItemTemplate="{StaticResource MemoryRow}" />
+                    <l:RowList ItemsSource="{Binding GuestProcessRows, Mode=OneWay}" ItemTemplate="{StaticResource MemoryRow}" />
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>
